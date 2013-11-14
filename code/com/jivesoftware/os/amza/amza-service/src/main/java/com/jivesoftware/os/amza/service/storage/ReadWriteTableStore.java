@@ -80,9 +80,9 @@ public class ReadWriteTableStore<K, V> {
         tableStorage.rowMutationSince(transactionId, transactionSetStream);
     }
 
-    public ConcurrentSkipListMap<K, TimestampedValue<V>> getCopy() throws Exception {
+    public ReadThroughChangeSet<K, V> getReadThroughChangeSet(long timestamp) throws Exception {
         load();
-        return new ConcurrentSkipListMap<>(readMap.get());
+        return new ReadThroughChangeSet<>(readMap.get(), timestamp);
     }
 
     synchronized public void commit(NavigableMap<K, TimestampedValue<V>> changes) throws Exception {

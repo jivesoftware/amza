@@ -2,23 +2,22 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import java.io.IOException;
-import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
- * Not thread safe. Each Thread should get their own IsolatedUpdatableMap.
+ * Not thread safe. Each Thread should get their own ReadThroughChangeSet.
  *
  * @param <K>
  * @param <V>
  */
-class IsolatedChanges<K, V> {
+public class ReadThroughChangeSet<K, V> {
 
-    private final ConcurrentSkipListMap<K, TimestampedValue<V>> writeMap;
+    private final ConcurrentNavigableMap<K, TimestampedValue<V>> writeMap;
     private final ConcurrentSkipListMap<K, TimestampedValue<V>> changes;
     private final long timestamp;
 
-    IsolatedChanges(ConcurrentSkipListMap<K, TimestampedValue<V>> writeMap, long timestamp) {
+    ReadThroughChangeSet(ConcurrentNavigableMap<K, TimestampedValue<V>> writeMap, long timestamp) {
         this.writeMap = writeMap;
         this.timestamp = timestamp;
         this.changes = new ConcurrentSkipListMap<>();
@@ -26,10 +25,6 @@ class IsolatedChanges<K, V> {
 
     ConcurrentSkipListMap<K, TimestampedValue<V>> getChangesMap() {
         return changes;
-    }
-
-    public Set<Map.Entry<K, TimestampedValue<V>>> getWritableEntrySet() throws IOException {
-        return writeMap.entrySet();
     }
 
     public boolean containsKey(K key) {
@@ -65,7 +60,6 @@ class IsolatedChanges<K, V> {
         TimestampedValue<V> update = new TimestampedValue<>(value, putTimestamp, false);
         TimestampedValue<V> current = writeMap.get(key);
         if (current == null || current.getTimestamp() < update.getTimestamp()) {
-            writeMap.put(key, update);
             changes.put(key, update);
             return true;
         }
@@ -81,7 +75,6 @@ class IsolatedChanges<K, V> {
         V value = (current != null) ? current.getValue() : null;
         TimestampedValue<V> update = new TimestampedValue<>(value, removeTimestamp, true);
         if (current == null || current.getTimestamp() < update.getTimestamp()) {
-            writeMap.put(key, update);
             changes.put(key, update);
             return true;
         }

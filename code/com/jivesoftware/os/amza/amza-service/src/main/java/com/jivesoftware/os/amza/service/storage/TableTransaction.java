@@ -3,11 +3,11 @@ package com.jivesoftware.os.amza.service.storage;
 public class TableTransaction<K, V> {
 
     private final TableStore<K, V> sortedMapStore;
-    private final IsolatedChanges<K, V> changesMap;
+    private final ReadThroughChangeSet<K, V> changesMap;
     private int changedCount = 0;
 
     TableTransaction(TableStore<K, V> sortedMapStore,
-            IsolatedChanges<K, V> updateableMap) {
+            ReadThroughChangeSet<K, V> updateableMap) {
         this.sortedMapStore = sortedMapStore;
         this.changesMap = updateableMap;
     }

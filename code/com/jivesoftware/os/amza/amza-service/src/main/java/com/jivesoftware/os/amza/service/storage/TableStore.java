@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 
 public class TableStore<K, V> {
 
@@ -58,8 +57,6 @@ public class TableStore<K, V> {
     }
 
     public TableTransaction<K, V> startTransaction(long timestamp) throws Exception {
-        ConcurrentSkipListMap<K, TimestampedValue<V>> copy = readWriteMaps.getCopy();
-        IsolatedChanges<K, V> isolatedChangesMap = new IsolatedChanges<>(copy, timestamp);
-        return new TableTransaction<>(this, isolatedChangesMap);
+        return new TableTransaction<>(this, readWriteMaps.getReadThroughChangeSet(timestamp));
     }
 }

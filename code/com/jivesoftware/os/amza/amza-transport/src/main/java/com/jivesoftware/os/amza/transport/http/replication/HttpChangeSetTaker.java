@@ -28,14 +28,14 @@ public class HttpChangeSetTaker implements ChangeSetTaker {
     private final ConcurrentHashMap<RingHost, RequestHelper> requestHelpers = new ConcurrentHashMap<>();
 
     @Override
-    public <K, V> boolean take(RingHost ringHost,
+    public <K, V> void take(RingHost ringHost,
             TableName<K, V> partitionName,
             long transationId,
             TransactionSetStream transactionSetStream) throws Exception {
         ChangeSet changeSet = new ChangeSet(transationId, partitionName, new ArrayList<String>());
         ChangeSet took = getRequestHelper(ringHost).executeRequest(changeSet, "/amza/changes/take", ChangeSet.class, null);
         if (took == null) {
-            return true;
+            return;
         }
         TableRowReader<String> rowReader = new StringArrayRowReader(took.getChanges());
         final StringRowMarshaller jsonPartitionRowMarshaller = new StringRowMarshaller(new ObjectMapper(), changeSet.getTableName());
@@ -49,7 +49,7 @@ public class HttpChangeSetTaker implements ChangeSetTaker {
             }
         });
         TransactionSet<K, V> transactionSet = new TransactionSet<>(took.getHighestTransactionId(), changes);
-        return transactionSetStream.stream(transactionSet);
+        transactionSetStream.stream(transactionSet);
     }
 
     RequestHelper getRequestHelper(RingHost ringHost) {

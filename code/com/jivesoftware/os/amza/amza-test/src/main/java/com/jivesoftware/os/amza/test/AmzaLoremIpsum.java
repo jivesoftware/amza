@@ -51,7 +51,7 @@ public class AmzaLoremIpsum {
 
             long elapse = System.currentTimeMillis() - start;
             double rate = ((double) elapse / (double) key);
-            System.out.println("mpi:" + rate+" millis "+(1000d / rate)+" ips "+key);
+            System.out.println("mpi:" + rate + " millis " + (1000d / rate) + " ips " + key);
         }
     }
 

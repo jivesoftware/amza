@@ -248,7 +248,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
 
     @Override
     public <K, V> void changes(TableName<K, V> tableName, TableDelta<K, V> changes) throws Exception {
-        receiveChanges(tableName, changes.getAppliedRows());
+        receiveChanges(tableName, changes.getApply());
     }
 
     @Override

@@ -1,31 +1,31 @@
 package com.jivesoftware.os.amza.shared;
 
 import com.google.common.collect.Multimap;
-import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.NavigableMap;
 
 public class TableDelta<K, V> {
 
-    private final ConcurrentNavigableMap<K, TimestampedValue<V>> appliedRows;
-    private final Multimap<K, TimestampedValue<V>> oldRows;
-    private final ConcurrentNavigableMap<K , TimestampedValue<V>> readableRows;
+    private final NavigableMap<K, TimestampedValue<V>> applyMap;
+    private final NavigableMap<K, TimestampedValue<V>> removeMap;
+    private final Multimap<K, TimestampedValue<V>> clobberedMap;
 
-    public TableDelta(ConcurrentNavigableMap<K, TimestampedValue<V>> appliedRows,
-            Multimap<K, TimestampedValue<V>> oldRows,
-            ConcurrentNavigableMap<K, TimestampedValue<V>> readableKVT) {
-        this.appliedRows = appliedRows;
-        this.oldRows = oldRows;
-        this.readableRows = readableKVT;
+    public TableDelta(NavigableMap<K, TimestampedValue<V>> applyMap,
+            NavigableMap<K, TimestampedValue<V>> removeMap,
+            Multimap<K, TimestampedValue<V>> clobberedMap) {
+        this.applyMap = applyMap;
+        this.removeMap = removeMap;
+        this.clobberedMap = clobberedMap;
     }
 
-    public ConcurrentNavigableMap<K, TimestampedValue<V>> getAppliedRows() {
-        return appliedRows;
+    public NavigableMap<K, TimestampedValue<V>> getApply() {
+        return applyMap;
     }
 
-    public Multimap<K, TimestampedValue<V>> getOldRows() {
-        return oldRows;
+    public NavigableMap<K, TimestampedValue<V>> getRemove() {
+        return removeMap;
     }
 
-    public ConcurrentNavigableMap<K, TimestampedValue<V>> getReadableRows() {
-        return readableRows;
+    public Multimap<K, TimestampedValue<V>> getClobbered() {
+        return clobberedMap;
     }
 }

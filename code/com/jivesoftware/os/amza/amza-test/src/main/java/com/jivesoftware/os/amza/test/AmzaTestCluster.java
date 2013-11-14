@@ -96,7 +96,7 @@ public class AmzaTestCluster {
         ChangeSetTaker tableTaker = new ChangeSetTaker() {
 
             @Override
-            public <K, V> boolean take(RingHost ringHost,
+            public <K, V> void take(RingHost ringHost,
                     TableName<K, V> mapName,
                     long transationId,
                     TransactionSetStream transactionSetStream) throws Exception {
@@ -105,7 +105,6 @@ public class AmzaTestCluster {
                     throw new IllegalStateException("Service doesn't exists for " + ringHost);
                 } else {
                     service.takeTable(mapName, transationId, transactionSetStream);
-                    return true;
                 }
             }
         };
@@ -153,10 +152,10 @@ public class AmzaTestCluster {
         amzaService.watch(tableName, new TableStateChanges<Object, Object>() {
             @Override
             public void changes(TableName<Object, Object> tableName, TableDelta<Object, Object> changes) throws Exception {
-                if (changes.getAppliedRows().size() > 0) {
+                if (changes.getApply().size() > 0) {
                     System.out.println("Service:" + serviceHost
                             + " Table:" + tableName.getTableName()
-                            + " Changed:" + changes.getAppliedRows().size());
+                            + " Changed:" + changes.getApply().size());
                 }
             }
         });

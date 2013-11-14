@@ -40,12 +40,12 @@ public class TableReplicator {
     private final ConcurrentHashMap<RingHost, ConcurrentHashMap<TableName, Long>> lastTransactionIds = new ConcurrentHashMap<>();
 
     public TableReplicator(TableStoreProvider tables,
-            int replicationFactor,
-            int takeFromFactor,
-            TableStoreProvider replicatedWAL,
-            TableStoreProvider resendWAL,
-            ChangeSetSender changeSetSender,
-            ChangeSetTaker tableTaker) {
+        int replicationFactor,
+        int takeFromFactor,
+        TableStoreProvider replicatedWAL,
+        TableStoreProvider resendWAL,
+        ChangeSetSender changeSetSender,
+        ChangeSetTaker tableTaker) {
         this.tables = tables;
         this.replicationFactor = replicationFactor;
         this.takeFromFactor = takeFromFactor;
@@ -99,16 +99,15 @@ public class TableReplicator {
                         lastTransactionId = -1L; // take all.
                     }
                     LOG.debug("Taking from " + ringHost + " " + tableName + " " + lastTransactionId);
-                    boolean took = tableTaker.take(ringHost, tableName, lastTransactionId, new TakeTransactionSetStream(tableStore,
-                            tableName, lastTableTransactionIds));
-                    if (took) {
-                        taken.increment();
-                        if (taken.intValue() >= takeFromFactor) {
-                            return;
-                        }
-                        leaps.increment();
-                        break;
+                    tableTaker.take(ringHost, tableName, lastTransactionId, new TakeTransactionSetStream(tableStore,
+                        tableName, lastTableTransactionIds));
+                    
+                    taken.increment();
+                    if (taken.intValue() >= takeFromFactor) {
+                        return;
                     }
+                    leaps.increment();
+                    break;
 
                 } catch (Exception x) {
                     LOG.debug("Can't takeFrom host:" + ringHost, x);
@@ -125,8 +124,8 @@ public class TableReplicator {
         private final ConcurrentHashMap<TableName, Long> trackTableTransactionIds;
 
         public TakeTransactionSetStream(TableStore<K, V> tableStore,
-                TableName<K, V> tableName,
-                ConcurrentHashMap<TableName, Long> trackTableTransactionIds) {
+            TableName<K, V> tableName,
+            ConcurrentHashMap<TableName, Long> trackTableTransactionIds) {
             this.tableStore = tableStore;
             this.tableName = tableName;
             this.trackTableTransactionIds = trackTableTransactionIds;
@@ -164,8 +163,8 @@ public class TableReplicator {
     }
 
     public <K, V> boolean replicateLocalChanges(HostRingProvider hostRingProvider, TableName<K, V> tableName,
-            NavigableMap<K, TimestampedValue<V>> changes,
-            boolean enqueueForResendOnFailure) throws Exception {
+        NavigableMap<K, TimestampedValue<V>> changes,
+        boolean enqueueForResendOnFailure) throws Exception {
         if (changes.isEmpty()) {
             return true;
         } else {

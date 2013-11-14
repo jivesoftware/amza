@@ -43,7 +43,7 @@ public class AmzaServiceInitializer {
         TableStateChanges<Object, Object> tableStateChanges = new TableStateChanges<Object, Object>() {
             @Override
             public void changes(TableName<Object, Object> mapName, TableDelta<Object, Object> change) throws Exception {
-                replicator.get().replicateLocalChanges(hostRingProvider.get(), mapName, change.getAppliedRows(), true);
+                replicator.get().replicateLocalChanges(hostRingProvider.get(), mapName, change.getApply(), true);
                 allChangesCallback.changes(mapName, change);
             }
         };

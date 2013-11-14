@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import javax.ws.rs.Consumes;
@@ -107,7 +108,7 @@ public class AmzaReplicationRestEndpoints {
             }
         });
 
-        return new TableDelta<>(changes, null, null);
+        return new TableDelta<>(changes, new TreeMap(), null);
     }
 
     @POST

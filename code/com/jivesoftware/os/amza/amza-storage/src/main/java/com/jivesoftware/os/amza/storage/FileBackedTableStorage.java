@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -50,47 +51,35 @@ public class FileBackedTableStorage<K, V> implements TableStorage<K, V> {
     synchronized public TableDelta<K, V> update(NavigableMap<K, TimestampedValue<V>> mutatedRows,
             ConcurrentNavigableMap<K, TimestampedValue<V>> allRows) throws Exception {
 
-        ConcurrentNavigableMap<K, TimestampedValue<V>> saveableMap = new ConcurrentSkipListMap<>();
-        saveableMap.putAll(allRows);
-
-        ConcurrentNavigableMap<K, TimestampedValue<V>> appliedRows = new ConcurrentSkipListMap<>();
-        Multimap<K, TimestampedValue<V>> oldRows = ArrayListMultimap.create();
-        ConcurrentNavigableMap<K, TimestampedValue<V>> trumpingRows = new ConcurrentSkipListMap<>();
+        NavigableMap<K, TimestampedValue<V>> applyMap = new TreeMap<>();
+        NavigableMap<K, TimestampedValue<V>> removeMap = new TreeMap<>();
+        Multimap<K, TimestampedValue<V>> clobberedRows = ArrayListMultimap.create();
 
         for (Entry<K, TimestampedValue<V>> e : mutatedRows.entrySet()) {
             K key = e.getKey();
             TimestampedValue<V> update = e.getValue();
-            TimestampedValue<V> current = saveableMap.get(key);
+            TimestampedValue<V> current = allRows.get(key);
             if (current == null) {
-                saveableMap.put(key, update);
-                appliedRows.put(key, update);
+                applyMap.put(key, update);
             } else {
                 if (update.getTombstoned() && update.getTimestamp() < 0) { // Handle tombstone updates
                     if (current.getTimestamp() <= Math.abs(update.getTimestamp())) {
-                        TimestampedValue<V> remove = saveableMap.remove(key);
-                        if (remove != null) {
-                            oldRows.put(key, remove);
+                        TimestampedValue<V> removeable = allRows.get(key);
+                        if (removeable != null) {
+                            removeMap.put(key, removeable);
+                            clobberedRows.put(key, removeable);
                         }
-                        appliedRows.put(key, update);
-                    } else {
-                        trumpingRows.put(key, current);
                     }
                 } else if (current.getTimestamp() < update.getTimestamp()) {
-                    oldRows.put(key, current);
-                    saveableMap.put(key, update);
-                    appliedRows.put(key, update);
-                } else {
-                    trumpingRows.put(key, current);
+                    clobberedRows.put(key, current);
+                    applyMap.put(key, update);
                 }
             }
         }
-        if (appliedRows.isEmpty()) {
-            //System.out.println("Current:" + getTableName() + " appliedRows:" + appliedRows.size() + " trumpingRows:" + trumpingRows.size());
-            return new TableDelta<>(appliedRows, oldRows, allRows);
+        if (!applyMap.isEmpty()) {
+            rowTableFile.save(clobberedRows, applyMap, true);
         }
-        //System.out.println("Saved:" + getTableName() + " appliedRows:" + appliedRows.size() + " trumpingRows:" + trumpingRows.size());
-        rowTableFile.save(oldRows, appliedRows, true);
-        return new TableDelta<>(appliedRows, oldRows, saveableMap);
+        return new TableDelta<>(applyMap, removeMap, clobberedRows);
     }
 
     @Override

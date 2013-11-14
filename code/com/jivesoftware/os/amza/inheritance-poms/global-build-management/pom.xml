@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
+        <artifactId>global-plugin-management</artifactId>
+        <version>unspecified</version>
+        <relativePath>../global-plugin-management/pom.xml</relativePath>
+    </parent>
+
+    <artifactId>global-build-management</artifactId>
+    <packaging>pom</packaging>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <build>
+        <!-- This section defines the plugins to run by default for all children projects.
+        Note that default maven plugins don't need to be specified (like maven-compiler-plugin). -->
+<!--        <plugins>
+            <plugin>
+                <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
+                <artifactId>module-name-alignment-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
+                <artifactId>package-name-alignment-plugin</artifactId>
+            </plugin>
+        </plugins>-->
+    </build>
+    <profiles>
+        <profile>
+            <id>checks</id>
+            <build>
+                <plugins>
+                    <!--Makes sure nobody depends on SNAPSHOTs.-->
+<!--                    <plugin>
+                        <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
+                        <artifactId>no-snapshots-plugin</artifactId>
+                    </plugin>-->
+                </plugins>
+            </build>
+        </profile>
+       </profiles>
+</project>

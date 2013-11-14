@@ -1,4 +1,4 @@
-package com.jivesoftware.jive.symphony.amza.example.deployable;
+package com.jivesoftware.os.amza.example.deployable;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +39,7 @@ public class Main {
         String hostname = args[0];
         int port = Integer.parseInt(System.getProperty("amza.port", "1175"));
         String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
-        int multicastPort = Integer.parseInt(System.getProperty("amza.port", "1123"));
+        int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1123"));
         String clusterName = (args.length > 1 ? args[1] : null);
 
         RingHost ringHost = new RingHost(hostname, port);

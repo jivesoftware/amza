@@ -45,9 +45,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.jivesoftware.jive.platform.logging</groupId>
+            <groupId>com.jivesoftware.os.jive.utils</groupId>
             <artifactId>logger</artifactId>
-            <version>unspecified</version>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>

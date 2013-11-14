@@ -14,10 +14,14 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
+import com.jivesoftware.os.amza.shared.TableStorage;
+import com.jivesoftware.os.amza.shared.TableStorageProvider;
+import com.jivesoftware.os.amza.storage.FileBackedTableStorage;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import com.jivesoftware.os.amza.storage.RowMarshallerProvider;
-import com.jivesoftware.os.amza.storage.json.StringRowMarshaller;
-import com.jivesoftware.os.amza.storage.json.StringTableStorageProvider;
+import com.jivesoftware.os.amza.storage.RowTableFile;
+import com.jivesoftware.os.amza.storage.json.StringRowReader;
+import com.jivesoftware.os.amza.storage.json.StringRowValueChunkMarshaller;
+import com.jivesoftware.os.amza.storage.json.StringRowWriter;
 import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
@@ -27,6 +31,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
+import java.io.File;
 
 public class Main {
 
@@ -43,7 +48,7 @@ public class Main {
         String clusterName = (args.length > 1 ? args[1] : null);
 
         RingHost ringHost = new RingHost(hostname, port);
-        OrderIdProvider orderIdProvider = new OrderIdProviderImpl(ringHost.getPort(), // todo need a better way to create writter id.
+        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(ringHost.getPort(), // todo need a better way to create writter id.
                 new AmzaChangeIdPacker(),
                 new JiveEpochTimestampProvider());
 
@@ -51,21 +56,29 @@ public class Main {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
 
-        StringTableStorageProvider storageProvider = new StringTableStorageProvider(orderIdProvider, new RowMarshallerProvider() {
+        final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
 
+        TableStorageProvider tableStorageProvider = new TableStorageProvider() {
             @Override
-            public <K, V, String> RowMarshaller<K, V, String> getRowMarshaller(TableName<K, V> tableName) {
-                return (RowMarshaller<K, V, String>) new StringRowMarshaller<>(mapper, tableName);
-            }
-        });
+            public <K, V> TableStorage<K, V> createTableStorage(File workingDirectory, String tableDomain, TableName<K, V> tableName) throws Exception {
+                File directory = new File(workingDirectory, tableDomain);
+                directory.mkdirs();
+                File file = new File(directory, tableName.getTableName() + ".kvt");
+                StringRowReader reader = new StringRowReader(file);
+                StringRowWriter writer = new StringRowWriter(file);
 
-        AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
+                //RowMarshaller<K, V, String> rowMarshaller = new StringRowMarshaller<>(mapper, tableName);
+                RowMarshaller<K, V, String> rowMarshaller = new StringRowValueChunkMarshaller(directory, mapper, tableName);
+                RowTableFile<K, V, String> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
+                return new FileBackedTableStorage(rowTableFile);
+            }
+        };
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
                 orderIdProvider,
-                storageProvider,
-                storageProvider,
-                storageProvider,
+                tableStorageProvider,
+                tableStorageProvider,
+                tableStorageProvider,
                 new HttpChangeSetSender(),
                 new HttpChangeSetTaker(),
                 new TableStateChanges<Object, Object>() {

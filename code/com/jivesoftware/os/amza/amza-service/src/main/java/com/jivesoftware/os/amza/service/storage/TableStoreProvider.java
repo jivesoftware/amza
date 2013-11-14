@@ -31,7 +31,7 @@ public class TableStoreProvider {
         return storeName;
     }
 
-    synchronized public <K, V> TableStore<K, V> getTableStore(TableName<K, V> tableName) {
+    synchronized public <K, V> TableStore<K, V> getTableStore(TableName<K, V> tableName) throws Exception {
         TableStore<K, V> tableStore = (TableStore<K, V>) tableStores.get(tableName);
         if (tableStore == null) {
             TableStorage<K, V> tableStorage = tableStorageProvider.createTableStorage(workingDirectory, storeName, tableName);

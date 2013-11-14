@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.storage.chunks.ChunkFiler;
 import com.jivesoftware.os.amza.storage.chunks.SubFiler;
+import java.io.IOException;
 import java.nio.charset.Charset;
 
 public class LazyLoadingTransactionEntry<K, V> implements TransactionEntry<K, V> {
@@ -19,8 +20,14 @@ public class LazyLoadingTransactionEntry<K, V> implements TransactionEntry<K, V>
     private final long timestamp;
     private final boolean tombstoned;
 
-    public LazyLoadingTransactionEntry(long orderId, K key,
-            ObjectMapper mapper, ChunkFiler chunkFiler, long chunkId, Class<V> valueClass, long timestamp, boolean tombstoned) {
+    public LazyLoadingTransactionEntry(long orderId,
+            K key,
+            ObjectMapper mapper,
+            ChunkFiler chunkFiler,
+            long chunkId,
+            Class<V> valueClass,
+            long timestamp,
+            boolean tombstoned) {
         this.orderId = orderId;
         this.key = key;
         this.chunkFiler = chunkFiler;
@@ -43,20 +50,24 @@ public class LazyLoadingTransactionEntry<K, V> implements TransactionEntry<K, V>
 
     @Override
     public TimestampedValue<V> getValue() {
-
+        byte[] rawValue = null;
         try {
             SubFiler filer = chunkFiler.getFiler(chunkId);
-            String valueString = new String(filer.toBytes(), UTF8);
-            V value = mapper.readValue(valueString, valueClass);
-            return new TimestampedValue<>(value, timestamp, tombstoned);
+            rawValue = filer.toBytes();
         } catch (Exception x) {
             throw new RuntimeException("Unable to read value from chunkFiler for chunkId:" + chunkId, x);
+        }
+        try {
+            V value = mapper.readValue(rawValue, valueClass);
+            return new TimestampedValue<>(value, timestamp, tombstoned);
+        } catch (IOException x) {
+            throw new RuntimeException("Unable map rawValue to valueClass=" + valueClass, x);
         }
     }
 
     @Override
     public TimestampedValue<V> setValue(TimestampedValue<V> value) {
-        throw new UnsupportedOperationException("Not supported.");
+        throw new UnsupportedOperationException("Will never be supported.");
     }
 
 }

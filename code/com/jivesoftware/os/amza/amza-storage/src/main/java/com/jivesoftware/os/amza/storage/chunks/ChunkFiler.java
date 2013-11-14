@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.storage.chunks;
 
-import com.jivesoftware.jive.platform.logging.logger.MetricLogger;
-import com.jivesoftware.jive.platform.logging.logger.MetricLoggerFactory;
+import com.jivesoftware.os.jive.utils.logger.MetricLogger;
+import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import java.io.File;
 import java.io.IOException;
 
@@ -207,7 +207,9 @@ public class ChunkFiler {
             filer.seek(_chunkFP);
             long magicNumber = UIO.readLong(filer, "magicNumber");
             if (magicNumber != cMagicNumber) {
-                throw new Exception("Invalid chunkFP " + _chunkFP);
+                throw new Exception("Invalid chunkFP:" + _chunkFP
+                        + " excountered bad magicNumber:" + magicNumber
+                        + " expected:" + cMagicNumber);
             }
             chunkPower = UIO.readLong(filer, "chunkPower");
             nextFreeChunkFP = UIO.readLong(filer, "chunkNexFreeChunkFP");
@@ -289,5 +291,4 @@ public class ChunkFiler {
             UIO.writeLong(filer, _nextFreeFP, "chunkNexFreeChunkFP");
         }
     }
-
 }

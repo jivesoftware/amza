@@ -12,14 +12,14 @@ import java.io.File;
 import java.nio.charset.Charset;
 import java.util.Map;
 
-public class JsonTableChunkedValueRowMarshaller<K, V> implements RowMarshaller<K, V, String> {
+public class StringRowValueChunkMarshaller<K, V> implements RowMarshaller<K, V, String> {
 
     private final Charset UTF8 = Charset.forName("UTF-8");
     private final ObjectMapper mapper;
     private final TableName<K, V> tableName;
     private final ChunkFiler chunkFiler;
 
-    public JsonTableChunkedValueRowMarshaller(File workingDirectory, ObjectMapper mapper, TableName<K, V> tableName) throws Exception {
+    public StringRowValueChunkMarshaller(File workingDirectory, ObjectMapper mapper, TableName<K, V> tableName) throws Exception {
         this.mapper = mapper;
         this.tableName = tableName;
         chunkFiler = ChunkFiler.factory(workingDirectory, "values-" + tableName.getTableName());
@@ -40,13 +40,12 @@ public class JsonTableChunkedValueRowMarshaller<K, V> implements RowMarshaller<K
 
         byte[] valueAsBytes = value.getBytes(UTF8);
         long chunkId = chunkFiler.newChunk(valueAsBytes.length);
+        System.out.println("chunkId=" + chunkId);
         SubFiler filer = chunkFiler.getFiler(chunkId);
-        filer.write(valueAsBytes);
+        filer.setBytes(valueAsBytes);
         filer.flush();
-        //filer.close(); //?? hmm dont know
 
         value = Long.toString(chunkId);
-
         StringBuilder sb = new StringBuilder();
         sb.append("transaction.").append(transaction.length()).append('=').append(transaction).append(',');
         sb.append("key.").append(key.length()).append('=').append(key).append(',');
@@ -68,8 +67,15 @@ public class JsonTableChunkedValueRowMarshaller<K, V> implements RowMarshaller<K
         long timestamp = Long.parseLong(stringAndOffest.getString());
         stringAndOffest = value(line, stringAndOffest.getOffset());
         String valueString = stringAndOffest.getString();
-        return new LazyLoadingTransactionEntry<>(orderId, key, mapper,
-                chunkFiler, Long.parseLong(valueString), tableName.getValueClass(), timestamp, tombstone);
+
+        return new LazyLoadingTransactionEntry<>(orderId,
+                key,
+                mapper,
+                chunkFiler,
+                Long.parseLong(valueString),
+                tableName.getValueClass(),
+                timestamp,
+                tombstone);
     }
 
     StringAndOffest value(String line, int offest) {

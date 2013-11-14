@@ -14,12 +14,16 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
+import com.jivesoftware.os.amza.shared.TableStorage;
+import com.jivesoftware.os.amza.shared.TableStorageProvider;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
+import com.jivesoftware.os.amza.storage.FileBackedTableStorage;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import com.jivesoftware.os.amza.storage.RowMarshallerProvider;
+import com.jivesoftware.os.amza.storage.RowTableFile;
 import com.jivesoftware.os.amza.storage.json.StringRowMarshaller;
-import com.jivesoftware.os.amza.storage.json.StringTableStorageProvider;
+import com.jivesoftware.os.amza.storage.json.StringRowReader;
+import com.jivesoftware.os.amza.storage.json.StringRowWriter;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -107,25 +111,30 @@ public class AmzaTestCluster {
         };
 
         // TODO need to get writer id from somewhere other than port.
-        OrderIdProvider orderIdProvider = new OrderIdProviderImpl(serviceHost.getPort(), new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
+        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(serviceHost.getPort(), new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
 
-        StringTableStorageProvider stringTableStorageProvider = new StringTableStorageProvider(orderIdProvider, new RowMarshallerProvider() {
-
+        TableStorageProvider tableStorageProvider = new TableStorageProvider() {
             @Override
-            public <K, V, String> RowMarshaller<K, V, String> getRowMarshaller(TableName<K, V> tableName) {
-                return (RowMarshaller<K, V, String>) new StringRowMarshaller<>(mapper, tableName);
+            public <K, V> TableStorage<K, V> createTableStorage(File workingDirectory, String tableDomain, TableName<K, V> tableName) throws Exception {
+                File file = new File(workingDirectory, tableDomain + File.separator + tableName.getTableName() + ".kvt");
+                StringRowReader reader = new StringRowReader(file);
+                StringRowWriter writer = new StringRowWriter(file);
+
+                RowMarshaller<K, V, String> rowMarshaller = new StringRowMarshaller<>(mapper, tableName);
+                RowTableFile<K, V, String> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
+                return new FileBackedTableStorage(rowTableFile);
             }
-        });
+        };
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(config,
                 orderIdProvider,
-                stringTableStorageProvider,
-                stringTableStorageProvider,
-                stringTableStorageProvider,
+                tableStorageProvider,
+                tableStorageProvider,
+                tableStorageProvider,
                 changeSetSender,
                 tableTaker, new TableStateChanges<Object, Object>() {
 

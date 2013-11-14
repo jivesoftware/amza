@@ -3,9 +3,6 @@ package com.jivesoftware.jive.symphony.amza.example.deployable;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetSender;
-import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetTaker;
-import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.example.deployable.endpoints.AmzaExampleEndpoints;
 import com.jivesoftware.os.amza.service.AmzaChangeIdPacker;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -21,6 +18,9 @@ import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.RowMarshallerProvider;
 import com.jivesoftware.os.amza.storage.json.StringRowMarshaller;
 import com.jivesoftware.os.amza.storage.json.StringTableStorageProvider;
+import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetSender;
+import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetTaker;
+import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -36,11 +36,13 @@ public class Main {
 
     public void run(String[] args) throws Exception {
 
-        String clusterName = args[0];
-        String host = args[1];
-        int port = Integer.parseInt(args[2]);
+        String hostname = args[0];
+        int port = Integer.parseInt(System.getProperty("amza.port", "1175"));
+        String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
+        int multicastPort = Integer.parseInt(System.getProperty("amza.port", "1123"));
+        String clusterName = (args.length > 1 ? args[1] : null);
 
-        RingHost ringHost = new RingHost(host, port);
+        RingHost ringHost = new RingHost(hostname, port);
         OrderIdProvider orderIdProvider = new OrderIdProviderImpl(ringHost.getPort(), // todo need a better way to create writter id.
                 new AmzaChangeIdPacker(),
                 new JiveEpochTimestampProvider());
@@ -49,7 +51,7 @@ public class Main {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
 
-        StringTableStorageProvider jsonPartitionStorageProvider = new StringTableStorageProvider(orderIdProvider, new RowMarshallerProvider() {
+        StringTableStorageProvider storageProvider = new StringTableStorageProvider(orderIdProvider, new RowMarshallerProvider() {
 
             @Override
             public <K, V, String> RowMarshaller<K, V, String> getRowMarshaller(TableName<K, V> tableName) {
@@ -61,9 +63,9 @@ public class Main {
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
                 orderIdProvider,
-                jsonPartitionStorageProvider,
-                jsonPartitionStorageProvider,
-                jsonPartitionStorageProvider,
+                storageProvider,
+                storageProvider,
+                storageProvider,
                 new HttpChangeSetSender(),
                 new HttpChangeSetTaker(),
                 new TableStateChanges<Object, Object>() {
@@ -78,23 +80,6 @@ public class Main {
                 amzaServiceConfig.takeFromNeighborsIntervalInMillis,
                 amzaServiceConfig.compactTombstoneIfOlderThanNMillis);
 
-//        try {
-//            amzaService.addRingHost("master", ringHost);
-//        } catch (Exception x) {
-//            x.printStackTrace();
-//            System.exit(1);
-//        }
-
-
-//        for (String peer : peers) {
-//            try {
-//                hostPort = peer.split(":");
-//                amzaService.addRingHost("master", new RingHost(hostPort[0], Integer.parseInt(hostPort[1])));
-//            } catch (Exception x) {
-//                System.out.println("Failed to add ring host:" + peer + " Cause:" + x.getMessage());
-//            }
-//        }
-
         System.out.println("-----------------------------------------------------------------------");
         System.out.println("|      Amza Service Online");
         System.out.println("-----------------------------------------------------------------------");
@@ -105,7 +90,6 @@ public class Main {
                 .addEndpoint(AmzaReplicationRestEndpoints.class)
                 .addInjectable(AmzaInstance.class, amzaService);
 
-
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);
         initializeRestfulServer.addContextHandler("/", jerseyEndpoints);
         ServiceHandle serviceHandle = initializeRestfulServer.build();
@@ -115,7 +99,16 @@ public class Main {
         System.out.println("|      Jetty Service Online");
         System.out.println("-----------------------------------------------------------------------");
 
-        AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService, ringHost, clusterName, "225.4.5.6", 9876);
-        amzaDiscovery.start();
+        if (clusterName != null) {
+            AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService, ringHost, clusterName, multicastGroup, multicastPort);
+            amzaDiscovery.start();
+            System.out.println("-----------------------------------------------------------------------");
+            System.out.println("|      Amza Service Discovery Online");
+            System.out.println("-----------------------------------------------------------------------");
+        } else {
+            System.out.println("-----------------------------------------------------------------------");
+            System.out.println("|     Amze Service is in manual Discovery mode.  No cluster name was specified");
+            System.out.println("-----------------------------------------------------------------------");
+        }
     }
 }

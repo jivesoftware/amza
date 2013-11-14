@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.jivesoftware.os</groupId>
+    <artifactId>amza</artifactId>
+    <version>0.1</version>
+    <packaging>pom</packaging>
+    <parent>
+        <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
+        <artifactId>global-repo-management</artifactId>
+        <version>0.1</version>
+        <relativePath>inheritance-poms/global-repo-management/pom.xml</relativePath>
+    </parent>
+    <modules>
+        <module>inheritance-poms</module>
+        <module>amza-example-deployable</module>
+        <module>amza-service</module>
+        <module>amza-test</module>
+        <module>amza-transport</module>
+        <module>amza-shared</module>
+        <module>amza-storage</module>
+    </modules>
+</project>

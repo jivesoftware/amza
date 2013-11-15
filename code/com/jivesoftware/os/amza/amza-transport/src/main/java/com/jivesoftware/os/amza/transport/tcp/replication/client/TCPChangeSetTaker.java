@@ -1,12 +1,12 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.client;
 
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.FstMarshaller;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.FstMarshaller;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.ReadBufferProvider;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
 import java.nio.ByteBuffer;
 
@@ -16,10 +16,10 @@ import java.nio.ByteBuffer;
 public class TCPChangeSetTaker implements ChangeSetTaker {
 
     private final ClientChannelProvider clientChannelProvider;
-    private final ReadBufferProvider readBufferProvider;
+    private final BufferProvider readBufferProvider;
     private final FstMarshaller fstMarshaller;
 
-    public TCPChangeSetTaker(ClientChannelProvider clientChannelProvider, ReadBufferProvider readBufferProvider, FstMarshaller fstMarshaller) {
+    public TCPChangeSetTaker(ClientChannelProvider clientChannelProvider, BufferProvider readBufferProvider, FstMarshaller fstMarshaller) {
         this.clientChannelProvider = clientChannelProvider;
         this.readBufferProvider = readBufferProvider;
         this.fstMarshaller = fstMarshaller;

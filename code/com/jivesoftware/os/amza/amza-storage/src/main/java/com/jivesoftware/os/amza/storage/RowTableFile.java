@@ -107,7 +107,6 @@ public class RowTableFile<K, V, R> {
                 return true;
             }
         });
-        //System.out.println("rowMutationSince:" + transactionId + " for " + getTableName() + " " + higestOrderId.longValue() + " " + changes);
         transactionSetStream.stream(new TransactionSet<>(higestOrderId.longValue(), changes));
     }
 }

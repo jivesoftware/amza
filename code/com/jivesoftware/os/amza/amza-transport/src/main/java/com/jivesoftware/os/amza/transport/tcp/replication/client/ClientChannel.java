@@ -1,7 +1,8 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.client;
 
-import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
+import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer.Frame;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
@@ -27,17 +28,20 @@ public class ClientChannel {
     private final int writeBufferSize;
     private final int socketTimeout;
     private final MessageFramer framer;
+    private final BufferProvider bufferProvider;
     private AtomicBoolean connected = new AtomicBoolean();
     private SocketChannel socketChannel;
     private ReadableByteChannel readChannel;
     private final Object connectLock = new Object();
 
-    public ClientChannel(RingHost host, int socketTimeout, int readBufferSize, int writeBufferSize, MessageFramer framer) {
+    public ClientChannel(RingHost host, int socketTimeout, int readBufferSize, int writeBufferSize, MessageFramer framer,
+        BufferProvider bufferProvider) {
         this.host = host;
         this.socketTimeout = socketTimeout;
         this.readBufferSize = readBufferSize;
         this.writeBufferSize = writeBufferSize;
         this.framer = framer;
+        this.bufferProvider = bufferProvider;
     }
 
     public void connect(int connectTimeout) throws IOException {
@@ -92,7 +96,14 @@ public class ClientChannel {
         if (!connected.get()) {
             throw new ClosedChannelException();
         }
-        socketChannel.write(framer.buildFrame(message, lastInSequence));
+
+        ByteBuffer writeBuffer = bufferProvider.acquire();
+        try {
+            framer.buildFrame(message, lastInSequence, writeBuffer);
+            socketChannel.write(writeBuffer);
+        } finally {
+            bufferProvider.release(writeBuffer);
+        }
     }
 
     public void receive(CallbackStream<byte[]> messageStream, ByteBuffer receiveBuffer) throws ClosedChannelException, IOException {
@@ -118,4 +129,3 @@ public class ClientChannel {
         }
     }
 }
-

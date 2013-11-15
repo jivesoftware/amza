@@ -7,11 +7,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  *
  */
-public class ReadBufferProvider {
+public class BufferProvider {
 
     private final Queue<ByteBuffer> buffers;
 
-    public ReadBufferProvider(int bufferSize, int poolSize) {
+    public BufferProvider(int bufferSize, int poolSize) {
         this.buffers = new ConcurrentLinkedQueue<>();
         for (int i=0; i<poolSize; i++) {
             buffers.add(ByteBuffer.allocateDirect(bufferSize));

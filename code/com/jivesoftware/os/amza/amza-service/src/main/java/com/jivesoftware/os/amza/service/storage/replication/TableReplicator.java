@@ -101,7 +101,7 @@ public class TableReplicator {
                     LOG.debug("Taking from " + ringHost + " " + tableName + " " + lastTransactionId);
                     tableTaker.take(ringHost, tableName, lastTransactionId, new TakeTransactionSetStream(tableStore,
                         tableName, lastTableTransactionIds));
-                    
+
                     taken.increment();
                     if (taken.intValue() >= takeFromFactor) {
                         return;

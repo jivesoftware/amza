@@ -25,13 +25,30 @@ public class AmzaLoremIpsum {
 
         args = new String[]{"localhost", "1175", "1", "100000"};
 
-        String hostName = args[0];
-        int port = Integer.parseInt(args[1]);
-        int firstDocId = Integer.parseInt(args[2]);
-        int count = Integer.parseInt(args[3]);
+        final String hostName = args[0];
+        final int port = Integer.parseInt(args[1]);
+        final int firstDocId = Integer.parseInt(args[2]);
+        final int count = Integer.parseInt(args[3]);
 
         String tableName = "lorem";
 
+        for (int i = 0; i < 8; i++) {
+            final String tname = tableName + 1;
+            new Thread() {
+
+                @Override
+                public void run() {
+                    try {
+                        feed(hostName, port, tname, firstDocId, count);
+                    } catch (Exception x) {
+                        x.printStackTrace();
+                    }
+                }
+            }.start();
+        }
+    }
+
+    private static void feed(String hostName, int port, String tableName, int firstDocId, int count) throws URIException, IOException {
         long start = System.currentTimeMillis();
         Curl curl = Curl.create();
         for (int key = 0; key < count; key++) {

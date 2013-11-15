@@ -40,7 +40,6 @@ public class StringRowValueChunkMarshaller<K, V> implements RowMarshaller<K, V, 
 
         byte[] valueAsBytes = value.getBytes(UTF8);
         long chunkId = chunkFiler.newChunk(valueAsBytes.length);
-        System.out.println("chunkId=" + chunkId);
         SubFiler filer = chunkFiler.getFiler(chunkId);
         filer.setBytes(valueAsBytes);
         filer.flush();

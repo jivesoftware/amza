@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -7,42 +8,42 @@ import java.nio.ByteBuffer;
  */
 public class MessageFramer {
 
-    public void buildFrame(byte[] payload, boolean lastInSequence, ByteBuffer frameBuffer) {
-        frameBuffer = ByteBuffer.allocate(5 + payload.length);
-        frameBuffer.put(lastInSequence ? (byte) 1 : 0);
-        frameBuffer.putInt(payload.length);
-        frameBuffer.put(payload);
+    private final FstMarshaller fstMarshaller;
+    private final int headerSize = 1 + 1 + 4;
+
+    public MessageFramer(FstMarshaller fstMarshaller) {
+        this.fstMarshaller = fstMarshaller;
     }
 
-    public Frame readFrame(ByteBuffer buffer) {
-        byte eos = buffer.get();
-        if (eos != 1 && eos != 0) {
-            throw new IllegalStateException("Invalid eos signifie read from stream");
-        }
+    public void toFrame(FrameableMessage frameable, ByteBuffer buff) throws IOException {
+        //set placeholder size;
+        buff.mark();
+        buff.putInt(0);
+        int size = fstMarshaller.serialize(frameable, buff);
 
-        int length = buffer.getInt();
-        byte[] message = new byte[length];
-        buffer.get(message, buffer.position(), length);
+        //set actual size value
+        buff.reset();
+        buff.putInt(size);
 
-        return new Frame(message, eos == 1);
+        //prepare for socket to read buffer during send
+        buff.rewind();
     }
 
-    public static class Frame {
+    public <F extends FrameableMessage> F fromFrame(ByteBuffer readBuffer, int read, Class<F> clazz) throws Exception {
+        readBuffer.mark();
+        readBuffer.flip();
 
-        private final byte[] message;
-        private final boolean lastInSequence;
+        if (readBuffer.remaining() > headerSize) {
+            int messageLength = readBuffer.getInt();
 
-        public Frame(byte[] message, boolean lastInSequence) {
-            this.message = message;
-            this.lastInSequence = lastInSequence;
+            if (readBuffer.remaining() >= messageLength) {
+                return fstMarshaller.<F>deserialize(readBuffer, clazz);
+            }
+
         }
 
-        public byte[] getMessage() {
-            return message;
-        }
-
-        public boolean isLastInSequence() {
-            return lastInSequence;
-        }
+        //return to it's last position so next read will append bytes
+        readBuffer.reset();
+        return null;
     }
 }

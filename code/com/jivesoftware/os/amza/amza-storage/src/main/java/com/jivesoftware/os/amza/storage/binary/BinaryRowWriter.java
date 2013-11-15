@@ -1,21 +1,38 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.TableRowWriter;
-import java.io.File;
+import com.jivesoftware.os.amza.storage.chunks.Filer;
+import java.io.IOException;
 import java.util.Collection;
-import org.apache.commons.io.FileUtils;
 
-public class BinaryRowWriter implements TableRowWriter<String> {
+public class BinaryRowWriter implements TableRowWriter<byte[]> {
 
-    private final File file;
+    private final Filer filer;
 
-    public BinaryRowWriter(File file) {
-        this.file = file;
+    public BinaryRowWriter(Filer filer) {
+        this.filer = filer;
     }
 
     @Override
-    public void write(Collection<String> rows, boolean append) throws Exception {
-        file.getParentFile().mkdirs();
-        FileUtils.writeLines(file, "utf-8", rows, "\n", append);
+    public void write(Collection<byte[]> rows, boolean append) throws Exception {
+        synchronized (filer.lock()) {
+            if (append) {
+                filer.seek(filer.length());
+                writeRows(rows);
+
+            } else {
+                filer.seek(filer.length());
+                writeRows(rows);
+                filer.eof();
+            }
+        }
+    }
+
+    private void writeRows(Collection<byte[]> rows) throws IOException {
+        for (byte[] row : rows) {
+            filer.write(row.length);
+            filer.write(row);
+            filer.write(row.length + (2 * 4));
+        }
     }
 }

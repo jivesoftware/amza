@@ -2,29 +2,50 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.TableRowReader;
 import com.jivesoftware.os.amza.shared.TableRowReader.Stream;
-import java.io.File;
-import java.util.Collections;
-import java.util.List;
-import org.apache.commons.io.FileUtils;
+import com.jivesoftware.os.amza.storage.chunks.Filer;
 
-public class BinaryRowReader implements TableRowReader<String> {
+public class BinaryRowReader implements TableRowReader<byte[]> {
 
-    private final File file;
+    private final Filer filer;
 
-    public BinaryRowReader(File file) {
-        this.file = file;
+    public BinaryRowReader(Filer filer) {
+        this.filer = filer;
     }
 
     @Override
-    public void read(boolean reverse, Stream<String> stream) throws Exception {
-        if (file.exists()) {
-            List<String> readLines = FileUtils.readLines(file, "utf-8");
-            if (reverse) {
-                Collections.reverse(readLines);
+    public void read(boolean reverse, Stream<byte[]> stream) throws Exception {
+
+        if (reverse) {
+            synchronized (filer.lock()) {
+                long seekTo = filer.length() - 4;
+                while (seekTo > -4) {
+                    if (seekTo < 0) {
+                        filer.seek(0);
+                    } else {
+                        filer.seek(seekTo);
+                        int priorLength = filer.read();
+                        int length = filer.read();
+                        byte[] row = new byte[length];
+                        filer.readFully(row);
+                        if (!stream.stream(row)) {
+                            break;
+                        }
+                        seekTo = priorLength;
+                    }
+                }
             }
-            for (String line : readLines) {
-                if (!stream.stream(line)) {
-                    break;
+        } else {
+            synchronized (filer.lock()) {
+                filer.seek(0);
+                int length = filer.read();
+                while (length != -1) {
+                    byte[] row = new byte[length];
+                    filer.readFully(row);
+                    if (!stream.stream(row)) {
+                        break;
+                    }
+                    filer.skipBytes(4);
+                    length = filer.read();
                 }
             }
         }

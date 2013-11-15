@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -54,16 +55,22 @@ public class RowTableFile<K, V, R> {
 //        }
     }
 
-    synchronized public void save(Multimap<K, TimestampedValue<V>> was, NavigableMap<K, TimestampedValue<V>> mutation, boolean append) throws Exception {
+    synchronized public NavigableMap<K, TimestampedValue<V>> save(Multimap<K, TimestampedValue<V>> was,
+            NavigableMap<K, TimestampedValue<V>> mutation, boolean append) throws Exception {
         long transactionId = 0;
         if (orderIdProvider != null) {
             transactionId = orderIdProvider.nextId();
         }
+        NavigableMap<K, TimestampedValue<V>> saved = new TreeMap<>();
         List<R> rows = new ArrayList<>();
         for (Map.Entry<K, TimestampedValue<V>> e : mutation.entrySet()) {
-            rows.add(rowMarshaller.toRow(transactionId, e));
+            R toRow = rowMarshaller.toRow(transactionId, e);
+            rows.add(toRow);
+            saved.put(e.getKey(), rowMarshaller.fromRow(toRow).getValue());
         }
         rowWriter.write(rows, append);
+
+        return saved;
     }
 
     synchronized public ConcurrentNavigableMap<K, TimestampedValue<V>> load() throws Exception {

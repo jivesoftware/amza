@@ -19,11 +19,11 @@ public class MessageFramer {
         if (eos != 1 && eos != 0) {
             throw new IllegalStateException("Invalid eos signifie read from stream");
         }
-        
+
         int length = buffer.getInt();
         byte[] message = new byte[length];
         buffer.get(message, buffer.position(), length);
-        
+
         return new Frame(message, eos == 1);
     }
 

@@ -27,18 +27,18 @@ public class FstMarshaller {
         fstConfig.registerSerializer(clazz, serializer, false);
     }
 
-    public <V> byte[] serialize(V changeSet) throws IOException {
+    public <V> byte[] serialize(V value) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (FSTObjectOutput out = fstConfig.getObjectOutput(baos)) {
-            out.writeObject(out, changeSet.getClass());
+        try (FSTObjectOutput out = new FSTObjectOutput(baos)) {
+            out.writeObject(value, value.getClass());
         }
         return baos.toByteArray();
     }
 
     public <V> V deserialize(byte[] bytes, Class<V> clazz) throws Exception {
         ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
-        try (FSTObjectInput in = fstConfig.getObjectInput(bais)) {
-            return (V)in.readObject(clazz);
+        try (FSTObjectInput in = new FSTObjectInput(bais)) {
+            return (V) in.readObject(clazz);
         }
     }
 

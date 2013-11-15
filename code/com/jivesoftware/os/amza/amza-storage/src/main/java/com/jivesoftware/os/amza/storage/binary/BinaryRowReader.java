@@ -2,13 +2,14 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.TableRowReader;
 import com.jivesoftware.os.amza.shared.TableRowReader.Stream;
-import com.jivesoftware.os.amza.storage.chunks.Filer;
+import com.jivesoftware.os.amza.storage.chunks.IFiler;
+import com.jivesoftware.os.amza.storage.chunks.UIO;
 
 public class BinaryRowReader implements TableRowReader<byte[]> {
 
-    private final Filer filer;
+    private final IFiler filer;
 
-    public BinaryRowReader(Filer filer) {
+    public BinaryRowReader(IFiler filer) {
         this.filer = filer;
     }
 
@@ -17,35 +18,42 @@ public class BinaryRowReader implements TableRowReader<byte[]> {
 
         if (reverse) {
             synchronized (filer.lock()) {
-                long seekTo = filer.length() - 4;
-                while (seekTo > -4) {
-                    if (seekTo < 0) {
-                        filer.seek(0);
-                    } else {
-                        filer.seek(seekTo);
-                        int priorLength = filer.read();
-                        int length = filer.read();
-                        byte[] row = new byte[length];
-                        filer.readFully(row);
-                        if (!stream.stream(row)) {
-                            break;
-                        }
-                        seekTo = priorLength;
+                long seekTo = filer.length() - 4; // last length int
+                if (seekTo < 0) {
+                    return;
+                }
+                while (seekTo >= 0) {
+                    filer.seek(seekTo);
+                    int priorLength = UIO.readInt(filer, "priorLength");
+                    seekTo -= (priorLength + 4);
+                    filer.seek(seekTo);
+
+                    int length = UIO.readInt(filer, "length");
+                    byte[] row = new byte[length];
+                    filer.read(row);
+                    if (!stream.stream(row)) {
+                        break;
                     }
+
+                    seekTo -= 4;
                 }
             }
         } else {
             synchronized (filer.lock()) {
+                if (filer.length() == 0) {
+                    return;
+                }
                 filer.seek(0);
-                int length = filer.read();
-                while (length != -1) {
+                while (filer.getFilePointer() < filer.length()) {
+                    int length = UIO.readInt(filer, "length");
                     byte[] row = new byte[length];
-                    filer.readFully(row);
+                    if (length > 0) {
+                        filer.read(row);
+                    }
                     if (!stream.stream(row)) {
                         break;
                     }
-                    filer.skipBytes(4);
-                    length = filer.read();
+                    UIO.readInt(filer, "length");
                 }
             }
         }

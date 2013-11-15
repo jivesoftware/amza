@@ -6,7 +6,7 @@ import de.ruedigermoeller.serialization.FSTObjectInput;
 import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;
 
-public class FSTBinaryRowSerializer extends FSTBasicObjectSerializer {
+public class FSTBinaryRowMarshaller extends FSTBasicObjectSerializer {
 
     @Override
     public void writeObject(FSTObjectOutput out,
@@ -14,18 +14,14 @@ public class FSTBinaryRowSerializer extends FSTBasicObjectSerializer {
             FSTClazzInfo fSTClazzInfo,
             FSTClazzInfo.FSTFieldInfo fSTFieldInfo,
             int streamPositioin) throws IOException {
-        out.writeFLong(((BinaryRow) toWrite).transaction);
-        out.writeClass(((BinaryRow) toWrite).key);
-        out.writeFLong(((BinaryRow) toWrite).timestamp);
-        out.writeFByte(((BinaryRow) toWrite).tombstone ? 1 : 0);
-        out.writeClass(((BinaryRow) toWrite).value);
-    }
-
-    @Override
-    public void readObject(FSTObjectInput in,
-            Object toRead,
-            FSTClazzInfo clzInfo,
-            FSTClazzInfo.FSTFieldInfo referencedBy) throws IOException, ClassNotFoundException, IllegalAccessException, InstantiationException {
+        BinaryRow br = (BinaryRow) toWrite;
+        out.writeFLong(br.transaction);
+        out.writeFInt(br.key.length);
+        out.write(br.key);
+        out.writeFLong(br.timestamp);
+        out.writeFByte(br.tombstone ? 1 : 0);
+        out.writeFInt(br.value.length);
+        out.write(br.value);
     }
 
     @Override
@@ -35,11 +31,16 @@ public class FSTBinaryRowSerializer extends FSTBasicObjectSerializer {
             FSTClazzInfo.FSTFieldInfo referencee,
             int streamPositioin) throws IOException, ClassNotFoundException, InstantiationException, IllegalAccessException {
         try {
-            Object object = new BinaryRow(in.readFLong(),
-                    (byte[]) in.readObject(byte[].class),
-                    in.readFLong(),
-                    in.readFByte() == 1,
-                    (byte[]) in.readObject(byte[].class));
+            long transaction = in.readFLong();
+            int keyLength = in.readFInt();
+            byte[] key = new byte[keyLength];
+            in.readFully(key);
+            long timestamp = in.readFLong();
+            boolean tombstone = in.readFByte() == 1;
+            int valueLength = in.readFInt();
+            byte[] value = new byte[valueLength];
+            in.readFully(value);
+            Object object = new BinaryRow(transaction, key, timestamp, tombstone, value);
             in.registerObject(object, streamPositioin, serializationInfo, referencee);
             return object;
         } catch (Exception x) {

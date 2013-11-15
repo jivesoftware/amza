@@ -1,15 +1,13 @@
 package com.jivesoftware.os.amza.storage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.storage.chunks.ChunkFiler;
 import com.jivesoftware.os.amza.storage.chunks.SubFiler;
 import java.io.IOException;
-import java.nio.charset.Charset;
 
 public class LazyLoadingTransactionEntry<K, V> implements TransactionEntry<K, V> {
-
-    private final static Charset UTF8 = Charset.forName("UTF-8");
 
     private final long orderId;
     private final K key;
@@ -59,7 +57,7 @@ public class LazyLoadingTransactionEntry<K, V> implements TransactionEntry<K, V>
         }
         try {
             V value = mapper.readValue(rawValue, valueClass);
-            return new TimestampedValue<>(value, timestamp, tombstoned);
+            return new BasicTimestampedValue<>(value, timestamp, tombstoned);
         } catch (IOException x) {
             throw new RuntimeException("Unable map rawValue to valueClass=" + valueClass, x);
         }

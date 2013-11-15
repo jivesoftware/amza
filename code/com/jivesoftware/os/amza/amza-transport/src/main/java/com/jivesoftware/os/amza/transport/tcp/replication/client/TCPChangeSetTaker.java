@@ -1,12 +1,12 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.client;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.FstMarshaller;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.FstMarshaller;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
 import java.nio.ByteBuffer;
 
@@ -27,7 +27,7 @@ public class TCPChangeSetTaker implements ChangeSetTaker {
 
     @Override
     public <K, V> void take(RingHost ringHost, TableName<K, V> tableName, long transationId, final TransactionSetStream transactionSetStream)
-        throws Exception {
+            throws Exception {
         ClientChannel channel = clientChannelProvider.getChannelForHost(ringHost);
 
         CallbackStream<byte[]> messageStream = new CallbackStream<byte[]>() {

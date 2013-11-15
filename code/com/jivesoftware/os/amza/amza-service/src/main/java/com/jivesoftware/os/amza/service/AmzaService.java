@@ -78,7 +78,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
                         tableReplicator.resendLocalChanges(AmzaService.this);
                     } catch (Exception x) {
                         LOG.debug("Failed while resending replicas.", x);
-                        LOG.error("Failed while resending replicas.");
+                        LOG.error("Failed while resending replicas.", x);
                     }
                 }
             }, resendReplicasIntervalInMillis, resendReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
@@ -90,7 +90,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
                         tableReplicator.applyReceivedChanges();
                     } catch (Exception x) {
                         LOG.debug("Failing to replay apply replication.", x);
-                        LOG.error("Failing to replay apply replication.");
+                        LOG.error("Failing to replay apply replication.", x);
                     }
                 }
             }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);

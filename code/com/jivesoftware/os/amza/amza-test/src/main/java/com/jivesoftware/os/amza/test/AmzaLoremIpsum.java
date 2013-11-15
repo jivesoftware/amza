@@ -23,7 +23,7 @@ public class AmzaLoremIpsum {
 
     public static void main(String[] args) throws URIException, IOException {
 
-        args = new String[]{"localhost", "1175", "1", "100000"};
+        args = new String[]{"localhost", "1175", "1", "1000000"};
 
         final String hostName = args[0];
         final int port = Integer.parseInt(args[1]);
@@ -32,8 +32,8 @@ public class AmzaLoremIpsum {
 
         String tableName = "lorem";
 
-        for (int i = 0; i < 8; i++) {
-            final String tname = tableName + 1;
+        for (int i = 0; i < 2; i++) {
+            final String tname = tableName + i;
             new Thread() {
 
                 @Override

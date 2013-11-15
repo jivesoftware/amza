@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.client;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer.Frame;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
@@ -35,7 +35,7 @@ public class ClientChannel {
     private final Object connectLock = new Object();
 
     public ClientChannel(RingHost host, int socketTimeout, int readBufferSize, int writeBufferSize, MessageFramer framer,
-        BufferProvider bufferProvider) {
+            BufferProvider bufferProvider) {
         this.host = host;
         this.socketTimeout = socketTimeout;
         this.readBufferSize = readBufferSize;

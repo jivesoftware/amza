@@ -7,6 +7,7 @@ import java.util.Map;
  *
  */
 public class ChangeSet {
+
     private final TableName tableName;
     private final Map table;
 
@@ -22,5 +23,5 @@ public class ChangeSet {
     public Map getTable() {
         return table;
     }
-    
+
 }

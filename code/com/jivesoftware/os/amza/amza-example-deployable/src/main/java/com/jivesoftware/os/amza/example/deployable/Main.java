@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.jivesoftware.os.amza.example.deployable.endpoints.AmzaExampleEndpoints;
-import com.jivesoftware.os.amza.service.AmzaChangeIdPacker;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
@@ -17,21 +16,21 @@ import com.jivesoftware.os.amza.shared.TableStateChanges;
 import com.jivesoftware.os.amza.shared.TableStorage;
 import com.jivesoftware.os.amza.shared.TableStorageProvider;
 import com.jivesoftware.os.amza.storage.FileBackedTableStorage;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.RowTableFile;
-import com.jivesoftware.os.amza.storage.json.StringRowReader;
-import com.jivesoftware.os.amza.storage.json.StringRowValueChunkMarshaller;
-import com.jivesoftware.os.amza.storage.json.StringRowWriter;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowChunkMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
+import com.jivesoftware.os.amza.storage.chunks.Filer;
 import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
-import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
 import java.io.File;
+import java.util.Random;
 
 public class Main {
 
@@ -48,9 +47,7 @@ public class Main {
         String clusterName = (args.length > 1 ? args[1] : null);
 
         RingHost ringHost = new RingHost(hostname, port);
-        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(ringHost.getPort(), // todo need a better way to create writter id.
-                new AmzaChangeIdPacker(),
-                new JiveEpochTimestampProvider());
+        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new Random().nextInt(1024)); // todo need a better way to create writter id.
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -64,12 +61,22 @@ public class Main {
                 File directory = new File(workingDirectory, tableDomain);
                 directory.mkdirs();
                 File file = new File(directory, tableName.getTableName() + ".kvt");
-                StringRowReader reader = new StringRowReader(file);
-                StringRowWriter writer = new StringRowWriter(file);
 
-                //RowMarshaller<K, V, String> rowMarshaller = new StringRowMarshaller<>(mapper, tableName);
-                RowMarshaller<K, V, String> rowMarshaller = new StringRowValueChunkMarshaller(directory, mapper, tableName);
-                RowTableFile<K, V, String> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
+                Filer filer = Filer.open(file, "rw");
+                BinaryRowReader reader = new BinaryRowReader(filer);
+                BinaryRowWriter writer = new BinaryRowWriter(filer);
+                BinaryRowChunkMarshaller rowMarshaller = new BinaryRowChunkMarshaller(directory, tableName);
+                RowTableFile<K, V, byte[]> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
+
+
+                /*
+                 StringRowReader reader = new StringRowReader(file);
+                 StringRowWriter writer = new StringRowWriter(file);
+
+                 //RowMarshaller<K, V, String> rowMarshaller = new StringRowMarshaller<>(mapper, tableName);
+                 RowMarshaller<K, V, String> rowMarshaller = new StringRowValueChunkMarshaller(directory, mapper, tableName);
+                 RowTableFile<K, V, String> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
+                 */
                 return new FileBackedTableStorage(rowTableFile);
             }
         };

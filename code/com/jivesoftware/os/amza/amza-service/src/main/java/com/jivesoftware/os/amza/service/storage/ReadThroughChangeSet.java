@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -57,7 +58,7 @@ public class ReadThroughChangeSet<K, V> {
             throw new IllegalArgumentException("key cannot be null.");
         }
         long putTimestamp = timestamp + 1;
-        TimestampedValue<V> update = new TimestampedValue<>(value, putTimestamp, false);
+        TimestampedValue<V> update = new BasicTimestampedValue<>(value, putTimestamp, false);
         TimestampedValue<V> current = writeMap.get(key);
         if (current == null || current.getTimestamp() < update.getTimestamp()) {
             changes.put(key, update);
@@ -73,7 +74,7 @@ public class ReadThroughChangeSet<K, V> {
         long removeTimestamp = timestamp;
         TimestampedValue<V> current = writeMap.get(key);
         V value = (current != null) ? current.getValue() : null;
-        TimestampedValue<V> update = new TimestampedValue<>(value, removeTimestamp, true);
+        TimestampedValue<V> update = new BasicTimestampedValue<>(value, removeTimestamp, true);
         if (current == null || current.getTimestamp() < update.getTimestamp()) {
             changes.put(key, update);
             return true;

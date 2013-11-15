@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.storage.json;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.storage.BasicTransactionEntry;
@@ -53,7 +54,7 @@ public class StringRowMarshaller<K, V> implements RowMarshaller<K, V, String> {
         long timestamp = Long.parseLong(stringAndOffest.getString());
         stringAndOffest = value(line, stringAndOffest.getOffset());
         V value = mapper.readValue(stringAndOffest.getString(), tableName.getValueClass());
-        return new BasicTransactionEntry<>(orderId, key, new TimestampedValue<>(value, timestamp, tombstone));
+        return new BasicTransactionEntry<>(orderId, key, new BasicTimestampedValue<>(value, timestamp, tombstone));
     }
 
     StringAndOffest value(String line, int offest) {

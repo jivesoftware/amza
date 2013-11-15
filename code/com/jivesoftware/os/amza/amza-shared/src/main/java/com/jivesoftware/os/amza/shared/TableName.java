@@ -2,9 +2,10 @@ package com.jivesoftware.os.amza.shared;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.io.Serializable;
 import java.util.Objects;
 
-public class TableName<K, V> implements Comparable<TableName<K, V>> {
+public class TableName<K, V> implements Comparable<TableName<K, V>>, Serializable {
 
     private final String ringName;
     private final String tableName;

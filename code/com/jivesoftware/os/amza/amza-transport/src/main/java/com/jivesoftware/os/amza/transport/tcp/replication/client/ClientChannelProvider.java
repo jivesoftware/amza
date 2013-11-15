@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.client;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -22,7 +22,7 @@ public class ClientChannelProvider {
     private final Object createLock = new Object();
 
     public ClientChannelProvider(int connectTimeout, int socketTimeout, int readBufferSize, int writeBufferSize, MessageFramer framer,
-        BufferProvider bufferProvider) {
+            BufferProvider bufferProvider) {
         this.connectTimeout = connectTimeout;
         this.socketTimeout = socketTimeout;
         this.readBufferSize = readBufferSize;
@@ -43,17 +43,16 @@ public class ClientChannelProvider {
                 }
             }
         }
-        
+
         channel.connect(connectTimeout);
-        
+
         //todo test and repair channel here
-        
         return channel;
 
     }
-    
+
     public void closeAll() {
-        synchronized(createLock) {
+        synchronized (createLock) {
             for (ClientChannel channel : channelPool.values()) {
                 channel.disconect();
             }

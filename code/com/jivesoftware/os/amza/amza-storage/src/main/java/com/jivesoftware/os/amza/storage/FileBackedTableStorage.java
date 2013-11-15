@@ -13,11 +13,11 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class FileBackedTableStorage<K, V> implements TableStorage<K, V> {
+public class FileBackedTableStorage<K, V, R> implements TableStorage<K, V> {
 
-    private final RowTableFile<K, V, String> rowTableFile;
+    private final RowTableFile<K, V, R> rowTableFile;
 
-    public FileBackedTableStorage(RowTableFile<K, V, String> rowTableFile) {
+    public FileBackedTableStorage(RowTableFile<K, V, R> rowTableFile) {
         this.rowTableFile = rowTableFile;
     }
 
@@ -77,9 +77,11 @@ public class FileBackedTableStorage<K, V> implements TableStorage<K, V> {
             }
         }
         if (!applyMap.isEmpty()) {
-            rowTableFile.save(clobberedRows, applyMap, true);
+            NavigableMap<K, TimestampedValue<V>> saved = rowTableFile.save(clobberedRows, applyMap, true);
+            return new TableDelta<>(saved, removeMap, clobberedRows);
+        } else {
+            return new TableDelta<>(applyMap, removeMap, clobberedRows);
         }
-        return new TableDelta<>(applyMap, removeMap, clobberedRows);
     }
 
     @Override

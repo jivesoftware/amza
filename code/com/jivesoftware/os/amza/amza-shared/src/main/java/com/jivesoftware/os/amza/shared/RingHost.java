@@ -2,9 +2,10 @@ package com.jivesoftware.os.amza.shared;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.io.Serializable;
 import java.util.Objects;
 
-public class RingHost implements Comparable<RingHost> {
+public class RingHost implements Comparable<RingHost>, Serializable {
 
     private final String host;
     private final int port;

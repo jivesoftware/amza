@@ -1,16 +1,16 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.client;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannel;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannelProvider;
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.ChangeSetRequest;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
+import com.jivesoftware.os.amza.transport.tcp.replication.messages.ChangeSetRequest;
 import com.jivesoftware.os.amza.transport.tcp.replication.messages.ChangeSetResponse;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannel;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannelProvider;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;

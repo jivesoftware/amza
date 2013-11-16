@@ -63,11 +63,11 @@
             <groupId>commons-lang</groupId>
             <artifactId>commons-lang</artifactId>
         </dependency>
-        <dependency>
+        <!--        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
             <version>4.0.10.Final</version>
-        </dependency>
+        </dependency>-->
         <dependency>
             <groupId>com.jivesoftware.os.jive.utils</groupId>
             <artifactId>base</artifactId>
@@ -77,10 +77,6 @@
             <artifactId>fst</artifactId>
             <version>1.28</version>
             <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.jive.utils</groupId>
-            <artifactId>base</artifactId>
         </dependency>
     </dependencies>
     <name>amza-transport</name>

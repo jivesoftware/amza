@@ -1,7 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.client;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.client.TCPChangeSetSender;
-import com.jivesoftware.os.amza.transport.tcp.replication.client.TCPChangeSetTaker;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.FrameableMessage;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.FrameableSerializer;

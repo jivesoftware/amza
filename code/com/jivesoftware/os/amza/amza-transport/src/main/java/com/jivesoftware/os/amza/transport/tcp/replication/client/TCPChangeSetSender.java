@@ -1,14 +1,14 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.client;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannel;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannelProvider;
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.SendChangeSet;
 import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
+import com.jivesoftware.os.amza.transport.tcp.replication.messages.SendChangeSet;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannel;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannelProvider;
 import java.nio.ByteBuffer;
 import java.util.NavigableMap;
 

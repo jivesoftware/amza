@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 
 /**
  *
- * @author pete
  */
 public class ByteBufferInputStream extends InputStream {
 
@@ -16,8 +15,25 @@ public class ByteBufferInputStream extends InputStream {
         this.buffer = buffer;
     }
 
-    @Override
     public int read() throws IOException {
-        return 0;
+        if (buffer.hasRemaining()) {
+            return buffer.get();
+        }
+        return -1;
+    }
+
+    public int read(byte[] bytes, int offset, int length) throws IOException {
+        if (buffer.hasRemaining()) {
+            length = Math.min(length, buffer.remaining());
+            buffer.get(bytes, offset, length);
+            return length;
+        }
+
+        return -1;
+    }
+
+    @Override
+    public int available() throws IOException {
+        return buffer.remaining();
     }
 }

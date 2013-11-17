@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.messages;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.FrameableMessage;
 import de.ruedigermoeller.serialization.FSTObjectInput;
 import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;

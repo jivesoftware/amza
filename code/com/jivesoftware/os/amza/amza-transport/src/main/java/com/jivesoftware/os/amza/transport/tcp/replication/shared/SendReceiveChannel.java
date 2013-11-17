@@ -19,19 +19,25 @@ public class SendReceiveChannel {
     private final RingHost host;
     private final int readBufferSize;
     private final int writeBufferSize;
+    private final int connectTimeout;
     private final int socketTimeout;
     private AtomicBoolean connected = new AtomicBoolean();
     private SocketChannel socketChannel;
     private ReadableByteChannel readChannel;
 
-    public SendReceiveChannel(RingHost host, int socketTimeout, int readBufferSize, int writeBufferSize) {
+    public SendReceiveChannel(RingHost host, int connectTimeout, int socketTimeout, int readBufferSize, int writeBufferSize) {
         this.host = host;
+        this.connectTimeout = connectTimeout;
         this.socketTimeout = socketTimeout;
         this.readBufferSize = readBufferSize;
         this.writeBufferSize = writeBufferSize;
     }
 
-    public void connect(int connectTimeout) throws IOException {
+    RingHost getRingHost() {
+        return host;
+    }
+
+    public void connect() throws IOException {
         if (connected.compareAndSet(false, true)) {
             try {
                 socketChannel = socketChannel.open();
@@ -55,6 +61,11 @@ public class SendReceiveChannel {
                 throw t;
             }
         }
+    }
+
+    public void reconnect() throws IOException {
+        disconect();
+        connect();
     }
 
     private void closeAndCatch(Closeable channel) {

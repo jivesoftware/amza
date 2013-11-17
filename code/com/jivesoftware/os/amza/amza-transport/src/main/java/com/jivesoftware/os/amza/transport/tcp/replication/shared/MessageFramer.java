@@ -1,5 +1,7 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
+import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
+import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 

@@ -5,11 +5,8 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.messages.SendChangeSet;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannel;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.SendReceiveChannelProvider;
-import java.nio.ByteBuffer;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClient;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import java.util.NavigableMap;
 
 /**
@@ -17,27 +14,20 @@ import java.util.NavigableMap;
  */
 public class TcpChangeSetSender implements ChangeSetSender {
 
-    private final SendReceiveChannelProvider clientChannelProvider;
-    private final MessageFramer messageFramer;
-    private final BufferProvider bufferProvider;
+    private final TcpClientProvider tcpClientProvider;
 
-    public TcpChangeSetSender(SendReceiveChannelProvider clientChannelProvider, MessageFramer messageFramer, BufferProvider bufferProvider) {
-        this.clientChannelProvider = clientChannelProvider;
-        this.messageFramer = messageFramer;
-        this.bufferProvider = bufferProvider;
+    public TcpChangeSetSender(TcpClientProvider tcpClientProvider) {
+        this.tcpClientProvider = tcpClientProvider;
     }
 
     @Override
     public <K, V> void sendChangeSet(RingHost ringHost, TableName<K, V> mapName, NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
-        SendReceiveChannel channel = clientChannelProvider.getChannelForHost(ringHost);
-
-        ByteBuffer sendBuff = bufferProvider.acquire();
+        TcpClient client = tcpClientProvider.getClientForHost(ringHost);
         try {
-            SendChangeSet sendChangeSet = new SendChangeSet(mapName, changes);
-            messageFramer.toFrame(sendChangeSet, sendBuff);
-            channel.send(sendBuff);
+            client.sendMessage(new SendChangeSet(mapName, changes));
         } finally {
-            bufferProvider.release(sendBuff);
+            tcpClientProvider.returnClient(client);
         }
+
     }
 }

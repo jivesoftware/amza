@@ -1,5 +1,6 @@
-package com.jivesoftware.os.amza.transport.tcp.replication.client;
+package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
+import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
@@ -7,22 +8,20 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.Frameabl
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.TableNameSerializer;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.TransactionSetSerializer;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import de.ruedigermoeller.serialization.FSTConfiguration;
+import java.io.IOException;
 
 /**
  *
  */
-public class ExampleMain {
+public class ExampleServerMain {
 
     public static void main(String[] args) {
-        int connectionsPerHost = 2;
-        int bufferSize = 10 * 1024;
-        int numBuffers = 10;
-        int connectTimeoutMillis = 5000;
-        int socketTimeoutMillis = 2000;
+        int bufferSize = 1024;
+        int numWorkers = 10;
+        int numBuffers = numWorkers * 2;
+
+        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(FrameableMessage.class, new FrameableSerializer());
@@ -31,14 +30,26 @@ public class ExampleMain {
 
         MessageFramer framer = new MessageFramer(marshaller);
 
-        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
-        TcpClientProvider clientChannelProvider = new TcpClientProvider(
-            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+        ServerRequestHandler handler = new ServerRequestHandler() {
+            @Override
+            public FrameableMessage handleRequest(FrameableMessage request) {
+                //do stuff
+                return null;
+            }
+        };
 
-        TcpChangeSetSender sender = new TcpChangeSetSender(clientChannelProvider);
-        TcpChangeSetTaker taker = new TcpChangeSetTaker(clientChannelProvider);
+        TcpServerInitializer initializer = new TcpServerInitializer();
+        try {
+            TcpServer server = initializer.initialize(new RingHost("localhost", 7777), numWorkers, bufferProvider, framer, handler);
+            server.start();
 
+            ///..... wait around
 
-        //send send send, take take take
+            server.stop();
+
+        } catch (InterruptedException | IOException ex) {
+            ex.printStackTrace(System.out);
+            System.exit(-1);
+        }
     }
 }

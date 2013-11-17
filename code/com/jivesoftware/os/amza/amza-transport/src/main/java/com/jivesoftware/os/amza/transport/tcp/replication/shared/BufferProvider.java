@@ -11,10 +11,10 @@ public class BufferProvider {
 
     private final BlockingQueue<ByteBuffer> buffers;
 
-    public BufferProvider(int bufferSize, int poolSize) {
+    public BufferProvider(int bufferSize, int poolSize, boolean direct) {
         this.buffers = new LinkedBlockingQueue<>();
         for (int i = 0; i < poolSize; i++) {
-            buffers.add(ByteBuffer.allocateDirect(bufferSize));
+            buffers.add(direct ? ByteBuffer.allocateDirect(bufferSize) : ByteBuffer.allocate(bufferSize));
         }
     }
 

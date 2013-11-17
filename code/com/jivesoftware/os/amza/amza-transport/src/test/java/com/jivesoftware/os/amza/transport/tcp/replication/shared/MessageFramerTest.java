@@ -14,7 +14,7 @@ public class MessageFramerTest {
 
     @Test
     public void testSerializationRoundTrip() throws Exception {
-        BufferProvider bufferProvider = new BufferProvider(1024, 1);
+        BufferProvider bufferProvider = new BufferProvider(1024, 1, true);
         FstMarshaller fstMarshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         MessageFramer framer = new MessageFramer(fstMarshaller);
 

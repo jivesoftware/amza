@@ -18,8 +18,17 @@ public class BufferProvider {
         }
     }
 
-    public ByteBuffer acquire() throws InterruptedException {
-        return buffers.take();
+    public ByteBuffer acquire() {
+        ByteBuffer buffer = null;
+        while (buffer == null) {
+            try {
+                buffer = buffers.take();
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        return buffer;
     }
 
     public boolean release(ByteBuffer byteBuffer) {

@@ -87,7 +87,7 @@ public class SendReceiveChannel {
         }
     }
 
-    public void send(ByteBuffer buffer) throws ClosedChannelException, IOException {
+    public void send(ByteBuffer buffer) throws IOException {
         if (!connected.get()) {
             throw new ClosedChannelException();
         }
@@ -96,7 +96,7 @@ public class SendReceiveChannel {
 
     }
 
-    public int receive(ByteBuffer buffer) throws ClosedChannelException, IOException {
+    public int receive(ByteBuffer buffer) throws IOException {
         if (!connected.get()) {
             throw new ClosedChannelException();
         }

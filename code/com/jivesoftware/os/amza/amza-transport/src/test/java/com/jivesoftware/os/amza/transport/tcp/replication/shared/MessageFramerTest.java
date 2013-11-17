@@ -27,6 +27,7 @@ public class MessageFramerTest {
             Assert.assertNotNull(received);
             Assert.assertTrue(received.getClass().equals(ChangeSetRequest.class));
         } finally {
+            bufferProvider.release(buffer);
         }
 
     }

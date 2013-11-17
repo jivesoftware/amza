@@ -25,15 +25,7 @@ public class TcpClient {
 
     public void sendMessage(FrameableMessage message) throws IOException {
 
-        //TODO this is probably the wrong way to handle this
-        ByteBuffer sendBuff = null;
-        while (sendBuff == null) {
-            try {
-                sendBuff = bufferProvider.acquire();
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();;
-            }
-        }
+        ByteBuffer sendBuff = bufferProvider.acquire();
 
         try {
             messageFramer.toFrame(message, sendBuff);

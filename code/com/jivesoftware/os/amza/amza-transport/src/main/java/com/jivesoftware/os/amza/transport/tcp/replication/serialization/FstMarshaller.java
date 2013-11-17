@@ -1,7 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.serialization;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.ByteBufferInputStream;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.ByteBufferOutputStream;
 import de.ruedigermoeller.serialization.FSTBasicObjectSerializer;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import de.ruedigermoeller.serialization.FSTObjectInput;

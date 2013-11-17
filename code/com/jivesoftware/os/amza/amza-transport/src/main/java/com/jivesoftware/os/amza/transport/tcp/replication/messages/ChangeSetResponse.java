@@ -13,6 +13,12 @@ public class ChangeSetResponse implements FrameableMessage {
     private TransactionSet transactionSet;
     private boolean lastInSequence;
 
+    /**
+     * for serialization
+     */
+    public ChangeSetResponse() {
+    }
+
     public ChangeSetResponse(TransactionSet transactionSet, boolean lastInSequence) {
         this.transactionSet = transactionSet;
         this.lastInSequence = lastInSequence;

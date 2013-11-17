@@ -6,7 +6,8 @@ import java.io.IOException;
 import java.io.Serializable;
 
 /**
- *
+ * All tcp replication messages implement this interface. Implementors must have a public no-args constructor for serialization to work. Janky, but hopefully
+ * temporary.
  */
 public interface FrameableMessage extends Serializable {
 

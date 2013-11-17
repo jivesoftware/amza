@@ -14,6 +14,12 @@ public class SendChangeSet implements FrameableMessage {
     private TableName mapName;
     private NavigableMap changes;
 
+    /**
+     * for serialization
+     */
+    public SendChangeSet() {
+    }
+
     public SendChangeSet(TableName mapName, NavigableMap changes) {
         this.mapName = mapName;
         this.changes = changes;

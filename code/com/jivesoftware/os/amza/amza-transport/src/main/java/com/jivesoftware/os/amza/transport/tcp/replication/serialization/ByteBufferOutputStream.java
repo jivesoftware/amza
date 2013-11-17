@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.transport.tcp.replication.shared;
+package com.jivesoftware.os.amza.transport.tcp.replication.serialization;
 
 import java.io.IOException;
 import java.io.OutputStream;

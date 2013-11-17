@@ -28,8 +28,8 @@ public class ExampleMain {
 
         MessageFramer framer = new MessageFramer(marshaller);
 
-        TCPChangeSetSender sender = new TCPChangeSetSender(clientChannelProvider, framer, bufferProvider);
-        TCPChangeSetTaker taker = new TCPChangeSetTaker(clientChannelProvider, framer, bufferProvider);
+        TcpChangeSetSender sender = new TcpChangeSetSender(clientChannelProvider, framer, bufferProvider);
+        TcpChangeSetTaker taker = new TcpChangeSetTaker(clientChannelProvider, framer, bufferProvider);
 
 
         //send send send

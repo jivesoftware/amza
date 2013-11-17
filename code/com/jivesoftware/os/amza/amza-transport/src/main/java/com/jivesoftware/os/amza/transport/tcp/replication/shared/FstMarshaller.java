@@ -20,7 +20,7 @@ public class FstMarshaller {
     }
 
     public void registerSerializer(Class clazz, FSTBasicObjectSerializer serializer) {
-        fstConfig.registerSerializer(clazz, serializer, false);
+        fstConfig.registerSerializer(clazz, serializer, true);
     }
 
     public <V extends Serializable> int serialize(V toSerialize, ByteBuffer buffer) throws IOException {
@@ -28,7 +28,7 @@ public class FstMarshaller {
 
         ByteBufferOutputStream bbos = new ByteBufferOutputStream(buffer);
         try (FSTObjectOutput out = fstConfig.getObjectOutput(bbos)) {
-            out.writeObject(out, toSerialize.getClass());
+            out.writeObject(toSerialize, toSerialize.getClass());
             out.flush();
         }
 

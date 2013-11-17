@@ -9,28 +9,30 @@ import java.nio.ByteBuffer;
 public class MessageFramer {
 
     private final FstMarshaller fstMarshaller;
-    private final int headerSize = 1 + 1 + 4;
+    private final int headerSize = 4;
 
     public MessageFramer(FstMarshaller fstMarshaller) {
         this.fstMarshaller = fstMarshaller;
     }
 
-    public void toFrame(FrameableMessage frameable, ByteBuffer buff) throws IOException {
+    public void toFrame(FrameableMessage frameable, ByteBuffer writeBuffer) throws IOException {
         //set placeholder size;
-        buff.mark();
-        buff.putInt(0);
-        int size = fstMarshaller.serialize(frameable, buff);
+        writeBuffer.mark();
+        writeBuffer.putInt(0);
+
+        int size = fstMarshaller.serialize(frameable, writeBuffer);
+        int position = writeBuffer.position();
 
         //set actual size value
-        buff.reset();
-        buff.putInt(size);
-
-        //prepare for socket to read buffer during send
-        buff.rewind();
+        writeBuffer.reset();
+        writeBuffer.putInt(size);
+        writeBuffer.position(position);
     }
 
-    public <F extends FrameableMessage> F fromFrame(ByteBuffer readBuffer, int read, Class<F> clazz) throws Exception {
-        readBuffer.mark();
+    public <F extends FrameableMessage> F fromFrame(ByteBuffer readBuffer, Class<F> clazz) throws Exception {
+        int position = readBuffer.position();
+        int limit = readBuffer.limit();
+
         readBuffer.flip();
 
         if (readBuffer.remaining() > headerSize) {
@@ -39,11 +41,12 @@ public class MessageFramer {
             if (readBuffer.remaining() >= messageLength) {
                 return fstMarshaller.<F>deserialize(readBuffer, clazz);
             }
-
         }
 
-        //return to it's last position so next read will append bytes
-        readBuffer.reset();
+        //return to it's last state
+        readBuffer.limit(limit);
+        readBuffer.position(position);
+
         return null;
     }
 }

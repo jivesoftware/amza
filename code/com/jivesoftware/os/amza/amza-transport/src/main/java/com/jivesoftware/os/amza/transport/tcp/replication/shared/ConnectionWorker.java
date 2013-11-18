@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -11,7 +10,6 @@ import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  *
@@ -102,9 +100,9 @@ public class ConnectionWorker extends Thread {
 
     private void readChannel(SelectionKey key) throws Exception {
         SocketChannel socketChannel = (SocketChannel) key.channel();
-        InProcessRequest inProcess = (InProcessRequest) key.attachment();
+        InProcessServerRequest inProcess = (InProcessServerRequest) key.attachment();
         if (key.attachment() == null) {
-            key.attach(new InProcessRequest());
+            key.attach(new InProcessServerRequest(messageFramer, bufferProvider));
         }
         if (inProcess.readRequest(socketChannel)) {
             FrameableMessage request = inProcess.getRequest();
@@ -114,7 +112,7 @@ public class ConnectionWorker extends Thread {
                 if (request.isLastInSequence()) {
                     FrameableMessage response = requestHandler.handleRequest(request);
                     if (response != null) {
-                        key.attach(new InProcessResponse(response));
+                        key.attach(new InProcessServerResponse(messageFramer, bufferProvider, response));
                         key.interestOps(SelectionKey.OP_WRITE);
                     }
                 } else {
@@ -134,13 +132,13 @@ public class ConnectionWorker extends Thread {
 
     private void writeChannel(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
-        InProcessResponse response = (InProcessResponse) key.attachment();
+        InProcessServerResponse response = (InProcessServerResponse) key.attachment();
 
         if (response.writeResponse(socketChannel)) {
             if (!response.isLastInSequence()) {
                 FrameableMessage nextMessage = requestHandler.consumeSequence(response.getInteractionId());
                 if (nextMessage != null) {
-                    key.attach(new InProcessResponse(nextMessage));
+                    key.attach(new InProcessServerResponse(messageFramer, bufferProvider, nextMessage));
                     key.interestOps(SelectionKey.OP_WRITE);
                 }
             } else {
@@ -159,82 +157,5 @@ public class ConnectionWorker extends Thread {
         serverContext.closeAndCatch(channel);
         key.attach(null);
         key.cancel();
-    }
-
-    private class InProcessRequest {
-
-        private final ByteBuffer readBuffer;
-        private final AtomicReference<FrameableMessage> message;
-
-        private InProcessRequest() {
-            readBuffer = bufferProvider.acquire();
-            message = new AtomicReference<>();
-        }
-
-        private boolean readRequest(SocketChannel channel) throws Exception {
-            try {
-                int read = channel.read(readBuffer);
-
-                if (read > 0) {
-                    FrameableMessage request = messageFramer.fromFrame(readBuffer, FrameableMessage.class); //???
-                    if (request != null) {
-                        message.set(request);
-                        bufferProvider.release(readBuffer);
-                    }
-
-                    return true;
-                } else {
-                    bufferProvider.release(readBuffer);
-
-                    return false;
-                }
-            } catch (Exception ex) {
-                bufferProvider.release(readBuffer);
-                throw ex;
-            }
-        }
-
-        public FrameableMessage getRequest() {
-            return message.get();
-        }
-    }
-
-    private class InProcessResponse {
-
-        private final ByteBuffer writeBuffer;
-        private final long interactionId;
-        private final boolean lastInSequence;
-
-        private InProcessResponse(FrameableMessage response) throws IOException {
-            writeBuffer = bufferProvider.acquire();
-            messageFramer.toFrame(response, writeBuffer);
-
-            this.interactionId = response.getInteractionId();
-            this.lastInSequence = response.isLastInSequence();
-        }
-
-        public long getInteractionId() {
-            return interactionId;
-        }
-
-        public boolean isLastInSequence() {
-            return lastInSequence;
-        }
-
-        private boolean writeResponse(SocketChannel channel) throws IOException {
-            try {
-                channel.write(writeBuffer);
-
-                if (writeBuffer.remaining() == 0) {
-                    bufferProvider.release(writeBuffer);
-                    return true;
-                } else {
-                    return false;
-                }
-            } catch (Exception ex) {
-                bufferProvider.release(writeBuffer);
-                throw ex;
-            }
-        }
     }
 }

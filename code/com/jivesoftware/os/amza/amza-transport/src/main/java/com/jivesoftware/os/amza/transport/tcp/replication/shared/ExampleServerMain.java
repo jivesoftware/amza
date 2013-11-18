@@ -36,6 +36,12 @@ public class ExampleServerMain {
                 //do stuff
                 return null;
             }
+
+            @Override
+            public FrameableMessage consumeSequence(long interactionId) {
+                //do stuff
+                return null;
+            }
         };
 
         TcpServerInitializer initializer = new TcpServerInitializer();

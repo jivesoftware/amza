@@ -8,9 +8,11 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarsh
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.TableNameSerializer;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.TransactionSetSerializer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.IdProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import de.ruedigermoeller.serialization.FSTConfiguration;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
@@ -35,8 +37,17 @@ public class ExampleMain {
         TcpClientProvider clientChannelProvider = new TcpClientProvider(
             connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
-        TcpChangeSetSender sender = new TcpChangeSetSender(clientChannelProvider);
-        TcpChangeSetTaker taker = new TcpChangeSetTaker(clientChannelProvider);
+        IdProvider idProvider = new IdProvider() {
+            private final AtomicLong id = new AtomicLong();
+
+            @Override
+            public long nextId() {
+                return id.incrementAndGet();
+            }
+        };
+
+        TcpChangeSetSender sender = new TcpChangeSetSender(clientChannelProvider, idProvider);
+        TcpChangeSetTaker taker = new TcpChangeSetTaker(clientChannelProvider, idProvider);
 
 
         //send send send, take take take

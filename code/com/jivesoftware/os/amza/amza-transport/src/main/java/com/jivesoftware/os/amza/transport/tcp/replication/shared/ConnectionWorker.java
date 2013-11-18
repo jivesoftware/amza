@@ -110,10 +110,18 @@ public class ConnectionWorker extends Thread {
             FrameableMessage request = inProcess.getRequest();
             if (request != null) {
                 key.attach(null);
-                FrameableMessage response = requestHandler.handleRequest(request);
-                if (response != null) {
-                    key.attach(new InProcessResponse(response));
-                    key.interestOps(SelectionKey.OP_WRITE);
+
+                if (request.isLastInSequence()) {
+                    FrameableMessage response = requestHandler.handleRequest(request);
+                    if (response != null) {
+                        key.attach(new InProcessResponse(response));
+                        key.interestOps(SelectionKey.OP_WRITE);
+                    }
+                } else {
+                    //don't expect a resonse yet
+                    requestHandler.handleRequest(request);
+                    key.interestOps(SelectionKey.OP_READ);
+                    selector.wakeup();
                 }
             } else {
                 key.interestOps(SelectionKey.OP_READ);
@@ -129,10 +137,16 @@ public class ConnectionWorker extends Thread {
         InProcessResponse response = (InProcessResponse) key.attachment();
 
         if (response.writeResponse(socketChannel)) {
-            //TODO add concept of follow on responses for multi message responses
-            //in which case we'd call the handler for another response and register for OP_WRITE again
-            key.attach(null);
-            key.interestOps(SelectionKey.OP_READ);
+            if (!response.isLastInSequence()) {
+                FrameableMessage nextMessage = requestHandler.consumeSequence(response.getInteractionId());
+                if (nextMessage != null) {
+                    key.attach(new InProcessResponse(nextMessage));
+                    key.interestOps(SelectionKey.OP_WRITE);
+                }
+            } else {
+                key.attach(null);
+                key.interestOps(SelectionKey.OP_READ);
+            }
         } else {
             key.interestOps(SelectionKey.OP_WRITE);
             selector.wakeup();
@@ -188,10 +202,23 @@ public class ConnectionWorker extends Thread {
     private class InProcessResponse {
 
         private final ByteBuffer writeBuffer;
+        private final long interactionId;
+        private final boolean lastInSequence;
 
         private InProcessResponse(FrameableMessage response) throws IOException {
             writeBuffer = bufferProvider.acquire();
             messageFramer.toFrame(response, writeBuffer);
+
+            this.interactionId = response.getInteractionId();
+            this.lastInSequence = response.isLastInSequence();
+        }
+
+        public long getInteractionId() {
+            return interactionId;
+        }
+
+        public boolean isLastInSequence() {
+            return lastInSequence;
         }
 
         private boolean writeResponse(SocketChannel channel) throws IOException {

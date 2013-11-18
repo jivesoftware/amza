@@ -8,4 +8,6 @@ import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMess
 public interface ServerRequestHandler {
 
     FrameableMessage handleRequest(FrameableMessage request);
+
+    FrameableMessage consumeSequence(long interactionId);
 }

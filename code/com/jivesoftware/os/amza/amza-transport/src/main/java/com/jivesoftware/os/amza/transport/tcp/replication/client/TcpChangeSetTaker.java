@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.transport.tcp.replication.messages.ChangeSetRequest;
 import com.jivesoftware.os.amza.transport.tcp.replication.messages.ChangeSetResponse;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.IdProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClient;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
@@ -20,9 +21,11 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final TcpClientProvider clientProvider;
+    private final IdProvider idProvider;
 
-    public TcpChangeSetTaker(TcpClientProvider clientProvider) {
+    public TcpChangeSetTaker(TcpClientProvider clientProvider, IdProvider idProvider) {
         this.clientProvider = clientProvider;
+        this.idProvider = idProvider;
     }
 
     @Override
@@ -30,7 +33,7 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
         long transationId, final TransactionSetStream transactionSetStream) throws Exception {
         TcpClient client = clientProvider.getClientForHost(ringHost);
         try {
-            client.sendMessage(new ChangeSetRequest());
+            client.sendMessage(new ChangeSetRequest(idProvider.nextId()));
 
             CallbackStream<TransactionSet> messageStream = new CallbackStream<TransactionSet>() {
                 @Override

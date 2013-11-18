@@ -13,6 +13,7 @@ public class SendChangeSet implements FrameableMessage {
 
     private TableName mapName;
     private NavigableMap changes;
+    private long interactionId;
 
     /**
      * for serialization
@@ -20,9 +21,10 @@ public class SendChangeSet implements FrameableMessage {
     public SendChangeSet() {
     }
 
-    public SendChangeSet(TableName mapName, NavigableMap changes) {
+    public SendChangeSet(TableName mapName, NavigableMap changes, long interactionId) {
         this.mapName = mapName;
         this.changes = changes;
+        this.interactionId = interactionId;
     }
 
     @Override
@@ -43,5 +45,15 @@ public class SendChangeSet implements FrameableMessage {
 
     public NavigableMap getChanges() {
         return changes;
+    }
+
+    @Override
+    public long getInteractionId() {
+        return interactionId;
+    }
+
+    @Override
+    public boolean isLastInSequence() {
+        return true;
     }
 }

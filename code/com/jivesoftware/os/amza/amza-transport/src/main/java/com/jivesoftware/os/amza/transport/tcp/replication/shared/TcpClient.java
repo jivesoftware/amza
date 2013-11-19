@@ -22,7 +22,7 @@ public class TcpClient {
         return channel;
     }
 
-    public void sendMessage(MessageFrame message) throws IOException {
+    public void sendMessage(Message message) throws IOException {
 
         ByteBuffer sendBuff = bufferProvider.acquire();
 
@@ -46,9 +46,9 @@ public class TcpClient {
         }
     }
 
-    public MessageFrame receiveMessage() throws Exception {
+    public Message receiveMessage() throws Exception {
         int read = 0;
-        MessageFrame response = null;
+        Message response = null;
         ByteBuffer readBuffer = bufferProvider.acquire();
 
         try {

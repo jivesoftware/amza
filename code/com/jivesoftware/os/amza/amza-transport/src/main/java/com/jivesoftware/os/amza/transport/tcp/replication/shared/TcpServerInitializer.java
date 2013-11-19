@@ -9,7 +9,7 @@ import java.io.IOException;
 public class TcpServerInitializer {
 
     public TcpServer initialize(RingHost localhost, int numWorkers, BufferProvider bufferProvider,
-        MessageFramer messageFramer, ServerRequestHandler requestHandler) throws IOException {
+        MessageFramer messageFramer, ApplicationProtocol requestHandler) throws IOException {
         ServerContext serverContext = new ServerContext();
         ConnectionWorker[] connectionWorkers = new ConnectionWorker[numWorkers];
         for (int i = 0; i < numWorkers; i++) {

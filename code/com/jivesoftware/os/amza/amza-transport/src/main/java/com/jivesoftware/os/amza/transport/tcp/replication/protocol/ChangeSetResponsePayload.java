@@ -1,6 +1,7 @@
-package com.jivesoftware.os.amza.transport.tcp.replication.messages;
+package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.shared.TransactionSet;
+import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import de.ruedigermoeller.serialization.FSTObjectInput;
 import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;
@@ -8,18 +9,17 @@ import java.io.IOException;
 /**
  *
  */
-public class ChangeSetResponse implements FrameableMessage {
+public class ChangeSetResponsePayload implements MessagePayload {
 
     private TransactionSet transactionSet;
-    private boolean lastInSequence;
 
     /**
      * for serialization
      */
-    public ChangeSetResponse() {
+    public ChangeSetResponsePayload() {
     }
 
-    public ChangeSetResponse(TransactionSet transactionSet) {
+    public ChangeSetResponsePayload(TransactionSet transactionSet) {
         this.transactionSet = transactionSet;
     }
 
@@ -29,7 +29,7 @@ public class ChangeSetResponse implements FrameableMessage {
 
     @Override
     public void serialize(FSTObjectOutput output) throws IOException {
-        output.writeObject(transactionSet); //TODO what about sub objects?
+        output.writeObject(transactionSet);
     }
 
     @Override

@@ -1,9 +1,10 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
-import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FrameableSerializer;
+import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IdProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
+import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
+import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayloadSerializer;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.IOException;
 import java.io.Serializable;
@@ -40,16 +41,18 @@ public class RoundTripTest {
         BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
-        marshaller.registerSerializer(FrameableMessage.class, new FrameableSerializer());
-        Map<Integer, Class<? extends Serializable>> payloadRegistry = new HashMap<>();
+        marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
+
+        final Map<Integer, Class<? extends Serializable>> payloadRegistry = new HashMap<>();
         payloadRegistry.put(requestOpcode, String.class);
         payloadRegistry.put(responseOpcode, String.class);
 
-        MessageFramer framer = new MessageFramer(marshaller, payloadRegistry);
 
-        ServerRequestHandler handler = new ServerRequestHandler() {
+        ApplicationProtocol applicationProtocol = new ApplicationProtocol() {
+            private final AtomicLong ids = new AtomicLong();
+
             @Override
-            public MessageFrame handleRequest(MessageFrame request) {
+            public Message handleRequest(Message request) {
                 RequestResponse method = requestResponseMethod.get();
                 if (method != null) {
                     return method.respondTo(request);
@@ -59,13 +62,25 @@ public class RoundTripTest {
             }
 
             @Override
-            public MessageFrame consumeSequence(long interactionId) {
+            public Message consumeSequence(long interactionId) {
                 throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Class<? extends Serializable> getOperationPayloadClass(int opCode) {
+                return payloadRegistry.get(opCode);
+            }
+
+            @Override
+            public long nextInteractionId() {
+                return ids.incrementAndGet();
             }
         };
 
+        MessageFramer framer = new MessageFramer(marshaller, applicationProtocol);
+
         TcpServerInitializer initializer = new TcpServerInitializer();
-        server = initializer.initialize(localHost, numWorkers, bufferProvider, framer, handler);
+        server = initializer.initialize(localHost, numWorkers, bufferProvider, framer, applicationProtocol);
         server.start();
 
 
@@ -101,10 +116,10 @@ public class RoundTripTest {
 
         requestResponseMethod.set(new RequestResponse() {
             @Override
-            public MessageFrame respondTo(MessageFrame request) {
+            public Message respondTo(Message request) {
                 String value = request.getPayload();
                 requestReceived.set(value.equals(sendText));
-                return new MessageFrame(request.getInteractionId(), responseOpcode, true, returnText);
+                return new Message(request.getInteractionId(), responseOpcode, true, returnText);
             }
         });
 
@@ -113,9 +128,10 @@ public class RoundTripTest {
 
         try {
             long interactionId = idProvider.nextId();
-            MessageFrame request = new MessageFrame(interactionId, requestOpcode, true, sendText);
+            Message request = new Message(interactionId, requestOpcode, true, sendText);
             client.sendMessage(request);
-            MessageFrame response = client.receiveMessage();
+            Message response = client.receiveMessage();
+            Assert.assertTrue(requestReceived.get());
             Assert.assertNotNull(response);
             Assert.assertEquals(response.getInteractionId(), interactionId);
             Assert.assertEquals(response.getPayload(), returnText);
@@ -126,6 +142,6 @@ public class RoundTripTest {
 
     private interface RequestResponse {
 
-        MessageFrame respondTo(MessageFrame request);
+        Message respondTo(Message request);
     }
 }

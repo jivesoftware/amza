@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.serialization;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
 import de.ruedigermoeller.serialization.FSTBasicObjectSerializer;
 import de.ruedigermoeller.serialization.FSTClazzInfo;
 import de.ruedigermoeller.serialization.FSTObjectInput;
@@ -10,20 +9,20 @@ import java.io.IOException;
 /**
  *
  */
-public class FrameableSerializer extends FSTBasicObjectSerializer {
+public class MessagePayloadSerializer extends FSTBasicObjectSerializer {
 
     @Override
     public void writeObject(FSTObjectOutput output, Object toSerialize,
         FSTClazzInfo serializationInfo, FSTClazzInfo.FSTFieldInfo referencer, int streamPosition) throws IOException {
 
-        ((FrameableMessage) toSerialize).serialize(output);
+        ((MessagePayload) toSerialize).serialize(output);
     }
 
     @Override
-    public FrameableMessage instantiate(Class objectClass, FSTObjectInput input, FSTClazzInfo serializationInfo,
+    public MessagePayload instantiate(Class objectClass, FSTObjectInput input, FSTClazzInfo serializationInfo,
         FSTClazzInfo.FSTFieldInfo referencee, int streamPosition) {
         try {
-            FrameableMessage message = (FrameableMessage) objectClass.newInstance();
+            MessagePayload message = (MessagePayload) objectClass.newInstance();
             message.deserialize(input);
             input.registerObject(message, streamPosition, serializationInfo, referencee);
             return message;

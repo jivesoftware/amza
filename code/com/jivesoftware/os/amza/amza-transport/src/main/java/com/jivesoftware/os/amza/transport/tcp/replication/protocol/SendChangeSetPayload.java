@@ -1,6 +1,7 @@
-package com.jivesoftware.os.amza.transport.tcp.replication.messages;
+package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import de.ruedigermoeller.serialization.FSTObjectInput;
 import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;
@@ -9,7 +10,7 @@ import java.util.NavigableMap;
 /**
  *
  */
-public class SendChangeSet implements FrameableMessage {
+public class SendChangeSetPayload implements MessagePayload {
 
     private TableName mapName;
     private NavigableMap changes;
@@ -17,10 +18,10 @@ public class SendChangeSet implements FrameableMessage {
     /**
      * for serialization
      */
-    public SendChangeSet() {
+    public SendChangeSetPayload() {
     }
 
-    public SendChangeSet(TableName mapName, NavigableMap changes) {
+    public SendChangeSetPayload(TableName mapName, NavigableMap changes) {
         this.mapName = mapName;
         this.changes = changes;
     }
@@ -28,7 +29,7 @@ public class SendChangeSet implements FrameableMessage {
     @Override
     public void serialize(FSTObjectOutput output) throws IOException {
         output.writeObject(mapName, TableName.class);
-        output.writeObject(changes, NavigableMap.class); //todo - what about the elements?
+        output.writeObject(changes, NavigableMap.class);
     }
 
     @Override

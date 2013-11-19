@@ -1,13 +1,12 @@
-package com.jivesoftware.os.amza.transport.tcp.replication.client;
+package com.jivesoftware.os.amza.transport.tcp.replication;
 
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.IdProvider;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFrame;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.OpCodes;
+import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClient;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
@@ -21,11 +20,11 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final TcpClientProvider clientProvider;
-    private final IdProvider idProvider;
+    private final IndexReplicationProtocol indexReplicationProtocol;
 
-    public TcpChangeSetTaker(TcpClientProvider clientProvider, IdProvider idProvider) {
+    public TcpChangeSetTaker(TcpClientProvider clientProvider, IndexReplicationProtocol indexReplicationProtocol) {
         this.clientProvider = clientProvider;
-        this.idProvider = idProvider;
+        this.indexReplicationProtocol = indexReplicationProtocol;
     }
 
     @Override
@@ -33,7 +32,8 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
         long transationId, final TransactionSetStream transactionSetStream) throws Exception {
         TcpClient client = clientProvider.getClientForHost(ringHost);
         try {
-            MessageFrame message = new MessageFrame(idProvider.nextId(), OpCodes.OPCODE_REQUEST_CHANGESET, true);
+            Message message = new Message(indexReplicationProtocol.nextInteractionId(),
+                indexReplicationProtocol.OPCODE_REQUEST_CHANGESET, true);
             client.sendMessage(message);
 
             CallbackStream<TransactionSet> messageStream = new CallbackStream<TransactionSet>() {
@@ -47,7 +47,7 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
                 }
             };
 
-            MessageFrame entry = null;
+            Message entry = null;
             boolean streamingResults = true;
 
             while ((entry = client.receiveMessage()) != null) {

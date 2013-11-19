@@ -93,7 +93,7 @@ public class SendReceiveChannel {
         }
 
         int written = socketChannel.write(buffer);
-        LOG.info("Wrote {} bytes to {}", written, host);
+        LOG.trace("Wrote {} bytes to {}", written, host);
     }
 
     public int receive(ByteBuffer buffer) throws IOException {

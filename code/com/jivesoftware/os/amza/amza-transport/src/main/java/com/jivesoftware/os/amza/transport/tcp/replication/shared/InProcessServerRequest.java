@@ -15,7 +15,7 @@ public class InProcessServerRequest implements Comparable<InProcessServerRequest
     private final MessageFramer messageFramer;
     private final BufferProvider bufferProvider;
     private final ByteBuffer readBuffer;
-    private final AtomicReference<MessageFrame> message;
+    private final AtomicReference<Message> message;
 
     public InProcessServerRequest(MessageFramer messageFramer, BufferProvider bufferProvider) {
         this.messageFramer = messageFramer;
@@ -34,7 +34,7 @@ public class InProcessServerRequest implements Comparable<InProcessServerRequest
                 //TODO this does not work - using the FrameableMessage interface rather than the concreate
                 //class blows up with ClassNotFound. Need to work some fst magic or start sending opcodes to use
                 //as a message class lookup key
-                MessageFrame request = messageFramer.readFrame(readBuffer);
+                Message request = messageFramer.readFrame(readBuffer);
                 if (request != null) {
                     message.set(request);
                     bufferProvider.release(readBuffer);
@@ -50,7 +50,7 @@ public class InProcessServerRequest implements Comparable<InProcessServerRequest
         }
     }
 
-    public MessageFrame getRequest() {
+    public Message getRequest() {
         return message.get();
     }
 

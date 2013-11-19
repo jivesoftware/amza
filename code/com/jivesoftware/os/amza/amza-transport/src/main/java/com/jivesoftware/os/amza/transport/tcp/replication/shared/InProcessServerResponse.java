@@ -14,7 +14,7 @@ public class InProcessServerResponse implements Comparable<InProcessServerRespon
     private final long interactionId;
     private final boolean lastInSequence;
 
-    public InProcessServerResponse(MessageFramer messageFramer, BufferProvider bufferProvider, MessageFrame response) throws IOException {
+    public InProcessServerResponse(MessageFramer messageFramer, BufferProvider bufferProvider, Message response) throws IOException {
         this.bufferProvider = bufferProvider;
         this.writeBuffer = bufferProvider.acquire();
         this.interactionId = response.getInteractionId();

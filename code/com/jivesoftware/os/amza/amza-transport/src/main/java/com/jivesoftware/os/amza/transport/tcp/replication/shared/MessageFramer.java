@@ -4,7 +4,6 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarsh
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 /**
  *
@@ -12,15 +11,16 @@ import java.util.Map;
 public class MessageFramer {
 
     private final FstMarshaller fstMarshaller;
-    private final Map<Integer, Class<? extends Serializable>> payloadRegistry;
+    private final ApplicationProtocol applicationProtocol;
     private final int headerSize = 8 + 4 + 1 + 4;
 
-    public MessageFramer(FstMarshaller fstMarshaller, Map<Integer, Class<? extends Serializable>> payloadRegistry) {
+    public MessageFramer(FstMarshaller fstMarshaller, ApplicationProtocol applicationProtocol) {
         this.fstMarshaller = fstMarshaller;
-        this.payloadRegistry = payloadRegistry;
+        this.applicationProtocol = applicationProtocol;
     }
 
-    public void writeFrame(MessageFrame frame, ByteBuffer writeBuffer) throws IOException {
+    //TODO we can make the serialized size smaller by packing bits into one long
+    public void writeFrame(Message frame, ByteBuffer writeBuffer) throws IOException {
         writeBuffer.putLong(frame.getInteractionId());
         writeBuffer.putInt(frame.getOpCode());
         writeBuffer.put(frame.isLastInSequence() ? (byte) 1 : 0);
@@ -47,7 +47,7 @@ public class MessageFramer {
         writeBuffer.flip();
     }
 
-    public MessageFrame readFrame(ByteBuffer readBuffer) throws Exception {
+    public Message readFrame(ByteBuffer readBuffer) throws Exception {
         int position = readBuffer.position();
         int limit = readBuffer.limit();
 
@@ -66,7 +66,7 @@ public class MessageFramer {
             Serializable payload = null;
             if (payloadLength > 0) {
                 if (readBuffer.remaining() >= payloadLength) {
-                    payload = fstMarshaller.deserialize(readBuffer, payloadRegistry.get(opCode));
+                    payload = fstMarshaller.deserialize(readBuffer, applicationProtocol.getOperationPayloadClass(opCode));
                 } else {
                     //return buffer to its last state
                     readBuffer.limit(limit);
@@ -76,7 +76,7 @@ public class MessageFramer {
                 }
             }
 
-            return new MessageFrame(interactionId, opCode, lastInSequence, payload);
+            return new Message(interactionId, opCode, lastInSequence, payload);
         }
 
         return null;

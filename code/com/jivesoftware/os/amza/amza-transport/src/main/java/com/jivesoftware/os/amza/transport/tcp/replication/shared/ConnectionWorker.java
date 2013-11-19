@@ -21,20 +21,20 @@ public class ConnectionWorker extends Thread {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final Selector selector;
     private final Queue<SocketChannel> acceptedConnections;
-    private final ServerRequestHandler requestHandler;
+    private final ApplicationProtocol applicationProtocol;
     private final BufferProvider bufferProvider;
     private final MessageFramer messageFramer;
     private final ServerContext serverContext;
     private static final AtomicInteger instanceCount = new AtomicInteger();
 
     public ConnectionWorker(
-        ServerRequestHandler requestHandler,
+        ApplicationProtocol applicationProtocol,
         BufferProvider bufferProvider,
         MessageFramer messageFramer,
         ServerContext serverContext) throws IOException {
         setName("TcpConnectionWorker-" + instanceCount.incrementAndGet());
 
-        this.requestHandler = requestHandler;
+        this.applicationProtocol = applicationProtocol;
         this.bufferProvider = bufferProvider;
         this.messageFramer = messageFramer;
         this.serverContext = serverContext;
@@ -127,12 +127,12 @@ public class ConnectionWorker extends Thread {
                 key.attach(inProcess);
             }
             if (inProcess.readRequest(socketChannel)) {
-                MessageFrame request = inProcess.getRequest();
+                Message request = inProcess.getRequest();
                 if (request != null) {
                     key.attach(null);
 
                     if (request.isLastInSequence()) {
-                        MessageFrame response = requestHandler.handleRequest(request);
+                        Message response = applicationProtocol.handleRequest(request);
                         if (response != null) {
                             InProcessServerResponse inProcessResponse = new InProcessServerResponse(messageFramer, bufferProvider, response);
                             try {
@@ -145,7 +145,7 @@ public class ConnectionWorker extends Thread {
                         }
                     } else {
                         //don't expect a resonse yet
-                        requestHandler.handleRequest(request);
+                        applicationProtocol.handleRequest(request);
                         key.interestOps(SelectionKey.OP_READ);
                         selector.wakeup();
                     }
@@ -174,7 +174,7 @@ public class ConnectionWorker extends Thread {
         try {
             if (response.writeResponse(socketChannel)) {
                 if (!response.isLastInSequence()) {
-                    MessageFrame nextMessage = requestHandler.consumeSequence(response.getInteractionId());
+                    Message nextMessage = applicationProtocol.consumeSequence(response.getInteractionId());
                     if (nextMessage != null) {
 
                         logTraceFromChannel(socketChannel, "Writing follow on response to connection to {}");

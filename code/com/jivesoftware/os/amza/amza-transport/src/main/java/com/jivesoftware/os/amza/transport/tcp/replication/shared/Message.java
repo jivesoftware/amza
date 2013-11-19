@@ -6,21 +6,21 @@ import java.util.Objects;
 /**
  *
  */
-public class MessageFrame {
+public class Message {
 
     private final long interactionId;
     private final int opCode;
     private final boolean lastInSequence;
     private final Serializable payload;
 
-    public MessageFrame(long interactionId, int opCode, boolean lastInSequence, Serializable payload) {
+    public Message(long interactionId, int opCode, boolean lastInSequence, Serializable payload) {
         this.interactionId = interactionId;
         this.opCode = opCode;
         this.lastInSequence = lastInSequence;
         this.payload = payload;
     }
 
-    public MessageFrame(long interactionId, int opCode, boolean lastInSequence) {
+    public Message(long interactionId, int opCode, boolean lastInSequence) {
         this(interactionId, opCode, lastInSequence, null);
     }
 
@@ -58,7 +58,7 @@ public class MessageFrame {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final MessageFrame other = (MessageFrame) obj;
+        final Message other = (Message) obj;
         if (this.interactionId != other.interactionId) {
             return false;
         }

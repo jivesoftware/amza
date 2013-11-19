@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import java.nio.ByteBuffer;
@@ -16,7 +15,7 @@ public class InProcessServerRequest implements Comparable<InProcessServerRequest
     private final MessageFramer messageFramer;
     private final BufferProvider bufferProvider;
     private final ByteBuffer readBuffer;
-    private final AtomicReference<FrameableMessage> message;
+    private final AtomicReference<MessageFrame> message;
 
     public InProcessServerRequest(MessageFramer messageFramer, BufferProvider bufferProvider) {
         this.messageFramer = messageFramer;
@@ -35,7 +34,7 @@ public class InProcessServerRequest implements Comparable<InProcessServerRequest
                 //TODO this does not work - using the FrameableMessage interface rather than the concreate
                 //class blows up with ClassNotFound. Need to work some fst magic or start sending opcodes to use
                 //as a message class lookup key
-                FrameableMessage request = messageFramer.fromFrame(readBuffer, FrameableMessage.class);
+                MessageFrame request = messageFramer.readFrame(readBuffer);
                 if (request != null) {
                     message.set(request);
                     bufferProvider.release(readBuffer);
@@ -51,7 +50,7 @@ public class InProcessServerRequest implements Comparable<InProcessServerRequest
         }
     }
 
-    public FrameableMessage getRequest() {
+    public MessageFrame getRequest() {
         return message.get();
     }
 

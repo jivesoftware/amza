@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -23,12 +22,12 @@ public class TcpClient {
         return channel;
     }
 
-    public void sendMessage(FrameableMessage message) throws IOException {
+    public void sendMessage(MessageFrame message) throws IOException {
 
         ByteBuffer sendBuff = bufferProvider.acquire();
 
         try {
-            messageFramer.toFrame(message, sendBuff);
+            messageFramer.writeFrame(message, sendBuff);
             int position = sendBuff.position();
             int limit = sendBuff.limit();
 
@@ -47,15 +46,15 @@ public class TcpClient {
         }
     }
 
-    public <M extends FrameableMessage> M receiveMessage(Class<M> clazz) throws Exception {
+    public MessageFrame receiveMessage() throws Exception {
         int read = 0;
-        M response = null;
+        MessageFrame response = null;
         ByteBuffer readBuffer = bufferProvider.acquire();
 
         try {
             while (response == null && read >= 0) {
                 read = channel.receive(readBuffer);
-                response = messageFramer.<M>fromFrame(readBuffer, clazz);
+                response = messageFramer.readFrame(readBuffer);
             }
 
             return response;

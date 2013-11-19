@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import java.io.IOException;
@@ -128,12 +127,12 @@ public class ConnectionWorker extends Thread {
                 key.attach(inProcess);
             }
             if (inProcess.readRequest(socketChannel)) {
-                FrameableMessage request = inProcess.getRequest();
+                MessageFrame request = inProcess.getRequest();
                 if (request != null) {
                     key.attach(null);
 
                     if (request.isLastInSequence()) {
-                        FrameableMessage response = requestHandler.handleRequest(request);
+                        MessageFrame response = requestHandler.handleRequest(request);
                         if (response != null) {
                             InProcessServerResponse inProcessResponse = new InProcessServerResponse(messageFramer, bufferProvider, response);
                             try {
@@ -175,7 +174,7 @@ public class ConnectionWorker extends Thread {
         try {
             if (response.writeResponse(socketChannel)) {
                 if (!response.isLastInSequence()) {
-                    FrameableMessage nextMessage = requestHandler.consumeSequence(response.getInteractionId());
+                    MessageFrame nextMessage = requestHandler.consumeSequence(response.getInteractionId());
                     if (nextMessage != null) {
 
                         logTraceFromChannel(socketChannel, "Writing follow on response to connection to {}");

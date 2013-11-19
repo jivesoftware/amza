@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.Transact
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.IdProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.OpCodes;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.util.concurrent.atomic.AtomicLong;
@@ -31,7 +32,7 @@ public class ExampleMain {
         marshaller.registerSerializer(TableName.class, new TableNameSerializer());
         marshaller.registerSerializer(TransactionSet.class, new TransactionSetSerializer());
 
-        MessageFramer framer = new MessageFramer(marshaller);
+        MessageFramer framer = new MessageFramer(marshaller, new OpCodes().getPayloadRegistry());
 
         BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
         TcpClientProvider clientChannelProvider = new TcpClientProvider(

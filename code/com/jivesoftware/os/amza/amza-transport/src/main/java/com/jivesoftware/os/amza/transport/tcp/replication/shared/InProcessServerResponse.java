@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.FrameableMessage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
@@ -15,13 +14,13 @@ public class InProcessServerResponse implements Comparable<InProcessServerRespon
     private final long interactionId;
     private final boolean lastInSequence;
 
-    public InProcessServerResponse(MessageFramer messageFramer, BufferProvider bufferProvider, FrameableMessage response) throws IOException {
+    public InProcessServerResponse(MessageFramer messageFramer, BufferProvider bufferProvider, MessageFrame response) throws IOException {
         this.bufferProvider = bufferProvider;
         this.writeBuffer = bufferProvider.acquire();
         this.interactionId = response.getInteractionId();
         this.lastInSequence = response.isLastInSequence();
 
-        messageFramer.toFrame(response, writeBuffer);
+        messageFramer.writeFrame(response, writeBuffer);
     }
 
     public long getInteractionId() {

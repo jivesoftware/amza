@@ -28,17 +28,17 @@ public class ExampleServerMain {
         marshaller.registerSerializer(TableName.class, new TableNameSerializer());
         marshaller.registerSerializer(TransactionSet.class, new TransactionSetSerializer());
 
-        MessageFramer framer = new MessageFramer(marshaller);
+        MessageFramer framer = new MessageFramer(marshaller, new OpCodes().getPayloadRegistry());
 
         ServerRequestHandler handler = new ServerRequestHandler() {
             @Override
-            public FrameableMessage handleRequest(FrameableMessage request) {
+            public MessageFrame handleRequest(MessageFrame request) {
                 //do stuff
                 return null;
             }
 
             @Override
-            public FrameableMessage consumeSequence(long interactionId) {
+            public MessageFrame consumeSequence(long interactionId) {
                 //do stuff
                 return null;
             }

@@ -5,9 +5,9 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.ChangeSetRequest;
-import com.jivesoftware.os.amza.transport.tcp.replication.messages.ChangeSetResponse;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.IdProvider;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFrame;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.OpCodes;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClient;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
@@ -33,7 +33,8 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
         long transationId, final TransactionSetStream transactionSetStream) throws Exception {
         TcpClient client = clientProvider.getClientForHost(ringHost);
         try {
-            client.sendMessage(new ChangeSetRequest(idProvider.nextId()));
+            MessageFrame message = new MessageFrame(idProvider.nextId(), OpCodes.OPCODE_REQUEST_CHANGESET, true);
+            client.sendMessage(message);
 
             CallbackStream<TransactionSet> messageStream = new CallbackStream<TransactionSet>() {
                 @Override
@@ -46,15 +47,16 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
                 }
             };
 
-            ChangeSetResponse entry = null;
+            MessageFrame entry = null;
             boolean streamingResults = true;
 
-            while ((entry = client.receiveMessage(ChangeSetResponse.class)) != null) {
+            while ((entry = client.receiveMessage()) != null) {
 
                 //if we aren't dispatching results anymore, we still need to loop over the input to drain the socket
                 if (streamingResults) {
                     try {
-                        TransactionSet returned = messageStream.callback(entry.getTransactionSet());
+                        TransactionSet payload = entry.getPayload();
+                        TransactionSet returned = messageStream.callback(payload);
                         if (returned == null) {
                             streamingResults = false;
                         }

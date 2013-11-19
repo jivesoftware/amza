@@ -14,8 +14,4 @@ public interface FrameableMessage extends Serializable {
     void serialize(FSTObjectOutput output) throws IOException;
 
     void deserialize(FSTObjectInput input) throws Exception;
-
-    long getInteractionId();
-
-    boolean isLastInSequence();
 }

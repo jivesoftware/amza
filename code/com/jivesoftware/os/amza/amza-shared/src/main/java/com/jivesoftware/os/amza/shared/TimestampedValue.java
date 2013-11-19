@@ -7,5 +7,4 @@ public interface TimestampedValue<V> {
     boolean getTombstoned();
 
     V getValue();
-;
 }

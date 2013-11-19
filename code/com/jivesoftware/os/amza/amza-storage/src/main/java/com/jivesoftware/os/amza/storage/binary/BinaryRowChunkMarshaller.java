@@ -11,9 +11,10 @@ import com.jivesoftware.os.amza.storage.chunks.UIO;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Map;
 
-public class BinaryRowChunkMarshaller<K, V> implements RowMarshaller<K, V, byte[]> {
+public class BinaryRowChunkMarshaller<K, V> implements RowMarshaller<K, V, byte[]>, Serializable {
 
     private static final FstMarshaller FST_MARSHALLER = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
 

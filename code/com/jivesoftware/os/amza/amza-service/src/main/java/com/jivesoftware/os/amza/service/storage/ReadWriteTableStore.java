@@ -20,7 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class ReadWriteTableStore<K, V> {
 
     private final TableStorage<K, V> tableStorage;
-    private final AtomicReference<ConcurrentNavigableMap<K, TimestampedValue<V>>> readMap;
+    private final AtomicReference<NavigableMap<K, TimestampedValue<V>>> readMap;
     private final AtomicBoolean loaded = new AtomicBoolean(false);
     private final TableStateChanges tableStateChanges;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
@@ -94,7 +94,7 @@ public class ReadWriteTableStore<K, V> {
 
     synchronized public void commit(NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
         load();
-        ConcurrentNavigableMap<K, TimestampedValue<V>> currentReadMap = readMap.get();
+        NavigableMap<K, TimestampedValue<V>> currentReadMap = readMap.get();
         TableDelta<K, V> updateMap = tableStorage.update(changes, currentReadMap);
         try {
             lock.writeLock().lock();

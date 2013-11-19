@@ -2,8 +2,9 @@ package com.jivesoftware.os.amza.shared;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.io.Serializable;
 
-public class BasicTimestampedValue<V> implements TimestampedValue<V> {
+public class BasicTimestampedValue<V> implements TimestampedValue<V>, Serializable {
 
     private final long timestamp;
     private final boolean tombstoned;

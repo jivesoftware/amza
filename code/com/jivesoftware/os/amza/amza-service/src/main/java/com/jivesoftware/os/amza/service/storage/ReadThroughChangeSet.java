@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.service.storage;
 import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import java.io.IOException;
-import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
@@ -14,11 +14,11 @@ import java.util.concurrent.ConcurrentSkipListMap;
  */
 public class ReadThroughChangeSet<K, V> {
 
-    private final ConcurrentNavigableMap<K, TimestampedValue<V>> writeMap;
+    private final NavigableMap<K, TimestampedValue<V>> writeMap;
     private final ConcurrentSkipListMap<K, TimestampedValue<V>> changes;
     private final long timestamp;
 
-    ReadThroughChangeSet(ConcurrentNavigableMap<K, TimestampedValue<V>> writeMap, long timestamp) {
+    ReadThroughChangeSet(NavigableMap<K, TimestampedValue<V>> writeMap, long timestamp) {
         this.writeMap = writeMap;
         this.timestamp = timestamp;
         this.changes = new ConcurrentSkipListMap<>();

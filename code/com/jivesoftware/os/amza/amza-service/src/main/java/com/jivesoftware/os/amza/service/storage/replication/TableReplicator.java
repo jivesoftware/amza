@@ -4,6 +4,7 @@ import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
 import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
+import com.jivesoftware.os.amza.shared.HighWaterMarks;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
@@ -37,11 +38,12 @@ public class TableReplicator {
     private final TableStoreProvider resendWAL;
     private final ChangeSetSender changeSetSender;
     private final ChangeSetTaker tableTaker;
-    private final ConcurrentHashMap<RingHost, ConcurrentHashMap<TableName, Long>> lastTransactionIds = new ConcurrentHashMap<>();
+    private final HighWaterMarks highWaterMarks;
 
     public TableReplicator(TableStoreProvider tables,
         int replicationFactor,
         int takeFromFactor,
+        HighWaterMarks highWaterMarks,
         TableStoreProvider replicatedWAL,
         TableStoreProvider resendWAL,
         ChangeSetSender changeSetSender,
@@ -49,6 +51,7 @@ public class TableReplicator {
         this.tables = tables;
         this.replicationFactor = replicationFactor;
         this.takeFromFactor = takeFromFactor;
+        this.highWaterMarks = highWaterMarks;
         this.receivedChangesWAL = replicatedWAL;
         this.resendWAL = resendWAL;
         this.changeSetSender = changeSetSender;
@@ -89,18 +92,10 @@ public class TableReplicator {
                 }
                 ringHosts[i] = null;
                 try {
-                    ConcurrentHashMap<TableName, Long> lastTableTransactionIds = lastTransactionIds.get(ringHost);
-                    if (lastTableTransactionIds == null) {
-                        lastTableTransactionIds = new ConcurrentHashMap<>();
-                        lastTransactionIds.put(ringHost, lastTableTransactionIds);
-                    }
-                    Long lastTransactionId = lastTableTransactionIds.get(tableName);
-                    if (lastTransactionId == null) {
-                        lastTransactionId = -1L; // take all.
-                    }
+                    Long lastTransactionId = highWaterMarks.get(ringHost, tableName);
                     LOG.debug("Taking from " + ringHost + " " + tableName + " " + lastTransactionId);
-                    tableTaker.take(ringHost, tableName, lastTransactionId, new TakeTransactionSetStream(tableStore,
-                        tableName, lastTableTransactionIds));
+                    tableTaker.take(ringHost, tableName, lastTransactionId,
+                        new TakeTransactionSetStream<>(tableStore, ringHost, tableName, highWaterMarks));
 
                     taken.increment();
                     if (taken.intValue() >= takeFromFactor) {
@@ -120,15 +115,18 @@ public class TableReplicator {
     static class TakeTransactionSetStream<K, V> implements TransactionSetStream<K, V> {
 
         private final TableStore<K, V> tableStore;
+        private final RingHost ringHost;
         private final TableName<K, V> tableName;
-        private final ConcurrentHashMap<TableName, Long> trackTableTransactionIds;
+        private final HighWaterMarks highWaterMarks;
 
         public TakeTransactionSetStream(TableStore<K, V> tableStore,
+            RingHost ringHost,
             TableName<K, V> tableName,
-            ConcurrentHashMap<TableName, Long> trackTableTransactionIds) {
+            HighWaterMarks highWaterMarks) {
             this.tableStore = tableStore;
+            this.ringHost = ringHost;
             this.tableName = tableName;
-            this.trackTableTransactionIds = trackTableTransactionIds;
+            this.highWaterMarks = highWaterMarks;
         }
 
         @Override
@@ -137,7 +135,7 @@ public class TableReplicator {
                 NavigableMap<K, TimestampedValue<V>> changes = took.getChanges();
                 if (!changes.isEmpty()) {
                     tableStore.commit(changes);
-                    trackTableTransactionIds.put(tableName, took.getHighestTransactionId());
+                    highWaterMarks.set(ringHost, tableName, took.getHighestTransactionId());
                 }
             }
             return true;

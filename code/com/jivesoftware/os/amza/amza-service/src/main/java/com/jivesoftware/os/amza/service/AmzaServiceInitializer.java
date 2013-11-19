@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
 import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
+import com.jivesoftware.os.amza.service.storage.replication.MemoryBackedHighWaterMarks;
 import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
 import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
@@ -26,17 +27,16 @@ public class AmzaServiceInitializer {
         public int applyReplicasIntervalInMillis = 1000;
         public int takeFromNeighborsIntervalInMillis = 10000;
         public long compactTombstoneIfOlderThanNMillis = 1 * 24 * 60 * 60 * 1000L;
-
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
-            OrderIdProvider orderIdProvider,
-            TableStorageProvider amzaStores,
-            TableStorageProvider amzaReplicasWAL,
-            TableStorageProvider amzaResendWAL,
-            ChangeSetSender changeSetSender,
-            ChangeSetTaker tableTaker,
-            final TableStateChanges<Object, Object> allChangesCallback) throws Exception {
+        OrderIdProvider orderIdProvider,
+        TableStorageProvider amzaStores,
+        TableStorageProvider amzaReplicasWAL,
+        TableStorageProvider amzaResendWAL,
+        ChangeSetSender changeSetSender,
+        ChangeSetTaker tableTaker,
+        final TableStateChanges<Object, Object> allChangesCallback) throws Exception {
 
         final AtomicReference<HostRingProvider> hostRingProvider = new AtomicReference<>();
         final AtomicReference<TableReplicator> replicator = new AtomicReference<>();
@@ -57,12 +57,15 @@ public class AmzaServiceInitializer {
         TableStoreProvider replicasProvider = new TableStoreProvider(workingDirectory, "amza/WAL/replicated", amzaReplicasWAL, null);
         TableStoreProvider resendsProvider = new TableStoreProvider(workingDirectory, "amza/WAL/resend", amzaResendWAL, null);
 
+        MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
+
         TableReplicator tableReplicator = new TableReplicator(storesProvider,
-                config.replicationFactor,
-                config.takeFromFactor,
-                replicasProvider,
-                resendsProvider,
-                changeSetSender, tableTaker);
+            config.replicationFactor,
+            config.takeFromFactor,
+            highWaterMarks,
+            replicasProvider,
+            resendsProvider,
+            changeSetSender, tableTaker);
         replicator.set(tableReplicator);
 
         AmzaService service = new AmzaService(orderIdProvider, tableReplicator, storesProvider, amzaTableWatcher);

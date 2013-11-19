@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.storage;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStorage;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
@@ -27,7 +28,7 @@ public class FileBackedTableStorage<K, V, R> implements TableStorage<K, V> {
     }
 
     @Override
-    synchronized public ConcurrentNavigableMap<K, TimestampedValue<V>> load() throws Exception {
+    synchronized public TableIndex<K,V> load() throws Exception {
         return rowTableFile.load();
     }
 
@@ -40,7 +41,7 @@ public class FileBackedTableStorage<K, V, R> implements TableStorage<K, V> {
     synchronized public void clear() throws Exception {
         ConcurrentNavigableMap<K, TimestampedValue<V>> saveableMap = new ConcurrentSkipListMap<>();
         Multimap<K, TimestampedValue<V>> all = ArrayListMultimap.create();
-        ConcurrentNavigableMap<K, TimestampedValue<V>> load = load();
+        TableIndex<K, V> load = load();
         for (Entry<K, TimestampedValue<V>> entry : load.entrySet()) {
             all.put(entry.getKey(), entry.getValue());
         }
@@ -49,7 +50,7 @@ public class FileBackedTableStorage<K, V, R> implements TableStorage<K, V> {
 
     @Override
     synchronized public TableDelta<K, V> update(NavigableMap<K, TimestampedValue<V>> mutatedRows,
-            ConcurrentNavigableMap<K, TimestampedValue<V>> allRows) throws Exception {
+            NavigableMap<K, TimestampedValue<V>> allRows) throws Exception {
 
         NavigableMap<K, TimestampedValue<V>> applyMap = new TreeMap<>();
         NavigableMap<K, TimestampedValue<V>> removeMap = new TreeMap<>();

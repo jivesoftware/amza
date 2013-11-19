@@ -2,19 +2,20 @@ package com.jivesoftware.os.amza.storage;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
+import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableRowReader;
 import com.jivesoftware.os.amza.shared.TableRowWriter;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
+import com.jivesoftware.os.amza.storage.index.MapDBTableIndex;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -73,8 +74,9 @@ public class RowTableFile<K, V, R> {
         return saved;
     }
 
-    synchronized public ConcurrentNavigableMap<K, TimestampedValue<V>> load() throws Exception {
-        final ConcurrentSkipListMap<K, TimestampedValue<V>> table = new ConcurrentSkipListMap<>();
+    synchronized public TableIndex<K, V> load() throws Exception {
+        //final ConcurrentSkipListMap<K, TimestampedValue<V>> table = new ConcurrentSkipListMap<>();
+        final MapDBTableIndex<K,V> tableIndex = new MapDBTableIndex<>(rowMarshaller.getTableName().getTableName());
         final Multimap<K, TimestampedValue<V>> was = ArrayListMultimap.create();
         rowReader.read(false, new TableRowReader.Stream<R>() {
             @Override
@@ -82,18 +84,18 @@ public class RowTableFile<K, V, R> {
                 TransactionEntry<K, V> transactionEntry = rowMarshaller.fromRow(row);
                 K key = transactionEntry.getKey();
                 TimestampedValue<V> timestampedValue = transactionEntry.getValue();
-                TimestampedValue<V> current = table.get(key);
+                TimestampedValue<V> current = tableIndex.get(key);
                 if (current == null) {
-                    table.put(key, timestampedValue);
+                    tableIndex.put(key, timestampedValue);
                 } else if (current.getTimestamp() < timestampedValue.getTimestamp()) {
                     was.put(key, current);
-                    table.put(key, timestampedValue);
+                    tableIndex.put(key, timestampedValue);
                 }
                 return true;
             }
         });
-        save(was, table, false); // write compacted table after load.
-        return table;
+        save(was, tableIndex, false); // write compacted table after load.
+        return tableIndex;
     }
 
     synchronized public void rowMutationSince(final long transactionId, TransactionSetStream<K, V> transactionSetStream) throws Exception {

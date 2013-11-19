@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.jive.utils.logger.MetricLogger;
+import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
@@ -14,6 +16,7 @@ import java.util.Iterator;
  */
 public class ConnectionAcceptor extends Thread {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final Selector selector;
     private final RingHost localHost;
     private final ConnectionWorker[] workers;
@@ -43,6 +46,8 @@ public class ConnectionAcceptor extends Thread {
             channel.socket().bind(new InetSocketAddress(localHost.getHost(), localHost.getPort()));
             channel.register(selector, SelectionKey.OP_ACCEPT);
 
+            LOG.info("Started Tcp connection acceptor bound to {}", localHost);
+
             int workerIdx = 0;
 
             while (serverContext.running()) {
@@ -69,6 +74,8 @@ public class ConnectionAcceptor extends Thread {
             serverContext.closeAndCatch(channel);
             serverContext.closeAndCatch(selector);
 
+            LOG.info("Stopped Tcp connection acceptor bound to {}", localHost);
+
         } catch (Exception ex) {
             serverContext.closeAndCatch(channel);
             serverContext.closeAndCatch(selector);
@@ -87,5 +94,7 @@ public class ConnectionAcceptor extends Thread {
         channel.configureBlocking(false);
         channel.socket().setTcpNoDelay(true);
         worker.addConnection(channel);
+
+        LOG.info("Accepted connection from {}", channel.getRemoteAddress());
     }
 }

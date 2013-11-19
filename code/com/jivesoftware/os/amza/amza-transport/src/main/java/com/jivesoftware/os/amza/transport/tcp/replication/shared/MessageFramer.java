@@ -29,6 +29,7 @@ public class MessageFramer {
         writeBuffer.reset();
         writeBuffer.putInt(size);
         writeBuffer.position(position);
+        writeBuffer.flip();
     }
 
     public <F extends FrameableMessage> F fromFrame(ByteBuffer readBuffer, Class<F> clazz) throws Exception {
@@ -39,6 +40,10 @@ public class MessageFramer {
 
         if (readBuffer.remaining() > headerSize) {
             int messageLength = readBuffer.getInt();
+
+            if (messageLength <= 0) {
+                throw new IllegalStateException("Encountered invalid message payloade length: " + messageLength);
+            }
 
             if (readBuffer.remaining() >= messageLength) {
                 return fstMarshaller.<F>deserialize(readBuffer, clazz);

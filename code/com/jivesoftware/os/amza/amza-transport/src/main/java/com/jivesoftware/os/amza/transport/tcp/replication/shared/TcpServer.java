@@ -22,6 +22,7 @@ public class TcpServer {
     }
 
     public void start() throws InterruptedException {
+        LOG.info("Starting TcpServer...");
         if (serverContext.start()) {
             for (ConnectionWorker worker : connectionWorkers) {
                 worker.start();
@@ -29,9 +30,12 @@ public class TcpServer {
 
             connectionAcceptor.start();
         }
+        LOG.inc("TcpServer started");
+
     }
 
     public void stop() throws InterruptedException {
+        LOG.info("Stopping TcpServer...");
         if (serverContext.stop()) {
             connectionAcceptor.wakeup();
 
@@ -42,5 +46,6 @@ public class TcpServer {
                 worker.join();
             }
         }
+        LOG.info("TcpServer stopped");
     }
 }

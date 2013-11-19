@@ -22,6 +22,12 @@ public class MessageFramerTest {
         try {
             ChangeSetRequest request = new ChangeSetRequest();
             framer.toFrame(request, buffer);
+
+            //mimic write/read to/from channel
+
+            buffer.limit(buffer.capacity());
+            buffer.position(buffer.limit());
+
             ChangeSetRequest received = framer.fromFrame(buffer, ChangeSetRequest.class);
 
             Assert.assertNotNull(received);

@@ -55,7 +55,7 @@ public class SendReceiveChannel {
                 socketChannel.socket().connect(new InetSocketAddress(host.getHost(), host.getPort()), connectTimeout);
                 readChannel = Channels.newChannel(socketChannel.socket().getInputStream());
 
-                LOG.info("Created socket channel connected to {}.", new Object[]{socketTimeout, readBufferSize, writeBufferSize, host});
+                LOG.info("Created socket channel connected to {}.", host);
             } catch (Throwable t) {
                 connected.set(false);
                 throw t;
@@ -92,8 +92,8 @@ public class SendReceiveChannel {
             throw new ClosedChannelException();
         }
 
-        socketChannel.write(buffer);
-
+        int written = socketChannel.write(buffer);
+        LOG.info("Wrote {} bytes to {}", written, host);
     }
 
     public int receive(ByteBuffer buffer) throws IOException {
@@ -101,6 +101,9 @@ public class SendReceiveChannel {
             throw new ClosedChannelException();
         }
 
-        return readChannel.read(buffer);
+        int read = readChannel.read(buffer);
+        LOG.trace("Read {} bytes from {}", read, host);
+        return read;
+
     }
 }

@@ -8,7 +8,7 @@ import java.nio.channels.SocketChannel;
 /**
  *
  */
-public class InProcessServerResponse {
+public class InProcessServerResponse implements Comparable<InProcessServerResponse> {
 
     private final BufferProvider bufferProvider;
     private final ByteBuffer writeBuffer;
@@ -45,5 +45,14 @@ public class InProcessServerResponse {
             bufferProvider.release(writeBuffer);
             throw ex;
         }
+    }
+
+    public void releaseResources() {
+        bufferProvider.release(writeBuffer);
+    }
+
+    @Override
+    public int compareTo(InProcessServerResponse o) {
+        return Integer.compare(System.identityHashCode(this), System.identityHashCode(o));
     }
 }

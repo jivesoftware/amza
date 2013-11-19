@@ -194,8 +194,10 @@ public class ConnectionWorker extends Thread {
         } catch (IOException ioe) {
             if (response != null) {
                 response.releaseResources();
-                logWarningFromChannel(socketChannel, "Error writing response to connection frm {}");
+                logWarningFromChannel(socketChannel, "Error writing response to connection to {}");
             }
+
+            throw ioe;
         }
     }
 
@@ -208,26 +210,32 @@ public class ConnectionWorker extends Thread {
     }
 
     private void logWarningFromChannel(SocketChannel channel, String message) {
-        try {
-            LOG.warn(message, channel.getRemoteAddress());
-        } catch (IOException ex) {
-            LOG.error("Unable to access remote host of socket connection", ex);
+        if (LOG.isWarnEnabled()) {
+            try {
+                LOG.warn(message, channel.getRemoteAddress());
+            } catch (IOException ex) {
+                LOG.error("Unable to access remote host of socket connection", ex);
+            }
         }
     }
 
     private void logInfoFromChannel(SocketChannel channel, String message) {
-        try {
-            LOG.info(message, channel.getRemoteAddress());
-        } catch (IOException ex) {
-            LOG.error("Unable to access remote host of socket connection", ex);
+        if (LOG.isInfoEnabled()) {
+            try {
+                LOG.info(message, channel.getRemoteAddress());
+            } catch (IOException ex) {
+                LOG.error("Unable to access remote host of socket connection", ex);
+            }
         }
     }
 
     private void logTraceFromChannel(SocketChannel channel, String message) {
-        try {
-            LOG.trace(message, channel.getRemoteAddress());
-        } catch (IOException ex) {
-            LOG.error("Unable to access remote host of socket connection", ex);
+        if (LOG.isTraceEnabled()) {
+            try {
+                LOG.trace(message, channel.getRemoteAddress());
+            } catch (IOException ex) {
+                LOG.error("Unable to access remote host of socket connection", ex);
+            }
         }
     }
 }

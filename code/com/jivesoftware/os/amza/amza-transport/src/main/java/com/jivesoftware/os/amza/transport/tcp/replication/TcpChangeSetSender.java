@@ -31,6 +31,16 @@ public class TcpChangeSetSender implements ChangeSetSender {
             SendChangeSetPayload payload = new SendChangeSetPayload(mapName, changes);
             client.sendMessage(new Message(indexReplicationProtocol.nextInteractionId(),
                 indexReplicationProtocol.OPCODE_PUSH_CHANGESET, true, payload));
+
+            Message maybeException = client.receiveMessage();
+            if (maybeException != null) {
+                if (maybeException.getOpCode() != indexReplicationProtocol.OPCODE_ERROR) {
+                    throw new IllegalArgumentException("Unexpected opcode in response to change set send:" + maybeException.getOpCode());
+                } else {
+                    String errorMsg = maybeException.getPayload();
+                    throw new Exception(errorMsg);
+                }
+            }
         } finally {
             tcpClientProvider.returnClient(client);
         }

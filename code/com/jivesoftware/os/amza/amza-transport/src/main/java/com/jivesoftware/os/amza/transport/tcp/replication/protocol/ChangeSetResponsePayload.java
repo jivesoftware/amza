@@ -36,4 +36,9 @@ public class ChangeSetResponsePayload implements MessagePayload {
     public void deserialize(FSTObjectInput input) throws Exception {
         this.transactionSet = (TransactionSet) input.readObject(TransactionSet.class);
     }
+
+    @Override
+    public String toString() {
+        return "ChangeSetResponsePayload{" + "transactionSet=" + transactionSet + '}';
+    }
 }

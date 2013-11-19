@@ -26,7 +26,7 @@ public class ExampleMain {
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
 
-        IndexReplicationProtocol protocol = new IndexReplicationProtocol(new IdProvider() {
+        IndexReplicationProtocol protocol = new IndexReplicationProtocol(null, new IdProvider() {
             private final AtomicLong id = new AtomicLong();
 
             @Override

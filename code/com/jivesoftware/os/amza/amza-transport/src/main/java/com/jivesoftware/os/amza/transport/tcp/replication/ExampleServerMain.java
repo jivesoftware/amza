@@ -30,7 +30,7 @@ public class ExampleServerMain {
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
 
-        ApplicationProtocol protocol = new IndexReplicationProtocol(new IdProvider() {
+        ApplicationProtocol protocol = new IndexReplicationProtocol(null, new IdProvider() {
             private final AtomicLong id = new AtomicLong();
 
             @Override

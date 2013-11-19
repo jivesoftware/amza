@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
+import com.jivesoftware.os.amza.transport.tcp.replication.protocol.ChangeSetRequestPayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClient;
@@ -32,8 +33,10 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
         long transationId, final TransactionSetStream transactionSetStream) throws Exception {
         TcpClient client = clientProvider.getClientForHost(ringHost);
         try {
+            ChangeSetRequestPayload requestPayload = new ChangeSetRequestPayload(tableName, transationId);
             Message message = new Message(indexReplicationProtocol.nextInteractionId(),
-                indexReplicationProtocol.OPCODE_REQUEST_CHANGESET, true);
+                indexReplicationProtocol.OPCODE_REQUEST_CHANGESET, true, requestPayload);
+
             client.sendMessage(message);
 
             CallbackStream<TransactionSet> messageStream = new CallbackStream<TransactionSet>() {
@@ -51,6 +54,11 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
             boolean streamingResults = true;
 
             while ((entry = client.receiveMessage()) != null) {
+
+                if (entry.getOpCode() == indexReplicationProtocol.OPCODE_ERROR) {
+                    String errorMsg = entry.getPayload();
+                    throw new Exception(errorMsg);
+                }
 
                 //if we aren't dispatching results anymore, we still need to loop over the input to drain the socket
                 if (streamingResults) {

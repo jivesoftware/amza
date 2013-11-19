@@ -45,4 +45,9 @@ public class SendChangeSetPayload implements MessagePayload {
     public NavigableMap getChanges() {
         return changes;
     }
+
+    @Override
+    public String toString() {
+        return "SendChangeSetPayload{" + "mapName=" + mapName + ", changes=" + changes + '}';
+    }
 }

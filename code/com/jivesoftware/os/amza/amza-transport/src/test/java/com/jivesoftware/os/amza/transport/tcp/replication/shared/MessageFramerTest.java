@@ -17,7 +17,7 @@ public class MessageFramerTest {
         BufferProvider bufferProvider = new BufferProvider(1024, 1, true);
         FstMarshaller fstMarshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
 
-        IndexReplicationProtocol protocol = new IndexReplicationProtocol(null);
+        IndexReplicationProtocol protocol = new IndexReplicationProtocol(null, null);
 
         MessageFramer framer = new MessageFramer(fstMarshaller, protocol);
 

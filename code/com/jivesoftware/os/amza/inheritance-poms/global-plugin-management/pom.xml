@@ -165,53 +165,6 @@
                         </dependency>
                     </dependencies>
                 </plugin>
-                <!-- Ensures module names are in alignment with the directory structure -->
-                <plugin>
-                    <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
-                    <artifactId>module-name-alignment-plugin</artifactId>
-                    <version>unspecified</version>
-                    <executions>
-                        <execution>
-                            <phase>validate</phase>
-                            <goals>
-                                <goal>module-name-alignment</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                    <configuration>
-                        <invalidModuleNameFailsTheBuild>true</invalidModuleNameFailsTheBuild>
-                    </configuration>
-                </plugin>
-                <!-- Ensures package names are in alignment with the module name and directory structure -->
-                <plugin>
-                    <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
-                    <artifactId>package-name-alignment-plugin</artifactId>
-                    <version>unspecified</version>
-                    <executions>
-                        <execution>
-                            <phase>process-test-classes</phase>
-                            <goals>
-                                <goal>package-name-alignment</goal>
-                            </goals>
-                            <configuration>
-                                <invalidPackageNameFailsTheBuild>true</invalidPackageNameFailsTheBuild>
-                            </configuration>
-                        </execution>
-                    </executions>
-                </plugin>
-                <plugin>
-                    <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
-                    <artifactId>no-snapshots-plugin</artifactId>
-                    <version>unspecified</version>
-                    <executions>
-                        <execution>
-                            <phase>validate</phase>
-                            <goals>
-                                <goal>no-snapshots</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-checkstyle-plugin</artifactId>
@@ -294,48 +247,6 @@
                     </executions>
                 </plugin>
                 <plugin>
-                    <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
-                    <artifactId>configurations-plugin</artifactId>
-                    <version>unspecified</version>
-                    <executions>
-                        <execution>
-                            <id>process-configurations</id>
-                            <phase>process-classes</phase>
-                            <goals>
-                                <goal>process-configurations</goal>
-                            </goals>
-                        </execution>
-                        <execution>
-                            <id>denormalize</id>
-                            <phase>none</phase>
-                            <goals>
-                                <goal>denormalize-only</goal>
-                            </goals>
-                            <configuration>
-                                <configBase>${env.J_CODE}</configBase>
-                            </configuration>
-                        </execution>
-                    </executions>
-                </plugin>
-                <plugin>
-                    <groupId>org.jacoco</groupId>
-                    <artifactId>jacoco-maven-plugin</artifactId>
-                    <version>0.6.3-jive1</version>
-                    <configuration>
-                        <destFile>${sonar.jacoco.reportPath}</destFile>
-                        <append>true</append>
-                        <exclClassLoaders>sun.reflect.DelegatingClassLoader:com.senseidb.search.relevance.impl.CompilationHelper$CustomLoader</exclClassLoaders>
-                    </configuration>
-                    <executions>
-                        <execution>
-                            <id>prepare-agent</id>
-                            <goals>
-                                <goal>prepare-agent</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                </plugin>
-                <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>properties-maven-plugin</artifactId>
                     <version>1.0-alpha-2</version>
@@ -406,34 +317,11 @@
                 </plugins>
             </build>
         </profile>
-        <profile>
-            <id>code-coverage</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.jacoco</groupId>
-                        <artifactId>jacoco-maven-plugin</artifactId>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
     </profiles>
 
     <reporting>
         <!--  Inheritance from the pluginManagement section doesn't work for reporting plugins. -->
         <plugins>
-            <!--            <plugin>
-                            <groupId>org.codehaus.mojo</groupId>
-                            <artifactId>cobertura-maven-plugin</artifactId>
-                            <version>2.5.2</version>
-                            <configuration>
-                                <formats>
-                                    <format>html</format>
-                                    <format>xml</format>
-                                </formats>
-                            </configuration>
-                        </plugin>-->
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-project-info-reports-plugin</artifactId>

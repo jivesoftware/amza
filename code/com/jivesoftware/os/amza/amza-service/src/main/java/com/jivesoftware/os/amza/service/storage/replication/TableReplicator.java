@@ -15,7 +15,6 @@ import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang.mutable.MutableInt;
 
 /**

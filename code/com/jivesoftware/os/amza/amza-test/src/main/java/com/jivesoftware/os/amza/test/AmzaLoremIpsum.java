@@ -34,8 +34,7 @@ public class AmzaLoremIpsum {
 
         for (int i = 0; i < 2; i++) {
             final String tname = tableName + i;
-            new Thread() {
-
+            Thread t = new Thread() {
                 @Override
                 public void run() {
                     try {
@@ -44,7 +43,8 @@ public class AmzaLoremIpsum {
                         x.printStackTrace();
                     }
                 }
-            }.start();
+            };
+            t.start();
         }
     }
 

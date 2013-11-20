@@ -27,9 +27,9 @@ public class RowTableFile<K, V, R> {
     private final TableRowWriter<R> rowWriter;
 
     public RowTableFile(OrderIdProvider orderIdProvider,
-            RowMarshaller<K, V, R> rowMarshaller,
-            TableRowReader<R> rowReader,
-            TableRowWriter<R> rowWriter) {
+        RowMarshaller<K, V, R> rowMarshaller,
+        TableRowReader<R> rowReader,
+        TableRowWriter<R> rowWriter) {
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
         this.rowReader = rowReader;
@@ -57,7 +57,7 @@ public class RowTableFile<K, V, R> {
     }
 
     synchronized public NavigableMap<K, TimestampedValue<V>> save(Multimap<K, TimestampedValue<V>> was,
-            NavigableMap<K, TimestampedValue<V>> mutation, boolean append) throws Exception {
+        NavigableMap<K, TimestampedValue<V>> mutation, boolean append) throws Exception {
         long transactionId = 0;
         if (orderIdProvider != null) {
             transactionId = orderIdProvider.nextId();
@@ -76,7 +76,7 @@ public class RowTableFile<K, V, R> {
 
     synchronized public TableIndex<K, V> load() throws Exception {
         //final ConcurrentSkipListMap<K, TimestampedValue<V>> table = new ConcurrentSkipListMap<>();
-        final MapDBTableIndex<K,V> tableIndex = new MapDBTableIndex<>(rowMarshaller.getTableName().getTableName());
+        final MapDBTableIndex<K, V> tableIndex = new MapDBTableIndex<>(rowMarshaller.getTableName().getTableName());
         final Multimap<K, TimestampedValue<V>> was = ArrayListMultimap.create();
         rowReader.read(false, new TableRowReader.Stream<R>() {
             @Override

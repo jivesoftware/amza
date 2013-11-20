@@ -28,7 +28,7 @@ public class FileBackedTableStorage<K, V, R> implements TableStorage<K, V> {
     }
 
     @Override
-    synchronized public TableIndex<K,V> load() throws Exception {
+    synchronized public TableIndex<K, V> load() throws Exception {
         return rowTableFile.load();
     }
 
@@ -50,7 +50,7 @@ public class FileBackedTableStorage<K, V, R> implements TableStorage<K, V> {
 
     @Override
     synchronized public TableDelta<K, V> update(NavigableMap<K, TimestampedValue<V>> mutatedRows,
-            NavigableMap<K, TimestampedValue<V>> allRows) throws Exception {
+        NavigableMap<K, TimestampedValue<V>> allRows) throws Exception {
 
         NavigableMap<K, TimestampedValue<V>> applyMap = new TreeMap<>();
         NavigableMap<K, TimestampedValue<V>> removeMap = new TreeMap<>();

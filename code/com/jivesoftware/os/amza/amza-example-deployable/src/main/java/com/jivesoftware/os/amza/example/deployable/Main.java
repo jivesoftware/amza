@@ -21,14 +21,24 @@ import com.jivesoftware.os.amza.storage.binary.BinaryRowChunkMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
 import com.jivesoftware.os.amza.storage.chunks.Filer;
-import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetSender;
-import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
+import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetSender;
+import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetTaker;
+import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
+import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
+import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
+import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayloadSerializer;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServer;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServerInitializer;
 import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
+import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.File;
 import java.util.Random;
 
@@ -81,34 +91,76 @@ public class Main {
             }
         };
 
-        AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
-                orderIdProvider,
-                tableStorageProvider,
-                tableStorageProvider,
-                tableStorageProvider,
-                new HttpChangeSetSender(),
-                new HttpChangeSetTaker(),
-                new TableStateChanges<Object, Object>() {
+        //TODO pull from properties
+        int connectionsPerHost = Integer.parseInt(System.getProperty("amza.tcp.client.connectionsPerHost", "2"));
+        int connectTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.connectTimeoutMillis", "5000"));
+        int socketTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.socketTimeoutMillis", "2000"));
+        int bufferSize = Integer.parseInt(System.getProperty("amza.tcp.bufferSize", "2048"));
+        int numServerThreads = Integer.parseInt(System.getProperty("amza.tcp.server.numThreads", "4"));
+        int numBuffers = numServerThreads + 2;
+        int tcpPort = Integer.parseInt(System.getProperty("amza.tcp.port", "1177"));
 
-                    @Override
-                    public void changes(TableName<Object, Object> tableName, TableDelta<Object, Object> changes) throws Exception {
-                    }
-                });
+        FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
+        marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
+
+        IndexReplicationProtocol clientProtocol = new IndexReplicationProtocol(null, orderIdProvider);
+
+        MessageFramer framer = new MessageFramer(marshaller, clientProtocol);
+        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
+
+        TcpClientProvider tcpClientProvider = new TcpClientProvider(
+            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+
+        AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
+            orderIdProvider,
+            tableStorageProvider,
+            tableStorageProvider,
+            tableStorageProvider,
+            new TcpChangeSetSender(tcpClientProvider, clientProtocol),
+            new TcpChangeSetTaker(tcpClientProvider, clientProtocol),
+            new TableStateChanges<Object, Object>() {
+            @Override
+            public void changes(TableName<Object, Object> tableName, TableDelta<Object, Object> changes) throws Exception {
+            }
+        });
 
         amzaService.start(ringHost, amzaServiceConfig.resendReplicasIntervalInMillis,
-                amzaServiceConfig.applyReplicasIntervalInMillis,
-                amzaServiceConfig.takeFromNeighborsIntervalInMillis,
-                amzaServiceConfig.compactTombstoneIfOlderThanNMillis);
+            amzaServiceConfig.applyReplicasIntervalInMillis,
+            amzaServiceConfig.takeFromNeighborsIntervalInMillis,
+            amzaServiceConfig.compactTombstoneIfOlderThanNMillis);
 
         System.out.println("-----------------------------------------------------------------------");
         System.out.println("|      Amza Service Online");
         System.out.println("-----------------------------------------------------------------------");
 
+
+        IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);
+        bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
+        TcpServerInitializer initializer = new TcpServerInitializer();
+        final TcpServer server = initializer.initialize(new RingHost(hostname, tcpPort), numServerThreads, bufferProvider, framer, serverProtocol);
+        server.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                try {
+                    server.stop();
+                } catch (InterruptedException ex) {
+                    System.out.println("Failed to stop Tcp Replication Service");
+                    ex.printStackTrace(System.out);
+                }
+            }
+        });
+
+        System.out.println("-----------------------------------------------------------------------");
+        System.out.println("|      Tcp Replication Service Online");
+        System.out.println("-----------------------------------------------------------------------");
+
         JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
-                .addEndpoint(AmzaExampleEndpoints.class)
-                .addInjectable(AmzaService.class, amzaService)
-                .addEndpoint(AmzaReplicationRestEndpoints.class)
-                .addInjectable(AmzaInstance.class, amzaService);
+            .addEndpoint(AmzaExampleEndpoints.class)
+            .addInjectable(AmzaService.class, amzaService)
+            .addEndpoint(AmzaReplicationRestEndpoints.class)
+            .addInjectable(AmzaInstance.class, amzaService);
 
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);
         initializeRestfulServer.addContextHandler("/", jerseyEndpoints);

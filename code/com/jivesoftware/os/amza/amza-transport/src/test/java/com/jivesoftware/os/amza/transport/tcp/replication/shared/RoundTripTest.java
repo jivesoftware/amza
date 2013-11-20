@@ -1,10 +1,10 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IdProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayloadSerializer;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.IOException;
 import java.io.Serializable;
@@ -27,7 +27,7 @@ public class RoundTripTest {
     private AtomicReference<RequestResponse> requestResponseMethod = new AtomicReference<>();
     private RingHost localHost = new RingHost("localhost", 7777);
     private TcpClientProvider tcpClientProvider;
-    private IdProvider idProvider;
+    private OrderIdProvider idProvider;
     private int requestOpcode = 45;
     private int responseOpcode = 47;
 
@@ -92,7 +92,7 @@ public class RoundTripTest {
         tcpClientProvider = new TcpClientProvider(
             connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
-        idProvider = new IdProvider() {
+        idProvider = new OrderIdProvider() {
             private final AtomicLong id = new AtomicLong();
 
             @Override

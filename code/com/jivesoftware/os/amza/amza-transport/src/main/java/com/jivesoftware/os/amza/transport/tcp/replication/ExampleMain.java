@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.transport.tcp.replication;
 
-import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IdProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
@@ -8,6 +7,7 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessageP
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -26,7 +26,7 @@ public class ExampleMain {
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
 
-        IndexReplicationProtocol protocol = new IndexReplicationProtocol(null, new IdProvider() {
+        IndexReplicationProtocol protocol = new IndexReplicationProtocol(null, new OrderIdProvider() {
             private final AtomicLong id = new AtomicLong();
 
             @Override

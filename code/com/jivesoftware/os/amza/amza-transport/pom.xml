@@ -63,6 +63,10 @@
             <groupId>commons-lang</groupId>
             <artifactId>commons-lang</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.jive.utils</groupId>
+            <artifactId>ordered-id</artifactId>
+        </dependency>
         <!--        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>

@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.ApplicationProt
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,9 +31,9 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     public final int OPCODE_ERROR = 9;
     private final Map<Integer, Class<? extends Serializable>> payloadRegistry;
     private final AmzaInstance amzaInstance;
-    private final IdProvider idProvider;
+    private final OrderIdProvider idProvider;
 
-    public IndexReplicationProtocol(AmzaInstance amzaInstance, IdProvider idProvider) {
+    public IndexReplicationProtocol(AmzaInstance amzaInstance, OrderIdProvider idProvider) {
         this.amzaInstance = amzaInstance;
         this.idProvider = idProvider;
 

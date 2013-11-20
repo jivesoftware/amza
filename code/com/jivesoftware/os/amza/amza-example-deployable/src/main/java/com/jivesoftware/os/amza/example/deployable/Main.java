@@ -9,6 +9,8 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.ChangeSetSender;
+import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableName;
@@ -17,10 +19,12 @@ import com.jivesoftware.os.amza.shared.TableStorage;
 import com.jivesoftware.os.amza.shared.TableStorageProvider;
 import com.jivesoftware.os.amza.storage.FileBackedTableStorage;
 import com.jivesoftware.os.amza.storage.RowTableFile;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowChunkMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
 import com.jivesoftware.os.amza.storage.chunks.Filer;
+import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetSender;
+import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetSender;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetTaker;
@@ -57,7 +61,7 @@ public class Main {
         String clusterName = (args.length > 1 ? args[1] : null);
 
         RingHost ringHost = new RingHost(hostname, port);
-        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new Random().nextInt(1024)); // todo need a better way to create writter id.
+        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new Random().nextInt(512)); // todo need a better way to create writter id.
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -75,21 +79,16 @@ public class Main {
                 Filer filer = Filer.open(file, "rw");
                 BinaryRowReader reader = new BinaryRowReader(filer);
                 BinaryRowWriter writer = new BinaryRowWriter(filer);
-                BinaryRowChunkMarshaller rowMarshaller = new BinaryRowChunkMarshaller(directory, tableName);
+                BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller(tableName);
+                //BinaryRowChunkMarshaller rowMarshaller = new BinaryRowChunkMarshaller(directory, tableName);
                 RowTableFile<K, V, byte[]> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
-
-
-                /*
-                 StringRowReader reader = new StringRowReader(file);
-                 StringRowWriter writer = new StringRowWriter(file);
-
-                 //RowMarshaller<K, V, String> rowMarshaller = new StringRowMarshaller<>(mapper, tableName);
-                 RowMarshaller<K, V, String> rowMarshaller = new StringRowValueChunkMarshaller(directory, mapper, tableName);
-                 RowTableFile<K, V, String> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
-                 */
                 return new FileBackedTableStorage(rowTableFile);
             }
         };
+
+        String transport = System.getProperty("amza.transport", "http");
+
+
 
         //TODO pull from properties
         int connectionsPerHost = Integer.parseInt(System.getProperty("amza.tcp.client.connectionsPerHost", "2"));
@@ -111,13 +110,24 @@ public class Main {
         TcpClientProvider tcpClientProvider = new TcpClientProvider(
             connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
+        ChangeSetSender changeSetSender = new TcpChangeSetSender(tcpClientProvider, clientProtocol);
+        ChangeSetTaker tableTaker = new TcpChangeSetTaker(tcpClientProvider, clientProtocol);
+
+
+        if (transport.equals("tcp")) {
+            changeSetSender = new HttpChangeSetSender();
+            tableTaker = new HttpChangeSetTaker();
+
+        }
+
+
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
             orderIdProvider,
             tableStorageProvider,
             tableStorageProvider,
             tableStorageProvider,
-            new TcpChangeSetSender(tcpClientProvider, clientProtocol),
-            new TcpChangeSetTaker(tcpClientProvider, clientProtocol),
+            changeSetSender,
+            tableTaker,
             new TableStateChanges<Object, Object>() {
             @Override
             public void changes(TableName<Object, Object> tableName, TableDelta<Object, Object> changes) throws Exception {

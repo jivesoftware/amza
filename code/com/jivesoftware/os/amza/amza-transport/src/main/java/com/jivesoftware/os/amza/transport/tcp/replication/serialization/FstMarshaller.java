@@ -42,18 +42,17 @@ public class FstMarshaller {
         int start = buffer.position();
 
         ByteBufferOutputStream bbos = new ByteBufferOutputStream(buffer);
-        try (FSTObjectOutput out = fstConfig.getObjectOutput(bbos)) {
-            out.writeObject(toSerialize, toSerialize.getClass());
-            out.flush();
-        }
+        FSTObjectOutput out = fstConfig.getObjectOutput(bbos);
+
+        out.writeObject(toSerialize, toSerialize.getClass());
+        out.flush();
 
         return buffer.position() - start;
     }
 
     public <V> V deserialize(ByteBuffer readBuffer, Class<V> clazz) throws Exception {
         ByteBufferInputStream bbis = new ByteBufferInputStream(readBuffer);
-        try (FSTObjectInput in = fstConfig.getObjectInput(bbis)) {
-            return (V) in.readObject(clazz);
-        }
+        FSTObjectInput in = fstConfig.getObjectInput(bbis);
+        return (V) in.readObject(clazz);
     }
 }

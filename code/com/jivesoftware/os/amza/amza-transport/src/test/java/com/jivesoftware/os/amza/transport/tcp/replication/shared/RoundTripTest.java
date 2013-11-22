@@ -55,7 +55,7 @@ public class RoundTripTest {
         //setup server
         BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
 
-        FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
+        FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.createDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
 
         final Map<Integer, Class<? extends Serializable>> payloadRegistry = new HashMap<>();

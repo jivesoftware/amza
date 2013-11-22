@@ -63,7 +63,7 @@ public class IndexReplicationTest {
         //setup server
         BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
 
-        FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
+        FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.createDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
 
         final Map<Integer, Class<? extends Serializable>> payloadRegistry = new HashMap<>();
@@ -86,7 +86,7 @@ public class IndexReplicationTest {
         int connectTimeoutMillis = 5000;
         int socketTimeoutMillis = 200000;
         tcpClientProvider = new TcpClientProvider(
-                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
     }
 
     @AfterTest
@@ -94,7 +94,7 @@ public class IndexReplicationTest {
         server.stop();
     }
 
-    @Test(enabled = false) //fst is sad when both test methods run
+    @Test
     public void testPush() throws Exception {
         TcpChangeSetSender sender = new TcpChangeSetSender(tcpClientProvider, applicationProtocol);
 
@@ -166,7 +166,7 @@ public class IndexReplicationTest {
 
             @Override
             public <K, V> void takeTableChanges(TableName<K, V> tableName, long transationId, TransactionSetStream<K, V> transactionSetStream)
-                    throws Exception {
+                throws Exception {
                 transactionSetStream.stream(take.get());
             }
 

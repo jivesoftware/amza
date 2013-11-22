@@ -30,7 +30,7 @@ public class MessageFramerTest {
     @Test
     public void testSerializationRoundTrip() throws Exception {
         BufferProvider bufferProvider = new BufferProvider(1024, 1, true);
-        FstMarshaller fstMarshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
+        FstMarshaller fstMarshaller = new FstMarshaller(FSTConfiguration.createDefaultConfiguration());
 
         IndexReplicationProtocol protocol = new IndexReplicationProtocol(null, null);
 

@@ -61,7 +61,6 @@ public class Message implements Serializable {
         hash = 29 * hash + (int) (this.interactionId ^ (this.interactionId >>> 32));
         hash = 29 * hash + this.opCode;
         hash = 29 * hash + (this.lastInSequence ? 1 : 0);
-        hash = 29 * hash + Objects.hashCode(this.payload);
         return hash;
     }
 
@@ -83,9 +82,11 @@ public class Message implements Serializable {
         if (this.lastInSequence != other.lastInSequence) {
             return false;
         }
-        if (!Objects.equals(this.payload, other.payload)) {
-            return false;
-        }
         return true;
+    }
+
+    @Override
+    public String toString() {
+        return "Message{" + "interactionId=" + interactionId + ", opCode=" + opCode + ", lastInSequence=" + lastInSequence + '}';
     }
 }

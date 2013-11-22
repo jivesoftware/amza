@@ -68,7 +68,7 @@ public class MessageFramer {
 
         readBuffer.flip();
 
-        if (readBuffer.remaining() > headerSize) {
+        if (readBuffer.remaining() >= headerSize) {
             long interactionId = readBuffer.getLong();
             int opCode = readBuffer.getInt();
             boolean lastInSequence = readBuffer.get() == 1;

@@ -15,9 +15,10 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import java.io.Serializable;
 import java.util.NavigableMap;
 
-public class TransactionSet<K, V> {
+public class TransactionSet<K, V> implements Serializable {
 
     private final long highestTransactionId;
     private final NavigableMap<K, TimestampedValue<V>> changes;

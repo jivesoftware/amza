@@ -43,10 +43,10 @@ public class ConnectionWorker extends Thread {
     private static final AtomicInteger instanceCount = new AtomicInteger();
 
     public ConnectionWorker(
-        ApplicationProtocol applicationProtocol,
-        BufferProvider bufferProvider,
-        MessageFramer messageFramer,
-        ServerContext serverContext) throws IOException {
+            ApplicationProtocol applicationProtocol,
+            BufferProvider bufferProvider,
+            MessageFramer messageFramer,
+            ServerContext serverContext) throws IOException {
         setName("TcpConnectionWorker-" + instanceCount.incrementAndGet());
 
         this.applicationProtocol = applicationProtocol;

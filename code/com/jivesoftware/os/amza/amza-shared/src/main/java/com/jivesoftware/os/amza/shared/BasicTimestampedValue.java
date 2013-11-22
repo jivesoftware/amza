@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.shared;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
+import java.util.Objects;
 
 public class BasicTimestampedValue<V> implements TimestampedValue<V>, Serializable {
 
@@ -53,5 +54,35 @@ public class BasicTimestampedValue<V> implements TimestampedValue<V>, Serializab
     @Override
     public String toString() {
         return "TimestampedValue{" + "timestamp=" + timestamp + ", tombstoned=" + tombstoned + ", value=" + value + '}';
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 73 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
+        hash = 73 * hash + (this.tombstoned ? 1 : 0);
+        hash = 73 * hash + Objects.hashCode(this.value);
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final BasicTimestampedValue<V> other = (BasicTimestampedValue<V>) obj;
+        if (this.timestamp != other.timestamp) {
+            return false;
+        }
+        if (this.tombstoned != other.tombstoned) {
+            return false;
+        }
+        if (!Objects.equals(this.value, other.value)) {
+            return false;
+        }
+        return true;
     }
 }

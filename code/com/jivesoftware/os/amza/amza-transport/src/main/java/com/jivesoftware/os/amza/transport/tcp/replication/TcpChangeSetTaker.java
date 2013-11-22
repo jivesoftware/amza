@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.ChangeSetRequestPayload;
+import com.jivesoftware.os.amza.transport.tcp.replication.protocol.ChangeSetResponsePayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClient;
@@ -45,12 +46,12 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
 
     @Override
     public <K, V> void take(RingHost ringHost, TableName<K, V> tableName,
-        long transationId, final TransactionSetStream transactionSetStream) throws Exception {
+            long transationId, final TransactionSetStream transactionSetStream) throws Exception {
         TcpClient client = clientProvider.getClientForHost(ringHost);
         try {
             ChangeSetRequestPayload requestPayload = new ChangeSetRequestPayload(tableName, transationId);
             Message message = new Message(indexReplicationProtocol.nextInteractionId(),
-                indexReplicationProtocol.OPCODE_REQUEST_CHANGESET, true, requestPayload);
+                    indexReplicationProtocol.OPCODE_REQUEST_CHANGESET, true, requestPayload);
 
             client.sendMessage(message);
 
@@ -78,13 +79,13 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
                 //if we aren't dispatching results anymore, we still need to loop over the input to drain the socket
                 if (streamingResults) {
                     try {
-                        TransactionSet payload = entry.getPayload();
-                        TransactionSet returned = messageStream.callback(payload);
+                        ChangeSetResponsePayload payload = entry.getPayload();
+                        TransactionSet returned = messageStream.callback(payload.getTransactionSet());
                         if (returned == null) {
                             streamingResults = false;
                         }
                     } catch (Exception ex) {
-                        LOG.error("Error streaming in transacion set {}", new Object[]{entry}, ex);
+                        LOG.error("Error streaming in transaction set: " + entry, ex);
                     }
                 }
 

@@ -44,6 +44,7 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     public final int OPCODE_REQUEST_CHANGESET = 5;
     public final int OPCODE_RESPOND_CHANGESET = 7;
     public final int OPCODE_ERROR = 9;
+    public final int OPCODE_OK = 11;
     private final Map<Integer, Class<? extends Serializable>> payloadRegistry;
     private final AmzaInstance amzaInstance;
     private final OrderIdProvider idProvider;
@@ -54,6 +55,7 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
 
         Map<Integer, Class<? extends Serializable>> map = new HashMap<>();
         map.put(OPCODE_PUSH_CHANGESET, SendChangeSetPayload.class);
+        map.put(OPCODE_REQUEST_CHANGESET, ChangeSetRequestPayload.class);
         map.put(OPCODE_RESPOND_CHANGESET, ChangeSetResponsePayload.class);
         map.put(OPCODE_ERROR, String.class);
         payloadRegistry = Collections.unmodifiableMap(map);
@@ -72,10 +74,16 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     }
 
     private Message handleChangeSetPush(Message request) {
+        LOG.trace("Received change set push {}", request);
+
         try {
             SendChangeSetPayload payload = request.getPayload();
             amzaInstance.changes(payload.getMapName(), changeSetToPartionDelta(payload));
-            return null;
+
+            Message response = new Message(request.getInteractionId(), OPCODE_OK, true);
+            LOG.trace("Returning from change set push {}", response);
+            return response;
+
         } catch (Exception x) {
             LOG.warn("Failed to apply changeset: " + request, x);
             ExceptionPayload exceptionPayload = new ExceptionPayload(x.toString());
@@ -91,6 +99,8 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
 
     //TODO figure out how to stream this out in stages vi calls to consumeSequence.
     private <K, V> Message handleChangeSetRequest(Message request) {
+        LOG.trace("Received change set request {}", request);
+
         try {
 
             ChangeSetRequestPayload changeSet = request.getPayload();
@@ -113,7 +123,10 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
 
             ChangeSetResponsePayload response = new ChangeSetResponsePayload(new TransactionSet(highestTransactionId.longValue(), changes));
 
-            return new Message(request.getInteractionId(), OPCODE_RESPOND_CHANGESET, true, response);
+            Message responseMsg = new Message(request.getInteractionId(), OPCODE_RESPOND_CHANGESET, true, response);
+            LOG.trace("Returning from change set request {}", responseMsg);
+            return responseMsg;
+
         } catch (Exception x) {
             LOG.warn("Failed to apply changeset: " + request, x);
             ExceptionPayload exceptionPayload = new ExceptionPayload(x.toString());

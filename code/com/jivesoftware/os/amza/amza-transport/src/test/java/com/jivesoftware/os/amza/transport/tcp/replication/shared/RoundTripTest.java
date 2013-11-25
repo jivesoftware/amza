@@ -105,7 +105,7 @@ public class RoundTripTest {
         int connectTimeoutMillis = 5000;
         int socketTimeoutMillis = 2000;
         tcpClientProvider = new TcpClientProvider(
-            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
         idProvider = new OrderIdProvider() {
             private final AtomicLong id = new AtomicLong();
@@ -119,10 +119,12 @@ public class RoundTripTest {
 
     @AfterTest
     public void tearDown() throws InterruptedException {
-        server.stop();
+        if (server != null) {
+            server.stop();
+        }
     }
 
-    @Test(enabled = false)
+    @Test
     public void testMessageRoundTrip() throws Exception {
         final String sendText = "booya";
         final String returnText = "mmhmm";

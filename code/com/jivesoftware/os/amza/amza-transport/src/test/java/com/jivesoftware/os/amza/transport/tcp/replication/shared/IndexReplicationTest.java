@@ -17,10 +17,7 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessageP
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.IOException;
-import java.io.Serializable;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -36,11 +33,9 @@ import org.testng.annotations.Test;
 public class IndexReplicationTest {
 
     private TcpServer server;
-    private RingHost localHost = new RingHost("localhost", 7777);
+    private RingHost localHost = new RingHost("localhost", 7766);
     private TcpClientProvider tcpClientProvider;
     private OrderIdProvider idProvider;
-    private int requestOpcode = 45;
-    private int responseOpcode = 47;
     private AtomicReference<TableDelta> receivedPut = new AtomicReference<>();
     private AtomicReference<TransactionSet> toTake = new AtomicReference<>();
     private IndexReplicationProtocol applicationProtocol;
@@ -66,10 +61,6 @@ public class IndexReplicationTest {
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.createDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
 
-        final Map<Integer, Class<? extends Serializable>> payloadRegistry = new HashMap<>();
-        payloadRegistry.put(requestOpcode, String.class);
-        payloadRegistry.put(responseOpcode, String.class);
-
         AmzaInstance amzaInstance = amzaInstance(receivedPut, toTake);
         applicationProtocol = new IndexReplicationProtocol(amzaInstance, idProvider);
 
@@ -86,12 +77,14 @@ public class IndexReplicationTest {
         int connectTimeoutMillis = 5000;
         int socketTimeoutMillis = 200000;
         tcpClientProvider = new TcpClientProvider(
-            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
     }
 
     @AfterTest
     public void tearDown() throws InterruptedException {
-        server.stop();
+        if (server != null) {
+            server.stop();
+        }
     }
 
     @Test
@@ -166,7 +159,7 @@ public class IndexReplicationTest {
 
             @Override
             public <K, V> void takeTableChanges(TableName<K, V> tableName, long transationId, TransactionSetStream<K, V> transactionSetStream)
-                throws Exception {
+                    throws Exception {
                 transactionSetStream.stream(take.get());
             }
 

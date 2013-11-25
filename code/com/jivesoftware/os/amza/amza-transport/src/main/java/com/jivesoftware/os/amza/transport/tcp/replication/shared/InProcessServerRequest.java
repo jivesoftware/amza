@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class InProcessServerRequest implements Comparable<InProcessServerRequest> {
 
-    private final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final MessageFramer messageFramer;
     private final BufferProvider bufferProvider;
     private final ByteBuffer readBuffer;

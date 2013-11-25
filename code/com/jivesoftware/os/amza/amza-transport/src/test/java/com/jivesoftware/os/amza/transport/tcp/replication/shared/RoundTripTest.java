@@ -122,7 +122,7 @@ public class RoundTripTest {
         server.stop();
     }
 
-    @Test()
+    @Test(enabled = false)
     public void testMessageRoundTrip() throws Exception {
         final String sendText = "booya";
         final String returnText = "mmhmm";

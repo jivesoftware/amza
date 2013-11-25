@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
 import com.jivesoftware.os.amza.shared.TableStorage;
@@ -24,9 +25,6 @@ import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.SortedMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -35,12 +33,12 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class ReadWriteTableStore<K, V> {
 
     private final TableStorage<K, V> tableStorage;
-    private final AtomicReference<NavigableMap<K, TimestampedValue<V>>> readMap;
+    private final AtomicReference<TableIndex<K, V>> readMap;
     private final AtomicBoolean loaded = new AtomicBoolean(false);
-    private final TableStateChanges tableStateChanges;
-    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private final TableStateChanges<K, V> tableStateChanges;
+    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
-    public ReadWriteTableStore(TableStorage<K, V> tableStorage, TableStateChanges tableStateChanges) {
+    public ReadWriteTableStore(TableStorage<K, V> tableStorage, TableStateChanges<K, V> tableStateChanges) {
         this.tableStorage = tableStorage;
         this.readMap = new AtomicReference<>(null);
         this.tableStateChanges = tableStateChanges;
@@ -50,19 +48,36 @@ public class ReadWriteTableStore<K, V> {
         return tableStorage.getTableName();
     }
 
+    public void load() throws Exception {
+        if (!loaded.get()) {
+            try {
+                readWriteLock.writeLock().lock();
+                if (loaded.compareAndSet(false, true)) {
+                    try {
+                        readMap.set(tableStorage.load());
+                    } catch (Exception x) {
+                        throw x;
+                    } finally {
+                        loaded.set(false);
+                    }
+                }
+            } finally {
+                readWriteLock.writeLock().unlock();
+            }
+        }
+    }
 
     public void compactTombestone(long ifOlderThanNMillis) throws Exception {
         tableStorage.compactTombestone(ifOlderThanNMillis);
     }
 
     public V get(K key) throws Exception {
-        load();
         TimestampedValue<V> got;
         try {
-            lock.readLock().lock();
+            readWriteLock.readLock().lock();
             got = readMap.get().get(key);
         } finally {
-            lock.readLock().unlock();
+            readWriteLock.readLock().unlock();
         }
         if (got == null) {
             return null;
@@ -74,27 +89,24 @@ public class ReadWriteTableStore<K, V> {
     }
 
     public TimestampedValue<V> getTimestampedValue(K key) throws Exception {
-        load();
         try {
-            lock.readLock().lock();
+            readWriteLock.readLock().lock();
             return readMap.get().get(key);
         } finally {
-            lock.readLock().unlock();
+            readWriteLock.readLock().unlock();
         }
     }
 
     public boolean containsKey(K key) throws Exception {
-        load();
         try {
-            lock.readLock().lock();
+            readWriteLock.readLock().lock();
             return readMap.get().containsKey(key);
         } finally {
-            lock.readLock().unlock();
+            readWriteLock.readLock().unlock();
         }
     }
 
     public NavigableMap<K, TimestampedValue<V>> getImmutableCopy() throws Exception {
-        load();
         return Maps.unmodifiableNavigableMap(readMap.get());
     }
 
@@ -103,16 +115,14 @@ public class ReadWriteTableStore<K, V> {
     }
 
     public ReadThroughChangeSet<K, V> getReadThroughChangeSet(long timestamp) throws Exception {
-        load();
         return new ReadThroughChangeSet<>(readMap.get(), timestamp);
     }
 
-    synchronized public void commit(NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
-        load();
+    public void commit(NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
         NavigableMap<K, TimestampedValue<V>> currentReadMap = readMap.get();
         TableDelta<K, V> updateMap = tableStorage.update(changes, currentReadMap);
         try {
-            lock.writeLock().lock();
+            readWriteLock.writeLock().lock();
             NavigableMap<K, TimestampedValue<V>> apply = updateMap.getApply();
             for (Map.Entry<K, TimestampedValue<V>> entry : apply.entrySet()) {
                 K k = entry.getKey();
@@ -135,24 +145,20 @@ public class ReadWriteTableStore<K, V> {
             }
 
         } finally {
-            lock.writeLock().unlock();
+            readWriteLock.writeLock().unlock();
         }
         if (tableStateChanges != null) {
             tableStateChanges.changes(tableStorage.getTableName(), updateMap);
         }
     }
 
-    synchronized public void clear() throws Exception {
-        ConcurrentNavigableMap<K, TimestampedValue<V>> empty = new ConcurrentSkipListMap<>();
-        readMap.set(empty);
-        tableStorage.clear();
-    }
-
-    synchronized public void load() throws Exception {
-        if (!loaded.get()) {
-            SortedMap<K, TimestampedValue<V>> sortedMap = tableStorage.load();
-            readMap.set(new ConcurrentSkipListMap<>(sortedMap));
-            loaded.set(true);
+    public void clear() throws Exception {
+        try {
+            readWriteLock.writeLock().lock();
+            readMap.get().clear();
+            tableStorage.clear();
+        } finally {
+            readWriteLock.writeLock().unlock();
         }
     }
 }

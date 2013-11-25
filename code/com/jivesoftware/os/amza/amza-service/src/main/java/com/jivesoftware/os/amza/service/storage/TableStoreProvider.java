@@ -51,11 +51,13 @@ public class TableStoreProvider {
         if (tableStore == null) {
             TableStorage<K, V> tableStorage = tableStorageProvider.createTableStorage(workingDirectory, storeName, tableName);
             ReadWriteTableStore<K, V> readWriteTableStore = new ReadWriteTableStore<>(tableStorage, tableStateChanges);
+            readWriteTableStore.load();
             tableStore = new TableStore(readWriteTableStore);
             tableStores.put(tableName, tableStore);
         }
         return tableStore;
     }
+
 
     public Set<Map.Entry<TableName, TableStore<?, ?>>> getTableStores() {
         return tableStores.entrySet();

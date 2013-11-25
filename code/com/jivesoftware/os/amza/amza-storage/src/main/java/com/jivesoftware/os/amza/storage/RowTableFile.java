@@ -71,22 +71,23 @@ public class RowTableFile<K, V, R> {
 //        }
     }
 
-    synchronized public NavigableMap<K, TimestampedValue<V>> save(Multimap<K, TimestampedValue<V>> was,
+    public NavigableMap<K, TimestampedValue<V>> save(Multimap<K, TimestampedValue<V>> was,
         NavigableMap<K, TimestampedValue<V>> mutation, boolean append) throws Exception {
-        long transactionId = 0;
-        if (orderIdProvider != null) {
-            transactionId = orderIdProvider.nextId();
+        synchronized (rowWriter) {
+            long transactionId = 0;
+            if (orderIdProvider != null) {
+                transactionId = orderIdProvider.nextId();
+            }
+            NavigableMap<K, TimestampedValue<V>> saved = new TreeMap<>();
+            List<R> rows = new ArrayList<>();
+            for (Map.Entry<K, TimestampedValue<V>> e : mutation.entrySet()) {
+                R toRow = rowMarshaller.toRow(transactionId, e);
+                rows.add(toRow);
+                saved.put(e.getKey(), rowMarshaller.fromRow(toRow).getValue());
+            }
+            rowWriter.write(rows, append);
+            return saved;
         }
-        NavigableMap<K, TimestampedValue<V>> saved = new TreeMap<>();
-        List<R> rows = new ArrayList<>();
-        for (Map.Entry<K, TimestampedValue<V>> e : mutation.entrySet()) {
-            R toRow = rowMarshaller.toRow(transactionId, e);
-            rows.add(toRow);
-            saved.put(e.getKey(), rowMarshaller.fromRow(toRow).getValue());
-        }
-        rowWriter.write(rows, append);
-
-        return saved;
     }
 
     synchronized public TableIndex<K, V> load() throws Exception {

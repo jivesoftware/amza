@@ -234,6 +234,15 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         }
     }
 
+    @Override
+    public List<TableName> getTableNames() {
+        List<TableName> amzaTableNames = new ArrayList<>();
+        for (Entry<TableName, TableStore<?, ?>> tableStore : tableStoreProvider.getTableStores()) {
+            amzaTableNames.add(tableStore.getKey());
+        }
+        return amzaTableNames;
+    }
+
     public Map<TableName, AmzaTable> getTables() throws Exception {
         Map<TableName, AmzaTable> amzaTables = new HashMap<>();
         for (Entry<TableName, TableStore<?, ?>> tableStore : tableStoreProvider.getTableStores()) {
@@ -242,6 +251,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         return amzaTables;
     }
 
+    @Override
     public <K, V> void destroyTable(TableName<K, V> tableName) throws Exception {
         TableStore<TableName, TableName> tableIndex = tableStoreProvider.getTableStore(tableIndexKey);
         TableTransaction<TableName, TableName> tx = tableIndex.startTransaction(orderIdProvider.nextId());
@@ -296,5 +306,4 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
             }
         }
     }
-
 }

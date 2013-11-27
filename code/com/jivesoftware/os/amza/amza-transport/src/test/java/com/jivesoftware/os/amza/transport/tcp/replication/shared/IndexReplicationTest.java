@@ -177,6 +177,16 @@ public class IndexReplicationTest {
             public List<RingHost> getRing(String ringName) throws Exception {
                 throw new UnsupportedOperationException("Not supported yet.");
             }
+
+            @Override
+            public List<TableName> getTableNames() {
+                throw new UnsupportedOperationException("Not supported yet.");
+            }
+
+            @Override
+            public <K, V> void destroyTable(TableName<K, V> tableName) throws Exception {
+                throw new UnsupportedOperationException("Not supported yet.");
+            }
         };
     }
 }

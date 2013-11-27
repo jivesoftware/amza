@@ -23,6 +23,10 @@ public interface AmzaInstance {
 
     <K, V> void takeTableChanges(TableName<K, V> tableName, long transationId, TransactionSetStream<K, V> transactionSetStream) throws Exception;
 
+    List<TableName> getTableNames();
+
+    <K, V> void destroyTable(TableName<K, V> tableName) throws Exception;
+
     void addRingHost(String ringName, RingHost ringHost) throws Exception;
 
     void removeRingHost(String ringName, RingHost ringHost) throws Exception;

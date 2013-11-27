@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableRowReader;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
@@ -92,6 +93,20 @@ public class AmzaReplicationRestEndpoints {
         } catch (Exception x) {
             LOG.warn("Failed to get amza ring.", x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to get amza ring.", x);
+        }
+    }
+
+    @POST
+    @Consumes("application/json")
+    @Path("/tables")
+    public Response getTables() {
+        try {
+            LOG.info("Attempting to get table names.");
+            List<TableName> tableNames = amzaInstance.getTableNames();
+            return ResponseHelper.INSTANCE.jsonResponse(tableNames);
+        } catch (Exception x) {
+            LOG.warn("Failed to get table names.", x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to get table names.", x);
         }
     }
 

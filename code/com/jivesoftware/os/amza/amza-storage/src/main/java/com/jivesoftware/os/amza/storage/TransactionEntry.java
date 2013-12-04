@@ -15,11 +15,14 @@
  */
 package com.jivesoftware.os.amza.storage;
 
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
-import java.util.Map;
 
-public interface TransactionEntry<K, V> extends Map.Entry<K, TimestampedValue<V>> {
+public interface TransactionEntry {
 
     long getOrderId();
 
+    TableIndexKey getKey();
+
+    TimestampedValue getValue();
 }

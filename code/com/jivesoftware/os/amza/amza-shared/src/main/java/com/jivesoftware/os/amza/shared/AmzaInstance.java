@@ -19,13 +19,13 @@ import java.util.List;
 
 public interface AmzaInstance {
 
-    <K, V> void changes(TableName<K, V> tableName, TableDelta<K, V> changes) throws Exception;
+    void changes(TableName tableName, TableDelta changes) throws Exception;
 
-    <K, V> void takeTableChanges(TableName<K, V> tableName, long transationId, TransactionSetStream<K, V> transactionSetStream) throws Exception;
+    void takeTableChanges(TableName tableName, long transationId, TransactionSetStream transactionSetStream) throws Exception;
 
     List<TableName> getTableNames();
 
-    <K, V> void destroyTable(TableName<K, V> tableName) throws Exception;
+    void destroyTable(TableName tableName) throws Exception;
 
     void addRingHost(String ringName, RingHost ringHost) throws Exception;
 

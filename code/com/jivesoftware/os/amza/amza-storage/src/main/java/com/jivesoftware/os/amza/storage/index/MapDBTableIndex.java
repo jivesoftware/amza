@@ -16,27 +16,22 @@
 package com.jivesoftware.os.amza.storage.index;
 
 import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.NavigableSet;
-import java.util.Set;
-import java.util.SortedMap;
+import java.util.Map.Entry;
 import org.mapdb.BTreeMap;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 
-public class MapDBTableIndex<K, V> implements TableIndex<K, V> {
+public class MapDBTableIndex implements TableIndex {
 
     private final DB db;
-    private final BTreeMap<K, TimestampedValue<V>> treeMap;
+    private final BTreeMap<TableIndexKey, TimestampedValue> treeMap;
 
     public MapDBTableIndex(String mapName) {
         db = DBMaker.newDirectMemoryDB()
-            .closeOnJvmShutdown()
-            .make();
+                .closeOnJvmShutdown()
+                .make();
         treeMap = db.getTreeMap(mapName);
     }
 
@@ -46,143 +41,16 @@ public class MapDBTableIndex<K, V> implements TableIndex<K, V> {
     }
 
     @Override
-    public Entry<K, TimestampedValue<V>> lowerEntry(K key) {
-        return treeMap.lowerEntry(key);
-    }
-
-    @Override
-    public K lowerKey(K key) {
-        return treeMap.lowerKey(key);
-    }
-
-    @Override
-    public Entry<K, TimestampedValue<V>> floorEntry(K key) {
-        return treeMap.floorEntry(key);
-    }
-
-    @Override
-    public K floorKey(K key) {
-        return treeMap.floorKey(key);
-    }
-
-    @Override
-    public Entry<K, TimestampedValue<V>> ceilingEntry(K key) {
-        return treeMap.ceilingEntry(key);
-    }
-
-    @Override
-    public K ceilingKey(K key) {
-        return treeMap.ceilingKey(key);
-    }
-
-    @Override
-    public Entry<K, TimestampedValue<V>> higherEntry(K key) {
-        return treeMap.higherEntry(key);
-    }
-
-    @Override
-    public K higherKey(K key) {
-        return treeMap.higherKey(key);
-    }
-
-    @Override
-    public Entry<K, TimestampedValue<V>> firstEntry() {
-        return treeMap.firstEntry();
-    }
-
-    @Override
-    public Entry<K, TimestampedValue<V>> lastEntry() {
-        return treeMap.lastEntry();
-    }
-
-    @Override
-    public Entry<K, TimestampedValue<V>> pollFirstEntry() {
-        return treeMap.pollFirstEntry();
-    }
-
-    @Override
-    public Entry<K, TimestampedValue<V>> pollLastEntry() {
-        return treeMap.pollLastEntry();
-    }
-
-    @Override
-    public NavigableMap<K, TimestampedValue<V>> descendingMap() {
-        return treeMap.descendingMap();
-    }
-
-    @Override
-    public NavigableSet<K> navigableKeySet() {
-        return treeMap.navigableKeySet();
-    }
-
-    @Override
-    public NavigableSet<K> descendingKeySet() {
-        return treeMap.descendingKeySet();
-    }
-
-    @Override
-    public NavigableMap<K, TimestampedValue<V>> subMap(K fromKey, boolean fromInclusive, K toKey, boolean toInclusive) {
-        return treeMap.subMap(fromKey, fromInclusive, toKey, toInclusive);
-    }
-
-    @Override
-    public NavigableMap<K, TimestampedValue<V>> headMap(K toKey, boolean inclusive) {
-        return treeMap.headMap(toKey, inclusive);
-    }
-
-    @Override
-    public NavigableMap<K, TimestampedValue<V>> tailMap(K fromKey, boolean inclusive) {
-        return treeMap.tailMap(fromKey, inclusive);
-    }
-
-    @Override
-    public SortedMap<K, TimestampedValue<V>> subMap(K fromKey, K toKey) {
-        return treeMap.subMap(fromKey, toKey);
-    }
-
-    @Override
-    public SortedMap<K, TimestampedValue<V>> headMap(K toKey) {
-        return treeMap.headMap(toKey);
-    }
-
-    @Override
-    public SortedMap<K, TimestampedValue<V>> tailMap(K fromKey) {
-        return treeMap.tailMap(fromKey);
-    }
-
-    @Override
-    public Comparator<? super K> comparator() {
-        return treeMap.comparator();
-    }
-
-    @Override
-    public K firstKey() {
-        return treeMap.firstKey();
-    }
-
-    @Override
-    public K lastKey() {
-        return treeMap.lastKey();
-    }
-
-    @Override
-    public Set<K> keySet() {
-        return treeMap.keySet();
-    }
-
-    @Override
-    public Collection<TimestampedValue<V>> values() {
-        return treeMap.values();
-    }
-
-    @Override
-    public Set<Entry<K, TimestampedValue<V>>> entrySet() {
-        return treeMap.entrySet();
-    }
-
-    @Override
-    public int size() {
-        return treeMap.size();
+    public <E extends Throwable> void entrySet(EntryStream<E> entryStream) {
+        for (Entry<TableIndexKey, TimestampedValue> e : treeMap.entrySet()) {
+            try {
+                if (!entryStream.stream(e.getKey(), e.getValue())) {
+                    break;
+                }
+            } catch (Throwable t) {
+                throw new RuntimeException("Failed while streaming entry set.", t);
+            }
+        }
     }
 
     @Override
@@ -191,35 +59,24 @@ public class MapDBTableIndex<K, V> implements TableIndex<K, V> {
     }
 
     @Override
-    public boolean containsKey(Object key) {
+    public boolean containsKey(TableIndexKey key) {
         return treeMap.containsKey(key);
     }
 
     @Override
-    public boolean containsValue(Object value) {
-        return treeMap.containsValue(value);
-    }
-
-    @Override
-    public TimestampedValue<V> get(Object key) {
+    public TimestampedValue get(TableIndexKey key) {
         return treeMap.get(key);
     }
 
     @Override
-    public TimestampedValue<V> put(K key,
-        TimestampedValue<V> value) {
+    public TimestampedValue put(TableIndexKey key,
+            TimestampedValue value) {
         return treeMap.put(key, value);
     }
 
     @Override
-    public TimestampedValue<V> remove(Object key) {
+    public TimestampedValue remove(TableIndexKey key) {
         return treeMap.remove(key);
-    }
-
-    @Override
-    public void putAll(
-        Map<? extends K, ? extends TimestampedValue<V>> m) {
-        treeMap.putAll(m);
     }
 
     @Override

@@ -20,28 +20,22 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.util.Objects;
 
-public class TableName<K, V> implements Comparable<TableName<K, V>>, Serializable {
+public class TableName implements Comparable<TableName>, Serializable {
 
     private final String ringName;
     private final String tableName;
-    private final Class<K> keyClass;
-    private final K minKeyInclusive;
-    private final K maxKeyExclusive;
-    private final Class<V> valueClass;
+    private final TableIndexKey minKeyInclusive;
+    private final TableIndexKey maxKeyExclusive;
 
     @JsonCreator
     public TableName(@JsonProperty("ringName") String ringName,
             @JsonProperty("tableName") String tableName,
-            @JsonProperty("keyClass") Class<K> keyClass,
-            @JsonProperty("minKeyInclusive") K minKeyInclusive,
-            @JsonProperty("maxKeyExclusive") K maxKeyExclusive,
-            @JsonProperty("valueClass") Class<V> valueClass) {
+            @JsonProperty("minKeyInclusive") TableIndexKey minKeyInclusive,
+            @JsonProperty("maxKeyExclusive") TableIndexKey maxKeyExclusive) {
         this.ringName = ringName.toUpperCase();
         this.tableName = tableName;
-        this.keyClass = keyClass;
         this.minKeyInclusive = minKeyInclusive;
         this.maxKeyExclusive = maxKeyExclusive;
-        this.valueClass = valueClass;
     }
 
     public String getRingName() {
@@ -52,20 +46,12 @@ public class TableName<K, V> implements Comparable<TableName<K, V>>, Serializabl
         return tableName;
     }
 
-    public Class<K> getKeyClass() {
-        return keyClass;
-    }
-
-    public K getMinKeyInclusive() {
+    public TableIndexKey getMinKeyInclusive() {
         return minKeyInclusive;
     }
 
-    public K getMaxKeyExclusive() {
+    public TableIndexKey getMaxKeyExclusive() {
         return maxKeyExclusive;
-    }
-
-    public Class<V> getValueClass() {
-        return valueClass;
     }
 
     @Override
@@ -73,10 +59,8 @@ public class TableName<K, V> implements Comparable<TableName<K, V>>, Serializabl
         return "TableName{"
                 + "ringName=" + ringName
                 + ", tableName=" + tableName
-                + ", keyClass=" + keyClass
                 + ", minKeyInclusive=" + minKeyInclusive
                 + ", maxKeyExclusive=" + maxKeyExclusive
-                + ", valueClass=" + valueClass
                 + '}';
     }
 
@@ -85,10 +69,8 @@ public class TableName<K, V> implements Comparable<TableName<K, V>>, Serializabl
         int hash = 3;
         hash = 89 * hash + Objects.hashCode(this.ringName);
         hash = 89 * hash + Objects.hashCode(this.tableName);
-        hash = 89 * hash + Objects.hashCode(this.keyClass);
         hash = 89 * hash + Objects.hashCode(this.minKeyInclusive);
         hash = 89 * hash + Objects.hashCode(this.maxKeyExclusive);
-        hash = 89 * hash + Objects.hashCode(this.valueClass);
         return hash;
     }
 
@@ -100,14 +82,11 @@ public class TableName<K, V> implements Comparable<TableName<K, V>>, Serializabl
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final TableName<K, V> other = (TableName<K, V>) obj;
+        final TableName other = (TableName) obj;
         if (!Objects.equals(this.ringName, other.ringName)) {
             return false;
         }
         if (!Objects.equals(this.tableName, other.tableName)) {
-            return false;
-        }
-        if (!Objects.equals(this.keyClass, other.keyClass)) {
             return false;
         }
         if (!Objects.equals(this.minKeyInclusive, other.minKeyInclusive)) {
@@ -116,27 +95,16 @@ public class TableName<K, V> implements Comparable<TableName<K, V>>, Serializabl
         if (!Objects.equals(this.maxKeyExclusive, other.maxKeyExclusive)) {
             return false;
         }
-        if (!Objects.equals(this.valueClass, other.valueClass)) {
-            return false;
-        }
         return true;
     }
 
     @Override
-    public int compareTo(TableName<K, V> o) {
+    public int compareTo(TableName o) {
         int i = ringName.compareTo(o.ringName);
         if (i != 0) {
             return i;
         }
         i = tableName.compareTo(o.tableName);
-        if (i != 0) {
-            return i;
-        }
-        i = keyClass.getName().compareTo(o.keyClass.getName());
-        if (i != 0) {
-            return i;
-        }
-        i = valueClass.getName().compareTo(o.valueClass.getName());
         if (i != 0) {
             return i;
         }

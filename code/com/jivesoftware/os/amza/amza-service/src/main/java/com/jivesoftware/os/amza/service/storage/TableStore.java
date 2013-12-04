@@ -15,18 +15,19 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
 import com.jivesoftware.os.amza.shared.KeyValueFilter;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
-import java.util.Map;
-import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 
-public class TableStore<K, V> {
+public class TableStore {
 
-    private final ReadWriteTableStore<K, V> readWriteMaps;
+    private final ReadWriteTableStore readWriteMaps;
 
-    public TableStore(ReadWriteTableStore<K, V> readWriteTable) {
+    public TableStore(ReadWriteTableStore readWriteTable) {
         this.readWriteMaps = readWriteTable;
     }
 
@@ -34,32 +35,37 @@ public class TableStore<K, V> {
         readWriteMaps.compactTombestone(ifOlderThanNMillis);
     }
 
-    public ConcurrentNavigableMap<K, TimestampedValue<V>> filter(KeyValueFilter<K, V> filter) throws Exception {
-        ConcurrentNavigableMap<K, TimestampedValue<V>> results = filter.createCollector();
-        for (Map.Entry<K, TimestampedValue<V>> e : readWriteMaps.getImmutableCopy().entrySet()) {
-            if (e.getValue().getTombstoned()) {
-                continue;
+    public ConcurrentNavigableMap<TableIndexKey, TimestampedValue> filter(final KeyValueFilter filter) throws Exception {
+        final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> results = filter.createCollector();
+        readWriteMaps.getImmutableCopy().entrySet(new TableIndex.EntryStream<RuntimeException>() {
+
+            @Override
+            public boolean stream(TableIndexKey key, TimestampedValue value) {
+                if (!value.getTombstoned()) {
+                    byte[] v = value.getValue();
+                    if (filter.filter(key, v)) {
+                        results.put(key, new BasicTimestampedValue(v, value.getTimestamp(), value.getTombstoned()));
+                    }
+                }
+                return true;
             }
-            if (filter.filter(e.getKey(), e.getValue().getValue())) {
-                results.put(e.getKey(), e.getValue());
-            }
-        }
+        });
         return results;
     }
 
-    public V getValue(K k) throws Exception {
+    public byte[] getValue(TableIndexKey k) throws Exception {
         return readWriteMaps.get(k);
     }
 
-    public TimestampedValue<V> getTimestampedValue(K k) throws Exception {
+    public TimestampedValue getTimestampedValue(TableIndexKey k) throws Exception {
         return readWriteMaps.getTimestampedValue(k);
     }
 
-    public NavigableMap<K, TimestampedValue<V>> getImmutableRows() throws Exception {
+    public TableIndex getImmutableRows() throws Exception {
         return readWriteMaps.getImmutableCopy();
     }
 
-    public void getMutatedRowsSince(long transactionId, TransactionSetStream<K, V> transactionSetStream) throws Exception {
+    public void getMutatedRowsSince(long transactionId, TransactionSetStream transactionSetStream) throws Exception {
         readWriteMaps.getMutatedRowsSince(transactionId, transactionSetStream);
     }
 
@@ -67,11 +73,11 @@ public class TableStore<K, V> {
         readWriteMaps.clear();
     }
 
-    public void commit(NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
+    public void commit(TableIndex changes) throws Exception {
         readWriteMaps.commit(changes);
     }
 
-    public TableTransaction<K, V> startTransaction(long timestamp) throws Exception {
-        return new TableTransaction<>(this, readWriteMaps.getReadThroughChangeSet(timestamp));
+    public TableTransaction startTransaction(long timestamp) throws Exception {
+        return new TableTransaction(this, readWriteMaps.getReadThroughChangeSet(timestamp));
     }
 }

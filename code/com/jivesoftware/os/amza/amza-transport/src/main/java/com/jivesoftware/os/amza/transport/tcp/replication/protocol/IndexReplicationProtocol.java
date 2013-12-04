@@ -17,6 +17,8 @@ package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
@@ -91,27 +93,35 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
         }
     }
 
-    private <K, V> TableDelta<K, V> changeSetToPartionDelta(SendChangeSetPayload changeSet) throws Exception {
-        final ConcurrentNavigableMap<K, TimestampedValue<V>> changes = new ConcurrentSkipListMap<>();
-        changes.putAll(changeSet.getChanges());
-        return new TableDelta<>(changes, new TreeMap(), null);
+    private TableDelta changeSetToPartionDelta(SendChangeSetPayload changeSet) throws Exception {
+        final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+        TableIndex tableIndex = changeSet.getChanges();
+        tableIndex.entrySet(new TableIndex.EntryStream<RuntimeException>() {
+
+            @Override
+            public boolean stream(TableIndexKey key, TimestampedValue value) {
+                changes.put(key, value);
+                return true;
+            }
+        });
+        return new TableDelta(changes, new TreeMap(), null);
     }
 
     //TODO figure out how to stream this out in stages vi calls to consumeSequence.
-    private <K, V> Message handleChangeSetRequest(Message request) {
+    private Message handleChangeSetRequest(Message request) {
         LOG.trace("Received change set request {}", request);
 
         try {
 
             ChangeSetRequestPayload changeSet = request.getPayload();
 
-            final ConcurrentNavigableMap<K, TimestampedValue<V>> changes = new ConcurrentSkipListMap<>();
+            final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
 
             final MutableLong highestTransactionId = new MutableLong();
 
-            amzaInstance.takeTableChanges(changeSet.getMapName(), changeSet.getHighestTransactionId(), new TransactionSetStream<K, V>() {
+            amzaInstance.takeTableChanges(changeSet.getMapName(), changeSet.getHighestTransactionId(), new TransactionSetStream() {
                 @Override
-                public boolean stream(TransactionSet<K, V> took) throws Exception {
+                public boolean stream(TransactionSet took) throws Exception {
                     changes.putAll(took.getChanges());
 
                     if (took.getHighestTransactionId() > highestTransactionId.longValue()) {

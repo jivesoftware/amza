@@ -2,8 +2,10 @@ package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
+import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
@@ -70,7 +72,6 @@ public class IndexReplicationTest {
         server = initializer.initialize(localHost, numWorkers, bufferProvider, framer, applicationProtocol);
         server.start();
 
-
         //setup client
         bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
         int connectionsPerHost = 2;
@@ -91,39 +92,39 @@ public class IndexReplicationTest {
     public void testPush() throws Exception {
         TcpChangeSetSender sender = new TcpChangeSetSender(tcpClientProvider, applicationProtocol);
 
-        TableName tableName = new TableName("test", "test", String.class, "1", "3", String.class);
-        NavigableMap<String, TimestampedValue<String>> changes = new ConcurrentSkipListMap<>();
+        TableName tableName = new TableName("test", "test", null, null);
+        NavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
 
-        TimestampedValue<String> val1 = new BasicTimestampedValue<>("blah", idProvider.nextId(), false);
-        TimestampedValue<String> val2 = new BasicTimestampedValue<>("meh", idProvider.nextId(), false);
+        TimestampedValue val1 = new BasicTimestampedValue("blah".getBytes(), idProvider.nextId(), false);
+        TimestampedValue val2 = new BasicTimestampedValue("meh".getBytes(), idProvider.nextId(), false);
 
-        changes.put("1", val1);
-        changes.put("2", val2);
+        changes.put(new TableIndexKey("1".getBytes()), val1);
+        changes.put(new TableIndexKey("2".getBytes()), val2);
 
-        sender.sendChangeSet(localHost, tableName, changes);
+        sender.sendChangeSet(localHost, tableName, new MemoryTableIndex(changes));
 
         TableDelta received = receivedPut.get();
         Assert.assertNotNull(received);
-        NavigableMap<String, TimestampedValue<String>> receivedApply = received.getApply();
+        NavigableMap<TableIndexKey, TimestampedValue> receivedApply = received.getApply();
         Assert.assertNotNull(receivedApply);
         Assert.assertEquals(receivedApply.size(), changes.size());
 
-        Assert.assertEquals(receivedApply.get("1"), val1);
-        Assert.assertEquals(receivedApply.get("2"), val2);
+        Assert.assertEquals(receivedApply.get(new TableIndexKey("1".getBytes())), val1);
+        Assert.assertEquals(receivedApply.get(new TableIndexKey("2".getBytes())), val2);
     }
 
     @Test
     public void testPull() throws Exception {
         TcpChangeSetTaker taker = new TcpChangeSetTaker(tcpClientProvider, applicationProtocol);
 
-        TableName tableName = new TableName("test", "test", String.class, "1", "3", String.class);
-        NavigableMap<String, TimestampedValue<String>> changes = new ConcurrentSkipListMap<>();
+        TableName tableName = new TableName("test", "test", null, null);
+        NavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
 
-        TimestampedValue<String> val1 = new BasicTimestampedValue<>("blah", idProvider.nextId(), false);
-        TimestampedValue<String> val2 = new BasicTimestampedValue<>("meh", idProvider.nextId(), false);
+        TimestampedValue val1 = new BasicTimestampedValue("blah".getBytes(), idProvider.nextId(), false);
+        TimestampedValue val2 = new BasicTimestampedValue("meh".getBytes(), idProvider.nextId(), false);
 
-        changes.put("1", val1);
-        changes.put("2", val2);
+        changes.put(new TableIndexKey("1".getBytes()), val1);
+        changes.put(new TableIndexKey("2".getBytes()), val2);
         long transactionId = idProvider.nextId();
 
         TransactionSet toReturn = new TransactionSet(transactionId, changes);
@@ -141,24 +142,24 @@ public class IndexReplicationTest {
 
         TransactionSet got = received.get();
         Assert.assertNotNull(got);
-        NavigableMap<String, TimestampedValue<String>> gotMap = got.getChanges();
+        NavigableMap<TableIndexKey, TimestampedValue> gotMap = got.getChanges();
         Assert.assertNotNull(gotMap);
         Assert.assertEquals(gotMap.size(), changes.size());
 
-        Assert.assertEquals(gotMap.get("1"), val1);
-        Assert.assertEquals(gotMap.get("2"), val2);
+        Assert.assertEquals(gotMap.get(new TableIndexKey("1".getBytes())), val1);
+        Assert.assertEquals(gotMap.get(new TableIndexKey("2".getBytes())), val2);
 
     }
 
     private AmzaInstance amzaInstance(final AtomicReference<TableDelta> put, final AtomicReference<TransactionSet> take) {
         return new AmzaInstance() {
             @Override
-            public <K, V> void changes(TableName<K, V> tableName, TableDelta<K, V> changes) throws Exception {
+            public void changes(TableName tableName, TableDelta changes) throws Exception {
                 put.set(changes);
             }
 
             @Override
-            public <K, V> void takeTableChanges(TableName<K, V> tableName, long transationId, TransactionSetStream<K, V> transactionSetStream)
+            public void takeTableChanges(TableName tableName, long transationId, TransactionSetStream transactionSetStream)
                     throws Exception {
                 transactionSetStream.stream(take.get());
             }
@@ -184,7 +185,7 @@ public class IndexReplicationTest {
             }
 
             @Override
-            public <K, V> void destroyTable(TableName<K, V> tableName) throws Exception {
+            public void destroyTable(TableName tableName) throws Exception {
                 throw new UnsupportedOperationException("Not supported yet.");
             }
         };

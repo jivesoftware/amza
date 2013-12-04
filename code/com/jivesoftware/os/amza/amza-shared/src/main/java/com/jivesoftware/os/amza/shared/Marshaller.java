@@ -15,13 +15,11 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.Collection;
+import java.io.IOException;
 
-/**
- *
- * @param <R> raw row type
- */
-public interface TableRowWriter<R> {
+public interface Marshaller {
 
-    void write(Collection<R> rows, boolean append) throws Exception;
+    <V> byte[] serialize(V value) throws IOException;
+
+    <V> V deserialize(byte[] bytes, Class<V> clazz) throws Exception;
 }

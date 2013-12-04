@@ -24,11 +24,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     property = "objectType")
 @JsonSubTypes ({
     @JsonSubTypes.Type (value = BasicTimestampedValue.class, name = "basicTimestampedValue") })
-public interface TimestampedValue<V> {
+public interface TimestampedValue {
 
     long getTimestamp();
 
     boolean getTombstoned();
 
-    V getValue();
+    byte[] getValue();
 }

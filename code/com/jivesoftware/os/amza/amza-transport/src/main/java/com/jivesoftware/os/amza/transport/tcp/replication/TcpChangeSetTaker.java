@@ -45,7 +45,7 @@ public class TcpChangeSetTaker implements ChangeSetTaker {
     }
 
     @Override
-    public <K, V> void take(RingHost ringHost, TableName<K, V> tableName,
+    public  void take(RingHost ringHost, TableName tableName,
             long transationId, final TransactionSetStream transactionSetStream) throws Exception {
         TcpClient client = clientProvider.getClientForHost(ringHost);
         try {

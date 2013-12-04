@@ -15,12 +15,12 @@
  */
 package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
+import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import de.ruedigermoeller.serialization.FSTObjectInput;
 import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;
-import java.util.NavigableMap;
 
 /**
  *
@@ -28,7 +28,7 @@ import java.util.NavigableMap;
 public class SendChangeSetPayload implements MessagePayload {
 
     private TableName mapName;
-    private NavigableMap changes;
+    private TableIndex changes;
 
     /**
      * for serialization
@@ -36,7 +36,7 @@ public class SendChangeSetPayload implements MessagePayload {
     public SendChangeSetPayload() {
     }
 
-    public SendChangeSetPayload(TableName mapName, NavigableMap changes) {
+    public SendChangeSetPayload(TableName mapName, TableIndex changes) {
         this.mapName = mapName;
         this.changes = changes;
     }
@@ -44,20 +44,20 @@ public class SendChangeSetPayload implements MessagePayload {
     @Override
     public void serialize(FSTObjectOutput output) throws IOException {
         output.writeObject(mapName, TableName.class);
-        output.writeObject(changes, NavigableMap.class);
+        output.writeObject(changes, TableIndex.class);
     }
 
     @Override
     public void deserialize(FSTObjectInput input) throws Exception {
         this.mapName = (TableName) input.readObject(TableName.class);
-        this.changes = (NavigableMap) input.readObject(NavigableMap.class);
+        this.changes = (TableIndex) input.readObject(TableIndex.class);
     }
 
     public TableName getMapName() {
         return mapName;
     }
 
-    public NavigableMap getChanges() {
+    public TableIndex getChanges() {
         return changes;
     }
 

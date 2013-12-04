@@ -19,7 +19,7 @@ import java.io.File;
 
 public interface TableStorageProvider {
 
-    <K, V> TableStorage<K, V> createTableStorage(File workingDirectory,
+    TableStorage createTableStorage(File workingDirectory,
             String tableDomain,
-            TableName<K, V> tableName) throws Exception;
+            TableName tableName) throws Exception;
 }

@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.storage;
 
+import com.jivesoftware.os.amza.shared.Marshaller;
 import de.ruedigermoeller.serialization.FSTBasicObjectSerializer;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import de.ruedigermoeller.serialization.FSTObjectInput;
@@ -26,7 +27,7 @@ import java.io.IOException;
 /**
  *
  */
-public class FstMarshaller {
+public class FstMarshaller implements Marshaller {
 
     private final FSTConfiguration fstConfig;
 
@@ -38,6 +39,7 @@ public class FstMarshaller {
         fstConfig.registerSerializer(clazz, serializer, false);
     }
 
+    @Override
     public <V> byte[] serialize(V value) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (FSTObjectOutput out = new FSTObjectOutput(baos)) {
@@ -46,6 +48,7 @@ public class FstMarshaller {
         return baos.toByteArray();
     }
 
+    @Override
     public <V> V deserialize(byte[] bytes, Class<V> clazz) throws Exception {
         ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
         try (FSTObjectInput in = new FSTObjectInput(bais)) {

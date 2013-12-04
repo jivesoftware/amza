@@ -18,47 +18,51 @@ package com.jivesoftware.os.amza.service;
 import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableTransaction;
 import com.jivesoftware.os.amza.shared.KeyValueFilter;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentNavigableMap;
+import org.apache.commons.lang.mutable.MutableBoolean;
+import org.apache.commons.lang.mutable.MutableInt;
 
-public class AmzaTable<K, V> {
+public class AmzaTable {
 
     private final OrderIdProvider orderIdProvider;
-    private final TableName<K, V> tableName;
-    private final TableStore<K, V> tableStore;
+    private final TableName tableName;
+    private final TableStore tableStore;
 
-    public AmzaTable(OrderIdProvider orderIdProvider, TableName tableName, TableStore<K, V> tableStore) {
+    public AmzaTable(OrderIdProvider orderIdProvider, TableName tableName, TableStore tableStore) {
         this.tableName = tableName;
         this.orderIdProvider = orderIdProvider;
         this.tableStore = tableStore;
     }
 
-    public TableName<K, V> getTableName() {
+    public TableName getTableName() {
         return tableName;
     }
 
-    public K set(K key, V value) throws Exception {
+    public TableIndexKey set(TableIndexKey key, byte[] value) throws Exception {
         if (value == null) {
             throw new IllegalStateException("Value cannot be null.");
         }
-        TableTransaction<K, V> tx = tableStore.startTransaction(orderIdProvider.nextId());
+        TableTransaction tx = tableStore.startTransaction(orderIdProvider.nextId());
         tx.add(key, value);
         tx.commit();
         return key;
     }
 
-    public void set(Iterable<Entry<K, V>> entries) throws Exception {
-        TableTransaction<K, V> tx = tableStore.startTransaction(orderIdProvider.nextId());
-        for (Entry<K, V> e : entries) {
-            K k = e.getKey();
-            V v = e.getValue();
+    public void set(Iterable<Entry<TableIndexKey, byte[]>> entries) throws Exception {
+        TableTransaction tx = tableStore.startTransaction(orderIdProvider.nextId());
+        for (Entry<TableIndexKey, byte[]> e : entries) {
+            TableIndexKey k = e.getKey();
+            byte[] v = e.getValue();
             if (v == null) {
                 throw new IllegalStateException("Value cannot be null.");
             }
@@ -67,36 +71,36 @@ public class AmzaTable<K, V> {
         tx.commit();
     }
 
-    public V get(K key) throws Exception {
+    public byte[] get(TableIndexKey key) throws Exception {
         return tableStore.getValue(key);
     }
 
-    public List<V> get(List<K> keys) throws Exception {
-        List<V> values = new ArrayList<>();
-        for (K key : keys) {
+    public List<byte[]> get(List<TableIndexKey> keys) throws Exception {
+        List<byte[]> values = new ArrayList<>();
+        for (TableIndexKey key : keys) {
             values.add(get(key));
         }
         return values;
     }
 
-    public void get(Iterable<K> keys, ValueStream<Entry<K, V>> valuesStream) throws Exception {
-        for (final K key : keys) {
-            final V value = tableStore.getValue(key);
+    public void get(Iterable<TableIndexKey> keys, ValueStream<Entry<TableIndexKey, byte[]>> valuesStream) throws Exception {
+        for (final TableIndexKey key : keys) {
+            final byte[] value = tableStore.getValue(key);
             if (value != null) {
-                Entry<K, V> entry = new Entry<K, V>() {
+                Entry<TableIndexKey, byte[]> entry = new Entry<TableIndexKey, byte[]>() {
 
                     @Override
-                    public K getKey() {
+                    public TableIndexKey getKey() {
                         return key;
                     }
 
                     @Override
-                    public V getValue() {
+                    public byte[] getValue() {
                         return value;
                     }
 
                     @Override
-                    public V setValue(V value) {
+                    public byte[] setValue(byte[] value) {
                         return value;
                     }
                 };
@@ -108,7 +112,7 @@ public class AmzaTable<K, V> {
         valuesStream.stream(null); //EOS
     }
 
-    public ConcurrentNavigableMap<K, TimestampedValue<V>> filter(KeyValueFilter<K, V> filter) throws Exception {
+    public ConcurrentNavigableMap<TableIndexKey, TimestampedValue> filter(KeyValueFilter filter) throws Exception {
         return tableStore.filter(filter);
     }
 
@@ -122,88 +126,114 @@ public class AmzaTable<K, V> {
         VV stream(VV value);
     }
 
-    public boolean remove(K key) throws Exception {
-        TableTransaction<K, V> tx = tableStore.startTransaction(orderIdProvider.nextId());
+    public boolean remove(TableIndexKey key) throws Exception {
+        TableTransaction tx = tableStore.startTransaction(orderIdProvider.nextId());
         tx.remove(key);
         tx.commit();
         return true;
     }
 
-    public void remove(Iterable<K> keys) throws Exception {
-        TableTransaction<K, V> tx = tableStore.startTransaction(orderIdProvider.nextId());
-        for (K key : keys) {
+    public void remove(Iterable<TableIndexKey> keys) throws Exception {
+        TableTransaction tx = tableStore.startTransaction(orderIdProvider.nextId());
+        for (TableIndexKey key : keys) {
             tx.remove(key);
         }
         tx.commit();
     }
 
-    public void listKeys(ValueStream<K> stream) throws Exception {
-        for (K key : tableStore.getImmutableRows().keySet()) {
-            if (stream.stream(key) != key) {
-                break;
+    public void listEntries(final ValueStream<Entry<TableIndexKey, TimestampedValue>> stream) throws Exception {
+        tableStore.getImmutableRows().entrySet(new TableIndex.EntryStream<RuntimeException>() {
+
+            @Override
+            public boolean stream(final TableIndexKey key, final TimestampedValue value) {
+                Entry e = new Entry() {
+
+                    @Override
+                    public TableIndexKey getKey() {
+                        return key;
+                    }
+
+                    @Override
+                    public TimestampedValue getValue() {
+                        return value;
+                    }
+
+                    @Override
+                    public Object setValue(Object value) {
+                        throw new UnsupportedOperationException("Not supported.");
+                    }
+                };
+                return stream.stream(e) != e;
             }
-        }
+        });
         stream.stream(null); //EOS
     }
 
-    public void listEntries(ValueStream<Entry<K, TimestampedValue<V>>> stream) throws Exception {
-        for (Entry<K, TimestampedValue<V>> e : tableStore.getImmutableRows().entrySet()) {
-            if (stream.stream(e) != e) {
-                break;
-            }
-        }
-        stream.stream(null); //EOS
-    }
-
-    public void getMutatedRowsSince(long transationId, TransactionSetStream<K, V> transactionSetStream) throws Exception {
+    public void getMutatedRowsSince(long transationId, TransactionSetStream transactionSetStream) throws Exception {
         tableStore.getMutatedRowsSince(transationId, transactionSetStream);
     }
 
     //  Use for testing
-    public boolean compare(AmzaTable<K, V> amzaTable) throws Exception {
-        NavigableMap<K, TimestampedValue<V>> immutableRows = amzaTable.tableStore.getImmutableRows();
-        int compared = 0;
-        for (Entry<K, TimestampedValue<V>> e : immutableRows.entrySet()) {
-            compared++;
-            TimestampedValue<V> timestampedValue = tableStore.getTimestampedValue(e.getKey());
+    public boolean compare(final AmzaTable amzaTable) throws Exception {
+        TableIndex immutableRows = amzaTable.tableStore.getImmutableRows();
+        final MutableInt compared = new MutableInt(0);
+        final MutableBoolean passed = new MutableBoolean(true);
+        immutableRows.entrySet(new TableIndex.EntryStream<RuntimeException>() {
 
-            String comparing = tableName.getRingName() + ":" + tableName.getTableName()
-                    + " to " + amzaTable.tableName.getRingName() + ":" + amzaTable.tableName.getTableName();
+            @Override
+            public boolean stream(TableIndexKey key, TimestampedValue value) {
+                try {
+                    compared.increment();
 
-            if (timestampedValue == null) {
-                System.out.println("INCONSISTENCY: " + comparing + " key:null"
-                        + " != " + e.getValue().getTimestamp()
-                        + "' -- " + timestampedValue + " vs " + e.getValue());
-                return false;
+                    TimestampedValue timestampedValue = tableStore.getTimestampedValue(key);
+                    String comparing = tableName.getRingName() + ":" + tableName.getTableName()
+                            + " to " + amzaTable.tableName.getRingName() + ":" + amzaTable.tableName.getTableName();
+
+                    if (timestampedValue == null) {
+                        System.out.println("INCONSISTENCY: " + comparing + " key:null"
+                                + " != " + value.getTimestamp()
+                                + "' -- " + timestampedValue + " vs " + value);
+                        passed.setValue(false);
+                        return false;
+                    }
+                    if (value.getTimestamp() != timestampedValue.getTimestamp()) {
+                        System.out.println("INCONSISTENCY: " + comparing + " timstamp:'" + timestampedValue.getTimestamp()
+                                + "' != '" + value.getTimestamp()
+                                + "' -- " + timestampedValue + " vs " + value);
+                        passed.setValue(false);
+                        return false;
+                    }
+                    if (value.getTombstoned() != timestampedValue.getTombstoned()) {
+                        System.out.println("INCONSISTENCY: " + comparing + " tombstone:" + timestampedValue.getTombstoned()
+                                + " != '" + value.getTombstoned()
+                                + "' -- " + timestampedValue + " vs " + value);
+                        passed.setValue(false);
+                        return false;
+                    }
+                    if (value.getValue() == null && timestampedValue.getValue() != null) {
+                        System.out.println("INCONSISTENCY: " + comparing + " null values:" + timestampedValue.getTombstoned()
+                                + " != '" + value.getTombstoned()
+                                + "' -- " + timestampedValue + " vs " + value);
+                        passed.setValue(false);
+                        return false;
+                    }
+                    if (value.getValue() != null && !Arrays.equals(value.getValue(), timestampedValue.getValue())) {
+                        System.out.println("INCONSISTENCY: " + comparing + " value:'" + timestampedValue.getValue()
+                                + "' != '" + value.getValue()
+                                + "' aClass:" + timestampedValue.getValue().getClass()
+                                + "' bClass:" + value.getValue().getClass()
+                                + "' -- " + timestampedValue + " vs " + value);
+                        passed.setValue(false);
+                        return false;
+                    }
+                    return true;
+                } catch (Exception x) {
+                    throw new RuntimeException("Failed while comparing", x);
+                }
             }
-            if (e.getValue().getTimestamp() != timestampedValue.getTimestamp()) {
-                System.out.println("INCONSISTENCY: " + comparing + " timstamp:'" + timestampedValue.getTimestamp()
-                        + "' != '" + e.getValue().getTimestamp()
-                        + "' -- " + timestampedValue + " vs " + e.getValue());
-                return false;
-            }
-            if (e.getValue().getTombstoned() != timestampedValue.getTombstoned()) {
-                System.out.println("INCONSISTENCY: " + comparing + " tombstone:" + timestampedValue.getTombstoned()
-                        + " != '" + e.getValue().getTombstoned()
-                        + "' -- " + timestampedValue + " vs " + e.getValue());
-                return false;
-            }
-            if (e.getValue().getValue() == null && timestampedValue.getValue() != null) {
-                System.out.println("INCONSISTENCY: " + comparing + " null values:" + timestampedValue.getTombstoned()
-                        + " != '" + e.getValue().getTombstoned()
-                        + "' -- " + timestampedValue + " vs " + e.getValue());
-                return false;
-            }
-            if (e.getValue().getValue() != null && !e.getValue().getValue().equals(timestampedValue.getValue())) {
-                System.out.println("INCONSISTENCY: " + comparing + " value:'" + timestampedValue.getValue()
-                        + "' != '" + e.getValue().getValue()
-                        + "' aClass:" + timestampedValue.getValue().getClass()
-                        + "' bClass:" + e.getValue().getValue().getClass()
-                        + "' -- " + timestampedValue + " vs " + e.getValue());
-                return false;
-            }
-        }
+        });
+
         System.out.println("table:" + amzaTable.tableName.getTableName() + " compared:" + compared + " keys");
-        return true;
+        return passed.booleanValue();
     }
 }

@@ -15,12 +15,29 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.NavigableMap;
+public interface TableIndex {
 
-public interface TableIndex<K, V> extends NavigableMap<K, TimestampedValue<V>> {
+    static public interface EntryStream<E extends Throwable> {
 
-   /**
-    * Force persistence of all changes
-    */
-   void flush();
+        boolean stream(TableIndexKey key, TimestampedValue value) throws E;
+    }
+
+    TimestampedValue put(TableIndexKey key, TimestampedValue value);
+
+    TimestampedValue get(TableIndexKey key);
+
+    boolean containsKey(TableIndexKey key);
+
+    TimestampedValue remove(TableIndexKey key);
+
+    <E extends Throwable> void entrySet(EntryStream<E> entryStream);
+
+    boolean isEmpty();
+
+    void clear();
+
+    /**
+     * Force persistence of all changes
+     */
+    void flush();
 }

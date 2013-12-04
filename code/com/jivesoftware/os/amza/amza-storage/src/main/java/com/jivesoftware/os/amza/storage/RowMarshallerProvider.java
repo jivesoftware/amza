@@ -17,7 +17,7 @@ package com.jivesoftware.os.amza.storage;
 
 import com.jivesoftware.os.amza.shared.TableName;
 
-public interface RowMarshallerProvider {
+public interface RowMarshallerProvider<R> {
 
-    <K, V, R> RowMarshaller<K, V, R> getRowMarshaller(TableName<K, V> tableName) throws Exception;
+    RowMarshaller<R> getRowMarshaller(TableName tableName) throws Exception;
 }

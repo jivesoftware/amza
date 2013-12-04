@@ -19,89 +19,92 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndex.EntryStream;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStorage;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class FileBackedTableStorage<K, V, R> implements TableStorage<K, V> {
+public class FileBackedTableStorage<R> implements TableStorage {
 
-    private final RowTableFile<K, V, R> rowTableFile;
+    private final RowTable<R> rowTable;
 
-    public FileBackedTableStorage(RowTableFile<K, V, R> rowTableFile) {
-        this.rowTableFile = rowTableFile;
+    public FileBackedTableStorage(RowTable<R> rowTable) {
+        this.rowTable = rowTable;
     }
 
     @Override
-    public TableName<K, V> getTableName() {
-        return rowTableFile.getTableName();
+    public TableName getTableName() {
+        return rowTable.getTableName();
     }
 
     @Override
-    synchronized public TableIndex<K, V> load() throws Exception {
-        return rowTableFile.load();
+    synchronized public TableIndex load() throws Exception {
+        return rowTable.load();
     }
 
     @Override
-    public void rowMutationSince(final long transactionId, TransactionSetStream<K, V> transactionSetStream) throws Exception {
-        rowTableFile.rowMutationSince(transactionId, transactionSetStream);
+    public void rowMutationSince(final long transactionId, TransactionSetStream transactionSetStream) throws Exception {
+        rowTable.rowMutationSince(transactionId, transactionSetStream);
     }
 
     @Override
     synchronized public void clear() throws Exception {
-        ConcurrentNavigableMap<K, TimestampedValue<V>> saveableMap = new ConcurrentSkipListMap<>();
-        Multimap<K, TimestampedValue<V>> all = ArrayListMultimap.create();
-        TableIndex<K, V> load = load();
-        for (Entry<K, TimestampedValue<V>> entry : load.entrySet()) {
-            all.put(entry.getKey(), entry.getValue());
-        }
-        rowTableFile.save(all, saveableMap, false);
+        ConcurrentNavigableMap<TableIndexKey, TimestampedValue> saveableMap = new ConcurrentSkipListMap<>();
+//        TableIndex<K, V> load = load();
+//        Multimap<K, TimestampedValue> all = ArrayListMultimap.create();
+//        for (Entry<K, TimestampedValue> entry : load.entrySet()) {
+//            all.put(entry.getKey(), entry.getValue());
+//        }
+        rowTable.save(null, saveableMap, false); // TODO should we add a clear to  RowTable interface
     }
 
     @Override
-    synchronized public TableDelta<K, V> update(NavigableMap<K, TimestampedValue<V>> mutatedRows,
-        NavigableMap<K, TimestampedValue<V>> allRows) throws Exception {
+    synchronized public TableDelta update(TableIndex mutatedRows,
+        final TableIndex allRows) throws Exception {
 
-        NavigableMap<K, TimestampedValue<V>> applyMap = new TreeMap<>();
-        NavigableMap<K, TimestampedValue<V>> removeMap = new TreeMap<>();
-        Multimap<K, TimestampedValue<V>> clobberedRows = ArrayListMultimap.create();
+        final NavigableMap<TableIndexKey, TimestampedValue> applyMap = new TreeMap<>();
+        final NavigableMap<TableIndexKey, TimestampedValue> removeMap = new TreeMap<>();
+        final Multimap<TableIndexKey, TimestampedValue> clobberedRows = ArrayListMultimap.create();
+        mutatedRows.entrySet(new EntryStream<RuntimeException>() {
 
-        for (Entry<K, TimestampedValue<V>> e : mutatedRows.entrySet()) {
-            K key = e.getKey();
-            TimestampedValue<V> update = e.getValue();
-            TimestampedValue<V> current = allRows.get(key);
-            if (current == null) {
-                applyMap.put(key, update);
-            } else {
-                if (update.getTombstoned() && update.getTimestamp() < 0) { // Handle tombstone updates
-                    if (current.getTimestamp() <= Math.abs(update.getTimestamp())) {
-                        TimestampedValue<V> removeable = allRows.get(key);
-                        if (removeable != null) {
-                            removeMap.put(key, removeable);
-                            clobberedRows.put(key, removeable);
-                        }
-                    }
-                } else if (current.getTimestamp() < update.getTimestamp()) {
-                    clobberedRows.put(key, current);
+            @Override
+            public boolean stream(TableIndexKey key, TimestampedValue update) {
+                TimestampedValue current = allRows.get(key);
+                if (current == null) {
                     applyMap.put(key, update);
+                } else {
+                    if (update.getTombstoned() && update.getTimestamp() < 0) { // Handle tombstone updates
+                        if (current.getTimestamp() <= Math.abs(update.getTimestamp())) {
+                            TimestampedValue removeable = allRows.get(key);
+                            if (removeable != null) {
+                                removeMap.put(key, removeable);
+                                clobberedRows.put(key, removeable);
+                            }
+                        }
+                    } else if (current.getTimestamp() < update.getTimestamp()) {
+                        clobberedRows.put(key, current);
+                        applyMap.put(key, update);
+                    }
                 }
+                return true;
             }
-        }
+        });
         if (!applyMap.isEmpty()) {
-            NavigableMap<K, TimestampedValue<V>> saved = rowTableFile.save(clobberedRows, applyMap, true);
-            return new TableDelta<>(saved, removeMap, clobberedRows);
+            NavigableMap<TableIndexKey, TimestampedValue> saved = rowTable.save(clobberedRows, applyMap, true);
+            return new TableDelta(saved, removeMap, clobberedRows);
         } else {
-            return new TableDelta<>(applyMap, removeMap, clobberedRows);
+            return new TableDelta(applyMap, removeMap, clobberedRows);
         }
     }
 
     @Override
     public void compactTombestone(long ifOlderThanNMillis) throws Exception {
-        rowTableFile.compactTombestone(ifOlderThanNMillis);
+        rowTable.compactTombestone(ifOlderThanNMillis);
     }
 }

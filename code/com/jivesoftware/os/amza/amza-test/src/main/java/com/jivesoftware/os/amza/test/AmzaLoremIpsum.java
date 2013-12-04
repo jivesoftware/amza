@@ -47,13 +47,14 @@ public class AmzaLoremIpsum {
 
         String tableName = "lorem";
 
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 16; i++) {
             final String tname = tableName + i;
+            final int fdi = firstDocId + (count * 1);
             Thread t = new Thread() {
                 @Override
                 public void run() {
                     try {
-                        feed(hostName, port, tname, firstDocId, count);
+                        feed(hostName, port, tname, fdi, count);
                     } catch (Exception x) {
                         x.printStackTrace();
                     }
@@ -83,7 +84,7 @@ public class AmzaLoremIpsum {
 
             long elapse = System.currentTimeMillis() - start;
             double rate = ((double) elapse / (double) key);
-            System.out.println("mpi:" + rate + " millis " + (1000d / rate) + " ips " + key);
+            System.out.println("millisPerAdd:" + rate + " addsPerSec" + (1000d / rate) + " key:" + key);
         }
     }
 

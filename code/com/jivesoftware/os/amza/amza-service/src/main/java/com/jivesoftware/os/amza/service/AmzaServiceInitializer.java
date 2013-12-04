@@ -23,6 +23,8 @@ import com.jivesoftware.os.amza.service.storage.replication.MemoryBackedHighWate
 import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
 import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
+import com.jivesoftware.os.amza.shared.Marshaller;
+import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
@@ -45,20 +47,21 @@ public class AmzaServiceInitializer {
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
-        OrderIdProvider orderIdProvider,
-        TableStorageProvider amzaStores,
-        TableStorageProvider amzaReplicasWAL,
-        TableStorageProvider amzaResendWAL,
-        ChangeSetSender changeSetSender,
-        ChangeSetTaker tableTaker,
-        final TableStateChanges<Object, Object> allChangesCallback) throws Exception {
+            OrderIdProvider orderIdProvider,
+            Marshaller marshaller,
+            TableStorageProvider amzaStores,
+            TableStorageProvider amzaReplicasWAL,
+            TableStorageProvider amzaResendWAL,
+            ChangeSetSender changeSetSender,
+            ChangeSetTaker tableTaker,
+            final TableStateChanges allChangesCallback) throws Exception {
 
         final AtomicReference<HostRingProvider> hostRingProvider = new AtomicReference<>();
         final AtomicReference<TableReplicator> replicator = new AtomicReference<>();
-        TableStateChanges<Object, Object> tableStateChanges = new TableStateChanges<Object, Object>() {
+        TableStateChanges tableStateChanges = new TableStateChanges() {
             @Override
-            public void changes(TableName<Object, Object> mapName, TableDelta<Object, Object> change) throws Exception {
-                replicator.get().replicateLocalChanges(hostRingProvider.get(), mapName, change.getApply(), true);
+            public void changes(TableName mapName, TableDelta change) throws Exception {
+                replicator.get().replicateLocalChanges(hostRingProvider.get(), mapName, new MemoryTableIndex(change.getApply()), true);
                 allChangesCallback.changes(mapName, change);
             }
         };
@@ -75,15 +78,15 @@ public class AmzaServiceInitializer {
         MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
 
         TableReplicator tableReplicator = new TableReplicator(storesProvider,
-            config.replicationFactor,
-            config.takeFromFactor,
-            highWaterMarks,
-            replicasProvider,
-            resendsProvider,
-            changeSetSender, tableTaker);
+                config.replicationFactor,
+                config.takeFromFactor,
+                highWaterMarks,
+                replicasProvider,
+                resendsProvider,
+                changeSetSender, tableTaker);
         replicator.set(tableReplicator);
 
-        AmzaService service = new AmzaService(orderIdProvider, tableReplicator, storesProvider, amzaTableWatcher);
+        AmzaService service = new AmzaService(orderIdProvider, marshaller, tableReplicator, storesProvider, amzaTableWatcher);
         hostRingProvider.set(service);
         return service;
     }

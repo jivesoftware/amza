@@ -27,7 +27,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class TcpClientProvider {
 
-    private ConcurrentMap<RingHost, ChannelPool> channelPools;
+    private final ConcurrentMap<RingHost, ChannelPool> channelPools;
     private final int connectionsPerHost;
     private final int connectTimeout;
     private final int socketTimeout;

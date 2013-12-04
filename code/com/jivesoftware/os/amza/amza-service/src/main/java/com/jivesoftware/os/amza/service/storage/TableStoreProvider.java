@@ -30,7 +30,7 @@ public class TableStoreProvider {
     private final String storeName;
     private final TableStorageProvider  tableStorageProvider;
     private final TableStateChanges tableStateChanges;
-    private final ConcurrentHashMap<TableName, TableStore<?, ?>> tableStores = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<TableName, TableStore> tableStores = new ConcurrentHashMap<>();
 
     public TableStoreProvider(File workingDirectory,
             String storeName,
@@ -46,11 +46,11 @@ public class TableStoreProvider {
         return storeName;
     }
 
-    synchronized public <K, V> TableStore<K, V> getTableStore(TableName<K, V> tableName) throws Exception {
-        TableStore<K, V> tableStore = (TableStore<K, V>) tableStores.get(tableName);
+    synchronized public TableStore getTableStore(TableName tableName) throws Exception {
+        TableStore tableStore = tableStores.get(tableName);
         if (tableStore == null) {
-            TableStorage<K, V> tableStorage = tableStorageProvider.createTableStorage(workingDirectory, storeName, tableName);
-            ReadWriteTableStore<K, V> readWriteTableStore = new ReadWriteTableStore<>(tableStorage, tableStateChanges);
+            TableStorage tableStorage = tableStorageProvider.createTableStorage(workingDirectory, storeName, tableName);
+            ReadWriteTableStore readWriteTableStore = new ReadWriteTableStore(tableStorage, tableStateChanges);
             readWriteTableStore.load();
             tableStore = new TableStore(readWriteTableStore);
             tableStores.put(tableName, tableStore);
@@ -59,7 +59,7 @@ public class TableStoreProvider {
     }
 
 
-    public Set<Map.Entry<TableName, TableStore<?, ?>>> getTableStores() {
+    public Set<Map.Entry<TableName, TableStore>> getTableStores() {
         return tableStores.entrySet();
     }
 }

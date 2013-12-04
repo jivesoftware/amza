@@ -24,13 +24,13 @@ public class ChangeSet {
 
     private final long highestTransactionId;
     private final TableName tableName;
-    private final List<String> changes;
+    private final List<byte[]> changes;
 
     @JsonCreator
     public ChangeSet(
             @JsonProperty("highestTransactionId") long highestTransactionId,
             @JsonProperty("tableName") TableName tableName,
-            @JsonProperty("changes") List<String> changes) {
+            @JsonProperty("changes") List<byte[]> changes) {
         this.highestTransactionId = highestTransactionId;
         this.tableName = tableName;
         this.changes = changes;
@@ -44,7 +44,7 @@ public class ChangeSet {
         return tableName;
     }
 
-    public List<String> getChanges() {
+    public List<byte[]> getChanges() {
         return changes;
     }
 

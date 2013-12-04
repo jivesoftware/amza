@@ -17,11 +17,11 @@ package com.jivesoftware.os.amza.shared;
 
 import java.util.concurrent.ConcurrentNavigableMap;
 
-public interface KeyValueFilter<K, V> {
+public interface KeyValueFilter {
 
-    ConcurrentNavigableMap<K, TimestampedValue<V>> createCollector();
+    ConcurrentNavigableMap<TableIndexKey, TimestampedValue> createCollector();
 
-    boolean filter(K key, V value);
+    boolean filter(TableIndexKey key, byte[] value);
 
     void reset();
 }

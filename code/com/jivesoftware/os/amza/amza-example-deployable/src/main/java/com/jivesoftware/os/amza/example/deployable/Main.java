@@ -28,16 +28,19 @@ import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexProvider;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
 import com.jivesoftware.os.amza.shared.TableStorage;
 import com.jivesoftware.os.amza.shared.TableStorageProvider;
 import com.jivesoftware.os.amza.storage.FileBackedTableStorage;
-import com.jivesoftware.os.amza.storage.RowTableFile;
+import com.jivesoftware.os.amza.storage.RowTable;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
 import com.jivesoftware.os.amza.storage.chunks.Filer;
+import com.jivesoftware.os.amza.storage.index.MapDBTableIndex;
 import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
@@ -74,8 +77,23 @@ public class Main {
         String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
         int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1123"));
         String clusterName = (args.length > 1 ? args[1] : null);
+        String transport = System.getProperty("amza.transport", "tcp");
 
-        RingHost ringHost = new RingHost(hostname, port);
+        //TODO pull from properties
+        int connectionsPerHost = Integer.parseInt(System.getProperty("amza.tcp.client.connectionsPerHost", "2"));
+        int connectTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.connectTimeoutMillis", "5000"));
+        int socketTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.socketTimeoutMillis", "2000"));
+        int bufferSize = Integer.parseInt(System.getProperty("amza.tcp.bufferSize", "" + (1024 * 1024 * 10)));
+        int numServerThreads = Integer.parseInt(System.getProperty("amza.tcp.server.numThreads", "4"));
+        int numBuffers = numServerThreads + 2;
+        int tcpPort = Integer.parseInt(System.getProperty("amza.tcp.port", "1177"));
+
+        RingHost ringHost;
+        if (transport.equals("http")) {
+            ringHost = new RingHost(hostname, port);
+        } else {
+            ringHost = new RingHost(hostname, tcpPort);
+        }
         final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new Random().nextInt(512)); // todo need a better way to create writter id.
 
         final ObjectMapper mapper = new ObjectMapper();
@@ -86,7 +104,9 @@ public class Main {
 
         TableStorageProvider tableStorageProvider = new TableStorageProvider() {
             @Override
-            public <K, V> TableStorage<K, V> createTableStorage(File workingDirectory, String tableDomain, TableName<K, V> tableName) throws Exception {
+            public TableStorage createTableStorage(File workingDirectory,
+                    String tableDomain,
+                    TableName tableName) throws Exception {
                 File directory = new File(workingDirectory, tableDomain);
                 directory.mkdirs();
                 File file = new File(directory, tableName.getTableName() + ".kvt");
@@ -94,25 +114,23 @@ public class Main {
                 Filer filer = Filer.open(file, "rw");
                 BinaryRowReader reader = new BinaryRowReader(filer);
                 BinaryRowWriter writer = new BinaryRowWriter(filer);
-                BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller(tableName);
-                //BinaryRowChunkMarshaller rowMarshaller = new BinaryRowChunkMarshaller(directory, tableName);
-                RowTableFile<K, V, byte[]> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
+                BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+                TableIndexProvider tableIndexProvider = new TableIndexProvider() {
+
+                    @Override
+                    public TableIndex createTableIndex(TableName tableName) {
+                        return new MapDBTableIndex(tableName.getTableName());
+                    }
+                };
+                RowTable<byte[]> rowTableFile = new RowTable<>(tableName,
+                        orderIdProvider,
+                        tableIndexProvider,
+                        rowMarshaller,
+                        reader,
+                        writer);
                 return new FileBackedTableStorage(rowTableFile);
             }
         };
-
-        String transport = System.getProperty("amza.transport", "http");
-
-
-
-        //TODO pull from properties
-        int connectionsPerHost = Integer.parseInt(System.getProperty("amza.tcp.client.connectionsPerHost", "2"));
-        int connectTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.connectTimeoutMillis", "5000"));
-        int socketTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.socketTimeoutMillis", "2000"));
-        int bufferSize = Integer.parseInt(System.getProperty("amza.tcp.bufferSize", "2048"));
-        int numServerThreads = Integer.parseInt(System.getProperty("amza.tcp.server.numThreads", "4"));
-        int numBuffers = numServerThreads + 2;
-        int tcpPort = Integer.parseInt(System.getProperty("amza.tcp.port", "1177"));
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
@@ -123,41 +141,38 @@ public class Main {
         BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
 
         TcpClientProvider tcpClientProvider = new TcpClientProvider(
-            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
         ChangeSetSender changeSetSender = new TcpChangeSetSender(tcpClientProvider, clientProtocol);
         ChangeSetTaker tableTaker = new TcpChangeSetTaker(tcpClientProvider, clientProtocol);
 
-
-        if (transport.equals("tcp")) {
+        if (transport.equals("http")) {
             changeSetSender = new HttpChangeSetSender();
             tableTaker = new HttpChangeSetTaker();
-
         }
 
-
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
-            orderIdProvider,
-            tableStorageProvider,
-            tableStorageProvider,
-            tableStorageProvider,
-            changeSetSender,
-            tableTaker,
-            new TableStateChanges<Object, Object>() {
-            @Override
-            public void changes(TableName<Object, Object> tableName, TableDelta<Object, Object> changes) throws Exception {
-            }
-        });
+                orderIdProvider,
+                new com.jivesoftware.os.amza.storage.FstMarshaller(FSTConfiguration.getDefaultConfiguration()),
+                tableStorageProvider,
+                tableStorageProvider,
+                tableStorageProvider,
+                changeSetSender,
+                tableTaker,
+                new TableStateChanges() {
+                    @Override
+                    public void changes(TableName tableName, TableDelta changes) throws Exception {
+                    }
+                });
 
         amzaService.start(ringHost, amzaServiceConfig.resendReplicasIntervalInMillis,
-            amzaServiceConfig.applyReplicasIntervalInMillis,
-            amzaServiceConfig.takeFromNeighborsIntervalInMillis,
-            amzaServiceConfig.compactTombstoneIfOlderThanNMillis);
+                amzaServiceConfig.applyReplicasIntervalInMillis,
+                amzaServiceConfig.takeFromNeighborsIntervalInMillis,
+                amzaServiceConfig.compactTombstoneIfOlderThanNMillis);
 
         System.out.println("-----------------------------------------------------------------------");
         System.out.println("|      Amza Service Online");
         System.out.println("-----------------------------------------------------------------------");
-
 
         IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);
         bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
@@ -182,10 +197,10 @@ public class Main {
         System.out.println("-----------------------------------------------------------------------");
 
         JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
-            .addEndpoint(AmzaExampleEndpoints.class)
-            .addInjectable(AmzaService.class, amzaService)
-            .addEndpoint(AmzaReplicationRestEndpoints.class)
-            .addInjectable(AmzaInstance.class, amzaService);
+                .addEndpoint(AmzaExampleEndpoints.class)
+                .addInjectable(AmzaService.class, amzaService)
+                .addEndpoint(AmzaReplicationRestEndpoints.class)
+                .addInjectable(AmzaInstance.class, amzaService);
 
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);
         initializeRestfulServer.addContextHandler("/", jerseyEndpoints);

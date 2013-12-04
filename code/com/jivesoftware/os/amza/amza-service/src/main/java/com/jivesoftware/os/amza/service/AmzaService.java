@@ -23,8 +23,13 @@ import com.jivesoftware.os.amza.service.storage.replication.HostRingBuilder;
 import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
 import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.Marshaller;
+import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndex.EntryStream;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
@@ -59,17 +64,19 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     private RingHost ringHost;
     private ScheduledExecutorService scheduledThreadPool;
     private final OrderIdProvider orderIdProvider;
+    private final Marshaller marshaller;
     private final TableReplicator tableReplicator;
     private final AmzaTableWatcher amzaTableWatcher;
     private final TableStoreProvider tableStoreProvider;
-    private final TableName tableIndexKey = new TableName<>("MASTER", "TABLE_INDEX",
-            TableName.class, null, null, TableName.class);
+    private final TableName tableIndexKey = new TableName("MASTER", "TABLE_INDEX", null, null);
 
     public AmzaService(OrderIdProvider orderIdProvider,
+            Marshaller marshaller,
             TableReplicator tableReplicator,
             TableStoreProvider tableStoreProvider,
             AmzaTableWatcher amzaTableWatcher) {
         this.orderIdProvider = orderIdProvider;
+        this.marshaller = marshaller;
         this.tableReplicator = tableReplicator;
         this.tableStoreProvider = tableStoreProvider;
         this.amzaTableWatcher = amzaTableWatcher;
@@ -154,10 +161,11 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
+        byte[] rawRingHost = marshaller.serialize(ringHost);
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore<RingHost, RingHost> ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
-        TableTransaction<RingHost, RingHost> tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.add(ringHost, ringHost);
+        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
+        TableTransaction tx = ringIndex.startTransaction(orderIdProvider.nextId());
+        tx.add(new TableIndexKey(rawRingHost), rawRingHost);
         tx.commit();
     }
 
@@ -169,27 +177,33 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
+        byte[] rawRingHost = marshaller.serialize(ringHost);
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore<RingHost, RingHost> ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
-        TableTransaction<RingHost, RingHost> tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.remove(ringHost);
+        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
+        TableTransaction tx = ringIndex.startTransaction(orderIdProvider.nextId());
+        tx.remove(new TableIndexKey(rawRingHost));
         tx.commit();
     }
 
     @Override
     public List<RingHost> getRing(String ringName) throws Exception {
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore<RingHost, RingHost> ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
+        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
         if (ringIndex == null) {
             LOG.warn("No ring defined for ringName:" + ringName);
             return new ArrayList<>();
         } else {
-            Set<RingHost> ringHosts = new HashSet<>();
-            for (TimestampedValue<RingHost> value : ringIndex.getImmutableRows().values()) {
-                if (!value.getTombstoned()) {
-                    ringHosts.add(value.getValue());
+            final Set<RingHost> ringHosts = new HashSet<>();
+            ringIndex.getImmutableRows().entrySet(new EntryStream<Exception>() {
+
+                @Override
+                public boolean stream(TableIndexKey key, TimestampedValue value) throws Exception {
+                    if (!value.getTombstoned()) {
+                        ringHosts.add(marshaller.deserialize(value.getValue(), RingHost.class));
+                    }
+                    return true;
                 }
-            }
+            });
             return new ArrayList<>(ringHosts);
         }
     }
@@ -199,19 +213,19 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         return new HostRingBuilder().build(ringHost, getRing(ringName));
     }
 
-    private TableName<RingHost, RingHost> createRingTableName(String ringName) {
+    private TableName createRingTableName(String ringName) {
         ringName = ringName.toUpperCase();
-        return new TableName<>("MASTER", "RING_INDEX_" + ringName,
-                RingHost.class, null, null, RingHost.class);
+        return new TableName("MASTER", "RING_INDEX_" + ringName, null, null);
     }
 
-    private <K, V> boolean createTable(TableName<K, V> tableName) throws Exception {
+    private boolean createTable(TableName tableName) throws Exception {
+        byte[] rawTableName = marshaller.serialize(tableName);
 
-        TableStore<TableName, TableName> tableNameIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        TimestampedValue<TableName> timestamptedTableKey = tableNameIndex.getTimestampedValue(tableName);
+        TableStore tableNameIndex = tableStoreProvider.getTableStore(tableIndexKey);
+        TimestampedValue timestamptedTableKey = tableNameIndex.getTimestampedValue(new TableIndexKey(rawTableName));
         if (timestamptedTableKey == null) {
-            TableTransaction<TableName, TableName> tx = tableNameIndex.startTransaction(orderIdProvider.nextId());
-            tx.add(tableName, tableName);
+            TableTransaction tx = tableNameIndex.startTransaction(orderIdProvider.nextId());
+            tx.add(new TableIndexKey(rawTableName), rawTableName);
             tx.commit();
             return true;
         } else {
@@ -219,25 +233,26 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         }
     }
 
-    public <K, V> AmzaTable<K, V> getTable(TableName<K, V> tableName) throws Exception {
-        TableStore<TableName, TableName> tableStoreIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        TimestampedValue<TableName> timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(tableName);
+    public AmzaTable getTable(TableName tableName) throws Exception {
+        byte[] rawTableName = marshaller.serialize(tableName);
+        TableStore tableStoreIndex = tableStoreProvider.getTableStore(tableIndexKey);
+        TimestampedValue timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new TableIndexKey(rawTableName));
         while (timestampedKeyValueStoreName == null) {
             createTable(tableName);
-            timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(tableName);
+            timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new TableIndexKey(rawTableName));
         }
         if (timestampedKeyValueStoreName.getTombstoned()) {
             return null;
         } else {
-            TableStore<K, V> tableStore = tableStoreProvider.getTableStore(tableName);
-            return new AmzaTable<>(orderIdProvider, tableName, tableStore);
+            TableStore tableStore = tableStoreProvider.getTableStore(tableName);
+            return new AmzaTable(orderIdProvider, tableName, tableStore);
         }
     }
 
     @Override
     public List<TableName> getTableNames() {
         List<TableName> amzaTableNames = new ArrayList<>();
-        for (Entry<TableName, TableStore<?, ?>> tableStore : tableStoreProvider.getTableStores()) {
+        for (Entry<TableName, TableStore> tableStore : tableStoreProvider.getTableStores()) {
             amzaTableNames.add(tableStore.getKey());
         }
         return amzaTableNames;
@@ -245,40 +260,41 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
 
     public Map<TableName, AmzaTable> getTables() throws Exception {
         Map<TableName, AmzaTable> amzaTables = new HashMap<>();
-        for (Entry<TableName, TableStore<?, ?>> tableStore : tableStoreProvider.getTableStores()) {
+        for (Entry<TableName, TableStore> tableStore : tableStoreProvider.getTableStores()) {
             amzaTables.put(tableStore.getKey(), new AmzaTable(orderIdProvider, tableStore.getKey(), tableStore.getValue()));
         }
         return amzaTables;
     }
 
     @Override
-    public <K, V> void destroyTable(TableName<K, V> tableName) throws Exception {
-        TableStore<TableName, TableName> tableIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        TableTransaction<TableName, TableName> tx = tableIndex.startTransaction(orderIdProvider.nextId());
-        tx.remove(tableName);
+    public void destroyTable(TableName tableName) throws Exception {
+        byte[] rawTableName = marshaller.serialize(tableName);
+        TableStore tableIndex = tableStoreProvider.getTableStore(tableIndexKey);
+        TableTransaction tx = tableIndex.startTransaction(orderIdProvider.nextId());
+        tx.remove(new TableIndexKey(rawTableName));
         tx.commit();
     }
 
-    public <K, V> void receiveChanges(TableName<K, V> mapName, NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
+    public void receiveChanges(TableName mapName, TableIndex changes) throws Exception {
         tableReplicator.receiveChanges(mapName, changes);
     }
 
-    public <K, V> void watch(TableName<K, V> tableName, TableStateChanges tableStateChanges) throws Exception {
+    public void watch(TableName tableName, TableStateChanges tableStateChanges) throws Exception {
         amzaTableWatcher.watch(tableName, tableStateChanges);
     }
 
-    public <K, V> TableStateChanges unwatch(TableName<K, V> tableName) throws Exception {
+    public TableStateChanges unwatch(TableName tableName) throws Exception {
         return amzaTableWatcher.unwatch(tableName);
     }
 
     @Override
-    public <K, V> void changes(TableName<K, V> tableName, TableDelta<K, V> changes) throws Exception {
-        receiveChanges(tableName, changes.getApply());
+    public void changes(TableName tableName, TableDelta changes) throws Exception {
+        receiveChanges(tableName, new MemoryTableIndex(changes.getApply()));
     }
 
     @Override
-    public <K, V> void takeTableChanges(TableName<K, V> tableName,
-            long transationId, TransactionSetStream<K, V> transactionSetStream) throws Exception {
+    public void takeTableChanges(TableName tableName,
+            long transationId, TransactionSetStream transactionSetStream) throws Exception {
         getTable(tableName).getMutatedRowsSince(transationId, transactionSetStream);
     }
 
@@ -295,10 +311,10 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
 
     //------ Used for debugging ------
     public void printService() throws Exception {
-        for (Map.Entry<TableName, TableStore<?, ?>> table : tableStoreProvider.getTableStores()) {
-            TableStore<?, ?> sortedMapStore = table.getValue();
-            NavigableMap<?, TimestampedValue<?>> immutableRows = (NavigableMap<?, TimestampedValue<?>>) sortedMapStore.getImmutableRows();
-            for (Map.Entry<?, TimestampedValue<?>> e : (Set<Map.Entry<?, TimestampedValue<?>>>) immutableRows.entrySet()) {
+        for (Map.Entry<TableName, TableStore> table : tableStoreProvider.getTableStores()) {
+            TableStore sortedMapStore = table.getValue();
+            NavigableMap<?, TimestampedValue> immutableRows = (NavigableMap<?, TimestampedValue>) sortedMapStore.getImmutableRows();
+            for (Map.Entry<?, TimestampedValue> e : (Set<Map.Entry<?, TimestampedValue>>) immutableRows.entrySet()) {
 
                 System.out.println(ringHost.getHost() + ":" + ringHost.getPort()
                         + ":" + table.getKey().getTableName() + " k:" + e.getKey() + " v:" + e.getValue().getValue()

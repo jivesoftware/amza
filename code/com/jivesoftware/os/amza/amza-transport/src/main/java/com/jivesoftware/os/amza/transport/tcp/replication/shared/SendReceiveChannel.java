@@ -36,7 +36,7 @@ public class SendReceiveChannel {
     private final int writeBufferSize;
     private final int connectTimeout;
     private final int socketTimeout;
-    private AtomicBoolean connected = new AtomicBoolean();
+    private final AtomicBoolean connected = new AtomicBoolean();
     private SocketChannel socketChannel;
     private ReadableByteChannel readChannel;
 

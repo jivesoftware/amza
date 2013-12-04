@@ -20,7 +20,10 @@ import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
 import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.HighWaterMarks;
+import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
@@ -30,6 +33,7 @@ import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
+import java.util.TreeMap;
 import org.apache.commons.lang.mutable.MutableInt;
 
 /**
@@ -55,13 +59,13 @@ public class TableReplicator {
     private final HighWaterMarks highWaterMarks;
 
     public TableReplicator(TableStoreProvider tables,
-        int replicationFactor,
-        int takeFromFactor,
-        HighWaterMarks highWaterMarks,
-        TableStoreProvider replicatedWAL,
-        TableStoreProvider resendWAL,
-        ChangeSetSender changeSetSender,
-        ChangeSetTaker tableTaker) {
+            int replicationFactor,
+            int takeFromFactor,
+            HighWaterMarks highWaterMarks,
+            TableStoreProvider replicatedWAL,
+            TableStoreProvider resendWAL,
+            ChangeSetSender changeSetSender,
+            ChangeSetTaker tableTaker) {
         this.tables = tables;
         this.replicationFactor = replicationFactor;
         this.takeFromFactor = takeFromFactor;
@@ -73,8 +77,8 @@ public class TableReplicator {
     }
 
     public void compactTombestone(long ifOlderThanNMillis) throws Exception {
-        for (Entry<TableName, TableStore<?, ?>> table : tables.getTableStores()) {
-            TableStore<?, ?> value = table.getValue();
+        for (Entry<TableName, TableStore> table : tables.getTableStores()) {
+            TableStore value = table.getValue();
             try {
                 value.compactTombestone(ifOlderThanNMillis);
             } catch (Exception x) {
@@ -84,7 +88,7 @@ public class TableReplicator {
     }
 
     public void takeChanges(HostRingProvider hostRingProvider) throws Exception {
-        for (Entry<TableName, TableStore<?, ?>> table : tables.getTableStores()) {
+        for (Entry<TableName, TableStore> table : tables.getTableStores()) {
             TableName tableName = table.getKey();
             HostRing hostRing = hostRingProvider.getHostRing(tableName.getRingName());
             LOG.debug("Taking changes for " + tableName);
@@ -92,11 +96,11 @@ public class TableReplicator {
         }
     }
 
-    private <K, V> void takeChanges(RingHost[] ringHosts, TableName<K, V> tableName) throws Exception {
+    private void takeChanges(RingHost[] ringHosts, TableName tableName) throws Exception {
         final MutableInt taken = new MutableInt(0);
         int i = 0;
         final MutableInt leaps = new MutableInt(0);
-        TableStore<K, V> tableStore = tables.getTableStore(tableName);
+        TableStore tableStore = tables.getTableStore(tableName);
         while (i < ringHosts.length) {
             i = (leaps.intValue() * 2);
             for (; i < ringHosts.length; i++) {
@@ -109,7 +113,7 @@ public class TableReplicator {
                     Long lastTransactionId = highWaterMarks.get(ringHost, tableName);
                     LOG.debug("Taking from " + ringHost + " " + tableName + " " + lastTransactionId);
                     tableTaker.take(ringHost, tableName, lastTransactionId,
-                        new TakeTransactionSetStream<>(tableStore, ringHost, tableName, highWaterMarks));
+                            new TakeTransactionSetStream(tableStore, ringHost, tableName, highWaterMarks));
 
                     taken.increment();
                     if (taken.intValue() >= takeFromFactor) {
@@ -126,17 +130,17 @@ public class TableReplicator {
         }
     }
 
-    static class TakeTransactionSetStream<K, V> implements TransactionSetStream<K, V> {
+    static class TakeTransactionSetStream implements TransactionSetStream {
 
-        private final TableStore<K, V> tableStore;
+        private final TableStore tableStore;
         private final RingHost ringHost;
-        private final TableName<K, V> tableName;
+        private final TableName tableName;
         private final HighWaterMarks highWaterMarks;
 
-        public TakeTransactionSetStream(TableStore<K, V> tableStore,
-            RingHost ringHost,
-            TableName<K, V> tableName,
-            HighWaterMarks highWaterMarks) {
+        public TakeTransactionSetStream(TableStore tableStore,
+                RingHost ringHost,
+                TableName tableName,
+                HighWaterMarks highWaterMarks) {
             this.tableStore = tableStore;
             this.ringHost = ringHost;
             this.tableName = tableName;
@@ -144,11 +148,11 @@ public class TableReplicator {
         }
 
         @Override
-        public boolean stream(TransactionSet<K, V> took) throws Exception {
+        public boolean stream(TransactionSet took) throws Exception {
             if (took != null) {
-                NavigableMap<K, TimestampedValue<V>> changes = took.getChanges();
+                NavigableMap<TableIndexKey, TimestampedValue> changes = took.getChanges();
                 if (!changes.isEmpty()) {
-                    tableStore.commit(changes);
+                    tableStore.commit(new MemoryTableIndex(changes));
                     highWaterMarks.set(ringHost, tableName, took.getHighestTransactionId());
                 }
             }
@@ -156,17 +160,17 @@ public class TableReplicator {
         }
     }
 
-    public <K, V> void receiveChanges(TableName<K, V> mapName, NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
+    public void receiveChanges(TableName mapName, TableIndex changes) throws Exception {
         if (!changes.isEmpty()) {
             receivedChangesWAL.getTableStore(mapName).commit(changes);
         }
     }
 
     synchronized public void applyReceivedChanges() throws Exception {
-        for (Map.Entry<TableName, TableStore<?, ?>> replicatedUpdates : receivedChangesWAL.getTableStores()) {
+        for (Map.Entry<TableName, TableStore> replicatedUpdates : receivedChangesWAL.getTableStores()) {
             TableName mapName = replicatedUpdates.getKey();
-            TableStore<?, ?> store = replicatedUpdates.getValue();
-            NavigableMap<?, TimestampedValue<?>> immutableRows = (NavigableMap<?, TimestampedValue<?>>) store.getImmutableRows();
+            TableStore store = replicatedUpdates.getValue();
+            TableIndex immutableRows = store.getImmutableRows();
             if (!immutableRows.isEmpty()) {
                 tables.getTableStore(mapName).commit(store.getImmutableRows());
                 store.clearAllRows();
@@ -174,9 +178,9 @@ public class TableReplicator {
         }
     }
 
-    public <K, V> boolean replicateLocalChanges(HostRingProvider hostRingProvider, TableName<K, V> tableName,
-        NavigableMap<K, TimestampedValue<V>> changes,
-        boolean enqueueForResendOnFailure) throws Exception {
+    public boolean replicateLocalChanges(HostRingProvider hostRingProvider, TableName tableName,
+            TableIndex changes,
+            boolean enqueueForResendOnFailure) throws Exception {
         if (changes.isEmpty()) {
             return true;
         } else {
@@ -196,7 +200,7 @@ public class TableReplicator {
                         ringWalker.success();
                     } catch (Exception x) {
                         ringWalker.failed();
-                        LOG.debug("Failed to send changeset to ringHost:" + ringHost, x);
+                        LOG.info("Failed to send changeset to ringHost:" + ringHost, x);
                         LOG.warn("Failed to send changeset to ringHost:" + ringHost);
                         if (enqueueForResendOnFailure) {
                             resendWAL.getTableStore(tableName).commit(changes);
@@ -212,18 +216,29 @@ public class TableReplicator {
     public void resendLocalChanges(HostRingProvider hostRingProvider) throws Exception {
 
         // Hacky
-        for (Map.Entry<TableName, TableStore<?, ?>> table : tables.getTableStores()) {
+        for (Map.Entry<TableName, TableStore> table : tables.getTableStores()) {
             resendWAL.getTableStore(table.getKey());
         }
 
-        for (Map.Entry<TableName, TableStore<?, ?>> updates : resendWAL.getTableStores()) {
+        for (Map.Entry<TableName, TableStore> updates : resendWAL.getTableStores()) {
             TableName tableName = updates.getKey();
             HostRing hostRing = hostRingProvider.getHostRing(tableName.getRingName());
             RingHost[] ring = hostRing.getBelowRing();
             if (ring.length > 0) {
                 TableName mapName = updates.getKey();
-                TableStore<?, ?> store = updates.getValue();
-                if (replicateLocalChanges(hostRingProvider, mapName, store.getImmutableRows(), false)) {
+                TableStore store = updates.getValue();
+                // TODO this copy sucks
+                final MemoryTableIndex memoryTableIndex = new MemoryTableIndex(new TreeMap<TableIndexKey, TimestampedValue>());
+                store.getImmutableRows().entrySet(new TableIndex.EntryStream<Exception>() {
+
+                    @Override
+                    public boolean stream(TableIndexKey key, TimestampedValue value) throws Exception {
+                        memoryTableIndex.put(key, value);
+                        return true;
+                    }
+                });
+                // END TODO this copy sucks
+                if (replicateLocalChanges(hostRingProvider, mapName, memoryTableIndex, false)) {
                     store.clearAllRows();
                 }
             } else {

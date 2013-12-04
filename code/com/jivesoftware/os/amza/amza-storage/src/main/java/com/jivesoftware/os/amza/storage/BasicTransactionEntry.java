@@ -15,15 +15,16 @@
  */
 package com.jivesoftware.os.amza.storage;
 
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 
-public class BasicTransactionEntry<K, V> implements TransactionEntry<K, V> {
+public class BasicTransactionEntry implements TransactionEntry {
 
     private final long orderId;
-    private final K key;
-    private final TimestampedValue<V> value;
+    private final TableIndexKey key;
+    private final TimestampedValue value;
 
-    public BasicTransactionEntry(long orderId, K key, TimestampedValue<V> value) {
+    public BasicTransactionEntry(long orderId, TableIndexKey key, TimestampedValue value) {
         this.orderId = orderId;
         this.key = key;
         this.value = value;
@@ -35,18 +36,13 @@ public class BasicTransactionEntry<K, V> implements TransactionEntry<K, V> {
     }
 
     @Override
-    public K getKey() {
+    public TableIndexKey getKey() {
         return key;
     }
 
     @Override
-    public TimestampedValue<V> getValue() {
+    public TimestampedValue getValue() {
         return value;
-    }
-
-    @Override
-    public TimestampedValue<V> setValue(TimestampedValue<V> value) {
-        throw new UnsupportedOperationException("Not supported.");
     }
 
     @Override

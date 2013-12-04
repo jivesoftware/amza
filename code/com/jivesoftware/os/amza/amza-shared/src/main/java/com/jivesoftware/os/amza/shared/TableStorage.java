@@ -15,17 +15,15 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.NavigableMap;
+public interface TableStorage {
 
-public interface TableStorage<K, V> {
+    TableName getTableName();
 
-    TableName<K, V> getTableName();
+    TableIndex load() throws Exception;
 
-    TableIndex<K, V> load() throws Exception;
+    TableDelta update(TableIndex mutatedRows, TableIndex rowIndex) throws Exception;
 
-    TableDelta<K, V> update(NavigableMap<K, TimestampedValue<V>> mutatedRows, NavigableMap<K, TimestampedValue<V>> allRows) throws Exception;
-
-    void rowMutationSince(final long transactionId, TransactionSetStream<K, V> transactionSetStream) throws Exception;
+    void rowMutationSince(final long transactionId, TransactionSetStream transactionSetStream) throws Exception;
 
     void compactTombestone(long ifOlderThanNMillis) throws Exception;
 

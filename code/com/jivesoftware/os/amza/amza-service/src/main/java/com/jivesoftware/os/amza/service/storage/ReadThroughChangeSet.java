@@ -16,65 +16,64 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import java.io.IOException;
-import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * Not thread safe. Each Thread should get their own ReadThroughChangeSet.
  *
- * @param <K>
- * @param <V>
  */
-public class ReadThroughChangeSet<K, V> {
+public class ReadThroughChangeSet {
 
-    private final NavigableMap<K, TimestampedValue<V>> writeMap;
-    private final ConcurrentSkipListMap<K, TimestampedValue<V>> changes;
+    private final TableIndex writeMap;
+    private final ConcurrentSkipListMap<TableIndexKey, TimestampedValue> changes;
     private final long timestamp;
 
-    ReadThroughChangeSet(NavigableMap<K, TimestampedValue<V>> writeMap, long timestamp) {
+    ReadThroughChangeSet(TableIndex writeMap, long timestamp) {
         this.writeMap = writeMap;
         this.timestamp = timestamp;
         this.changes = new ConcurrentSkipListMap<>();
     }
 
-    ConcurrentSkipListMap<K, TimestampedValue<V>> getChangesMap() {
+    ConcurrentSkipListMap<TableIndexKey, TimestampedValue> getChangesMap() {
         return changes;
     }
 
-    public boolean containsKey(K key) {
+    public boolean containsKey(TableIndexKey key) {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
         return writeMap.containsKey(key);
     }
 
-    public V getValue(K key) {
+    public byte[] getValue(TableIndexKey key) {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        TimestampedValue<V> got = writeMap.get(key);
+        TimestampedValue got = writeMap.get(key);
         if (got == null || got.getTombstoned()) {
             return null;
         }
         return got.getValue();
     }
 
-    public TimestampedValue<V> getTimestampedValue(K key) {
+    public TimestampedValue getTimestampedValue(TableIndexKey key) {
         if (key == null) {
             return null;
         }
         return writeMap.get(key);
     }
 
-    public boolean put(K key, V value) throws IOException {
+    public boolean put(TableIndexKey key, byte[] value) throws IOException {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
         long putTimestamp = timestamp + 1;
-        TimestampedValue<V> update = new BasicTimestampedValue<>(value, putTimestamp, false);
-        TimestampedValue<V> current = writeMap.get(key);
+        TimestampedValue update = new BasicTimestampedValue(value, putTimestamp, false);
+        TimestampedValue current = writeMap.get(key);
         if (current == null || current.getTimestamp() < update.getTimestamp()) {
             changes.put(key, update);
             return true;
@@ -82,14 +81,14 @@ public class ReadThroughChangeSet<K, V> {
         return false;
     }
 
-    public boolean remove(K key) throws IOException {
+    public boolean remove(TableIndexKey key) throws IOException {
         if (key == null) {
             return false;
         }
         long removeTimestamp = timestamp;
-        TimestampedValue<V> current = writeMap.get(key);
-        V value = (current != null) ? current.getValue() : null;
-        TimestampedValue<V> update = new BasicTimestampedValue<>(value, removeTimestamp, true);
+        TimestampedValue current = writeMap.get(key);
+        byte[] value = (current != null) ? current.getValue() : null;
+        TimestampedValue update = new BasicTimestampedValue(value, removeTimestamp, true);
         if (current == null || current.getTimestamp() < update.getTimestamp()) {
             changes.put(key, update);
             return true;

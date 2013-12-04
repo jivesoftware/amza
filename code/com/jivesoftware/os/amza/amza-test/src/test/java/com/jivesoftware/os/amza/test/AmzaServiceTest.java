@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.test;
 
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
@@ -58,7 +59,7 @@ public class AmzaServiceTest {
         for (int i = 0; i < maxNumberOfServices; i++) {
             cluster.newNode(new RingHost("localhost", i));
         }
-        final TableName mapName = new TableName("test", "table1", String.class, null, null, String.class);
+        final TableName mapName = new TableName("test", "table1", null, null);
         final CountDownLatch latch = new CountDownLatch(1);
         Executors.newSingleThreadExecutor().submit(new Runnable() {
             int removeService = maxRemovedServices;
@@ -73,9 +74,10 @@ public class AmzaServiceTest {
                         if (node != null) {
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
-                            node.update(mapName, key, "" + random.nextInt(), System.currentTimeMillis(), tombstone);
+                            TableIndexKey indexKey = new TableIndexKey(key.getBytes());
+                            node.update(mapName, indexKey, ("" + random.nextInt()).getBytes(), System.currentTimeMillis(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
-                            node.get(mapName, key);
+                            node.get(mapName, indexKey);
                         }
                     } catch (Exception x) {
                         System.out.println(x.getMessage());

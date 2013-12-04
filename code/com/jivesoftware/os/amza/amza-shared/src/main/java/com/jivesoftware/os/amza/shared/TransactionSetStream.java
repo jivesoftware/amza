@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-public interface TransactionSetStream<K, V> {
+public interface TransactionSetStream {
 
-    boolean stream(TransactionSet<K, V> transactionSet) throws Exception;
+    boolean stream(TransactionSet transactionSet) throws Exception;
 }

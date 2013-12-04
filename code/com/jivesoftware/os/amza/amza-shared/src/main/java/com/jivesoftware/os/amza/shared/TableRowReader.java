@@ -15,11 +15,19 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+/**
+ *
+ * @param <R> raw row type
+ */
 public interface TableRowReader<R> {
 
-    static interface Stream<S> {
+    /**
+     *
+     * @param <RR> raw row type
+     */
+    static interface Stream<RR> {
 
-        boolean stream(S row) throws Exception;
+        boolean stream(RR row) throws Exception;
     }
 
     void read(boolean reverse, Stream<R> rowStream) throws Exception;

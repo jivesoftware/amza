@@ -15,9 +15,6 @@
  */
 package com.jivesoftware.os.amza.test;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.jivesoftware.os.amza.service.AmzaChangeIdPacker;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
@@ -27,26 +24,32 @@ import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.TableIndexProvider;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
 import com.jivesoftware.os.amza.shared.TableStorage;
 import com.jivesoftware.os.amza.shared.TableStorageProvider;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.storage.FileBackedTableStorage;
+import com.jivesoftware.os.amza.storage.FstMarshaller;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import com.jivesoftware.os.amza.storage.RowTableFile;
-import com.jivesoftware.os.amza.storage.json.StringRowMarshaller;
-import com.jivesoftware.os.amza.storage.json.StringRowReader;
-import com.jivesoftware.os.amza.storage.json.StringRowWriter;
+import com.jivesoftware.os.amza.storage.RowTable;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
+import com.jivesoftware.os.amza.storage.chunks.Filer;
+import com.jivesoftware.os.amza.storage.chunks.IFiler;
+import com.jivesoftware.os.amza.storage.index.MapDBTableIndex;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.File;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -97,8 +100,8 @@ public class AmzaTestCluster {
 
         ChangeSetSender changeSetSender = new ChangeSetSender() {
             @Override
-            public <K, V> void sendChangeSet(RingHost ringHost,
-                    TableName<K, V> mapName, NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
+            public void sendChangeSet(RingHost ringHost,
+                    TableName mapName, TableIndex changes) throws Exception {
                 AmzaNode service = cluster.get(ringHost);
                 if (service == null) {
                     throw new IllegalStateException("Service doesn't exists for " + ringHost);
@@ -111,8 +114,8 @@ public class AmzaTestCluster {
         ChangeSetTaker tableTaker = new ChangeSetTaker() {
 
             @Override
-            public <K, V> void take(RingHost ringHost,
-                    TableName<K, V> mapName,
+            public void take(RingHost ringHost,
+                    TableName mapName,
                     long transationId,
                     TransactionSetStream transactionSetStream) throws Exception {
                 AmzaNode service = cluster.get(ringHost);
@@ -127,33 +130,40 @@ public class AmzaTestCluster {
         // TODO need to get writer id from somewhere other than port.
         final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(serviceHost.getPort(), new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
 
-        final ObjectMapper mapper = new ObjectMapper();
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
+        final TableIndexProvider tableIndexProvider = new TableIndexProvider() {
+
+            @Override
+            public TableIndex createTableIndex(TableName tableName) {
+                return new MapDBTableIndex(tableName.getTableName());
+            }
+        };
 
         TableStorageProvider tableStorageProvider = new TableStorageProvider() {
             @Override
-            public <K, V> TableStorage<K, V> createTableStorage(File workingDirectory, String tableDomain, TableName<K, V> tableName) throws Exception {
+            public TableStorage createTableStorage(File workingDirectory, String tableDomain, TableName tableName) throws Exception {
                 File file = new File(workingDirectory, tableDomain + File.separator + tableName.getTableName() + ".kvt");
-                StringRowReader reader = new StringRowReader(file);
-                StringRowWriter writer = new StringRowWriter(file);
-
-                RowMarshaller<K, V, String> rowMarshaller = new StringRowMarshaller<>(mapper, tableName);
-                RowTableFile<K, V, String> rowTableFile = new RowTableFile<>(orderIdProvider, rowMarshaller, reader, writer);
+                file.getParentFile().mkdirs();
+                IFiler filer = Filer.open(file, "rw");
+                BinaryRowReader reader = new BinaryRowReader(filer);
+                BinaryRowWriter writer = new BinaryRowWriter(filer);
+                RowMarshaller<byte[]> rowMarshaller = new BinaryRowMarshaller();
+                RowTable<byte[]> rowTableFile = new RowTable(tableName, orderIdProvider, tableIndexProvider, rowMarshaller, reader, writer);
                 return new FileBackedTableStorage(rowTableFile);
             }
         };
 
+        FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         AmzaService amzaService = new AmzaServiceInitializer().initialize(config,
                 orderIdProvider,
+                marshaller,
                 tableStorageProvider,
                 tableStorageProvider,
                 tableStorageProvider,
                 changeSetSender,
-                tableTaker, new TableStateChanges<Object, Object>() {
+                tableTaker, new TableStateChanges() {
 
                     @Override
-                    public void changes(TableName<Object, Object> tableName, TableDelta<Object, Object> changes) throws Exception {
+                    public void changes(TableName tableName, TableDelta changes) throws Exception {
                     }
                 });
 
@@ -163,10 +173,10 @@ public class AmzaTestCluster {
                 config.compactTombstoneIfOlderThanNMillis);
 
         //if (serviceHost.getPort() % 2 == 0) {
-        final TableName tableName = new TableName("test", "table1", String.class, null, null, String.class);
-        amzaService.watch(tableName, new TableStateChanges<Object, Object>() {
+        final TableName tableName = new TableName("test", "table1", null, null);
+        amzaService.watch(tableName, new TableStateChanges() {
             @Override
-            public void changes(TableName<Object, Object> tableName, TableDelta<Object, Object> changes) throws Exception {
+            public void changes(TableName tableName, TableDelta changes) throws Exception {
                 if (changes.getApply().size() > 0) {
                     System.out.println("Service:" + serviceHost
                             + " Table:" + tableName.getTableName()
@@ -224,8 +234,8 @@ public class AmzaTestCluster {
             amzaService.stop();
         }
 
-        <K, V> void addToReplicatedWAL(TableName<K, V> mapName,
-                NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
+        void addToReplicatedWAL(TableName mapName,
+                TableIndex changes) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }
@@ -235,11 +245,11 @@ public class AmzaTestCluster {
             amzaService.receiveChanges(mapName, changes);
         }
 
-        public <K, V> void update(TableName<K, V> tableName, K k, V v, long timestamp, boolean tombstone) throws Exception {
+        public void update(TableName tableName, TableIndexKey k, byte[] v, long timestamp, boolean tombstone) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }
-            AmzaTable<K, V> amzaTable = amzaService.getTable(tableName);
+            AmzaTable amzaTable = amzaService.getTable(tableName);
             if (tombstone) {
                 amzaTable.remove(k);
             } else {
@@ -248,22 +258,22 @@ public class AmzaTestCluster {
 
         }
 
-        public <K, V> V get(TableName<K, V> tableName, K key) throws Exception {
+        public byte[] get(TableName tableName, TableIndexKey key) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }
-            AmzaTable<K, V> amzaTable = amzaService.getTable(tableName);
+            AmzaTable amzaTable = amzaService.getTable(tableName);
             return amzaTable.get(key);
         }
 
-        public <K, V> void takeTable(TableName<K, V> tableName, long transationId, TransactionSetStream<K, V> transactionSetStream) throws Exception {
+        public void takeTable(TableName tableName, long transationId, TransactionSetStream transactionSetStream) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }
             if (random.nextInt(100) > (100 - oddsOfAConnectionFailureWhenTaking)) {
                 throw new RuntimeException("Random take failure:" + serviceHost);
             }
-            AmzaTable<K, V> got = amzaService.getTable(tableName);
+            AmzaTable got = amzaService.getTable(tableName);
             if (got != null) {
                 got.getMutatedRowsSince(transationId, transactionSetStream);
             }

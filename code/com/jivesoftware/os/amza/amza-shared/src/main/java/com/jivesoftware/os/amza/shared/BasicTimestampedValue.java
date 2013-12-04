@@ -18,17 +18,17 @@ package com.jivesoftware.os.amza.shared;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
-import java.util.Objects;
+import java.util.Arrays;
 
-public class BasicTimestampedValue<V> implements TimestampedValue<V>, Serializable {
+public class BasicTimestampedValue implements TimestampedValue, Serializable {
 
     private final long timestamp;
     private final boolean tombstoned;
-    private final V value;
+    private final byte[] value;
 
     @JsonCreator
     public BasicTimestampedValue(
-            @JsonProperty("value") V value,
+            @JsonProperty("value") byte[] value,
             @JsonProperty("timestamp") long timestamp,
             @JsonProperty("tombstoned") boolean tombstoned) {
         this.timestamp = timestamp;
@@ -47,7 +47,7 @@ public class BasicTimestampedValue<V> implements TimestampedValue<V>, Serializab
     }
 
     @Override
-    public V getValue() {
+    public byte[] getValue() {
         return value;
     }
 
@@ -58,10 +58,10 @@ public class BasicTimestampedValue<V> implements TimestampedValue<V>, Serializab
 
     @Override
     public int hashCode() {
-        int hash = 3;
-        hash = 73 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
-        hash = 73 * hash + (this.tombstoned ? 1 : 0);
-        hash = 73 * hash + Objects.hashCode(this.value);
+        int hash = 5;
+        hash = 97 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
+        hash = 97 * hash + (this.tombstoned ? 1 : 0);
+        hash = 97 * hash + Arrays.hashCode(this.value);
         return hash;
     }
 
@@ -73,16 +73,17 @@ public class BasicTimestampedValue<V> implements TimestampedValue<V>, Serializab
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final BasicTimestampedValue<V> other = (BasicTimestampedValue<V>) obj;
+        final BasicTimestampedValue other = (BasicTimestampedValue) obj;
         if (this.timestamp != other.timestamp) {
             return false;
         }
         if (this.tombstoned != other.tombstoned) {
             return false;
         }
-        if (!Objects.equals(this.value, other.value)) {
+        if (!Arrays.equals(this.value, other.value)) {
             return false;
         }
         return true;
     }
+
 }

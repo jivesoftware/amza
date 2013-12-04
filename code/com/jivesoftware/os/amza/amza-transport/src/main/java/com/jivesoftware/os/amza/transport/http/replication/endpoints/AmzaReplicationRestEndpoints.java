@@ -15,17 +15,16 @@
  */
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TableRowReader;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.storage.TransactionEntry;
-import com.jivesoftware.os.amza.storage.json.StringRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.ChangeSet;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
@@ -123,22 +122,15 @@ public class AmzaReplicationRestEndpoints {
         }
     }
 
-    private <K, V> TableDelta<K, V> changeSetToPartionDelta(ChangeSet changeSet) throws Exception {
-        ObjectMapper mapper = new ObjectMapper();
-        TableRowReader<String> rowReader = new StringArrayRowReader(changeSet.getChanges());
-        final StringRowMarshaller<K, V> jsonPartitionRowMarshaller = new StringRowMarshaller<>(mapper, changeSet.getTableName());
+    private TableDelta changeSetToPartionDelta(ChangeSet changeSet) throws Exception {
 
-        final ConcurrentNavigableMap<K, TimestampedValue<V>> changes = new ConcurrentSkipListMap<>();
-        rowReader.read(false, new TableRowReader.Stream<String>() {
-            @Override
-            public boolean stream(String kvt) throws Exception {
-                TransactionEntry<K, V> te = jsonPartitionRowMarshaller.fromRow(kvt);
-                changes.put(te.getKey(), te.getValue());
-                return true;
-            }
-        });
-
-        return new TableDelta<>(changes, new TreeMap(), null);
+        final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+        final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+        for (byte[] row : changeSet.getChanges()) {
+            TransactionEntry te = rowMarshaller.fromRow(row);
+            changes.put(te.getKey(), te.getValue());
+        }
+        return new TableDelta(changes, new TreeMap(), null);
     }
 
     @POST
@@ -147,16 +139,16 @@ public class AmzaReplicationRestEndpoints {
     public Response take(final ChangeSet changeSet) {
         try {
 
-            final StringRowMarshaller jsonPartitionRowMarshaller = new StringRowMarshaller(new ObjectMapper(), changeSet.getTableName());
-            final List<String> rows = new ArrayList<>();
+            final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+            final List<byte[]> rows = new ArrayList<>();
             final MutableLong highestTransactionId = new MutableLong();
-            amzaInstance.takeTableChanges(changeSet.getTableName(), changeSet.getHighestTransactionId(), new TransactionSetStream<Object, Object>() {
+            amzaInstance.takeTableChanges(changeSet.getTableName(), changeSet.getHighestTransactionId(), new TransactionSetStream() {
 
                 @Override
-                public boolean stream(TransactionSet<Object, Object> took) throws Exception {
-                    NavigableMap<Object, TimestampedValue<Object>> changes = took.getChanges();
-                    for (Map.Entry<Object, TimestampedValue<Object>> e : changes.entrySet()) {
-                        rows.add(jsonPartitionRowMarshaller.toRow(0, e));
+                public boolean stream(TransactionSet took) throws Exception {
+                    NavigableMap<TableIndexKey, TimestampedValue> changes = took.getChanges();
+                    for (Map.Entry<TableIndexKey, TimestampedValue> e : changes.entrySet()) {
+                        rows.add(rowMarshaller.toRow(0, e.getKey(), e.getValue()));
                     }
                     if (took.getHighestTransactionId() > highestTransactionId.longValue()) {
                         highestTransactionId.setValue(took.getHighestTransactionId());

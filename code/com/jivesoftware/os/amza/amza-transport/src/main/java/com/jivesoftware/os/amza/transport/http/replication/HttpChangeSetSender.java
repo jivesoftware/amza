@@ -18,9 +18,12 @@ package com.jivesoftware.os.amza.transport.http.replication;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndex.EntryStream;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.storage.json.StringRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.jive.utils.http.client.HttpClient;
 import com.jivesoftware.os.jive.utils.http.client.HttpClientConfig;
 import com.jivesoftware.os.jive.utils.http.client.HttpClientConfiguration;
@@ -30,23 +33,26 @@ import com.jivesoftware.os.jive.utils.http.client.rest.RequestHelper;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class HttpChangeSetSender<K, V> implements ChangeSetSender {
+public class HttpChangeSetSender implements ChangeSetSender {
 
     private final ConcurrentHashMap<RingHost, RequestHelper> requestHelpers = new ConcurrentHashMap<>();
 
     @Override
-    public <K, V> void sendChangeSet(RingHost ringHost, TableName<K, V> tableName,
-            NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
+    public void sendChangeSet(RingHost ringHost, TableName tableName,
+            TableIndex changes) throws Exception {
 
-        final StringRowMarshaller jsonPartitionRowMarshaller = new StringRowMarshaller(new ObjectMapper(), tableName);
-        List<String> rows = new ArrayList<>();
-        for (Map.Entry<K, TimestampedValue<V>> e : changes.entrySet()) {
-            rows.add(jsonPartitionRowMarshaller.toRow(-1, e));
-        }
+        final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+        final List<byte[]> rows = new ArrayList<>();
+        changes.entrySet(new EntryStream<Exception>() {
+
+            @Override
+            public boolean stream(TableIndexKey key, TimestampedValue value) throws Exception {
+                rows.add(rowMarshaller.toRow(-1, key, value));
+                return true;
+            }
+        });
         ChangeSet changeSet = new ChangeSet(-1, tableName, rows);
         getRequestHelper(ringHost).executeRequest(changeSet, "/amza/changes/add", Boolean.class, false);
     }

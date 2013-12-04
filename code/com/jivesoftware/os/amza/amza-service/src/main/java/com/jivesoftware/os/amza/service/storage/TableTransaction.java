@@ -15,28 +15,31 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-public class TableTransaction<K, V> {
+import com.jivesoftware.os.amza.shared.MemoryTableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 
-    private final TableStore<K, V> sortedMapStore;
-    private final ReadThroughChangeSet<K, V> changesMap;
+public class TableTransaction {
+
+    private final TableStore sortedMapStore;
+    private final ReadThroughChangeSet changesMap;
     private int changedCount = 0;
 
-    TableTransaction(TableStore<K, V> sortedMapStore,
-            ReadThroughChangeSet<K, V> updateableMap) {
+    TableTransaction(TableStore sortedMapStore,
+            ReadThroughChangeSet updateableMap) {
         this.sortedMapStore = sortedMapStore;
         this.changesMap = updateableMap;
     }
 
-    public K add(K key, V value) throws Exception {
+    public TableIndexKey add(TableIndexKey key, byte[] value) throws Exception {
         if (changesMap.put(key, value)) {
             changedCount++;
         }
         return key;
     }
 
-    public boolean remove(K key) throws Exception {
+    public boolean remove(TableIndexKey key) throws Exception {
         if (changesMap.containsKey(key)) {
-            V got = changesMap.getValue(key);
+            byte[] got = changesMap.getValue(key);
             if (got != null) {
                 if (changesMap.remove(key)) {
                     changedCount++;
@@ -50,7 +53,7 @@ public class TableTransaction<K, V> {
 
     public void commit() throws Exception {
         if (changedCount > 0) {
-            sortedMapStore.commit(changesMap.getChangesMap());
+            sortedMapStore.commit(new MemoryTableIndex(changesMap.getChangesMap()));
         }
     }
 }

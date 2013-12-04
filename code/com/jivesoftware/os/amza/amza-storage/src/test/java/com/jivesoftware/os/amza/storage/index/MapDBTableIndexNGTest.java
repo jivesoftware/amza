@@ -16,6 +16,8 @@
 package com.jivesoftware.os.amza.storage.index;
 
 import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.storage.chunks.UIO;
 import org.testng.annotations.Test;
 
 public class MapDBTableIndexNGTest {
@@ -23,9 +25,9 @@ public class MapDBTableIndexNGTest {
     @Test (enabled = false)
     public void loadTest() {
         System.out.println("InitialHeap:" + Runtime.getRuntime().totalMemory());
-        MapDBTableIndex<Long, Long> instance = new MapDBTableIndex<>("test");
+        MapDBTableIndex instance = new MapDBTableIndex("test");
         for (long i = 0; i < 200000000; i++) {
-            instance.put(i, new BasicTimestampedValue<>(i, i, false));
+            instance.put(new TableIndexKey(UIO.longBytes(i)), new BasicTimestampedValue(UIO.longBytes(i), i, false));
             if (i % 1000000 == 0) {
                 System.out.println("Size:" + i + " Heap:" + Runtime.getRuntime().totalMemory());
                 instance.flush();

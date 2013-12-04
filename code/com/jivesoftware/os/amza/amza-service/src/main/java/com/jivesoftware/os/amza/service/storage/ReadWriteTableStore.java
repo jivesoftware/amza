@@ -15,9 +15,10 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.shared.ImmutableTableIndex;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
+import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
 import com.jivesoftware.os.amza.shared.TableStorage;
@@ -30,15 +31,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class ReadWriteTableStore<K, V> {
+public class ReadWriteTableStore {
 
-    private final TableStorage<K, V> tableStorage;
-    private final AtomicReference<TableIndex<K, V>> readMap;
+    private final TableStorage tableStorage;
+    private final AtomicReference<TableIndex> readMap;
     private final AtomicBoolean loaded = new AtomicBoolean(false);
-    private final TableStateChanges<K, V> tableStateChanges;
+    private final TableStateChanges tableStateChanges;
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
-    public ReadWriteTableStore(TableStorage<K, V> tableStorage, TableStateChanges<K, V> tableStateChanges) {
+    public ReadWriteTableStore(TableStorage tableStorage, TableStateChanges tableStateChanges) {
         this.tableStorage = tableStorage;
         this.readMap = new AtomicReference<>(null);
         this.tableStateChanges = tableStateChanges;
@@ -71,8 +72,8 @@ public class ReadWriteTableStore<K, V> {
         tableStorage.compactTombestone(ifOlderThanNMillis);
     }
 
-    public V get(K key) throws Exception {
-        TimestampedValue<V> got;
+    public byte[] get(TableIndexKey key) throws Exception {
+        TimestampedValue got;
         try {
             readWriteLock.readLock().lock();
             got = readMap.get().get(key);
@@ -88,7 +89,7 @@ public class ReadWriteTableStore<K, V> {
         return got.getValue();
     }
 
-    public TimestampedValue<V> getTimestampedValue(K key) throws Exception {
+    public TimestampedValue getTimestampedValue(TableIndexKey key) throws Exception {
         try {
             readWriteLock.readLock().lock();
             return readMap.get().get(key);
@@ -97,7 +98,7 @@ public class ReadWriteTableStore<K, V> {
         }
     }
 
-    public boolean containsKey(K key) throws Exception {
+    public boolean containsKey(TableIndexKey key) throws Exception {
         try {
             readWriteLock.readLock().lock();
             return readMap.get().containsKey(key);
@@ -106,39 +107,39 @@ public class ReadWriteTableStore<K, V> {
         }
     }
 
-    public NavigableMap<K, TimestampedValue<V>> getImmutableCopy() throws Exception {
-        return Maps.unmodifiableNavigableMap(readMap.get());
+    public TableIndex getImmutableCopy() throws Exception {
+        return new ImmutableTableIndex(readMap.get());
     }
 
-    public void getMutatedRowsSince(long transactionId, TransactionSetStream<K, V> transactionSetStream) throws Exception {
+    public void getMutatedRowsSince(long transactionId, TransactionSetStream transactionSetStream) throws Exception {
         tableStorage.rowMutationSince(transactionId, transactionSetStream);
     }
 
-    public ReadThroughChangeSet<K, V> getReadThroughChangeSet(long timestamp) throws Exception {
-        return new ReadThroughChangeSet<>(readMap.get(), timestamp);
+    public ReadThroughChangeSet getReadThroughChangeSet(long timestamp) throws Exception {
+        return new ReadThroughChangeSet(readMap.get(), timestamp);
     }
 
-    public void commit(NavigableMap<K, TimestampedValue<V>> changes) throws Exception {
-        NavigableMap<K, TimestampedValue<V>> currentReadMap = readMap.get();
-        TableDelta<K, V> updateMap = tableStorage.update(changes, currentReadMap);
+    public void commit(TableIndex changes) throws Exception {
+        TableIndex currentReadMap = readMap.get();
+        TableDelta updateMap = tableStorage.update(changes, currentReadMap);
         try {
             readWriteLock.writeLock().lock();
-            NavigableMap<K, TimestampedValue<V>> apply = updateMap.getApply();
-            for (Map.Entry<K, TimestampedValue<V>> entry : apply.entrySet()) {
-                K k = entry.getKey();
-                TimestampedValue<V> timestampedValue = entry.getValue();
-                TimestampedValue<V> got = currentReadMap.get(k);
+            NavigableMap<TableIndexKey, TimestampedValue> apply = updateMap.getApply();
+            for (Map.Entry<TableIndexKey, TimestampedValue> entry : apply.entrySet()) {
+                TableIndexKey k = entry.getKey();
+                TimestampedValue timestampedValue = entry.getValue();
+                TimestampedValue got = currentReadMap.get(k);
                 if (got == null) {
                     currentReadMap.put(k, timestampedValue);
                 } else if (got.getTimestamp() < timestampedValue.getTimestamp()) {
                     currentReadMap.put(k, timestampedValue);
                 }
             }
-            NavigableMap<K, TimestampedValue<V>> remove = updateMap.getRemove();
-            for (Map.Entry<K, TimestampedValue<V>> entry : remove.entrySet()) {
-                K k = entry.getKey();
-                TimestampedValue<V> timestampedValue = entry.getValue();
-                TimestampedValue<V> got = currentReadMap.get(k);
+            NavigableMap<TableIndexKey, TimestampedValue> remove = updateMap.getRemove();
+            for (Map.Entry<TableIndexKey, TimestampedValue> entry : remove.entrySet()) {
+                TableIndexKey k = entry.getKey();
+                TimestampedValue timestampedValue = entry.getValue();
+                TimestampedValue got = currentReadMap.get(k);
                 if (got != null && got.getTimestamp() < timestampedValue.getTimestamp()) {
                     currentReadMap.remove(k);
                 }

@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-public interface TableStateChanges<K, V> {
+public interface TableStateChanges {
 
-    void changes(TableName<K, V> tableName, TableDelta<K, V> changes) throws Exception;
+    void changes(TableName tableName, TableDelta changes) throws Exception;
 }

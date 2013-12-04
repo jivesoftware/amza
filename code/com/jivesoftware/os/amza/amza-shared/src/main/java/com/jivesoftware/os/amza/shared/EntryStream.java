@@ -15,20 +15,8 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
+public interface EntryStream<E extends Throwable> {
 
-@JsonTypeInfo (
-    use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "objectType")
-@JsonSubTypes ({
-    @JsonSubTypes.Type (value = BasicTimestampedValue.class, name = "basicTimestampedValue") })
-public interface TimestampedValue {
+    boolean stream(TableIndexKey key, BinaryTimestampedValue value) throws E;
 
-    long getTimestamp();
-
-    boolean getTombstoned();
-
-    byte[] getValue();
 }

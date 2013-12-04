@@ -15,10 +15,9 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -29,7 +28,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 public class ReadThroughChangeSet {
 
     private final TableIndex writeMap;
-    private final ConcurrentSkipListMap<TableIndexKey, TimestampedValue> changes;
+    private final ConcurrentSkipListMap<TableIndexKey, BinaryTimestampedValue> changes;
     private final long timestamp;
 
     ReadThroughChangeSet(TableIndex writeMap, long timestamp) {
@@ -38,7 +37,7 @@ public class ReadThroughChangeSet {
         this.changes = new ConcurrentSkipListMap<>();
     }
 
-    ConcurrentSkipListMap<TableIndexKey, TimestampedValue> getChangesMap() {
+    ConcurrentSkipListMap<TableIndexKey, BinaryTimestampedValue> getChangesMap() {
         return changes;
     }
 
@@ -53,14 +52,14 @@ public class ReadThroughChangeSet {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        TimestampedValue got = writeMap.get(key);
+        BinaryTimestampedValue got = writeMap.get(key);
         if (got == null || got.getTombstoned()) {
             return null;
         }
         return got.getValue();
     }
 
-    public TimestampedValue getTimestampedValue(TableIndexKey key) {
+    public BinaryTimestampedValue getTimestampedValue(TableIndexKey key) {
         if (key == null) {
             return null;
         }
@@ -72,8 +71,8 @@ public class ReadThroughChangeSet {
             throw new IllegalArgumentException("key cannot be null.");
         }
         long putTimestamp = timestamp + 1;
-        TimestampedValue update = new BasicTimestampedValue(value, putTimestamp, false);
-        TimestampedValue current = writeMap.get(key);
+        BinaryTimestampedValue update = new BinaryTimestampedValue(value, putTimestamp, false);
+        BinaryTimestampedValue current = writeMap.get(key);
         if (current == null || current.getTimestamp() < update.getTimestamp()) {
             changes.put(key, update);
             return true;
@@ -86,9 +85,9 @@ public class ReadThroughChangeSet {
             return false;
         }
         long removeTimestamp = timestamp;
-        TimestampedValue current = writeMap.get(key);
+        BinaryTimestampedValue current = writeMap.get(key);
         byte[] value = (current != null) ? current.getValue() : null;
-        TimestampedValue update = new BasicTimestampedValue(value, removeTimestamp, true);
+        BinaryTimestampedValue update = new BinaryTimestampedValue(value, removeTimestamp, true);
         if (current == null || current.getTimestamp() < update.getTimestamp()) {
             changes.put(key, update);
             return true;

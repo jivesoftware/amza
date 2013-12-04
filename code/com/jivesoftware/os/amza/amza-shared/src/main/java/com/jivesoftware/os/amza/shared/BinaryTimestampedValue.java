@@ -20,14 +20,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.util.Arrays;
 
-public class BasicTimestampedValue implements TimestampedValue, Serializable {
+public class BinaryTimestampedValue implements Serializable {
 
     private final long timestamp;
     private final boolean tombstoned;
     private final byte[] value;
 
     @JsonCreator
-    public BasicTimestampedValue(
+    public BinaryTimestampedValue(
             @JsonProperty("value") byte[] value,
             @JsonProperty("timestamp") long timestamp,
             @JsonProperty("tombstoned") boolean tombstoned) {
@@ -36,17 +36,14 @@ public class BasicTimestampedValue implements TimestampedValue, Serializable {
         this.tombstoned = tombstoned;
     }
 
-    @Override
     public long getTimestamp() {
         return timestamp;
     }
 
-    @Override
     public boolean getTombstoned() {
         return tombstoned;
     }
 
-    @Override
     public byte[] getValue() {
         return value;
     }
@@ -73,7 +70,7 @@ public class BasicTimestampedValue implements TimestampedValue, Serializable {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final BasicTimestampedValue other = (BasicTimestampedValue) obj;
+        final BinaryTimestampedValue other = (BinaryTimestampedValue) obj;
         if (this.timestamp != other.timestamp) {
             return false;
         }

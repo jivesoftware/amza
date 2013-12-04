@@ -21,9 +21,9 @@ import java.util.NavigableMap;
 public class TransactionSet implements Serializable {
 
     private final long highestTransactionId;
-    private final NavigableMap<TableIndexKey, TimestampedValue> changes;
+    private final NavigableMap<TableIndexKey, BinaryTimestampedValue> changes;
 
-    public TransactionSet(long highestTransactionId, NavigableMap<TableIndexKey, TimestampedValue> changes) {
+    public TransactionSet(long highestTransactionId, NavigableMap<TableIndexKey, BinaryTimestampedValue> changes) {
         this.highestTransactionId = highestTransactionId;
         this.changes = changes;
     }
@@ -32,7 +32,7 @@ public class TransactionSet implements Serializable {
         return highestTransactionId;
     }
 
-    public NavigableMap<TableIndexKey, TimestampedValue> getChanges() {
+    public NavigableMap<TableIndexKey, BinaryTimestampedValue> getChanges() {
         return changes;
     }
 

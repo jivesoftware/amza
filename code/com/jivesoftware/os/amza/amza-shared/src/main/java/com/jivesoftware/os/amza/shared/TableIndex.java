@@ -17,18 +17,13 @@ package com.jivesoftware.os.amza.shared;
 
 public interface TableIndex {
 
-    static public interface EntryStream<E extends Throwable> {
+    BinaryTimestampedValue put(TableIndexKey key, BinaryTimestampedValue value);
 
-        boolean stream(TableIndexKey key, TimestampedValue value) throws E;
-    }
-
-    TimestampedValue put(TableIndexKey key, TimestampedValue value);
-
-    TimestampedValue get(TableIndexKey key);
+    BinaryTimestampedValue get(TableIndexKey key);
 
     boolean containsKey(TableIndexKey key);
 
-    TimestampedValue remove(TableIndexKey key);
+    BinaryTimestampedValue remove(TableIndexKey key);
 
     <E extends Throwable> void entrySet(EntryStream<E> entryStream);
 

@@ -16,13 +16,13 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.TableIndex.EntryStream;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.jive.utils.http.client.HttpClient;
 import com.jivesoftware.os.jive.utils.http.client.HttpClientConfig;
@@ -48,7 +48,7 @@ public class HttpChangeSetSender implements ChangeSetSender {
         changes.entrySet(new EntryStream<Exception>() {
 
             @Override
-            public boolean stream(TableIndexKey key, TimestampedValue value) throws Exception {
+            public boolean stream(TableIndexKey key, BinaryTimestampedValue value) throws Exception {
                 rows.add(rowMarshaller.toRow(-1, key, value));
                 return true;
             }

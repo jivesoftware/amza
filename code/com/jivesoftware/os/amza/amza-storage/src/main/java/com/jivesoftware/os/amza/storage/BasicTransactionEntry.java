@@ -15,16 +15,16 @@
  */
 package com.jivesoftware.os.amza.storage;
 
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 
 public class BasicTransactionEntry implements TransactionEntry {
 
     private final long orderId;
     private final TableIndexKey key;
-    private final TimestampedValue value;
+    private final BinaryTimestampedValue value;
 
-    public BasicTransactionEntry(long orderId, TableIndexKey key, TimestampedValue value) {
+    public BasicTransactionEntry(long orderId, TableIndexKey key, BinaryTimestampedValue value) {
         this.orderId = orderId;
         this.key = key;
         this.value = value;
@@ -41,7 +41,7 @@ public class BasicTransactionEntry implements TransactionEntry {
     }
 
     @Override
-    public TimestampedValue getValue() {
+    public BinaryTimestampedValue getValue() {
         return value;
     }
 

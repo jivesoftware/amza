@@ -17,15 +17,16 @@ package com.jivesoftware.os.amza.service.storage.replication;
 
 import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.ChangeSetSender;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.HighWaterMarks;
 import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
@@ -150,7 +151,7 @@ public class TableReplicator {
         @Override
         public boolean stream(TransactionSet took) throws Exception {
             if (took != null) {
-                NavigableMap<TableIndexKey, TimestampedValue> changes = took.getChanges();
+                NavigableMap<TableIndexKey, BinaryTimestampedValue> changes = took.getChanges();
                 if (!changes.isEmpty()) {
                     tableStore.commit(new MemoryTableIndex(changes));
                     highWaterMarks.set(ringHost, tableName, took.getHighestTransactionId());
@@ -228,11 +229,11 @@ public class TableReplicator {
                 TableName mapName = updates.getKey();
                 TableStore store = updates.getValue();
                 // TODO this copy sucks
-                final MemoryTableIndex memoryTableIndex = new MemoryTableIndex(new TreeMap<TableIndexKey, TimestampedValue>());
-                store.getImmutableRows().entrySet(new TableIndex.EntryStream<Exception>() {
+                final MemoryTableIndex memoryTableIndex = new MemoryTableIndex(new TreeMap<TableIndexKey, BinaryTimestampedValue>());
+                store.getImmutableRows().entrySet(new EntryStream<Exception>() {
 
                     @Override
-                    public boolean stream(TableIndexKey key, TimestampedValue value) throws Exception {
+                    public boolean stream(TableIndexKey key, BinaryTimestampedValue value) throws Exception {
                         memoryTableIndex.put(key, value);
                         return true;
                     }

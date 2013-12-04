@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentNavigableMap;
 
 public interface KeyValueFilter {
 
-    ConcurrentNavigableMap<TableIndexKey, TimestampedValue> createCollector();
+    ConcurrentNavigableMap<TableIndexKey, BinaryTimestampedValue> createCollector();
 
     boolean filter(TableIndexKey key, byte[] value);
 

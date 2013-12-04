@@ -23,16 +23,16 @@ import com.jivesoftware.os.amza.service.storage.replication.HostRingBuilder;
 import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
 import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.Marshaller;
 import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.TableIndex.EntryStream;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
@@ -197,7 +197,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
             ringIndex.getImmutableRows().entrySet(new EntryStream<Exception>() {
 
                 @Override
-                public boolean stream(TableIndexKey key, TimestampedValue value) throws Exception {
+                public boolean stream(TableIndexKey key, BinaryTimestampedValue value) throws Exception {
                     if (!value.getTombstoned()) {
                         ringHosts.add(marshaller.deserialize(value.getValue(), RingHost.class));
                     }
@@ -222,7 +222,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         byte[] rawTableName = marshaller.serialize(tableName);
 
         TableStore tableNameIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        TimestampedValue timestamptedTableKey = tableNameIndex.getTimestampedValue(new TableIndexKey(rawTableName));
+        BinaryTimestampedValue timestamptedTableKey = tableNameIndex.getTimestampedValue(new TableIndexKey(rawTableName));
         if (timestamptedTableKey == null) {
             TableTransaction tx = tableNameIndex.startTransaction(orderIdProvider.nextId());
             tx.add(new TableIndexKey(rawTableName), rawTableName);
@@ -236,7 +236,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     public AmzaTable getTable(TableName tableName) throws Exception {
         byte[] rawTableName = marshaller.serialize(tableName);
         TableStore tableStoreIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        TimestampedValue timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new TableIndexKey(rawTableName));
+        BinaryTimestampedValue timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new TableIndexKey(rawTableName));
         while (timestampedKeyValueStoreName == null) {
             createTable(tableName);
             timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new TableIndexKey(rawTableName));
@@ -313,8 +313,8 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     public void printService() throws Exception {
         for (Map.Entry<TableName, TableStore> table : tableStoreProvider.getTableStores()) {
             TableStore sortedMapStore = table.getValue();
-            NavigableMap<?, TimestampedValue> immutableRows = (NavigableMap<?, TimestampedValue>) sortedMapStore.getImmutableRows();
-            for (Map.Entry<?, TimestampedValue> e : (Set<Map.Entry<?, TimestampedValue>>) immutableRows.entrySet()) {
+            NavigableMap<?, BinaryTimestampedValue> immutableRows = (NavigableMap<?, BinaryTimestampedValue>) sortedMapStore.getImmutableRows();
+            for (Map.Entry<?, BinaryTimestampedValue> e : (Set<Map.Entry<?, BinaryTimestampedValue>>) immutableRows.entrySet()) {
 
                 System.out.println(ringHost.getHost() + ":" + ringHost.getPort()
                         + ":" + table.getKey().getTableName() + " k:" + e.getKey() + " v:" + e.getValue().getValue()

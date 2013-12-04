@@ -17,13 +17,13 @@ package com.jivesoftware.os.amza.storage;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableIndexProvider;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableRowReader;
 import com.jivesoftware.os.amza.shared.TableRowWriter;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -64,14 +64,14 @@ public class RowTable<R> {
 
     synchronized public TableIndex load() throws Exception {
         final TableIndex tableIndex = tableIndexProvider.createTableIndex(tableName);
-        final Multimap<TableIndexKey, TimestampedValue> was = ArrayListMultimap.create();
+        final Multimap<TableIndexKey, BinaryTimestampedValue> was = ArrayListMultimap.create();
         rowReader.read(false, new TableRowReader.Stream<R>() {
             @Override
             public boolean stream(R row) throws Exception {
                 TransactionEntry transactionEntry = rowMarshaller.fromRow(row);
                 TableIndexKey key = transactionEntry.getKey();
-                TimestampedValue timestampedValue = transactionEntry.getValue();
-                TimestampedValue current = tableIndex.get(key);
+                BinaryTimestampedValue timestampedValue = transactionEntry.getValue();
+                BinaryTimestampedValue current = tableIndex.get(key);
                 if (current == null) {
                     tableIndex.put(key, timestampedValue);
                 } else if (current.getTimestamp() < timestampedValue.getTimestamp()) {
@@ -85,16 +85,16 @@ public class RowTable<R> {
         return tableIndex;
     }
 
-    public NavigableMap<TableIndexKey, TimestampedValue> save(Multimap<TableIndexKey, TimestampedValue> was,
-            NavigableMap<TableIndexKey, TimestampedValue> mutation, boolean append) throws Exception {
+    public NavigableMap<TableIndexKey, BinaryTimestampedValue> save(Multimap<TableIndexKey, BinaryTimestampedValue> was,
+            NavigableMap<TableIndexKey, BinaryTimestampedValue> mutation, boolean append) throws Exception {
         synchronized (rowWriter) {
             long transactionId = 0;
             if (orderIdProvider != null) {
                 transactionId = orderIdProvider.nextId();
             }
-            NavigableMap<TableIndexKey, TimestampedValue> saved = new TreeMap<>();
+            NavigableMap<TableIndexKey, BinaryTimestampedValue> saved = new TreeMap<>();
             List<R> rows = new ArrayList<>();
-            for (Map.Entry<TableIndexKey, TimestampedValue> e : mutation.entrySet()) {
+            for (Map.Entry<TableIndexKey, BinaryTimestampedValue> e : mutation.entrySet()) {
                 R toRow = rowMarshaller.toRow(transactionId, e.getKey(), e.getValue());
                 rows.add(toRow);
                 saved.put(e.getKey(), rowMarshaller.fromRow(toRow).getValue());
@@ -106,7 +106,7 @@ public class RowTable<R> {
 
     synchronized public void rowMutationSince(final long transactionId, TransactionSetStream transactionSetStream) throws Exception {
         final MutableLong higestOrderId = new MutableLong(transactionId);
-        final ConcurrentSkipListMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+        final ConcurrentSkipListMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
         rowReader.read(true, new TableRowReader.Stream<R>() {
             @Override
             public boolean stream(R row) throws Exception {
@@ -114,7 +114,7 @@ public class RowTable<R> {
                 if (transactionEntry.getOrderId() <= transactionId) {
                     return false;
                 }
-                TimestampedValue had = changes.putIfAbsent(transactionEntry.getKey(), transactionEntry.getValue());
+                BinaryTimestampedValue had = changes.putIfAbsent(transactionEntry.getKey(), transactionEntry.getValue());
                 if (had != null && had.getTimestamp() > transactionEntry.getValue().getTimestamp()) {
                     changes.put(transactionEntry.getKey(), had);
                 }

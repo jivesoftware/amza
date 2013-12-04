@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.storage;
 
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 
 public interface TransactionEntry {
 
@@ -24,5 +24,5 @@ public interface TransactionEntry {
 
     TableIndexKey getKey();
 
-    TimestampedValue getValue();
+    BinaryTimestampedValue getValue();
 }

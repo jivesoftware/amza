@@ -15,9 +15,8 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.storage.BasicTransactionEntry;
 import com.jivesoftware.os.amza.storage.FstMarshaller;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
@@ -36,7 +35,7 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
     }
 
     @Override
-    public byte[] toRow(long orderId, TableIndexKey k, TimestampedValue v) throws Exception {
+    public byte[] toRow(long orderId, TableIndexKey k, BinaryTimestampedValue v) throws Exception {
         return FST_MARSHALLER.serialize(new BinaryRow(orderId,
                 k.getKey(),
                 v.getTimestamp(),
@@ -49,7 +48,7 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
         BinaryRow binaryRow = FST_MARSHALLER.deserialize(row, BinaryRow.class);
         return new BasicTransactionEntry(binaryRow.transaction,
                 new TableIndexKey(binaryRow.key),
-                new BasicTimestampedValue(
+                new BinaryTimestampedValue(
                         binaryRow.value,
                         binaryRow.timestamp,
                         binaryRow.tombstone)

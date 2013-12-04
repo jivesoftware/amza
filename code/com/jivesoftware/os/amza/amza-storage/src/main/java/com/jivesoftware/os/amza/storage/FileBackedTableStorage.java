@@ -17,13 +17,13 @@ package com.jivesoftware.os.amza.storage;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.TableIndex.EntryStream;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStorage;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -55,7 +55,7 @@ public class FileBackedTableStorage<R> implements TableStorage {
 
     @Override
     synchronized public void clear() throws Exception {
-        ConcurrentNavigableMap<TableIndexKey, TimestampedValue> saveableMap = new ConcurrentSkipListMap<>();
+        ConcurrentNavigableMap<TableIndexKey, BinaryTimestampedValue> saveableMap = new ConcurrentSkipListMap<>();
 //        TableIndex<K, V> load = load();
 //        Multimap<K, TimestampedValue> all = ArrayListMultimap.create();
 //        for (Entry<K, TimestampedValue> entry : load.entrySet()) {
@@ -68,20 +68,20 @@ public class FileBackedTableStorage<R> implements TableStorage {
     synchronized public TableDelta update(TableIndex mutatedRows,
         final TableIndex allRows) throws Exception {
 
-        final NavigableMap<TableIndexKey, TimestampedValue> applyMap = new TreeMap<>();
-        final NavigableMap<TableIndexKey, TimestampedValue> removeMap = new TreeMap<>();
-        final Multimap<TableIndexKey, TimestampedValue> clobberedRows = ArrayListMultimap.create();
+        final NavigableMap<TableIndexKey, BinaryTimestampedValue> applyMap = new TreeMap<>();
+        final NavigableMap<TableIndexKey, BinaryTimestampedValue> removeMap = new TreeMap<>();
+        final Multimap<TableIndexKey, BinaryTimestampedValue> clobberedRows = ArrayListMultimap.create();
         mutatedRows.entrySet(new EntryStream<RuntimeException>() {
 
             @Override
-            public boolean stream(TableIndexKey key, TimestampedValue update) {
-                TimestampedValue current = allRows.get(key);
+            public boolean stream(TableIndexKey key, BinaryTimestampedValue update) {
+                BinaryTimestampedValue current = allRows.get(key);
                 if (current == null) {
                     applyMap.put(key, update);
                 } else {
                     if (update.getTombstoned() && update.getTimestamp() < 0) { // Handle tombstone updates
                         if (current.getTimestamp() <= Math.abs(update.getTimestamp())) {
-                            TimestampedValue removeable = allRows.get(key);
+                            BinaryTimestampedValue removeable = allRows.get(key);
                             if (removeable != null) {
                                 removeMap.put(key, removeable);
                                 clobberedRows.put(key, removeable);
@@ -96,7 +96,7 @@ public class FileBackedTableStorage<R> implements TableStorage {
             }
         });
         if (!applyMap.isEmpty()) {
-            NavigableMap<TableIndexKey, TimestampedValue> saved = rowTable.save(clobberedRows, applyMap, true);
+            NavigableMap<TableIndexKey, BinaryTimestampedValue> saved = rowTable.save(clobberedRows, applyMap, true);
             return new TableDelta(saved, removeMap, clobberedRows);
         } else {
             return new TableDelta(applyMap, removeMap, clobberedRows);

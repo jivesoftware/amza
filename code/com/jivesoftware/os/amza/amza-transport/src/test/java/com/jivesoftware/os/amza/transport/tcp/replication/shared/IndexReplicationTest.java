@@ -1,13 +1,12 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetSender;
@@ -93,10 +92,10 @@ public class IndexReplicationTest {
         TcpChangeSetSender sender = new TcpChangeSetSender(tcpClientProvider, applicationProtocol);
 
         TableName tableName = new TableName("test", "test", null, null);
-        NavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+        NavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
 
-        TimestampedValue val1 = new BasicTimestampedValue("blah".getBytes(), idProvider.nextId(), false);
-        TimestampedValue val2 = new BasicTimestampedValue("meh".getBytes(), idProvider.nextId(), false);
+        BinaryTimestampedValue val1 = new BinaryTimestampedValue("blah".getBytes(), idProvider.nextId(), false);
+        BinaryTimestampedValue val2 = new BinaryTimestampedValue("meh".getBytes(), idProvider.nextId(), false);
 
         changes.put(new TableIndexKey("1".getBytes()), val1);
         changes.put(new TableIndexKey("2".getBytes()), val2);
@@ -105,7 +104,7 @@ public class IndexReplicationTest {
 
         TableDelta received = receivedPut.get();
         Assert.assertNotNull(received);
-        NavigableMap<TableIndexKey, TimestampedValue> receivedApply = received.getApply();
+        NavigableMap<TableIndexKey, BinaryTimestampedValue> receivedApply = received.getApply();
         Assert.assertNotNull(receivedApply);
         Assert.assertEquals(receivedApply.size(), changes.size());
 
@@ -118,10 +117,10 @@ public class IndexReplicationTest {
         TcpChangeSetTaker taker = new TcpChangeSetTaker(tcpClientProvider, applicationProtocol);
 
         TableName tableName = new TableName("test", "test", null, null);
-        NavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+        NavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
 
-        TimestampedValue val1 = new BasicTimestampedValue("blah".getBytes(), idProvider.nextId(), false);
-        TimestampedValue val2 = new BasicTimestampedValue("meh".getBytes(), idProvider.nextId(), false);
+        BinaryTimestampedValue val1 = new BinaryTimestampedValue("blah".getBytes(), idProvider.nextId(), false);
+        BinaryTimestampedValue val2 = new BinaryTimestampedValue("meh".getBytes(), idProvider.nextId(), false);
 
         changes.put(new TableIndexKey("1".getBytes()), val1);
         changes.put(new TableIndexKey("2".getBytes()), val2);
@@ -142,7 +141,7 @@ public class IndexReplicationTest {
 
         TransactionSet got = received.get();
         Assert.assertNotNull(got);
-        NavigableMap<TableIndexKey, TimestampedValue> gotMap = got.getChanges();
+        NavigableMap<TableIndexKey, BinaryTimestampedValue> gotMap = got.getChanges();
         Assert.assertNotNull(gotMap);
         Assert.assertEquals(gotMap.size(), changes.size());
 

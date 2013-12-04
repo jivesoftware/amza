@@ -16,11 +16,11 @@
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.storage.TransactionEntry;
@@ -125,7 +125,7 @@ public class AmzaReplicationRestEndpoints {
     private TableDelta changeSetToPartionDelta(ChangeSet changeSet) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-        final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+        final ConcurrentNavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
         for (byte[] row : changeSet.getChanges()) {
             TransactionEntry te = rowMarshaller.fromRow(row);
             changes.put(te.getKey(), te.getValue());
@@ -146,8 +146,8 @@ public class AmzaReplicationRestEndpoints {
 
                 @Override
                 public boolean stream(TransactionSet took) throws Exception {
-                    NavigableMap<TableIndexKey, TimestampedValue> changes = took.getChanges();
-                    for (Map.Entry<TableIndexKey, TimestampedValue> e : changes.entrySet()) {
+                    NavigableMap<TableIndexKey, BinaryTimestampedValue> changes = took.getChanges();
+                    for (Map.Entry<TableIndexKey, BinaryTimestampedValue> e : changes.entrySet()) {
                         rows.add(rowMarshaller.toRow(0, e.getKey(), e.getValue()));
                     }
                     if (took.getHighestTransactionId() > highestTransactionId.longValue()) {

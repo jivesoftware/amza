@@ -16,10 +16,11 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.ApplicationProtocol;
@@ -94,12 +95,12 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     }
 
     private TableDelta changeSetToPartionDelta(SendChangeSetPayload changeSet) throws Exception {
-        final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+        final ConcurrentNavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
         TableIndex tableIndex = changeSet.getChanges();
-        tableIndex.entrySet(new TableIndex.EntryStream<RuntimeException>() {
+        tableIndex.entrySet(new EntryStream<RuntimeException>() {
 
             @Override
-            public boolean stream(TableIndexKey key, TimestampedValue value) {
+            public boolean stream(TableIndexKey key, BinaryTimestampedValue value) {
                 changes.put(key, value);
                 return true;
             }
@@ -115,7 +116,7 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
 
             ChangeSetRequestPayload changeSet = request.getPayload();
 
-            final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+            final ConcurrentNavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
 
             final MutableLong highestTransactionId = new MutableLong();
 

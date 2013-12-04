@@ -17,18 +17,17 @@ package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableTransaction;
-import com.jivesoftware.os.amza.shared.KeyValueFilter;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentNavigableMap;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
 
@@ -112,8 +111,9 @@ public class AmzaTable {
         valuesStream.stream(null); //EOS
     }
 
-    public ConcurrentNavigableMap<TableIndexKey, TimestampedValue> filter(KeyValueFilter filter) throws Exception {
-        return tableStore.filter(filter);
+    // TODO add concept of a key start stop and filtering
+    public <E extends Throwable> void scan(EntryStream<E> stream) throws E {
+        tableStore.scan(stream);
     }
 
     public static interface ValueStream<VV> {
@@ -141,11 +141,11 @@ public class AmzaTable {
         tx.commit();
     }
 
-    public void listEntries(final ValueStream<Entry<TableIndexKey, TimestampedValue>> stream) throws Exception {
-        tableStore.getImmutableRows().entrySet(new TableIndex.EntryStream<RuntimeException>() {
+    public void listEntries(final ValueStream<Entry<TableIndexKey, BinaryTimestampedValue>> stream) throws Exception {
+        tableStore.getImmutableRows().entrySet(new EntryStream<RuntimeException>() {
 
             @Override
-            public boolean stream(final TableIndexKey key, final TimestampedValue value) {
+            public boolean stream(final TableIndexKey key, final BinaryTimestampedValue value) {
                 Entry e = new Entry() {
 
                     @Override
@@ -154,7 +154,7 @@ public class AmzaTable {
                     }
 
                     @Override
-                    public TimestampedValue getValue() {
+                    public BinaryTimestampedValue getValue() {
                         return value;
                     }
 
@@ -178,14 +178,14 @@ public class AmzaTable {
         TableIndex immutableRows = amzaTable.tableStore.getImmutableRows();
         final MutableInt compared = new MutableInt(0);
         final MutableBoolean passed = new MutableBoolean(true);
-        immutableRows.entrySet(new TableIndex.EntryStream<RuntimeException>() {
+        immutableRows.entrySet(new EntryStream<RuntimeException>() {
 
             @Override
-            public boolean stream(TableIndexKey key, TimestampedValue value) {
+            public boolean stream(TableIndexKey key, BinaryTimestampedValue value) {
                 try {
                     compared.increment();
 
-                    TimestampedValue timestampedValue = tableStore.getTimestampedValue(key);
+                    BinaryTimestampedValue timestampedValue = tableStore.getTimestampedValue(key);
                     String comparing = tableName.getRingName() + ":" + tableName.getTableName()
                             + " to " + amzaTable.tableName.getRingName() + ":" + amzaTable.tableName.getTableName();
 

@@ -15,9 +15,10 @@
  */
 package com.jivesoftware.os.amza.storage.index;
 
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import java.util.Map.Entry;
 import org.mapdb.BTreeMap;
 import org.mapdb.DB;
@@ -26,7 +27,7 @@ import org.mapdb.DBMaker;
 public class MapDBTableIndex implements TableIndex {
 
     private final DB db;
-    private final BTreeMap<TableIndexKey, TimestampedValue> treeMap;
+    private final BTreeMap<TableIndexKey, BinaryTimestampedValue> treeMap;
 
     public MapDBTableIndex(String mapName) {
         db = DBMaker.newDirectMemoryDB()
@@ -42,7 +43,7 @@ public class MapDBTableIndex implements TableIndex {
 
     @Override
     public <E extends Throwable> void entrySet(EntryStream<E> entryStream) {
-        for (Entry<TableIndexKey, TimestampedValue> e : treeMap.entrySet()) {
+        for (Entry<TableIndexKey, BinaryTimestampedValue> e : treeMap.entrySet()) {
             try {
                 if (!entryStream.stream(e.getKey(), e.getValue())) {
                     break;
@@ -64,18 +65,18 @@ public class MapDBTableIndex implements TableIndex {
     }
 
     @Override
-    public TimestampedValue get(TableIndexKey key) {
+    public BinaryTimestampedValue get(TableIndexKey key) {
         return treeMap.get(key);
     }
 
     @Override
-    public TimestampedValue put(TableIndexKey key,
-            TimestampedValue value) {
+    public BinaryTimestampedValue put(TableIndexKey key,
+            BinaryTimestampedValue value) {
         return treeMap.put(key, value);
     }
 
     @Override
-    public TimestampedValue remove(TableIndexKey key) {
+    public BinaryTimestampedValue remove(TableIndexKey key) {
         return treeMap.remove(key);
     }
 

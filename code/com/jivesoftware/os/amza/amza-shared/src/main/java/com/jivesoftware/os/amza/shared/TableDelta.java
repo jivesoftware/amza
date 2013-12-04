@@ -20,27 +20,27 @@ import java.util.NavigableMap;
 
 public class TableDelta {
 
-    private final NavigableMap<TableIndexKey, TimestampedValue> applyMap;
-    private final NavigableMap<TableIndexKey, TimestampedValue> removeMap;
-    private final Multimap<TableIndexKey, TimestampedValue> clobberedMap;
+    private final NavigableMap<TableIndexKey, BinaryTimestampedValue> applyMap;
+    private final NavigableMap<TableIndexKey, BinaryTimestampedValue> removeMap;
+    private final Multimap<TableIndexKey, BinaryTimestampedValue> clobberedMap;
 
-    public TableDelta(NavigableMap<TableIndexKey, TimestampedValue> applyMap,
-            NavigableMap<TableIndexKey, TimestampedValue> removeMap,
-            Multimap<TableIndexKey, TimestampedValue> clobberedMap) {
+    public TableDelta(NavigableMap<TableIndexKey, BinaryTimestampedValue> applyMap,
+            NavigableMap<TableIndexKey, BinaryTimestampedValue> removeMap,
+            Multimap<TableIndexKey, BinaryTimestampedValue> clobberedMap) {
         this.applyMap = applyMap;
         this.removeMap = removeMap;
         this.clobberedMap = clobberedMap;
     }
 
-    public NavigableMap<TableIndexKey, TimestampedValue> getApply() {
+    public NavigableMap<TableIndexKey, BinaryTimestampedValue> getApply() {
         return applyMap;
     }
 
-    public NavigableMap<TableIndexKey, TimestampedValue> getRemove() {
+    public NavigableMap<TableIndexKey, BinaryTimestampedValue> getRemove() {
         return removeMap;
     }
 
-    public Multimap<TableIndexKey, TimestampedValue> getClobbered() {
+    public Multimap<TableIndexKey, BinaryTimestampedValue> getClobbered() {
         return clobberedMap;
     }
 }

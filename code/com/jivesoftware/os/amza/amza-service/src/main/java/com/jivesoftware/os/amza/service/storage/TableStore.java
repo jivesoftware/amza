@@ -15,13 +15,11 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
-import com.jivesoftware.os.amza.shared.KeyValueFilter;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
-import java.util.concurrent.ConcurrentNavigableMap;
 
 public class TableStore {
 
@@ -35,29 +33,15 @@ public class TableStore {
         readWriteMaps.compactTombestone(ifOlderThanNMillis);
     }
 
-    public ConcurrentNavigableMap<TableIndexKey, TimestampedValue> filter(final KeyValueFilter filter) throws Exception {
-        final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> results = filter.createCollector();
-        readWriteMaps.getImmutableCopy().entrySet(new TableIndex.EntryStream<RuntimeException>() {
-
-            @Override
-            public boolean stream(TableIndexKey key, TimestampedValue value) {
-                if (!value.getTombstoned()) {
-                    byte[] v = value.getValue();
-                    if (filter.filter(key, v)) {
-                        results.put(key, new BasicTimestampedValue(v, value.getTimestamp(), value.getTombstoned()));
-                    }
-                }
-                return true;
-            }
-        });
-        return results;
+    public <E extends Throwable> void scan(EntryStream<E> stream) throws E {
+        readWriteMaps.getImmutableCopy().entrySet(stream);
     }
 
     public byte[] getValue(TableIndexKey k) throws Exception {
         return readWriteMaps.get(k);
     }
 
-    public TimestampedValue getTimestampedValue(TableIndexKey k) throws Exception {
+    public BinaryTimestampedValue getTimestampedValue(TableIndexKey k) throws Exception {
         return readWriteMaps.getTimestampedValue(k);
     }
 

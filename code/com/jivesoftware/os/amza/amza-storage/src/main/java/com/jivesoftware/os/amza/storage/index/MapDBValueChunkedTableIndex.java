@@ -15,11 +15,11 @@
  */
 package com.jivesoftware.os.amza.storage.index;
 
-import com.jivesoftware.os.amza.shared.BasicTimestampedValue;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.storage.FstMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRow;
 import com.jivesoftware.os.amza.storage.binary.FSTBinaryRowMarshaller;
@@ -43,7 +43,7 @@ public class MapDBValueChunkedTableIndex implements TableIndex {
     }
 
     private final DB db;
-    private final BTreeMap<TableIndexKey, TimestampedValue> treeMap;
+    private final BTreeMap<TableIndexKey, BinaryTimestampedValue> treeMap;
     private final ChunkFiler chunkFiler;
     private final TableName tableName;
 
@@ -63,10 +63,9 @@ public class MapDBValueChunkedTableIndex implements TableIndex {
 
     @Override
     public <E extends Throwable> void entrySet(EntryStream<E> entryStream) {
-        for (Entry<TableIndexKey, TimestampedValue> e : treeMap.entrySet()) {
-            LazyLoadingTimestampValue lazyLoadingTimestampValue = new LazyLoadingTimestampValue(e.getValue().getTimestamp(),
-                    e.getValue().getTombstoned(),
-                    UIO.bytesLong(e.getValue().getValue()));
+        for (Entry<TableIndexKey, BinaryTimestampedValue> e : treeMap.entrySet()) {
+            LazyLoadingTimestampValue lazyLoadingTimestampValue = new LazyLoadingTimestampValue(e.getValue().getValue(), e.getValue().getTimestamp(),
+                    e.getValue().getTombstoned());
             try {
                 if (!entryStream.stream(e.getKey(), lazyLoadingTimestampValue)) {
                     break;
@@ -88,17 +87,17 @@ public class MapDBValueChunkedTableIndex implements TableIndex {
     }
 
     @Override
-    public TimestampedValue get(TableIndexKey key) {
-        TimestampedValue got = treeMap.get(key);
+    public BinaryTimestampedValue get(TableIndexKey key) {
+        BinaryTimestampedValue got = treeMap.get(key);
         if (got == null) {
             return null;
         }
-        return new LazyLoadingTimestampValue(got.getTimestamp(), got.getTombstoned(), UIO.bytesLong(got.getValue()));
+        return new LazyLoadingTimestampValue(got.getValue(), got.getTimestamp(), got.getTombstoned());
     }
 
     @Override
-    public TimestampedValue put(TableIndexKey key,
-            TimestampedValue value) {
+    public BinaryTimestampedValue put(TableIndexKey key,
+            BinaryTimestampedValue value) {
         byte[] valueAsBytes;
         try {
             valueAsBytes = FST_MARSHALLER.serialize(value.getValue());
@@ -115,22 +114,22 @@ public class MapDBValueChunkedTableIndex implements TableIndex {
             throw new RuntimeException("Failed to save value to chuck filer. " + value.getValue().getClass(), x);
         }
 
-        BasicTimestampedValue basicTimestampedValue = new BasicTimestampedValue(UIO.longBytes(chunkId), value.getTimestamp(), value.getTombstoned());
-        TimestampedValue had = treeMap.put(key, basicTimestampedValue);
+        BinaryTimestampedValue basicTimestampedValue = new BinaryTimestampedValue(UIO.longBytes(chunkId), value.getTimestamp(), value.getTombstoned());
+        BinaryTimestampedValue had = treeMap.put(key, basicTimestampedValue);
         if (had == null) {
             return null;
         }
-        return new LazyLoadingTimestampValue(had.getTimestamp(), had.getTombstoned(), UIO.bytesLong(had.getValue()));
+        return new LazyLoadingTimestampValue(had.getValue(), had.getTimestamp(), had.getTombstoned());
     }
 
     @Override
-    public TimestampedValue remove(TableIndexKey key) {
-        TimestampedValue removed = treeMap.remove(key);
+    public BinaryTimestampedValue remove(TableIndexKey key) {
+        BinaryTimestampedValue removed = treeMap.remove(key);
         if (removed == null) {
             return null;
         }
         // TODO should we load the value and delete it from the chunk filer?
-        return new LazyLoadingTimestampValue(removed.getTimestamp(), removed.getTombstoned(), UIO.bytesLong(removed.getValue()));
+        return new LazyLoadingTimestampValue(removed.getValue(), removed.getTimestamp(), removed.getTombstoned());
     }
 
     @Override
@@ -139,35 +138,21 @@ public class MapDBValueChunkedTableIndex implements TableIndex {
         treeMap.clear();
     }
 
-    public class LazyLoadingTimestampValue implements TimestampedValue {
+    public class LazyLoadingTimestampValue extends BinaryTimestampedValue {
 
-        private final long timestamp;
-        private final boolean tombstone;
-        private final long chunkId;
-
-        public LazyLoadingTimestampValue(long timestamp, boolean tombstone, long chunkId) {
-            this.timestamp = timestamp;
-            this.tombstone = tombstone;
-            this.chunkId = chunkId;
-        }
-
-        @Override
-        public long getTimestamp() {
-            return timestamp;
-        }
-
-        @Override
-        public boolean getTombstoned() {
-            return tombstone;
+        public LazyLoadingTimestampValue(byte[] value,
+                long timestamp,
+                boolean tombstoned) {
+            super(value, 0, tombstoned);
         }
 
         @Override
         public byte[] getValue() {
             try {
-                SubFiler filer = chunkFiler.getFiler(chunkId);
+                SubFiler filer = chunkFiler.getFiler(UIO.bytesLong(super.getValue()));
                 return filer.toBytes();
             } catch (Exception x) {
-                throw new RuntimeException("Unable to read value from chunkFiler for chunkId:" + chunkId, x);
+                throw new RuntimeException("Unable to read value from chunkFiler for chunkId:" + UIO.bytesLong(super.getValue()), x);
             }
         }
     }

@@ -24,12 +24,12 @@ public class ImmutableTableIndex implements TableIndex {
     }
 
     @Override
-    public TimestampedValue put(TableIndexKey key, TimestampedValue value) {
+    public BinaryTimestampedValue put(TableIndexKey key, BinaryTimestampedValue value) {
         throw new UnsupportedOperationException("Cannot put into an immutable table index.");
     }
 
     @Override
-    public TimestampedValue get(TableIndexKey key) {
+    public BinaryTimestampedValue get(TableIndexKey key) {
         return tableIndex.get(key);
     }
 
@@ -39,7 +39,7 @@ public class ImmutableTableIndex implements TableIndex {
     }
 
     @Override
-    public TimestampedValue remove(TableIndexKey key) {
+    public BinaryTimestampedValue remove(TableIndexKey key) {
         throw new UnsupportedOperationException("Cannot remove from an immutable table index.");
     }
 

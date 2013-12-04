@@ -16,11 +16,11 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.storage.TransactionEntry;
@@ -52,7 +52,7 @@ public class HttpChangeSetTaker implements ChangeSetTaker {
             return;
         }
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-        final ConcurrentNavigableMap<TableIndexKey, TimestampedValue> changes = new ConcurrentSkipListMap<>();
+        final ConcurrentNavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
         for (byte[] row : took.getChanges()) {
             TransactionEntry te = rowMarshaller.fromRow(row);
             changes.put(te.getKey(), te.getValue());

@@ -21,19 +21,19 @@ import java.util.NavigableMap;
 
 public class MemoryTableIndex implements TableIndex, Serializable {
 
-    private final NavigableMap<TableIndexKey, TimestampedValue> index;
+    private final NavigableMap<TableIndexKey, BinaryTimestampedValue> index;
 
-    public MemoryTableIndex(NavigableMap<TableIndexKey, TimestampedValue> index) {
+    public MemoryTableIndex(NavigableMap<TableIndexKey, BinaryTimestampedValue> index) {
         this.index = index;
     }
 
     @Override
-    public TimestampedValue put(TableIndexKey key, TimestampedValue value) {
+    public BinaryTimestampedValue put(TableIndexKey key, BinaryTimestampedValue value) {
         return index.put(key, value);
     }
 
     @Override
-    public TimestampedValue get(TableIndexKey key) {
+    public BinaryTimestampedValue get(TableIndexKey key) {
         return index.get(key);
     }
 
@@ -43,13 +43,13 @@ public class MemoryTableIndex implements TableIndex, Serializable {
     }
 
     @Override
-    public TimestampedValue remove(TableIndexKey key) {
+    public BinaryTimestampedValue remove(TableIndexKey key) {
         return index.remove(key);
     }
 
     @Override
     public <E extends Throwable> void entrySet(EntryStream<E> entryStream) {
-        for (Entry<TableIndexKey, TimestampedValue> e : index.entrySet()) {
+        for (Entry<TableIndexKey, BinaryTimestampedValue> e : index.entrySet()) {
             try {
                 if (!entryStream.stream(e.getKey(), e.getValue())) {
                     break;

@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
 import com.jivesoftware.os.amza.shared.ImmutableTableIndex;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
@@ -22,7 +23,6 @@ import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
 import com.jivesoftware.os.amza.shared.TableStorage;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -73,7 +73,7 @@ public class ReadWriteTableStore {
     }
 
     public byte[] get(TableIndexKey key) throws Exception {
-        TimestampedValue got;
+        BinaryTimestampedValue got;
         try {
             readWriteLock.readLock().lock();
             got = readMap.get().get(key);
@@ -89,7 +89,7 @@ public class ReadWriteTableStore {
         return got.getValue();
     }
 
-    public TimestampedValue getTimestampedValue(TableIndexKey key) throws Exception {
+    public BinaryTimestampedValue getTimestampedValue(TableIndexKey key) throws Exception {
         try {
             readWriteLock.readLock().lock();
             return readMap.get().get(key);
@@ -107,7 +107,7 @@ public class ReadWriteTableStore {
         }
     }
 
-    public TableIndex getImmutableCopy() throws Exception {
+    public TableIndex getImmutableCopy() {
         return new ImmutableTableIndex(readMap.get());
     }
 
@@ -124,22 +124,22 @@ public class ReadWriteTableStore {
         TableDelta updateMap = tableStorage.update(changes, currentReadMap);
         try {
             readWriteLock.writeLock().lock();
-            NavigableMap<TableIndexKey, TimestampedValue> apply = updateMap.getApply();
-            for (Map.Entry<TableIndexKey, TimestampedValue> entry : apply.entrySet()) {
+            NavigableMap<TableIndexKey, BinaryTimestampedValue> apply = updateMap.getApply();
+            for (Map.Entry<TableIndexKey, BinaryTimestampedValue> entry : apply.entrySet()) {
                 TableIndexKey k = entry.getKey();
-                TimestampedValue timestampedValue = entry.getValue();
-                TimestampedValue got = currentReadMap.get(k);
+                BinaryTimestampedValue timestampedValue = entry.getValue();
+                BinaryTimestampedValue got = currentReadMap.get(k);
                 if (got == null) {
                     currentReadMap.put(k, timestampedValue);
                 } else if (got.getTimestamp() < timestampedValue.getTimestamp()) {
                     currentReadMap.put(k, timestampedValue);
                 }
             }
-            NavigableMap<TableIndexKey, TimestampedValue> remove = updateMap.getRemove();
-            for (Map.Entry<TableIndexKey, TimestampedValue> entry : remove.entrySet()) {
+            NavigableMap<TableIndexKey, BinaryTimestampedValue> remove = updateMap.getRemove();
+            for (Map.Entry<TableIndexKey, BinaryTimestampedValue> entry : remove.entrySet()) {
                 TableIndexKey k = entry.getKey();
-                TimestampedValue timestampedValue = entry.getValue();
-                TimestampedValue got = currentReadMap.get(k);
+                BinaryTimestampedValue timestampedValue = entry.getValue();
+                BinaryTimestampedValue got = currentReadMap.get(k);
                 if (got != null && got.getTimestamp() < timestampedValue.getTimestamp()) {
                     currentReadMap.remove(k);
                 }

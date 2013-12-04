@@ -21,21 +21,25 @@ import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TransactionSet;
 import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.ApplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.Response;
+import com.jivesoftware.os.amza.transport.tcp.replication.shared.ResponseWriter;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  *
@@ -51,6 +55,7 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     private final Map<Integer, Class<? extends Serializable>> payloadRegistry;
     private final AmzaInstance amzaInstance;
     private final OrderIdProvider idProvider;
+    private final NavigableMap<TableIndexKey, BinaryTimestampedValue> empty = new TreeMap<>();
 
     public IndexReplicationProtocol(AmzaInstance amzaInstance, OrderIdProvider idProvider) {
         this.amzaInstance = amzaInstance;
@@ -65,7 +70,7 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     }
 
     @Override
-    public Message handleRequest(Message request) {
+    public Response handleRequest(Message request) {
         switch (request.getOpCode()) {
             case OPCODE_PUSH_CHANGESET:
                 return handleChangeSetPush(request);
@@ -76,21 +81,22 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
         }
     }
 
-    private Message handleChangeSetPush(Message request) {
+    private Response handleChangeSetPush(Message request) {
         LOG.trace("Received change set push {}", request);
 
         try {
             SendChangeSetPayload payload = request.getPayload();
             amzaInstance.changes(payload.getMapName(), changeSetToPartionDelta(payload));
 
-            Message response = new Message(request.getInteractionId(), OPCODE_OK, true);
+            final Message response = new Message(request.getInteractionId(), OPCODE_OK, true);
             LOG.trace("Returning from change set push {}", response);
-            return response;
+
+            return messageResponse(response);
 
         } catch (Exception x) {
             LOG.warn("Failed to apply changeset: " + request, x);
             ExceptionPayload exceptionPayload = new ExceptionPayload(x.toString());
-            return new Message(request.getInteractionId(), OPCODE_ERROR, true, exceptionPayload);
+            return messageResponse(new Message(request.getInteractionId(), OPCODE_ERROR, true, exceptionPayload));
         }
     }
 
@@ -98,7 +104,6 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
         final ConcurrentNavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
         TableIndex tableIndex = changeSet.getChanges();
         tableIndex.entrySet(new EntryStream<RuntimeException>() {
-
             @Override
             public boolean stream(TableIndexKey key, BinaryTimestampedValue value) {
                 changes.put(key, value);
@@ -108,46 +113,49 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
         return new TableDelta(changes, new TreeMap(), null);
     }
 
-    //TODO figure out how to stream this out in stages vi calls to consumeSequence.
-    private Message handleChangeSetRequest(Message request) {
+    private Response handleChangeSetRequest(Message request) {
+
         LOG.trace("Received change set request {}", request);
 
+        ChangeSetRequestPayload changeSet = request.getPayload();
+
+        return streamChangeSetResponse(request.getInteractionId(), changeSet.getMapName(), changeSet.getHighestTransactionId());
+    }
+
+    private void streamChangeSet(final ResponseWriter responseWriter, final long interactionId,
+            final TableName mapName, final long highestTransactionId) throws IOException {
         try {
 
-            ChangeSetRequestPayload changeSet = request.getPayload();
-
-            final ConcurrentNavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
-
-            final MutableLong highestTransactionId = new MutableLong();
-
-            amzaInstance.takeTableChanges(changeSet.getMapName(), changeSet.getHighestTransactionId(), new TransactionSetStream() {
+            amzaInstance.takeTableChanges(mapName, highestTransactionId, new TransactionSetStream() {
                 @Override
                 public boolean stream(TransactionSet took) throws Exception {
-                    changes.putAll(took.getChanges());
+                    ChangeSetResponsePayload response = new ChangeSetResponsePayload(took);
+                    Message responseMsg = new Message(interactionId, OPCODE_RESPOND_CHANGESET, false, response);
+                    LOG.trace("Writing response from change set request {}", responseMsg);
+                    responseWriter.writeMessage(responseMsg);
 
-                    if (took.getHighestTransactionId() > highestTransactionId.longValue()) {
-                        highestTransactionId.setValue(took.getHighestTransactionId());
-                    }
+
                     return true;
                 }
             });
 
-            ChangeSetResponsePayload response = new ChangeSetResponsePayload(new TransactionSet(highestTransactionId.longValue(), changes));
+            ChangeSetResponsePayload response = new ChangeSetResponsePayload(new TransactionSet(-1, empty));
+            Message responseMsg = new Message(interactionId, OPCODE_RESPOND_CHANGESET, true, response);
+            LOG.trace("Writing final response from change set request {}", responseMsg);
+            responseWriter.writeMessage(responseMsg);
 
-            Message responseMsg = new Message(request.getInteractionId(), OPCODE_RESPOND_CHANGESET, true, response);
-            LOG.trace("Returning from change set request {}", responseMsg);
-            return responseMsg;
+
 
         } catch (Exception x) {
-            LOG.warn("Failed to apply changeset: " + request, x);
+            LOG.warn("Failed to apply changeset: " + mapName, x);
             ExceptionPayload exceptionPayload = new ExceptionPayload(x.toString());
-            return new Message(request.getInteractionId(), OPCODE_ERROR, true, exceptionPayload);
+            responseWriter.writeMessage(new Message(interactionId, OPCODE_ERROR, true, exceptionPayload));
         }
     }
 
     @Override
     public Message consumeSequence(long interactionId) {
-        throw new UnsupportedOperationException("Sequences not supported yet - currently sending whole changesets");
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -158,5 +166,53 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     @Override
     public long nextInteractionId() {
         return idProvider.nextId();
+    }
+
+    private Response messageResponse(final Message message) {
+        return new Response() {
+            @Override
+            public Message getMessage() {
+                return message;
+            }
+
+            @Override
+            public boolean isBlocking() {
+                return false;
+            }
+
+            @Override
+            public boolean hasMessage() {
+                return true;
+            }
+
+            @Override
+            public void writeTo(ResponseWriter responseWriter) {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    private Response streamChangeSetResponse(final long interactionId, final TableName mapName, final long highestTransactionId) {
+        return new Response() {
+            @Override
+            public Message getMessage() {
+                return null;
+            }
+
+            @Override
+            public boolean isBlocking() {
+                return true;
+            }
+
+            @Override
+            public boolean hasMessage() {
+                return false;
+            }
+
+            @Override
+            public void writeTo(ResponseWriter responseWriter) throws IOException {
+                streamChangeSet(responseWriter, interactionId, mapName, highestTransactionId);
+            }
+        };
     }
 }

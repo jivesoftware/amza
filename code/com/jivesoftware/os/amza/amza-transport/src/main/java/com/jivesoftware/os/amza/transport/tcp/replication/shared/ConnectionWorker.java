@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -147,15 +148,12 @@ public class ConnectionWorker extends Thread {
                     key.attach(null);
 
                     if (request.isLastInSequence()) {
-                        Message response = applicationProtocol.handleRequest(request);
+                        Response response = applicationProtocol.handleRequest(request);
                         if (response != null) {
-                            InProcessServerResponse inProcessResponse = new InProcessServerResponse(messageFramer, bufferProvider, response);
-                            try {
-                                key.attach(inProcessResponse);
-                                key.interestOps(SelectionKey.OP_WRITE);
-                            } catch (Exception ex) {
-                                inProcessResponse.releaseResources();
-                                throw ex;
+                            if (response.isBlocking()) {
+                                handleBlockingResponse(response, key, socketChannel);
+                            } else if (response.hasMessage()) {
+                                handleNonBlockingResponse(response, key);
                             }
                         }
                     } else {
@@ -177,6 +175,50 @@ public class ConnectionWorker extends Thread {
                 logWarningFromChannel(socketChannel, "Error reading connection from {}");
             }
             throw ioe;
+        }
+    }
+
+    private void handleBlockingResponse(Response response, SelectionKey key, SocketChannel socketChannel) throws IOException {
+        try {
+            key.cancel();
+            socketChannel.configureBlocking(true);
+            response.writeTo(writerOverChannel(socketChannel));
+        } finally {
+            try {
+                socketChannel.configureBlocking(false);
+                key.selector().selectNow();
+                socketChannel.register(selector, SelectionKey.OP_READ);
+            } catch (IOException ioe) {
+                LOG.error("Failed to set channel back to non-blocking mode", ioe);
+                throw ioe;
+            }
+        }
+    }
+
+    private ResponseWriter writerOverChannel(final SocketChannel channel) {
+        return new ResponseWriter() {
+            @Override
+            public void writeMessage(Message message) throws IOException {
+                ByteBuffer writeBuffer = bufferProvider.acquire();
+                try {
+                    messageFramer.writeFrame(message, writeBuffer);
+                    channel.write(writeBuffer);
+                } finally {
+                    bufferProvider.release(writeBuffer);
+                }
+            }
+        };
+    }
+
+    private void handleNonBlockingResponse(Response response, SelectionKey key) throws IOException {
+        Message message = response.getMessage();
+        InProcessServerResponse inProcessResponse = new InProcessServerResponse(messageFramer, bufferProvider, message);
+        try {
+            key.attach(inProcessResponse);
+            key.interestOps(SelectionKey.OP_WRITE);
+        } catch (Exception ex) {
+            inProcessResponse.releaseResources();
+            throw ex;
         }
     }
 

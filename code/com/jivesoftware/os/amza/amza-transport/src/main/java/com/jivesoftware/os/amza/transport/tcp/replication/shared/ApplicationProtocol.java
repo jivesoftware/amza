@@ -22,7 +22,7 @@ import java.io.Serializable;
  */
 public interface ApplicationProtocol {
 
-    Message handleRequest(Message request);
+    Response handleRequest(Message request);
 
     Message consumeSequence(long interactionId);
 

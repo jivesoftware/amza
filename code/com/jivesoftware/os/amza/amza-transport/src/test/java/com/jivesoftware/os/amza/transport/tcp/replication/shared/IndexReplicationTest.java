@@ -134,7 +134,7 @@ public class IndexReplicationTest {
         taker.take(localHost, tableName, transactionId, new TransactionSetStream() {
             @Override
             public boolean stream(TransactionSet transactionSet) throws Exception {
-                received.set(transactionSet);
+                received.compareAndSet(null, transactionSet);
                 return true;
             }
         });

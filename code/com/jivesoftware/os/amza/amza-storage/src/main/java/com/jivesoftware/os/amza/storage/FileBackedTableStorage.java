@@ -18,9 +18,9 @@ package com.jivesoftware.os.amza.storage;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStorage;
@@ -66,13 +66,12 @@ public class FileBackedTableStorage<R> implements TableStorage {
 
     @Override
     synchronized public TableDelta update(TableIndex mutatedRows,
-        final TableIndex allRows) throws Exception {
+            final TableIndex allRows) throws Exception {
 
         final NavigableMap<TableIndexKey, BinaryTimestampedValue> applyMap = new TreeMap<>();
         final NavigableMap<TableIndexKey, BinaryTimestampedValue> removeMap = new TreeMap<>();
         final Multimap<TableIndexKey, BinaryTimestampedValue> clobberedRows = ArrayListMultimap.create();
         mutatedRows.entrySet(new EntryStream<RuntimeException>() {
-
             @Override
             public boolean stream(TableIndexKey key, BinaryTimestampedValue update) {
                 BinaryTimestampedValue current = allRows.get(key);

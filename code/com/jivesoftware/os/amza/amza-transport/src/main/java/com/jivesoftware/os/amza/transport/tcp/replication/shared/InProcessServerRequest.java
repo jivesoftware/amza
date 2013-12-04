@@ -46,9 +46,6 @@ public class InProcessServerRequest implements Comparable<InProcessServerRequest
             LOG.trace("Read {} bytes from connection to {}", read, channel.getRemoteAddress());
 
             if (read > 0) {
-                //TODO this does not work - using the FrameableMessage interface rather than the concreate
-                //class blows up with ClassNotFound. Need to work some fst magic or start sending opcodes to use
-                //as a message class lookup key
                 Message request = messageFramer.readFrame(readBuffer);
                 if (request != null) {
                     message.set(request);

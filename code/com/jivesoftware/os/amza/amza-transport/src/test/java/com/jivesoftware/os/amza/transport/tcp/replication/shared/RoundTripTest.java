@@ -67,13 +67,29 @@ public class RoundTripTest {
             private final AtomicLong ids = new AtomicLong();
 
             @Override
-            public Message handleRequest(Message request) {
-                RequestResponse method = requestResponseMethod.get();
-                if (method != null) {
-                    return method.respondTo(request);
-                } else {
-                    return null;
-                }
+            public Response handleRequest(final Message request) {
+                final RequestResponse method = requestResponseMethod.get();
+                return new Response() {
+                    @Override
+                    public Message getMessage() {
+                        return hasMessage() ? method.respondTo(request) : null;
+                    }
+
+                    @Override
+                    public boolean isBlocking() {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean hasMessage() {
+                        return method != null;
+                    }
+
+                    @Override
+                    public void writeTo(ResponseWriter responseWriter) {
+                        throw new UnsupportedOperationException();
+                    }
+                };
             }
 
             @Override

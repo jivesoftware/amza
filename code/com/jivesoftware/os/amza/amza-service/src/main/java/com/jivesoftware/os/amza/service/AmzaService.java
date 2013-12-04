@@ -24,12 +24,12 @@ import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
 import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
+import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.Marshaller;
 import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableDelta;
 import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.TableIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.TableStateChanges;
@@ -195,7 +195,6 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         } else {
             final Set<RingHost> ringHosts = new HashSet<>();
             ringIndex.getImmutableRows().entrySet(new EntryStream<Exception>() {
-
                 @Override
                 public boolean stream(TableIndexKey key, BinaryTimestampedValue value) throws Exception {
                     if (!value.getTombstoned()) {

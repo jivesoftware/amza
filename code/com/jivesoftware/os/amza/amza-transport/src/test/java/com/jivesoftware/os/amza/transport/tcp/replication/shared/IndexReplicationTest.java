@@ -57,7 +57,7 @@ public class IndexReplicationTest {
         int numBuffers = numWorkers * 2;
 
         //setup server
-        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
+        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 1000);
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.createDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
@@ -72,7 +72,7 @@ public class IndexReplicationTest {
         server.start();
 
         //setup client
-        bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
+        bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 1000);
         int connectionsPerHost = 2;
         int connectTimeoutMillis = 5000;
         int socketTimeoutMillis = 200000;

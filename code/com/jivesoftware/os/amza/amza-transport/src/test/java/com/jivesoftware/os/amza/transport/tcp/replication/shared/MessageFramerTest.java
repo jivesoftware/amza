@@ -29,7 +29,7 @@ public class MessageFramerTest {
 
     @Test
     public void testSerializationRoundTrip() throws Exception {
-        BufferProvider bufferProvider = new BufferProvider(1024, 1, true);
+        BufferProvider bufferProvider = new BufferProvider(1024, 1, true, 1000);
         FstMarshaller fstMarshaller = new FstMarshaller(FSTConfiguration.createDefaultConfiguration());
 
         IndexReplicationProtocol protocol = new IndexReplicationProtocol(null, null);

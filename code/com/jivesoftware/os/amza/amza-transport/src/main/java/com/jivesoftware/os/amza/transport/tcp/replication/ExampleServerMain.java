@@ -40,7 +40,7 @@ public class ExampleServerMain {
         int numWorkers = 10;
         int numBuffers = numWorkers * 2;
 
-        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
+        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 1000);
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());

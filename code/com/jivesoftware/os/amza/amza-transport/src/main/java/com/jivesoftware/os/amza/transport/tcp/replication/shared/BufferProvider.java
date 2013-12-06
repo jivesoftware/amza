@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -25,19 +26,28 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class BufferProvider {
 
     private final BlockingQueue<ByteBuffer> buffers;
+    private final int bufferSize;
+    private final boolean direct;
+    private final long takeTimeoutMillis;
 
-    public BufferProvider(int bufferSize, int poolSize, boolean direct) {
+    public BufferProvider(int bufferSize, int poolSize, boolean direct, long takeTimeoutMillis) {
         this.buffers = new LinkedBlockingQueue<>();
         for (int i = 0; i < poolSize; i++) {
             buffers.add(direct ? ByteBuffer.allocateDirect(bufferSize) : ByteBuffer.allocate(bufferSize));
         }
+        this.bufferSize = bufferSize;
+        this.direct = direct;
+        this.takeTimeoutMillis = takeTimeoutMillis;
     }
 
     public ByteBuffer acquire() {
         ByteBuffer buffer = null;
         while (buffer == null) {
             try {
-                buffer = buffers.take();
+                buffer = buffers.poll(takeTimeoutMillis, TimeUnit.MILLISECONDS);
+                if (buffer == null) {
+                    return ByteBuffer.allocate(bufferSize);
+                }
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
             }
@@ -46,8 +56,10 @@ public class BufferProvider {
         return buffer;
     }
 
-    public boolean release(ByteBuffer byteBuffer) {
+    public void release(ByteBuffer byteBuffer) {
         byteBuffer.clear();
-        return buffers.offer(byteBuffer);
+        if (!direct || byteBuffer.isDirect()) {
+            buffers.offer(byteBuffer);
+        }
     }
 }

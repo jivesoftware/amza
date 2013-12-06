@@ -51,10 +51,10 @@ public class ExampleMain {
         });
 
         MessageFramer framer = new MessageFramer(marshaller, protocol);
-        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
+        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 1000);
 
         TcpClientProvider clientChannelProvider = new TcpClientProvider(
-            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
 
 

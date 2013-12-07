@@ -90,8 +90,8 @@ public class AmzaDiscovery {
                         socket.leaveGroup(multicastGroup);
                     }
                 }
-            } catch (Exception x) {
-                x.printStackTrace();
+            } catch (IOException x) {
+                LOG.error("Issue with MulticastReceiver", x);
             }
         }
     }

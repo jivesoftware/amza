@@ -15,25 +15,22 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
-import com.jivesoftware.os.amza.service.storage.TableTransaction;
 import com.jivesoftware.os.amza.service.storage.replication.HostRing;
 import com.jivesoftware.os.amza.service.storage.replication.HostRingBuilder;
 import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
 import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
-import com.jivesoftware.os.amza.shared.EntryStream;
 import com.jivesoftware.os.amza.shared.Marshaller;
-import com.jivesoftware.os.amza.shared.MemoryTableIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.TableDelta;
-import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.RowScan;
+import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TableStateChanges;
-import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -44,7 +41,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -163,9 +159,9 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         }
         byte[] rawRingHost = marshaller.serialize(ringHost);
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
-        TableTransaction tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.add(new TableIndexKey(rawRingHost), rawRingHost);
+        TableStore ringIndex = tableStoreProvider.getRowsStore(ringIndexKey);
+        RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
+        tx.add(new RowIndexKey(rawRingHost), rawRingHost);
         tx.commit();
     }
 
@@ -179,24 +175,24 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         }
         byte[] rawRingHost = marshaller.serialize(ringHost);
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
-        TableTransaction tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.remove(new TableIndexKey(rawRingHost));
+        TableStore ringIndex = tableStoreProvider.getRowsStore(ringIndexKey);
+        RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
+        tx.remove(new RowIndexKey(rawRingHost));
         tx.commit();
     }
 
     @Override
     public List<RingHost> getRing(String ringName) throws Exception {
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
+        TableStore ringIndex = tableStoreProvider.getRowsStore(ringIndexKey);
         if (ringIndex == null) {
             LOG.warn("No ring defined for ringName:" + ringName);
             return new ArrayList<>();
         } else {
             final Set<RingHost> ringHosts = new HashSet<>();
-            ringIndex.getImmutableRows().entrySet(new EntryStream<Exception>() {
+            ringIndex.rowScan(new RowScan<Exception>() {
                 @Override
-                public boolean stream(TableIndexKey key, BinaryTimestampedValue value) throws Exception {
+                public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
                     if (!value.getTombstoned()) {
                         ringHosts.add(marshaller.deserialize(value.getValue(), RingHost.class));
                     }
@@ -220,11 +216,11 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     private boolean createTable(TableName tableName) throws Exception {
         byte[] rawTableName = marshaller.serialize(tableName);
 
-        TableStore tableNameIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        BinaryTimestampedValue timestamptedTableKey = tableNameIndex.getTimestampedValue(new TableIndexKey(rawTableName));
+        TableStore tableNameIndex = tableStoreProvider.getRowsStore(tableIndexKey);
+        RowIndexValue timestamptedTableKey = tableNameIndex.getTimestampedValue(new RowIndexKey(rawTableName));
         if (timestamptedTableKey == null) {
-            TableTransaction tx = tableNameIndex.startTransaction(orderIdProvider.nextId());
-            tx.add(new TableIndexKey(rawTableName), rawTableName);
+            RowStoreUpdates tx = tableNameIndex.startTransaction(orderIdProvider.nextId());
+            tx.add(new RowIndexKey(rawTableName), rawTableName);
             tx.commit();
             return true;
         } else {
@@ -234,16 +230,16 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
 
     public AmzaTable getTable(TableName tableName) throws Exception {
         byte[] rawTableName = marshaller.serialize(tableName);
-        TableStore tableStoreIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        BinaryTimestampedValue timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new TableIndexKey(rawTableName));
+        TableStore tableStoreIndex = tableStoreProvider.getRowsStore(tableIndexKey);
+        RowIndexValue timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new RowIndexKey(rawTableName));
         while (timestampedKeyValueStoreName == null) {
             createTable(tableName);
-            timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new TableIndexKey(rawTableName));
+            timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new RowIndexKey(rawTableName));
         }
         if (timestampedKeyValueStoreName.getTombstoned()) {
             return null;
         } else {
-            TableStore tableStore = tableStoreProvider.getTableStore(tableName);
+            TableStore tableStore = tableStoreProvider.getRowsStore(tableName);
             return new AmzaTable(orderIdProvider, tableName, tableStore);
         }
     }
@@ -268,33 +264,29 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     @Override
     public void destroyTable(TableName tableName) throws Exception {
         byte[] rawTableName = marshaller.serialize(tableName);
-        TableStore tableIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        TableTransaction tx = tableIndex.startTransaction(orderIdProvider.nextId());
-        tx.remove(new TableIndexKey(rawTableName));
+        TableStore tableIndex = tableStoreProvider.getRowsStore(tableIndexKey);
+        RowStoreUpdates tx = tableIndex.startTransaction(orderIdProvider.nextId());
+        tx.remove(new RowIndexKey(rawTableName));
         tx.commit();
     }
 
-    public void receiveChanges(TableName mapName, TableIndex changes) throws Exception {
-        tableReplicator.receiveChanges(mapName, changes);
+    @Override
+    public void updates(TableName tableName, RowScanable rowUpdates) throws Exception {
+        tableReplicator.receiveChanges(tableName, rowUpdates);
     }
 
-    public void watch(TableName tableName, TableStateChanges tableStateChanges) throws Exception {
-        amzaTableWatcher.watch(tableName, tableStateChanges);
+
+    public void watch(TableName tableName, RowChanges rowChanges) throws Exception {
+        amzaTableWatcher.watch(tableName, rowChanges);
     }
 
-    public TableStateChanges unwatch(TableName tableName) throws Exception {
+    public RowChanges unwatch(TableName tableName) throws Exception {
         return amzaTableWatcher.unwatch(tableName);
     }
 
     @Override
-    public void changes(TableName tableName, TableDelta changes) throws Exception {
-        receiveChanges(tableName, new MemoryTableIndex(changes.getApply()));
-    }
-
-    @Override
-    public void takeTableChanges(TableName tableName,
-            long transationId, TransactionSetStream transactionSetStream) throws Exception {
-        getTable(tableName).getMutatedRowsSince(transationId, transactionSetStream);
+    public void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception {
+        getTable(tableName).takeRowUpdatesSince(transationId, rowUpdates);
     }
 
     public void buildRandomSubRing(String ringName, int desiredRingSize) throws Exception {
@@ -311,14 +303,18 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     //------ Used for debugging ------
     public void printService() throws Exception {
         for (Map.Entry<TableName, TableStore> table : tableStoreProvider.getTableStores()) {
-            TableStore sortedMapStore = table.getValue();
-            NavigableMap<?, BinaryTimestampedValue> immutableRows = (NavigableMap<?, BinaryTimestampedValue>) sortedMapStore.getImmutableRows();
-            for (Map.Entry<?, BinaryTimestampedValue> e : (Set<Map.Entry<?, BinaryTimestampedValue>>) immutableRows.entrySet()) {
+            final TableName tableName = table.getKey();
+            final TableStore sortedMapStore = table.getValue();
+            sortedMapStore.rowScan(new RowScan<RuntimeException>() {
 
-                System.out.println(ringHost.getHost() + ":" + ringHost.getPort()
-                        + ":" + table.getKey().getTableName() + " k:" + e.getKey() + " v:" + e.getValue().getValue()
-                        + " d:" + e.getValue().getTombstoned() + " t:" + e.getValue().getTimestamp());
-            }
+                @Override
+                public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws RuntimeException {
+                    System.out.println(ringHost.getHost() + ":" + ringHost.getPort()
+                            + ":" + tableName.getTableName() + " k:" + key + " v:" + value.getValue()
+                            + " d:" + value.getTombstoned() + " t:" + value.getTimestamp());
+                    return true;
+                }
+            });
         }
     }
 }

@@ -15,21 +15,14 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+public interface ValueStorage {
 
-public interface AmzaInstance {
+    byte[] put(byte[] value) throws Exception;
 
-    void updates(TableName tableName, RowScanable updates) throws Exception;
+    byte[] get(byte[] key) throws Exception;
 
-    void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception;
+    void remove(byte[] key) throws Exception;
 
-    List<TableName> getTableNames();
+    void clear();
 
-    void destroyTable(TableName tableName) throws Exception;
-
-    void addRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    void removeRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    List<RingHost> getRing(String ringName) throws Exception;
 }

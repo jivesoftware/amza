@@ -15,21 +15,10 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+public class NoOpFlusher implements Flusher {
 
-public interface AmzaInstance {
+    @Override
+    public void flush() {
+    }
 
-    void updates(TableName tableName, RowScanable updates) throws Exception;
-
-    void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception;
-
-    List<TableName> getTableNames();
-
-    void destroyTable(TableName tableName) throws Exception;
-
-    void addRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    void removeRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    List<RingHost> getRing(String ringName) throws Exception;
 }

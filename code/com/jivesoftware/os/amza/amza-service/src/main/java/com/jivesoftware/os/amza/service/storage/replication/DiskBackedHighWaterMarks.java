@@ -1,10 +1,10 @@
 package com.jivesoftware.os.amza.service.storage.replication;
 
-import com.jivesoftware.os.amza.shared.HighWaterMarks;
+import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 
-public class DiskBackedHighWaterMarks implements HighWaterMarks {
+public class DiskBackedHighWaterMarks implements HighwaterMarks {
 
     @Override
     public void clearRing(RingHost ringHost) {

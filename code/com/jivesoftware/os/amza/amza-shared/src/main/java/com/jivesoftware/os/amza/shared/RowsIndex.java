@@ -15,21 +15,24 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+public interface RowsIndex extends RowScanable {
 
-public interface AmzaInstance {
+    RowIndexValue put(RowIndexKey key, RowIndexValue value);
 
-    void updates(TableName tableName, RowScanable updates) throws Exception;
+    RowIndexValue get(RowIndexKey key);
 
-    void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception;
+    boolean containsKey(RowIndexKey key);
 
-    List<TableName> getTableNames();
+    RowIndexValue remove(RowIndexKey key);
 
-    void destroyTable(TableName tableName) throws Exception;
+    boolean isEmpty();
 
-    void addRingHost(String ringName, RingHost ringHost) throws Exception;
+    void clear();
 
-    void removeRingHost(String ringName, RingHost ringHost) throws Exception;
+    /**
+     * Force persistence of all changes
+     */
+    void commit();
 
-    List<RingHost> getRing(String ringName) throws Exception;
+    void compact();
 }

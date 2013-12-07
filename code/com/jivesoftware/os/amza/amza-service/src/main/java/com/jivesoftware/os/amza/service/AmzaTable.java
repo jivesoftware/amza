@@ -15,14 +15,12 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.service.storage.TableStore;
-import com.jivesoftware.os.amza.service.storage.TableTransaction;
-import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
-import com.jivesoftware.os.amza.shared.EntryStream;
-import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TransactionSetStream;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,20 +45,20 @@ public class AmzaTable {
         return tableName;
     }
 
-    public TableIndexKey set(TableIndexKey key, byte[] value) throws Exception {
+    public RowIndexKey set(RowIndexKey key, byte[] value) throws Exception {
         if (value == null) {
             throw new IllegalStateException("Value cannot be null.");
         }
-        TableTransaction tx = tableStore.startTransaction(orderIdProvider.nextId());
+        RowStoreUpdates tx = tableStore.startTransaction(orderIdProvider.nextId());
         tx.add(key, value);
         tx.commit();
         return key;
     }
 
-    public void set(Iterable<Entry<TableIndexKey, byte[]>> entries) throws Exception {
-        TableTransaction tx = tableStore.startTransaction(orderIdProvider.nextId());
-        for (Entry<TableIndexKey, byte[]> e : entries) {
-            TableIndexKey k = e.getKey();
+    public void set(Iterable<Entry<RowIndexKey, byte[]>> entries) throws Exception {
+        RowStoreUpdates tx = tableStore.startTransaction(orderIdProvider.nextId());
+        for (Entry<RowIndexKey, byte[]> e : entries) {
+            RowIndexKey k = e.getKey();
             byte[] v = e.getValue();
             if (v == null) {
                 throw new IllegalStateException("Value cannot be null.");
@@ -70,26 +68,27 @@ public class AmzaTable {
         tx.commit();
     }
 
-    public byte[] get(TableIndexKey key) throws Exception {
-        return tableStore.getValue(key);
+    public byte[] get(RowIndexKey key) throws Exception {
+        return tableStore.get(key);
     }
 
-    public List<byte[]> get(List<TableIndexKey> keys) throws Exception {
+    public List<byte[]> get(List<RowIndexKey> keys) throws Exception {
         List<byte[]> values = new ArrayList<>();
-        for (TableIndexKey key : keys) {
+        for (RowIndexKey key : keys) {
             values.add(get(key));
         }
         return values;
     }
 
-    public void get(Iterable<TableIndexKey> keys, ValueStream<Entry<TableIndexKey, byte[]>> valuesStream) throws Exception {
-        for (final TableIndexKey key : keys) {
-            final byte[] value = tableStore.getValue(key);
+    // TODO replace ValueStream with RowScan
+    public void get(Iterable<RowIndexKey> keys, ValueStream<Entry<RowIndexKey, byte[]>> valuesStream) throws Exception {
+        for (final RowIndexKey key : keys) {
+            final byte[] value = tableStore.get(key);
             if (value != null) {
-                Entry<TableIndexKey, byte[]> entry = new Entry<TableIndexKey, byte[]>() {
+                Entry<RowIndexKey, byte[]> entry = new Entry<RowIndexKey, byte[]>() {
 
                     @Override
-                    public TableIndexKey getKey() {
+                    public RowIndexKey getKey() {
                         return key;
                     }
 
@@ -112,8 +111,8 @@ public class AmzaTable {
     }
 
     // TODO add concept of a key start stop and filtering
-    public <E extends Throwable> void scan(EntryStream<E> stream) throws E {
-        tableStore.scan(stream);
+    public <E extends Exception> void scan(RowScan<E> stream) throws E {
+        tableStore.rowScan(stream);
     }
 
     public static interface ValueStream<VV> {
@@ -126,35 +125,36 @@ public class AmzaTable {
         VV stream(VV value);
     }
 
-    public boolean remove(TableIndexKey key) throws Exception {
-        TableTransaction tx = tableStore.startTransaction(orderIdProvider.nextId());
+    public boolean remove(RowIndexKey key) throws Exception {
+        RowStoreUpdates tx = tableStore.startTransaction(orderIdProvider.nextId());
         tx.remove(key);
         tx.commit();
         return true;
     }
 
-    public void remove(Iterable<TableIndexKey> keys) throws Exception {
-        TableTransaction tx = tableStore.startTransaction(orderIdProvider.nextId());
-        for (TableIndexKey key : keys) {
+    public void remove(Iterable<RowIndexKey> keys) throws Exception {
+        RowStoreUpdates tx = tableStore.startTransaction(orderIdProvider.nextId());
+        for (RowIndexKey key : keys) {
             tx.remove(key);
         }
         tx.commit();
     }
 
-    public void listEntries(final ValueStream<Entry<TableIndexKey, BinaryTimestampedValue>> stream) throws Exception {
-        tableStore.getImmutableRows().entrySet(new EntryStream<RuntimeException>() {
+    // TODO replace ValueStream with RowScan
+    public void listEntries(final ValueStream<Entry<RowIndexKey, RowIndexValue>> stream) throws Exception {
+        tableStore.rowScan(new RowScan<RuntimeException>() {
 
             @Override
-            public boolean stream(final TableIndexKey key, final BinaryTimestampedValue value) {
+            public boolean row(long orderId, final RowIndexKey key, final RowIndexValue value) {
                 Entry e = new Entry() {
 
                     @Override
-                    public TableIndexKey getKey() {
+                    public RowIndexKey getKey() {
                         return key;
                     }
 
                     @Override
-                    public BinaryTimestampedValue getValue() {
+                    public RowIndexValue getValue() {
                         return value;
                     }
 
@@ -169,23 +169,22 @@ public class AmzaTable {
         stream.stream(null); //EOS
     }
 
-    public void getMutatedRowsSince(long transationId, TransactionSetStream transactionSetStream) throws Exception {
-        tableStore.getMutatedRowsSince(transationId, transactionSetStream);
+    public void takeRowUpdatesSince(long transationId, RowScan rowUpdates) throws Exception {
+        tableStore.takeRowUpdatesSince(transationId, rowUpdates);
     }
 
     //  Use for testing
     public boolean compare(final AmzaTable amzaTable) throws Exception {
-        TableIndex immutableRows = amzaTable.tableStore.getImmutableRows();
         final MutableInt compared = new MutableInt(0);
         final MutableBoolean passed = new MutableBoolean(true);
-        immutableRows.entrySet(new EntryStream<RuntimeException>() {
+        amzaTable.tableStore.rowScan(new RowScan<RuntimeException>() {
 
             @Override
-            public boolean stream(TableIndexKey key, BinaryTimestampedValue value) {
+            public boolean row(long orderId, RowIndexKey key, RowIndexValue value) {
                 try {
                     compared.increment();
 
-                    BinaryTimestampedValue timestampedValue = tableStore.getTimestampedValue(key);
+                    RowIndexValue timestampedValue = tableStore.getTimestampedValue(key);
                     String comparing = tableName.getRingName() + ":" + tableName.getTableName()
                             + " to " + amzaTable.tableName.getRingName() + ":" + amzaTable.tableName.getTableName();
 

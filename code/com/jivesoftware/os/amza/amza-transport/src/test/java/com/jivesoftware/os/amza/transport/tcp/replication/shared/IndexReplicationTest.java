@@ -1,23 +1,24 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
-import com.jivesoftware.os.amza.shared.MemoryTableIndex;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.TableDelta;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.RowScan;
+import com.jivesoftware.os.amza.shared.RowScanable;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TransactionSet;
-import com.jivesoftware.os.amza.shared.TransactionSetStream;
-import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetSender;
-import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetTaker;
+import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
+import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
+import com.jivesoftware.os.amza.transport.tcp.replication.protocol.RowUpdatesPayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayloadSerializer;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -37,8 +38,8 @@ public class IndexReplicationTest {
     private RingHost localHost = new RingHost("localhost", 7766);
     private TcpClientProvider tcpClientProvider;
     private OrderIdProvider idProvider;
-    private AtomicReference<TableDelta> receivedPut = new AtomicReference<>();
-    private AtomicReference<TransactionSet> toTake = new AtomicReference<>();
+    private AtomicReference<RowScanable> receivedPut = new AtomicReference<>();
+    private AtomicReference<RowUpdatesPayload> toTake = new AtomicReference<>();
     private IndexReplicationProtocol applicationProtocol;
 
     @BeforeTest
@@ -89,78 +90,83 @@ public class IndexReplicationTest {
 
     @Test
     public void testPush() throws Exception {
-        TcpChangeSetSender sender = new TcpChangeSetSender(tcpClientProvider, applicationProtocol);
+        TcpUpdatesSender sender = new TcpUpdatesSender(tcpClientProvider, applicationProtocol);
 
         TableName tableName = new TableName("test", "test", null, null);
-        NavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
+        NavigableMap<RowIndexKey, RowIndexValue> changes = new ConcurrentSkipListMap<>();
 
-        BinaryTimestampedValue val1 = new BinaryTimestampedValue("blah".getBytes(), idProvider.nextId(), false);
-        BinaryTimestampedValue val2 = new BinaryTimestampedValue("meh".getBytes(), idProvider.nextId(), false);
+        RowIndexValue val1 = new RowIndexValue("blah".getBytes(), idProvider.nextId(), false);
+        RowIndexValue val2 = new RowIndexValue("meh".getBytes(), idProvider.nextId(), false);
 
-        changes.put(new TableIndexKey("1".getBytes()), val1);
-        changes.put(new TableIndexKey("2".getBytes()), val2);
+        changes.put(new RowIndexKey("1".getBytes()), val1);
+        changes.put(new RowIndexKey("2".getBytes()), val2);
 
-        sender.sendChangeSet(localHost, tableName, new MemoryTableIndex(changes));
+        sender.sendUpdates(localHost, tableName, new MemoryRowsIndex(changes));
 
-        TableDelta received = receivedPut.get();
+        RowScanable received = receivedPut.get();
         Assert.assertNotNull(received);
-        NavigableMap<TableIndexKey, BinaryTimestampedValue> receivedApply = received.getApply();
+        final NavigableMap<RowIndexKey, RowIndexValue> receivedApply = new ConcurrentSkipListMap<>();
+        received.rowScan(new RowScan<RuntimeException>() {
+
+            @Override
+            public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws RuntimeException {
+                receivedApply.put(key, value);
+                return true;
+            }
+        });
         Assert.assertNotNull(receivedApply);
         Assert.assertEquals(receivedApply.size(), changes.size());
 
-        Assert.assertEquals(receivedApply.get(new TableIndexKey("1".getBytes())), val1);
-        Assert.assertEquals(receivedApply.get(new TableIndexKey("2".getBytes())), val2);
+        Assert.assertEquals(receivedApply.get(new RowIndexKey("1".getBytes())), val1);
+        Assert.assertEquals(receivedApply.get(new RowIndexKey("2".getBytes())), val2);
     }
 
     @Test
     public void testPull() throws Exception {
-        TcpChangeSetTaker taker = new TcpChangeSetTaker(tcpClientProvider, applicationProtocol);
+        TcpUpdatesTaker taker = new TcpUpdatesTaker(tcpClientProvider, applicationProtocol);
 
         TableName tableName = new TableName("test", "test", null, null);
-        NavigableMap<TableIndexKey, BinaryTimestampedValue> changes = new ConcurrentSkipListMap<>();
+        NavigableMap<RowIndexKey, RowIndexValue> changes = new ConcurrentSkipListMap<>();
 
-        BinaryTimestampedValue val1 = new BinaryTimestampedValue("blah".getBytes(), idProvider.nextId(), false);
-        BinaryTimestampedValue val2 = new BinaryTimestampedValue("meh".getBytes(), idProvider.nextId(), false);
+        RowIndexValue val1 = new RowIndexValue("blah".getBytes(), idProvider.nextId(), false);
+        RowIndexValue val2 = new RowIndexValue("meh".getBytes(), idProvider.nextId(), false);
 
-        changes.put(new TableIndexKey("1".getBytes()), val1);
-        changes.put(new TableIndexKey("2".getBytes()), val2);
+        changes.put(new RowIndexKey("1".getBytes()), val1);
+        changes.put(new RowIndexKey("2".getBytes()), val2);
         long transactionId = idProvider.nextId();
 
-        TransactionSet toReturn = new TransactionSet(transactionId, changes);
-        toTake.set(toReturn);
+        toTake.set(new RowUpdatesPayload(tableName, transactionId, Arrays.asList(new RowIndexKey("1".getBytes()),new RowIndexKey("2".getBytes())),
+        Arrays.asList(val1, val2)));
 
-        final AtomicReference<TransactionSet> received = new AtomicReference<>();
+        final NavigableMap<RowIndexKey, RowIndexValue> received = new ConcurrentSkipListMap<>();
+        taker.takeUpdates(localHost, tableName, transactionId, new RowScan() {
 
-        taker.take(localHost, tableName, transactionId, new TransactionSetStream() {
             @Override
-            public boolean stream(TransactionSet transactionSet) throws Exception {
-                received.compareAndSet(null, transactionSet);
+            public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
+                received.put(key, value);
                 return true;
             }
         });
 
-        TransactionSet got = received.get();
-        Assert.assertNotNull(got);
-        NavigableMap<TableIndexKey, BinaryTimestampedValue> gotMap = got.getChanges();
-        Assert.assertNotNull(gotMap);
-        Assert.assertEquals(gotMap.size(), changes.size());
+        Assert.assertNotNull(received);
+        Assert.assertEquals(received.size(), changes.size());
 
-        Assert.assertEquals(gotMap.get(new TableIndexKey("1".getBytes())), val1);
-        Assert.assertEquals(gotMap.get(new TableIndexKey("2".getBytes())), val2);
+        Assert.assertEquals(received.get(new RowIndexKey("1".getBytes())), val1);
+        Assert.assertEquals(received.get(new RowIndexKey("2".getBytes())), val2);
 
     }
 
-    private AmzaInstance amzaInstance(final AtomicReference<TableDelta> put, final AtomicReference<TransactionSet> take) {
+    private AmzaInstance amzaInstance(final AtomicReference<RowScanable> put, final AtomicReference<RowUpdatesPayload> take) {
         return new AmzaInstance() {
             @Override
-            public void changes(TableName tableName, TableDelta changes) throws Exception {
+            public void updates(TableName tableName, RowScanable changes) throws Exception {
                 put.set(changes);
             }
 
             @Override
-            public void takeTableChanges(TableName tableName, long transationId, TransactionSetStream transactionSetStream)
+            public void takeRowUpdates(TableName tableName, long transationId, RowScan rowStream)
                     throws Exception {
-                transactionSetStream.stream(take.get());
+                take.get().rowScan(rowStream);
             }
 
             @Override

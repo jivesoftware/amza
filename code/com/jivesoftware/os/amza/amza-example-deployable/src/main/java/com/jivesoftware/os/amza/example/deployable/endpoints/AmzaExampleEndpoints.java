@@ -17,7 +17,7 @@ package com.jivesoftware.os.amza.example.deployable.endpoints;
 
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaTable;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
@@ -48,7 +48,7 @@ public class AmzaExampleEndpoints {
             @QueryParam("value") String value) {
         try {
             AmzaTable amzaTable = amzaService.getTable(new TableName("master", table, null, null));
-            return Response.ok(new String(amzaTable.set(new TableIndexKey(key.getBytes()), value.getBytes()).getKey()), MediaType.TEXT_PLAIN).build();
+            return Response.ok(new String(amzaTable.set(new RowIndexKey(key.getBytes()), value.getBytes()).getKey()), MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set table:" + table + " key:" + key + " value:" + value, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to set table:" + table + " key:" + key + " value:" + value, x);
@@ -62,7 +62,12 @@ public class AmzaExampleEndpoints {
             @QueryParam("key") String key) {
         try {
             AmzaTable amzaTable = amzaService.getTable(new TableName("master", table, null, null));
-            return Response.ok(new String(amzaTable.get(new TableIndexKey(key.getBytes()))), MediaType.TEXT_PLAIN).build();
+            byte[] got = amzaTable.get(new RowIndexKey(key.getBytes()));
+            if (got == null) {
+                return Response.ok(null, MediaType.TEXT_PLAIN).build();
+            } else {
+                return Response.ok(new String(got), MediaType.TEXT_PLAIN).build();
+            }
         } catch (Exception x) {
             LOG.warn("Failed to get table:" + table + " key:" + key, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to get table:" + table + " key:" + key, x);
@@ -76,7 +81,7 @@ public class AmzaExampleEndpoints {
             @QueryParam("key") String key) {
         try {
             AmzaTable amzaTable = amzaService.getTable(new TableName("master", table, null, null));
-            return Response.ok(amzaTable.remove(new TableIndexKey(key.getBytes())), MediaType.TEXT_PLAIN).build();
+            return Response.ok(amzaTable.remove(new RowIndexKey(key.getBytes())), MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove table:" + table + " key:" + key, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to remove table:" + table + " key:" + key, x);

@@ -15,12 +15,11 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.storage.BasicTransactionEntry;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.RowScan;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.storage.FstMarshaller;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import com.jivesoftware.os.amza.storage.TransactionEntry;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 
 public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
@@ -35,7 +34,7 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
     }
 
     @Override
-    public byte[] toRow(long orderId, TableIndexKey k, BinaryTimestampedValue v) throws Exception {
+    public byte[] toRow(long orderId, RowIndexKey k, RowIndexValue v) throws Exception {
         return FST_MARSHALLER.serialize(new BinaryRow(orderId,
                 k.getKey(),
                 v.getTimestamp(),
@@ -44,14 +43,9 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
     }
 
     @Override
-    public TransactionEntry fromRow(byte[] row) throws Exception {
+    public boolean fromRow(byte[] row, RowScan rowStream) throws Exception {
         BinaryRow binaryRow = FST_MARSHALLER.deserialize(row, BinaryRow.class);
-        return new BasicTransactionEntry(binaryRow.transaction,
-                new TableIndexKey(binaryRow.key),
-                new BinaryTimestampedValue(
-                        binaryRow.value,
-                        binaryRow.timestamp,
-                        binaryRow.tombstone)
-        );
+        return rowStream.row(binaryRow.transactionId, new RowIndexKey(binaryRow.key),
+                new RowIndexValue(binaryRow.value, binaryRow.timestamp, binaryRow.tombstone));
     }
 }

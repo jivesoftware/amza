@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.TableRowReader;
+import com.jivesoftware.os.amza.shared.RowReader;
 import com.jivesoftware.os.amza.storage.chunks.Filer;
 import com.jivesoftware.os.amza.storage.chunks.IFiler;
 import java.io.File;
@@ -76,7 +76,7 @@ public class BinaryRowReaderWriterTest {
 
     }
 
-    static class ReadStream implements TableRowReader.Stream<byte[]> {
+    static class ReadStream implements RowReader.Stream<byte[]> {
 
         int clears = 0;
         private final ArrayList<byte[]> rows = new ArrayList<>();

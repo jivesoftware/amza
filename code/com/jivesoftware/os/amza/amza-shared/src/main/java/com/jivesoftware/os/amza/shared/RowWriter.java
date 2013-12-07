@@ -15,21 +15,13 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+import java.util.Collection;
 
-public interface AmzaInstance {
+/**
+ *
+ * @param <R> raw row type
+ */
+public interface RowWriter<R> {
 
-    void updates(TableName tableName, RowScanable updates) throws Exception;
-
-    void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception;
-
-    List<TableName> getTableNames();
-
-    void destroyTable(TableName tableName) throws Exception;
-
-    void addRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    void removeRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    List<RingHost> getRing(String ringName) throws Exception;
+    void write(Collection<R> rows, boolean append) throws Exception;
 }

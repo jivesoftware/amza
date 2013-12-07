@@ -15,12 +15,13 @@
  */
 package com.jivesoftware.os.amza.storage;
 
-import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.RowScan;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
 
 public interface RowMarshaller<R> {
 
-    R toRow(long orderId, TableIndexKey key, BinaryTimestampedValue value) throws Exception;
+    R toRow(long orderId, RowIndexKey key, RowIndexValue value) throws Exception;
 
-    TransactionEntry fromRow(R line) throws Exception;
+    boolean fromRow(R row, RowScan rowStream) throws Exception;
 }

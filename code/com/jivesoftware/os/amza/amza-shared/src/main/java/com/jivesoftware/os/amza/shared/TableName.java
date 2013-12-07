@@ -24,14 +24,14 @@ public class TableName implements Comparable<TableName>, Serializable {
 
     private final String ringName;
     private final String tableName;
-    private final TableIndexKey minKeyInclusive;
-    private final TableIndexKey maxKeyExclusive;
+    private final RowIndexKey minKeyInclusive;
+    private final RowIndexKey maxKeyExclusive;
 
     @JsonCreator
     public TableName(@JsonProperty("ringName") String ringName,
             @JsonProperty("tableName") String tableName,
-            @JsonProperty("minKeyInclusive") TableIndexKey minKeyInclusive,
-            @JsonProperty("maxKeyExclusive") TableIndexKey maxKeyExclusive) {
+            @JsonProperty("minKeyInclusive") RowIndexKey minKeyInclusive,
+            @JsonProperty("maxKeyExclusive") RowIndexKey maxKeyExclusive) {
         this.ringName = ringName.toUpperCase();
         this.tableName = tableName;
         this.minKeyInclusive = minKeyInclusive;
@@ -46,11 +46,11 @@ public class TableName implements Comparable<TableName>, Serializable {
         return tableName;
     }
 
-    public TableIndexKey getMinKeyInclusive() {
+    public RowIndexKey getMinKeyInclusive() {
         return minKeyInclusive;
     }
 
-    public TableIndexKey getMaxKeyExclusive() {
+    public RowIndexKey getMaxKeyExclusive() {
         return maxKeyExclusive;
     }
 

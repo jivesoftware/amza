@@ -13,35 +13,52 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.storage.binary;
+package com.jivesoftware.os.amza.shared;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.util.Arrays;
 
-public class BinaryRow implements Serializable {
+public class RowIndexValue implements Serializable {
 
-    public final long transactionId;
-    public final byte[] key;
-    public final long timestamp;
-    public final boolean tombstone;
-    public final byte[] value;
+    private final long timestamp;
+    private final boolean tombstoned;
+    private final byte[] value;
 
-    public BinaryRow(long transactionId, byte[] key, long timestamp, boolean tombstone, byte[] value) {
-        this.transactionId = transactionId;
-        this.key = key;
+    @JsonCreator
+    public RowIndexValue(
+            @JsonProperty("value") byte[] value,
+            @JsonProperty("timestamp") long timestamp,
+            @JsonProperty("tombstoned") boolean tombstoned) {
         this.timestamp = timestamp;
-        this.tombstone = tombstone;
         this.value = value;
+        this.tombstoned = tombstoned;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    public boolean getTombstoned() {
+        return tombstoned;
+    }
+
+    public byte[] getValue() {
+        return value;
+    }
+
+    @Override
+    public String toString() {
+        return "RowIndexValue{" + "timestamp=" + timestamp + ", tombstoned=" + tombstoned + ", value=" + value + '}';
     }
 
     @Override
     public int hashCode() {
-        int hash = 3;
-        hash = 79 * hash + (int) (this.transactionId ^ (this.transactionId >>> 32));
-        hash = 79 * hash + Arrays.hashCode(this.key);
-        hash = 79 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
-        hash = 79 * hash + (this.tombstone ? 1 : 0);
-        hash = 79 * hash + Arrays.hashCode(this.value);
+        int hash = 5;
+        hash = 97 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
+        hash = 97 * hash + (this.tombstoned ? 1 : 0);
+        hash = 97 * hash + Arrays.hashCode(this.value);
         return hash;
     }
 
@@ -53,17 +70,11 @@ public class BinaryRow implements Serializable {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final BinaryRow other = (BinaryRow) obj;
-        if (this.transactionId != other.transactionId) {
-            return false;
-        }
-        if (!Arrays.equals(this.key, other.key)) {
-            return false;
-        }
+        final RowIndexValue other = (RowIndexValue) obj;
         if (this.timestamp != other.timestamp) {
             return false;
         }
-        if (this.tombstone != other.tombstone) {
+        if (this.tombstoned != other.tombstoned) {
             return false;
         }
         if (!Arrays.equals(this.value, other.value)) {

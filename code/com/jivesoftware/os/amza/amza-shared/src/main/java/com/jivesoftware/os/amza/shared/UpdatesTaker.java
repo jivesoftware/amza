@@ -15,21 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+public interface UpdatesTaker {
 
-public interface AmzaInstance {
-
-    void updates(TableName tableName, RowScanable updates) throws Exception;
-
-    void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception;
-
-    List<TableName> getTableNames();
-
-    void destroyTable(TableName tableName) throws Exception;
-
-    void addRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    void removeRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    List<RingHost> getRing(String ringName) throws Exception;
+    void takeUpdates(RingHost ringHost, TableName tableName, long transationId, RowScan updates) throws Exception;
 }

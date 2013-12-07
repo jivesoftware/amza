@@ -17,25 +17,23 @@ package com.jivesoftware.os.amza.service.storage.replication;
 
 import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
-import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
-import com.jivesoftware.os.amza.shared.ChangeSetSender;
-import com.jivesoftware.os.amza.shared.ChangeSetTaker;
-import com.jivesoftware.os.amza.shared.EntryStream;
-import com.jivesoftware.os.amza.shared.HighWaterMarks;
-import com.jivesoftware.os.amza.shared.MemoryTableIndex;
+import com.jivesoftware.os.amza.shared.HighwaterMarks;
+import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.RowScan;
+import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TransactionSet;
-import com.jivesoftware.os.amza.shared.TransactionSetStream;
+import com.jivesoftware.os.amza.shared.UpdatesSender;
+import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.jive.utils.logger.MetricLogger;
 import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.TreeMap;
 import org.apache.commons.lang.mutable.MutableInt;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  *
@@ -55,33 +53,33 @@ public class TableReplicator {
     private final int takeFromFactor;
     private final TableStoreProvider receivedChangesWAL;
     private final TableStoreProvider resendWAL;
-    private final ChangeSetSender changeSetSender;
-    private final ChangeSetTaker tableTaker;
-    private final HighWaterMarks highWaterMarks;
+    private final UpdatesSender updatesSender;
+    private final UpdatesTaker updatesTaker;
+    private final HighwaterMarks highwaterMarks;
 
     public TableReplicator(TableStoreProvider tables,
             int replicationFactor,
             int takeFromFactor,
-            HighWaterMarks highWaterMarks,
+            HighwaterMarks highwaterMarks,
             TableStoreProvider replicatedWAL,
             TableStoreProvider resendWAL,
-            ChangeSetSender changeSetSender,
-            ChangeSetTaker tableTaker) {
+            UpdatesSender updatesSender,
+            UpdatesTaker updatesTaker) {
         this.tables = tables;
         this.replicationFactor = replicationFactor;
         this.takeFromFactor = takeFromFactor;
-        this.highWaterMarks = highWaterMarks;
+        this.highwaterMarks = highwaterMarks;
         this.receivedChangesWAL = replicatedWAL;
         this.resendWAL = resendWAL;
-        this.changeSetSender = changeSetSender;
-        this.tableTaker = tableTaker;
+        this.updatesSender = updatesSender;
+        this.updatesTaker = updatesTaker;
     }
 
     public void compactTombestone(long ifOlderThanNMillis) throws Exception {
         for (Entry<TableName, TableStore> table : tables.getTableStores()) {
-            TableStore value = table.getValue();
+            TableStore tableStore = table.getValue();
             try {
-                value.compactTombestone(ifOlderThanNMillis);
+                tableStore.compactTombestone(ifOlderThanNMillis);
             } catch (Exception x) {
                 LOG.warn("Failed to compact tombstones table:" + table.getKey(), x);
             }
@@ -93,7 +91,7 @@ public class TableReplicator {
             TableName tableName = table.getKey();
             HostRing hostRing = hostRingProvider.getHostRing(tableName.getRingName());
             LOG.debug("Taking changes for " + tableName);
-            takeChanges(hostRing.getAboveRing(), table.getKey());
+            takeChanges(hostRing.getAboveRing(), tableName);
         }
     }
 
@@ -101,7 +99,7 @@ public class TableReplicator {
         final MutableInt taken = new MutableInt(0);
         int i = 0;
         final MutableInt leaps = new MutableInt(0);
-        TableStore tableStore = tables.getTableStore(tableName);
+        TableStore tableStore = tables.getRowsStore(tableName);
         while (i < ringHosts.length) {
             i = (leaps.intValue() * 2);
             for (; i < ringHosts.length; i++) {
@@ -111,10 +109,14 @@ public class TableReplicator {
                 }
                 ringHosts[i] = null;
                 try {
-                    Long lastTransactionId = highWaterMarks.get(ringHost, tableName);
-                    LOG.debug("Taking from " + ringHost + " " + tableName + " " + lastTransactionId);
-                    tableTaker.take(ringHost, tableName, lastTransactionId,
-                            new TakeTransactionSetStream(tableStore, ringHost, tableName, highWaterMarks));
+                    Long highwaterMark = highwaterMarks.get(ringHost, tableName);
+                    LOG.trace("Taking from " + ringHost + " " + tableName + " " + highwaterMark);
+                    updatesTaker.takeUpdates(ringHost, tableName, highwaterMark,
+                            new TakeRowStream(tableStore, ringHost, tableName, highwaterMarks));
+
+                    TakeRowStream takeRowStream = new TakeRowStream(tableStore, ringHost, tableName, highwaterMarks);
+                    updatesTaker.takeUpdates(ringHost, tableName, highwaterMark, takeRowStream);
+                    takeRowStream.flush();
 
                     taken.increment();
                     if (taken.intValue() >= takeFromFactor) {
@@ -125,100 +127,111 @@ public class TableReplicator {
 
                 } catch (Exception x) {
                     LOG.debug("Can't takeFrom host:" + ringHost, x);
-                    LOG.warn("Can't takeFrom host:" + ringHost);
+                    LOG.warn("Can't takeFrom host:" + ringHost + " " + x.getMessage());
                 }
             }
         }
     }
 
-    static class TakeTransactionSetStream implements TransactionSetStream {
+    // TODO fix known issues around how highwater marks are handled
+    static class TakeRowStream implements RowScan {
 
         private final TableStore tableStore;
         private final RingHost ringHost;
         private final TableName tableName;
-        private final HighWaterMarks highWaterMarks;
+        private final HighwaterMarks highWaterMarks;
+        private final MutableLong highWaterMark;
+        private final TreeMap<RowIndexKey, RowIndexValue> batch = new TreeMap<>();
 
-        public TakeTransactionSetStream(TableStore tableStore,
+        public TakeRowStream(TableStore tableStore,
                 RingHost ringHost,
                 TableName tableName,
-                HighWaterMarks highWaterMarks) {
+                HighwaterMarks highWaterMarks) {
             this.tableStore = tableStore;
             this.ringHost = ringHost;
             this.tableName = tableName;
             this.highWaterMarks = highWaterMarks;
+            this.highWaterMark = new MutableLong(highWaterMarks.get(ringHost, tableName));
         }
 
         @Override
-        public boolean stream(TransactionSet took) throws Exception {
-            if (took != null) {
-                NavigableMap<TableIndexKey, BinaryTimestampedValue> changes = took.getChanges();
-                if (!changes.isEmpty()) {
-                    tableStore.commit(new MemoryTableIndex(changes));
-                    highWaterMarks.set(ringHost, tableName, took.getHighestTransactionId());
-                }
+        public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
+            if (highWaterMark.longValue() < orderId) {
+                highWaterMark.setValue(orderId);
+            }
+            batch.put(key, value);
+            if (batch.size() > 1) {
+                flush();
             }
             return true;
         }
-    }
 
-    public void receiveChanges(TableName mapName, TableIndex changes) throws Exception {
-        if (!changes.isEmpty()) {
-            receivedChangesWAL.getTableStore(mapName).commit(changes);
+        public void flush() throws Exception {
+            if (!batch.isEmpty()) {
+                System.out.println("Took:" + batch.size() + " from " + ringHost + " for " + tableName);
+                tableStore.commit(new MemoryRowsIndex(batch));
+                highWaterMarks.set(ringHost, tableName, highWaterMark.longValue());
+                batch.clear();
+            }
+            if (highWaterMark.longValue() < 0) {
+                highWaterMarks.set(ringHost, tableName, 0);
+            }
         }
     }
 
+    public void receiveChanges(TableName mapName, RowScanable changes) throws Exception {
+        receivedChangesWAL.getRowsStore(mapName).commit(changes);
+    }
+
+    // TODO move synchronized to a tighter scope
     synchronized public void applyReceivedChanges() throws Exception {
         for (Map.Entry<TableName, TableStore> replicatedUpdates : receivedChangesWAL.getTableStores()) {
             TableName mapName = replicatedUpdates.getKey();
-            TableStore store = replicatedUpdates.getValue();
-            TableIndex immutableRows = store.getImmutableRows();
-            if (!immutableRows.isEmpty()) {
-                tables.getTableStore(mapName).commit(store.getImmutableRows());
-                store.clearAllRows();
-            }
+            TableStore tableStore = tables.getRowsStore(mapName);
+            TableStore updates = replicatedUpdates.getValue();
+            tableStore.commit(updates);
+            updates.clear();
         }
     }
 
-    public boolean replicateLocalChanges(HostRingProvider hostRingProvider, TableName tableName,
-            TableIndex changes,
+    public boolean replicateLocalUpdates(HostRingProvider hostRingProvider,
+            TableName tableName,
+            RowScanable rowUpdates,
             boolean enqueueForResendOnFailure) throws Exception {
-        if (changes.isEmpty()) {
-            return true;
+
+        HostRing hostRing = hostRingProvider.getHostRing(tableName.getRingName());
+        RingHost[] ringHosts = hostRing.getBelowRing();
+        if (ringHosts == null || ringHosts.length == 0) {
+            if (enqueueForResendOnFailure) {
+                resendWAL.getRowsStore(tableName).commit(rowUpdates);
+            }
+            return false;
         } else {
-            HostRing hostRing = hostRingProvider.getHostRing(tableName.getRingName());
-            RingHost[] ringHosts = hostRing.getBelowRing();
-            if (ringHosts == null || ringHosts.length == 0) {
-                if (enqueueForResendOnFailure) {
-                    resendWAL.getTableStore(tableName).commit(changes);
-                }
-                return false;
-            } else {
-                RingWalker ringWalker = new RingWalker(ringHosts, replicationFactor);
-                RingHost ringHost;
-                while ((ringHost = ringWalker.host()) != null) {
-                    try {
-                        changeSetSender.sendChangeSet(ringHost, tableName, changes);
-                        ringWalker.success();
-                    } catch (Exception x) {
-                        ringWalker.failed();
-                        LOG.info("Failed to send changeset to ringHost:" + ringHost, x);
-                        LOG.warn("Failed to send changeset to ringHost:" + ringHost);
-                        if (enqueueForResendOnFailure) {
-                            resendWAL.getTableStore(tableName).commit(changes);
-                            enqueueForResendOnFailure = false;
-                        }
+            RingWalker ringWalker = new RingWalker(ringHosts, replicationFactor);
+            RingHost ringHost;
+            while ((ringHost = ringWalker.host()) != null) {
+                try {
+                    updatesSender.sendUpdates(ringHost, tableName, rowUpdates);
+                    ringWalker.success();
+                } catch (Exception x) {
+                    ringWalker.failed();
+                    LOG.info("Failed to send changeset to ringHost:" + ringHost, x);
+                    LOG.warn("Failed to send changeset to ringHost:" + ringHost);
+                    if (enqueueForResendOnFailure) {
+                        resendWAL.getRowsStore(tableName).commit(rowUpdates);
+                        enqueueForResendOnFailure = false;
                     }
                 }
-                return ringWalker.wasAdequetlyReplicated();
             }
+            return ringWalker.wasAdequetlyReplicated();
         }
     }
 
     public void resendLocalChanges(HostRingProvider hostRingProvider) throws Exception {
 
-        // Hacky
+        // TODO eval why this is Hacky
         for (Map.Entry<TableName, TableStore> table : tables.getTableStores()) {
-            resendWAL.getTableStore(table.getKey());
+            resendWAL.getRowsStore(table.getKey());
         }
 
         for (Map.Entry<TableName, TableStore> updates : resendWAL.getTableStores()) {
@@ -228,19 +241,8 @@ public class TableReplicator {
             if (ring.length > 0) {
                 TableName mapName = updates.getKey();
                 TableStore store = updates.getValue();
-                // TODO this copy sucks
-                final MemoryTableIndex memoryTableIndex = new MemoryTableIndex(new TreeMap<TableIndexKey, BinaryTimestampedValue>());
-                store.getImmutableRows().entrySet(new EntryStream<Exception>() {
-
-                    @Override
-                    public boolean stream(TableIndexKey key, BinaryTimestampedValue value) throws Exception {
-                        memoryTableIndex.put(key, value);
-                        return true;
-                    }
-                });
-                // END TODO this copy sucks
-                if (replicateLocalChanges(hostRingProvider, mapName, memoryTableIndex, false)) {
-                    store.clearAllRows();
+                if (replicateLocalUpdates(hostRingProvider, mapName, store, false)) {
+                    store.clear(); // TODO this is a BUG cause anything that came along while we were replicating is lost.
                 }
             } else {
                 LOG.warn("Trying to resend to an empty ring. tableName:" + tableName);

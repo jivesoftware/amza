@@ -15,12 +15,12 @@
  */
 package com.jivesoftware.os.amza.service.storage.replication;
 
-import com.jivesoftware.os.amza.shared.HighWaterMarks;
+import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.TableName;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MemoryBackedHighWaterMarks implements HighWaterMarks {
+public class MemoryBackedHighWaterMarks implements HighwaterMarks {
 
     private final ConcurrentHashMap<RingHost, ConcurrentHashMap<TableName, Long>> lastTransactionIds = new ConcurrentHashMap<>();
 

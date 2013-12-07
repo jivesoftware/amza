@@ -58,8 +58,8 @@ public class ExampleMain {
 
 
 
-        TcpChangeSetSender sender = new TcpChangeSetSender(clientChannelProvider, protocol);
-        TcpChangeSetTaker taker = new TcpChangeSetTaker(clientChannelProvider, protocol);
+        TcpUpdatesSender sender = new TcpUpdatesSender(clientChannelProvider, protocol);
+        TcpUpdatesTaker taker = new TcpUpdatesTaker(clientChannelProvider, protocol);
 
 
         //send send send, take take take

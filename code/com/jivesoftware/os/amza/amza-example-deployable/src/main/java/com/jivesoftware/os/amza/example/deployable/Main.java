@@ -24,28 +24,33 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.ChangeSetSender;
-import com.jivesoftware.os.amza.shared.ChangeSetTaker;
+import com.jivesoftware.os.amza.shared.UpdatesSender;
+import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.Flusher;
+import com.jivesoftware.os.amza.shared.PassBackValueStorage;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.TableDelta;
-import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.TableIndexProvider;
+import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.RowsIndex;
+import com.jivesoftware.os.amza.shared.RowsIndexProvider;
+import com.jivesoftware.os.amza.shared.RowsStorage;
+import com.jivesoftware.os.amza.shared.RowsStorageProvider;
+import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TableStateChanges;
-import com.jivesoftware.os.amza.shared.TableStorage;
-import com.jivesoftware.os.amza.shared.TableStorageProvider;
-import com.jivesoftware.os.amza.storage.FileBackedTableStorage;
+import com.jivesoftware.os.amza.shared.ValueStorage;
+import com.jivesoftware.os.amza.shared.ValueStorageProvider;
 import com.jivesoftware.os.amza.storage.RowTable;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
 import com.jivesoftware.os.amza.storage.chunks.Filer;
-import com.jivesoftware.os.amza.storage.index.MapDBTableIndex;
-import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetSender;
-import com.jivesoftware.os.amza.transport.http.replication.HttpChangeSetTaker;
+import com.jivesoftware.os.amza.storage.index.NavigableMapRowsIndex;
+import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
+import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
-import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetSender;
-import com.jivesoftware.os.amza.transport.tcp.replication.TcpChangeSetTaker;
+import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
+import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
@@ -63,6 +68,9 @@ import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.File;
 import java.util.Random;
+import org.mapdb.BTreeMap;
+import org.mapdb.DB;
+import org.mapdb.DBMaker;
 
 public class Main {
 
@@ -77,7 +85,7 @@ public class Main {
         String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
         int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1123"));
         String clusterName = (args.length > 1 ? args[1] : null);
-        String transport = System.getProperty("amza.transport", "tcp");
+        String transport = System.getProperty("amza.transport", "http");
 
         //TODO pull from properties
         int connectionsPerHost = Integer.parseInt(System.getProperty("amza.tcp.client.connectionsPerHost", "2"));
@@ -85,7 +93,7 @@ public class Main {
         int socketTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.socketTimeoutMillis", "2000"));
         int bufferSize = Integer.parseInt(System.getProperty("amza.tcp.bufferSize", "" + (1024 * 1024 * 10)));
         int numServerThreads = Integer.parseInt(System.getProperty("amza.tcp.server.numThreads", "4"));
-        int numBuffers = numServerThreads + 2;
+        int numBuffers = numServerThreads * 10;
         int tcpPort = Integer.parseInt(System.getProperty("amza.tcp.port", "1177"));
 
         RingHost ringHost;
@@ -102,12 +110,12 @@ public class Main {
 
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
 
-        TableStorageProvider tableStorageProvider = new TableStorageProvider() {
+        RowsStorageProvider tableStorageProvider = new RowsStorageProvider() {
             @Override
-            public TableStorage createTableStorage(File workingDirectory,
+            public RowsStorage createRowsStorage(File workingDirectory,
                     String tableDomain,
                     TableName tableName) throws Exception {
-                File directory = new File(workingDirectory, tableDomain);
+                final File directory = new File(workingDirectory, tableDomain);
                 directory.mkdirs();
                 File file = new File(directory, tableName.getTableName() + ".kvt");
 
@@ -115,20 +123,43 @@ public class Main {
                 BinaryRowReader reader = new BinaryRowReader(filer);
                 BinaryRowWriter writer = new BinaryRowWriter(filer);
                 BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-                TableIndexProvider tableIndexProvider = new TableIndexProvider() {
+
+                final ValueStorageProvider valueStorageProvider = new ValueStorageProvider() {
 
                     @Override
-                    public TableIndex createTableIndex(TableName tableName) {
-                        return new MapDBTableIndex(tableName.getTableName());
+                    public ValueStorage createValueStorage(TableName tableName) throws Exception {
+                        File chunksDirectory = new File(directory, "values");
+                        chunksDirectory.mkdirs();
+                        //return new ChunkFilerValueStorage(ChunkFiler.factory(chunksDirectory, "values-" + tableName.getTableName()));
+                        return new PassBackValueStorage();
                     }
                 };
-                RowTable<byte[]> rowTableFile = new RowTable<>(tableName,
+
+                RowsIndexProvider tableIndexProvider = new RowsIndexProvider() {
+
+                    @Override
+                    public RowsIndex createRowsIndex(TableName tableName, ValueStorage valueStorage) throws Exception {
+                        final DB db = DBMaker.newDirectMemoryDB()
+                            .closeOnJvmShutdown()
+                            .make();
+                        BTreeMap<RowIndexKey, RowIndexValue> treeMap = db.getTreeMap(tableName.getTableName());
+                        return new NavigableMapRowsIndex(treeMap, new Flusher() {
+
+                            @Override
+                            public void flush() {
+                                db.commit();
+                            }
+                        }, valueStorage);
+                    }
+                };
+
+                return new RowTable<>(tableName,
                         orderIdProvider,
                         tableIndexProvider,
+                        valueStorageProvider,
                         rowMarshaller,
                         reader,
                         writer);
-                return new FileBackedTableStorage(rowTableFile);
             }
         };
 
@@ -143,12 +174,12 @@ public class Main {
         TcpClientProvider tcpClientProvider = new TcpClientProvider(
                 connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
-        ChangeSetSender changeSetSender = new TcpChangeSetSender(tcpClientProvider, clientProtocol);
-        ChangeSetTaker tableTaker = new TcpChangeSetTaker(tcpClientProvider, clientProtocol);
+        UpdatesSender changeSetSender = new TcpUpdatesSender(tcpClientProvider, clientProtocol);
+        UpdatesTaker tableTaker = new TcpUpdatesTaker(tcpClientProvider, clientProtocol);
 
         if (transport.equals("http")) {
-            changeSetSender = new HttpChangeSetSender();
-            tableTaker = new HttpChangeSetTaker();
+            changeSetSender = new HttpUpdatesSender();
+            tableTaker = new HttpUpdatesTaker();
         }
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
@@ -159,9 +190,9 @@ public class Main {
                 tableStorageProvider,
                 changeSetSender,
                 tableTaker,
-                new TableStateChanges() {
+                new RowChanges() {
                     @Override
-                    public void changes(TableName tableName, TableDelta changes) throws Exception {
+                    public void changes(RowsChanged changes) throws Exception {
                     }
                 });
 

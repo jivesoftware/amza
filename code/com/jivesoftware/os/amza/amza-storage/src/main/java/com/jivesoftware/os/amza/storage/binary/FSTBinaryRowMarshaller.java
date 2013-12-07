@@ -30,7 +30,7 @@ public class FSTBinaryRowMarshaller extends FSTBasicObjectSerializer {
             FSTClazzInfo.FSTFieldInfo fSTFieldInfo,
             int streamPositioin) throws IOException {
         BinaryRow br = (BinaryRow) toWrite;
-        out.writeFLong(br.transaction);
+        out.writeFLong(br.transactionId);
         out.writeFInt(br.key.length);
         out.write(br.key);
         out.writeFLong(br.timestamp);

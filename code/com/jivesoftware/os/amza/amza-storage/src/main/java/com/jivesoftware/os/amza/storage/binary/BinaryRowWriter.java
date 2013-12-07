@@ -15,13 +15,13 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.TableRowWriter;
+import com.jivesoftware.os.amza.shared.RowWriter;
 import com.jivesoftware.os.amza.storage.chunks.IFiler;
 import com.jivesoftware.os.amza.storage.chunks.UIO;
 import java.io.IOException;
 import java.util.Collection;
 
-public class BinaryRowWriter implements TableRowWriter<byte[]> {
+public class BinaryRowWriter implements RowWriter<byte[]> {
 
     private final IFiler filer;
 

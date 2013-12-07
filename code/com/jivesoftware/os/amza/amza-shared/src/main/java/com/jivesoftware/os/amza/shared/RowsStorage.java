@@ -15,21 +15,25 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+public interface RowsStorage extends RowScanable {
 
-public interface AmzaInstance {
+    void load() throws Exception;
 
-    void updates(TableName tableName, RowScanable updates) throws Exception;
+    // TODO Consider using a call back stream instead of returning RowsChanged
+    RowsChanged update(RowScanable rowUpdates) throws Exception;
 
-    void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception;
+    void takeRowUpdatesSince(final long transactionId, RowScan rowUpdates) throws Exception;
 
-    List<TableName> getTableNames();
+    void compactTombestone(long ifOlderThanNMillis) throws Exception;
 
-    void destroyTable(TableName tableName) throws Exception;
+    void clear() throws Exception;
 
-    void addRingHost(String ringName, RingHost ringHost) throws Exception;
+    public RowIndexValue get(RowIndexKey key);
 
-    void removeRingHost(String ringName, RingHost ringHost) throws Exception;
+    boolean containsKey(RowIndexKey key);
 
-    List<RingHost> getRing(String ringName) throws Exception;
+    void put(RowIndexKey key, RowIndexValue value);
+
+    void remove(RowIndexKey key);
+
 }

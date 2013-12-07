@@ -15,21 +15,13 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+public interface HighwaterMarks {
 
-public interface AmzaInstance {
+    void clearRing(RingHost ringHost);
 
-    void updates(TableName tableName, RowScanable updates) throws Exception;
+    void set(RingHost ringHost, TableName tableName, long highWatermark);
 
-    void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception;
+    void clear(RingHost ringHost, TableName tableName);
 
-    List<TableName> getTableNames();
-
-    void destroyTable(TableName tableName) throws Exception;
-
-    void addRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    void removeRingHost(String ringName, RingHost ringHost) throws Exception;
-
-    List<RingHost> getRing(String ringName) throws Exception;
+    Long get(RingHost ringHost, TableName tableName);
 }

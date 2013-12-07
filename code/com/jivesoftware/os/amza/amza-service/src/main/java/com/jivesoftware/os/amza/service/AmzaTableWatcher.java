@@ -15,34 +15,34 @@
  */
 package com.jivesoftware.os.amza.service;
 
-import com.jivesoftware.os.amza.shared.TableDelta;
+import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TableStateChanges;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class AmzaTableWatcher implements TableStateChanges {
+public class AmzaTableWatcher implements RowChanges {
 
-    private final TableStateChanges tableStateChanges;
-    private final ConcurrentHashMap<TableName, TableStateChanges> watchers = new ConcurrentHashMap<>();
+    private final RowChanges rowChanges;
+    private final ConcurrentHashMap<TableName, RowChanges> watchers = new ConcurrentHashMap<>();
 
-    public AmzaTableWatcher(TableStateChanges tableStateChanges) {
-        this.tableStateChanges = tableStateChanges;
+    public AmzaTableWatcher(RowChanges rowChanges) {
+        this.rowChanges = rowChanges;
     }
 
     @Override
-    public void changes(TableName tableName, TableDelta changes) throws Exception {
-        tableStateChanges.changes(tableName, changes);
-        TableStateChanges watcher = watchers.get(tableName);
+    public void changes(RowsChanged changes) throws Exception {
+        rowChanges.changes(changes);
+        RowChanges watcher = watchers.get(changes.getTableName());
         if (watcher != null) {
-            watcher.changes(tableName, changes);
+            watcher.changes(changes);
         }
     }
 
-    public void watch(TableName tableName, TableStateChanges tableStateChanges) throws Exception {
-        watchers.put(tableName, tableStateChanges);
+    public void watch(TableName tableName, RowChanges rowChanges) throws Exception {
+        watchers.put(tableName, rowChanges);
     }
 
-    public TableStateChanges unwatch(TableName tableName) throws Exception {
+    public RowChanges unwatch(TableName tableName) throws Exception {
         return watchers.remove(tableName);
     }
 }

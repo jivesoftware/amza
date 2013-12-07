@@ -15,10 +15,10 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.RowsStorage;
+import com.jivesoftware.os.amza.shared.RowsStorageProvider;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TableStateChanges;
-import com.jivesoftware.os.amza.shared.TableStorage;
-import com.jivesoftware.os.amza.shared.TableStorageProvider;
+import com.jivesoftware.os.amza.shared.RowChanges;
 import java.io.File;
 import java.util.Map;
 import java.util.Set;
@@ -28,14 +28,14 @@ public class TableStoreProvider {
 
     private final File workingDirectory;
     private final String storeName;
-    private final TableStorageProvider  tableStorageProvider;
-    private final TableStateChanges tableStateChanges;
-    private final ConcurrentHashMap<TableName, TableStore> tableStores = new ConcurrentHashMap<>();
+    private final RowsStorageProvider  tableStorageProvider;
+    private final RowChanges tableStateChanges;
+    private final ConcurrentHashMap<TableName, TableStore> rowsStores = new ConcurrentHashMap<>();
 
     public TableStoreProvider(File workingDirectory,
             String storeName,
-            TableStorageProvider tableStorageProvider,
-            TableStateChanges tableStateChanges) {
+            RowsStorageProvider tableStorageProvider,
+            RowChanges tableStateChanges) {
         this.workingDirectory = workingDirectory;
         this.storeName = storeName;
         this.tableStorageProvider = tableStorageProvider;
@@ -46,20 +46,19 @@ public class TableStoreProvider {
         return storeName;
     }
 
-    synchronized public TableStore getTableStore(TableName tableName) throws Exception {
-        TableStore tableStore = tableStores.get(tableName);
+    synchronized public TableStore getRowsStore(TableName tableName) throws Exception {
+        TableStore tableStore = rowsStores.get(tableName);
         if (tableStore == null) {
-            TableStorage tableStorage = tableStorageProvider.createTableStorage(workingDirectory, storeName, tableName);
-            ReadWriteTableStore readWriteTableStore = new ReadWriteTableStore(tableStorage, tableStateChanges);
-            readWriteTableStore.load();
-            tableStore = new TableStore(readWriteTableStore);
-            tableStores.put(tableName, tableStore);
+            RowsStorage rowsStorage = tableStorageProvider.createRowsStorage(workingDirectory, storeName, tableName);
+            tableStore = new TableStore(rowsStorage, tableStateChanges);
+            tableStore.load();
+            rowsStores.put(tableName, tableStore);
         }
         return tableStore;
     }
 
 
     public Set<Map.Entry<TableName, TableStore>> getTableStores() {
-        return tableStores.entrySet();
+        return rowsStores.entrySet();
     }
 }

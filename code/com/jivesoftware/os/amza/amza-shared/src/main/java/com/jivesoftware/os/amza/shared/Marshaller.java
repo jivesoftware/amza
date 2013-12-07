@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.shared;
 
 import java.io.IOException;
 
+// TODO make this support both byte[] and ByteBuffer
 public interface Marshaller {
 
     <V> byte[] serialize(V value) throws IOException;

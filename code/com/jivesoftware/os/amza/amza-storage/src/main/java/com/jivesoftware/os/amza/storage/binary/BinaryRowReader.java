@@ -15,12 +15,12 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.TableRowReader;
-import com.jivesoftware.os.amza.shared.TableRowReader.Stream;
+import com.jivesoftware.os.amza.shared.RowReader;
+import com.jivesoftware.os.amza.shared.RowReader.Stream;
 import com.jivesoftware.os.amza.storage.chunks.IFiler;
 import com.jivesoftware.os.amza.storage.chunks.UIO;
 
-public class BinaryRowReader implements TableRowReader<byte[]> {
+public class BinaryRowReader implements RowReader<byte[]> {
 
     private final IFiler filer;
 

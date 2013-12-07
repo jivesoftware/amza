@@ -15,53 +15,144 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.BinaryTimestampedValue;
-import com.jivesoftware.os.amza.shared.EntryStream;
-import com.jivesoftware.os.amza.shared.TableIndex;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
-import com.jivesoftware.os.amza.shared.TransactionSetStream;
+import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.RowScan;
+import com.jivesoftware.os.amza.shared.RowScanable;
+import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.RowsStorage;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class TableStore {
+public class TableStore implements RowScanable {
 
-    private final ReadWriteTableStore readWriteMaps;
+    private final RowsStorage rowsStorage;
+    private final AtomicBoolean loaded = new AtomicBoolean(false);
+    private final RowChanges rowChanges;
+    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
-    public TableStore(ReadWriteTableStore readWriteTable) {
-        this.readWriteMaps = readWriteTable;
+    public TableStore(RowsStorage rowsStorage, RowChanges rowChanges) {
+        this.rowsStorage = rowsStorage;
+        this.rowChanges = rowChanges;
+    }
+
+    public void load() throws Exception {
+        if (!loaded.get()) {
+            try {
+                readWriteLock.writeLock().lock();
+                if (loaded.compareAndSet(false, true)) {
+                    try {
+
+                        rowsStorage.load();
+                    } catch (Exception x) {
+                        throw x;
+                    } finally {
+                        loaded.set(false);
+                    }
+                }
+            } finally {
+                readWriteLock.writeLock().unlock();
+            }
+        }
     }
 
     public void compactTombestone(long ifOlderThanNMillis) throws Exception {
-        readWriteMaps.compactTombestone(ifOlderThanNMillis);
+        rowsStorage.compactTombestone(ifOlderThanNMillis);
     }
 
-    public <E extends Throwable> void scan(EntryStream<E> stream) throws E {
-        readWriteMaps.getImmutableCopy().entrySet(stream);
+    public byte[] get(RowIndexKey key) throws Exception {
+        RowIndexValue got;
+        try {
+            readWriteLock.readLock().lock();
+            got = rowsStorage.get(key);
+        } finally {
+            readWriteLock.readLock().unlock();
+        }
+        if (got == null) {
+            return null;
+        }
+        if (got.getTombstoned()) {
+            return null;
+        }
+        return got.getValue();
     }
 
-    public byte[] getValue(TableIndexKey k) throws Exception {
-        return readWriteMaps.get(k);
+    public RowIndexValue getTimestampedValue(RowIndexKey key) throws Exception {
+        try {
+            readWriteLock.readLock().lock();
+            return rowsStorage.get(key);
+        } finally {
+            readWriteLock.readLock().unlock();
+        }
     }
 
-    public BinaryTimestampedValue getTimestampedValue(TableIndexKey k) throws Exception {
-        return readWriteMaps.getTimestampedValue(k);
+    public boolean containsKey(RowIndexKey key) throws Exception {
+        try {
+            readWriteLock.readLock().lock();
+            return rowsStorage.containsKey(key);
+        } finally {
+            readWriteLock.readLock().unlock();
+        }
     }
 
-    public TableIndex getImmutableRows() throws Exception {
-        return readWriteMaps.getImmutableCopy();
+    @Override
+    public <E extends Exception> void rowScan(RowScan<E> stream) throws E {
+        rowsStorage.rowScan(stream);
     }
 
-    public void getMutatedRowsSince(long transactionId, TransactionSetStream transactionSetStream) throws Exception {
-        readWriteMaps.getMutatedRowsSince(transactionId, transactionSetStream);
+    public void takeRowUpdatesSince(long transactionId, RowScan rowUpdates) throws Exception {
+        rowsStorage.takeRowUpdatesSince(transactionId, rowUpdates);
     }
 
-    public void clearAllRows() throws Exception {
-        readWriteMaps.clear();
+    public RowStoreUpdates startTransaction(long timestamp) throws Exception {
+        return new RowStoreUpdates(this, new RowsStorageUpdates(rowsStorage, timestamp));
     }
 
-    public void commit(TableIndex changes) throws Exception {
-        readWriteMaps.commit(changes);
+    public void commit(RowScanable changes) throws Exception {
+        RowsChanged updateMap = rowsStorage.update(changes);
+        if (!updateMap.isEmpty()) {
+            try {
+                readWriteLock.writeLock().lock();
+                NavigableMap<RowIndexKey, RowIndexValue> apply = updateMap.getApply();
+                for (Map.Entry<RowIndexKey, RowIndexValue> entry : apply.entrySet()) {
+                    RowIndexKey k = entry.getKey();
+                    RowIndexValue timestampedValue = entry.getValue();
+                    RowIndexValue got = rowsStorage.get(k);
+                    if (got == null) {
+                        rowsStorage.put(k, timestampedValue);
+                    } else if (got.getTimestamp() < timestampedValue.getTimestamp()) {
+                        rowsStorage.put(k, timestampedValue);
+                    }
+                }
+                NavigableMap<RowIndexKey, RowIndexValue> remove = updateMap.getRemove();
+                for (Map.Entry<RowIndexKey, RowIndexValue> entry : remove.entrySet()) {
+                    RowIndexKey k = entry.getKey();
+                    RowIndexValue timestampedValue = entry.getValue();
+                    RowIndexValue got = rowsStorage.get(k);
+                    if (got != null && got.getTimestamp() < timestampedValue.getTimestamp()) {
+                        rowsStorage.remove(k);
+                    }
+                }
+
+            } finally {
+                readWriteLock.writeLock().unlock();
+            }
+            if (rowChanges != null) {
+                rowChanges.changes(updateMap);
+            }
+        }
     }
 
-    public TableTransaction startTransaction(long timestamp) throws Exception {
-        return new TableTransaction(this, readWriteMaps.getReadThroughChangeSet(timestamp));
+    public void clear() throws Exception {
+        try {
+            readWriteLock.writeLock().lock();
+            rowsStorage.clear();
+        } finally {
+            readWriteLock.writeLock().unlock();
+        }
     }
 }

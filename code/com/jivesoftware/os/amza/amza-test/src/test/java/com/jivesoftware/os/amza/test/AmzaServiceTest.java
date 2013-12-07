@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.test;
 
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.TableIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
@@ -74,7 +74,7 @@ public class AmzaServiceTest {
                         if (node != null) {
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
-                            TableIndexKey indexKey = new TableIndexKey(key.getBytes());
+                            RowIndexKey indexKey = new RowIndexKey(key.getBytes());
                             node.update(mapName, indexKey, ("" + random.nextInt()).getBytes(), System.currentTimeMillis(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
                             node.get(mapName, indexKey);

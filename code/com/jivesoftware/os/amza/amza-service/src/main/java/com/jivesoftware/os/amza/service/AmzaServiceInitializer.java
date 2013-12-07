@@ -21,14 +21,12 @@ import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
 import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
 import com.jivesoftware.os.amza.service.storage.replication.MemoryBackedHighWaterMarks;
 import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
-import com.jivesoftware.os.amza.shared.ChangeSetSender;
-import com.jivesoftware.os.amza.shared.ChangeSetTaker;
 import com.jivesoftware.os.amza.shared.Marshaller;
-import com.jivesoftware.os.amza.shared.MemoryTableIndex;
-import com.jivesoftware.os.amza.shared.TableDelta;
-import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.TableStateChanges;
-import com.jivesoftware.os.amza.shared.TableStorageProvider;
+import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.RowsStorageProvider;
+import com.jivesoftware.os.amza.shared.UpdatesSender;
+import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.File;
 import java.util.concurrent.atomic.AtomicReference;
@@ -49,20 +47,20 @@ public class AmzaServiceInitializer {
     public AmzaService initialize(AmzaServiceConfig config,
             OrderIdProvider orderIdProvider,
             Marshaller marshaller,
-            TableStorageProvider amzaStores,
-            TableStorageProvider amzaReplicasWAL,
-            TableStorageProvider amzaResendWAL,
-            ChangeSetSender changeSetSender,
-            ChangeSetTaker tableTaker,
-            final TableStateChanges allChangesCallback) throws Exception {
+            RowsStorageProvider amzaStores,
+            RowsStorageProvider amzaReplicasWAL,
+            RowsStorageProvider amzaResendWAL,
+            UpdatesSender updatesSender,
+            UpdatesTaker updatesTaker,
+            final RowChanges allRowChanges) throws Exception {
 
         final AtomicReference<HostRingProvider> hostRingProvider = new AtomicReference<>();
         final AtomicReference<TableReplicator> replicator = new AtomicReference<>();
-        TableStateChanges tableStateChanges = new TableStateChanges() {
+        RowChanges tableStateChanges = new RowChanges() {
             @Override
-            public void changes(TableName mapName, TableDelta change) throws Exception {
-                replicator.get().replicateLocalChanges(hostRingProvider.get(), mapName, new MemoryTableIndex(change.getApply()), true);
-                allChangesCallback.changes(mapName, change);
+            public void changes(RowsChanged rowsChanged) throws Exception {
+                replicator.get().replicateLocalUpdates(hostRingProvider.get(),rowsChanged.getTableName(), rowsChanged, true);
+                allRowChanges.changes(rowsChanged);
             }
         };
         AmzaTableWatcher amzaTableWatcher = new AmzaTableWatcher(tableStateChanges);
@@ -83,7 +81,7 @@ public class AmzaServiceInitializer {
                 highWaterMarks,
                 replicasProvider,
                 resendsProvider,
-                changeSetSender, tableTaker);
+                updatesSender, updatesTaker);
         replicator.set(tableReplicator);
 
         AmzaService service = new AmzaService(orderIdProvider, marshaller, tableReplicator, storesProvider, amzaTableWatcher);

@@ -15,11 +15,11 @@
  */
 package com.jivesoftware.os.amza.storage.index;
 
-import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.Flusher;
-import com.jivesoftware.os.amza.shared.PassBackValueStorage;
+import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.storage.chunks.UIO;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.storage.filer.UIO;
 import org.mapdb.BTreeMap;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -35,13 +35,13 @@ public class NavigableMapTableIndexTest {
                 .make();
         BTreeMap<RowIndexKey, RowIndexValue> treeMap = db.getTreeMap("test");
 
-        NavigableMapRowsIndex instance = new NavigableMapRowsIndex(treeMap, new Flusher() {
+        MemoryRowsIndex instance = new MemoryRowsIndex(treeMap, new Flusher() {
 
             @Override
             public void flush() {
                 db.commit();
             }
-        }, new PassBackValueStorage());
+        });
 
 
         for (long i = 0; i < 200000000; i++) {

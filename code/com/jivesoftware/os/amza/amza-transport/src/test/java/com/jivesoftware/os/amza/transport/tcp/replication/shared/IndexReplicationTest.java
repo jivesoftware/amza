@@ -1,12 +1,13 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
+import com.jivesoftware.os.amza.shared.NoOpFlusher;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
@@ -101,7 +102,7 @@ public class IndexReplicationTest {
         changes.put(new RowIndexKey("1".getBytes()), val1);
         changes.put(new RowIndexKey("2".getBytes()), val2);
 
-        sender.sendUpdates(localHost, tableName, new MemoryRowsIndex(changes));
+        sender.sendUpdates(localHost, tableName, new MemoryRowsIndex(changes, new NoOpFlusher()));
 
         RowScanable received = receivedPut.get();
         Assert.assertNotNull(received);
@@ -135,8 +136,8 @@ public class IndexReplicationTest {
         changes.put(new RowIndexKey("2".getBytes()), val2);
         long transactionId = idProvider.nextId();
 
-        toTake.set(new RowUpdatesPayload(tableName, transactionId, Arrays.asList(new RowIndexKey("1".getBytes()),new RowIndexKey("2".getBytes())),
-        Arrays.asList(val1, val2)));
+        toTake.set(new RowUpdatesPayload(tableName, transactionId, Arrays.asList(new RowIndexKey("1".getBytes()), new RowIndexKey("2".getBytes())),
+                Arrays.asList(val1, val2)));
 
         final NavigableMap<RowIndexKey, RowIndexValue> received = new ConcurrentSkipListMap<>();
         taker.takeUpdates(localHost, tableName, transactionId, new RowScan() {

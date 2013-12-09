@@ -184,7 +184,7 @@ public class AmzaTable {
                 try {
                     compared.increment();
 
-                    RowIndexValue timestampedValue = tableStore.getTimestampedValue(key);
+                    RowIndexValue timestampedValue = tableStore.getRowIndexValue(key);
                     String comparing = tableName.getRingName() + ":" + tableName.getTableName()
                             + " to " + amzaTable.tableName.getRingName() + ":" + amzaTable.tableName.getTableName();
 

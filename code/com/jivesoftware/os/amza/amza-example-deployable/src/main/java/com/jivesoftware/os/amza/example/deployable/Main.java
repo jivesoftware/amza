@@ -24,28 +24,25 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.UpdatesSender;
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.Flusher;
-import com.jivesoftware.os.amza.shared.PassBackValueStorage;
+import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.RowsIndex;
 import com.jivesoftware.os.amza.shared.RowsIndexProvider;
 import com.jivesoftware.os.amza.shared.RowsStorage;
 import com.jivesoftware.os.amza.shared.RowsStorageProvider;
-import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.ValueStorage;
-import com.jivesoftware.os.amza.shared.ValueStorageProvider;
+import com.jivesoftware.os.amza.shared.UpdatesSender;
+import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.storage.RowTable;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
-import com.jivesoftware.os.amza.storage.chunks.Filer;
-import com.jivesoftware.os.amza.storage.index.NavigableMapRowsIndex;
+import com.jivesoftware.os.amza.storage.filer.Filer;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
@@ -98,9 +95,9 @@ public class Main {
 
         RingHost ringHost;
         if (transport.equals("http")) {
-            ringHost = new RingHost(hostname, port);
+            ringHost = new RingHost(hostname, port); // TODO include rackId
         } else {
-            ringHost = new RingHost(hostname, tcpPort);
+            ringHost = new RingHost(hostname, tcpPort); // TODO include rackId
         }
         final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new Random().nextInt(512)); // todo need a better way to create writter id.
 
@@ -124,39 +121,28 @@ public class Main {
                 BinaryRowWriter writer = new BinaryRowWriter(filer);
                 BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
-                final ValueStorageProvider valueStorageProvider = new ValueStorageProvider() {
-
-                    @Override
-                    public ValueStorage createValueStorage(TableName tableName) throws Exception {
-                        File chunksDirectory = new File(directory, "values");
-                        chunksDirectory.mkdirs();
-                        //return new ChunkFilerValueStorage(ChunkFiler.factory(chunksDirectory, "values-" + tableName.getTableName()));
-                        return new PassBackValueStorage();
-                    }
-                };
 
                 RowsIndexProvider tableIndexProvider = new RowsIndexProvider() {
 
                     @Override
-                    public RowsIndex createRowsIndex(TableName tableName, ValueStorage valueStorage) throws Exception {
+                    public RowsIndex createRowsIndex(TableName tableName) throws Exception {
                         final DB db = DBMaker.newDirectMemoryDB()
                             .closeOnJvmShutdown()
                             .make();
                         BTreeMap<RowIndexKey, RowIndexValue> treeMap = db.getTreeMap(tableName.getTableName());
-                        return new NavigableMapRowsIndex(treeMap, new Flusher() {
+                        return new MemoryRowsIndex(treeMap, new Flusher() {
 
                             @Override
                             public void flush() {
                                 db.commit();
                             }
-                        }, valueStorage);
+                        });
                     }
                 };
 
-                return new RowTable<>(tableName,
+                return new RowTable(tableName,
                         orderIdProvider,
                         tableIndexProvider,
-                        valueStorageProvider,
                         rowMarshaller,
                         reader,
                         writer);
@@ -169,7 +155,7 @@ public class Main {
         IndexReplicationProtocol clientProtocol = new IndexReplicationProtocol(null, orderIdProvider);
 
         MessageFramer framer = new MessageFramer(marshaller, clientProtocol);
-        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
+        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
 
         TcpClientProvider tcpClientProvider = new TcpClientProvider(
                 connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
@@ -206,8 +192,9 @@ public class Main {
         System.out.println("-----------------------------------------------------------------------");
 
         IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);
-        bufferProvider = new BufferProvider(bufferSize, numBuffers, true);
+        bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
         TcpServerInitializer initializer = new TcpServerInitializer();
+        // TODO include rackId
         final TcpServer server = initializer.initialize(new RingHost(hostname, tcpPort), numServerThreads, bufferProvider, framer, serverProtocol);
         server.start();
 

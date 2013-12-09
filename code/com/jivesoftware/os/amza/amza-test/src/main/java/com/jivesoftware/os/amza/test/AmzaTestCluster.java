@@ -20,33 +20,30 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.AmzaTable;
-import com.jivesoftware.os.amza.shared.UpdatesSender;
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.NoOpFlusher;
-import com.jivesoftware.os.amza.shared.PassBackValueStorage;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.RowScan;
+import com.jivesoftware.os.amza.shared.RowScanable;
+import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.RowsIndex;
 import com.jivesoftware.os.amza.shared.RowsIndexProvider;
 import com.jivesoftware.os.amza.shared.RowsStorage;
 import com.jivesoftware.os.amza.shared.RowsStorageProvider;
-import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.ValueStorage;
-import com.jivesoftware.os.amza.shared.ValueStorageProvider;
+import com.jivesoftware.os.amza.shared.UpdatesSender;
+import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.storage.FstMarshaller;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.RowTable;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
-import com.jivesoftware.os.amza.storage.chunks.Filer;
-import com.jivesoftware.os.amza.storage.chunks.IFiler;
-import com.jivesoftware.os.amza.storage.index.NavigableMapRowsIndex;
+import com.jivesoftware.os.amza.storage.filer.Filer;
+import com.jivesoftware.os.amza.storage.filer.IFiler;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -135,21 +132,12 @@ public class AmzaTestCluster {
         // TODO need to get writer id from somewhere other than port.
         final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(serviceHost.getPort(), new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
 
-        final ValueStorageProvider valueStorageProvider = new ValueStorageProvider() {
-
-            @Override
-            public ValueStorage createValueStorage(TableName tableName) {
-                return new PassBackValueStorage();
-            }
-        };
-
-
         final RowsIndexProvider tableIndexProvider = new RowsIndexProvider() {
 
             @Override
-            public RowsIndex createRowsIndex(TableName tableName, ValueStorage valueStorage) throws Exception {
+            public RowsIndex createRowsIndex(TableName tableName) throws Exception {
 
-                return new NavigableMapRowsIndex(new ConcurrentSkipListMap<RowIndexKey, RowIndexValue>(), new NoOpFlusher(), valueStorage);
+                return new MemoryRowsIndex(new ConcurrentSkipListMap<RowIndexKey, RowIndexValue>(), new NoOpFlusher());
             }
         };
 
@@ -165,7 +153,6 @@ public class AmzaTestCluster {
                 return new RowTable(tableName,
                         orderIdProvider,
                         tableIndexProvider,
-                        valueStorageProvider,
                         rowMarshaller,
                         reader,
                         writer);

@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.RowScan;
+import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.RowsStorage;
 import java.io.IOException;
 import java.util.Map.Entry;
@@ -42,7 +42,7 @@ public class RowsStorageUpdates implements RowScanable {
 
     @Override
     public <E extends Exception> void rowScan(RowScan<E> rowStream) throws E {
-        for(Entry<RowIndexKey, RowIndexValue> e:changes.entrySet()) {
+        for (Entry<RowIndexKey, RowIndexValue> e : changes.entrySet()) {
             if (!rowStream.row(timestamp, e.getKey(), e.getValue())) {
                 return;
             }

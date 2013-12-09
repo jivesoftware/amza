@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.Collection;
+import java.util.List;
 
 /**
  *
@@ -23,5 +23,5 @@ import java.util.Collection;
  */
 public interface RowWriter<R> {
 
-    void write(Collection<R> rows, boolean append) throws Exception;
+    List<byte[]> write(List<R> rows, boolean append) throws Exception;
 }

@@ -22,18 +22,13 @@ import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.RowsStorage;
-import java.util.Map;
-import java.util.NavigableMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TableStore implements RowScanable {
 
-    private final RowsStorage rowsStorage;
     private final AtomicBoolean loaded = new AtomicBoolean(false);
+    private final RowsStorage rowsStorage;
     private final RowChanges rowChanges;
-    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
     public TableStore(RowsStorage rowsStorage, RowChanges rowChanges) {
         this.rowsStorage = rowsStorage;
@@ -42,20 +37,14 @@ public class TableStore implements RowScanable {
 
     public void load() throws Exception {
         if (!loaded.get()) {
-            try {
-                readWriteLock.writeLock().lock();
-                if (loaded.compareAndSet(false, true)) {
-                    try {
-
-                        rowsStorage.load();
-                    } catch (Exception x) {
-                        throw x;
-                    } finally {
-                        loaded.set(false);
-                    }
+            if (loaded.compareAndSet(false, true)) {
+                try {
+                    rowsStorage.load();
+                } catch (Exception x) {
+                    throw x;
+                } finally {
+                    loaded.set(false);
                 }
-            } finally {
-                readWriteLock.writeLock().unlock();
             }
         }
     }
@@ -65,13 +54,7 @@ public class TableStore implements RowScanable {
     }
 
     public byte[] get(RowIndexKey key) throws Exception {
-        RowIndexValue got;
-        try {
-            readWriteLock.readLock().lock();
-            got = rowsStorage.get(key);
-        } finally {
-            readWriteLock.readLock().unlock();
-        }
+        RowIndexValue got = rowsStorage.get(key);
         if (got == null) {
             return null;
         }
@@ -81,22 +64,12 @@ public class TableStore implements RowScanable {
         return got.getValue();
     }
 
-    public RowIndexValue getTimestampedValue(RowIndexKey key) throws Exception {
-        try {
-            readWriteLock.readLock().lock();
-            return rowsStorage.get(key);
-        } finally {
-            readWriteLock.readLock().unlock();
-        }
+    public RowIndexValue getRowIndexValue(RowIndexKey key) throws Exception {
+        return rowsStorage.get(key);
     }
 
     public boolean containsKey(RowIndexKey key) throws Exception {
-        try {
-            readWriteLock.readLock().lock();
-            return rowsStorage.containsKey(key);
-        } finally {
-            readWriteLock.readLock().unlock();
-        }
+        return rowsStorage.containsKey(key);
     }
 
     @Override
@@ -112,35 +85,9 @@ public class TableStore implements RowScanable {
         return new RowStoreUpdates(this, new RowsStorageUpdates(rowsStorage, timestamp));
     }
 
-    public void commit(RowScanable changes) throws Exception {
-        RowsChanged updateMap = rowsStorage.update(changes);
+    public void commit(RowScanable rowUpdates) throws Exception {
+        RowsChanged updateMap = rowsStorage.update(rowUpdates);
         if (!updateMap.isEmpty()) {
-            try {
-                readWriteLock.writeLock().lock();
-                NavigableMap<RowIndexKey, RowIndexValue> apply = updateMap.getApply();
-                for (Map.Entry<RowIndexKey, RowIndexValue> entry : apply.entrySet()) {
-                    RowIndexKey k = entry.getKey();
-                    RowIndexValue timestampedValue = entry.getValue();
-                    RowIndexValue got = rowsStorage.get(k);
-                    if (got == null) {
-                        rowsStorage.put(k, timestampedValue);
-                    } else if (got.getTimestamp() < timestampedValue.getTimestamp()) {
-                        rowsStorage.put(k, timestampedValue);
-                    }
-                }
-                NavigableMap<RowIndexKey, RowIndexValue> remove = updateMap.getRemove();
-                for (Map.Entry<RowIndexKey, RowIndexValue> entry : remove.entrySet()) {
-                    RowIndexKey k = entry.getKey();
-                    RowIndexValue timestampedValue = entry.getValue();
-                    RowIndexValue got = rowsStorage.get(k);
-                    if (got != null && got.getTimestamp() < timestampedValue.getTimestamp()) {
-                        rowsStorage.remove(k);
-                    }
-                }
-
-            } finally {
-                readWriteLock.writeLock().unlock();
-            }
             if (rowChanges != null) {
                 rowChanges.changes(updateMap);
             }
@@ -148,11 +95,6 @@ public class TableStore implements RowScanable {
     }
 
     public void clear() throws Exception {
-        try {
-            readWriteLock.writeLock().lock();
-            rowsStorage.clear();
-        } finally {
-            readWriteLock.writeLock().unlock();
-        }
+        rowsStorage.clear();
     }
 }

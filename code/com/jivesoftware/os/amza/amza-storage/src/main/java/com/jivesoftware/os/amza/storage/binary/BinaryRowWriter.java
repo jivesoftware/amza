@@ -16,10 +16,11 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowWriter;
-import com.jivesoftware.os.amza.storage.chunks.IFiler;
-import com.jivesoftware.os.amza.storage.chunks.UIO;
+import com.jivesoftware.os.amza.storage.filer.IFiler;
+import com.jivesoftware.os.amza.storage.filer.UIO;
 import java.io.IOException;
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.List;
 
 public class BinaryRowWriter implements RowWriter<byte[]> {
 
@@ -30,25 +31,31 @@ public class BinaryRowWriter implements RowWriter<byte[]> {
     }
 
     @Override
-    public void write(Collection<byte[]> rows, boolean append) throws Exception {
+    public List<byte[]> write(List<byte[]> rows, boolean append) throws Exception {
+        List<byte[]> rowPointers;
         synchronized (filer.lock()) {
             if (append) {
                 filer.seek(filer.length()); // seek to end of file.
-                writeRows(rows);
+                rowPointers = writeRows(rows);
             } else {
                 filer.seek(0);
-                writeRows(rows);
+                rowPointers = writeRows(rows);
                 filer.eof(); // trim file to size.
             }
             filer.flush();
         }
+        return rowPointers;
     }
 
-    private void writeRows(Collection<byte[]> rows) throws IOException {
+    private List<byte[]> writeRows(List<byte[]> rows) throws IOException {
+        List<byte[]> rowPointers = new ArrayList<>();
         for (byte[] row : rows) {
-            UIO.writeInt(filer, row.length, "length");
+            rowPointers.add(UIO.longBytes(filer.getFilePointer()));
+            int length = row.length;
+            UIO.writeInt(filer, length, "length");
             filer.write(row);
-            UIO.writeInt(filer, row.length, "length");
+            UIO.writeInt(filer, length, "length");
         }
+        return rowPointers;
     }
 }

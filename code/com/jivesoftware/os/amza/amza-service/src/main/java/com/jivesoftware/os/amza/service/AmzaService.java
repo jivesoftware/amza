@@ -217,7 +217,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         byte[] rawTableName = marshaller.serialize(tableName);
 
         TableStore tableNameIndex = tableStoreProvider.getRowsStore(tableIndexKey);
-        RowIndexValue timestamptedTableKey = tableNameIndex.getTimestampedValue(new RowIndexKey(rawTableName));
+        RowIndexValue timestamptedTableKey = tableNameIndex.getRowIndexValue(new RowIndexKey(rawTableName));
         if (timestamptedTableKey == null) {
             RowStoreUpdates tx = tableNameIndex.startTransaction(orderIdProvider.nextId());
             tx.add(new RowIndexKey(rawTableName), rawTableName);
@@ -231,10 +231,10 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     public AmzaTable getTable(TableName tableName) throws Exception {
         byte[] rawTableName = marshaller.serialize(tableName);
         TableStore tableStoreIndex = tableStoreProvider.getRowsStore(tableIndexKey);
-        RowIndexValue timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new RowIndexKey(rawTableName));
+        RowIndexValue timestampedKeyValueStoreName = tableStoreIndex.getRowIndexValue(new RowIndexKey(rawTableName));
         while (timestampedKeyValueStoreName == null) {
             createTable(tableName);
-            timestampedKeyValueStoreName = tableStoreIndex.getTimestampedValue(new RowIndexKey(rawTableName));
+            timestampedKeyValueStoreName = tableStoreIndex.getRowIndexValue(new RowIndexKey(rawTableName));
         }
         if (timestampedKeyValueStoreName.getTombstoned()) {
             return null;
@@ -274,7 +274,6 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     public void updates(TableName tableName, RowScanable rowUpdates) throws Exception {
         tableReplicator.receiveChanges(tableName, rowUpdates);
     }
-
 
     public void watch(TableName tableName, RowChanges rowChanges) throws Exception {
         amzaTableWatcher.watch(tableName, rowChanges);

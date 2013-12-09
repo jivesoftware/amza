@@ -16,8 +16,8 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowReader;
-import com.jivesoftware.os.amza.storage.chunks.Filer;
-import com.jivesoftware.os.amza.storage.chunks.IFiler;
+import com.jivesoftware.os.amza.storage.filer.Filer;
+import com.jivesoftware.os.amza.storage.filer.IFiler;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,29 +46,29 @@ public class BinaryRowReaderWriterTest {
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer);
 
         ReadStream readStream = new ReadStream();
-        binaryRowReader.read(true, readStream);
+        binaryRowReader.scan(true, readStream);
         Assert.assertTrue(readStream.rows.isEmpty());
         readStream.clear();
 
-        binaryRowReader.read(false, readStream);
+        binaryRowReader.scan(false, readStream);
         Assert.assertTrue(readStream.rows.isEmpty());
         readStream.clear();
 
         binaryRowWriter.write(Arrays.asList(new byte[]{1, 2, 3, 4}), false);
-        binaryRowReader.read(false, readStream);
+        binaryRowReader.scan(false, readStream);
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
 
-        binaryRowReader.read(true, readStream);
+        binaryRowReader.scan(true, readStream);
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
 
         binaryRowWriter.write(Arrays.asList(new byte[]{2, 3, 4, 5}), true);
-        binaryRowReader.read(false, readStream);
+        binaryRowReader.scan(false, readStream);
         Assert.assertEquals(readStream.rows.size(), 2);
         readStream.clear();
 
-        binaryRowReader.read(true, readStream);
+        binaryRowReader.scan(true, readStream);
         Assert.assertEquals(readStream.rows.size(), 2);
         Assert.assertTrue(Arrays.equals(readStream.rows.get(0), new byte[]{2, 3, 4, 5}));
         Assert.assertTrue(Arrays.equals(readStream.rows.get(1), new byte[]{1, 2, 3, 4}));
@@ -82,7 +82,7 @@ public class BinaryRowReaderWriterTest {
         private final ArrayList<byte[]> rows = new ArrayList<>();
 
         @Override
-        public boolean stream(byte[] row) throws Exception {
+        public boolean row(byte[] rowPointer, byte[] row) throws Exception {
             rows.add(row);
             System.out.println(clears + " row:" + Arrays.toString(row));
             return true;

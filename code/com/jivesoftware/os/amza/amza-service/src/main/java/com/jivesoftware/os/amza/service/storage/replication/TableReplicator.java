@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
+import com.jivesoftware.os.amza.shared.NoOpFlusher;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
@@ -127,7 +128,7 @@ public class TableReplicator {
 
                 } catch (Exception x) {
                     LOG.debug("Can't takeFrom host:" + ringHost, x);
-                    LOG.warn("Can't takeFrom host:" + ringHost + " " + x.getMessage());
+                    LOG.warn("Can't takeFrom host:" + ringHost + " " + x.toString());
                 }
             }
         }
@@ -168,8 +169,8 @@ public class TableReplicator {
 
         public void flush() throws Exception {
             if (!batch.isEmpty()) {
-                System.out.println("Took:" + batch.size() + " from " + ringHost + " for " + tableName);
-                tableStore.commit(new MemoryRowsIndex(batch));
+                LOG.trace("Took:" + batch.size() + " from " + ringHost + " for " + tableName);
+                tableStore.commit(new MemoryRowsIndex(batch, new NoOpFlusher()));
                 highWaterMarks.set(ringHost, tableName, highWaterMark.longValue());
                 batch.clear();
             }
@@ -186,8 +187,8 @@ public class TableReplicator {
     // TODO move synchronized to a tighter scope
     synchronized public void applyReceivedChanges() throws Exception {
         for (Map.Entry<TableName, TableStore> replicatedUpdates : receivedChangesWAL.getTableStores()) {
-            TableName mapName = replicatedUpdates.getKey();
-            TableStore tableStore = tables.getRowsStore(mapName);
+            TableName tableName = replicatedUpdates.getKey();
+            TableStore tableStore = tables.getRowsStore(tableName);
             TableStore updates = replicatedUpdates.getValue();
             tableStore.commit(updates);
             updates.clear();

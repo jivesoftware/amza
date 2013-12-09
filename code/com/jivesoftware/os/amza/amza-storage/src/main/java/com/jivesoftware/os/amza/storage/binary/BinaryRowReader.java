@@ -17,8 +17,9 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowReader;
 import com.jivesoftware.os.amza.shared.RowReader.Stream;
-import com.jivesoftware.os.amza.storage.chunks.IFiler;
-import com.jivesoftware.os.amza.storage.chunks.UIO;
+import com.jivesoftware.os.amza.storage.filer.IFiler;
+import com.jivesoftware.os.amza.storage.filer.UIO;
+import java.io.IOException;
 
 public class BinaryRowReader implements RowReader<byte[]> {
 
@@ -29,7 +30,7 @@ public class BinaryRowReader implements RowReader<byte[]> {
     }
 
     @Override
-    public void read(boolean reverse, Stream<byte[]> stream) throws Exception {
+    public void scan(boolean reverse, Stream<byte[]> stream) throws Exception {
 
         if (reverse) {
             synchronized (filer.lock()) {
@@ -46,10 +47,9 @@ public class BinaryRowReader implements RowReader<byte[]> {
                     int length = UIO.readInt(filer, "length");
                     byte[] row = new byte[length];
                     filer.read(row);
-                    if (!stream.stream(row)) {
+                    if (!stream.row(UIO.longBytes(seekTo), row)) {
                         break;
                     }
-
                     seekTo -= 4;
                 }
             }
@@ -60,17 +60,34 @@ public class BinaryRowReader implements RowReader<byte[]> {
                 }
                 filer.seek(0);
                 while (filer.getFilePointer() < filer.length()) {
+                    long seekTo = filer.getFilePointer();
                     int length = UIO.readInt(filer, "length");
                     byte[] row = new byte[length];
                     if (length > 0) {
                         filer.read(row);
                     }
-                    if (!stream.stream(row)) {
+                    if (!stream.row(UIO.longBytes(seekTo), row)) {
                         break;
                     }
                     UIO.readInt(filer, "length");
                 }
             }
+        }
+    }
+
+    @Override
+    public byte[] read(byte[] rowPointer) throws IOException {
+        synchronized (filer.lock()) {
+            if (filer.length() == 0) {
+                return null;
+            }
+            filer.seek(UIO.bytesLong(rowPointer));
+            int length = UIO.readInt(filer, "length");
+            byte[] row = new byte[length];
+            if (length > 0) {
+                filer.read(row);
+            }
+            return row;
         }
     }
 }

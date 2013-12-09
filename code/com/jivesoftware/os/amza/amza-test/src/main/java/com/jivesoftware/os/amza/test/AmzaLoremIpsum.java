@@ -47,7 +47,7 @@ public class AmzaLoremIpsum {
 
         String tableName = "lorem";
 
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 1; i++) {
             final String tname = tableName + i;
             final int fdi = firstDocId + (count * 1);
             Thread t = new Thread() {

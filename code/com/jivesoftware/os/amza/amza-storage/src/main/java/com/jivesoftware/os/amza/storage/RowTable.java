@@ -28,41 +28,36 @@ import com.jivesoftware.os.amza.shared.RowsIndex;
 import com.jivesoftware.os.amza.shared.RowsIndexProvider;
 import com.jivesoftware.os.amza.shared.RowsStorage;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.shared.ValueStorage;
-import com.jivesoftware.os.amza.shared.ValueStorageProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class RowTable<R> implements RowsStorage {
+public class RowTable implements RowsStorage {
 
     private final TableName tableName;
     private final OrderIdProvider orderIdProvider;
     private final RowsIndexProvider tableIndexProvider;
-    private final ValueStorageProvider valueStorageProvider;
-    private final RowMarshaller<R> rowMarshaller;
-    private final RowReader<R> rowReader;
-    private final RowWriter<R> rowWriter;
-    private final AtomicReference<ValueStorage> valueStorage = new AtomicReference<>(null);
+    private final RowMarshaller<byte[]> rowMarshaller;
+    private final RowReader<byte[]> rowReader;
+    private final RowWriter<byte[]> rowWriter;
     private final AtomicReference<RowsIndex> tableIndex = new AtomicReference<>(null);
+    private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
     public RowTable(TableName tableName,
             OrderIdProvider orderIdProvider,
             RowsIndexProvider tableIndexProvider,
-            ValueStorageProvider valueStorageProvider,
-            RowMarshaller<R> rowMarshaller,
-            RowReader<R> rowReader,
-            RowWriter<R> rowWriter) {
+            RowMarshaller<byte[]> rowMarshaller,
+            RowReader<byte[]> rowReader,
+            RowWriter<byte[]> rowWriter) {
         this.tableName = tableName;
         this.orderIdProvider = orderIdProvider;
         this.tableIndexProvider = tableIndexProvider;
-        this.valueStorageProvider = valueStorageProvider;
         this.rowMarshaller = rowMarshaller;
         this.rowReader = rowReader;
         this.rowWriter = rowWriter;
@@ -74,171 +69,208 @@ public class RowTable<R> implements RowsStorage {
 
     @Override
     synchronized public void load() throws Exception {
-        final ValueStorage storage = valueStorageProvider.createValueStorage(tableName);
-        final RowsIndex index = tableIndexProvider.createRowsIndex(tableName, storage);
-        final Multimap<RowIndexKey, RowIndexValue> was = ArrayListMultimap.create();
-        final RowScan<RuntimeException> rowStream = new RowScan<RuntimeException>() {
+        final RowsIndex rowsIndex = tableIndexProvider.createRowsIndex(tableName);
+        rowReader.scan(false, new RowReader.Stream<byte[]>() {
             @Override
-            public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws RuntimeException {
-                RowIndexValue current = index.get(key);
-                if (current == null) {
-                    index.put(key, value);
-                } else if (current.getTimestamp() < value.getTimestamp()) {
-                    was.put(key, current);
-                    index.put(key, value);
-                }
-                return true;
-            }
-        };
-        rowReader.read(false, new RowReader.Stream<R>() {
-            @Override
-            public boolean stream(R row) throws Exception {
-                rowMarshaller.fromRow(row, rowStream);
+            public boolean row(final byte[] rowPointer, byte[] row) throws Exception {
+                rowMarshaller.fromRow(row, new RowScan() {
+
+                    @Override
+                    public boolean row(long transactionId, RowIndexKey key, RowIndexValue value) throws Exception {
+                        RowIndexValue current = rowsIndex.get(key);
+                        if (current == null) {
+                            rowsIndex.put(key, new RowIndexValue(rowPointer, value.getTimestamp(), value.getTombstoned()));
+                        } else if (current.getTimestamp() < value.getTimestamp()) {
+                            rowsIndex.put(key, new RowIndexValue(rowPointer, value.getTimestamp(), value.getTombstoned()));
+                        }
+                        return true;
+                    }
+                });
                 return true;
             }
         });
-        //save(was, tableIndex, false); // write compacted table after load.
-        valueStorage.set(storage);
-        tableIndex.set(index);
+        tableIndex.set(rowsIndex);
     }
 
     @Override
-    public RowsChanged update(RowScanable update) throws Exception {
-        final NavigableMap<RowIndexKey, RowIndexValue> applyMap = new TreeMap<>();
-        final NavigableMap<RowIndexKey, RowIndexValue> removeMap = new TreeMap<>();
+    public RowsChanged update(RowScanable updates) throws Exception {
+        final NavigableMap<RowIndexKey, RowIndexValue> appliedRows = new TreeMap<>();
+        final NavigableMap<RowIndexKey, RowIndexValue> removedRows = new TreeMap<>();
         final Multimap<RowIndexKey, RowIndexValue> clobberedRows = ArrayListMultimap.create();
-        final RowsIndex rowIndex = tableIndex.get();
-        update.rowScan(new RowScan<RuntimeException>() {
+        final RowsIndex rowsIndex = tableIndex.get();
+        updates.rowScan(new RowScan<RuntimeException>() {
             @Override
-            public boolean row(long orderId, RowIndexKey key, RowIndexValue update) {
-                RowIndexValue current = rowIndex.get(key);
-                if (current == null) {
-                    applyMap.put(key, update);
+            public boolean row(long transactionId, RowIndexKey updateRowKey, RowIndexValue updateRowValue) {
+                RowIndexValue currentRowValue = rowsIndex.get(updateRowKey);
+                if (currentRowValue == null) {
+                    appliedRows.put(updateRowKey, updateRowValue);
                 } else {
-                    if (update.getTombstoned() && update.getTimestamp() < 0) { // Handle tombstone updates
-                        if (current.getTimestamp() <= Math.abs(update.getTimestamp())) {
-                            RowIndexValue removeable = rowIndex.get(key);
+                    if (updateRowValue.getTombstoned() && updateRowValue.getTimestamp() < 0) { // Handle tombstone updates
+                        if (currentRowValue.getTimestamp() <= Math.abs(updateRowValue.getTimestamp())) {
+                            RowIndexValue removeable = hydrateRowIndexValue(rowsIndex.get(updateRowKey));
                             if (removeable != null) {
-                                removeMap.put(key, removeable);
-                                clobberedRows.put(key, removeable);
+                                removedRows.put(updateRowKey, removeable);
+                                clobberedRows.put(updateRowKey, removeable);
                             }
                         }
-                    } else if (current.getTimestamp() < update.getTimestamp()) {
-                        clobberedRows.put(key, current);
-                        applyMap.put(key, update);
+                    } else if (currentRowValue.getTimestamp() < updateRowValue.getTimestamp()) {
+                        clobberedRows.put(updateRowKey, currentRowValue);
+                        appliedRows.put(updateRowKey, updateRowValue);
                     }
                 }
                 return true;
             }
         });
-        if (!applyMap.isEmpty()) {
-            //System.out.println("applyMap:" + applyMap.size() + " removeMap:" + removeMap.size() + " clobberedRows:" + clobberedRows.size());
-            NavigableMap<RowIndexKey, RowIndexValue> saved = save(clobberedRows, applyMap, true);
-            return new RowsChanged(tableName, saved, removeMap, clobberedRows);
+        if (!appliedRows.isEmpty()) {
+
+            NavigableMap<RowIndexKey, RowIndexValue> saved = new TreeMap<>();
+            NavigableMap<RowIndexKey, byte[]> keyToRowPointer = new TreeMap<>();
+            synchronized (rowWriter) {
+                long transactionId = 0;
+                if (orderIdProvider != null) {
+                    transactionId = orderIdProvider.nextId();
+                }
+                List<RowIndexKey> rowKeys = new ArrayList<>();
+                List<byte[]> rows = new ArrayList<>();
+                for (Map.Entry<RowIndexKey, RowIndexValue> e : appliedRows.entrySet()) {
+                    RowIndexKey key = e.getKey();
+                    RowIndexValue value = e.getValue();
+                    byte[] toRow = rowMarshaller.toRow(transactionId, key, value);
+                    rowKeys.add(key);
+                    rows.add(toRow);
+                    saved.put(key, value);
+                }
+                if (!rows.isEmpty()) {
+                    List<byte[]> rowPointers = rowWriter.write(rows, true);
+                    for (int i = 0; i < rowPointers.size(); i++) {
+                        keyToRowPointer.put(rowKeys.get(i), rowPointers.get(i));
+                    }
+                }
+            }
+            try {
+                readWriteLock.writeLock().lock();
+                for (Map.Entry<RowIndexKey, RowIndexValue> entry : saved.entrySet()) {
+                    RowIndexKey rowIndexKey = entry.getKey();
+                    RowIndexValue rowIndexValue = entry.getValue();
+                    byte[] rowPointer = keyToRowPointer.get(rowIndexKey);
+                    RowIndexValue rowIndexValuePointer = new RowIndexValue(rowPointer,
+                            rowIndexValue.getTimestamp(),
+                            rowIndexValue.getTombstoned());
+                    RowIndexValue got = rowsIndex.get(rowIndexKey);
+                    if (got == null) {
+                        rowsIndex.put(rowIndexKey, rowIndexValuePointer);
+                    } else if (got.getTimestamp() < rowIndexValue.getTimestamp()) {
+                        rowsIndex.put(rowIndexKey, rowIndexValuePointer);
+                    }
+                }
+                NavigableMap<RowIndexKey, RowIndexValue> remove = removedRows;
+                for (Map.Entry<RowIndexKey, RowIndexValue> entry : remove.entrySet()) {
+                    RowIndexKey rowIndexKey = entry.getKey();
+                    RowIndexValue timestampedValue = entry.getValue();
+                    RowIndexValue got = rowsIndex.get(rowIndexKey);
+                    if (got != null && got.getTimestamp() < timestampedValue.getTimestamp()) {
+                        rowsIndex.remove(rowIndexKey);
+                    }
+                }
+
+            } finally {
+                readWriteLock.writeLock().unlock();
+            }
+            rowsIndex.commit();
+
+            return new RowsChanged(tableName, saved, removedRows, clobberedRows);
         } else {
-            return new RowsChanged(tableName, applyMap, removeMap, clobberedRows);
+            return new RowsChanged(tableName, appliedRows, removedRows, clobberedRows);
         }
     }
 
     @Override
-    public <E extends Exception> void rowScan(RowScan<E> rowStream) throws E {
-        tableIndex.get().rowScan(rowStream);
-    }
+    public <E extends Exception> void rowScan(final RowScan<E> rowStream) throws E {
+        RowsIndex rowsIndex = tableIndex.get();
+        rowsIndex.rowScan(new RowScan<E>() {
 
-    @Override
-    public void put(RowIndexKey k, RowIndexValue timestampedValue) {
-        tableIndex.get().put(k, timestampedValue);
+            @Override
+            public boolean row(long transactionId, RowIndexKey key, RowIndexValue value) throws E {
+                return rowStream.row(transactionId, key, hydrateRowIndexValue(value));
+            }
+        });
     }
 
     @Override
     public RowIndexValue get(RowIndexKey key) {
-        return tableIndex.get().get(key);
-    }
-
-    @Override
-    public boolean containsKey(RowIndexKey key) {
-        return tableIndex.get().containsKey(key);
-    }
-
-
-    @Override
-    public void remove(RowIndexKey key) {
-        tableIndex.get().remove(key);
-    }
-
-    public NavigableMap<RowIndexKey, RowIndexValue> save(Multimap<RowIndexKey, RowIndexValue> was,
-            NavigableMap<RowIndexKey, RowIndexValue> mutation,
-            boolean append) throws Exception {
-        synchronized (rowWriter) {
-            long transactionId = 0;
-            if (orderIdProvider != null) {
-                transactionId = orderIdProvider.nextId();
+        RowsIndex rowsIndex = tableIndex.get();
+        try {
+            readWriteLock.readLock().lock();
+            RowIndexValue got = rowsIndex.get(key);
+            if (got == null) {
+                return got;
             }
-            NavigableMap<RowIndexKey, RowIndexValue> saved = new TreeMap<>();
-            List<R> rows = new ArrayList<>();
-            for (Map.Entry<RowIndexKey, RowIndexValue> e : mutation.entrySet()) {
-                RowIndexKey key = e.getKey();
-                RowIndexValue value = e.getValue();
-                R toRow = rowMarshaller.toRow(transactionId, key, value);
-                rows.add(toRow);
-                saved.put(key, value); // TODO what value do we want the pointer or the real value?
-            }
-            if (!rows.isEmpty()) {
-                rowWriter.write(rows, append);
-            }
-            return saved;
+            return hydrateRowIndexValue(got);
+        } finally {
+            readWriteLock.readLock().unlock();
         }
     }
 
     @Override
-    synchronized public void takeRowUpdatesSince(final long transactionId, final RowScan rowStream) throws Exception {
+    public boolean containsKey(RowIndexKey key) {
+        try {
+            readWriteLock.readLock().lock();
+            return tableIndex.get().containsKey(key);
+        } finally {
+            readWriteLock.readLock().unlock();
+        }
+    }
+
+    private RowIndexValue hydrateRowIndexValue(RowIndexValue rowIndexValue) {
+        try {
+            // TODO replace with a read only pool of rowReaders
+            byte[] row = rowReader.read(rowIndexValue.getValue());
+            byte[] value = rowMarshaller.valueFromRow(row);
+            return new RowIndexValue(value,
+                    rowIndexValue.getTimestamp(),
+                    rowIndexValue.getTombstoned());
+        } catch (Exception x) {
+            throw new RuntimeException("Failed to hydrtate " + rowIndexValue, x);
+        }
+    }
+
+    @Override
+    public void takeRowUpdatesSince(final long transactionId, final RowScan rowStream) throws Exception {
         final RowScan<Exception> filteringRowStream = new RowScan<Exception>() {
             @Override
             public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
                 if (orderId > transactionId) {
-                    byte[] storeValue = valueStorage.get().get(value.getValue());
-                    rowStream.row(orderId, key, new RowIndexValue(storeValue, value.getTimestamp(), value.getTombstoned()));
+                    rowStream.row(orderId, key, value);
                 }
                 return true;
             }
         };
-
-        rowReader.read(true, new RowReader.Stream<R>() {
+        rowReader.scan(true, new RowReader.Stream<byte[]>() {
             @Override
-            public boolean stream(R row) throws Exception {
+            public boolean row(byte[] rowPointer, byte[] row) throws Exception {
                 return rowMarshaller.fromRow(row, filteringRowStream);
             }
         });
     }
 
     @Override
-    synchronized public void compactTombestone(long ifOlderThanNMillis) throws Exception {
+    public void compactTombestone(long ifOlderThanNMillis) throws Exception {
 //        System.out.println("TODO: compactTombestone ifOlderThanNMillis:" + ifOlderThanNMillis);
 //        long[] unpack = new AmzaChangeIdPacker().unpack(ifOlderThanNMillis);
-//        ConcurrentNavigableMap<K, TimestampedValue> changes = new ConcurrentSkipListMap<>();
-//        ConcurrentNavigableMap<K, TimestampedValue> currentMap = readMap.get();
-//        for (Map.Entry<K, TimestampedValue> e : currentMap.entrySet()) {
-//            TimestampedValue timestampedValue = e.getValue();
-//            if (timestampedValue.getTimestamp() < ifOlderThanTimestamp) {
-//                changes.put(e.getKey(), new TimestampedValue(null, -timestampedValue.getTimestamp(), true));
-//            }
-//        }
-//        if (!changes.isEmpty()) {
-//            applyChanges(changes);
-//        }
     }
 
     @Override
-    synchronized public void clear() throws Exception {
-        ConcurrentNavigableMap<RowIndexKey, RowIndexValue> saveableMap = new ConcurrentSkipListMap<>();
-//        TableIndex<K, V> load = load();
-//        Multimap<K, TimestampedValue> all = ArrayListMultimap.create();
-//        for (Entry<K, TimestampedValue> entry : load.entrySet()) {
-//            all.put(entry.getKey(), entry.getValue());
-//        }
-        save(null, saveableMap, false);
+    public void clear() throws Exception {
+        try {
+            readWriteLock.writeLock().lock();
+            List<byte[]> rows = new ArrayList<>();
+            rowWriter.write(rows, false);
+
+            RowsIndex rowsIndex = tableIndex.get();
+            rowsIndex.clear();
+            rowsIndex.commit();
+        } finally {
+            readWriteLock.writeLock().unlock();
+        }
     }
-
-
-
 }

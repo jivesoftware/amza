@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.storage.chunks;
+package com.jivesoftware.os.amza.storage.filer;
 
 import java.io.IOException;
 
@@ -31,6 +31,9 @@ public class MemoryFiler implements IFiler {
     }
 
     public MemoryFiler(byte[] _bytes) {
+        if (_bytes == null) {
+            throw new IllegalArgumentException("MemoryFiler _bytes cannot be null.");
+        }
         bytes = _bytes;
     }
 

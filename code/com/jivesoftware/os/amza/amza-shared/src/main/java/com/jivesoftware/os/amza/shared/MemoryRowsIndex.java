@@ -21,60 +21,80 @@ import java.util.NavigableMap;
 
 public class MemoryRowsIndex implements RowsIndex, Serializable {
 
-    private final NavigableMap<RowIndexKey, RowIndexValue> rowsIndex;
+    private final NavigableMap<RowIndexKey, RowIndexValue> index;
+    private final Flusher flusher;
 
-    public MemoryRowsIndex(NavigableMap<RowIndexKey, RowIndexValue> rowsIndex) {
-        this.rowsIndex = rowsIndex;
+    public MemoryRowsIndex(NavigableMap<RowIndexKey, RowIndexValue> index, Flusher flusher) throws Exception {
+        this.index = index;
+        this.flusher = flusher;
     }
 
     @Override
-    public RowIndexValue put(RowIndexKey key, RowIndexValue value) {
-        return rowsIndex.put(key, value);
+    public void commit() {
+        if (flusher != null) {
+            flusher.flush();
+        }
     }
 
     @Override
-    public RowIndexValue get(RowIndexKey key) {
-        return rowsIndex.get(key);
+    public void compact() {
+        if (flusher != null) {
+            //flusher.compact(); // TODO?
+        }
     }
 
     @Override
-    public boolean containsKey(RowIndexKey key) {
-        return rowsIndex.containsKey(key);
-    }
-
-    @Override
-    public RowIndexValue remove(RowIndexKey key) {
-        return rowsIndex.remove(key);
-    }
-
-    @Override
-    public <E extends Exception> void rowScan(RowScan<E> rowScan) {
-        for (Entry<RowIndexKey, RowIndexValue> e : rowsIndex.entrySet()) {
-            try {
-                if (!rowScan.row(-1, e.getKey(), e.getValue())) {
-                    break;
-                }
-            } catch (Throwable ex) {
-                throw new RuntimeException("Error while streaming entry set.", ex);
+    public <E extends Exception> void rowScan(RowScan<E> rowScan) throws Exception {
+        for (Entry<RowIndexKey, RowIndexValue> e : index.entrySet()) {
+            RowIndexKey key = e.getKey();
+            RowIndexValue value = e.getValue();
+            if (!rowScan.row(-1, key, value)) {
+                break;
             }
         }
     }
 
     @Override
-    public void clear() {
-        rowsIndex.clear();
-    }
-
-    @Override
     public boolean isEmpty() {
-        return rowsIndex.isEmpty();
+        return index.isEmpty();
     }
 
     @Override
-    public void commit() {
+    public boolean containsKey(RowIndexKey key) {
+        return index.containsKey(key);
     }
 
     @Override
-    public void compact() {
+    public RowIndexValue get(RowIndexKey key) {
+        RowIndexValue got = index.get(key);
+        if (got == null) {
+            return null;
+        }
+        return got;
     }
+
+    @Override
+    public RowIndexValue put(RowIndexKey key, RowIndexValue value) {
+        RowIndexValue had = index.put(key, value);
+        if (had == null) {
+            return null;
+        }
+        return had;
+    }
+
+    @Override
+    public RowIndexValue remove(RowIndexKey key) {
+        RowIndexValue removed = index.remove(key);
+        if (removed == null) {
+            return null;
+        }
+        return removed;
+    }
+
+    @Override
+    public void clear() {
+        index.clear();
+    }
+
+
 }

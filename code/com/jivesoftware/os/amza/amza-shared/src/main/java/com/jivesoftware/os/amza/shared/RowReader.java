@@ -27,8 +27,10 @@ public interface RowReader<R> {
      */
     static interface Stream<RR> {
 
-        boolean stream(RR row) throws Exception;
+        boolean row(byte[] rowPointer, RR row) throws Exception;
     }
 
-    void read(boolean reverse, Stream<R> rowStream) throws Exception;
+    void scan(boolean reverse, Stream<R> rowStream) throws Exception;
+
+    R read(byte[] rowPointer) throws Exception;
 }

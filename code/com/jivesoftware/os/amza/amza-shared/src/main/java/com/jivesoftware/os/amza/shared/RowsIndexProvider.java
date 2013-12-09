@@ -17,5 +17,5 @@ package com.jivesoftware.os.amza.shared;
 
 public interface RowsIndexProvider {
 
-    RowsIndex createRowsIndex(TableName tableName, ValueStorage valueStorage) throws Exception;
+    RowsIndex createRowsIndex(TableName tableName) throws Exception;
 }

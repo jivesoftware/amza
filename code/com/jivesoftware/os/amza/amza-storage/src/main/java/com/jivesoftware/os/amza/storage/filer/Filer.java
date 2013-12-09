@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.storage.chunks;
+package com.jivesoftware.os.amza.storage.filer;
 
 import java.io.File;
 import java.io.IOException;

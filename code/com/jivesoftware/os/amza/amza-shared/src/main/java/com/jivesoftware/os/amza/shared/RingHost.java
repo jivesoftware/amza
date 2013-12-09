@@ -47,9 +47,9 @@ public class RingHost implements Comparable<RingHost>, Serializable {
 
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 89 * hash + Objects.hashCode(this.host);
-        hash = 89 * hash + this.port;
+        int hash = 7;
+        hash = 79 * hash + Objects.hashCode(this.host);
+        hash = 79 * hash + this.port;
         return hash;
     }
 
@@ -74,9 +74,9 @@ public class RingHost implements Comparable<RingHost>, Serializable {
     @Override
     public int compareTo(RingHost o) {
         int i = host.compareTo(o.host);
-        if (i == 0) {
-            i = Integer.compare(port, o.port);
+        if (i != 0) {
+            return i;
         }
-        return i;
+        return Integer.compare(port, o.port);
     }
 }

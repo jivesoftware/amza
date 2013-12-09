@@ -15,37 +15,42 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
+import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.storage.FstMarshaller;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import de.ruedigermoeller.serialization.FSTConfiguration;
+import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
+import com.jivesoftware.os.amza.storage.filer.UIO;
 
 public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
 
-    private static final FstMarshaller FST_MARSHALLER = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
-
-    static {
-        FST_MARSHALLER.registerSerializer(BinaryRow.class, new FSTBinaryRowMarshaller());
-    }
-
-    public BinaryRowMarshaller() {
-    }
-
     @Override
-    public byte[] toRow(long orderId, RowIndexKey k, RowIndexValue v) throws Exception {
-        return FST_MARSHALLER.serialize(new BinaryRow(orderId,
-                k.getKey(),
-                v.getTimestamp(),
-                v.getTombstoned(),
-                v.getValue()));
+    public byte[] toRow(long transactionId, RowIndexKey k, RowIndexValue v) throws Exception {
+        MemoryFiler filer = new MemoryFiler();
+        UIO.writeLong(filer, transactionId, "transactionId");
+        UIO.writeByteArray(filer, v.getValue(), "value");
+        UIO.writeLong(filer, v.getTimestamp(), "timestamp");
+        UIO.writeBoolean(filer, v.getTombstoned(), "tombstone");
+        UIO.writeByteArray(filer, k.getKey(), "key");
+        return filer.getBytes();
+
     }
 
     @Override
     public boolean fromRow(byte[] row, RowScan rowStream) throws Exception {
-        BinaryRow binaryRow = FST_MARSHALLER.deserialize(row, BinaryRow.class);
-        return rowStream.row(binaryRow.transactionId, new RowIndexKey(binaryRow.key),
-                new RowIndexValue(binaryRow.value, binaryRow.timestamp, binaryRow.tombstone));
+        MemoryFiler filer = new MemoryFiler(row);
+        long transactionId = UIO.readLong(filer, "transactionId");
+        byte[] value = UIO.readByteArray(filer, "value");
+        long timestamp = UIO.readLong(filer, "timestamp");
+        boolean tombstone = UIO.readBoolean(filer, "tombstone");
+        byte[] key = UIO.readByteArray(filer, "key");
+        return rowStream.row(transactionId, new RowIndexKey(key), new RowIndexValue(value, timestamp, tombstone));
+    }
+
+    @Override
+    public byte[] valueFromRow(byte[] row) throws Exception {
+        MemoryFiler filer = new MemoryFiler(row);
+        UIO.readLong(filer, "transactionId");
+        return UIO.readByteArray(filer, "value");
     }
 }

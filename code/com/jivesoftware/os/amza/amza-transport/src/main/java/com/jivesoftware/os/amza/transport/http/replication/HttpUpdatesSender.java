@@ -16,13 +16,13 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.jive.utils.http.client.HttpClient;
 import com.jivesoftware.os.jive.utils.http.client.HttpClientConfig;
@@ -43,8 +43,7 @@ public class HttpUpdatesSender implements UpdatesSender {
     private final ConcurrentHashMap<RingHost, RequestHelper> requestHelpers = new ConcurrentHashMap<>();
 
     @Override
-    public void sendUpdates(RingHost ringHost, TableName tableName,
-            RowScanable changes) throws Exception {
+    public void sendUpdates(RingHost ringHost, TableName tableName, RowScanable changes) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         final List<byte[]> rows = new ArrayList<>();
@@ -59,7 +58,7 @@ public class HttpUpdatesSender implements UpdatesSender {
             }
         });
         if (!rows.isEmpty()) {
-            LOG.info("Pushing " + rows.size() + " changes to " + ringHost);
+            LOG.debug("Pushing " + rows.size() + " changes to " + ringHost);
             RowUpdates changeSet = new RowUpdates(-1, tableName, rows);
             getRequestHelper(ringHost).executeRequest(changeSet, "/amza/changes/add", Boolean.class, false);
         }

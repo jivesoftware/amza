@@ -59,7 +59,7 @@ public class AmzaServiceInitializer {
         RowChanges tableStateChanges = new RowChanges() {
             @Override
             public void changes(RowsChanged rowsChanged) throws Exception {
-                replicator.get().replicateLocalUpdates(hostRingProvider.get(),rowsChanged.getTableName(), rowsChanged, true);
+                replicator.get().replicateLocalUpdates(hostRingProvider.get(), rowsChanged.getTableName(), rowsChanged, true);
                 allRowChanges.changes(rowsChanged);
             }
         };

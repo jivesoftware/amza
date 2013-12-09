@@ -22,18 +22,14 @@ public interface RowsStorage extends RowScanable {
     // TODO Consider using a call back stream instead of returning RowsChanged
     RowsChanged update(RowScanable rowUpdates) throws Exception;
 
+    RowIndexValue get(RowIndexKey key);
+
+    boolean containsKey(RowIndexKey key);
+
     void takeRowUpdatesSince(final long transactionId, RowScan rowUpdates) throws Exception;
 
     void compactTombestone(long ifOlderThanNMillis) throws Exception;
 
     void clear() throws Exception;
-
-    public RowIndexValue get(RowIndexKey key);
-
-    boolean containsKey(RowIndexKey key);
-
-    void put(RowIndexKey key, RowIndexValue value);
-
-    void remove(RowIndexKey key);
 
 }

@@ -15,13 +15,15 @@
  */
 package com.jivesoftware.os.amza.storage;
 
+import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
 
 public interface RowMarshaller<R> {
 
     R toRow(long orderId, RowIndexKey key, RowIndexValue value) throws Exception;
 
     boolean fromRow(R row, RowScan rowStream) throws Exception;
+
+    byte[] valueFromRow(R row) throws Exception;
 }

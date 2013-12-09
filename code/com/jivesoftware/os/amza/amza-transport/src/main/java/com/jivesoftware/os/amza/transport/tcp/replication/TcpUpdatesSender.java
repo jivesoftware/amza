@@ -15,13 +15,13 @@
  */
 package com.jivesoftware.os.amza.transport.tcp.replication;
 
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.RowUpdatesPayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
@@ -82,7 +82,7 @@ public class TcpUpdatesSender implements UpdatesSender {
 
         TcpClient client = tcpClientProvider.getClientForHost(ringHost);
         try {
-            LOG.info("Pushing " + payload.size() + " changes to " + ringHost);
+            LOG.debug("Pushing " + payload.size() + " changes to " + ringHost);
             Message request = new Message(indexReplicationProtocol.nextInteractionId(),
                     indexReplicationProtocol.OPCODE_PUSH_CHANGESET, true, payload);
             client.sendMessage(request);

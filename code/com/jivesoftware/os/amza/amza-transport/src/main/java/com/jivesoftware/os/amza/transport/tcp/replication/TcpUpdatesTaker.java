@@ -15,13 +15,13 @@
  */
 package com.jivesoftware.os.amza.transport.tcp.replication;
 
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.amza.transport.tcp.replication.protocol.TakeRowUpdatesRequestPayload;
+import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.RowUpdatesPayload;
+import com.jivesoftware.os.amza.transport.tcp.replication.protocol.TakeRowUpdatesRequestPayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClient;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;

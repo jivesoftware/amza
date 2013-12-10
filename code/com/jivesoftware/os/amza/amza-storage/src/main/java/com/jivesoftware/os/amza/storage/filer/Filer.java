@@ -15,29 +15,11 @@
  */
 package com.jivesoftware.os.amza.storage.filer;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
 public class Filer extends RandomAccessFile implements IFiler {
 
-    final private static SoftIndex<Filer, String, Object> openFilers = new SoftIndex<>("Open Filers");
-
-    public static Filer open(File _file, String _mode) throws IOException {
-        return open(_file.getPath(), _mode);
-    }
-
-    public static Filer open(String _file, String _mode) throws IOException {
-        synchronized (openFilers) {
-            Filer f = openFilers.get(_file);
-            if (f == null) {
-                f = new Filer(_file, _mode);
-                openFilers.set(f, _file);
-            }
-            return f;
-        }
-
-    }
     public static long totalFilesOpenCount;
     public static long totalReadByteCount;
     public static long totalWriteByteCount;
@@ -46,7 +28,7 @@ public class Filer extends RandomAccessFile implements IFiler {
     public long writeByteCount;
     String fileName;
 
-    private Filer(String name, String mode) throws IOException {
+    public Filer(String name, String mode) throws IOException {
         super(name, mode);
         fileName = name;
     }
@@ -62,9 +44,6 @@ public class Filer extends RandomAccessFile implements IFiler {
 
     @Override
     public void close() throws IOException {
-        synchronized (openFilers) {
-            openFilers.remove(fileName);
-        }
         super.close();
     }
 

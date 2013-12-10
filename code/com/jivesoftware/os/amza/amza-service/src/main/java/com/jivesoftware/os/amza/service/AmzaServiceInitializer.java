@@ -38,9 +38,9 @@ public class AmzaServiceInitializer {
         public String workingDirectory = "./var/data/";
         public int replicationFactor = 1;
         public int takeFromFactor = 1;
-        public int resendReplicasIntervalInMillis = 10000;
+        public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
-        public int takeFromNeighborsIntervalInMillis = 10000;
+        public int takeFromNeighborsIntervalInMillis = 1000;
         public long compactTombstoneIfOlderThanNMillis = 1 * 24 * 60 * 60 * 1000L;
     }
 
@@ -59,7 +59,8 @@ public class AmzaServiceInitializer {
         RowChanges tableStateChanges = new RowChanges() {
             @Override
             public void changes(RowsChanged rowsChanged) throws Exception {
-                replicator.get().replicateLocalUpdates(hostRingProvider.get(), rowsChanged.getTableName(), rowsChanged, true);
+                TableReplicator tableReplicator = replicator.get();
+                tableReplicator.replicateLocalUpdates(hostRingProvider.get(), rowsChanged.getTableName(), rowsChanged, true);
                 allRowChanges.changes(rowsChanged);
             }
         };

@@ -107,7 +107,7 @@ public class Main {
 
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
 
-        RowsStorageProvider tableStorageProvider = new RowsStorageProvider() {
+        RowsStorageProvider rowsStorageProvider = new RowsStorageProvider() {
             @Override
             public RowsStorage createRowsStorage(File workingDirectory,
                     String tableDomain,
@@ -116,7 +116,7 @@ public class Main {
                 directory.mkdirs();
                 File file = new File(directory, tableName.getTableName() + ".kvt");
 
-                Filer filer = Filer.open(file, "rw");
+                Filer filer = new Filer(file.getAbsolutePath(), "rw");
                 BinaryRowReader reader = new BinaryRowReader(filer);
                 BinaryRowWriter writer = new BinaryRowWriter(filer);
                 BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
@@ -171,9 +171,9 @@ public class Main {
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
                 orderIdProvider,
                 new com.jivesoftware.os.amza.storage.FstMarshaller(FSTConfiguration.getDefaultConfiguration()),
-                tableStorageProvider,
-                tableStorageProvider,
-                tableStorageProvider,
+                rowsStorageProvider,
+                rowsStorageProvider,
+                rowsStorageProvider,
                 changeSetSender,
                 tableTaker,
                 new RowChanges() {

@@ -41,7 +41,7 @@ public class BinaryRowReaderWriterTest {
     @Test
     public void testRead() throws Exception {
 
-        IFiler filer = Filer.open("booya", "rw");
+        IFiler filer = new Filer("booya", "rw");
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer);
 

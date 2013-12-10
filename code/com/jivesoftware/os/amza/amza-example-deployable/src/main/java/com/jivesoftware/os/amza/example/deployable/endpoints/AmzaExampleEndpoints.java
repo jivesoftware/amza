@@ -61,6 +61,7 @@ public class AmzaExampleEndpoints {
     public Response get(@QueryParam("table") String table,
             @QueryParam("key") String key) {
         try {
+            LOG.warn("Getting:" + table + " key:" + key);
             AmzaTable amzaTable = amzaService.getTable(new TableName("master", table, null, null));
             byte[] got = amzaTable.get(new RowIndexKey(key.getBytes()));
             if (got == null) {

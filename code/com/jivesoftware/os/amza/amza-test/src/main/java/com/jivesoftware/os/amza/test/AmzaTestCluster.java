@@ -146,7 +146,7 @@ public class AmzaTestCluster {
             public RowsStorage createRowsStorage(File workingDirectory, String tableDomain, TableName tableName) throws Exception {
                 File file = new File(workingDirectory, tableDomain + File.separator + tableName.getTableName() + ".kvt");
                 file.getParentFile().mkdirs();
-                IFiler filer = Filer.open(file, "rw");
+                IFiler filer = new Filer(file.getAbsolutePath(), "rw");
                 BinaryRowReader reader = new BinaryRowReader(filer);
                 BinaryRowWriter writer = new BinaryRowWriter(filer);
                 RowMarshaller<byte[]> rowMarshaller = new BinaryRowMarshaller();

@@ -69,7 +69,14 @@ public class AmzaTable {
     }
 
     public byte[] get(RowIndexKey key) throws Exception {
-        return tableStore.get(key);
+        RowIndexValue got = tableStore.get(key);
+        if (got == null) {
+            return null;
+        }
+        if (got.getTombstoned()) {
+            return null;
+        }
+        return got.getValue();
     }
 
     public List<byte[]> get(List<RowIndexKey> keys) throws Exception {
@@ -80,49 +87,20 @@ public class AmzaTable {
         return values;
     }
 
-    // TODO replace ValueStream with RowScan
-    public void get(Iterable<RowIndexKey> keys, ValueStream<Entry<RowIndexKey, byte[]>> valuesStream) throws Exception {
+    public void get(Iterable<RowIndexKey> keys, RowScan<Exception> valuesStream) throws Exception {
         for (final RowIndexKey key : keys) {
-            final byte[] value = tableStore.get(key);
-            if (value != null) {
-                Entry<RowIndexKey, byte[]> entry = new Entry<RowIndexKey, byte[]>() {
-
-                    @Override
-                    public RowIndexKey getKey() {
-                        return key;
-                    }
-
-                    @Override
-                    public byte[] getValue() {
-                        return value;
-                    }
-
-                    @Override
-                    public byte[] setValue(byte[] value) {
-                        return value;
-                    }
-                };
-                if (valuesStream.stream(entry) != entry) {
-                    break;
+            RowIndexValue rowIndexValue = tableStore.get(key);
+            if (rowIndexValue != null && !rowIndexValue.getTombstoned()) {
+                if (!valuesStream.row(-1, key, rowIndexValue)) {
+                    return;
                 }
             }
         }
-        valuesStream.stream(null); //EOS
     }
 
     // TODO add concept of a key start stop and filtering
     public <E extends Exception> void scan(RowScan<E> stream) throws E {
         tableStore.rowScan(stream);
-    }
-
-    public static interface ValueStream<VV> {
-
-        /**
-         *
-         * @param value null means end of stream.
-         * @return implementor can stop the stream by returning null.
-         */
-        VV stream(VV value);
     }
 
     public boolean remove(RowIndexKey key) throws Exception {
@@ -140,35 +118,6 @@ public class AmzaTable {
         tx.commit();
     }
 
-    // TODO replace ValueStream with RowScan
-    public void listEntries(final ValueStream<Entry<RowIndexKey, RowIndexValue>> stream) throws Exception {
-        tableStore.rowScan(new RowScan<RuntimeException>() {
-
-            @Override
-            public boolean row(long orderId, final RowIndexKey key, final RowIndexValue value) {
-                Entry e = new Entry() {
-
-                    @Override
-                    public RowIndexKey getKey() {
-                        return key;
-                    }
-
-                    @Override
-                    public RowIndexValue getValue() {
-                        return value;
-                    }
-
-                    @Override
-                    public Object setValue(Object value) {
-                        throw new UnsupportedOperationException("Not supported.");
-                    }
-                };
-                return stream.stream(e) != e;
-            }
-        });
-        stream.stream(null); //EOS
-    }
-
     public void takeRowUpdatesSince(long transationId, RowScan rowUpdates) throws Exception {
         tableStore.takeRowUpdatesSince(transationId, rowUpdates);
     }
@@ -184,7 +133,7 @@ public class AmzaTable {
                 try {
                     compared.increment();
 
-                    RowIndexValue timestampedValue = tableStore.getRowIndexValue(key);
+                    RowIndexValue timestampedValue = tableStore.get(key);
                     String comparing = tableName.getRingName() + ":" + tableName.getTableName()
                             + " to " + amzaTable.tableName.getRingName() + ":" + amzaTable.tableName.getTableName();
 

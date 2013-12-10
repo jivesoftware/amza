@@ -28,7 +28,7 @@ public class TableStoreProvider {
 
     private final File workingDirectory;
     private final String storeName;
-    private final RowsStorageProvider  tableStorageProvider;
+    private final RowsStorageProvider tableStorageProvider;
     private final RowChanges tableStateChanges;
     private final ConcurrentHashMap<TableName, TableStore> rowsStores = new ConcurrentHashMap<>();
 
@@ -46,7 +46,8 @@ public class TableStoreProvider {
         return storeName;
     }
 
-    synchronized public TableStore getRowsStore(TableName tableName) throws Exception {
+    // TODO hash lock on tableName
+    synchronized public TableStore getTableStore(TableName tableName) throws Exception {
         TableStore tableStore = rowsStores.get(tableName);
         if (tableStore == null) {
             RowsStorage rowsStorage = tableStorageProvider.createRowsStorage(workingDirectory, storeName, tableName);
@@ -56,7 +57,6 @@ public class TableStoreProvider {
         }
         return tableStore;
     }
-
 
     public Set<Map.Entry<TableName, TableStore>> getTableStores() {
         return rowsStores.entrySet();

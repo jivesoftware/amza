@@ -19,12 +19,12 @@ import com.jivesoftware.os.amza.shared.RowIndexKey;
 
 public class RowStoreUpdates {
 
-    private final TableStore rowsStore;
+    private final TableStore tableStore;
     private final RowsStorageUpdates rowsStorageChangeSet;
     private int changedCount = 0;
 
-    RowStoreUpdates(TableStore rowsStore, RowsStorageUpdates rowsStorageChangeSet) {
-        this.rowsStore = rowsStore;
+    RowStoreUpdates(TableStore tableStore, RowsStorageUpdates rowsStorageChangeSet) {
+        this.tableStore = tableStore;
         this.rowsStorageChangeSet = rowsStorageChangeSet;
     }
 
@@ -51,7 +51,7 @@ public class RowStoreUpdates {
 
     public void commit() throws Exception {
         if (changedCount > 0) {
-            rowsStore.commit(rowsStorageChangeSet);
+            tableStore.commit(rowsStorageChangeSet);
         }
     }
 }

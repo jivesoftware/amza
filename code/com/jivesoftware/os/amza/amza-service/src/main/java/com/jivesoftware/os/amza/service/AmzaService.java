@@ -159,7 +159,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         }
         byte[] rawRingHost = marshaller.serialize(ringHost);
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getRowsStore(ringIndexKey);
+        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
         RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
         tx.add(new RowIndexKey(rawRingHost), rawRingHost);
         tx.commit();
@@ -175,7 +175,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         }
         byte[] rawRingHost = marshaller.serialize(ringHost);
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getRowsStore(ringIndexKey);
+        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
         RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
         tx.remove(new RowIndexKey(rawRingHost));
         tx.commit();
@@ -184,7 +184,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     @Override
     public List<RingHost> getRing(String ringName) throws Exception {
         TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getRowsStore(ringIndexKey);
+        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
         if (ringIndex == null) {
             LOG.warn("No ring defined for ringName:" + ringName);
             return new ArrayList<>();
@@ -216,8 +216,8 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     private boolean createTable(TableName tableName) throws Exception {
         byte[] rawTableName = marshaller.serialize(tableName);
 
-        TableStore tableNameIndex = tableStoreProvider.getRowsStore(tableIndexKey);
-        RowIndexValue timestamptedTableKey = tableNameIndex.getRowIndexValue(new RowIndexKey(rawTableName));
+        TableStore tableNameIndex = tableStoreProvider.getTableStore(tableIndexKey);
+        RowIndexValue timestamptedTableKey = tableNameIndex.get(new RowIndexKey(rawTableName));
         if (timestamptedTableKey == null) {
             RowStoreUpdates tx = tableNameIndex.startTransaction(orderIdProvider.nextId());
             tx.add(new RowIndexKey(rawTableName), rawTableName);
@@ -230,16 +230,16 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
 
     public AmzaTable getTable(TableName tableName) throws Exception {
         byte[] rawTableName = marshaller.serialize(tableName);
-        TableStore tableStoreIndex = tableStoreProvider.getRowsStore(tableIndexKey);
-        RowIndexValue timestampedKeyValueStoreName = tableStoreIndex.getRowIndexValue(new RowIndexKey(rawTableName));
+        TableStore tableStoreIndex = tableStoreProvider.getTableStore(tableIndexKey);
+        RowIndexValue timestampedKeyValueStoreName = tableStoreIndex.get(new RowIndexKey(rawTableName));
         while (timestampedKeyValueStoreName == null) {
             createTable(tableName);
-            timestampedKeyValueStoreName = tableStoreIndex.getRowIndexValue(new RowIndexKey(rawTableName));
+            timestampedKeyValueStoreName = tableStoreIndex.get(new RowIndexKey(rawTableName));
         }
         if (timestampedKeyValueStoreName.getTombstoned()) {
             return null;
         } else {
-            TableStore tableStore = tableStoreProvider.getRowsStore(tableName);
+            TableStore tableStore = tableStoreProvider.getTableStore(tableName);
             return new AmzaTable(orderIdProvider, tableName, tableStore);
         }
     }
@@ -264,7 +264,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     @Override
     public void destroyTable(TableName tableName) throws Exception {
         byte[] rawTableName = marshaller.serialize(tableName);
-        TableStore tableIndex = tableStoreProvider.getRowsStore(tableIndexKey);
+        TableStore tableIndex = tableStoreProvider.getTableStore(tableIndexKey);
         RowStoreUpdates tx = tableIndex.startTransaction(orderIdProvider.nextId());
         tx.remove(new RowIndexKey(rawTableName));
         tx.commit();

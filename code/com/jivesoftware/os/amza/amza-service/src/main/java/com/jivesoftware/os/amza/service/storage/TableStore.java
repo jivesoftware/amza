@@ -22,11 +22,9 @@ import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.RowsStorage;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class TableStore implements RowScanable {
 
-    private final AtomicBoolean loaded = new AtomicBoolean(false);
     private final RowsStorage rowsStorage;
     private final RowChanges rowChanges;
 
@@ -36,45 +34,24 @@ public class TableStore implements RowScanable {
     }
 
     public void load() throws Exception {
-        if (!loaded.get()) {
-            if (loaded.compareAndSet(false, true)) {
-                try {
-                    rowsStorage.load();
-                } catch (Exception x) {
-                    throw x;
-                } finally {
-                    loaded.set(false);
-                }
-            }
-        }
+        rowsStorage.load();
+    }
+
+    @Override
+    public <E extends Exception> void rowScan(RowScan<E> stream) throws E {
+        rowsStorage.rowScan(stream);
     }
 
     public void compactTombestone(long ifOlderThanNMillis) throws Exception {
         rowsStorage.compactTombestone(ifOlderThanNMillis);
     }
 
-    public byte[] get(RowIndexKey key) throws Exception {
-        RowIndexValue got = rowsStorage.get(key);
-        if (got == null) {
-            return null;
-        }
-        if (got.getTombstoned()) {
-            return null;
-        }
-        return got.getValue();
-    }
-
-    public RowIndexValue getRowIndexValue(RowIndexKey key) throws Exception {
+    public RowIndexValue get(RowIndexKey key) throws Exception {
         return rowsStorage.get(key);
     }
 
     public boolean containsKey(RowIndexKey key) throws Exception {
         return rowsStorage.containsKey(key);
-    }
-
-    @Override
-    public <E extends Exception> void rowScan(RowScan<E> stream) throws E {
-        rowsStorage.rowScan(stream);
     }
 
     public void takeRowUpdatesSince(long transactionId, RowScan rowUpdates) throws Exception {
@@ -87,10 +64,8 @@ public class TableStore implements RowScanable {
 
     public void commit(RowScanable rowUpdates) throws Exception {
         RowsChanged updateMap = rowsStorage.update(rowUpdates);
-        if (!updateMap.isEmpty()) {
-            if (rowChanges != null) {
-                rowChanges.changes(updateMap);
-            }
+        if (rowChanges != null && !updateMap.isEmpty()) {
+            rowChanges.changes(updateMap);
         }
     }
 

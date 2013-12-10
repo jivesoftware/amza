@@ -47,7 +47,7 @@ public class AmzaLoremIpsum {
 
         String tableName = "lorem";
 
-        for (int i = 0; i < 1; i++) {
+        for (int i = 0; i < 8; i++) {
             final String tname = tableName + i;
             final int fdi = firstDocId + (count * 1);
             Thread t = new Thread() {
@@ -73,7 +73,7 @@ public class AmzaLoremIpsum {
             url.append(hostName).append(":").append(port);
             url.append("/example/set");
             url.append("?table=").append(tableName);
-            url.append("&key=").append((firstDocId + key));
+            url.append("&key=").append("k" + key);
 
             String doc = document();
             doc = new String(Base64.encodeBase64(doc.getBytes()));
@@ -90,8 +90,12 @@ public class AmzaLoremIpsum {
 
     public static String document() {
         StringBuilder document = new StringBuilder();
-        document.append("Title-").append(loremIpsum.getWords(rand.nextInt(10), 0)).append(" ");
-        document.append(loremIpsum.getParagraphs(1 + rand.nextInt(20))).append(" ");
+        //document.append("Title-").append(loremIpsum.getWords(rand.nextInt(10), 0)).append(" ");
+        //document.append(loremIpsum.getParagraphs(1 + rand.nextInt(20))).append(" ");
+        int wordCount = rand.nextInt(1000);
+        for (int i = 10; i < wordCount; i++) {
+            document.append("booya ");
+        }
         return document.toString().replace('\n', ' ');
     }
 

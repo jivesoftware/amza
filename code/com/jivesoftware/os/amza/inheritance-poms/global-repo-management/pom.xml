@@ -6,4 +6,24 @@
     <artifactId>global-repo-management</artifactId>
     <version>unspecified</version>
     <packaging>pom</packaging>
+    <inceptionYear>2013</inceptionYear>
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <distributionManagement>
+        <repository>
+            <id>modified-thirdparty</id>
+            <name>Jive Internal Repository</name>
+            <url>http://nexus-int.eng.jiveland.com/content/repositories/modified-thirdparty</url>
+        </repository>
+    </distributionManagement>
+    <scm>
+        <url>https://github.com/jivesoftware/amza</url>
+        <connection>scm:git:git://github.com/jivesoftware/amza.git</connection>
+        <developerConnection>scm:git:git@github.com:jivesoftware/amza.git</developerConnection>
+    </scm>
 </project>

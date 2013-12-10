@@ -6,6 +6,12 @@
     <artifactId>amza</artifactId>
     <version>unspecified</version>
     <packaging>pom</packaging>
+    <parent>
+        <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
+        <artifactId>global-repo-management</artifactId>
+        <version>unspecified</version>
+        <relativePath>inheritance-poms/global-repo-management/pom.xml</relativePath>
+    </parent>
     <modules>
         <module>inheritance-poms</module>
         <module>amza-example-deployable</module>

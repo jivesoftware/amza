@@ -58,10 +58,7 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvid
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServerInitializer;
 import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
-<<<<<<< HEAD
-=======
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
->>>>>>> develop
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;

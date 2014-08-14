@@ -179,7 +179,7 @@ public class TableReplicator {
 
     public void receiveChanges(TableName tableName, RowScanable changes) throws Exception {
         TableStore tableStore = receivedUpdatesWAL.getTableStore(tableName);
-        synchronized(tableStore) {
+        synchronized (tableStore) {
             tableStore.commit(changes);
         }
     }
@@ -189,7 +189,7 @@ public class TableReplicator {
             TableName tableName = receivedUpdates.getKey();
             TableStore updates = receivedUpdates.getValue();
             TableStore tableStore = tables.getTableStore(tableName);
-            synchronized(tableStore) {
+            synchronized (tableStore) {
                 tableStore.commit(updates);
                 updates.clear();
             }
@@ -206,7 +206,7 @@ public class TableReplicator {
         if (ringHosts == null || ringHosts.length == 0) {
             if (enqueueForResendOnFailure) {
                 TableStore tableStore = resendWAL.getTableStore(tableName);
-                synchronized(tableStore) {
+                synchronized (tableStore) {
                     tableStore.commit(rowUpdates);
                 }
             }
@@ -224,7 +224,7 @@ public class TableReplicator {
                     LOG.warn("Failed to send changeset to ringHost:" + ringHost);
                     if (enqueueForResendOnFailure) {
                         TableStore tableStore = resendWAL.getTableStore(tableName);
-                        synchronized(tableStore) {
+                        synchronized (tableStore) {
                             tableStore.commit(rowUpdates);
                         }
                         enqueueForResendOnFailure = false;
@@ -249,7 +249,7 @@ public class TableReplicator {
             if (ring.length > 0) {
                 TableName mapName = updates.getKey();
                 TableStore store = updates.getValue();
-                synchronized(store) {
+                synchronized (store) {
                     if (replicateLocalUpdates(hostRingProvider, mapName, store, false)) {
                         store.clear();
                     }

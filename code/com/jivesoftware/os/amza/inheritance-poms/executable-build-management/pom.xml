@@ -20,19 +20,6 @@
             <id>make-fat-jar</id>
             <build>
                 <plugins>
-<!--                    <plugin>
-                        <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
-                        <artifactId>git-release-notes-plugin</artifactId>
-                        <version>0.1</version>
-                        <executions>
-                            <execution>
-                                <phase>compile</phase>
-                                <goals>
-                                    <goal>git-release-notes</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>-->
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-assembly-plugin</artifactId>

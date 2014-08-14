@@ -14,19 +14,6 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
-    <repositories>
-        <repository>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-            <id>nexus-int.internal</id>
-            <name>Internal Jive Internal</name>
-            <url>http://nexus-int.eng.jiveland.com/content/repositories/modified-thirdparty</url>
-        </repository>
-    </repositories>
     <distributionManagement>
         <repository>
             <id>modified-thirdparty</id>

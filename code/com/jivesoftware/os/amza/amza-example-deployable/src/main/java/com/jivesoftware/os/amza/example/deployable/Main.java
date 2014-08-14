@@ -58,6 +58,10 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvid
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServerInitializer;
 import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
+<<<<<<< HEAD
+=======
+import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+>>>>>>> develop
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
@@ -86,8 +90,8 @@ public class Main {
 
         //TODO pull from properties
         int connectionsPerHost = Integer.parseInt(System.getProperty("amza.tcp.client.connectionsPerHost", "2"));
-        int connectTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.connectTimeoutMillis", "5000"));
-        int socketTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.socketTimeoutMillis", "2000"));
+        int connectTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.connectTimeoutMillis", "30000"));
+        int socketTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.socketTimeoutMillis", "30000"));
         int bufferSize = Integer.parseInt(System.getProperty("amza.tcp.bufferSize", "" + (1024 * 1024 * 10)));
         int numServerThreads = Integer.parseInt(System.getProperty("amza.tcp.server.numThreads", "4"));
         int numBuffers = numServerThreads * 10;
@@ -99,7 +103,9 @@ public class Main {
         } else {
             ringHost = new RingHost(hostname, tcpPort); // TODO include rackId
         }
-        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new Random().nextInt(512)); // todo need a better way to create writter id.
+
+        // todo need a better way to create writter id.
+        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(new Random().nextInt(512)));
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);

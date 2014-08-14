@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>executable-version-management</artifactId>
-        <version>unspecified</version>
+        <version>0.1-SNAPSHOT</version>
         <relativePath>../executable-version-management/pom.xml</relativePath>
     </parent>
     <artifactId>executable-build-management</artifactId>
@@ -20,19 +20,6 @@
             <id>make-fat-jar</id>
             <build>
                 <plugins>
-<!--                    <plugin>
-                        <groupId>com.jivesoftware.jive.build.configuration.maven.plugins</groupId>
-                        <artifactId>git-release-notes-plugin</artifactId>
-                        <version>unspecified</version>
-                        <executions>
-                            <execution>
-                                <phase>compile</phase>
-                                <goals>
-                                    <goal>git-release-notes</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>-->
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-assembly-plugin</artifactId>

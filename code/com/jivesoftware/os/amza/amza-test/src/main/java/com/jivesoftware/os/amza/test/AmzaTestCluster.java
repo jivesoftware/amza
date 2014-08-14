@@ -44,6 +44,7 @@ import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
 import com.jivesoftware.os.amza.storage.filer.Filer;
 import com.jivesoftware.os.amza.storage.filer.IFiler;
+import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -130,7 +131,8 @@ public class AmzaTestCluster {
         };
 
         // TODO need to get writer id from somewhere other than port.
-        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(serviceHost.getPort(), new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
+        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(serviceHost.getPort()),
+                new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
 
         final RowsIndexProvider tableIndexProvider = new RowsIndexProvider() {
 

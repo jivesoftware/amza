@@ -129,7 +129,7 @@ public class Main {
 
                     @Override
                     public RowsIndex createRowsIndex(TableName tableName) throws Exception {
-                        final DB db = DBMaker.newDirectMemoryDB()
+                        final DB db = DBMaker.newMemoryDirectDB()
                             .closeOnJvmShutdown()
                             .make();
                         BTreeMap<RowIndexKey, RowIndexValue> treeMap = db.getTreeMap(tableName.getTableName());

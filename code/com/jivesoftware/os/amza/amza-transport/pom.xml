@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>shared-lib-build-management</artifactId>
-        <version>0.4</version>
+        <version>0.5</version>
         <relativePath>../inheritance-poms/shared-lib-build-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -40,23 +40,19 @@
             <artifactId>jaxrs-util</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.jivesoftware.os.jive.utils</groupId>
-            <artifactId>http-client-rest</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.jive.utils</groupId>
-            <artifactId>http-client</artifactId>
+            <groupId>commons-httpclient</groupId>
+            <artifactId>commons-httpclient</artifactId>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
-            <version>0.4</version>
+            <version>0.5</version>
             <type>jar</type>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-storage</artifactId>
-            <version>0.4</version>
+            <version>0.5</version>
             <type>jar</type>
         </dependency>
         <dependency>
@@ -81,6 +77,14 @@
             <artifactId>fst</artifactId>
             <version>1.28</version>
             <type>jar</type>
+        </dependency>
+<!--        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-io</artifactId>
+        </dependency>-->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
         </dependency>
     </dependencies>
     <name>amza-transport</name>

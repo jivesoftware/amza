@@ -16,12 +16,12 @@
 package com.jivesoftware.os.amza.test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.jive.utils.http.client.HttpClient;
-import com.jivesoftware.os.jive.utils.http.client.HttpClientConfig;
-import com.jivesoftware.os.jive.utils.http.client.HttpClientConfiguration;
-import com.jivesoftware.os.jive.utils.http.client.HttpClientFactory;
-import com.jivesoftware.os.jive.utils.http.client.HttpClientFactoryProvider;
-import com.jivesoftware.os.jive.utils.http.client.rest.RequestHelper;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfig;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfiguration;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientFactory;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientFactoryProvider;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpRequestHelper;
 import com.jivesoftware.os.jive.utils.shell.utils.Curl;
 import de.svenjacobs.loremipsum.LoremIpsum;
 import java.io.IOException;
@@ -99,11 +99,11 @@ public class AmzaLoremIpsum {
         return document.toString().replace('\n', ' ');
     }
 
-    static RequestHelper buildRequestHelper(String host, int port) {
+    static HttpRequestHelper buildRequestHelper(String host, int port) {
         HttpClientConfig httpClientConfig = HttpClientConfig.newBuilder().build();
         HttpClientFactory httpClientFactory = new HttpClientFactoryProvider().createHttpClientFactory(Arrays.<HttpClientConfiguration>asList(httpClientConfig));
         HttpClient httpClient = httpClientFactory.createClient(host, port);
-        RequestHelper requestHelper = new RequestHelper(httpClient, new ObjectMapper());
+        HttpRequestHelper requestHelper = new HttpRequestHelper(httpClient, new ObjectMapper());
         return requestHelper;
     }
 }

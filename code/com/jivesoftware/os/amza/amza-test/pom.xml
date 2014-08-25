@@ -73,15 +73,13 @@
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.jive.utils</groupId>
-            <artifactId>http-client</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.jive.utils</groupId>
-            <artifactId>http-client-rest</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.jive.utils</groupId>
             <artifactId>shell-utils</artifactId>
+            <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-transport</artifactId>
+            <version>0.5-SNAPSHOT</version>
             <type>jar</type>
         </dependency>
     </dependencies>

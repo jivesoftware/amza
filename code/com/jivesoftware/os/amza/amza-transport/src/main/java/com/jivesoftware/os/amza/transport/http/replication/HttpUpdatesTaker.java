@@ -21,19 +21,19 @@ import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
-import com.jivesoftware.os.jive.utils.http.client.HttpClient;
-import com.jivesoftware.os.jive.utils.http.client.HttpClientConfig;
-import com.jivesoftware.os.jive.utils.http.client.HttpClientConfiguration;
-import com.jivesoftware.os.jive.utils.http.client.HttpClientFactory;
-import com.jivesoftware.os.jive.utils.http.client.HttpClientFactoryProvider;
-import com.jivesoftware.os.jive.utils.http.client.rest.RequestHelper;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfig;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfiguration;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientFactory;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientFactoryProvider;
+import com.jivesoftware.os.amza.transport.http.replication.client.HttpRequestHelper;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class HttpUpdatesTaker implements UpdatesTaker {
 
-    private final ConcurrentHashMap<RingHost, RequestHelper> requestHelpers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
 
     @Override
     public void takeUpdates(RingHost ringHost,
@@ -52,11 +52,11 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         }
     }
 
-    RequestHelper getRequestHelper(RingHost ringHost) {
-        RequestHelper requestHelper = requestHelpers.get(ringHost);
+    HttpRequestHelper getRequestHelper(RingHost ringHost) {
+        HttpRequestHelper requestHelper = requestHelpers.get(ringHost);
         if (requestHelper == null) {
             requestHelper = buildRequestHelper(ringHost.getHost(), ringHost.getPort());
-            RequestHelper had = requestHelpers.putIfAbsent(ringHost, requestHelper);
+            HttpRequestHelper had = requestHelpers.putIfAbsent(ringHost, requestHelper);
             if (had != null) {
                 requestHelper = had;
             }
@@ -64,11 +64,11 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         return requestHelper;
     }
 
-    RequestHelper buildRequestHelper(String host, int port) {
+    HttpRequestHelper buildRequestHelper(String host, int port) {
         HttpClientConfig httpClientConfig = HttpClientConfig.newBuilder().build();
         HttpClientFactory httpClientFactory = new HttpClientFactoryProvider().createHttpClientFactory(Arrays.<HttpClientConfiguration>asList(httpClientConfig));
         HttpClient httpClient = httpClientFactory.createClient(host, port);
-        RequestHelper requestHelper = new RequestHelper(httpClient, new ObjectMapper());
+        HttpRequestHelper requestHelper = new HttpRequestHelper(httpClient, new ObjectMapper());
         return requestHelper;
     }
 }

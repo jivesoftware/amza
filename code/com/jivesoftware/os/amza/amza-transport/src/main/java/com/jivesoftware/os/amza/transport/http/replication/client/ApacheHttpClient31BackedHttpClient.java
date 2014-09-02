@@ -162,20 +162,14 @@ class ApacheHttpClient31BackedHttpClient implements HttpClient {
             if (LOG.isInfoEnabled()) {
                 long elapsedTime = LOG.stopTimer(TIMER_NAME);
                 StringBuilder httpInfo = new StringBuilder();
-                boolean logInfo = false;
                 if (statusLine != null) {
-                    logInfo = (statusLine.getStatusCode() < HttpStatus.SC_MULTIPLE_CHOICES);
                     httpInfo.append("Outbound ").append(statusLine.getHttpVersion()).append(" Status ").append(statusLine.getStatusCode());
                 } else {
                     httpInfo.append("Exception sending request");
                 }
                 httpInfo.append(" in ").append(elapsedTime).append(" ms ").append(method.getName()).append(" ")
                         .append(safeHostString(client.getHostConfiguration())).append(method.getURI());
-                if (logInfo) {
-                    LOG.warn(httpInfo.toString());
-                } else {
-                    LOG.debug(httpInfo.toString());
-                }
+                LOG.debug(httpInfo.toString());
             }
         }
     }

@@ -18,12 +18,11 @@ package com.jivesoftware.os.amza.transport.http.replication.client;
 import java.util.Map;
 
 public interface HttpClient {
-   
+
     /**
      * @param path everything but the leading "http/s://host:port"
      */
     HttpResponse get(String path, Map<String, String> headers, int timeoutMillis) throws HttpClientException;
-
 
     /**
      * @param path everything but the leading "http/s://host:port"

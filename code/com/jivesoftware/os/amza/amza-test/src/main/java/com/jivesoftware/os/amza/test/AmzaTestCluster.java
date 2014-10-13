@@ -15,11 +15,14 @@
  */
 package com.jivesoftware.os.amza.test;
 
+import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.AmzaChangeIdPacker;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.AmzaTable;
+import com.jivesoftware.os.amza.service.storage.replication.SendFailureListener;
+import com.jivesoftware.os.amza.service.storage.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.NoOpFlusher;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -169,7 +172,10 @@ public class AmzaTestCluster {
                 tableStorageProvider,
                 tableStorageProvider,
                 changeSetSender,
-                tableTaker, new RowChanges() {
+                tableTaker,
+                Optional.<SendFailureListener>absent(),
+                Optional.<TakeFailureListener>absent(),
+                new RowChanges() {
 
                     @Override
                     public void changes(RowsChanged changes) throws Exception {

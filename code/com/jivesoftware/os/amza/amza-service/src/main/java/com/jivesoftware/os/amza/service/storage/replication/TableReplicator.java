@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.storage.replication;
 
+import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
@@ -57,15 +58,19 @@ public class TableReplicator {
     private final UpdatesSender updatesSender;
     private final UpdatesTaker updatesTaker;
     private final HighwaterMarks highwaterMarks;
+    private final Optional<SendFailureListener> sendFailureListener;
+    private final Optional<TakeFailureListener> takeFailureListener;
 
     public TableReplicator(TableStoreProvider tables,
-            int replicationFactor,
-            int takeFromFactor,
-            HighwaterMarks highwaterMarks,
-            TableStoreProvider replicatedWAL,
-            TableStoreProvider resendWAL,
-            UpdatesSender updatesSender,
-            UpdatesTaker updatesTaker) {
+        int replicationFactor,
+        int takeFromFactor,
+        HighwaterMarks highwaterMarks,
+        TableStoreProvider replicatedWAL,
+        TableStoreProvider resendWAL,
+        UpdatesSender updatesSender,
+        UpdatesTaker updatesTaker,
+        Optional<SendFailureListener> sendFailureListener,
+        Optional<TakeFailureListener> takeFailureListener) {
         this.tables = tables;
         this.replicationFactor = replicationFactor;
         this.takeFromFactor = takeFromFactor;
@@ -74,6 +79,8 @@ public class TableReplicator {
         this.resendWAL = resendWAL;
         this.updatesSender = updatesSender;
         this.updatesTaker = updatesTaker;
+        this.sendFailureListener = sendFailureListener;
+        this.takeFailureListener = takeFailureListener;
     }
 
     public void compactTombestone(long ifOlderThanNMillis) throws Exception {
@@ -124,6 +131,9 @@ public class TableReplicator {
                     break;
 
                 } catch (Exception x) {
+                    if (takeFailureListener.isPresent()) {
+                        takeFailureListener.get().failedToTake(ringHost, x);
+                    }
                     LOG.debug("Can't takeFrom host:" + ringHost, x);
                     LOG.warn("Can't takeFrom host:" + ringHost + " " + x.toString());
                 }
@@ -142,9 +152,9 @@ public class TableReplicator {
         private final TreeMap<RowIndexKey, RowIndexValue> batch = new TreeMap<>();
 
         public TakeRowStream(TableStore tableStore,
-                RingHost ringHost,
-                TableName tableName,
-                HighwaterMarks highWaterMarks) {
+            RingHost ringHost,
+            TableName tableName,
+            HighwaterMarks highWaterMarks) {
             this.tableStore = tableStore;
             this.ringHost = ringHost;
             this.tableName = tableName;
@@ -197,9 +207,9 @@ public class TableReplicator {
     }
 
     public boolean replicateLocalUpdates(HostRingProvider hostRingProvider,
-            TableName tableName,
-            RowScanable rowUpdates,
-            boolean enqueueForResendOnFailure) throws Exception {
+        TableName tableName,
+        RowScanable rowUpdates,
+        boolean enqueueForResendOnFailure) throws Exception {
 
         HostRing hostRing = hostRingProvider.getHostRing(tableName.getRingName());
         RingHost[] ringHosts = hostRing.getBelowRing();
@@ -219,6 +229,9 @@ public class TableReplicator {
                     updatesSender.sendUpdates(ringHost, tableName, rowUpdates);
                     ringWalker.success();
                 } catch (Exception x) {
+                    if (sendFailureListener.isPresent()) {
+                        sendFailureListener.get().failedToSend(ringHost, x);
+                    }
                     ringWalker.failed();
                     LOG.info("Failed to send changeset to ringHost:" + ringHost, x);
                     LOG.warn("Failed to send changeset to ringHost:" + ringHost);

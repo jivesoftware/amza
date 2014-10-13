@@ -17,10 +17,13 @@ package com.jivesoftware.os.amza.service;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
 import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
 import com.jivesoftware.os.amza.service.storage.replication.MemoryBackedHighWaterMarks;
+import com.jivesoftware.os.amza.service.storage.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
+import com.jivesoftware.os.amza.service.storage.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.shared.Marshaller;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -45,14 +48,16 @@ public class AmzaServiceInitializer {
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
-            OrderIdProvider orderIdProvider,
-            Marshaller marshaller,
-            RowsStorageProvider amzaStores,
-            RowsStorageProvider amzaReplicasWAL,
-            RowsStorageProvider amzaResendWAL,
-            UpdatesSender updatesSender,
-            UpdatesTaker updatesTaker,
-            final RowChanges allRowChanges) throws Exception {
+        OrderIdProvider orderIdProvider,
+        Marshaller marshaller,
+        RowsStorageProvider amzaStores,
+        RowsStorageProvider amzaReplicasWAL,
+        RowsStorageProvider amzaResendWAL,
+        UpdatesSender updatesSender,
+        UpdatesTaker updatesTaker,
+        Optional<SendFailureListener> sendFailureListener,
+        Optional<TakeFailureListener> takeFailureListener,
+        final RowChanges allRowChanges) throws Exception {
 
         final AtomicReference<HostRingProvider> hostRingProvider = new AtomicReference<>();
         final AtomicReference<TableReplicator> replicator = new AtomicReference<>();
@@ -77,12 +82,15 @@ public class AmzaServiceInitializer {
         MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
 
         TableReplicator tableReplicator = new TableReplicator(storesProvider,
-                config.replicationFactor,
-                config.takeFromFactor,
-                highWaterMarks,
-                replicasProvider,
-                resendsProvider,
-                updatesSender, updatesTaker);
+            config.replicationFactor,
+            config.takeFromFactor,
+            highWaterMarks,
+            replicasProvider,
+            resendsProvider,
+            updatesSender,
+            updatesTaker,
+            sendFailureListener,
+            takeFailureListener);
         replicator.set(tableReplicator);
 
         AmzaService service = new AmzaService(orderIdProvider, marshaller, tableReplicator, storesProvider, amzaTableWatcher);

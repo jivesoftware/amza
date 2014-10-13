@@ -18,11 +18,14 @@ package com.jivesoftware.os.amza.example.deployable;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.example.deployable.endpoints.AmzaExampleEndpoints;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
+import com.jivesoftware.os.amza.service.storage.replication.SendFailureListener;
+import com.jivesoftware.os.amza.service.storage.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.Flusher;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
@@ -113,8 +116,8 @@ public class Main {
         RowsStorageProvider rowsStorageProvider = new RowsStorageProvider() {
             @Override
             public RowsStorage createRowsStorage(File workingDirectory,
-                    String tableDomain,
-                    TableName tableName) throws Exception {
+                String tableDomain,
+                TableName tableName) throws Exception {
                 final File directory = new File(workingDirectory, tableDomain);
                 directory.mkdirs();
                 File file = new File(directory, tableName.getTableName() + ".kvt");
@@ -123,7 +126,6 @@ public class Main {
                 BinaryRowReader reader = new BinaryRowReader(filer);
                 BinaryRowWriter writer = new BinaryRowWriter(filer);
                 BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-
 
                 RowsIndexProvider tableIndexProvider = new RowsIndexProvider() {
 
@@ -144,11 +146,11 @@ public class Main {
                 };
 
                 return new RowTable(tableName,
-                        orderIdProvider,
-                        tableIndexProvider,
-                        rowMarshaller,
-                        reader,
-                        writer);
+                    orderIdProvider,
+                    tableIndexProvider,
+                    rowMarshaller,
+                    reader,
+                    writer);
             }
         };
 
@@ -161,7 +163,7 @@ public class Main {
         BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
 
         TcpClientProvider tcpClientProvider = new TcpClientProvider(
-                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
         UpdatesSender changeSetSender = new TcpUpdatesSender(tcpClientProvider, clientProtocol);
         UpdatesTaker tableTaker = new TcpUpdatesTaker(tcpClientProvider, clientProtocol);
@@ -172,23 +174,25 @@ public class Main {
         }
 
         AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
-                orderIdProvider,
-                new com.jivesoftware.os.amza.storage.FstMarshaller(FSTConfiguration.getDefaultConfiguration()),
-                rowsStorageProvider,
-                rowsStorageProvider,
-                rowsStorageProvider,
-                changeSetSender,
-                tableTaker,
-                new RowChanges() {
-                    @Override
-                    public void changes(RowsChanged changes) throws Exception {
-                    }
-                });
+            orderIdProvider,
+            new com.jivesoftware.os.amza.storage.FstMarshaller(FSTConfiguration.getDefaultConfiguration()),
+            rowsStorageProvider,
+            rowsStorageProvider,
+            rowsStorageProvider,
+            changeSetSender,
+            tableTaker,
+            Optional.<SendFailureListener>absent(),
+            Optional.<TakeFailureListener>absent(),
+            new RowChanges() {
+                @Override
+                public void changes(RowsChanged changes) throws Exception {
+                }
+            });
 
         amzaService.start(ringHost, amzaServiceConfig.resendReplicasIntervalInMillis,
-                amzaServiceConfig.applyReplicasIntervalInMillis,
-                amzaServiceConfig.takeFromNeighborsIntervalInMillis,
-                amzaServiceConfig.compactTombstoneIfOlderThanNMillis);
+            amzaServiceConfig.applyReplicasIntervalInMillis,
+            amzaServiceConfig.takeFromNeighborsIntervalInMillis,
+            amzaServiceConfig.compactTombstoneIfOlderThanNMillis);
 
         System.out.println("-----------------------------------------------------------------------");
         System.out.println("|      Amza Service Online");
@@ -218,10 +222,10 @@ public class Main {
         System.out.println("-----------------------------------------------------------------------");
 
         JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
-                .addEndpoint(AmzaExampleEndpoints.class)
-                .addInjectable(AmzaService.class, amzaService)
-                .addEndpoint(AmzaReplicationRestEndpoints.class)
-                .addInjectable(AmzaInstance.class, amzaService);
+            .addEndpoint(AmzaExampleEndpoints.class)
+            .addInjectable(AmzaService.class, amzaService)
+            .addEndpoint(AmzaReplicationRestEndpoints.class)
+            .addInjectable(AmzaInstance.class, amzaService);
 
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);
         initializeRestfulServer.addContextHandler("/", jerseyEndpoints);

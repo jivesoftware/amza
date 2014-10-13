@@ -51,7 +51,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
-import com.sun.xml.internal.ws.policy.sourcemodel.wspolicy.XmlToken;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.File;
 import java.util.Collection;

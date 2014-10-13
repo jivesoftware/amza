@@ -42,13 +42,16 @@ public class BinaryRowReader implements RowReader<byte[]> {
                     filer.seek(seekTo);
                     int priorLength = UIO.readInt(filer, "priorLength");
                     seekTo -= (priorLength + 4);
+                    if (seekTo < 0) {
+                        return;
+                    }
                     filer.seek(seekTo);
 
                     int length = UIO.readInt(filer, "length");
                     byte[] row = new byte[length];
                     filer.read(row);
                     if (!stream.row(UIO.longBytes(seekTo), row)) {
-                        break;
+                        return;
                     }
                     seekTo -= 4;
                 }
@@ -67,7 +70,7 @@ public class BinaryRowReader implements RowReader<byte[]> {
                         filer.read(row);
                     }
                     if (!stream.row(UIO.longBytes(seekTo), row)) {
-                        break;
+                        return;
                     }
                     UIO.readInt(filer, "length");
                 }

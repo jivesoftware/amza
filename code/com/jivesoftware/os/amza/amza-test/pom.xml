@@ -50,7 +50,6 @@
             <groupId>com.jivesoftware.os.jive.utils</groupId>
             <artifactId>ordered-id</artifactId>
             <type>jar</type>
-            <version>0.31</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>

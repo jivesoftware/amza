@@ -122,7 +122,9 @@ public class TableReplicator {
                     LOG.trace("Taking from " + ringHost + " " + tableName + " " + highwaterMark);
                     updatesTaker.takeUpdates(ringHost, tableName, highwaterMark, takeRowStream);
                     takeRowStream.flush();
-
+                    if (takeFailureListener.isPresent()) {
+                        takeFailureListener.get().tookFrom(ringHost);
+                    }
                     taken.increment();
                     if (taken.intValue() >= takeFromFactor) {
                         return;
@@ -227,14 +229,18 @@ public class TableReplicator {
             while ((ringHost = ringWalker.host()) != null) {
                 try {
                     updatesSender.sendUpdates(ringHost, tableName, rowUpdates);
+                     if (sendFailureListener.isPresent()) {
+                         sendFailureListener.get().sent(ringHost);
+                     }
                     ringWalker.success();
                 } catch (Exception x) {
                     if (sendFailureListener.isPresent()) {
                         sendFailureListener.get().failedToSend(ringHost, x);
                     }
                     ringWalker.failed();
-                    LOG.info("Failed to send changeset to ringHost:" + ringHost, x);
-                    LOG.warn("Failed to send changeset to ringHost:" + ringHost);
+                    LOG.info("Failed to send changeset to ringHost:{}", ringHost);
+                    LOG.debug("Failed to send changeset to ringHost:" + ringHost, x);
+                    LOG.warn("Failed to send changeset to ringHost:{}", ringHost);
                     if (enqueueForResendOnFailure) {
                         TableStore tableStore = resendWAL.getTableStore(tableName);
                         synchronized (tableStore) {

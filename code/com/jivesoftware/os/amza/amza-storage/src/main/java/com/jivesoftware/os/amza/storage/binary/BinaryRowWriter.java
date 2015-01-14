@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowWriter;
 import com.jivesoftware.os.amza.storage.filer.IFiler;
+import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
 import com.jivesoftware.os.amza.storage.filer.UIO;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,30 +32,35 @@ public class BinaryRowWriter implements RowWriter<byte[]> {
 
     @Override
     public List<byte[]> write(List<byte[]> rows, boolean append) throws Exception {
-        List<byte[]> rowPointers;
+        List<Long> offests = new ArrayList<>();
+        MemoryFiler memoryFiler = new MemoryFiler();
+        for (byte[] row : rows) {
+            offests.add(filer.getFilePointer());
+            int length = row.length;
+            UIO.writeInt(memoryFiler, length, "length");
+            memoryFiler.write(row);
+            UIO.writeInt(memoryFiler, length, "length");
+        }
+
+        long startFp;
         synchronized (filer.lock()) {
             if (append) {
-                filer.seek(filer.length()); // seek to end of file.
-                rowPointers = writeRows(rows);
+                startFp = filer.length();
+                filer.seek(startFp); // seek to end of file.
+                filer.write(memoryFiler.getBytes());
             } else {
+                startFp = 0;
                 filer.seek(0);
-                rowPointers = writeRows(rows);
+                filer.write(memoryFiler.getBytes());
                 filer.eof(); // trim file to size.
             }
             filer.flush();
         }
-        return rowPointers;
-    }
-
-    private List<byte[]> writeRows(List<byte[]> rows) throws IOException {
         List<byte[]> rowPointers = new ArrayList<>();
-        for (byte[] row : rows) {
-            rowPointers.add(UIO.longBytes(filer.getFilePointer()));
-            int length = row.length;
-            UIO.writeInt(filer, length, "length");
-            filer.write(row);
-            UIO.writeInt(filer, length, "length");
+        for (Long offest : offests) {
+            rowPointers.add(UIO.longBytes(startFp + offest));
         }
         return rowPointers;
     }
+
 }

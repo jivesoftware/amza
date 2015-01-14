@@ -24,4 +24,6 @@ import com.jivesoftware.os.amza.shared.RingHost;
 public interface SendFailureListener {
 
     void failedToSend(RingHost ringHost, Throwable reason);
+
+    void sent(RingHost ringHost);
 }

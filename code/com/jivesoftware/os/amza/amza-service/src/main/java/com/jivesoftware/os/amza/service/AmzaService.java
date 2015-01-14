@@ -289,7 +289,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     }
 
     public void buildRandomSubRing(String ringName, int desiredRingSize) throws Exception {
-        List<RingHost> ring = getRing("MASTER");
+        List<RingHost> ring = getRing("master");
         if (ring.size() < desiredRingSize) {
             throw new IllegalStateException("Current master ring is not large enough to support a ring of size:" + desiredRingSize);
         }

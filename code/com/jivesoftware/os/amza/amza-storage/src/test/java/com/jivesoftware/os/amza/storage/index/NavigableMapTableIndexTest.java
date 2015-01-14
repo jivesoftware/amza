@@ -20,29 +20,23 @@ import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.storage.filer.UIO;
-import org.mapdb.BTreeMap;
-import org.mapdb.DB;
-import org.mapdb.DBMaker;
+import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import org.testng.annotations.Test;
 
 public class NavigableMapTableIndexTest {
 
-    @Test (enabled = false)
+    @Test(enabled = false)
     public void loadTest() throws Exception {
         System.out.println("InitialHeap:" + Runtime.getRuntime().totalMemory());
-        final DB db = DBMaker.newDirectMemoryDB()
-                .closeOnJvmShutdown()
-                .make();
-        BTreeMap<RowIndexKey, RowIndexValue> treeMap = db.getTreeMap("test");
+        NavigableMap<RowIndexKey, RowIndexValue> navigableMap = new ConcurrentSkipListMap<>();
 
-        MemoryRowsIndex instance = new MemoryRowsIndex(treeMap, new Flusher() {
+        MemoryRowsIndex instance = new MemoryRowsIndex(navigableMap, new Flusher() {
 
             @Override
             public void flush() {
-                db.commit();
             }
         });
-
 
         for (long i = 0; i < 200000000; i++) {
             instance.put(new RowIndexKey(UIO.longBytes(i)), new RowIndexValue(UIO.longBytes(i), i, false));

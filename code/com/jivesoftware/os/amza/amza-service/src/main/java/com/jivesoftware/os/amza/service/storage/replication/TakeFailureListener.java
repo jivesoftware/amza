@@ -24,4 +24,6 @@ import com.jivesoftware.os.amza.shared.RingHost;
 public interface TakeFailureListener {
 
     void failedToTake(RingHost ringHost, Throwable reason);
+
+    void tookFrom(RingHost ringHost);
 }

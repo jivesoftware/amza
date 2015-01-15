@@ -44,12 +44,12 @@ public class AmzaServiceTest {
 
     @Test(enabled = true)
     public void testAddToReplicatedWAL() throws Exception {
-        final int maxUpdates = 1000;
-        final int delayBetweenUpdates = 1;
+        final int maxUpdates = 100;
+        final int delayBetweenUpdates = 0;
         final int maxFields = 10;
-        final int maxOffServices = 2;
-        final int maxRemovedServices = 2;
-        final int maxAddService = 2;
+        final int maxOffServices = 0;
+        final int maxRemovedServices = 0;
+        final int maxAddService = 0;
         final int maxNumberOfServices = 5;
 
         final Random random = new Random();

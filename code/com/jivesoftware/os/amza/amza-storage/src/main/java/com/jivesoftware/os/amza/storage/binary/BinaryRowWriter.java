@@ -35,7 +35,7 @@ public class BinaryRowWriter implements RowWriter<byte[]> {
         List<Long> offests = new ArrayList<>();
         MemoryFiler memoryFiler = new MemoryFiler();
         for (byte[] row : rows) {
-            offests.add(filer.getFilePointer());
+            offests.add(memoryFiler.getFilePointer());
             int length = row.length;
             UIO.writeInt(memoryFiler, length, "length");
             memoryFiler.write(row);

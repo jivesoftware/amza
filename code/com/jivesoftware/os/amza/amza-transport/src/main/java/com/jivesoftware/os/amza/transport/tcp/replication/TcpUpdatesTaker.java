@@ -26,8 +26,8 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClient;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
-import com.jivesoftware.os.jive.utils.logger.MetricLogger;
-import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 
 /**
  *

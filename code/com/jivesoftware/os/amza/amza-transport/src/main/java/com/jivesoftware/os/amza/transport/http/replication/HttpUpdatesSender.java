@@ -30,8 +30,8 @@ import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConf
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientFactory;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientFactoryProvider;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpRequestHelper;
-import com.jivesoftware.os.jive.utils.logger.MetricLogger;
-import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;

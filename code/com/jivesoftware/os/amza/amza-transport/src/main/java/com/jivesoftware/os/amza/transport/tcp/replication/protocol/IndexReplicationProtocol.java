@@ -24,9 +24,9 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.ApplicationProt
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Response;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.ResponseWriter;
-import com.jivesoftware.os.jive.utils.logger.MetricLogger;
-import com.jivesoftware.os.jive.utils.logger.MetricLoggerFactory;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;

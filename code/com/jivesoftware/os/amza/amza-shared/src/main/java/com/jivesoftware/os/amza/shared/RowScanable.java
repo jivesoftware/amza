@@ -18,4 +18,15 @@ package com.jivesoftware.os.amza.shared;
 public interface RowScanable {
 
     <E extends Exception> void rowScan(RowScan<E> rowScan) throws E;
+
+    /**
+
+    @param <E>
+    @param from inclusive
+    @param to exclusize
+    @param rowScan
+    @throws E
+    */
+    <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowScan) throws E;
+
 }

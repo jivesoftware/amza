@@ -98,9 +98,12 @@ public class AmzaTable {
         }
     }
 
-    // TODO add concept of a key start stop and filtering
     public <E extends Exception> void scan(RowScan<E> stream) throws E {
         tableStore.rowScan(stream);
+    }
+
+    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> stream) throws E {
+        tableStore.rangeScan(from, to, stream);
     }
 
     public boolean remove(RowIndexKey key) throws Exception {
@@ -135,42 +138,42 @@ public class AmzaTable {
 
                     RowIndexValue timestampedValue = tableStore.get(key);
                     String comparing = tableName.getRingName() + ":" + tableName.getTableName()
-                            + " to " + amzaTable.tableName.getRingName() + ":" + amzaTable.tableName.getTableName();
+                        + " to " + amzaTable.tableName.getRingName() + ":" + amzaTable.tableName.getTableName();
 
                     if (timestampedValue == null) {
                         System.out.println("INCONSISTENCY: " + comparing + " key:null"
-                                + " != " + value.getTimestamp()
-                                + "' -- " + timestampedValue + " vs " + value);
+                            + " != " + value.getTimestamp()
+                            + "' -- " + timestampedValue + " vs " + value);
                         passed.setValue(false);
                         return false;
                     }
                     if (value.getTimestamp() != timestampedValue.getTimestamp()) {
                         System.out.println("INCONSISTENCY: " + comparing + " timstamp:'" + timestampedValue.getTimestamp()
-                                + "' != '" + value.getTimestamp()
-                                + "' -- " + timestampedValue + " vs " + value);
+                            + "' != '" + value.getTimestamp()
+                            + "' -- " + timestampedValue + " vs " + value);
                         passed.setValue(false);
                         return false;
                     }
                     if (value.getTombstoned() != timestampedValue.getTombstoned()) {
                         System.out.println("INCONSISTENCY: " + comparing + " tombstone:" + timestampedValue.getTombstoned()
-                                + " != '" + value.getTombstoned()
-                                + "' -- " + timestampedValue + " vs " + value);
+                            + " != '" + value.getTombstoned()
+                            + "' -- " + timestampedValue + " vs " + value);
                         passed.setValue(false);
                         return false;
                     }
                     if (value.getValue() == null && timestampedValue.getValue() != null) {
                         System.out.println("INCONSISTENCY: " + comparing + " null values:" + timestampedValue.getTombstoned()
-                                + " != '" + value.getTombstoned()
-                                + "' -- " + timestampedValue + " vs " + value);
+                            + " != '" + value.getTombstoned()
+                            + "' -- " + timestampedValue + " vs " + value);
                         passed.setValue(false);
                         return false;
                     }
                     if (value.getValue() != null && !Arrays.equals(value.getValue(), timestampedValue.getValue())) {
                         System.out.println("INCONSISTENCY: " + comparing + " value:'" + timestampedValue.getValue()
-                                + "' != '" + value.getValue()
-                                + "' aClass:" + timestampedValue.getValue().getClass()
-                                + "' bClass:" + value.getValue().getClass()
-                                + "' -- " + timestampedValue + " vs " + value);
+                            + "' != '" + value.getValue()
+                            + "' aClass:" + timestampedValue.getValue().getClass()
+                            + "' bClass:" + value.getValue().getClass()
+                            + "' -- " + timestampedValue + " vs " + value);
                         passed.setValue(false);
                         return false;
                     }

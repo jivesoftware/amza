@@ -49,6 +49,15 @@ public class RowsStorageUpdates implements RowScanable {
         }
     }
 
+    @Override
+    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowStream) throws E {
+        for (Entry<RowIndexKey, RowIndexValue> e : changes.subMap(from, to).entrySet()) {
+            if (!rowStream.row(timestamp, e.getKey(), e.getValue())) {
+                return;
+            }
+        }
+    }
+
     public boolean containsKey(RowIndexKey key) {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
@@ -102,4 +111,5 @@ public class RowsStorageUpdates implements RowScanable {
         }
         return false;
     }
+
 }

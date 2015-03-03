@@ -51,11 +51,11 @@ public class RowTable implements RowsStorage {
     private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 
     public RowTable(TableName tableName,
-            OrderIdProvider orderIdProvider,
-            RowsIndexProvider tableIndexProvider,
-            RowMarshaller<byte[]> rowMarshaller,
-            RowReader<byte[]> rowReader,
-            RowWriter<byte[]> rowWriter) {
+        OrderIdProvider orderIdProvider,
+        RowsIndexProvider tableIndexProvider,
+        RowMarshaller<byte[]> rowMarshaller,
+        RowReader<byte[]> rowReader,
+        RowWriter<byte[]> rowWriter) {
         this.tableName = tableName;
         this.orderIdProvider = orderIdProvider;
         this.tableIndexProvider = tableIndexProvider;
@@ -163,8 +163,8 @@ public class RowTable implements RowsStorage {
                     RowIndexValue rowIndexValue = entry.getValue();
                     byte[] rowPointer = keyToRowPointer.get(rowIndexKey);
                     RowIndexValue rowIndexValuePointer = new RowIndexValue(rowPointer,
-                            rowIndexValue.getTimestamp(),
-                            rowIndexValue.getTombstoned());
+                        rowIndexValue.getTimestamp(),
+                        rowIndexValue.getTombstoned());
                     RowIndexValue got = rowsIndex.get(rowIndexKey);
                     if (got == null) {
                         rowsIndex.put(rowIndexKey, rowIndexValuePointer);
@@ -209,6 +209,23 @@ public class RowTable implements RowsStorage {
     }
 
     @Override
+    public <E extends Exception> void rangeScan(final RowIndexKey from, final RowIndexKey to, final RowScan<E> rowScan) throws E {
+        RowsIndex rowsIndex = tableIndex.get();
+        try {
+            readWriteLock.readLock().lock();
+            rowsIndex.rangeScan(from, to, new RowScan<E>() {
+
+                @Override
+                public boolean row(long transactionId, RowIndexKey key, RowIndexValue value) throws E {
+                    return rowScan.row(transactionId, key, hydrateRowIndexValue(value));
+                }
+            });
+        } finally {
+            readWriteLock.readLock().unlock();
+        }
+    }
+
+    @Override
     public RowIndexValue get(RowIndexKey key) {
         RowsIndex rowsIndex = tableIndex.get();
         try {
@@ -239,8 +256,8 @@ public class RowTable implements RowsStorage {
             byte[] row = rowReader.read(rowIndexValue.getValue());
             byte[] value = rowMarshaller.valueFromRow(row);
             return new RowIndexValue(value,
-                    rowIndexValue.getTimestamp(),
-                    rowIndexValue.getTombstoned());
+                rowIndexValue.getTimestamp(),
+                rowIndexValue.getTombstoned());
         } catch (Exception x) {
             throw new RuntimeException("Failed to hydrtate " + rowIndexValue, x);
         }

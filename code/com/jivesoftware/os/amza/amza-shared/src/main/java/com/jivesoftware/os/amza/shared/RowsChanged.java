@@ -77,4 +77,17 @@ public class RowsChanged implements RowScanable {
             }
         }
     }
+
+    @Override
+    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowStream) throws E {
+        for (Map.Entry<RowIndexKey, RowIndexValue> e : apply.subMap(from, to).entrySet()) {
+            try {
+                if (!rowStream.row(-1, e.getKey(), e.getValue())) {
+                    break;
+                }
+            } catch (Throwable ex) {
+                throw new RuntimeException("Error while streaming entry set.", ex);
+            }
+        }
+    }
 }

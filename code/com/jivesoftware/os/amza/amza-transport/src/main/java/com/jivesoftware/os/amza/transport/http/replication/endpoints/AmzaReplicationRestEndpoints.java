@@ -127,6 +127,16 @@ public class AmzaReplicationRestEndpoints {
                     }
                 }
             }
+
+            @Override
+            public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowScan) throws Exception {
+                for (byte[] row : changeSet.getChanges()) {
+                    if (!rowMarshaller.fromRow(row, rowScan)) {
+                        return;
+                    }
+                }
+            }
+
         };
     }
 

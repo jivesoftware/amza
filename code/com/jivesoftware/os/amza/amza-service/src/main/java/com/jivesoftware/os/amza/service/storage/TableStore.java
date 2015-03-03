@@ -42,6 +42,11 @@ public class TableStore implements RowScanable {
         rowsStorage.rowScan(stream);
     }
 
+    @Override
+    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowScan) throws E {
+        rowsStorage.rangeScan(from, to, rowScan);
+    }
+
     public void compactTombestone(long ifOlderThanNMillis) throws Exception {
         rowsStorage.compactTombestone(ifOlderThanNMillis);
     }
@@ -72,4 +77,5 @@ public class TableStore implements RowScanable {
     public void clear() throws Exception {
         rowsStorage.clear();
     }
+
 }

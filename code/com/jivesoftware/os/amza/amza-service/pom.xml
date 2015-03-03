@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>shared-lib-build-management</artifactId>
-        <version>0.13-SNAPSHOT</version>
+        <version>0.13</version>
         <relativePath>../inheritance-poms/shared-lib-build-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -40,7 +40,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
-            <version>0.13-SNAPSHOT</version>
+            <version>0.13</version>
             <type>jar</type>
         </dependency>
         <dependency>
@@ -50,7 +50,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-storage</artifactId>
-            <version>0.13-SNAPSHOT</version>
+            <version>0.13</version>
             <scope>test</scope>
             <type>jar</type>
         </dependency>

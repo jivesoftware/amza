@@ -26,7 +26,7 @@ public class RowIndexKey implements Comparable<RowIndexKey>, Serializable {
     public RowIndexKey(byte[] key) {
         this.key = key;
     }
-    
+
     /**
      * Please don't mutate this array. Should hand out a copy but trying to make this as fast as possible.
      *

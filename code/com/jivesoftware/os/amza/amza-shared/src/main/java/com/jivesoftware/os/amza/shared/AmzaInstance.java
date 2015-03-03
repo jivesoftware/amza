@@ -32,4 +32,6 @@ public interface AmzaInstance {
     void removeRingHost(String ringName, RingHost ringHost) throws Exception;
 
     List<RingHost> getRing(String ringName) throws Exception;
+
+    long getTimestamp(long timestamp, long millisAgo) throws Exception;
 }

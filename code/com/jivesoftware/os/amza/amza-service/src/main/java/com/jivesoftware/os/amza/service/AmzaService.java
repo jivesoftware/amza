@@ -32,6 +32,7 @@ import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -65,6 +66,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     private final AmzaTableWatcher amzaTableWatcher;
     private final TableStoreProvider tableStoreProvider;
     private final TableName tableIndexKey = new TableName("MASTER", "TABLE_INDEX", null, null);
+    private final SnowflakeIdPacker snowflakeIdPacker = new SnowflakeIdPacker();
 
     public AmzaService(OrderIdProvider orderIdProvider,
             Marshaller marshaller,
@@ -147,6 +149,12 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
             this.scheduledThreadPool.shutdownNow();
             this.scheduledThreadPool = null;
         }
+    }
+
+    @Override
+    public long getTimestamp(long timestamp, long millisAgo) throws Exception {
+        //TODO it would be great if orderIdProvider could answer this instead of using SnowflakeIdPacker
+        return snowflakeIdPacker.pack(snowflakeIdPacker.unpack(timestamp)[0] - millisAgo, 0, 0);
     }
 
     @Override

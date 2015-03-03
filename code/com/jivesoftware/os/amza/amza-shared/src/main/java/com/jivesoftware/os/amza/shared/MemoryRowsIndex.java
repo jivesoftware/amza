@@ -55,6 +55,17 @@ public class MemoryRowsIndex implements RowsIndex, Serializable {
     }
 
     @Override
+    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowScan) throws E {
+        for (Entry<RowIndexKey, RowIndexValue> e : index.subMap(from, to).entrySet()) {
+            RowIndexKey key = e.getKey();
+            RowIndexValue value = e.getValue();
+            if (!rowScan.row(-1, key, value)) {
+                break;
+            }
+        }
+    }
+
+    @Override
     public boolean isEmpty() {
         return index.isEmpty();
     }
@@ -95,6 +106,5 @@ public class MemoryRowsIndex implements RowsIndex, Serializable {
     public void clear() {
         index.clear();
     }
-
 
 }

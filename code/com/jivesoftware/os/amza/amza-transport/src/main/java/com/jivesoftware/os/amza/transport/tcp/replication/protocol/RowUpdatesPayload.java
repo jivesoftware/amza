@@ -83,6 +83,15 @@ public class RowUpdatesPayload implements MessagePayload, RowScanable {
     }
 
     @Override
+    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowScan) throws E {
+        for (int i = 0; i < keys.size(); i++) {
+            if (!rowScan.row(largestTransactionId, keys.get(i), values.get(i))) {
+                return;
+            }
+        }
+    }
+
+    @Override
     public String toString() {
         return "UpdatesPayload{" + "mapName=" + mapName + ", keys=" + keys + ", values=" + values + '}';
     }

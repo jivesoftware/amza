@@ -108,6 +108,7 @@ public class TableReplicator {
         int i = 0;
         final MutableInt leaps = new MutableInt(0);
         TableStore tableStore = tables.getTableStore(tableName);
+        int failedToTake = 0;
         while (i < ringHosts.length) {
             i = (leaps.intValue() * 2);
             for (; i < ringHosts.length; i++) {
@@ -126,6 +127,7 @@ public class TableReplicator {
                         takeFailureListener.get().tookFrom(ringHost);
                     }
                     taken.increment();
+                    failedToTake++;
                     if (taken.intValue() >= takeFromFactor) {
                         return;
                     }
@@ -137,7 +139,10 @@ public class TableReplicator {
                         takeFailureListener.get().failedToTake(ringHost, x);
                     }
                     LOG.debug("Can't takeFrom host:" + ringHost, x);
-                    LOG.warn("Can't takeFrom host:" + ringHost + " " + x.toString());
+                    if (failedToTake == 0) {
+                        failedToTake++;
+                        LOG.warn("Can't takeFrom host:" + ringHost + " " + x.toString());
+                    }
                 }
             }
         }
@@ -229,9 +234,9 @@ public class TableReplicator {
             while ((ringHost = ringWalker.host()) != null) {
                 try {
                     updatesSender.sendUpdates(ringHost, tableName, rowUpdates);
-                     if (sendFailureListener.isPresent()) {
-                         sendFailureListener.get().sent(ringHost);
-                     }
+                    if (sendFailureListener.isPresent()) {
+                        sendFailureListener.get().sent(ringHost);
+                    }
                     ringWalker.success();
                 } catch (Exception x) {
                     if (sendFailureListener.isPresent()) {

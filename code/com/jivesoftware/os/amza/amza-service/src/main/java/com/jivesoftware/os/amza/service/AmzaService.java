@@ -88,53 +88,74 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
             long applyReplicasIntervalInMillis,
             long takeFromNeighborsIntervalInMillis,
             final long compactTombstoneIfOlderThanNMillis) throws Exception {
+        final int silenceBackToBackErrors = 100;
         if (scheduledThreadPool == null) {
             this.ringHost = ringHost;
             scheduledThreadPool = Executors.newScheduledThreadPool(4);
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
+                int failedToSend = 0;
                 @Override
                 public void run() {
                     try {
+                        failedToSend = 0;
                         tableReplicator.resendLocalChanges(AmzaService.this);
                     } catch (Exception x) {
                         LOG.debug("Failed while resending replicas.", x);
-                        LOG.error("Failed while resending replicas.", x);
+                        if (failedToSend % silenceBackToBackErrors == 0) {
+                            failedToSend++;
+                            LOG.error("Failed while resending replicas.", x);
+                        }
                     }
                 }
             }, resendReplicasIntervalInMillis, resendReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
 
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
+                int failedToReceive = 0;
                 @Override
                 public void run() {
                     try {
+                        failedToReceive = 0;
                         tableReplicator.applyReceivedChanges();
                     } catch (Exception x) {
                         LOG.debug("Failing to replay apply replication.", x);
-                        LOG.error("Failing to replay apply replication.", x);
+                        if (failedToReceive % silenceBackToBackErrors == 0) {
+                            failedToReceive++;
+                            LOG.error("Failing to replay apply replication.", x);
+                        }
                     }
                 }
             }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
 
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
+                int failedToTake = 0;
                 @Override
                 public void run() {
                     try {
+                        failedToTake = 0;
                         tableReplicator.takeChanges(AmzaService.this);
                     } catch (Exception x) {
                         LOG.debug("Failing to take from above and below.", x);
-                        LOG.error("Failing to take from above and below.");
+                        if (failedToTake % silenceBackToBackErrors == 0) {
+                            failedToTake++;
+                            LOG.error("Failing to take from above and below.");
+                        }
                     }
                 }
             }, takeFromNeighborsIntervalInMillis, takeFromNeighborsIntervalInMillis, TimeUnit.MILLISECONDS);
 
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
+                int failedToCompact = 0;
                 @Override
                 public void run() {
                     try {
+                        failedToCompact = 0;
                         tableReplicator.compactTombestone(compactTombstoneIfOlderThanNMillis);
                     } catch (Exception x) {
                         LOG.debug("Failing to compact tombestones.", x);
-                        LOG.error("Failing to compact tombestones.");
+                        if (failedToCompact % silenceBackToBackErrors == 0) {
+                            failedToCompact++;
+                            LOG.error("Failing to compact tombestones.");
+                        }
                     }
                 }
             }, compactTombstoneIfOlderThanNMillis, compactTombstoneIfOlderThanNMillis, TimeUnit.MILLISECONDS);

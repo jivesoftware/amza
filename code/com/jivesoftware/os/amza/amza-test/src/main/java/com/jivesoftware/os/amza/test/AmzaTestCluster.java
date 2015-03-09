@@ -43,10 +43,7 @@ import com.jivesoftware.os.amza.storage.FstMarshaller;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.RowTable;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowReader;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
-import com.jivesoftware.os.amza.storage.filer.Filer;
-import com.jivesoftware.os.amza.storage.filer.IFiler;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowsTx;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -151,16 +148,12 @@ public class AmzaTestCluster {
             public RowsStorage createRowsStorage(File workingDirectory, String tableDomain, TableName tableName) throws Exception {
                 File file = new File(workingDirectory, tableDomain + File.separator + tableName.getTableName() + ".kvt");
                 file.getParentFile().mkdirs();
-                IFiler filer = new Filer(file.getAbsolutePath(), "rw");
-                BinaryRowReader reader = new BinaryRowReader(filer);
-                BinaryRowWriter writer = new BinaryRowWriter(filer);
                 RowMarshaller<byte[]> rowMarshaller = new BinaryRowMarshaller();
                 return new RowTable(tableName,
                         orderIdProvider,
                         tableIndexProvider,
                         rowMarshaller,
-                        reader,
-                        writer);
+                        new BinaryRowsTx(file, rowMarshaller));
             }
         };
 

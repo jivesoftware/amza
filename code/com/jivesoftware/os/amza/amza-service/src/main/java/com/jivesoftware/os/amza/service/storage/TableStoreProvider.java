@@ -33,11 +33,11 @@ public class TableStoreProvider {
     private final ConcurrentHashMap<TableName, TableStore> rowsStores = new ConcurrentHashMap<>();
 
     public TableStoreProvider(File workingDirectory,
-            String storeName,
+            String tableDomain,
             RowsStorageProvider tableStorageProvider,
             RowChanges tableStateChanges) {
         this.workingDirectory = workingDirectory;
-        this.storeName = storeName;
+        this.storeName = tableDomain;
         this.tableStorageProvider = tableStorageProvider;
         this.tableStateChanges = tableStateChanges;
     }

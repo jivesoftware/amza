@@ -30,7 +30,7 @@ import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.RowsStorageProvider;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -44,11 +44,12 @@ public class AmzaServiceInitializer {
         public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
         public int takeFromNeighborsIntervalInMillis = 1000;
-        public long compactTombstoneIfOlderThanNMillis = 1 * 24 * 60 * 60 * 1000L;
+        public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
+        public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
-        OrderIdProvider orderIdProvider,
+        TimestampedOrderIdProvider orderIdProvider,
         Marshaller marshaller,
         RowsStorageProvider amzaStores,
         RowsStorageProvider amzaReplicasWAL,

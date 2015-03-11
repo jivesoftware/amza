@@ -23,59 +23,61 @@ import java.io.IOException;
 
 public class BinaryRowReader implements RowReader<byte[]> {
 
-    private final IFiler filer;
+    private final IFiler filer; // TODO use mem-mapping and bb.dupliate to remove all the hard locks
 
     public BinaryRowReader(IFiler filer) {
         this.filer = filer;
     }
 
     @Override
-    public void scan(boolean reverse, Stream<byte[]> stream) throws Exception {
-
-        if (reverse) {
-            synchronized (filer.lock()) {
-                long seekTo = filer.length() - 4; // last length int
+    public void reverseScan(Stream<byte[]> stream) throws Exception {
+        synchronized (filer.lock()) {
+            long seekTo = filer.length() - 4; // last length int
+            if (seekTo < 0) {
+                return;
+            }
+            while (seekTo >= 0) {
+                filer.seek(seekTo);
+                int priorLength = UIO.readInt(filer, "priorLength");
+                seekTo -= (priorLength + 4);
                 if (seekTo < 0) {
                     return;
                 }
-                while (seekTo >= 0) {
-                    filer.seek(seekTo);
-                    int priorLength = UIO.readInt(filer, "priorLength");
-                    seekTo -= (priorLength + 4);
-                    if (seekTo < 0) {
-                        return;
-                    }
-                    filer.seek(seekTo);
+                filer.seek(seekTo);
 
-                    int length = UIO.readInt(filer, "length");
-                    byte[] row = new byte[length];
-                    filer.read(row);
-                    if (!stream.row(UIO.longBytes(seekTo), row)) {
-                        return;
-                    }
-                    seekTo -= 4;
-                }
-            }
-        } else {
-            synchronized (filer.lock()) {
-                if (filer.length() == 0) {
+                int length = UIO.readInt(filer, "length");
+                byte[] row = new byte[length];
+                filer.read(row);
+                if (!stream.row(seekTo, row)) {
                     return;
                 }
-                filer.seek(0);
-                while (filer.getFilePointer() < filer.length()) {
-                    long seekTo = filer.getFilePointer();
-                    int length = UIO.readInt(filer, "length");
-                    byte[] row = new byte[length];
-                    if (length > 0) {
-                        filer.read(row);
-                    }
-                    if (!stream.row(UIO.longBytes(seekTo), row)) {
-                        return;
-                    }
-                    UIO.readInt(filer, "length");
-                }
+                seekTo -= 4;
             }
         }
+    }
+
+    @Override
+    public void scan(long offest, Stream<byte[]> stream) throws Exception {
+
+        synchronized (filer.lock()) {
+            if (filer.length() == 0) {
+                return;
+            }
+            filer.seek(offest);
+            while (filer.getFilePointer() < filer.length()) {
+                long seekTo = filer.getFilePointer();
+                int length = UIO.readInt(filer, "length");
+                byte[] row = new byte[length];
+                if (length > 0) {
+                    filer.read(row);
+                }
+                if (!stream.row(seekTo, row)) {
+                    return;
+                }
+                UIO.readInt(filer, "length");
+            }
+        }
+
     }
 
     @Override

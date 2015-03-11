@@ -47,8 +47,8 @@ public class TableStore implements RowScanable {
         rowsStorage.rangeScan(from, to, rowScan);
     }
 
-    public void compactTombestone(long ifOlderThanNMillis) throws Exception {
-        rowsStorage.compactTombestone(ifOlderThanNMillis);
+    public void compactTombstone(long removeTombstonedOlderThanTimestampId) throws Exception {
+        rowsStorage.compactTombstone(removeTombstonedOlderThanTimestampId);
     }
 
     public RowIndexValue get(RowIndexKey key) throws Exception {

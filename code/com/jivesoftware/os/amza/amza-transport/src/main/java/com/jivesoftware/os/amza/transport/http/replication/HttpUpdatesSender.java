@@ -52,7 +52,7 @@ public class HttpUpdatesSender implements UpdatesSender {
             public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
                 // We make this copy because we don't know how the value is being stored. By calling value.getValue()
                 // we ensure that the value from the tableIndex is real vs a pointer.
-                RowIndexValue copy = new RowIndexValue(value.getValue(), value.getTimestamp(), value.getTombstoned());
+                RowIndexValue copy = new RowIndexValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
                 rows.add(rowMarshaller.toRow(orderId, key, copy));
                 return true;
             }

@@ -24,4 +24,6 @@ import java.util.List;
 public interface RowWriter<R> {
 
     List<byte[]> write(List<R> rows, boolean append) throws Exception;
+
+    long getEndOfLastRow() throws Exception;
 }

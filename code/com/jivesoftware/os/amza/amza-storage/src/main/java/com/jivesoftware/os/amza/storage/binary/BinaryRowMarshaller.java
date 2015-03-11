@@ -29,7 +29,7 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
         MemoryFiler filer = new MemoryFiler();
         UIO.writeLong(filer, transactionId, "transactionId");
         UIO.writeByteArray(filer, v.getValue(), "value");
-        UIO.writeLong(filer, v.getTimestamp(), "timestamp");
+        UIO.writeLong(filer, v.getTimestampId(), "timestamp");
         UIO.writeBoolean(filer, v.getTombstoned(), "tombstone");
         UIO.writeByteArray(filer, k.getKey(), "key");
         return filer.getBytes();

@@ -36,7 +36,7 @@ public class RowIndexValue implements Serializable {
         this.tombstoned = tombstoned;
     }
 
-    public long getTimestamp() {
+    public long getTimestampId() {
         return timestamp;
     }
 

@@ -59,7 +59,7 @@ public class TcpUpdatesSender implements UpdatesSender {
                 keys.add(key);
                 // We make this copy because we don't know how the value is being stored. By calling value.getValue()
                 // we ensure that the value from the tableIndex is real vs a pointer.
-                RowIndexValue copy = new RowIndexValue(value.getValue(), value.getTimestamp(), value.getTombstoned());
+                RowIndexValue copy = new RowIndexValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
                 values.add(copy);
                 if (highestId.longValue() < orderId) {
                     highestId.setValue(orderId);

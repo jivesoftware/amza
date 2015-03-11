@@ -201,7 +201,9 @@ public class BinaryRowsTx implements RowsTx<byte[]> {
                 if (rowPointer >= endOfLastRow) {
                     return false;
                 }
-                final List<byte[]> rows = new ArrayList<>();
+                final List<RowIndexKey> rowKeys = new ArrayList<>();
+                final List<RowIndexValue> rowValues = new ArrayList<>();
+                final List<byte[]> rawRows = new ArrayList<>();
                 final AtomicLong batchSizeInBytes = new AtomicLong();
                 rowMarshaller.fromRow(row, new RowScan() {
 
@@ -213,9 +215,10 @@ public class BinaryRowsTx implements RowsTx<byte[]> {
                             if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
                                 tombstoneCount.incrementAndGet();
                             } else {
-                                rows.add(row);
+                                rowKeys.add(key);
+                                rowValues.add(value);
+                                rawRows.add(row);
                                 batchSizeInBytes.addAndGet(row.length);
-                                compactedRowsIndex.put(key, value);
                                 keyCount.incrementAndGet();
                             }
                         } else {
@@ -223,17 +226,30 @@ public class BinaryRowsTx implements RowsTx<byte[]> {
                         }
                         long batchingSize = 1024 * 1024 * 10; // TODO expose to config
                         if (batchSizeInBytes.get() > batchingSize) {
-                            compactionWriter.write(rows, true);
-                            rows.clear();
-                            batchSizeInBytes.set(0);
+                            flush(rawRows, rowKeys, rowValues, batchSizeInBytes);
                         }
                         return true;
                     }
                 });
-                if (!rows.isEmpty()) {
-                    compactionWriter.write(rows, true);
+                if (!rawRows.isEmpty()) {
+                    flush(rawRows, rowKeys, rowValues, batchSizeInBytes);
                 }
                 return true;
+            }
+
+            private void flush(final List<byte[]> rawRows, final List<RowIndexKey> rowKeys, final List<RowIndexValue> rowValues,
+                final AtomicLong batchSizeInBytes) throws Exception {
+
+                List<byte[]> rowPointers = compactionWriter.write(rawRows, true);
+                for (int i = 0; i < rowKeys.size(); i++) {
+                    RowIndexValue rowValue = rowValues.get(i);
+                    compactedRowsIndex.put(rowKeys.get(i),
+                        new RowIndexValue(rowPointers.get(i), rowValue.getTimestampId(), rowValue.getTombstoned()));
+                }
+                rowKeys.clear();
+                rowValues.clear();
+                rawRows.clear();
+                batchSizeInBytes.set(0);
             }
         });
     }

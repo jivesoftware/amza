@@ -83,11 +83,11 @@ public class TableReplicator {
         this.takeFailureListener = takeFailureListener;
     }
 
-    public void compactTombestone(long ifOlderThanNMillis) throws Exception {
+    public void compactTombstone(long removeTombstonedOlderThanTimestampId) throws Exception {
         for (Entry<TableName, TableStore> table : tables.getTableStores()) {
             TableStore tableStore = table.getValue();
             try {
-                tableStore.compactTombestone(ifOlderThanNMillis);
+                tableStore.compactTombstone(removeTombstonedOlderThanTimestampId);
             } catch (Exception x) {
                 LOG.warn("Failed to compact tombstones table:" + table.getKey(), x);
             }

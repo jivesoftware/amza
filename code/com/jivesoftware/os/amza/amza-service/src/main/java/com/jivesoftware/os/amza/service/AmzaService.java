@@ -31,8 +31,7 @@ import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.TableName;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -60,19 +59,18 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private RingHost ringHost;
     private ScheduledExecutorService scheduledThreadPool;
-    private final OrderIdProvider orderIdProvider;
+    private final TimestampedOrderIdProvider orderIdProvider;
     private final Marshaller marshaller;
     private final TableReplicator tableReplicator;
     private final AmzaTableWatcher amzaTableWatcher;
     private final TableStoreProvider tableStoreProvider;
     private final TableName tableIndexKey = new TableName("MASTER", "TABLE_INDEX", null, null);
-    private final SnowflakeIdPacker snowflakeIdPacker = new SnowflakeIdPacker();
 
-    public AmzaService(OrderIdProvider orderIdProvider,
-            Marshaller marshaller,
-            TableReplicator tableReplicator,
-            TableStoreProvider tableStoreProvider,
-            AmzaTableWatcher amzaTableWatcher) {
+    public AmzaService(TimestampedOrderIdProvider orderIdProvider,
+        Marshaller marshaller,
+        TableReplicator tableReplicator,
+        TableStoreProvider tableStoreProvider,
+        AmzaTableWatcher amzaTableWatcher) {
         this.orderIdProvider = orderIdProvider;
         this.marshaller = marshaller;
         this.tableReplicator = tableReplicator;
@@ -84,16 +82,20 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         return ringHost;
     }
 
-    synchronized public void start(RingHost ringHost, long resendReplicasIntervalInMillis,
-            long applyReplicasIntervalInMillis,
-            long takeFromNeighborsIntervalInMillis,
-            final long compactTombstoneIfOlderThanNMillis) throws Exception {
+    synchronized public void start(RingHost ringHost,
+        long resendReplicasIntervalInMillis,
+        long applyReplicasIntervalInMillis,
+        long takeFromNeighborsIntervalInMillis,
+        long checkIfCompactionIsNeededIntervalInMillis,
+        final long removeTombstonedOlderThanNMilli) throws Exception {
+
         final int silenceBackToBackErrors = 100;
         if (scheduledThreadPool == null) {
             this.ringHost = ringHost;
             scheduledThreadPool = Executors.newScheduledThreadPool(4);
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
                 int failedToSend = 0;
+
                 @Override
                 public void run() {
                     try {
@@ -111,6 +113,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
 
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
                 int failedToReceive = 0;
+
                 @Override
                 public void run() {
                     try {
@@ -128,6 +131,7 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
 
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
                 int failedToTake = 0;
+
                 @Override
                 public void run() {
                     try {
@@ -145,20 +149,22 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
 
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
                 int failedToCompact = 0;
+
                 @Override
                 public void run() {
                     try {
                         failedToCompact = 0;
-                        tableReplicator.compactTombestone(compactTombstoneIfOlderThanNMillis);
+                        long removeIfOlderThanTimestmapId = orderIdProvider.getApproximateId(System.currentTimeMillis() - removeTombstonedOlderThanNMilli);
+                        tableReplicator.compactTombstone(removeIfOlderThanTimestmapId);
                     } catch (Exception x) {
-                        LOG.debug("Failing to compact tombestones.", x);
+                        LOG.debug("Failing to compact tombstones.", x);
                         if (failedToCompact % silenceBackToBackErrors == 0) {
                             failedToCompact++;
-                            LOG.error("Failing to compact tombestones.");
+                            LOG.error("Failing to compact tombstones.");
                         }
                     }
                 }
-            }, compactTombstoneIfOlderThanNMillis, compactTombstoneIfOlderThanNMillis, TimeUnit.MILLISECONDS);
+            }, checkIfCompactionIsNeededIntervalInMillis, checkIfCompactionIsNeededIntervalInMillis, TimeUnit.MILLISECONDS);
 
             tableReplicator.takeChanges(AmzaService.this);
         }
@@ -173,9 +179,8 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
     }
 
     @Override
-    public long getTimestamp(long timestamp, long millisAgo) throws Exception {
-        //TODO it would be great if orderIdProvider could answer this instead of using SnowflakeIdPacker
-        return snowflakeIdPacker.pack(snowflakeIdPacker.unpack(timestamp)[0] - millisAgo, 0, 0);
+    public long getTimestamp(long timestampId, long wallClockMillis) throws Exception {
+        return orderIdProvider.getApproximateId(timestampId, wallClockMillis);
     }
 
     @Override
@@ -338,8 +343,8 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
                 @Override
                 public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws RuntimeException {
                     System.out.println(ringHost.getHost() + ":" + ringHost.getPort()
-                            + ":" + tableName.getTableName() + " k:" + key + " v:" + value.getValue()
-                            + " d:" + value.getTombstoned() + " t:" + value.getTimestamp());
+                        + ":" + tableName.getTableName() + " k:" + key + " v:" + value.getValue()
+                        + " d:" + value.getTombstoned() + " t:" + value.getTimestampId());
                     return true;
                 }
             });

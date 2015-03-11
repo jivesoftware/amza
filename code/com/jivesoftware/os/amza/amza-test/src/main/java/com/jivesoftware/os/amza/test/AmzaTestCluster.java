@@ -46,8 +46,8 @@ import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowsTx;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.File;
 import java.util.Collection;
@@ -131,7 +131,7 @@ public class AmzaTestCluster {
         };
 
         // TODO need to get writer id from somewhere other than port.
-        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(serviceHost.getPort()),
+        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(serviceHost.getPort()),
                 new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
 
         final RowsIndexProvider tableIndexProvider = new RowsIndexProvider() {
@@ -151,9 +151,8 @@ public class AmzaTestCluster {
                 RowMarshaller<byte[]> rowMarshaller = new BinaryRowMarshaller();
                 return new RowTable(tableName,
                         orderIdProvider,
-                        tableIndexProvider,
                         rowMarshaller,
-                        new BinaryRowsTx(file, rowMarshaller));
+                        new BinaryRowsTx(file, rowMarshaller, tableIndexProvider));
             }
         };
 
@@ -178,6 +177,7 @@ public class AmzaTestCluster {
         amzaService.start(serviceHost, config.resendReplicasIntervalInMillis,
                 config.applyReplicasIntervalInMillis,
                 config.takeFromNeighborsIntervalInMillis,
+                config.checkIfCompactionIsNeededIntervalInMillis,
                 config.compactTombstoneIfOlderThanNMillis);
 
         //if (serviceHost.getPort() % 2 == 0) {

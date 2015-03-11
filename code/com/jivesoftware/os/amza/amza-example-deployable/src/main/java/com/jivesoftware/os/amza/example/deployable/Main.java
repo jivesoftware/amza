@@ -60,8 +60,8 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServerInitializer;
 import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
 import de.ruedigermoeller.serialization.FSTConfiguration;
@@ -102,7 +102,7 @@ public class Main {
         }
 
         // todo need a better way to create writter id.
-        final OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(new Random().nextInt(512)));
+        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(new Random().nextInt(512)));
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -136,9 +136,8 @@ public class Main {
                 File file = new File(directory, tableName.getTableName() + ".kvt");
                 return new RowTable(tableName,
                     orderIdProvider,
-                    tableIndexProvider,
                     rowMarshaller,
-                    new BinaryRowsTx(file, rowMarshaller));
+                    new BinaryRowsTx(file, rowMarshaller, tableIndexProvider));
             }
         };
 
@@ -180,6 +179,7 @@ public class Main {
         amzaService.start(ringHost, amzaServiceConfig.resendReplicasIntervalInMillis,
             amzaServiceConfig.applyReplicasIntervalInMillis,
             amzaServiceConfig.takeFromNeighborsIntervalInMillis,
+            amzaServiceConfig.checkIfCompactionIsNeededIntervalInMillis,
             amzaServiceConfig.compactTombstoneIfOlderThanNMillis);
 
         System.out.println("-----------------------------------------------------------------------");

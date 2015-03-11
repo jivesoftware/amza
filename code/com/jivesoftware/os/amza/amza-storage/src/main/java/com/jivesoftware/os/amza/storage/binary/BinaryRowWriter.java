@@ -63,4 +63,11 @@ public class BinaryRowWriter implements RowWriter<byte[]> {
         return rowPointers;
     }
 
+    @Override
+    public long getEndOfLastRow() throws Exception {
+        synchronized (filer.lock()) {
+            return filer.length();
+        }
+    }
+
 }

@@ -90,7 +90,7 @@ public class RowsStorageUpdates implements RowScanable {
         long putTimestamp = timestamp + 1;
         RowIndexValue update = new RowIndexValue(value, putTimestamp, false);
         RowIndexValue current = rowsStorage.get(key);
-        if (current == null || current.getTimestamp() < update.getTimestamp()) {
+        if (current == null || current.getTimestampId() < update.getTimestampId()) {
             changes.put(key, update);
             return true;
         }
@@ -105,7 +105,7 @@ public class RowsStorageUpdates implements RowScanable {
         RowIndexValue current = rowsStorage.get(key);
         byte[] value = (current != null) ? current.getValue() : null;
         RowIndexValue update = new RowIndexValue(value, removeTimestamp, true);
-        if (current == null || current.getTimestamp() < update.getTimestamp()) {
+        if (current == null || current.getTimestampId() < update.getTimestampId()) {
             changes.put(key, update);
             return true;
         }

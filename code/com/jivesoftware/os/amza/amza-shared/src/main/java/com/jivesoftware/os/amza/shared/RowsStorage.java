@@ -15,6 +15,8 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import java.util.List;
+
 public interface RowsStorage extends RowScanable {
 
     void load() throws Exception;
@@ -26,9 +28,13 @@ public interface RowsStorage extends RowScanable {
 
     boolean containsKey(RowIndexKey key);
 
+    List<RowIndexValue> get(List<RowIndexKey> keys);
+
+    List<Boolean> containsKey(List<RowIndexKey> keys);
+
     void takeRowUpdatesSince(final long transactionId, RowScan rowUpdates) throws Exception;
 
-    void compactTombestone(long ifOlderThanNMillis) throws Exception;
+    void compactTombstone(long removeTombstonedOlderThanNMillis) throws Exception;
 
     void clear() throws Exception;
 

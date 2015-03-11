@@ -142,14 +142,14 @@ public class AmzaTable {
 
                     if (timestampedValue == null) {
                         System.out.println("INCONSISTENCY: " + comparing + " key:null"
-                            + " != " + value.getTimestamp()
+                            + " != " + value.getTimestampId()
                             + "' -- " + timestampedValue + " vs " + value);
                         passed.setValue(false);
                         return false;
                     }
-                    if (value.getTimestamp() != timestampedValue.getTimestamp()) {
-                        System.out.println("INCONSISTENCY: " + comparing + " timstamp:'" + timestampedValue.getTimestamp()
-                            + "' != '" + value.getTimestamp()
+                    if (value.getTimestampId() != timestampedValue.getTimestampId()) {
+                        System.out.println("INCONSISTENCY: " + comparing + " timstamp:'" + timestampedValue.getTimestampId()
+                            + "' != '" + value.getTimestampId()
                             + "' -- " + timestampedValue + " vs " + value);
                         passed.setValue(false);
                         return false;

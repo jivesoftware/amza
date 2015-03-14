@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
-import com.jivesoftware.os.amza.shared.NoOpFlusher;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
@@ -102,7 +101,7 @@ public class IndexReplicationTest {
         changes.put(new RowIndexKey("1".getBytes()), val1);
         changes.put(new RowIndexKey("2".getBytes()), val2);
 
-        sender.sendUpdates(localHost, tableName, new MemoryRowsIndex(changes, new NoOpFlusher()));
+        sender.sendUpdates(localHost, tableName, new MemoryRowsIndex(changes));
 
         RowScanable received = receivedPut.get();
         Assert.assertNotNull(received);

@@ -17,7 +17,6 @@
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>de.ruedigermoeller</groupId>
@@ -52,6 +51,14 @@
             <artifactId>commons-io</artifactId>
             <scope>test</scope>
             <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.filer</groupId>
+            <artifactId>io</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.filer</groupId>
+            <artifactId>map-store</artifactId>
         </dependency>
     </dependencies>
     <name>amza-storage</name>

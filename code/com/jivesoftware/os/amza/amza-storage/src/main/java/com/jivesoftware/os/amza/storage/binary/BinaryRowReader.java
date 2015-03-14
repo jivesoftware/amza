@@ -31,53 +31,74 @@ public class BinaryRowReader implements RowReader<byte[]> {
 
     @Override
     public void reverseScan(Stream<byte[]> stream) throws Exception {
+        long seekTo;
+
         synchronized (filer.lock()) {
-            long seekTo = filer.length() - 4; // last length int
+            seekTo = filer.length() - 4; // last length int
             if (seekTo < 0) {
                 return;
             }
-            while (seekTo >= 0) {
-                filer.seek(seekTo);
-                int priorLength = UIO.readInt(filer, "priorLength");
-                seekTo -= (priorLength + 4);
-                if (seekTo < 0) {
-                    return;
-                }
-                filer.seek(seekTo);
-
-                int length = UIO.readInt(filer, "length");
-                byte[] row = new byte[length];
-                filer.read(row);
-                if (!stream.row(seekTo, row)) {
-                    return;
-                }
-                seekTo -= 4;
-            }
         }
+        while (true) {
+            long rowFP;
+            byte[] row;
+            synchronized (filer.lock()) {
+                if (seekTo >= 0) {
+                    filer.seek(seekTo);
+                    int priorLength = UIO.readInt(filer, "priorLength");
+                    seekTo -= (priorLength + 4);
+                    if (seekTo < 0) {
+                        return;
+                    }
+                    filer.seek(seekTo);
+
+                    int length = UIO.readInt(filer, "length");
+                    row = new byte[length];
+                    filer.read(row);
+                    rowFP = seekTo;
+                    seekTo -= 4;
+                } else {
+                    break;
+                }
+            }
+
+            if (!stream.row(rowFP, row)) {
+                return;
+            }
+
+        }
+
     }
 
     @Override
-    public void scan(long offest, Stream<byte[]> stream) throws Exception {
-
+    public void scan(long offset, Stream<byte[]> stream) throws Exception {
         synchronized (filer.lock()) {
             if (filer.length() == 0) {
                 return;
             }
-            filer.seek(offest);
-            while (filer.getFilePointer() < filer.length()) {
-                long seekTo = filer.getFilePointer();
-                int length = UIO.readInt(filer, "length");
-                byte[] row = new byte[length];
-                if (length > 0) {
-                    filer.read(row);
+        }
+        while (true) {
+            long rowFP;
+            byte[] row;
+            synchronized (filer.lock()) {
+                filer.seek(offset);
+                if (offset < filer.length()) {
+                    int length = UIO.readInt(filer, "length");
+                    rowFP = offset;
+                    row = new byte[length];
+                    if (length > 0) {
+                        filer.read(row);
+                    }
+                    UIO.readInt(filer, "length");
+                    offset = filer.getFilePointer();
+                } else {
+                    break;
                 }
-                if (!stream.row(seekTo, row)) {
-                    return;
-                }
-                UIO.readInt(filer, "length");
+            }
+            if (!stream.row(rowFP, row)) {
+                return;
             }
         }
-
     }
 
     @Override

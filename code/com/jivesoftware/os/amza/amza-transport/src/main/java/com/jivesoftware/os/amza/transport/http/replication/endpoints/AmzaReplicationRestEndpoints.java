@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.RowUpdates;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
@@ -120,9 +121,10 @@ public class AmzaReplicationRestEndpoints {
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         return new RowScanable() {
             @Override
-            public <E extends Exception> void rowScan(RowScan<E> rowStream) throws Exception {
+            public <E extends Exception> void rowScan(RowScan<E> rowScan) throws Exception {
                 for (byte[] row : changeSet.getChanges()) {
-                    if (!rowMarshaller.fromRow(row, rowStream)) {
+                    RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+                    if (!rowScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
                         return;
                     }
                 }
@@ -131,7 +133,8 @@ public class AmzaReplicationRestEndpoints {
             @Override
             public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowScan) throws Exception {
                 for (byte[] row : changeSet.getChanges()) {
-                    if (!rowMarshaller.fromRow(row, rowScan)) {
+                    RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+                    if (!rowScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
                         return;
                     }
                 }

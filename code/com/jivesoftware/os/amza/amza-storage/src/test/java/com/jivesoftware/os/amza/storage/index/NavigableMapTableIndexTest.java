@@ -15,13 +15,12 @@
  */
 package com.jivesoftware.os.amza.storage.index;
 
-import com.jivesoftware.os.amza.shared.Flusher;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.storage.filer.UIO;
-import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.AbstractMap;
+import java.util.Collections;
 import org.testng.annotations.Test;
 
 public class NavigableMapTableIndexTest {
@@ -29,17 +28,13 @@ public class NavigableMapTableIndexTest {
     @Test(enabled = false)
     public void loadTest() throws Exception {
         System.out.println("InitialHeap:" + Runtime.getRuntime().totalMemory());
-        NavigableMap<RowIndexKey, RowIndexValue> navigableMap = new ConcurrentSkipListMap<>();
 
-        MemoryRowsIndex instance = new MemoryRowsIndex(navigableMap, new Flusher() {
-
-            @Override
-            public void flush() {
-            }
-        });
+        MemoryRowsIndex instance = new MemoryRowsIndex();
 
         for (long i = 0; i < 200000000; i++) {
-            instance.put(new RowIndexKey(UIO.longBytes(i)), new RowIndexValue(UIO.longBytes(i), i, false));
+            instance.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                new RowIndexKey(UIO.longBytes(i)),
+                new RowIndexValue(UIO.longBytes(i), i, false))));
             if (i % 1000000 == 0) {
                 System.out.println("Size:" + i + " Heap:" + Runtime.getRuntime().totalMemory());
                 instance.commit();

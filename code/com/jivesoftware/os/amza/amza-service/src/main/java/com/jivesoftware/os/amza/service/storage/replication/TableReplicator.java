@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.service.storage.TableStore;
 import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
-import com.jivesoftware.os.amza.shared.NoOpFlusher;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
@@ -184,7 +183,7 @@ public class TableReplicator {
         public void flush() throws Exception {
             if (!batch.isEmpty()) {
                 LOG.trace("Took:" + batch.size() + " from " + ringHost + " for " + tableName);
-                tableStore.commit(new MemoryRowsIndex(batch, new NoOpFlusher()));
+                tableStore.commit(new MemoryRowsIndex(batch));
                 highWaterMarks.set(ringHost, tableName, highWaterMark.longValue());
                 batch.clear();
             }

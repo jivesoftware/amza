@@ -13,9 +13,20 @@
     <properties>
         <jive.utils.version>0.78</jive.utils.version>
         <mlogger.version>0.8</mlogger.version>
+        <filer.version>0.65-SNAPSHOT</filer.version>
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.jivesoftware.os.filer</groupId>
+                <artifactId>io</artifactId>
+                <version>${filer.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jivesoftware.os.filer</groupId>
+                <artifactId>map-store</artifactId>
+                <version>${filer.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.jive.utils</groupId>
                 <artifactId>shell-utils</artifactId>

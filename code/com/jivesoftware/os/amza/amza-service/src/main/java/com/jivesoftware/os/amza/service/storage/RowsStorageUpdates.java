@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.RowsStorage;
-import java.io.IOException;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -58,14 +57,14 @@ public class RowsStorageUpdates implements RowScanable {
         }
     }
 
-    public boolean containsKey(RowIndexKey key) {
+    public boolean containsKey(RowIndexKey key) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
         return rowsStorage.containsKey(key);
     }
 
-    public byte[] getValue(RowIndexKey key) {
+    public byte[] getValue(RowIndexKey key) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
@@ -76,14 +75,14 @@ public class RowsStorageUpdates implements RowScanable {
         return got.getValue();
     }
 
-    public RowIndexValue getTimestampedValue(RowIndexKey key) {
+    public RowIndexValue getTimestampedValue(RowIndexKey key) throws Exception {
         if (key == null) {
             return null;
         }
         return rowsStorage.get(key);
     }
 
-    public boolean put(RowIndexKey key, byte[] value) throws IOException {
+    public boolean put(RowIndexKey key, byte[] value) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
@@ -97,7 +96,7 @@ public class RowsStorageUpdates implements RowScanable {
         return false;
     }
 
-    public boolean remove(RowIndexKey key) throws IOException {
+    public boolean remove(RowIndexKey key) throws Exception {
         if (key == null) {
             return false;
         }

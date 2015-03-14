@@ -22,6 +22,10 @@ import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map.Entry;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -44,11 +48,18 @@ public class AmzaExampleEndpoints {
     @Consumes("application/json")
     @Path("/set")
     public Response set(@QueryParam("table") String table,
-            @QueryParam("key") String key,
-            @QueryParam("value") String value) {
+        @QueryParam("key") String key,
+        @QueryParam("value") String value) {
         try {
             AmzaTable amzaTable = amzaService.getTable(new TableName("master", table, null, null));
-            return Response.ok(new String(amzaTable.set(new RowIndexKey(key.getBytes()), value.getBytes()).getKey()), MediaType.TEXT_PLAIN).build();
+            List<Entry<RowIndexKey, byte[]>> entries = new ArrayList<>();
+            String[] keys = key.split(",");
+            String[] values = value.split(",");
+            for (int i = 0; i < keys.length; i++) {
+                entries.add(new AbstractMap.SimpleEntry<>(new RowIndexKey(keys[i].getBytes()), values[i].getBytes()));
+            }
+            amzaTable.set(entries);
+            return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set table:" + table + " key:" + key + " value:" + value, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to set table:" + table + " key:" + key + " value:" + value, x);
@@ -59,16 +70,18 @@ public class AmzaExampleEndpoints {
     @Consumes("application/json")
     @Path("/get")
     public Response get(@QueryParam("table") String table,
-            @QueryParam("key") String key) {
+        @QueryParam("key") String key) {
         try {
             LOG.warn("Getting:" + table + " key:" + key);
-            AmzaTable amzaTable = amzaService.getTable(new TableName("master", table, null, null));
-            byte[] got = amzaTable.get(new RowIndexKey(key.getBytes()));
-            if (got == null) {
-                return Response.ok(null, MediaType.TEXT_PLAIN).build();
-            } else {
-                return Response.ok(new String(got), MediaType.TEXT_PLAIN).build();
+            String[] keys = key.split(",");
+            List<RowIndexKey> rowKeys = new ArrayList<>();
+            for (int i = 0; i < keys.length; i++) {
+                rowKeys.add(new RowIndexKey(keys[i].getBytes()));
             }
+
+            AmzaTable amzaTable = amzaService.getTable(new TableName("master", table, null, null));
+            List<byte[]> got = amzaTable.get(rowKeys);
+            return ResponseHelper.INSTANCE.jsonResponse(got);
         } catch (Exception x) {
             LOG.warn("Failed to get table:" + table + " key:" + key, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to get table:" + table + " key:" + key, x);
@@ -79,7 +92,7 @@ public class AmzaExampleEndpoints {
     @Consumes("application/json")
     @Path("/remove")
     public Response remove(@QueryParam("table") String table,
-            @QueryParam("key") String key) {
+        @QueryParam("key") String key) {
         try {
             AmzaTable amzaTable = amzaService.getTable(new TableName("master", table, null, null));
             return Response.ok(amzaTable.remove(new RowIndexKey(key.getBytes())), MediaType.TEXT_PLAIN).build();

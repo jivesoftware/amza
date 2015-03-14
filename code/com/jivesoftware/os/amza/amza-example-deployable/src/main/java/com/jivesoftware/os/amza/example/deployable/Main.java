@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.example.deployable.endpoints.AmzaExampleEndpoints;
+import com.jivesoftware.os.amza.mapdb.MapdbRowIndex;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
@@ -27,12 +28,9 @@ import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.storage.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.storage.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.Flusher;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.RowsIndex;
 import com.jivesoftware.os.amza.shared.RowsIndexProvider;
@@ -66,9 +64,7 @@ import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServ
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
 import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.File;
-import java.util.NavigableMap;
 import java.util.Random;
-import java.util.concurrent.ConcurrentSkipListMap;
 
 public class Main {
 
@@ -110,22 +106,37 @@ public class Main {
 
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
 
-        final RowsIndexProvider tableIndexProvider = new RowsIndexProvider() {
+        final File[] rowIndexDirs = new File[]{
+            new File("./rowIndexs/data1"),
+            new File("./rowIndexs/data2"),
+            new File("./rowIndexs/data3")};
+
+//        final RowsIndexProvider fileBackedTableIndexProvider = new RowsIndexProvider() {
+//
+//            @Override
+//            public RowsIndex createRowsIndex(TableName tableName) throws Exception {
+//                return new FileBackedRowIndex(tableName, 256, true, 0, rowIndexDirs);
+//            }
+//        };
+        final RowsIndexProvider fileBackedTableIndexProvider = new RowsIndexProvider() {
 
             @Override
             public RowsIndex createRowsIndex(TableName tableName) throws Exception {
-                NavigableMap<RowIndexKey, RowIndexValue> navigableMap = new ConcurrentSkipListMap<>();
-                return new MemoryRowsIndex(navigableMap, new Flusher() {
-
-                    @Override
-                    public void flush() {
-                    }
-                });
+                File tableDir = new File(rowIndexDirs[0], tableName.getTableName() + "-" + tableName.getRingName());
+                return new MapdbRowIndex(tableDir, tableName);
             }
         };
 
+//        final RowsIndexProvider fileBackedTableIndexProvider = new RowsIndexProvider() {
+//
+//            @Override
+//            public RowsIndex createRowsIndex(TableName tableName) throws Exception {
+//                return new MavibotRowIndex(rowIndexDirs[0], tableName);
+//            }
+//        };
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
+        final int backRepairIndexForNDistinctTxIds = 1000;
         RowsStorageProvider rowsStorageProvider = new RowsStorageProvider() {
             @Override
             public RowsStorage createRowsStorage(File workingDirectory,
@@ -137,7 +148,30 @@ public class Main {
                 return new RowTable(tableName,
                     orderIdProvider,
                     rowMarshaller,
-                    new BinaryRowsTx(file, rowMarshaller, tableIndexProvider));
+                    new BinaryRowsTx(file, rowMarshaller, fileBackedTableIndexProvider, backRepairIndexForNDistinctTxIds));
+            }
+        };
+
+        final RowsIndexProvider tableIndexProvider = new RowsIndexProvider() {
+
+            @Override
+            public RowsIndex createRowsIndex(TableName tableName) throws Exception {
+                return new MemoryRowsIndex();
+            }
+        };
+
+        RowsStorageProvider temporayRowsStorageProvider = new RowsStorageProvider() {
+            @Override
+            public RowsStorage createRowsStorage(File workingDirectory,
+                String tableDomain,
+                TableName tableName) throws Exception {
+                final File directory = new File(workingDirectory, tableDomain);
+                directory.mkdirs();
+                File file = new File(directory, tableName.getTableName() + ".kvt");
+                return new RowTable(tableName,
+                    orderIdProvider,
+                    rowMarshaller,
+                    new BinaryRowsTx(file, rowMarshaller, tableIndexProvider, backRepairIndexForNDistinctTxIds));
             }
         };
 
@@ -164,8 +198,8 @@ public class Main {
             orderIdProvider,
             new com.jivesoftware.os.amza.storage.FstMarshaller(FSTConfiguration.getDefaultConfiguration()),
             rowsStorageProvider,
-            rowsStorageProvider,
-            rowsStorageProvider,
+            temporayRowsStorageProvider,
+            temporayRowsStorageProvider,
             changeSetSender,
             tableTaker,
             Optional.<SendFailureListener>absent(),

@@ -5,17 +5,28 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.19</version>
+        <version>0.20</version>
         <relativePath>../global-repo-management/pom.xml</relativePath>
     </parent>
     <artifactId>global-version-management</artifactId>
     <packaging>pom</packaging>
     <properties>
-        <jive.utils.version>0.78</jive.utils.version>
+        <jive.utils.version>0.79</jive.utils.version>
         <mlogger.version>0.8</mlogger.version>
+        <filer.version>0.67</filer.version>
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.jivesoftware.os.filer</groupId>
+                <artifactId>io</artifactId>
+                <version>${filer.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jivesoftware.os.filer</groupId>
+                <artifactId>map-store</artifactId>
+                <version>${filer.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.jive.utils</groupId>
                 <artifactId>shell-utils</artifactId>

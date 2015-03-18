@@ -55,5 +55,4 @@ public class FstMarshaller implements Marshaller {
             return (V) in.readObject(clazz);
         }
     }
-
 }

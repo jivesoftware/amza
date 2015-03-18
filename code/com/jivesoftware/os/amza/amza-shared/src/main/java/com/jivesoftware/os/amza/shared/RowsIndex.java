@@ -15,24 +15,40 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+
 public interface RowsIndex extends RowScanable {
 
-    RowIndexValue put(RowIndexKey key, RowIndexValue value);
+    void put(Collection<? extends Map.Entry<RowIndexKey, RowIndexValue>> entry) throws Exception;
 
-    RowIndexValue get(RowIndexKey key);
+    List<RowIndexValue> get(List<RowIndexKey> key) throws Exception;
 
-    boolean containsKey(RowIndexKey key);
+    List<Boolean> containsKey(List<RowIndexKey> key) throws Exception;
 
-    RowIndexValue remove(RowIndexKey key);
+    void remove(Collection<RowIndexKey> key) throws Exception;
 
-    boolean isEmpty();
+    boolean isEmpty() throws Exception;
 
-    void clear();
+    void clear() throws Exception;
 
     /**
      * Force persistence of all changes
+     * @throws java.lang.Exception
      */
-    void commit();
+    void commit() throws Exception;
 
-    void compact();
+    void compact() throws Exception;
+
+    CompactionRowIndex startCompaction() throws Exception;
+
+    public interface CompactionRowIndex {
+
+        void put(Collection<? extends Map.Entry<RowIndexKey, RowIndexValue>> entry) throws Exception;
+
+        void abort() throws Exception;
+
+        void commit() throws Exception;
+    }
 }

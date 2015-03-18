@@ -4,12 +4,12 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.jivesoftware.os</groupId>
     <artifactId>amza</artifactId>
-    <version>0.19</version>
+    <version>0.20</version>
     <packaging>pom</packaging>
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.19</version>
+        <version>0.20</version>
         <relativePath>inheritance-poms/global-repo-management/pom.xml</relativePath>
     </parent>
     <modules>
@@ -20,5 +20,7 @@
         <module>amza-transport</module>
         <module>amza-shared</module>
         <module>amza-storage</module>
+        <module>amza-mavibot-storage</module>
+        <module>amza-mapdb-storage</module>
     </modules>
 </project>

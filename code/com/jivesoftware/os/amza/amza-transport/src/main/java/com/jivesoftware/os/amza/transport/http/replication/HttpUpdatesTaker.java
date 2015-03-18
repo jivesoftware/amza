@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfig;
@@ -48,7 +49,8 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         }
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         for (byte[] row : took.getChanges()) {
-            rowMarshaller.fromRow(row, tookRowUpdates);
+            RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+            tookRowUpdates.row(walr.getTransactionId(), walr.getKey(), walr.getValue());
         }
     }
 

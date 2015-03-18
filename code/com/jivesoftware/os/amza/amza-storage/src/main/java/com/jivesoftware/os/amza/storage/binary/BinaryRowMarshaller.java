@@ -17,7 +17,6 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
 import com.jivesoftware.os.amza.storage.filer.UIO;
@@ -37,14 +36,30 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
     }
 
     @Override
-    public boolean fromRow(byte[] row, RowScan rowStream) throws Exception {
+    public WALRow fromRow(byte[] row) throws Exception {
         MemoryFiler filer = new MemoryFiler(row);
-        long transactionId = UIO.readLong(filer, "transactionId");
-        byte[] value = UIO.readByteArray(filer, "value");
-        long timestamp = UIO.readLong(filer, "timestamp");
-        boolean tombstone = UIO.readBoolean(filer, "tombstone");
-        byte[] key = UIO.readByteArray(filer, "key");
-        return rowStream.row(transactionId, new RowIndexKey(key), new RowIndexValue(value, timestamp, tombstone));
+        final long transactionId = UIO.readLong(filer, "transactionId");
+        final byte[] value = UIO.readByteArray(filer, "value");
+        final long timestamp = UIO.readLong(filer, "timestamp");
+        final boolean tombstone = UIO.readBoolean(filer, "tombstone");
+        final byte[] key = UIO.readByteArray(filer, "key");
+        return new WALRow() {
+
+            @Override
+            public long getTransactionId() {
+                return transactionId;
+            }
+
+            @Override
+            public RowIndexKey getKey() {
+                return new RowIndexKey(key);
+            }
+
+            @Override
+            public RowIndexValue getValue() {
+                return new RowIndexValue(value, timestamp, tombstone);
+            }
+        };
     }
 
     @Override

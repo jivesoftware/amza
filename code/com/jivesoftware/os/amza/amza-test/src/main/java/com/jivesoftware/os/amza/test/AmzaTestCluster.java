@@ -24,11 +24,9 @@ import com.jivesoftware.os.amza.service.AmzaTable;
 import com.jivesoftware.os.amza.service.storage.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.storage.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
-import com.jivesoftware.os.amza.shared.NoOpFlusher;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
 import com.jivesoftware.os.amza.shared.RowScan;
 import com.jivesoftware.os.amza.shared.RowScanable;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -139,7 +137,7 @@ public class AmzaTestCluster {
             @Override
             public RowsIndex createRowsIndex(TableName tableName) throws Exception {
 
-                return new MemoryRowsIndex(new ConcurrentSkipListMap<RowIndexKey, RowIndexValue>(), new NoOpFlusher());
+                return new MemoryRowsIndex();
             }
         };
 
@@ -152,7 +150,7 @@ public class AmzaTestCluster {
                 return new RowTable(tableName,
                         orderIdProvider,
                         rowMarshaller,
-                        new BinaryRowsTx(file, rowMarshaller, tableIndexProvider));
+                        new BinaryRowsTx(file, rowMarshaller, tableIndexProvider, 100));
             }
         };
 

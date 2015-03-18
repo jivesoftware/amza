@@ -111,7 +111,6 @@ public class BinaryRowReaderWriterTest {
         @Override
         public boolean row(long rowPointer, byte[] row) throws Exception {
             rows.add(row);
-            //System.out.println(clears + " row:" + Arrays.toString(row));
             return true;
         }
 

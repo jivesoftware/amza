@@ -16,31 +16,34 @@
 package com.jivesoftware.os.amza.shared;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 public class MemoryRowsIndex implements RowsIndex, Serializable {
 
     private final NavigableMap<RowIndexKey, RowIndexValue> index;
-    private final Flusher flusher;
 
-    public MemoryRowsIndex(NavigableMap<RowIndexKey, RowIndexValue> index, Flusher flusher) throws Exception {
+    public MemoryRowsIndex() {
+        this(new ConcurrentSkipListMap<RowIndexKey, RowIndexValue>());
+    }
+
+    public MemoryRowsIndex(NavigableMap<RowIndexKey, RowIndexValue> index) {
         this.index = index;
-        this.flusher = flusher;
     }
 
     @Override
     public void commit() {
-        if (flusher != null) {
-            flusher.flush();
-        }
+
     }
 
     @Override
     public void compact() {
-        if (flusher != null) {
-            //flusher.compact(); // TODO?
-        }
+
     }
 
     @Override
@@ -71,40 +74,64 @@ public class MemoryRowsIndex implements RowsIndex, Serializable {
     }
 
     @Override
-    public boolean containsKey(RowIndexKey key) {
-        return index.containsKey(key);
+    public List<Boolean> containsKey(List<RowIndexKey> keys) {
+        List<Boolean> contains = new ArrayList<>(keys.size());
+        for (RowIndexKey key : keys) {
+            contains.add(index.containsKey(key));
+        }
+        return contains;
     }
 
     @Override
-    public RowIndexValue get(RowIndexKey key) {
-        RowIndexValue got = index.get(key);
-        if (got == null) {
-            return null;
+    public List<RowIndexValue> get(List<RowIndexKey> keys) {
+        List<RowIndexValue> gots = new ArrayList<>(keys.size());
+        for (RowIndexKey key : keys) {
+            gots.add(index.get(key));
         }
-        return got;
+        return gots;
     }
 
     @Override
-    public RowIndexValue put(RowIndexKey key, RowIndexValue value) {
-        RowIndexValue had = index.put(key, value);
-        if (had == null) {
-            return null;
+    public void put(Collection<? extends Map.Entry<RowIndexKey, RowIndexValue>> entrys) {
+        for (Map.Entry<RowIndexKey, RowIndexValue> entry : entrys) {
+            index.put(entry.getKey(), entry.getValue());
         }
-        return had;
     }
 
     @Override
-    public RowIndexValue remove(RowIndexKey key) {
-        RowIndexValue removed = index.remove(key);
-        if (removed == null) {
-            return null;
+    public void remove(Collection<RowIndexKey> keys) {
+        for (RowIndexKey key : keys) {
+            index.remove(key);
         }
-        return removed;
     }
 
     @Override
     public void clear() {
         index.clear();
+    }
+
+    @Override
+    public CompactionRowIndex startCompaction() throws Exception {
+
+        final MemoryRowsIndex rowsIndex = new MemoryRowsIndex();
+        return new CompactionRowIndex() {
+
+            @Override
+            public void put(Collection<? extends Map.Entry<RowIndexKey, RowIndexValue>> entries) {
+                rowsIndex.put(entries);
+            }
+
+            @Override
+            public void abort() throws Exception {
+            }
+
+            @Override
+            public void commit() throws Exception {
+                index.clear();
+                index.putAll(rowsIndex.index);
+            }
+        };
+
     }
 
 }

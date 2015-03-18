@@ -24,13 +24,13 @@ public interface RowsStorage extends RowScanable {
     // TODO Consider using a call back stream instead of returning RowsChanged
     RowsChanged update(RowScanable rowUpdates) throws Exception;
 
-    RowIndexValue get(RowIndexKey key);
+    RowIndexValue get(RowIndexKey key) throws Exception;
 
-    boolean containsKey(RowIndexKey key);
+    boolean containsKey(RowIndexKey key) throws Exception;
 
-    List<RowIndexValue> get(List<RowIndexKey> keys);
+    List<RowIndexValue> get(List<RowIndexKey> keys) throws Exception;
 
-    List<Boolean> containsKey(List<RowIndexKey> keys);
+    List<Boolean> containsKey(List<RowIndexKey> keys) throws Exception;
 
     void takeRowUpdatesSince(final long transactionId, RowScan rowUpdates) throws Exception;
 

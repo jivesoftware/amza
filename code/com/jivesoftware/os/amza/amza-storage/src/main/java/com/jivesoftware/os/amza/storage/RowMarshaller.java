@@ -17,13 +17,18 @@ package com.jivesoftware.os.amza.storage;
 
 import com.jivesoftware.os.amza.shared.RowIndexKey;
 import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
 
 public interface RowMarshaller<R> {
 
     R toRow(long orderId, RowIndexKey key, RowIndexValue value) throws Exception;
 
-    boolean fromRow(R row, RowScan rowStream) throws Exception;
+    WALRow fromRow(R row) throws Exception;
+
+    public interface WALRow {
+        long getTransactionId();
+        RowIndexKey getKey();
+        RowIndexValue getValue();
+    }
 
     byte[] valueFromRow(R row) throws Exception;
 }

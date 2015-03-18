@@ -35,7 +35,7 @@ public class AmzaSetStress {
 
         String tableName = "lorem";
 
-        for (int i = 1; i < 2; i++) {
+        for (int i = 0; i < 2; i++) {
             final String tname = tableName + i;
             MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
             final org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);

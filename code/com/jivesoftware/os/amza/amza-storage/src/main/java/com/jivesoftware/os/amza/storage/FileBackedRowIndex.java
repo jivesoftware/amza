@@ -375,8 +375,6 @@ public class FileBackedRowIndex implements RowsIndex {
                     public boolean stream(byte[] key) throws IOException {
                         byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key);
                         if (got != null) {
-                            //System.out.println(sls);
-                            //System.out.println("got.length:" + got.length + " got:" + Arrays.toString(got));
                             RowIndexValue value = der(got);
                             try {
                                 return rowScan.row(-1, new RowIndexKey(key), value);

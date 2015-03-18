@@ -32,6 +32,8 @@ import com.jivesoftware.os.amza.shared.RowsStorage;
 import com.jivesoftware.os.amza.shared.RowsTx;
 import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,6 +47,8 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class RowTable implements RowsStorage {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final TableName tableName;
     private final OrderIdProvider orderIdProvider;
@@ -319,7 +323,7 @@ public class RowTable implements RowsStorage {
             });
 
             if (took.longValue() > 0) {
-                System.out.println("Took:" + took.longValue() + " " + sinceTransactionId + " " + tableName);
+                LOG.info("Took:" + took.longValue() + " " + sinceTransactionId + " " + tableName);
             }
         } finally {
             readWriteLock.readLock().unlock();

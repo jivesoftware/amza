@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.discovery;
 
-import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.service.AmzaHostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -38,16 +38,18 @@ public class AmzaDiscovery {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final AmzaService amzaService;
+    private final AmzaHostRing amzaRing;
     private final String clusterName;
-    private final RingHost ringHost;
     private final InetAddress multicastGroup;
     private final int multicastPort;
     private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
 
-    public AmzaDiscovery(AmzaService amzaService, RingHost ringHost, String clusterName, String multicastGroup, int multicastPort) throws UnknownHostException {
-        this.amzaService = amzaService;
-        this.ringHost = ringHost;
+    public AmzaDiscovery(AmzaHostRing amzaRing,
+        RingHost ringHost,
+        String clusterName,
+        String multicastGroup,
+        int multicastPort) throws UnknownHostException {
+        this.amzaRing = amzaRing;
         this.clusterName = clusterName;
         this.multicastGroup = InetAddress.getByName(multicastGroup);
         this.multicastPort = multicastPort;
@@ -77,10 +79,10 @@ public class AmzaDiscovery {
                                 String host = clusterHostPort[1];
                                 int port = Integer.parseInt(clusterHostPort[2].trim());
                                 RingHost anotherRingHost = new RingHost(host, port); // TODO need to broadcast rack id
-                                List<RingHost> ring = amzaService.getRing("master");
+                                List<RingHost> ring = amzaRing.getRing("master");
                                 if (!ring.contains(anotherRingHost)) {
                                     LOG.info("Adding host to the cluster: " + anotherRingHost);
-                                    amzaService.addRingHost("master", anotherRingHost);
+                                    amzaRing.addRingHost("master", anotherRingHost);
                                 }
                             }
                         }
@@ -100,6 +102,7 @@ public class AmzaDiscovery {
 
         @Override
         public void run() {
+            RingHost ringHost = amzaRing.getRingHost();
             String message = (clusterName + ":" + ringHost.getHost() + ":" + ringHost.getPort());
             try (MulticastSocket socket = new MulticastSocket()) {
                 byte[] buf = new byte[512];

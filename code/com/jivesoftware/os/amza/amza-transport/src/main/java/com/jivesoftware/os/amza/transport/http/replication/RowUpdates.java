@@ -17,22 +17,22 @@ package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.RegionName;
 import java.util.List;
 
 public class RowUpdates {
 
     private final long highestTransactionId;
-    private final TableName tableName;
+    private final RegionName regionName;
     private final List<byte[]> changes;
 
     @JsonCreator
     public RowUpdates(
             @JsonProperty("highestTransactionId") long highestTransactionId,
-            @JsonProperty("tableName") TableName tableName,
+            @JsonProperty("tableName") RegionName regionName,
             @JsonProperty("changes") List<byte[]> changes) {
         this.highestTransactionId = highestTransactionId;
-        this.tableName = tableName;
+        this.regionName = regionName;
         this.changes = changes;
     }
 
@@ -40,8 +40,8 @@ public class RowUpdates {
         return highestTransactionId;
     }
 
-    public TableName getTableName() {
-        return tableName;
+    public RegionName getRegionName() {
+        return regionName;
     }
 
     public List<byte[]> getChanges() {
@@ -50,6 +50,6 @@ public class RowUpdates {
 
     @Override
     public String toString() {
-        return "ChangeSet{" + "highestTransactionId=" + highestTransactionId + ", tableName=" + tableName + ", changes=" + changes + '}';
+        return "RowUpdates{" + "highestTransactionId=" + highestTransactionId + ", regionName=" + regionName + ", changes=" + changes + '}';
     }
 }

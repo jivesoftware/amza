@@ -19,9 +19,9 @@ public interface HighwaterMarks {
 
     void clearRing(RingHost ringHost);
 
-    void set(RingHost ringHost, TableName tableName, long highWatermark);
+    void set(RingHost ringHost, RegionName regionName, long highWatermark);
 
-    void clear(RingHost ringHost, TableName tableName);
+    void clear(RingHost ringHost, RegionName regionName);
 
-    Long get(RingHost ringHost, TableName tableName);
+    Long get(RingHost ringHost, RegionName regionName);
 }

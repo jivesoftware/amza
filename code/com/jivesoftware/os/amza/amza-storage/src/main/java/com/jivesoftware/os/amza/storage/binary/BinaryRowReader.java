@@ -15,78 +15,79 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.RowReader;
-import com.jivesoftware.os.amza.shared.RowReader.Stream;
-import com.jivesoftware.os.amza.storage.filer.IFiler;
+import com.jivesoftware.os.amza.shared.WALReader;
+import com.jivesoftware.os.amza.shared.WALReader.Stream;
+import com.jivesoftware.os.amza.storage.filer.Filer;
+import com.jivesoftware.os.amza.storage.filer.FilerChannel;
 import com.jivesoftware.os.amza.storage.filer.UIO;
 import java.io.IOException;
 
-public class BinaryRowReader implements RowReader<byte[]> {
+public class BinaryRowReader implements WALReader {
 
-    private final IFiler filer; // TODO use mem-mapping and bb.dupliate to remove all the hard locks
+    private final Filer parent; // TODO use mem-mapping and bb.dupliate to remove all the hard locks
 
-    public BinaryRowReader(IFiler filer) {
-        this.filer = filer;
+    public BinaryRowReader(Filer parent) {
+        this.parent = parent;
     }
 
     @Override
-    public void reverseScan(Stream<byte[]> stream) throws Exception {
+    public void reverseScan(Stream stream) throws Exception {
         long seekTo;
-
-        synchronized (filer.lock()) {
-            seekTo = filer.length() - 4; // last length int
-            if (seekTo < 0) {
-                return;
-            }
+        synchronized (parent.lock()) {
+            seekTo = parent.length() - 4; // last length int
+        }
+        FilerChannel filer = parent.fileChannelFiler();
+        if (seekTo < 0) {
+            return;
         }
         while (true) {
             long rowFP;
+            byte rowType;
             byte[] row;
-            synchronized (filer.lock()) {
-                if (seekTo >= 0) {
-                    filer.seek(seekTo);
-                    int priorLength = UIO.readInt(filer, "priorLength");
-                    seekTo -= (priorLength + 4);
-                    if (seekTo < 0) {
-                        return;
-                    }
-                    filer.seek(seekTo);
-
-                    int length = UIO.readInt(filer, "length");
-                    row = new byte[length];
-                    filer.read(row);
-                    rowFP = seekTo;
-                    seekTo -= 4;
-                } else {
-                    break;
+            if (seekTo >= 0) {
+                filer.seek(seekTo);
+                int priorLength = UIO.readInt(filer, "priorLength");
+                seekTo -= (priorLength + 4);
+                if (seekTo < 0) {
+                    return;
                 }
+                filer.seek(seekTo);
+
+                int length = UIO.readInt(filer, "length");
+                rowType = (byte) filer.read();
+                row = new byte[length - 1];
+                filer.read(row);
+                rowFP = seekTo;
+                seekTo -= 4;
+            } else {
+                break;
             }
 
-            if (!stream.row(rowFP, row)) {
+            if (!stream.row(rowFP, rowType, row)) {
                 return;
             }
-
         }
-
     }
 
     @Override
-    public void scan(long offset, Stream<byte[]> stream) throws Exception {
-        synchronized (filer.lock()) {
-            if (filer.length() == 0) {
-                return;
+    public void scan(long offset, Stream stream) throws Exception {
+        long fileLength = 0;
+        while (fileLength < parent.length()) {
+            synchronized (parent.lock()) {
+                fileLength = parent.length();
             }
-        }
-        while (true) {
-            long rowFP;
-            byte[] row;
-            synchronized (filer.lock()) {
+            FilerChannel filer = parent.fileChannelFiler();
+            while (true) {
+                long rowFP;
+                byte rowType;
+                byte[] row;
                 filer.seek(offset);
-                if (offset < filer.length()) {
+                if (offset < fileLength) {
                     int length = UIO.readInt(filer, "length");
                     rowFP = offset;
-                    row = new byte[length];
-                    if (length > 0) {
+                    rowType = (byte) filer.read();
+                    row = new byte[length - 1];
+                    if (length > 1) {
                         filer.read(row);
                     }
                     UIO.readInt(filer, "length");
@@ -94,26 +95,30 @@ public class BinaryRowReader implements RowReader<byte[]> {
                 } else {
                     break;
                 }
-            }
-            if (!stream.row(rowFP, row)) {
-                return;
+                if (!stream.row(rowFP, rowType, row)) {
+                    return;
+                }
             }
         }
     }
 
     @Override
     public byte[] read(byte[] rowPointer) throws IOException {
-        synchronized (filer.lock()) {
-            if (filer.length() == 0) {
-                return null;
-            }
-            filer.seek(UIO.bytesLong(rowPointer));
-            int length = UIO.readInt(filer, "length");
-            byte[] row = new byte[length];
-            if (length > 0) {
-                filer.read(row);
-            }
-            return row;
+        long fileLength;
+        synchronized (parent.lock()) {
+            fileLength = parent.length();
         }
+        if (fileLength == 0) {
+            return null;
+        }
+        FilerChannel filer = parent.fileChannelFiler();
+        filer.seek(UIO.bytesLong(rowPointer));
+        long rowType = (byte) filer.read();
+        int length = UIO.readInt(filer, "length");
+        byte[] row = new byte[length - 1];
+        if (length > 1) {
+            filer.read(row);
+        }
+        return row;
     }
 }

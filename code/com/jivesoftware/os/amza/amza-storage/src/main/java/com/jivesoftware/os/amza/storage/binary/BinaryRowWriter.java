@@ -15,14 +15,14 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.RowWriter;
+import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.storage.filer.IFiler;
 import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
 import com.jivesoftware.os.amza.storage.filer.UIO;
 import java.util.ArrayList;
 import java.util.List;
 
-public class BinaryRowWriter implements RowWriter<byte[]> {
+public class BinaryRowWriter implements WALWriter {
 
     private final IFiler filer;
 
@@ -31,27 +31,30 @@ public class BinaryRowWriter implements RowWriter<byte[]> {
     }
 
     @Override
-    public List<byte[]> write(List<byte[]> rows, boolean append) throws Exception {
+    public List<byte[]> write(List<Byte> rowType, List<byte[]> rows, boolean append) throws Exception {
         List<Long> offests = new ArrayList<>();
         MemoryFiler memoryFiler = new MemoryFiler();
+        int i = 0;
         for (byte[] row : rows) {
             offests.add(memoryFiler.getFilePointer());
-            int length = row.length;
+            int length = row.length + 1;
             UIO.writeInt(memoryFiler, length, "length");
+            memoryFiler.write(rowType.get(i));
             memoryFiler.write(row);
             UIO.writeInt(memoryFiler, length, "length");
+            i++;
         }
-
+        byte[] bytes = memoryFiler.getBytes();
         long startFp;
         synchronized (filer.lock()) {
             if (append) {
                 startFp = filer.length();
                 filer.seek(startFp); // seek to end of file.
-                filer.write(memoryFiler.getBytes());
+                filer.write(bytes);
             } else {
                 startFp = 0;
                 filer.seek(0);
-                filer.write(memoryFiler.getBytes());
+                filer.write(bytes);
                 filer.eof(); // trim file to size.
             }
             filer.flush();

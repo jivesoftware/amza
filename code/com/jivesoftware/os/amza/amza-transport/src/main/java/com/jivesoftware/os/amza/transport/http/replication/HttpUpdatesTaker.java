@@ -16,10 +16,10 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
@@ -38,11 +38,11 @@ public class HttpUpdatesTaker implements UpdatesTaker {
 
     @Override
     public void takeUpdates(RingHost ringHost,
-            TableName partitionName,
-            long transationId,
-            RowScan tookRowUpdates) throws Exception {
+            RegionName partitionName,
+            long transactionId,
+            WALScan tookRowUpdates) throws Exception {
 
-        RowUpdates changeSet = new RowUpdates(transationId, partitionName, new ArrayList<byte[]>());
+        RowUpdates changeSet = new RowUpdates(transactionId, partitionName, new ArrayList<byte[]>());
         RowUpdates took = getRequestHelper(ringHost).executeRequest(changeSet, "/amza/changes/take", RowUpdates.class, null);
         if (took == null) {
             return;

@@ -15,11 +15,11 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.RowsStorage;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALScanable;
+import com.jivesoftware.os.amza.shared.WALStorage;
+import com.jivesoftware.os.amza.shared.WALValue;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -27,21 +27,21 @@ import java.util.concurrent.ConcurrentSkipListMap;
  * Not thread safe. Each Thread should get their own ReadThroughChangeSet.
  *
  */
-public class RowsStorageUpdates implements RowScanable {
+public class RowsStorageUpdates implements WALScanable {
 
-    private final RowsStorage rowsStorage;
-    private final ConcurrentSkipListMap<RowIndexKey, RowIndexValue> changes;
+    private final WALStorage walStorage;
+    private final ConcurrentSkipListMap<WALKey, WALValue> changes;
     private final long timestamp;
 
-    RowsStorageUpdates(RowsStorage rowsStorage, long timestamp) {
-        this.rowsStorage = rowsStorage;
+    RowsStorageUpdates(WALStorage walStorage, long timestamp) {
+        this.walStorage = walStorage;
         this.timestamp = timestamp;
         this.changes = new ConcurrentSkipListMap<>();
     }
 
     @Override
-    public <E extends Exception> void rowScan(RowScan<E> rowStream) throws E {
-        for (Entry<RowIndexKey, RowIndexValue> e : changes.entrySet()) {
+    public <E extends Exception> void rowScan(WALScan<E> rowStream) throws E {
+        for (Entry<WALKey, WALValue> e : changes.entrySet()) {
             if (!rowStream.row(timestamp, e.getKey(), e.getValue())) {
                 return;
             }
@@ -49,61 +49,55 @@ public class RowsStorageUpdates implements RowScanable {
     }
 
     @Override
-    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowStream) throws E {
-        for (Entry<RowIndexKey, RowIndexValue> e : changes.subMap(from, to).entrySet()) {
+    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowStream) throws E {
+        for (Entry<WALKey, WALValue> e : changes.subMap(from, to).entrySet()) {
             if (!rowStream.row(timestamp, e.getKey(), e.getValue())) {
                 return;
             }
         }
     }
 
-    public boolean containsKey(RowIndexKey key) throws Exception {
+    public boolean containsKey(WALKey key) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        return rowsStorage.containsKey(key);
+        return walStorage.containsKey(key);
     }
 
-    public byte[] getValue(RowIndexKey key) throws Exception {
+    public byte[] getValue(WALKey key) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        RowIndexValue got = rowsStorage.get(key);
+        WALValue got = walStorage.get(key);
         if (got == null || got.getTombstoned()) {
             return null;
         }
         return got.getValue();
     }
 
-    public RowIndexValue getTimestampedValue(RowIndexKey key) throws Exception {
+    public WALValue getTimestampedValue(WALKey key) throws Exception {
         if (key == null) {
             return null;
         }
-        return rowsStorage.get(key);
+        return walStorage.get(key);
     }
 
-    public boolean put(RowIndexKey key, byte[] value) throws Exception {
+    public boolean put(WALKey key, byte[] value) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        long putTimestamp = timestamp + 1;
-        RowIndexValue update = new RowIndexValue(value, putTimestamp, false);
-        RowIndexValue current = rowsStorage.get(key);
-        if (current == null || current.getTimestampId() < update.getTimestampId()) {
-            changes.put(key, update);
-            return true;
-        }
-        return false;
+        WALValue update = new WALValue(value, timestamp, false);
+        changes.put(key, update);
+        return true;
     }
 
-    public boolean remove(RowIndexKey key) throws Exception {
+    public boolean remove(WALKey key) throws Exception {
         if (key == null) {
             return false;
         }
-        long removeTimestamp = timestamp;
-        RowIndexValue current = rowsStorage.get(key);
+        WALValue current = walStorage.get(key);
         byte[] value = (current != null) ? current.getValue() : null;
-        RowIndexValue update = new RowIndexValue(value, removeTimestamp, true);
+        WALValue update = new WALValue(value, timestamp, true);
         if (current == null || current.getTimestampId() < update.getTimestampId()) {
             changes.put(key, update);
             return true;

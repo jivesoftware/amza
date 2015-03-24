@@ -15,13 +15,13 @@
  */
 package com.jivesoftware.os.amza.transport.tcp.replication;
 
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALScanable;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.RowUpdatesPayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
@@ -48,18 +48,18 @@ public class TcpUpdatesSender implements UpdatesSender {
     }
 
     @Override
-    public void sendUpdates(final RingHost ringHost, final TableName tableName, RowScanable changes) throws Exception {
+    public void sendUpdates(final RingHost ringHost, final RegionName tableName, WALScanable changes) throws Exception {
         final int batchSize = 10; // TODO expose to config;
-        final List<RowIndexKey> keys = new ArrayList<>();
-        final List<RowIndexValue> values = new ArrayList<>();
+        final List<WALKey> keys = new ArrayList<>();
+        final List<WALValue> values = new ArrayList<>();
         final MutableLong highestId = new MutableLong(-1);
-        changes.rowScan(new RowScan<Exception>() {
+        changes.rowScan(new WALScan<Exception>() {
             @Override
-            public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
+            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                 keys.add(key);
                 // We make this copy because we don't know how the value is being stored. By calling value.getValue()
                 // we ensure that the value from the tableIndex is real vs a pointer.
-                RowIndexValue copy = new RowIndexValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
+                WALValue copy = new WALValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
                 values.add(copy);
                 if (highestId.longValue() < orderId) {
                     highestId.setValue(orderId);

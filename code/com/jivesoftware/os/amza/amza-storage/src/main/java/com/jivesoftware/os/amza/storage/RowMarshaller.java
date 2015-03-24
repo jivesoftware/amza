@@ -15,19 +15,19 @@
  */
 package com.jivesoftware.os.amza.storage;
 
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALValue;
 
 public interface RowMarshaller<R> {
 
-    R toRow(long orderId, RowIndexKey key, RowIndexValue value) throws Exception;
+    R toRow(long orderId, WALKey key, WALValue value) throws Exception;
 
     WALRow fromRow(R row) throws Exception;
 
     public interface WALRow {
         long getTransactionId();
-        RowIndexKey getKey();
-        RowIndexValue getValue();
+        WALKey getKey();
+        WALValue getValue();
     }
 
     byte[] valueFromRow(R row) throws Exception;

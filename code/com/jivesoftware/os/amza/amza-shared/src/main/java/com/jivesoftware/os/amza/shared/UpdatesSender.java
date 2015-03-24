@@ -17,5 +17,5 @@ package com.jivesoftware.os.amza.shared;
 
 public interface UpdatesSender {
 
-    void sendUpdates(RingHost ringHost, TableName tableName, RowScanable rowUpdates) throws Exception;
+    void sendUpdates(RingHost ringHost, RegionName regionName, WALScanable rowUpdates) throws Exception;
 }

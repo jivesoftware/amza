@@ -31,7 +31,7 @@ public class AmzaGetStress {
 
     public static void main(String[] args) throws URIException, IOException {
 
-        args = new String[]{"localhost", "1175", "1", "20000"};
+        args = new String[]{"localhost", "1175", "1", "10000"};
 
         final String hostName = args[0];
         final int port = Integer.parseInt(args[1]);
@@ -39,10 +39,10 @@ public class AmzaGetStress {
         final int count = Integer.parseInt(args[3]);
         final int batchSize = 100;
 
-        String tableName = "lorem";
+        String regionName = "lorem";
 
-        for (int i = 0; i < 2; i++) {
-            final String tname = tableName + i;
+        for (int i = 0; i < 8; i++) {
+            final String rname = regionName + i;
             MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
             final org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);
 
@@ -50,7 +50,7 @@ public class AmzaGetStress {
                 @Override
                 public void run() {
                     try {
-                        get(httpClient, hostName, port, tname, 0, count, batchSize);
+                        get(httpClient, hostName, port, rname, 0, count, batchSize);
                     } catch (Exception x) {
                         x.printStackTrace();
                     }
@@ -61,14 +61,14 @@ public class AmzaGetStress {
     }
 
     private static void get(org.apache.commons.httpclient.HttpClient httpClient,
-        String hostName, int port, String tableName, int firstDocId, int count, int batchSize) throws URIException, IOException, InterruptedException {
+        String hostName, int port, String regionName, int firstDocId, int count, int batchSize) throws URIException, IOException, InterruptedException {
         long start = System.currentTimeMillis();
         for (int key = firstDocId; key < count; key++) {
             StringBuilder url = new StringBuilder();
             url.append("http://");
             url.append(hostName).append(":").append(port);
             url.append("/example/get");
-            url.append("?table=").append(tableName);
+            url.append("?region=").append(regionName);
             url.append("&key=");
 
             for (int b = 0; b < batchSize; b++) {
@@ -103,7 +103,7 @@ public class AmzaGetStress {
             if (key % 100 == 0) {
                 long elapse = System.currentTimeMillis() - start;
                 double millisPerAdd = ((double) elapse / (double) key);
-                System.out.println(tableName + " millisPerGet:" + millisPerAdd + " getsPerSec:" + (1000d / millisPerAdd) + " key:" + key);
+                System.out.println(regionName + " millisPerGet:" + millisPerAdd + " getsPerSec:" + (1000d / millisPerAdd) + " key:" + key);
             }
         }
     }

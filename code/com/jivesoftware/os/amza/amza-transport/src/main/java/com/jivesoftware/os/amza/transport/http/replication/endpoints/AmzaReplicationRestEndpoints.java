@@ -16,12 +16,13 @@
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.AmzaRing;
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALScanable;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.RowUpdates;
@@ -41,9 +42,12 @@ import org.apache.commons.lang.mutable.MutableLong;
 public class AmzaReplicationRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private final AmzaRing amzaRing;
     private final AmzaInstance amzaInstance;
 
-    public AmzaReplicationRestEndpoints(@Context AmzaInstance amzaInstance) {
+    public AmzaReplicationRestEndpoints(@Context AmzaRing amzaRing,
+        @Context AmzaInstance amzaInstance) {
+        this.amzaRing = amzaRing;
         this.amzaInstance = amzaInstance;
     }
 
@@ -53,7 +57,7 @@ public class AmzaReplicationRestEndpoints {
     public Response addHost(final RingHost ringHost) {
         try {
             LOG.info("Attempting to add RingHost: " + ringHost);
-            amzaInstance.addRingHost("master", ringHost);
+            amzaRing.addRingHost("master", ringHost);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + ringHost, x);
@@ -67,7 +71,7 @@ public class AmzaReplicationRestEndpoints {
     public Response removeHost(final RingHost ringHost) {
         try {
             LOG.info("Attempting to remove RingHost: " + ringHost);
-            amzaInstance.removeRingHost("master", ringHost);
+            amzaRing.removeRingHost("master", ringHost);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + ringHost, x);
@@ -81,7 +85,7 @@ public class AmzaReplicationRestEndpoints {
     public Response getRing() {
         try {
             LOG.info("Attempting to get amza ring.");
-            List<RingHost> ring = amzaInstance.getRing("master");
+            List<RingHost> ring = amzaRing.getRing("master");
             return ResponseHelper.INSTANCE.jsonResponse(ring);
         } catch (Exception x) {
             LOG.warn("Failed to get amza ring.", x);
@@ -95,7 +99,7 @@ public class AmzaReplicationRestEndpoints {
     public Response getTables() {
         try {
             LOG.info("Attempting to get table names.");
-            List<TableName> tableNames = amzaInstance.getTableNames();
+            List<RegionName> tableNames = amzaInstance.getRegionNames();
             return ResponseHelper.INSTANCE.jsonResponse(tableNames);
         } catch (Exception x) {
             LOG.warn("Failed to get table names.", x);
@@ -108,7 +112,7 @@ public class AmzaReplicationRestEndpoints {
     @Path("/changes/add")
     public Response changeset(final RowUpdates changeSet) {
         try {
-            amzaInstance.updates(changeSet.getTableName(), changeSetToScanable(changeSet));
+            amzaInstance.updates(changeSet.getRegionName(), changeSetToScanable(changeSet));
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to apply changeset: " + changeSet, x);
@@ -116,12 +120,12 @@ public class AmzaReplicationRestEndpoints {
         }
     }
 
-    private RowScanable changeSetToScanable(final RowUpdates changeSet) throws Exception {
+    private WALScanable changeSetToScanable(final RowUpdates changeSet) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-        return new RowScanable() {
+        return new WALScanable() {
             @Override
-            public <E extends Exception> void rowScan(RowScan<E> rowScan) throws Exception {
+            public <E extends Exception> void rowScan(WALScan<E> rowScan) throws Exception {
                 for (byte[] row : changeSet.getChanges()) {
                     RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
                     if (!rowScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
@@ -131,7 +135,7 @@ public class AmzaReplicationRestEndpoints {
             }
 
             @Override
-            public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowScan) throws Exception {
+            public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowScan) throws Exception {
                 for (byte[] row : changeSet.getChanges()) {
                     RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
                     if (!rowScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
@@ -152,9 +156,9 @@ public class AmzaReplicationRestEndpoints {
             final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
             final List<byte[]> rows = new ArrayList<>();
             final MutableLong highestTransactionId = new MutableLong();
-            amzaInstance.takeRowUpdates(rowUpdates.getTableName(), rowUpdates.getHighestTransactionId(), new RowScan() {
+            amzaInstance.takeRowUpdates(rowUpdates.getRegionName(), rowUpdates.getHighestTransactionId(), new WALScan() {
                 @Override
-                public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
+                public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                     rows.add(rowMarshaller.toRow(orderId, key, value));
                     if (orderId > highestTransactionId.longValue()) {
                         highestTransactionId.setValue(orderId);
@@ -163,7 +167,7 @@ public class AmzaReplicationRestEndpoints {
                 }
             });
 
-            return ResponseHelper.INSTANCE.jsonResponse(new RowUpdates(highestTransactionId.longValue(), rowUpdates.getTableName(), rows));
+            return ResponseHelper.INSTANCE.jsonResponse(new RowUpdates(highestTransactionId.longValue(), rowUpdates.getRegionName(), rows));
         } catch (Exception x) {
             LOG.warn("Failed to apply changeset: " + rowUpdates, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to changeset " + rowUpdates, x);

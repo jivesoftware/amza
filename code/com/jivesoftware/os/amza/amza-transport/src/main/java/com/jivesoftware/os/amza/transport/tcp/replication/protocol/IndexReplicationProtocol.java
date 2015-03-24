@@ -16,10 +16,10 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.ApplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Response;
@@ -52,7 +52,7 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     private final Map<Integer, Class<? extends Serializable>> payloadRegistry;
     private final AmzaInstance amzaInstance;
     private final OrderIdProvider idProvider;
-    private final NavigableMap<RowIndexKey, RowIndexValue> empty = new TreeMap<>();
+    private final NavigableMap<WALKey, WALValue> empty = new TreeMap<>();
 
     public IndexReplicationProtocol(AmzaInstance amzaInstance, OrderIdProvider idProvider) {
         this.amzaInstance = amzaInstance;
@@ -108,19 +108,19 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     }
 
     private void streamChangeSet(final ResponseWriter responseWriter, final long interactionId,
-            final TableName mapName, final long highestTransactionId) throws IOException {
+            final RegionName mapName, final long highestTransactionId) throws IOException {
         try {
             final int batchSize = 10; // TODO expose to config;
-            final List<RowIndexKey> keys = new ArrayList<>();
-            final List<RowIndexValue> values = new ArrayList<>();
+            final List<WALKey> keys = new ArrayList<>();
+            final List<WALValue> values = new ArrayList<>();
             final MutableLong highestId = new MutableLong(-1);
-            amzaInstance.takeRowUpdates(mapName, highestTransactionId, new RowScan() {
+            amzaInstance.takeRowUpdates(mapName, highestTransactionId, new WALScan() {
                 @Override
-                public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
+                public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                     keys.add(key);
                     // We make this copy because we don't know how the value is being stored. By calling value.getValue()
                     // we ensure that the value from the tableIndex is real vs a pointer.
-                    RowIndexValue copy = new RowIndexValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
+                    WALValue copy = new WALValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
                     values.add(copy);
                     if (highestId.longValue() < orderId) {
                         highestId.setValue(orderId);
@@ -188,7 +188,7 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
         };
     }
 
-    private Response streamChangeSetResponse(final long interactionId, final TableName mapName, final long highestTransactionId) {
+    private Response streamChangeSetResponse(final long interactionId, final RegionName mapName, final long highestTransactionId) {
         return new Response() {
             @Override
             public Message getMessage() {

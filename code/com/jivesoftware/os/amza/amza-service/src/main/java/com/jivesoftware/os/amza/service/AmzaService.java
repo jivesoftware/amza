@@ -15,36 +15,30 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReceiver;
+import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
+import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeTaker;
+import com.jivesoftware.os.amza.service.replication.AmzaRegionCompactor;
+import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
-import com.jivesoftware.os.amza.service.storage.TableStore;
-import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
-import com.jivesoftware.os.amza.service.storage.replication.HostRing;
-import com.jivesoftware.os.amza.service.storage.replication.HostRingBuilder;
-import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
-import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.Marshaller;
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALScanable;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -54,128 +48,61 @@ import java.util.concurrent.TimeUnit;
  *
  *
  */
-public class AmzaService implements HostRingProvider, AmzaInstance {
+public class AmzaService implements AmzaInstance {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private RingHost ringHost;
-    private ScheduledExecutorService scheduledThreadPool;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final Marshaller marshaller;
-    private final TableReplicator tableReplicator;
-    private final AmzaTableWatcher amzaTableWatcher;
-    private final TableStoreProvider tableStoreProvider;
-    private final TableName tableIndexKey = new TableName("MASTER", "TABLE_INDEX", null, null);
+    private final AmzaHostRing amzaRing;
+    private final AmzaRegionChangeReceiver changeReceiver;
+    private final AmzaRegionChangeTaker changeTaker;
+    private final AmzaRegionChangeReplicator changeReplicator;
+    private final AmzaRegionCompactor regionCompactor;
+    private final AmzaRegionWatcher regionWatcher;
+    private final RegionProvider regionProvider;
+    private final RegionName regionIndexKey = new RegionName("MASTER", "REGION_INDEX", null, null);
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
         Marshaller marshaller,
-        TableReplicator tableReplicator,
-        TableStoreProvider tableStoreProvider,
-        AmzaTableWatcher amzaTableWatcher) {
+        AmzaHostRing amzaRing,
+        AmzaRegionChangeReceiver changeReceiver,
+        AmzaRegionChangeTaker changeTaker,
+        AmzaRegionChangeReplicator changeReplicator,
+        AmzaRegionCompactor regionCompactor,
+        RegionProvider regionProvider,
+        AmzaRegionWatcher regionWatcher) {
         this.orderIdProvider = orderIdProvider;
         this.marshaller = marshaller;
-        this.tableReplicator = tableReplicator;
-        this.tableStoreProvider = tableStoreProvider;
-        this.amzaTableWatcher = amzaTableWatcher;
+        this.amzaRing = amzaRing;
+        this.changeReceiver = changeReceiver;
+        this.changeTaker = changeTaker;
+        this.changeReplicator = changeReplicator;
+        this.regionCompactor = regionCompactor;
+        this.regionProvider = regionProvider;
+        this.regionWatcher = regionWatcher;
     }
 
-    synchronized public RingHost ringHost() {
-        return ringHost;
+    public AmzaHostRing getAmzaRing() {
+        return amzaRing;
     }
 
-    synchronized public void start(RingHost ringHost,
-        long resendReplicasIntervalInMillis,
-        long applyReplicasIntervalInMillis,
-        long takeFromNeighborsIntervalInMillis,
-        long checkIfCompactionIsNeededIntervalInMillis,
-        final long removeTombstonedOlderThanNMilli) throws Exception {
+    public RegionProvider getRegionProvider() {
+        return regionProvider;
+    }
 
-        final int silenceBackToBackErrors = 100;
-        if (scheduledThreadPool == null) {
-            this.ringHost = ringHost;
-            scheduledThreadPool = Executors.newScheduledThreadPool(4);
-            scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
-                int failedToSend = 0;
-
-                @Override
-                public void run() {
-                    try {
-                        failedToSend = 0;
-                        tableReplicator.resendLocalChanges(AmzaService.this);
-                    } catch (Exception x) {
-                        LOG.debug("Failed while resending replicas.", x);
-                        if (failedToSend % silenceBackToBackErrors == 0) {
-                            failedToSend++;
-                            LOG.error("Failed while resending replicas.", x);
-                        }
-                    }
-                }
-            }, resendReplicasIntervalInMillis, resendReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
-
-            scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
-                int failedToReceive = 0;
-
-                @Override
-                public void run() {
-                    try {
-                        failedToReceive = 0;
-                        tableReplicator.applyReceivedChanges();
-                    } catch (Exception x) {
-                        LOG.debug("Failing to replay apply replication.", x);
-                        if (failedToReceive % silenceBackToBackErrors == 0) {
-                            failedToReceive++;
-                            LOG.error("Failing to replay apply replication.", x);
-                        }
-                    }
-                }
-            }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
-
-            scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
-                int failedToTake = 0;
-
-                @Override
-                public void run() {
-                    try {
-                        failedToTake = 0;
-                        tableReplicator.takeChanges(AmzaService.this);
-                    } catch (Exception x) {
-                        LOG.debug("Failing to take from above and below.", x);
-                        if (failedToTake % silenceBackToBackErrors == 0) {
-                            failedToTake++;
-                            LOG.error("Failing to take from above and below.");
-                        }
-                    }
-                }
-            }, takeFromNeighborsIntervalInMillis, takeFromNeighborsIntervalInMillis, TimeUnit.MILLISECONDS);
-
-            scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
-                int failedToCompact = 0;
-
-                @Override
-                public void run() {
-                    try {
-                        failedToCompact = 0;
-                        long removeIfOlderThanTimestmapId = orderIdProvider.getApproximateId(System.currentTimeMillis() - removeTombstonedOlderThanNMilli);
-                        tableReplicator.compactTombstone(removeIfOlderThanTimestmapId);
-                    } catch (Exception x) {
-                        LOG.debug("Failing to compact tombstones.", x);
-                        if (failedToCompact % silenceBackToBackErrors == 0) {
-                            failedToCompact++;
-                            LOG.error("Failing to compact tombstones.");
-                        }
-                    }
-                }
-            }, checkIfCompactionIsNeededIntervalInMillis, checkIfCompactionIsNeededIntervalInMillis, TimeUnit.MILLISECONDS);
-
-            tableReplicator.takeChanges(AmzaService.this);
-        }
+    synchronized public void start() throws Exception {
+        changeReceiver.start();
+        changeTaker.start();
+        changeReplicator.start();
+        regionCompactor.start();
+        changeTaker.takeChanges(); // HACK
     }
 
     synchronized public void stop() throws Exception {
-        this.ringHost = null;
-        if (scheduledThreadPool != null) {
-            this.scheduledThreadPool.shutdownNow();
-            this.scheduledThreadPool = null;
-        }
+        changeReceiver.stop();
+        changeTaker.stop();
+        changeReplicator.stop();
+        regionCompactor.stop();
     }
 
     @Override
@@ -183,171 +110,112 @@ public class AmzaService implements HostRingProvider, AmzaInstance {
         return orderIdProvider.getApproximateId(timestampId, wallClockMillis);
     }
 
-    @Override
-    public void addRingHost(String ringName, RingHost ringHost) throws Exception {
-        if (ringName == null) {
-            throw new IllegalArgumentException("ringName cannot be null.");
-        }
-        if (ringHost == null) {
-            throw new IllegalArgumentException("ringHost cannot be null.");
-        }
-        byte[] rawRingHost = marshaller.serialize(ringHost);
-        TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
-        RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.add(new RowIndexKey(rawRingHost), rawRingHost);
-        tx.commit();
-    }
+    private boolean createRegion(RegionName regionName) throws Exception {
+        byte[] rawRegionName = marshaller.serialize(regionName);
 
-    @Override
-    public void removeRingHost(String ringName, RingHost ringHost) throws Exception {
-        if (ringName == null) {
-            throw new IllegalArgumentException("ringName cannot be null.");
-        }
-        if (ringHost == null) {
-            throw new IllegalArgumentException("ringHost cannot be null.");
-        }
-        byte[] rawRingHost = marshaller.serialize(ringHost);
-        TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
-        RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.remove(new RowIndexKey(rawRingHost));
-        tx.commit();
-    }
-
-    @Override
-    public List<RingHost> getRing(String ringName) throws Exception {
-        TableName ringIndexKey = createRingTableName(ringName);
-        TableStore ringIndex = tableStoreProvider.getTableStore(ringIndexKey);
-        if (ringIndex == null) {
-            LOG.warn("No ring defined for ringName:" + ringName);
-            return new ArrayList<>();
-        } else {
-            final Set<RingHost> ringHosts = new HashSet<>();
-            ringIndex.rowScan(new RowScan<Exception>() {
-                @Override
-                public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
-                    if (!value.getTombstoned()) {
-                        ringHosts.add(marshaller.deserialize(value.getValue(), RingHost.class));
-                    }
-                    return true;
-                }
-            });
-            return new ArrayList<>(ringHosts);
-        }
-    }
-
-    @Override
-    public HostRing getHostRing(String ringName) throws Exception {
-        return new HostRingBuilder().build(ringHost, getRing(ringName));
-    }
-
-    private TableName createRingTableName(String ringName) {
-        ringName = ringName.toUpperCase();
-        return new TableName("MASTER", "RING_INDEX_" + ringName, null, null);
-    }
-
-    private boolean createTable(TableName tableName) throws Exception {
-        byte[] rawTableName = marshaller.serialize(tableName);
-
-        TableStore tableNameIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        RowIndexValue timestamptedTableKey = tableNameIndex.get(new RowIndexKey(rawTableName));
-        if (timestamptedTableKey == null) {
-            RowStoreUpdates tx = tableNameIndex.startTransaction(orderIdProvider.nextId());
-            tx.add(new RowIndexKey(rawTableName), rawTableName);
+        RegionStore regionNameIndex = regionProvider.get(regionIndexKey);
+        WALValue timestamptedRegionKey = regionNameIndex.get(new WALKey(rawRegionName));
+        if (timestamptedRegionKey == null) {
+            RowStoreUpdates tx = regionNameIndex.startTransaction(orderIdProvider.nextId());
+            tx.add(new WALKey(rawRegionName), rawRegionName);
             tx.commit();
             return true;
         } else {
-            return !timestamptedTableKey.getTombstoned();
+            return !timestamptedRegionKey.getTombstoned();
         }
     }
 
-    public AmzaTable getTable(TableName tableName) throws Exception {
-        byte[] rawTableName = marshaller.serialize(tableName);
-        TableStore tableStoreIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        RowIndexValue timestampedKeyValueStoreName = tableStoreIndex.get(new RowIndexKey(rawTableName));
+    public AmzaRegion getRegion(RegionName regionName) throws Exception {
+        byte[] rawRegionName = marshaller.serialize(regionName);
+        RegionStore regionStoreIndex = regionProvider.get(regionIndexKey);
+        WALValue timestampedKeyValueStoreName = regionStoreIndex.get(new WALKey(rawRegionName));
         while (timestampedKeyValueStoreName == null) {
-            createTable(tableName);
-            timestampedKeyValueStoreName = tableStoreIndex.get(new RowIndexKey(rawTableName));
+            createRegion(regionName);
+            timestampedKeyValueStoreName = regionStoreIndex.get(new WALKey(rawRegionName));
         }
         if (timestampedKeyValueStoreName.getTombstoned()) {
             return null;
         } else {
-            TableStore tableStore = tableStoreProvider.getTableStore(tableName);
-            return new AmzaTable(orderIdProvider, tableName, tableStore);
+            RegionStore regionStore = regionProvider.get(regionName);
+            return new AmzaRegion(orderIdProvider, regionName, regionStore);
         }
     }
 
     @Override
-    public List<TableName> getTableNames() {
-        List<TableName> amzaTableNames = new ArrayList<>();
-        for (Entry<TableName, TableStore> tableStore : tableStoreProvider.getTableStores()) {
-            amzaTableNames.add(tableStore.getKey());
+    public List<RegionName> getRegionNames() {
+        List<RegionName> regionNames = new ArrayList<>();
+        for (Entry<RegionName, RegionStore> regionStore : regionProvider.getAll()) {
+            regionNames.add(regionStore.getKey());
         }
-        return amzaTableNames;
+        return regionNames;
     }
 
-    public Map<TableName, AmzaTable> getTables() throws Exception {
-        Map<TableName, AmzaTable> amzaTables = new HashMap<>();
-        for (Entry<TableName, TableStore> tableStore : tableStoreProvider.getTableStores()) {
-            amzaTables.put(tableStore.getKey(), new AmzaTable(orderIdProvider, tableStore.getKey(), tableStore.getValue()));
+    public Map<RegionName, AmzaRegion> getRegions() throws Exception {
+        Map<RegionName, AmzaRegion> regions = new HashMap<>();
+        for (Entry<RegionName, RegionStore> regionStore : regionProvider.getAll()) {
+            regions.put(regionStore.getKey(), new AmzaRegion(orderIdProvider, regionStore.getKey(), regionStore.getValue()));
         }
-        return amzaTables;
+        return regions;
     }
 
     @Override
-    public void destroyTable(TableName tableName) throws Exception {
-        byte[] rawTableName = marshaller.serialize(tableName);
-        TableStore tableIndex = tableStoreProvider.getTableStore(tableIndexKey);
-        RowStoreUpdates tx = tableIndex.startTransaction(orderIdProvider.nextId());
-        tx.remove(new RowIndexKey(rawTableName));
+    public void destroyRegion(RegionName regionName) throws Exception {
+        byte[] rawRegionName = marshaller.serialize(regionName);
+        RegionStore regionStore = regionProvider.get(regionIndexKey);
+        RowStoreUpdates tx = regionStore.startTransaction(orderIdProvider.nextId());
+        tx.remove(new WALKey(rawRegionName));
         tx.commit();
     }
 
     @Override
-    public void updates(TableName tableName, RowScanable rowUpdates) throws Exception {
-        tableReplicator.receiveChanges(tableName, rowUpdates);
+    public void updates(RegionName regionName, WALScanable rowUpdates) throws Exception {
+        changeReceiver.receiveChanges(regionName, rowUpdates);
     }
 
-    public void watch(TableName tableName, RowChanges rowChanges) throws Exception {
-        amzaTableWatcher.watch(tableName, rowChanges);
+    public void watch(RegionName regionName, RowChanges rowChanges) throws Exception {
+        regionWatcher.watch(regionName, rowChanges);
     }
 
-    public RowChanges unwatch(TableName tableName) throws Exception {
-        return amzaTableWatcher.unwatch(tableName);
+    public RowChanges unwatch(RegionName regionName) throws Exception {
+        return regionWatcher.unwatch(regionName);
     }
 
     @Override
-    public void takeRowUpdates(TableName tableName, long transationId, RowScan rowUpdates) throws Exception {
-        getTable(tableName).takeRowUpdatesSince(transationId, rowUpdates);
-    }
-
-    public void buildRandomSubRing(String ringName, int desiredRingSize) throws Exception {
-        List<RingHost> ring = getRing("MASTER");
-        if (ring.size() < desiredRingSize) {
-            throw new IllegalStateException("Current master ring is not large enough to support a ring of size:" + desiredRingSize);
-        }
-        Collections.shuffle(ring);
-        for (int i = 0; i < desiredRingSize; i++) {
-            addRingHost(ringName, ring.get(i));
-        }
+    public void takeRowUpdates(RegionName regionName, long transationId, WALScan rowUpdates) throws Exception {
+        getRegion(regionName).takeRowUpdatesSince(transationId, rowUpdates);
     }
 
     //------ Used for debugging ------
-    public void printService() throws Exception {
-        for (Map.Entry<TableName, TableStore> table : tableStoreProvider.getTableStores()) {
-            final TableName tableName = table.getKey();
-            final TableStore sortedMapStore = table.getValue();
-            sortedMapStore.rowScan(new RowScan<RuntimeException>() {
+    public void printService(final RingHost ringHost) throws Exception {
+        for (Map.Entry<RegionName, RegionStore> region : regionProvider.getAll()) {
+//            final RegionName tableName = table.getKey();
+//            final RegionStore sortedMapStore = table.getValue();
+//            sortedMapStore.rowScan(new WALScan<RuntimeException>() {
+//
+//                @Override
+//                public boolean row(long orderId, WALKey key, WALValue value) throws RuntimeException {
+//                    System.out.println("INDEX:"
+//                        + tableName.getTableName() + " k:" + key
+//                        + " d:" + value.getTombstoned() + " t:" + value.getTimestampId()
+//                        + " v:" + Arrays.toString(value.getValue())
+//                        + ringHost.getHost() + ":" + ringHost.getPort());
+//                    return true;
+//                }
+//            });
 
-                @Override
-                public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws RuntimeException {
-                    System.out.println(ringHost.getHost() + ":" + ringHost.getPort()
-                        + ":" + tableName.getTableName() + " k:" + key + " v:" + value.getValue()
-                        + " d:" + value.getTombstoned() + " t:" + value.getTimestampId());
-                    return true;
-                }
-            });
+//            sortedMapStore.takeRowUpdatesSince(0, new WALScan<RuntimeException>() {
+//
+//                @Override
+//                public boolean row(long orderId, WALKey key, WALValue value) throws RuntimeException {
+//                    System.out.println("WAL:"
+//                        + tableName.getTableName() + " k:" + BaseEncoding.base64().encode(key.getKey())
+//                        + " d:" + value.getTombstoned() + " t:" + value.getTimestampId()
+//                        + " v:" + BaseEncoding.base64().encode(value.getValue())
+//                        + ringHost.getHost() + ":" + ringHost.getPort()
+//                    );
+//                    return true;
+//                }
+//            });
         }
     }
 }

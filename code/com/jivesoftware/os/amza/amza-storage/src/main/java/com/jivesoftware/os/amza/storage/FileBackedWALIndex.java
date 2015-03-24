@@ -27,7 +27,6 @@ import java.util.Map;
 import org.apache.commons.io.FileUtils;
 
 /**
- *
  * @author jonathan.colt
  */
 public class FileBackedWALIndex implements WALIndex {
@@ -365,7 +364,7 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public <E extends Exception> void rowScan(final WALScan<E> rowScan) throws E {
+    synchronized public void rowScan(final WALScan walScan) throws Exception {
         try {
             SkipListMapContext slmc = ensureCapacity(0);
             if (slmc != null) {
@@ -377,7 +376,7 @@ public class FileBackedWALIndex implements WALIndex {
                         if (got != null) {
                             WALValue value = der(got);
                             try {
-                                return rowScan.row(-1, new WALKey(key), value);
+                                return walScan.row(-1, new WALKey(key), value);
                             } catch (Exception e) {
                                 throw new RuntimeException("Error in rowScan.", e);
                             }
@@ -393,7 +392,7 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public <E extends Exception> void rangeScan(WALKey from, WALKey to, final WALScan<E> rowScan) throws E {
+    synchronized public void rangeScan(WALKey from, WALKey to, final WALScan walScan) throws Exception {
         try {
             List<KeyRange> ranges = Collections.singletonList(new KeyRange(from.getKey(), to.getKey()));
             SkipListMapContext slmc = ensureCapacity(0);
@@ -406,7 +405,7 @@ public class FileBackedWALIndex implements WALIndex {
                         if (got != null) {
                             WALValue value = der(got);
                             try {
-                                return rowScan.row(-1, new WALKey(key), value);
+                                return walScan.row(-1, new WALKey(key), value);
                             } catch (Exception e) {
                                 throw new RuntimeException("Error in rangeScan.", e);
                             }

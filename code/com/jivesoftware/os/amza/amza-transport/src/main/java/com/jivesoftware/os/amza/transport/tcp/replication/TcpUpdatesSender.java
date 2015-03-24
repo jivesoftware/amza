@@ -53,7 +53,7 @@ public class TcpUpdatesSender implements UpdatesSender {
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
         final MutableLong highestId = new MutableLong(-1);
-        changes.rowScan(new WALScan<Exception>() {
+        changes.rowScan(new WALScan() {
             @Override
             public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                 keys.add(key);
@@ -84,7 +84,7 @@ public class TcpUpdatesSender implements UpdatesSender {
         try {
             LOG.debug("Pushing " + payload.size() + " changes to " + ringHost);
             Message request = new Message(indexReplicationProtocol.nextInteractionId(),
-                    indexReplicationProtocol.OPCODE_PUSH_CHANGESET, true, payload);
+                indexReplicationProtocol.OPCODE_PUSH_CHANGESET, true, payload);
             client.sendMessage(request);
 
             Message response = client.receiveMessage();

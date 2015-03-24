@@ -87,7 +87,7 @@ public class AmzaRegion {
         return values;
     }
 
-    public void get(Iterable<WALKey> keys, WALScan<Exception> valuesStream) throws Exception {
+    public void get(Iterable<WALKey> keys, WALScan valuesStream) throws Exception {
         for (final WALKey key : keys) {
             WALValue rowIndexValue = regionStore.get(key);
             if (rowIndexValue != null && !rowIndexValue.getTombstoned()) {
@@ -98,11 +98,11 @@ public class AmzaRegion {
         }
     }
 
-    public <E extends Exception> void scan(WALScan<E> stream) throws E {
+    public void scan(WALScan stream) throws Exception {
         regionStore.rowScan(stream);
     }
 
-    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> stream) throws E {
+    public void rangeScan(WALKey from, WALKey to, WALScan stream) throws Exception {
         regionStore.rangeScan(from, to, stream);
     }
 
@@ -129,7 +129,7 @@ public class AmzaRegion {
     public boolean compare(final AmzaRegion amzaRegion) throws Exception {
         final MutableInt compared = new MutableInt(0);
         final MutableBoolean passed = new MutableBoolean(true);
-        amzaRegion.regionStore.rowScan(new WALScan<RuntimeException>() {
+        amzaRegion.regionStore.rowScan(new WALScan() {
 
             @Override
             public boolean row(long txid, WALKey key, WALValue value) {

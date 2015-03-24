@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.shared;
 
 public interface WALScanable {
 
-    <E extends Exception> void rowScan(WALScan<E> walScan) throws E;
+    void rowScan(WALScan walScan) throws Exception;
 
-    <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> walScan) throws E;
+    void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception;
 
 }

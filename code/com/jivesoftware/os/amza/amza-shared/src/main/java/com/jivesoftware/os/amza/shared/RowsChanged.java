@@ -73,10 +73,10 @@ public class RowsChanged implements WALScanable {
     }
 
     @Override
-    public <E extends Exception> void rowScan(WALScan<E> rowStream) {
+    public void rowScan(WALScan walScan) {
         for (Map.Entry<WALKey, WALValue> e : apply.entrySet()) {
             try {
-                if (!rowStream.row(-1, e.getKey(), e.getValue())) {
+                if (!walScan.row(-1, e.getKey(), e.getValue())) {
                     break;
                 }
             } catch (Throwable ex) {
@@ -86,10 +86,10 @@ public class RowsChanged implements WALScanable {
     }
 
     @Override
-    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowStream) throws E {
+    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
         for (Map.Entry<WALKey, WALValue> e : apply.subMap(from, to).entrySet()) {
             try {
-                if (!rowStream.row(-1, e.getKey(), e.getValue())) {
+                if (!walScan.row(-1, e.getKey(), e.getValue())) {
                     break;
                 }
             } catch (Throwable ex) {

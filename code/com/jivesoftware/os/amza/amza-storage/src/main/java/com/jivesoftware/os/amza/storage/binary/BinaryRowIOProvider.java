@@ -9,14 +9,10 @@ import java.io.File;
  */
 public class BinaryRowIOProvider implements RowIOProvider {
 
-    private final static String VERSION_1 = "v1";
-
     @Override
     public RowIO create(File dir, String name) throws Exception {
-        File versionedDir = new File(dir, VERSION_1);
-        versionedDir.mkdirs();
-
-        File file = new File(versionedDir, name);
+        dir.mkdirs();
+        File file = new File(dir, name);
         Filer filer = new Filer(file.getAbsolutePath(), "rw");
         BinaryRowReader rowReader = new BinaryRowReader(filer);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer);

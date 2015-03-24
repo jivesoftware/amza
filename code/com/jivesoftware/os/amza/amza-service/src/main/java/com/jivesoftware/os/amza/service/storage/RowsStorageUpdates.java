@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * Not thread safe. Each Thread should get their own ReadThroughChangeSet.
- *
  */
 public class RowsStorageUpdates implements WALScanable {
 
@@ -40,18 +39,18 @@ public class RowsStorageUpdates implements WALScanable {
     }
 
     @Override
-    public <E extends Exception> void rowScan(WALScan<E> rowStream) throws E {
+    public void rowScan(WALScan walScan) throws Exception {
         for (Entry<WALKey, WALValue> e : changes.entrySet()) {
-            if (!rowStream.row(timestamp, e.getKey(), e.getValue())) {
+            if (!walScan.row(timestamp, e.getKey(), e.getValue())) {
                 return;
             }
         }
     }
 
     @Override
-    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowStream) throws E {
+    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
         for (Entry<WALKey, WALValue> e : changes.subMap(from, to).entrySet()) {
-            if (!rowStream.row(timestamp, e.getKey(), e.getValue())) {
+            if (!walScan.row(timestamp, e.getKey(), e.getValue())) {
                 return;
             }
         }

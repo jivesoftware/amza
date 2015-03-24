@@ -74,18 +74,18 @@ public class RowUpdatesPayload implements MessagePayload, WALScanable {
     }
 
     @Override
-    public <E extends Exception> void rowScan(WALScan<E> entryStream) throws E {
+    public void rowScan(WALScan walScan) throws Exception {
         for (int i = 0; i < keys.size(); i++) {
-            if (!entryStream.row(largestTransactionId, keys.get(i), values.get(i))) {
+            if (!walScan.row(largestTransactionId, keys.get(i), values.get(i))) {
                 return;
             }
         }
     }
 
     @Override
-    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowScan) throws E {
+    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
         for (int i = 0; i < keys.size(); i++) {
-            if (!rowScan.row(largestTransactionId, keys.get(i), values.get(i))) {
+            if (!walScan.row(largestTransactionId, keys.get(i), values.get(i))) {
                 return;
             }
         }

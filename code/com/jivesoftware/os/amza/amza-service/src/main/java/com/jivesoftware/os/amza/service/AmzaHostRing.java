@@ -82,7 +82,7 @@ public class AmzaHostRing implements AmzaRing {
             return new ArrayList<>();
         } else {
             final Set<RingHost> ringHosts = new HashSet<>();
-            ringIndex.rowScan(new WALScan<Exception>() {
+            ringIndex.rowScan(new WALScan() {
                 @Override
                 public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                     if (!value.getTombstoned()) {

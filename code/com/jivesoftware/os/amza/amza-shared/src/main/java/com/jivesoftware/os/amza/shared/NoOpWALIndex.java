@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 
 /**
- *
  * @author jonathan.colt
  */
 public class NoOpWALIndex implements WALIndex {
@@ -82,11 +81,11 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public <E extends Exception> void rowScan(WALScan<E> walScan) throws E {
+    public void rowScan(WALScan walScan) throws Exception {
     }
 
     @Override
-    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> walScan) throws E {
+    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
     }
 
 }

@@ -26,16 +26,16 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class WALs {
 
-    private final File workingDirectory;
+    private final String[] workingDirectories;
     private final String storeName;
     private final WALStorageProvider walStorageProvider;
     private final ConcurrentHashMap<RegionName, WALStorage> walStores = new ConcurrentHashMap<>();
     private final StripingLocksProvider locksProvider = new StripingLocksProvider(1024); // TODO expose to config
 
-    public WALs(File workingDirectory,
+    public WALs(String[] workingDirectories,
         String storeName,
         WALStorageProvider rowStorageProvider) {
-        this.workingDirectory = workingDirectory;
+        this.workingDirectories = workingDirectories;
         this.storeName = storeName;
         this.walStorageProvider = rowStorageProvider;
     }
@@ -48,6 +48,7 @@ public class WALs {
         synchronized (locksProvider.lock(regionName, 1234)) {
             WALStorage storage = walStores.get(regionName);
             if (storage == null) {
+                File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
                 storage = walStorageProvider.create(workingDirectory, storeName, regionName, null);
                 storage.load();
                 walStores.put(regionName, storage);

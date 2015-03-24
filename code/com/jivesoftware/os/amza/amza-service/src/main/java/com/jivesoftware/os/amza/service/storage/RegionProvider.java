@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class RegionProvider {
 
-    private final File workingDirectory;
+    private final String[] workingDirectories;
     private final String domain;
     private final WALStorageProvider walStorageProvider;
     private final RowChanges rwoChanges;
@@ -36,12 +36,12 @@ public class RegionProvider {
     private final ConcurrentHashMap<RegionName, RegionStore> regionStores = new ConcurrentHashMap<>();
     private final StripingLocksProvider locksProvider = new StripingLocksProvider(1024); // TODO expose to config
 
-    public RegionProvider(File workingDirectory,
+    public RegionProvider(String[] workingDirectories,
         String domain,
         WALStorageProvider walStorageProvider,
         RowChanges rowChanges,
         WALReplicator rowReplicator) {
-        this.workingDirectory = workingDirectory;
+        this.workingDirectories = workingDirectories;
         this.domain = domain;
         this.walStorageProvider = walStorageProvider;
         this.rwoChanges = rowChanges;
@@ -56,6 +56,7 @@ public class RegionProvider {
         synchronized (locksProvider.lock(regionName, 1234)) {
             RegionStore regionStore = regionStores.get(regionName);
             if (regionStore == null) {
+                File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
                 WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, regionName, walReplicator);
                 regionStore = new RegionStore(walStorage, rwoChanges);
                 regionStore.load();

@@ -46,10 +46,10 @@ public class RowRegionNGTest {
         };
         RegionName regionName = new RegionName("ring", "booya", null, null);
 
-        BinaryRowsTx binaryRowsTx = new BinaryRowsTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, 100);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, 100);
 
         final OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryRowsTx, new WALReplicator() {
+        final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, new WALReplicator() {
 
             @Override
             public void replicate(RowsChanged rowsChanged) throws Exception {
@@ -138,10 +138,10 @@ public class RowRegionNGTest {
         };
         RegionName regionName = new RegionName("ring", "booya", null, null);
 
-        BinaryRowsTx binaryRowsTx = new BinaryRowsTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, 100);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, 100);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryRowsTx, new WALReplicator() {
+        IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, new WALReplicator() {
 
             @Override
             public void replicate(RowsChanged rowsChanged) throws Exception {

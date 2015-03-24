@@ -34,35 +34,22 @@ import com.jivesoftware.os.amza.deployable.ui.region.endpoints.HealthPluginEndpo
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyDataUtils;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyService;
-import com.jivesoftware.os.amza.mapdb.MapdbWALIndex;
+import com.jivesoftware.os.amza.mapdb.MapdbWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
+import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
-import com.jivesoftware.os.amza.service.replication.MemoryBackedHighWaterMarks;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
-import com.jivesoftware.os.amza.shared.NoOpWALIndex;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageProvider;
-import com.jivesoftware.os.amza.storage.IndexedWAL;
-import com.jivesoftware.os.amza.storage.NonIndexWAL;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowsTx;
-import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
@@ -84,7 +71,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
 import de.ruedigermoeller.serialization.FSTConfiguration;
-import java.io.File;
 import java.util.List;
 import java.util.Random;
 
@@ -129,76 +115,12 @@ public class Main {
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
         final AmzaStats amzaStats = new AmzaStats();
 
-        final File[] rowIndexDirs = new File[]{
-            new File("./rowIndexs/data1"),
-            new File("./rowIndexs/data2"),
-            new File("./rowIndexs/data3")};
+        final String[] rowIndexDirs = new String[] {
+            "./rowIndexs/data1",
+            "./rowIndexs/data2",
+            "./rowIndexs/data3" };
 
-        final WALIndexProvider walIndexProvider = new WALIndexProvider() {
-
-            @Override
-            public WALIndex createIndex(RegionName regionName) throws Exception {
-                File regionDir = new File(rowIndexDirs[0], regionName.getRegionName() + "-" + regionName.getRingName());
-                return new MapdbWALIndex(regionDir, regionName);
-            }
-        };
-
-        final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-
-        final int backRepairIndexForNDistinctTxIds = 1000;
-        WALStorageProvider regionStorageProvider = new WALStorageProvider() {
-            @Override
-            public WALStorage create(File workingDirectory,
-                String domain,
-                RegionName regionName,
-                WALReplicator rowReplicator) throws Exception {
-
-                final File directory = new File(workingDirectory, domain);
-                directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider();
-                return new IndexedWAL(regionName,
-                    orderIdProvider,
-                    rowMarshaller,
-                    new BinaryRowsTx(directory,
-                        regionName.getRegionName() + ".kvt",
-                        rowIOProvider,
-                        rowMarshaller,
-                        walIndexProvider,
-                        backRepairIndexForNDistinctTxIds),
-                    rowReplicator,
-                    1000);
-            }
-        };
-
-        final WALIndexProvider tmpWALIndexProvider = new WALIndexProvider() {
-
-            @Override
-            public WALIndex createIndex(RegionName regionName) throws Exception {
-                return new NoOpWALIndex();
-            }
-        };
-
-        WALStorageProvider tmpWALStorageProvider = new WALStorageProvider() {
-            @Override
-            public WALStorage create(File workingDirectory,
-                String domain,
-                RegionName regionName,
-                WALReplicator rowReplicator) throws Exception {
-
-                final File directory = new File(workingDirectory, domain);
-                directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider();
-                return new NonIndexWAL(regionName,
-                    orderIdProvider,
-                    rowMarshaller,
-                    new BinaryRowsTx(directory,
-                        regionName.getRegionName() + ".kvt",
-                        rowIOProvider,
-                        rowMarshaller,
-                        tmpWALIndexProvider,
-                        backRepairIndexForNDistinctTxIds));
-            }
-        };
+        final WALIndexProvider walIndexProvider = new MapdbWALIndexProvider(rowIndexDirs);
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
@@ -219,18 +141,14 @@ public class Main {
             taker = new HttpUpdatesTaker();
         }
 
-        MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
-        AmzaService amzaService = new AmzaServiceInitializer().initialize(amzaServiceConfig,
+        AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             ringHost,
             orderIdProvider,
             new com.jivesoftware.os.amza.storage.FstMarshaller(FSTConfiguration.getDefaultConfiguration()),
-            regionStorageProvider,
-            tmpWALStorageProvider,
-            tmpWALStorageProvider,
+            walIndexProvider,
             changeSetSender,
             taker,
-            highWaterMarks,
             Optional.<SendFailureListener>absent(),
             Optional.<TakeFailureListener>absent(),
             new RowChanges() {
@@ -290,8 +208,8 @@ public class Main {
             new HomeRegion("soy.page.homeRegion", renderer));
 
         List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("fire", "Health", "/ui/health",
-            HealthPluginEndpoints.class,
-            new HealthPluginRegion("soy.page.healthPluginRegion", renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
+                HealthPluginEndpoints.class,
+                new HealthPluginRegion("soy.page.healthPluginRegion", renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
             new ManagePlugin("leaf", "Amza Ring", "/ui/ring",
                 AmzaRingPluginEndpoints.class,
                 new AmzaRingPluginRegion("soy.page.amzaRingPluginRegion", renderer, amzaService.getAmzaRing())));

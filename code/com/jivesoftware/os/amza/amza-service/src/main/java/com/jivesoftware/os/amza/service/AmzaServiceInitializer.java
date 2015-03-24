@@ -15,21 +15,25 @@
  */
 package com.jivesoftware.os.amza.service;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.service.storage.TableStoreProvider;
-import com.jivesoftware.os.amza.service.storage.replication.HostRingProvider;
-import com.jivesoftware.os.amza.service.storage.replication.MemoryBackedHighWaterMarks;
-import com.jivesoftware.os.amza.service.storage.replication.SendFailureListener;
-import com.jivesoftware.os.amza.service.storage.replication.TableReplicator;
-import com.jivesoftware.os.amza.service.storage.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReceiver;
+import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
+import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeTaker;
+import com.jivesoftware.os.amza.service.replication.AmzaRegionCompactor;
+import com.jivesoftware.os.amza.service.replication.MemoryBackedHighWaterMarks;
+import com.jivesoftware.os.amza.service.replication.SendFailureListener;
+import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.WALs;
 import com.jivesoftware.os.amza.shared.Marshaller;
+import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.RowsStorageProvider;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.WALReplicator;
+import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
 import java.util.concurrent.atomic.AtomicReference;
@@ -49,53 +53,81 @@ public class AmzaServiceInitializer {
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
+        AmzaStats amzaStats,
+        RingHost ringHost,
         TimestampedOrderIdProvider orderIdProvider,
         Marshaller marshaller,
-        RowsStorageProvider amzaStores,
-        RowsStorageProvider amzaReplicasWAL,
-        RowsStorageProvider amzaResendWAL,
+        WALStorageProvider regionsWALStorageProvider,
+        WALStorageProvider replicaWALStorageProvider,
+        WALStorageProvider resendWALStorageProvider,
         UpdatesSender updatesSender,
         UpdatesTaker updatesTaker,
+        MemoryBackedHighWaterMarks highWaterMarks,
         Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
         final RowChanges allRowChanges) throws Exception {
 
-        final AtomicReference<HostRingProvider> hostRingProvider = new AtomicReference<>();
-        final AtomicReference<TableReplicator> replicator = new AtomicReference<>();
-        RowChanges tableStateChanges = new RowChanges() {
+        RowChanges rowChanges = new RowChanges() {
             @Override
             public void changes(RowsChanged rowsChanged) throws Exception {
-                TableReplicator tableReplicator = replicator.get();
-                tableReplicator.replicateLocalUpdates(hostRingProvider.get(), rowsChanged.getTableName(), rowsChanged, true);
                 allRowChanges.changes(rowsChanged);
             }
         };
-        AmzaTableWatcher amzaTableWatcher = new AmzaTableWatcher(tableStateChanges);
+        AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(rowChanges);
 
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         File workingDirectory = new File(config.workingDirectory);
 
-        TableStoreProvider storesProvider = new TableStoreProvider(workingDirectory, "amza/stores", amzaStores, amzaTableWatcher);
-        TableStoreProvider replicasProvider = new TableStoreProvider(workingDirectory, "amza/WAL/replicated", amzaReplicasWAL, null);
-        TableStoreProvider resendsProvider = new TableStoreProvider(workingDirectory, "amza/WAL/resend", amzaResendWAL, null);
+        final AtomicReference<AmzaRegionChangeReplicator> replicator = new AtomicReference<>();
+        RegionProvider regionProvider = new RegionProvider(workingDirectory, "amza/stores", regionsWALStorageProvider, amzaRegionWatcher, new WALReplicator() {
 
-        MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
+            @Override
+            public void replicate(RowsChanged rowsChanged) throws Exception {
+                replicator.get().replicate(rowsChanged);
+            }
+        });
+        final AmzaHostRing amzaRing = new AmzaHostRing(ringHost, regionProvider, orderIdProvider, marshaller);
+        WALs resendWALs = new WALs(workingDirectory, "amza/WAL/resend", resendWALStorageProvider);
 
-        TableReplicator tableReplicator = new TableReplicator(storesProvider,
+        AmzaRegionChangeReplicator changeReplicator = new AmzaRegionChangeReplicator(amzaStats,
+            amzaRing,
+            regionProvider,
             config.replicationFactor,
+            resendWALs,
+            updatesSender,
+            sendFailureListener,
+            config.resendReplicasIntervalInMillis);
+        replicator.set(changeReplicator);
+
+        WALs replicatedWALs = new WALs(workingDirectory, "amza/WAL/replicated", replicaWALStorageProvider);
+        AmzaRegionChangeReceiver changeReceiver = new AmzaRegionChangeReceiver(amzaStats,
+            regionProvider,
+            replicatedWALs,
+            config.applyReplicasIntervalInMillis);
+
+        AmzaRegionChangeTaker changeTaker = new AmzaRegionChangeTaker(amzaStats,
+            amzaRing,
+            regionProvider,
             config.takeFromFactor,
             highWaterMarks,
-            replicasProvider,
-            resendsProvider,
-            updatesSender,
             updatesTaker,
-            sendFailureListener,
-            takeFailureListener);
-        replicator.set(tableReplicator);
+            takeFailureListener,
+            config.takeFromNeighborsIntervalInMillis);
 
-        AmzaService service = new AmzaService(orderIdProvider, marshaller, tableReplicator, storesProvider, amzaTableWatcher);
-        hostRingProvider.set(service);
+        AmzaRegionCompactor regionCompactor = new AmzaRegionCompactor(amzaStats,
+            regionProvider,
+            orderIdProvider,
+            config.checkIfCompactionIsNeededIntervalInMillis,
+            config.compactTombstoneIfOlderThanNMillis);
+
+        AmzaService service = new AmzaService(orderIdProvider,
+            marshaller,
+            amzaRing,
+            changeReceiver,
+            changeTaker,
+            changeReplicator,
+            regionCompactor,
+            regionProvider,
+            amzaRegionWatcher);
         return service;
     }
 }

@@ -15,11 +15,11 @@
  */
 package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALScanable;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import de.ruedigermoeller.serialization.FSTObjectInput;
 import de.ruedigermoeller.serialization.FSTObjectOutput;
@@ -29,12 +29,12 @@ import java.util.List;
 /**
  *
  */
-public class RowUpdatesPayload implements MessagePayload, RowScanable {
+public class RowUpdatesPayload implements MessagePayload, WALScanable {
 
-    private TableName mapName;
+    private RegionName mapName;
     private long largestTransactionId;
-    private List<RowIndexKey> keys;
-    private List<RowIndexValue> values;
+    private List<WALKey> keys;
+    private List<WALValue> values;
 
     /**
      * for serialization
@@ -42,7 +42,7 @@ public class RowUpdatesPayload implements MessagePayload, RowScanable {
     public RowUpdatesPayload() {
     }
 
-    public RowUpdatesPayload(TableName mapName, long largestTransactionId, List<RowIndexKey> keys, List<RowIndexValue> values) {
+    public RowUpdatesPayload(RegionName mapName, long largestTransactionId, List<WALKey> keys, List<WALValue> values) {
         this.mapName = mapName;
         this.largestTransactionId = largestTransactionId;
         this.keys = keys;
@@ -51,7 +51,7 @@ public class RowUpdatesPayload implements MessagePayload, RowScanable {
 
     @Override
     public void serialize(FSTObjectOutput output) throws IOException {
-        output.writeObject(mapName, TableName.class);
+        output.writeObject(mapName, RegionName.class);
         output.writeLong(largestTransactionId);
         output.writeObject(keys, List.class);
         output.writeObject(values, List.class);
@@ -59,13 +59,13 @@ public class RowUpdatesPayload implements MessagePayload, RowScanable {
 
     @Override
     public void deserialize(FSTObjectInput input) throws Exception {
-        this.mapName = (TableName) input.readObject(TableName.class);
+        this.mapName = (RegionName) input.readObject(RegionName.class);
         this.largestTransactionId = input.readLong();
-        this.keys = (List<RowIndexKey>) input.readObject(List.class);
-        this.values = (List<RowIndexValue>) input.readObject(List.class);
+        this.keys = (List<WALKey>) input.readObject(List.class);
+        this.values = (List<WALValue>) input.readObject(List.class);
     }
 
-    public TableName getMapName() {
+    public RegionName getMapName() {
         return mapName;
     }
 
@@ -74,7 +74,7 @@ public class RowUpdatesPayload implements MessagePayload, RowScanable {
     }
 
     @Override
-    public <E extends Exception> void rowScan(RowScan<E> entryStream) throws E {
+    public <E extends Exception> void rowScan(WALScan<E> entryStream) throws E {
         for (int i = 0; i < keys.size(); i++) {
             if (!entryStream.row(largestTransactionId, keys.get(i), values.get(i))) {
                 return;
@@ -83,7 +83,7 @@ public class RowUpdatesPayload implements MessagePayload, RowScanable {
     }
 
     @Override
-    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowScan) throws E {
+    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowScan) throws E {
         for (int i = 0; i < keys.size(); i++) {
             if (!rowScan.row(largestTransactionId, keys.get(i), values.get(i))) {
                 return;

@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.storage.filer;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
 
 public class Filer extends RandomAccessFile implements IFiler {
 
@@ -31,6 +32,11 @@ public class Filer extends RandomAccessFile implements IFiler {
     public Filer(String name, String mode) throws IOException {
         super(name, mode);
         fileName = name;
+    }
+
+    public FilerChannel fileChannelFiler() {
+        final FileChannel channel = getChannel();
+        return new FilerChannel(this, channel);
     }
 
     @Override

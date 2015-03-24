@@ -15,27 +15,27 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.RowIndexKey;
+import com.jivesoftware.os.amza.shared.WALKey;
 
 public class RowStoreUpdates {
 
-    private final TableStore tableStore;
+    private final RegionStore regionStore;
     private final RowsStorageUpdates rowsStorageChangeSet;
     private int changedCount = 0;
 
-    RowStoreUpdates(TableStore tableStore, RowsStorageUpdates rowsStorageChangeSet) {
-        this.tableStore = tableStore;
+    RowStoreUpdates(RegionStore regionStore, RowsStorageUpdates rowsStorageChangeSet) {
+        this.regionStore = regionStore;
         this.rowsStorageChangeSet = rowsStorageChangeSet;
     }
 
-    public RowIndexKey add(RowIndexKey key, byte[] value) throws Exception {
+    public WALKey add(WALKey key, byte[] value) throws Exception {
         if (rowsStorageChangeSet.put(key, value)) {
             changedCount++;
         }
         return key;
     }
 
-    public boolean remove(RowIndexKey key) throws Exception {
+    public boolean remove(WALKey key) throws Exception {
         if (rowsStorageChangeSet.containsKey(key)) {
             byte[] got = rowsStorageChangeSet.getValue(key);
             if (got != null) {
@@ -51,7 +51,7 @@ public class RowStoreUpdates {
 
     public void commit() throws Exception {
         if (changedCount > 0) {
-            tableStore.commit(rowsStorageChangeSet);
+            regionStore.commit(rowsStorageChangeSet);
         }
     }
 }

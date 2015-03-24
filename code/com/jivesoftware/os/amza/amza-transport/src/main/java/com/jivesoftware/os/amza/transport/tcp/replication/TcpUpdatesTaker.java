@@ -15,10 +15,10 @@
  */
 package com.jivesoftware.os.amza.transport.tcp.replication;
 
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.RowUpdatesPayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.TakeRowUpdatesRequestPayload;
@@ -44,8 +44,8 @@ public class TcpUpdatesTaker implements UpdatesTaker {
     }
 
     @Override
-    public  void takeUpdates(RingHost ringHost, TableName tableName,
-            long transationId, final RowScan tookStream) throws Exception {
+    public  void takeUpdates(RingHost ringHost, RegionName tableName,
+            long transationId, final WALScan tookStream) throws Exception {
         TcpClient client = clientProvider.getClientForHost(ringHost);
         try {
             TakeRowUpdatesRequestPayload requestPayload = new TakeRowUpdatesRequestPayload(tableName, transationId);

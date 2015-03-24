@@ -35,8 +35,8 @@ public class ExampleMain {
         int connectionsPerHost = 2;
         int bufferSize = 10 * 1024;
         int numBuffers = 10;
-        int connectTimeoutMillis = 5000;
-        int socketTimeoutMillis = 2000;
+        int connectTimeoutMillis = 60000;
+        int socketTimeoutMillis = 60000;
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());

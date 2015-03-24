@@ -1,13 +1,13 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.MemoryRowsIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALScanable;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
@@ -38,7 +38,7 @@ public class IndexReplicationTest {
     private RingHost localHost = new RingHost("localhost", 7766);
     private TcpClientProvider tcpClientProvider;
     private OrderIdProvider idProvider;
-    private AtomicReference<RowScanable> receivedPut = new AtomicReference<>();
+    private AtomicReference<WALScanable> receivedPut = new AtomicReference<>();
     private AtomicReference<RowUpdatesPayload> toTake = new AtomicReference<>();
     private IndexReplicationProtocol applicationProtocol;
 
@@ -92,24 +92,24 @@ public class IndexReplicationTest {
     public void testPush() throws Exception {
         TcpUpdatesSender sender = new TcpUpdatesSender(tcpClientProvider, applicationProtocol);
 
-        TableName tableName = new TableName("test", "test", null, null);
-        NavigableMap<RowIndexKey, RowIndexValue> changes = new ConcurrentSkipListMap<>();
+        RegionName tableName = new RegionName("test", "test", null, null);
+        NavigableMap<WALKey, WALValue> changes = new ConcurrentSkipListMap<>();
 
-        RowIndexValue val1 = new RowIndexValue("blah".getBytes(), idProvider.nextId(), false);
-        RowIndexValue val2 = new RowIndexValue("meh".getBytes(), idProvider.nextId(), false);
+        WALValue val1 = new WALValue("blah".getBytes(), idProvider.nextId(), false);
+        WALValue val2 = new WALValue("meh".getBytes(), idProvider.nextId(), false);
 
-        changes.put(new RowIndexKey("1".getBytes()), val1);
-        changes.put(new RowIndexKey("2".getBytes()), val2);
+        changes.put(new WALKey("1".getBytes()), val1);
+        changes.put(new WALKey("2".getBytes()), val2);
 
-        sender.sendUpdates(localHost, tableName, new MemoryRowsIndex(changes));
+        sender.sendUpdates(localHost, tableName, new MemoryWALIndex(changes));
 
-        RowScanable received = receivedPut.get();
+        WALScanable received = receivedPut.get();
         Assert.assertNotNull(received);
-        final NavigableMap<RowIndexKey, RowIndexValue> receivedApply = new ConcurrentSkipListMap<>();
-        received.rowScan(new RowScan<RuntimeException>() {
+        final NavigableMap<WALKey, WALValue> receivedApply = new ConcurrentSkipListMap<>();
+        received.rowScan(new WALScan<RuntimeException>() {
 
             @Override
-            public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws RuntimeException {
+            public boolean row(long orderId, WALKey key, WALValue value) throws RuntimeException {
                 receivedApply.put(key, value);
                 return true;
             }
@@ -117,32 +117,32 @@ public class IndexReplicationTest {
         Assert.assertNotNull(receivedApply);
         Assert.assertEquals(receivedApply.size(), changes.size());
 
-        Assert.assertEquals(receivedApply.get(new RowIndexKey("1".getBytes())), val1);
-        Assert.assertEquals(receivedApply.get(new RowIndexKey("2".getBytes())), val2);
+        Assert.assertEquals(receivedApply.get(new WALKey("1".getBytes())), val1);
+        Assert.assertEquals(receivedApply.get(new WALKey("2".getBytes())), val2);
     }
 
     @Test
     public void testPull() throws Exception {
         TcpUpdatesTaker taker = new TcpUpdatesTaker(tcpClientProvider, applicationProtocol);
 
-        TableName tableName = new TableName("test", "test", null, null);
-        NavigableMap<RowIndexKey, RowIndexValue> changes = new ConcurrentSkipListMap<>();
+        RegionName tableName = new RegionName("test", "test", null, null);
+        NavigableMap<WALKey, WALValue> changes = new ConcurrentSkipListMap<>();
 
-        RowIndexValue val1 = new RowIndexValue("blah".getBytes(), idProvider.nextId(), false);
-        RowIndexValue val2 = new RowIndexValue("meh".getBytes(), idProvider.nextId(), false);
+        WALValue val1 = new WALValue("blah".getBytes(), idProvider.nextId(), false);
+        WALValue val2 = new WALValue("meh".getBytes(), idProvider.nextId(), false);
 
-        changes.put(new RowIndexKey("1".getBytes()), val1);
-        changes.put(new RowIndexKey("2".getBytes()), val2);
+        changes.put(new WALKey("1".getBytes()), val1);
+        changes.put(new WALKey("2".getBytes()), val2);
         long transactionId = idProvider.nextId();
 
-        toTake.set(new RowUpdatesPayload(tableName, transactionId, Arrays.asList(new RowIndexKey("1".getBytes()), new RowIndexKey("2".getBytes())),
+        toTake.set(new RowUpdatesPayload(tableName, transactionId, Arrays.asList(new WALKey("1".getBytes()), new WALKey("2".getBytes())),
                 Arrays.asList(val1, val2)));
 
-        final NavigableMap<RowIndexKey, RowIndexValue> received = new ConcurrentSkipListMap<>();
-        taker.takeUpdates(localHost, tableName, transactionId, new RowScan() {
+        final NavigableMap<WALKey, WALValue> received = new ConcurrentSkipListMap<>();
+        taker.takeUpdates(localHost, tableName, transactionId, new WALScan() {
 
             @Override
-            public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
+            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                 received.put(key, value);
                 return true;
             }
@@ -151,46 +151,31 @@ public class IndexReplicationTest {
         Assert.assertNotNull(received);
         Assert.assertEquals(received.size(), changes.size());
 
-        Assert.assertEquals(received.get(new RowIndexKey("1".getBytes())), val1);
-        Assert.assertEquals(received.get(new RowIndexKey("2".getBytes())), val2);
+        Assert.assertEquals(received.get(new WALKey("1".getBytes())), val1);
+        Assert.assertEquals(received.get(new WALKey("2".getBytes())), val2);
 
     }
 
-    private AmzaInstance amzaInstance(final AtomicReference<RowScanable> put, final AtomicReference<RowUpdatesPayload> take) {
+    private AmzaInstance amzaInstance(final AtomicReference<WALScanable> put, final AtomicReference<RowUpdatesPayload> take) {
         return new AmzaInstance() {
             @Override
-            public void updates(TableName tableName, RowScanable changes) throws Exception {
+            public void updates(RegionName tableName, WALScanable changes) throws Exception {
                 put.set(changes);
             }
 
             @Override
-            public void takeRowUpdates(TableName tableName, long transationId, RowScan rowStream)
+            public void takeRowUpdates(RegionName tableName, long transationId, WALScan rowStream)
                     throws Exception {
                 take.get().rowScan(rowStream);
             }
 
             @Override
-            public void addRingHost(String ringName, RingHost ringHost) throws Exception {
+            public List<RegionName> getRegionNames() {
                 throw new UnsupportedOperationException("Not supported yet.");
             }
 
             @Override
-            public void removeRingHost(String ringName, RingHost ringHost) throws Exception {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public List<RingHost> getRing(String ringName) throws Exception {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public List<TableName> getTableNames() {
-                throw new UnsupportedOperationException("Not supported yet.");
-            }
-
-            @Override
-            public void destroyTable(TableName tableName) throws Exception {
+            public void destroyRegion(RegionName tableName) throws Exception {
                 throw new UnsupportedOperationException("Not supported yet.");
             }
 

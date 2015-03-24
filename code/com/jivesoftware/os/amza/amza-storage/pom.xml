@@ -55,5 +55,4 @@
             <artifactId>map-store</artifactId>
         </dependency>
     </dependencies>
-    <name>amza-storage</name>
 </project>

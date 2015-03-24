@@ -14,13 +14,12 @@
     </parent>
     <modules>
         <module>inheritance-poms</module>
-        <module>amza-example-deployable</module>
         <module>amza-service</module>
         <module>amza-test</module>
         <module>amza-transport</module>
         <module>amza-shared</module>
         <module>amza-storage</module>
-        <module>amza-mavibot-storage</module>
         <module>amza-mapdb-storage</module>
+        <module>amza-deployable</module>
     </modules>
 </project>

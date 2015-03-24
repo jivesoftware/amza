@@ -16,13 +16,13 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
-import com.jivesoftware.os.amza.shared.RowScan;
-import com.jivesoftware.os.amza.shared.RowScanable;
-import com.jivesoftware.os.amza.shared.TableName;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALScanable;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfig;
@@ -43,16 +43,16 @@ public class HttpUpdatesSender implements UpdatesSender {
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
 
     @Override
-    public void sendUpdates(RingHost ringHost, TableName tableName, RowScanable changes) throws Exception {
+    public void sendUpdates(RingHost ringHost, RegionName tableName, WALScanable changes) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         final List<byte[]> rows = new ArrayList<>();
-        changes.rowScan(new RowScan<Exception>() {
+        changes.rowScan(new WALScan<Exception>() {
             @Override
-            public boolean row(long orderId, RowIndexKey key, RowIndexValue value) throws Exception {
+            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                 // We make this copy because we don't know how the value is being stored. By calling value.getValue()
                 // we ensure that the value from the tableIndex is real vs a pointer.
-                RowIndexValue copy = new RowIndexValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
+                WALValue copy = new WALValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
                 rows.add(rowMarshaller.toRow(orderId, key, copy));
                 return true;
             }

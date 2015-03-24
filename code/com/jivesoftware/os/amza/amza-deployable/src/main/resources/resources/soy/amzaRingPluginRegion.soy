@@ -1,0 +1,60 @@
+{namespace soy.page}
+
+/**
+ * Amza Ring plugin page
+ * 
+ * @param? ring
+ */
+{template .amzaRingPluginRegion}
+    {if $ring}
+        <div class="panel panel-default">
+            <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Amza Ring</div>
+                <div class="panel-body">
+                    
+                    <table class="table table-condensed">
+                        <thead>
+                            <tr>
+                                <th>Host</th>
+                                <th>Port</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
+                                data-jive-ui="jive/ui/typeahead/request_typeahead" method="get" name="addRingHost">
+                                <tr style="background-color:#ddd;">
+                                    <td>
+                                        <input type="text" autocomplete="off" role="combobox" style="width:280px; padding-left:10px;"
+                                        class="form-control" placeholder="Host" value=""
+                                        name="host" id="hostPicker" data-original-title="" title="">
+                                    </td>
+                                    <td>
+                                        <input type="number" name="port" min="1" max="65536" autocomplete="off" role="combobox" style="width:280px; padding-left:10px;"
+                                        class="form-control" placeholder="Port" value="" id="portPicker" 
+                                        data-original-title="" title="">
+                                    </td>
+                                    <input type="hidden" name="action" value="add">
+                                    <td><button title="Add" type="submit" name="action" value="add" class="btn btn-default"><span class="glyphicon glyphicon-plus"></span></button><td>
+                                </tr>
+                            </form>
+
+                            {foreach $r in $ring}
+                                <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
+                                    data-jive-ui="jive/ui/typeahead/request_typeahead" method="get" name="removeRingHost">
+                                    <tr>    
+                                        <input type="hidden" name="host" value="{$r.host}">
+                                        <input type="hidden" name="port" value="{$r.port}">
+                                        <input type="hidden" name="action" value="remove">
+                                        <td>{$r.host}</td>
+                                        <td>{$r.port}</td>
+                                        <td><button title="Remove" type="submit" name="action" value="remove" class="btn btn-default"><span class="glyphicon glyphicon-trash"></span></button><td>
+                                    </tr>
+                                </form>
+                            {/foreach}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {/if}
+{/template}

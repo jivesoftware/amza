@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.test;
 
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
@@ -44,9 +44,9 @@ public class AmzaServiceTest {
 
     @Test(enabled = true)
     public void testAddToReplicatedWAL() throws Exception {
-        final int maxUpdates = 100;
+        final int maxUpdates = 1;
         final int delayBetweenUpdates = 0;
-        final int maxFields = 10;
+        final int maxFields = 1;
         final int maxOffServices = 0;
         final int maxRemovedServices = 0;
         final int maxAddService = 0;
@@ -59,7 +59,7 @@ public class AmzaServiceTest {
         for (int i = 0; i < maxNumberOfServices; i++) {
             cluster.newNode(new RingHost("localhost", i));
         }
-        final TableName mapName = new TableName("test", "table1", null, null);
+        final RegionName regionName = new RegionName("test", "region1", null, null);
         final CountDownLatch latch = new CountDownLatch(1);
         Executors.newSingleThreadExecutor().submit(new Runnable() {
             int removeService = maxRemovedServices;
@@ -74,10 +74,10 @@ public class AmzaServiceTest {
                         if (node != null) {
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
-                            RowIndexKey indexKey = new RowIndexKey(key.getBytes());
-                            node.update(mapName, indexKey, ("" + random.nextInt()).getBytes(), System.currentTimeMillis(), tombstone);
+                            WALKey indexKey = new WALKey(key.getBytes());
+                            node.update(regionName, indexKey, ("" + random.nextInt()).getBytes(), System.currentTimeMillis(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
-                            node.get(mapName, indexKey);
+                            node.get(regionName, indexKey);
                         }
                     } catch (Exception x) {
                         System.out.println(x.getMessage());
@@ -151,6 +151,7 @@ public class AmzaServiceTest {
             }
             if (falseCount > 0) {
                 Thread.sleep(10000);
+                System.out.println("---------------------------------------------------------------------\n\n\n\n");
             }
         }
         System.out.println("\n------stopping---------");
@@ -159,10 +160,6 @@ public class AmzaServiceTest {
         }
         System.out.println("\n------PASSED :) ---------");
 
-//        System.out.println("\n------final-state---------");
-//        for (Service a : cluster.values()) {
-//            a.printService();
-//        }
     }
 
 }

@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
-import com.jivesoftware.os.amza.shared.TableName;
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import de.ruedigermoeller.serialization.FSTObjectInput;
 import de.ruedigermoeller.serialization.FSTObjectOutput;
@@ -26,13 +26,13 @@ import java.io.IOException;
  */
 public class TakeRowUpdatesRequestPayload implements MessagePayload {
 
-    private TableName mapName;
+    private RegionName mapName;
     private long highestTransactionId;
 
     public TakeRowUpdatesRequestPayload() {
     }
 
-    public TakeRowUpdatesRequestPayload(TableName mapName, long highestTransactionId) {
+    public TakeRowUpdatesRequestPayload(RegionName mapName, long highestTransactionId) {
         this.mapName = mapName;
         this.highestTransactionId = highestTransactionId;
     }
@@ -45,11 +45,11 @@ public class TakeRowUpdatesRequestPayload implements MessagePayload {
 
     @Override
     public void deserialize(FSTObjectInput input) throws Exception {
-        this.mapName = (TableName) input.readObject();
+        this.mapName = (RegionName) input.readObject();
         this.highestTransactionId = input.readLong();
     }
 
-    public TableName getMapName() {
+    public RegionName getMapName() {
         return mapName;
     }
 

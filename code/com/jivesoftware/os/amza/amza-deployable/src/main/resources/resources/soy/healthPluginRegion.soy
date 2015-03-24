@@ -1,0 +1,122 @@
+{namespace soy.page}
+
+/**
+ * @param ongoingCompactions
+ * @param recentCompactions
+ * @param totalCompactions
+ * @param grandTotals
+ * @param regionTotals
+ */
+{template .healthPluginRegion}
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>{sp}Health</div>
+        <div class="panel-body">
+             <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th>Actions</th>
+                        <th>Name</th>
+                        <th>Ring</th>
+                        <th>MinKey</th>
+                        <th>MaxKey</th>
+                        <th><span class="glyphicon glyphicon-open"></span>{sp}Get</th>
+                        <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Scan</th>
+                        <th><span class="glyphicon glyphicon-upload"></span>{sp}Took</th>
+                        <th><span class="glyphicon glyphicon-cloud-download"></span>{sp}Received</th>
+                        <th><span class="glyphicon glyphicon-save"></span>{sp}Applied</th>
+                        <th><span class="glyphicon glyphicon-cloud-upload"></span>Replicated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td>{$grandTotals.gets}{sp}lag={$grandTotals.getsLag}millis</td>
+                        <td>{$grandTotals.scans}{sp}lag={$grandTotals.scansLag}millis</td>
+                        <td>{$grandTotals.takeUpdates}{sp}lag={$grandTotals.takeUpdatesLag}millis</td>
+                        <td>{$grandTotals.received}{sp}lag={$grandTotals.receivedLag}millis</td>
+                        <td>{$grandTotals.applies}{sp}lag={$grandTotals.appliesLag}millis</td>
+                        <td>{$grandTotals.replicates}{sp}lag={$grandTotals.replicatesLag}millis</td>
+                    </tr>
+                    {foreach $r in $regionTotals}
+                        <tr>
+                            <td>
+                                <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default">
+                                    <span class="glyphicon glyphicon-trash"></span>
+                                </button>
+                                <button title="Remove" type="submit" name="action" value="compact" class="btn btn-default">
+                                    <span class="glyphicon glyphicon-compressed"></span>
+                                </button>
+                            </td>
+                            <td>{$r.name}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <button aria-expanded="false" type="button" data-toggle="dropdown" class="btn btn-default btn-sm dropdown-toggle">
+                                        {$r.ringName}<span class="caret"></span></button>
+                                    <ul class="dropdown-menu">
+                                        {foreach $ring in $r.ring}
+                                            <li><a target="ui_iframe" href="http://{$ring.host}:{$ring.port}/">
+                                                {$ring.host}:{$ring.port}</a></li>
+                                        {/foreach}
+                                    </ul>
+                                </div>
+                            </td>
+                            <td>{$r.minKey}</td>
+                            <td>{$r.maxKey}</td>
+                            <td>{$r.gets}{sp}lag={$r.getsLag}millis</td>
+                            <td>{$r.scans}{sp}lag={$r.scansLag}millis</td>
+                            <td>{$r.takeUpdates}{sp}lag={$r.takeUpdatesLag}millis</td>
+                            <td>{$r.received}{sp}lag={$r.receivedLag}millis</td>
+                            <td>{$r.applies}{sp}lag={$r.appliesLag}millis</td>
+                            <td>{$r.replicates}{sp}lag={$grandTotals.replicatesLag}millis</td>
+                        </tr>
+                    {/foreach}
+                </tbody>
+            </table>
+
+        
+     
+        </div>
+    </div>
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-tasks"></span>{sp}Compactions - ({$totalCompactions})</div>
+        <div class="panel-body">
+            <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th><span class="glyphicon glyphicon-clock"></span>{sp}Elapse</th>
+                    </tr>
+                </thead>
+                
+                <tbody>
+                    <tr>
+                        <td colspan="2">
+                        Ongoing:
+                        </td>
+                    </tr>
+                    {foreach $c in $ongoingCompactions}
+                        <tr>
+                            <td>{$c.name}</td>
+                            <td>{$c.elapse}</td>
+                        </tr>
+                    {/foreach}
+                    <tr>
+                        <td colspan="2">
+                        Recently Completed:
+                        </td>
+                    </tr>
+                    {foreach $c in $recentCompactions}
+                        <tr>
+                            <td>{$c.name}</td>
+                            <td>{$c.elapse}</td>
+                        </tr>
+                    {/foreach}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{/template}

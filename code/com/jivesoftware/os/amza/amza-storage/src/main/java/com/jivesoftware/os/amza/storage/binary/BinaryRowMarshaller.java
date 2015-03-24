@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.RowIndexKey;
-import com.jivesoftware.os.amza.shared.RowIndexValue;
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
 import com.jivesoftware.os.amza.storage.filer.UIO;
@@ -24,7 +24,7 @@ import com.jivesoftware.os.amza.storage.filer.UIO;
 public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
 
     @Override
-    public byte[] toRow(long transactionId, RowIndexKey k, RowIndexValue v) throws Exception {
+    public byte[] toRow(long transactionId, WALKey k, WALValue v) throws Exception {
         MemoryFiler filer = new MemoryFiler();
         UIO.writeLong(filer, transactionId, "transactionId");
         UIO.writeByteArray(filer, v.getValue(), "value");
@@ -51,13 +51,13 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
             }
 
             @Override
-            public RowIndexKey getKey() {
-                return new RowIndexKey(key);
+            public WALKey getKey() {
+                return new WALKey(key);
             }
 
             @Override
-            public RowIndexValue getValue() {
-                return new RowIndexValue(value, timestamp, tombstone);
+            public WALValue getValue() {
+                return new WALValue(value, timestamp, tombstone);
             }
         };
     }

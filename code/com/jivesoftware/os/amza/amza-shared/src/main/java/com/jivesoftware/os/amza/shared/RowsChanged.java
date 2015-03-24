@@ -19,36 +19,43 @@ import com.google.common.collect.Multimap;
 import java.util.Map;
 import java.util.NavigableMap;
 
-public class RowsChanged implements RowScanable {
+public class RowsChanged implements WALScanable {
 
-    private final TableName tableName;
-    private final NavigableMap<RowIndexKey, RowIndexValue> apply;
-    private final NavigableMap<RowIndexKey, RowIndexValue> remove;
-    private final Multimap<RowIndexKey, RowIndexValue> clobber;
+    private final RegionName regionName;
+    private final long oldestApply;
+    private final NavigableMap<WALKey, WALValue> apply;
+    private final NavigableMap<WALKey, WALValue> remove;
+    private final Multimap<WALKey, WALValue> clobber;
 
-    public RowsChanged(TableName tableName,
-            NavigableMap<RowIndexKey, RowIndexValue> apply,
-            NavigableMap<RowIndexKey, RowIndexValue> remove,
-            Multimap<RowIndexKey, RowIndexValue> clobber) {
-        this.tableName = tableName;
+    public RowsChanged(RegionName regionName,
+        long oldestApply,
+        NavigableMap<WALKey, WALValue> apply,
+        NavigableMap<WALKey, WALValue> remove,
+        Multimap<WALKey, WALValue> clobber) {
+        this.regionName = regionName;
+        this.oldestApply = oldestApply;
         this.apply = apply;
         this.remove = remove;
         this.clobber = clobber;
     }
 
-    public TableName getTableName() {
-        return tableName;
+    public RegionName getRegionName() {
+        return regionName;
     }
 
-    public NavigableMap<RowIndexKey, RowIndexValue> getApply() {
+    public long getOldestApply() {
+        return oldestApply;
+    }
+
+    public NavigableMap<WALKey, WALValue> getApply() {
         return apply;
     }
 
-    public NavigableMap<RowIndexKey, RowIndexValue> getRemove() {
+    public NavigableMap<WALKey, WALValue> getRemove() {
         return remove;
     }
 
-    public Multimap<RowIndexKey, RowIndexValue> getClobbered() {
+    public Multimap<WALKey, WALValue> getClobbered() {
         return clobber;
     }
 
@@ -66,8 +73,8 @@ public class RowsChanged implements RowScanable {
     }
 
     @Override
-    public <E extends Exception> void rowScan(RowScan<E> rowStream) {
-        for (Map.Entry<RowIndexKey, RowIndexValue> e : apply.entrySet()) {
+    public <E extends Exception> void rowScan(WALScan<E> rowStream) {
+        for (Map.Entry<WALKey, WALValue> e : apply.entrySet()) {
             try {
                 if (!rowStream.row(-1, e.getKey(), e.getValue())) {
                     break;
@@ -79,8 +86,8 @@ public class RowsChanged implements RowScanable {
     }
 
     @Override
-    public <E extends Exception> void rangeScan(RowIndexKey from, RowIndexKey to, RowScan<E> rowStream) throws E {
-        for (Map.Entry<RowIndexKey, RowIndexValue> e : apply.subMap(from, to).entrySet()) {
+    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowStream) throws E {
+        for (Map.Entry<WALKey, WALValue> e : apply.subMap(from, to).entrySet()) {
             try {
                 if (!rowStream.row(-1, e.getKey(), e.getValue())) {
                     break;

@@ -35,14 +35,13 @@ import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
-import java.io.File;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String workingDirectory = "./var/data/";
+        public String[] workingDirectories = new String[] { "./var/data/" };
         public int replicationFactor = 1;
         public int takeFromFactor = 1;
         public int resendReplicasIntervalInMillis = 1000;
@@ -75,18 +74,16 @@ public class AmzaServiceInitializer {
         };
         AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(rowChanges);
 
-        File workingDirectory = new File(config.workingDirectory);
-
         final AtomicReference<AmzaRegionChangeReplicator> replicator = new AtomicReference<>();
-        RegionProvider regionProvider = new RegionProvider(workingDirectory, "amza/stores", regionsWALStorageProvider, amzaRegionWatcher, new WALReplicator() {
-
-            @Override
-            public void replicate(RowsChanged rowsChanged) throws Exception {
-                replicator.get().replicate(rowsChanged);
-            }
-        });
+        RegionProvider regionProvider = new RegionProvider(config.workingDirectories, "amza/stores", regionsWALStorageProvider, amzaRegionWatcher,
+            new WALReplicator() {
+                @Override
+                public void replicate(RowsChanged rowsChanged) throws Exception {
+                    replicator.get().replicate(rowsChanged);
+                }
+            });
         final AmzaHostRing amzaRing = new AmzaHostRing(ringHost, regionProvider, orderIdProvider, marshaller);
-        WALs resendWALs = new WALs(workingDirectory, "amza/WAL/resend", resendWALStorageProvider);
+        WALs resendWALs = new WALs(config.workingDirectories, "amza/WAL/resend", resendWALStorageProvider);
 
         AmzaRegionChangeReplicator changeReplicator = new AmzaRegionChangeReplicator(amzaStats,
             amzaRing,
@@ -98,7 +95,7 @@ public class AmzaServiceInitializer {
             config.resendReplicasIntervalInMillis);
         replicator.set(changeReplicator);
 
-        WALs replicatedWALs = new WALs(workingDirectory, "amza/WAL/replicated", replicaWALStorageProvider);
+        WALs replicatedWALs = new WALs(config.workingDirectories, "amza/WAL/replicated", replicaWALStorageProvider);
         AmzaRegionChangeReceiver changeReceiver = new AmzaRegionChangeReceiver(amzaStats,
             regionProvider,
             replicatedWALs,

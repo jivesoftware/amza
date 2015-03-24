@@ -137,13 +137,13 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    public <E extends Exception> void rowScan(final WALScan<E> rowScan) throws Exception {
+    public void rowScan(final WALScan walScan) throws Exception {
         lock.acquire();
         try {
             for (Map.Entry<WALKey, WALValue> e : index.entrySet()) {
                 WALKey key = e.getKey();
                 WALValue value = e.getValue();
-                if (!rowScan.row(-1, key, value)) {
+                if (!walScan.row(-1, key, value)) {
                     break;
                 }
             }
@@ -153,14 +153,14 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public <E extends Exception> void rangeScan(WALKey from, WALKey to, final WALScan<E> rowScan) throws Exception {
+    synchronized public void rangeScan(WALKey from, WALKey to, final WALScan walScan) throws Exception {
         lock.acquire();
         try {
 
             for (Map.Entry<WALKey, WALValue> e : index.subMap(from, to).entrySet()) {
                 WALKey key = e.getKey();
                 WALValue value = e.getValue();
-                if (!rowScan.row(-1, key, value)) {
+                if (!walScan.row(-1, key, value)) {
                     break;
                 }
             }

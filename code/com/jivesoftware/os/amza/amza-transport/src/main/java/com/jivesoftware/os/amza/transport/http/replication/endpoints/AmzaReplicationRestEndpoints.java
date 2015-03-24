@@ -125,20 +125,20 @@ public class AmzaReplicationRestEndpoints {
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         return new WALScanable() {
             @Override
-            public <E extends Exception> void rowScan(WALScan<E> rowScan) throws Exception {
+            public void rowScan(WALScan walScan) throws Exception {
                 for (byte[] row : changeSet.getChanges()) {
                     RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
-                    if (!rowScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
+                    if (!walScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
                         return;
                     }
                 }
             }
 
             @Override
-            public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowScan) throws Exception {
+            public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
                 for (byte[] row : changeSet.getChanges()) {
                     RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
-                    if (!rowScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
+                    if (!walScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
                         return;
                     }
                 }

@@ -47,22 +47,22 @@ public class MemoryWALIndex implements WALIndex, Serializable {
     }
 
     @Override
-    public <E extends Exception> void rowScan(WALScan<E> rowScan) throws Exception {
+    public void rowScan(WALScan walScan) throws Exception {
         for (Entry<WALKey, WALValue> e : index.entrySet()) {
             WALKey key = e.getKey();
             WALValue value = e.getValue();
-            if (!rowScan.row(-1, key, value)) {
+            if (!walScan.row(-1, key, value)) {
                 break;
             }
         }
     }
 
     @Override
-    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowScan) throws E {
+    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
         for (Entry<WALKey, WALValue> e : index.subMap(from, to).entrySet()) {
             WALKey key = e.getKey();
             WALValue value = e.getValue();
-            if (!rowScan.row(-1, key, value)) {
+            if (!walScan.row(-1, key, value)) {
                 break;
             }
         }

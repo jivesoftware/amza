@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.base.Optional;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndex.CompactionWALIndex;
@@ -28,15 +29,15 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- *
  * @author jonathan.colt
  */
-public class BinaryRowsTx implements WALTx {
+public class BinaryWALTx implements WALTx {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private static final int numPermits = 1024;
-    private final Semaphore compactionLock = new Semaphore(numPermits, true);
+    private static final int NUM_PERMITS = 1024;
+
+    private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
     private final File dir;
     private final String name;
     private final RowMarshaller<byte[]> rowMarshaller;
@@ -47,19 +48,20 @@ public class BinaryRowsTx implements WALTx {
     private final RowIOProvider ioProvider;
     private RowIO io;
 
-    public BinaryRowsTx(File dir,
+    public BinaryWALTx(File baseDir,
         String name,
         RowIOProvider ioProvider,
         RowMarshaller<byte[]> rowMarshaller,
-        WALIndexProvider rowsIndexProvider,
+        WALIndexProvider walIndexProvider,
         int backRepairIndexForNDistinctTxIds) throws Exception {
-        this.dir = dir;
+        this.dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
         this.name = name;
         this.ioProvider = ioProvider;
         this.rowMarshaller = rowMarshaller;
-        this.rowsIndexProvider = rowsIndexProvider;
+        this.rowsIndexProvider = walIndexProvider;
         this.backRepairIndexForNDistinctTxIds = backRepairIndexForNDistinctTxIds;
-        io = ioProvider.create(dir, name);
+
+        this.io = ioProvider.create(dir, name);
     }
 
     @Override
@@ -84,34 +86,34 @@ public class BinaryRowsTx implements WALTx {
 
     @Override
     public WALIndex load(RegionName regionName) throws Exception {
-        compactionLock.acquire(numPermits);
+        compactionLock.acquire(NUM_PERMITS);
         try {
-            final WALIndex rowsIndex = rowsIndexProvider.createIndex(regionName);
-            if (rowsIndex.isEmpty()) {
+            final WALIndex walIndex = rowsIndexProvider.createIndex(regionName);
+            if (walIndex.isEmpty()) {
                 LOG.info(
-                    "Loading rowIndex:" + rowsIndex.getClass().getSimpleName()
-                    + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
+                    "Loading rowIndex:" + walIndex.getClass().getSimpleName()
+                        + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
                 io.scan(0, new WALReader.Stream() {
                     @Override
                     public boolean row(final long rowPointer, byte rowType, byte[] row) throws Exception {
                         RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
                         WALKey key = walr.getKey();
                         WALValue value = walr.getValue();
-                        WALValue current = rowsIndex.get(Collections.singletonList(key)).get(0);
+                        WALValue current = walIndex.get(Collections.singletonList(key)).get(0);
                         if (current == null) {
-                            rowsIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                            walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
                                 key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
                         } else if (current.getTimestampId() < value.getTimestampId()) {
-                            rowsIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                            walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
                                 key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
                         }
                         return true;
                     }
                 });
-                LOG.info("Loaded rowIndex:" + rowsIndex.getClass().getSimpleName()
+                LOG.info("Loaded rowIndex:" + walIndex.getClass().getSimpleName()
                     + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
             } else {
-                LOG.info("Checking rowIndex:" + rowsIndex.getClass().getSimpleName()
+                LOG.info("Checking rowIndex:" + walIndex.getClass().getSimpleName()
                     + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
                 final Set<Long> txIds = new HashSet<>();
                 io.reverseScan(new WALReader.Stream() {
@@ -121,18 +123,18 @@ public class BinaryRowsTx implements WALTx {
                         RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
                         WALKey key = walr.getKey();
                         WALValue value = walr.getValue();
-                        rowsIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                        walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
                             key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
                         txIds.add(walr.getTransactionId());
                         return txIds.size() < backRepairIndexForNDistinctTxIds;
                     }
                 });
-                LOG.info("Checked rowIndex:" + rowsIndex.getClass().getSimpleName()
+                LOG.info("Checked rowIndex:" + walIndex.getClass().getSimpleName()
                     + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
             }
-            return rowsIndex;
+            return walIndex;
         } finally {
-            compactionLock.release(numPermits);
+            compactionLock.release(NUM_PERMITS);
         }
     }
 
@@ -171,7 +173,7 @@ public class BinaryRowsTx implements WALTx {
             @Override
             public WALIndex getCompactedWALIndex() throws Exception {
 
-                compactionLock.acquire(numPermits);
+                compactionLock.acquire(NUM_PERMITS);
                 try {
                     long startCatchup = System.currentTimeMillis();
                     AtomicLong catchupKeys = new AtomicLong();
@@ -218,7 +220,7 @@ public class BinaryRowsTx implements WALTx {
                     lastEndOfLastRow.set(endOfLastRow);
                     return rowIndex;
                 } finally {
-                    compactionLock.release(numPermits);
+                    compactionLock.release(NUM_PERMITS);
                 }
             }
         });
@@ -228,7 +230,7 @@ public class BinaryRowsTx implements WALTx {
     private void compact(long startAtRow,
         final long endOfLastRow,
         final WALIndex rowIndex,
-        final CompactionWALIndex compactedRowsIndex,
+        final CompactionWALIndex compactionWALIndex,
         final RowIO compactionIO,
         final AtomicLong keyCount,
         final AtomicLong removeCount,
@@ -273,18 +275,18 @@ public class BinaryRowsTx implements WALTx {
                 }
                 long batchingSize = 1024 * 1024 * 10; // TODO expose to config
                 if (batchSizeInBytes.get() > batchingSize) {
-                    flush(compactedRowsIndex, compactionIO, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
+                    flush(compactionWALIndex, compactionIO, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
                 }
                 return true;
             }
 
         });
         if (!rawRows.isEmpty()) {
-            flush(compactedRowsIndex, compactionIO, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
+            flush(compactionWALIndex, compactionIO, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
         }
     }
 
-    private void flush(CompactionWALIndex compactedRowsIndex,
+    private void flush(CompactionWALIndex compactionWALIndex,
         RowIO compactionIO,
         List<Byte> rawRowTypes,
         List<byte[]> rawRows,
@@ -299,8 +301,8 @@ public class BinaryRowsTx implements WALTx {
             entries.add(new AbstractMap.SimpleEntry<>(rowKeys.get(i),
                 new WALValue(rowPointers.get(i), rowValue.getTimestampId(), rowValue.getTombstoned())));
         }
-        if (compactedRowsIndex != null) {
-            compactedRowsIndex.put(entries);
+        if (compactionWALIndex != null) {
+            compactionWALIndex.put(entries);
         }
         rowKeys.clear();
         rowValues.clear();

@@ -7,7 +7,6 @@ import com.jivesoftware.os.amza.shared.WALValue;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- *
  * @author jonathan.colt
  */
 public class HighwaterInterceptor implements WALScanable {
@@ -29,25 +28,25 @@ public class HighwaterInterceptor implements WALScanable {
     }
 
     @Override
-    public <E extends Exception> void rowScan(final WALScan<E> walScan) throws E {
-        scanable.rowScan(new WALScanHighwaterInterceptor<>(walScan));
+    public void rowScan(final WALScan walScan) throws Exception {
+        scanable.rowScan(new WALScanHighwaterInterceptor(walScan));
     }
 
     @Override
-    public <E extends Exception> void rangeScan(WALKey from, WALKey to, final WALScan<E> walScan) throws E {
-        scanable.rangeScan(from, to, new WALScanHighwaterInterceptor<>(walScan));
+    public void rangeScan(WALKey from, WALKey to, final WALScan walScan) throws Exception {
+        scanable.rangeScan(from, to, new WALScanHighwaterInterceptor(walScan));
     }
 
-    class WALScanHighwaterInterceptor<E extends Exception> implements WALScan<E> {
+    class WALScanHighwaterInterceptor implements WALScan {
 
-        private final WALScan<E> walScan;
+        private final WALScan walScan;
 
-        public WALScanHighwaterInterceptor(WALScan<E> walScan) {
+        public WALScanHighwaterInterceptor(WALScan walScan) {
             this.walScan = walScan;
         }
 
         @Override
-        public boolean row(long transactionId, WALKey key, WALValue value) throws E {
+        public boolean row(long transactionId, WALKey key, WALValue value) throws Exception {
             if (transactionId <= initialHighwaterMark) {
                 return true;
             }

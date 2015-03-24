@@ -78,7 +78,7 @@ public class IndexReplicationTest {
         int connectTimeoutMillis = 5000;
         int socketTimeoutMillis = 200000;
         tcpClientProvider = new TcpClientProvider(
-                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
     }
 
     @AfterTest
@@ -106,10 +106,10 @@ public class IndexReplicationTest {
         WALScanable received = receivedPut.get();
         Assert.assertNotNull(received);
         final NavigableMap<WALKey, WALValue> receivedApply = new ConcurrentSkipListMap<>();
-        received.rowScan(new WALScan<RuntimeException>() {
+        received.rowScan(new WALScan() {
 
             @Override
-            public boolean row(long orderId, WALKey key, WALValue value) throws RuntimeException {
+            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                 receivedApply.put(key, value);
                 return true;
             }
@@ -136,7 +136,7 @@ public class IndexReplicationTest {
         long transactionId = idProvider.nextId();
 
         toTake.set(new RowUpdatesPayload(tableName, transactionId, Arrays.asList(new WALKey("1".getBytes()), new WALKey("2".getBytes())),
-                Arrays.asList(val1, val2)));
+            Arrays.asList(val1, val2)));
 
         final NavigableMap<WALKey, WALValue> received = new ConcurrentSkipListMap<>();
         taker.takeUpdates(localHost, tableName, transactionId, new WALScan() {
@@ -165,7 +165,7 @@ public class IndexReplicationTest {
 
             @Override
             public void takeRowUpdates(RegionName tableName, long transationId, WALScan rowStream)
-                    throws Exception {
+                throws Exception {
                 take.get().rowScan(rowStream);
             }
 

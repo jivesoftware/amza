@@ -47,7 +47,7 @@ public class HttpUpdatesSender implements UpdatesSender {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         final List<byte[]> rows = new ArrayList<>();
-        changes.rowScan(new WALScan<Exception>() {
+        changes.rowScan(new WALScan() {
             @Override
             public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                 // We make this copy because we don't know how the value is being stored. By calling value.getValue()

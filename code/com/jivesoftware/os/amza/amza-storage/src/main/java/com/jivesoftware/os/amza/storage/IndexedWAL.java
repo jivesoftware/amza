@@ -151,7 +151,7 @@ public class IndexedWAL implements WALStorage {
 
     private void writeMarker(WALWriter rowWriter) throws Exception {
         rowWriter.write(Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-            Collections.singletonList(FilerIO.longsBytes(new long[]{
+            Collections.singletonList(FilerIO.longsBytes(new long[] {
                 0, // Key
                 newCount.get(),
                 clobberCount.get()
@@ -168,7 +168,7 @@ public class IndexedWAL implements WALStorage {
 
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
-        updates.rowScan(new WALScan<Exception>() {
+        updates.rowScan(new WALScan() {
             @Override
             public boolean row(long transactionId, WALKey key, WALValue update) throws Exception {
                 keys.add(key);
@@ -263,14 +263,14 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public <E extends Exception> void rowScan(final WALScan<E> rowStream) throws Exception {
+    public void rowScan(final WALScan walScan) throws Exception {
         tickleMeElmaphore.acquire();
         try {
             WALIndex rowsIndex = walIndex.get();
-            rowsIndex.rowScan(new WALScan<E>() {
+            rowsIndex.rowScan(new WALScan() {
                 @Override
-                public boolean row(long transactionId, WALKey key, WALValue value) throws E {
-                    return rowStream.row(transactionId, key, hydrateRowIndexValue(value));
+                public boolean row(long transactionId, WALKey key, WALValue value) throws Exception {
+                    return walScan.row(transactionId, key, hydrateRowIndexValue(value));
                 }
             });
         } finally {
@@ -279,14 +279,14 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public <E extends Exception> void rangeScan(final WALKey from, final WALKey to, final WALScan<E> rowScan) throws Exception {
+    public void rangeScan(final WALKey from, final WALKey to, final WALScan walScan) throws Exception {
         tickleMeElmaphore.acquire();
         try {
             WALIndex wali = walIndex.get();
-            wali.rangeScan(from, to, new WALScan<E>() {
+            wali.rangeScan(from, to, new WALScan() {
                 @Override
-                public boolean row(long transactionId, WALKey key, WALValue value) throws E {
-                    return rowScan.row(transactionId, key, hydrateRowIndexValue(value));
+                public boolean row(long transactionId, WALKey key, WALValue value) throws Exception {
+                    return walScan.row(transactionId, key, hydrateRowIndexValue(value));
                 }
             });
         } finally {
@@ -357,7 +357,7 @@ public class IndexedWAL implements WALStorage {
     @Override
     public void takeRowUpdatesSince(final long sinceTransactionId, final WALScan rowStream) throws Exception {
         synchronized (oneWriterAtATimeLock) {
-            final WALScan<Exception> filteringRowStream = new WALScan<Exception>() {
+            final WALScan filteringRowStream = new WALScan() {
 
                 @Override
                 public boolean row(long transactionId, WALKey key, WALValue value) throws Exception {

@@ -38,13 +38,13 @@ public class RegionStore implements WALScanable {
     }
 
     @Override
-    public <E extends Exception> void rowScan(WALScan<E> stream) throws E {
-        walStorage.rowScan(stream);
+    public void rowScan(WALScan walScan) throws Exception {
+        walStorage.rowScan(walScan);
     }
 
     @Override
-    public <E extends Exception> void rangeScan(WALKey from, WALKey to, WALScan<E> rowScan) throws E {
-        walStorage.rangeScan(from, to, rowScan);
+    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
+        walStorage.rangeScan(from, to, walScan);
     }
 
     public void compactTombstone(long removeTombstonedOlderThanTimestampId) throws Exception {

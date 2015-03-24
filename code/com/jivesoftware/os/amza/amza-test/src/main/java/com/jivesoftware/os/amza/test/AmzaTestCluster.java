@@ -47,7 +47,7 @@ import com.jivesoftware.os.amza.storage.NonIndexWAL;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowsTx;
+import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -98,7 +98,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectory = workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort();
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort() };
         config.replicationFactor = 2;
         config.takeFromFactor = 2;
         config.resendReplicasIntervalInMillis = 100;
@@ -158,7 +158,7 @@ public class AmzaTestCluster {
                 return new IndexedWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
-                    new BinaryRowsTx(dir,
+                    new BinaryWALTx(dir,
                         regionName.getRegionName() + ".kvt",
                         rowIOProvider,
                         rowMarshaller,
@@ -186,7 +186,7 @@ public class AmzaTestCluster {
                 return new NonIndexWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
-                    new BinaryRowsTx(dir,
+                    new BinaryWALTx(dir,
                         regionName.getRegionName() + ".kvt",
                         rowIOProvider,
                         rowMarshaller,

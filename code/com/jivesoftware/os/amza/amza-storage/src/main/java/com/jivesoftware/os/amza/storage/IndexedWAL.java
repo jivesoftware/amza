@@ -151,7 +151,7 @@ public class IndexedWAL implements WALStorage {
 
     private void writeMarker(WALWriter rowWriter) throws Exception {
         rowWriter.write(Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-            Collections.singletonList(FilerIO.longsBytes(new long[] {
+            Collections.singletonList(FilerIO.longsBytes(new long[]{
                 0, // Key
                 newCount.get(),
                 clobberCount.get()
@@ -248,7 +248,6 @@ public class IndexedWAL implements WALStorage {
                             wali.put(Collections.singletonList(new SimpleEntry<>(key, rowValue)));
                             newCount.incrementAndGet();
                         } else if (got.getTimestampId() < value.getTimestampId()) {
-                            // TODO add a counter around this and leverage to avoid lame compactions
                             wali.put(Collections.singletonList(new SimpleEntry<>(key, rowValue)));
                             clobberCount.incrementAndGet();
                         }
@@ -266,8 +265,8 @@ public class IndexedWAL implements WALStorage {
     public void rowScan(final WALScan walScan) throws Exception {
         tickleMeElmaphore.acquire();
         try {
-            WALIndex rowsIndex = walIndex.get();
-            rowsIndex.rowScan(new WALScan() {
+            WALIndex wali = walIndex.get();
+            wali.rowScan(new WALScan() {
                 @Override
                 public boolean row(long transactionId, WALKey key, WALValue value) throws Exception {
                     return walScan.row(transactionId, key, hydrateRowIndexValue(value));
@@ -335,22 +334,20 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    private WALValue hydrateRowIndexValue(final WALValue rowIndexValue) {
+    private WALValue hydrateRowIndexValue(final WALValue indexFP) {
         try {
-            // TODO replace with a read only pool of rowReaders
             byte[] row = walTx.read(new WALTx.WALRead<byte[]>() {
-
                 @Override
                 public byte[] read(WALReader rowReader) throws Exception {
-                    return rowReader.read(rowIndexValue.getValue());
+                    return rowReader.read(indexFP.getValue());
                 }
             });
             byte[] value = rowMarshaller.valueFromRow(row);
             return new WALValue(value,
-                rowIndexValue.getTimestampId(),
-                rowIndexValue.getTombstoned());
+                indexFP.getTimestampId(),
+                indexFP.getTombstoned());
         } catch (Exception x) {
-            throw new RuntimeException("Failed to hydrtate " + rowIndexValue, x);
+            throw new RuntimeException("Failed to hydrtate " + indexFP, x);
         }
     }
 

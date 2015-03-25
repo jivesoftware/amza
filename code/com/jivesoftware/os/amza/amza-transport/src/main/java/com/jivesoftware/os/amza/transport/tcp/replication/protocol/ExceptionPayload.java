@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
-import de.ruedigermoeller.serialization.FSTObjectInput;
-import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;
+import org.nustaq.serialization.FSTObjectInput;
+import org.nustaq.serialization.FSTObjectOutput;
 
 /**
  *
@@ -40,11 +40,11 @@ public class ExceptionPayload implements MessagePayload {
 
     @Override
     public void serialize(FSTObjectOutput output) throws IOException {
-        output.writeStringCompressed(message);
+        output.writeStringUTF(message);
     }
 
     @Override
     public void deserialize(FSTObjectInput input) throws Exception {
-        this.message = input.readStringCompressed();
+        this.message = input.readStringUTF();
     }
 }

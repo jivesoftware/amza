@@ -17,17 +17,37 @@ package com.jivesoftware.os.amza.shared;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.io.Serializable;
+import com.jivesoftware.os.amza.shared.filer.UIO;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
-public class RingHost implements Comparable<RingHost>, Serializable {
+public class RingHost implements Comparable<RingHost> {
 
     private final String host;
     private final int port;
 
+    public byte[] toBytes() {
+        byte[] hostBytes = host.getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = new byte[1 + 4 + hostBytes.length];
+        bytes[0] = 0; // version;
+        UIO.intBytes(port, bytes, 1);
+        UIO.bytes(hostBytes, bytes, 1 + 4);
+        return bytes;
+    }
+
+    public static RingHost fromBytes(byte[] bytes) throws IOException {
+        if (bytes[0] == 0) {
+            int port = UIO.bytesInt(bytes, 1);
+            String host = new String(bytes, 1 + 4, bytes.length - (1 + 4));
+            return new RingHost(host, port);
+        }
+        throw new IOException("Invalid version:" + bytes[0]);
+    }
+
     @JsonCreator
     public RingHost(@JsonProperty("host") String host,
-            @JsonProperty("port") int port) {
+        @JsonProperty("port") int port) {
         this.host = host;
         this.port = port;
     }

@@ -17,9 +17,9 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALReader.Stream;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.filer.Filer;
 import com.jivesoftware.os.amza.storage.filer.FilerChannel;
-import com.jivesoftware.os.amza.storage.filer.UIO;
 import java.io.IOException;
 
 public class BinaryRowReader implements WALReader {
@@ -83,8 +83,8 @@ public class BinaryRowReader implements WALReader {
                 byte[] row;
                 filer.seek(offset);
                 if (offset < fileLength) {
-                    int length = UIO.readInt(filer, "length");
                     rowFP = offset;
+                    int length = UIO.readInt(filer, "length");
                     rowType = (byte) filer.read();
                     row = new byte[length - 1];
                     if (length > 1) {
@@ -113,8 +113,8 @@ public class BinaryRowReader implements WALReader {
         }
         FilerChannel filer = parent.fileChannelFiler();
         filer.seek(UIO.bytesLong(rowPointer));
-        long rowType = (byte) filer.read();
         int length = UIO.readInt(filer, "length");
+        long rowType = (byte) filer.read();
         byte[] row = new byte[length - 1];
         if (length > 1) {
             filer.read(row);

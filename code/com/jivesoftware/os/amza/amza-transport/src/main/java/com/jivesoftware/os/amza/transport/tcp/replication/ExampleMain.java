@@ -23,8 +23,8 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.util.concurrent.atomic.AtomicLong;
+import org.nustaq.serialization.FSTConfiguration;
 
 /**
  *

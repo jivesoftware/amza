@@ -1,7 +1,7 @@
 /*
- * IReadable.java.java
+ * ICloseable.java.java
  *
- * Created on 03-12-2010 11:13:54 PM
+ * Created on 03-12-2010 11:13:05 PM
  *
  * Copyright 2010 Jonathan Colt
  *
@@ -17,7 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.jivesoftware.os.amza.storage.filer;
+package com.jivesoftware.os.amza.shared.filer;
 
 import java.io.IOException;
 
@@ -25,29 +25,11 @@ import java.io.IOException;
  *
  * @author Administrator
  */
-public interface IReadable extends ICloseable {
+public interface ICloseable {
 
     /**
      *
-     * @return @throws IOException
-     */
-    public int read() throws IOException;
-
-    /**
-     *
-     * @param b
-     * @return
      * @throws IOException
      */
-    public int read(byte b[]) throws IOException;
-
-    /**
-     *
-     * @param b
-     * @param _offset
-     * @param _len
-     * @return
-     * @throws IOException
-     */
-    public int read(byte b[], int _offset, int _len) throws IOException;
+    public void close() throws IOException;
 }

@@ -23,7 +23,6 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.Marshaller;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
@@ -52,7 +51,6 @@ public class AmzaService implements AmzaInstance {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final TimestampedOrderIdProvider orderIdProvider;
-    private final Marshaller marshaller;
     private final AmzaHostRing amzaRing;
     private final AmzaRegionChangeReceiver changeReceiver;
     private final AmzaRegionChangeTaker changeTaker;
@@ -63,7 +61,6 @@ public class AmzaService implements AmzaInstance {
     private final RegionName regionIndexKey = new RegionName("MASTER", "REGION_INDEX", null, null);
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
-        Marshaller marshaller,
         AmzaHostRing amzaRing,
         AmzaRegionChangeReceiver changeReceiver,
         AmzaRegionChangeTaker changeTaker,
@@ -72,7 +69,6 @@ public class AmzaService implements AmzaInstance {
         RegionProvider regionProvider,
         AmzaRegionWatcher regionWatcher) {
         this.orderIdProvider = orderIdProvider;
-        this.marshaller = marshaller;
         this.amzaRing = amzaRing;
         this.changeReceiver = changeReceiver;
         this.changeTaker = changeTaker;
@@ -111,7 +107,7 @@ public class AmzaService implements AmzaInstance {
     }
 
     private boolean createRegion(RegionName regionName) throws Exception {
-        byte[] rawRegionName = marshaller.serialize(regionName);
+        byte[] rawRegionName = regionName.toBytes();
 
         RegionStore regionNameIndex = regionProvider.get(regionIndexKey);
         WALValue timestamptedRegionKey = regionNameIndex.get(new WALKey(rawRegionName));
@@ -126,7 +122,7 @@ public class AmzaService implements AmzaInstance {
     }
 
     public AmzaRegion getRegion(RegionName regionName) throws Exception {
-        byte[] rawRegionName = marshaller.serialize(regionName);
+        byte[] rawRegionName = regionName.toBytes();
         RegionStore regionStoreIndex = regionProvider.get(regionIndexKey);
         WALValue timestampedKeyValueStoreName = regionStoreIndex.get(new WALKey(rawRegionName));
         while (timestampedKeyValueStoreName == null) {
@@ -160,7 +156,7 @@ public class AmzaService implements AmzaInstance {
 
     @Override
     public void destroyRegion(RegionName regionName) throws Exception {
-        byte[] rawRegionName = marshaller.serialize(regionName);
+        byte[] rawRegionName = regionName.toBytes();
         RegionStore regionStore = regionProvider.get(regionIndexKey);
         RowStoreUpdates tx = regionStore.startTransaction(orderIdProvider.nextId());
         tx.remove(new WALKey(rawRegionName));

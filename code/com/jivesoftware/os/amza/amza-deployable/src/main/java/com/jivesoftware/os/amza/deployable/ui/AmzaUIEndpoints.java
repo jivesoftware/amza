@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.deployable.ui;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyService;
+import com.jivesoftware.os.amza.deployable.ui.utils.MinMaxLong;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
@@ -127,33 +128,97 @@ public class AmzaUIEndpoints {
             List<RingHost> ring = amzaRing.getRing("master");
             Collections.sort(ring);
 
-            Map<RingHost, Integer> index = new HashMap<>();
+            Map<String, Integer> index = new HashMap<>();
             Map<String, Object> arcData = new HashMap<>();
             int i = 0;
-            List<Integer> nodes = new ArrayList();
+            int g = 1;
+            List<Map<String, Object>> nodes = new ArrayList();
             for (RingHost r : ring) {
-                index.put(r, i);
+                String name = r.getHost() + ":" + r.getPort();
+                addNode(nodes, index, name + "-received", i, g);
                 i++;
-                Map<String, Object> node = new HashMap<>();
-                node.put("nodeName", r.getHost() + ":" + r.getPort());
-                node.put("group", i);
+                addNode(nodes, index, name + "-take", i, g);
+                i++;
+                if (r.equals(host)) {
+                    addNode(nodes, index, name, i, g);
+                    i++;
+                }
+                addNode(nodes, index, name + "-took", i, g);
+                i++;
+                addNode(nodes, index, name + "-replicate", i, g);
+                i++;
+                for (int b = 0; b < 10; b++) {
+                    addNode(nodes, index, "", i, 0);
+                    i++;
+                }
+                g++;
+
             }
 
-            Integer source = index.get(host);
-            List<Map<String, Integer>> links = new ArrayList();
+            MinMaxLong range = new MinMaxLong();
+            String sourceName = hostAsString(host);
             for (RingHost r : ring) {
-                Integer target = index.get(r);
-                Map<String, Integer> map = new HashMap<>();
-                map.put("source", source);
-                map.put("target", target);
-                map.put("value", (int) (amzaStats.getTotalOffered(r) + amzaStats.getTotalTakes(r)));
+                long totalOffered = amzaStats.getTotalOffered(r);
+                if (totalOffered > 0) {
+                    range.value(totalOffered);
+                }
+
+                long totalTakes = amzaStats.getTotalTakes(r);
+                if (totalTakes > 0) {
+                    range.value(totalOffered);
+                }
             }
+
+            List<Map<String, Integer>> links = new ArrayList();
+            Integer root = index.get(sourceName);
+            for (RingHost r : ring) {
+                long totalOffered = amzaStats.getTotalOffered(r);
+                long totalTakes = amzaStats.getTotalTakes(r);
+                long total = totalOffered + totalTakes; // TODO use applied from replicated vs took
+                if (totalOffered > 0) {
+                    Integer source = index.get(sourceName + "-replicate");
+                    Integer target = index.get(hostAsString(r) + "-received");
+                    addLink(source, target, range, totalOffered, links);
+                    addLink(root, target, range, total, links);
+
+                }
+
+                if (totalTakes > 0) {
+                    Integer source = index.get(sourceName + "-take");
+                    Integer target = index.get(hostAsString(r) + "-took");
+                    addLink(source, target, range, totalTakes, links);
+                    addLink(root, target, range, total, links);
+                }
+
+            }
+            arcData.put("nodes", nodes);
+            arcData.put("links", links);
 
             return Response.ok(mapper.writeValueAsString(arcData), MediaType.APPLICATION_JSON).build();
         } catch (Exception x) {
             LOG.error("Failed genrating chords.", x);
             return Response.serverError().build();
         }
+    }
+
+    private void addLink(Integer source, Integer target, MinMaxLong range, long totalTakes, List<Map<String, Integer>> links) {
+        Map<String, Integer> map = new HashMap<>();
+        map.put("source", source);
+        map.put("target", target);
+        map.put("value", (int) (range.zeroToOne(totalTakes) * 10));
+        links.add(map);
+    }
+
+    private String hostAsString(RingHost ringHost) {
+        return ringHost.getHost() + ":" + ringHost.getPort();
+    }
+
+    private void addNode(List<Map<String, Object>> nodes, Map<String, Integer> index, String nodeName, int i, int g) {
+        index.put(nodeName, i);
+        Map<String, Object> node = new HashMap<>();
+        node.put("nodeName", nodeName);
+        node.put("group", g);
+        nodes.add(node);
     }
 
     @GET

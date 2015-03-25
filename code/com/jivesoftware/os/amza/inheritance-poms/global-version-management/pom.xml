@@ -19,6 +19,11 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
+                <groupId>de.ruedigermoeller</groupId>
+                <artifactId>fst</artifactId>
+                <version>2.23</version>
+            </dependency>
+            <dependency>
                 <groupId>com.jivesoftware.os.filer</groupId>
                 <artifactId>io</artifactId>
                 <version>${filer.version}</version>

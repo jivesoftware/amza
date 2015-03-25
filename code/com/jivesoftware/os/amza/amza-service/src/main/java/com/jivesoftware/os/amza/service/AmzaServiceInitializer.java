@@ -26,7 +26,6 @@ import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.WALs;
-import com.jivesoftware.os.amza.shared.Marshaller;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -55,7 +54,6 @@ public class AmzaServiceInitializer {
         AmzaStats amzaStats,
         RingHost ringHost,
         TimestampedOrderIdProvider orderIdProvider,
-        Marshaller marshaller,
         WALStorageProvider regionsWALStorageProvider,
         WALStorageProvider replicaWALStorageProvider,
         WALStorageProvider resendWALStorageProvider,
@@ -82,7 +80,7 @@ public class AmzaServiceInitializer {
                     replicator.get().replicate(rowsChanged);
                 }
             });
-        final AmzaHostRing amzaRing = new AmzaHostRing(ringHost, regionProvider, orderIdProvider, marshaller);
+        final AmzaHostRing amzaRing = new AmzaHostRing(ringHost, regionProvider, orderIdProvider);
         WALs resendWALs = new WALs(config.workingDirectories, "amza/WAL/resend", resendWALStorageProvider);
 
         AmzaRegionChangeReplicator changeReplicator = new AmzaRegionChangeReplicator(amzaStats,
@@ -117,7 +115,6 @@ public class AmzaServiceInitializer {
             config.compactTombstoneIfOlderThanNMillis);
 
         AmzaService service = new AmzaService(orderIdProvider,
-            marshaller,
             amzaRing,
             changeReceiver,
             changeTaker,

@@ -61,7 +61,7 @@ public class AmzaSetStress {
             StringBuilder url = new StringBuilder();
             url.append("http://");
             url.append(hostName).append(":").append(port);
-            url.append("/example/set");
+            url.append("/amza/set");
             url.append("?region=").append(regionName);
             url.append("&key=");
 

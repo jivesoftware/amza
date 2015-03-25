@@ -28,8 +28,8 @@ public class RegionStore implements WALScanable {
     private final WALStorage walStorage;
     private final RowChanges rowChanges;
 
-    public RegionStore(WALStorage rowsStorage, RowChanges rowChanges) {
-        this.walStorage = rowsStorage;
+    public RegionStore(WALStorage walStorage, RowChanges rowChanges) {
+        this.walStorage = walStorage;
         this.rowChanges = rowChanges;
     }
 

@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.storage.filer;
 
+import com.jivesoftware.os.amza.shared.filer.IFiler;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;

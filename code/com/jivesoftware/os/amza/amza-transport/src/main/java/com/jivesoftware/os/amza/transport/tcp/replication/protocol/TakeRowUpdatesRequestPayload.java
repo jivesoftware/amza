@@ -17,9 +17,9 @@ package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
-import de.ruedigermoeller.serialization.FSTObjectInput;
-import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;
+import org.nustaq.serialization.FSTObjectInput;
+import org.nustaq.serialization.FSTObjectOutput;
 
 /**
  *

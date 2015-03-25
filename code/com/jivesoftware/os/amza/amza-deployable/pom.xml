@@ -28,7 +28,7 @@
                         </manifest>
                     </archive>
                     <appendAssemblyId>false</appendAssemblyId>
-                    <finalName>amza-example</finalName>
+                    <finalName>amza</finalName>
                 </configuration>
             </plugin>
         </plugins>
@@ -87,13 +87,6 @@
         <dependency>
             <groupId>de.ruedigermoeller</groupId>
             <artifactId>fst</artifactId>
-            <version>1.34</version>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-storage</artifactId>
-            <version>0.25-SNAPSHOT</version>
-            <type>jar</type>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>

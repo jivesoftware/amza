@@ -36,13 +36,13 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 @Singleton
-@Path("/example")
-public class AmzaExampleEndpoints {
+@Path("/amza")
+public class AmzaEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaService amzaService;
 
-    public AmzaExampleEndpoints(@Context AmzaService amzaService) {
+    public AmzaEndpoints(@Context AmzaService amzaService) {
         this.amzaService = amzaService;
     }
 

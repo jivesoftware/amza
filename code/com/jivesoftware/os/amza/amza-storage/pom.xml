@@ -19,12 +19,6 @@
             <artifactId>commons-io</artifactId>
         </dependency>
         <dependency>
-            <groupId>de.ruedigermoeller</groupId>
-            <artifactId>fst</artifactId>
-            <version>1.28</version>
-            <type>jar</type>
-        </dependency>
-        <dependency>
             <groupId>com.jivesoftware.os.jive.utils</groupId>
             <artifactId>ordered-id</artifactId>
         </dependency>

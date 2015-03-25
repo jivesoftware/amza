@@ -17,6 +17,9 @@ package com.jivesoftware.os.amza.shared;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
+import com.jivesoftware.os.amza.shared.filer.UIO;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -27,11 +30,33 @@ public class RegionName implements Comparable<RegionName>, Serializable {
     private final WALKey minKeyInclusive;
     private final WALKey maxKeyExclusive;
 
+    public byte[] toBytes() throws IOException {
+        MemoryFiler memoryFiler = new MemoryFiler();
+        UIO.writeByte(memoryFiler, 0, "version");
+        UIO.writeString(memoryFiler, ringName, "ringName");
+        UIO.writeString(memoryFiler, regionName, "regionName");
+        UIO.writeByteArray(memoryFiler, minKeyInclusive == null ?  null : minKeyInclusive.getKey(), "minKeyInclusive");
+        UIO.writeByteArray(memoryFiler, maxKeyExclusive == null ?  null : maxKeyExclusive.getKey(), "maxKeyExclusive");
+        return memoryFiler.getBytes();
+    }
+
+    public static RegionName fromBytes(byte[] bytes) throws IOException {
+        MemoryFiler memoryFiler = new MemoryFiler(bytes);
+        if (UIO.readByte(memoryFiler, "version") == 0) {
+            return new RegionName(
+                UIO.readString(memoryFiler, "ringName"),
+                UIO.readString(memoryFiler, "ringName"),
+                new WALKey(UIO.readByteArray(memoryFiler, "minKeyInclusive")),
+                new WALKey(UIO.readByteArray(memoryFiler, "maxKeyExclusive")));
+        }
+        throw new IOException("Invalid version:" + bytes[0]);
+    }
+
     @JsonCreator
     public RegionName(@JsonProperty("ringName") String ringName,
-            @JsonProperty("regionName") String regionName,
-            @JsonProperty("minKeyInclusive") WALKey minKeyInclusive,
-            @JsonProperty("maxKeyExclusive") WALKey maxKeyExclusive) {
+        @JsonProperty("regionName") String regionName,
+        @JsonProperty("minKeyInclusive") WALKey minKeyInclusive,
+        @JsonProperty("maxKeyExclusive") WALKey maxKeyExclusive) {
         this.ringName = ringName.toUpperCase();
         this.regionName = regionName;
         this.minKeyInclusive = minKeyInclusive;
@@ -57,11 +82,11 @@ public class RegionName implements Comparable<RegionName>, Serializable {
     @Override
     public String toString() {
         return "Region{"
-                + "name=" + regionName
-                + ", ring=" + ringName
-                + ", from" + minKeyInclusive
-                + ", to" + maxKeyExclusive
-                + '}';
+            + "name=" + regionName
+            + ", ring=" + ringName
+            + ", from" + minKeyInclusive
+            + ", to" + maxKeyExclusive
+            + '}';
     }
 
     @Override

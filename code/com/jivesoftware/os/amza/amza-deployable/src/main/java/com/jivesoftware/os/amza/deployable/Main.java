@@ -70,9 +70,9 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
-import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.util.List;
 import java.util.Random;
+import org.nustaq.serialization.FSTConfiguration;
 
 public class Main {
 
@@ -85,7 +85,7 @@ public class Main {
         String hostname = args[0];
         int port = Integer.parseInt(System.getProperty("amza.port", "1175"));
         String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
-        int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1123"));
+        int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1223"));
         String clusterName = (args.length > 1 ? args[1] : null);
         String transport = System.getProperty("amza.transport", "http");
 
@@ -115,10 +115,10 @@ public class Main {
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
         final AmzaStats amzaStats = new AmzaStats();
 
-        final String[] rowIndexDirs = new String[] {
+        final String[] rowIndexDirs = new String[]{
             "./rowIndexs/data1",
             "./rowIndexs/data2",
-            "./rowIndexs/data3" };
+            "./rowIndexs/data3"};
 
         final WALIndexProvider walIndexProvider = new MapdbWALIndexProvider(rowIndexDirs);
 
@@ -145,7 +145,6 @@ public class Main {
             amzaStats,
             ringHost,
             orderIdProvider,
-            new com.jivesoftware.os.amza.storage.FstMarshaller(FSTConfiguration.getDefaultConfiguration()),
             walIndexProvider,
             changeSetSender,
             taker,
@@ -187,7 +186,7 @@ public class Main {
         System.out.println("-----------------------------------------------------------------------");
 
         JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
-            .addEndpoint(AmzaExampleEndpoints.class)
+            .addEndpoint(AmzaEndpoints.class)
             .addInjectable(AmzaService.class, amzaService)
             .addEndpoint(AmzaReplicationRestEndpoints.class)
             .addInjectable(AmzaInstance.class, amzaService);
@@ -208,8 +207,8 @@ public class Main {
             new HomeRegion("soy.page.homeRegion", renderer));
 
         List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("fire", "Health", "/ui/health",
-                HealthPluginEndpoints.class,
-                new HealthPluginRegion("soy.page.healthPluginRegion", renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
+            HealthPluginEndpoints.class,
+            new HealthPluginRegion("soy.page.healthPluginRegion", renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
             new ManagePlugin("leaf", "Amza Ring", "/ui/ring",
                 AmzaRingPluginEndpoints.class,
                 new AmzaRingPluginRegion("soy.page.amzaRingPluginRegion", renderer, amzaService.getAmzaRing())));

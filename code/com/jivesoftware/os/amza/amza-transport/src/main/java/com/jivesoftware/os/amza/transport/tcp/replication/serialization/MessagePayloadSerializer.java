@@ -15,11 +15,11 @@
  */
 package com.jivesoftware.os.amza.transport.tcp.replication.serialization;
 
-import de.ruedigermoeller.serialization.FSTBasicObjectSerializer;
-import de.ruedigermoeller.serialization.FSTClazzInfo;
-import de.ruedigermoeller.serialization.FSTObjectInput;
-import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;
+import org.nustaq.serialization.FSTBasicObjectSerializer;
+import org.nustaq.serialization.FSTClazzInfo;
+import org.nustaq.serialization.FSTObjectInput;
+import org.nustaq.serialization.FSTObjectOutput;
 
 /**
  *

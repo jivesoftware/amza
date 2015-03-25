@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
-import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.nio.ByteBuffer;
+import org.nustaq.serialization.FSTConfiguration;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 

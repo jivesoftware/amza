@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.24</version>
+        <version>0.25</version>
         <relativePath>../global-repo-management/pom.xml</relativePath>
     </parent>
     <artifactId>global-version-management</artifactId>
@@ -18,6 +18,11 @@
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>de.ruedigermoeller</groupId>
+                <artifactId>fst</artifactId>
+                <version>2.23</version>
+            </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.filer</groupId>
                 <artifactId>io</artifactId>

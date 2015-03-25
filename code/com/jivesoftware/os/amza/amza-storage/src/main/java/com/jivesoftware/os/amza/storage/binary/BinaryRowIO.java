@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.storage.binary;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALWriter;
-import com.jivesoftware.os.amza.storage.filer.IFiler;
+import com.jivesoftware.os.amza.shared.filer.IFiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;

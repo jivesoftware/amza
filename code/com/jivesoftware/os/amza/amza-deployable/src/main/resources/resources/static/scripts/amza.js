@@ -4,6 +4,23 @@ window.amza = {};
 
 
 amza.arc = {
+    fetch: function () {
+        var gotData;
+        $.ajax("/arc", {
+            method: "get",
+            async: false,
+            success: function (data) {
+                gotData = data;
+            },
+            error: function () {
+                alert('We suck!');
+            }
+        });
+        
+        return { data: function() {
+           if (gotData) return gotData;
+        }};
+    },
     init: function () {
         $.ajax("/arc", {
             method: "get",
@@ -180,8 +197,5 @@ amza.chord = {
 $(document).ready(function () {
     if ($('#chord').length) {
         amza.chord.init();
-    }
-    if ($('#arc').length) {
-        amza.arc.init();
     }
 });

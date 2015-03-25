@@ -173,8 +173,11 @@ public class AmzaStats {
         if (!changed.isEmpty()) {
             RegionName regionName = changed.getRegionName();
 
-            LOG.info(name + " " + changed.getApply().size()
-                + " to region:" + regionName.getRegionName() + ":" + regionName.getRingName() + " lag:" + lag(changed));
+            LOG.debug("{} {} to region: {}:{} lag:{}", new Object[]{name,
+                changed.getApply().size(),
+                regionName.getRegionName(),
+                regionName.getRingName(),
+                lag(changed)});
         }
     }
 

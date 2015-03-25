@@ -17,9 +17,9 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
-import com.jivesoftware.os.amza.storage.filer.UIO;
 
 public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
 

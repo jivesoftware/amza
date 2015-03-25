@@ -16,7 +16,6 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarsh
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayloadSerializer;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -24,6 +23,7 @@ import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import org.nustaq.serialization.FSTConfiguration;
 import org.testng.Assert;
 import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;

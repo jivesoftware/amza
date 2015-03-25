@@ -11,8 +11,8 @@ import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import com.jivesoftware.os.amza.storage.filer.UIO;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.mlogger.core.ValueType;
@@ -92,20 +92,23 @@ public class BinaryWALTx implements WALTx {
             if (walIndex.isEmpty()) {
                 LOG.info(
                     "Loading rowIndex:" + walIndex.getClass().getSimpleName()
-                        + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
+                    + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
                 io.scan(0, new WALReader.Stream() {
                     @Override
                     public boolean row(final long rowPointer, byte rowType, byte[] row) throws Exception {
-                        RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
-                        WALKey key = walr.getKey();
-                        WALValue value = walr.getValue();
-                        WALValue current = walIndex.get(Collections.singletonList(key)).get(0);
-                        if (current == null) {
-                            walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                                key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
-                        } else if (current.getTimestampId() < value.getTimestampId()) {
-                            walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                                key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
+                        if (rowType > 0) {
+                            RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+                            WALKey key = walr.getKey();
+                            WALValue value = walr.getValue();
+                            WALValue current = walIndex.get(Collections.singletonList(key)).get(0);
+                            if (current == null) {
+                                walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                                    key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
+                            } else if (current.getTimestampId() < value.getTimestampId()) {
+                                walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                                    key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
+                            }
+                            return true;
                         }
                         return true;
                     }
@@ -120,13 +123,16 @@ public class BinaryWALTx implements WALTx {
 
                     @Override
                     public boolean row(long rowPointer, byte rowType, byte[] row) throws Exception {
-                        RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
-                        WALKey key = walr.getKey();
-                        WALValue value = walr.getValue();
-                        walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                            key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
-                        txIds.add(walr.getTransactionId());
-                        return txIds.size() < backRepairIndexForNDistinctTxIds;
+                        if (rowType > 0) {
+                            RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+                            WALKey key = walr.getKey();
+                            WALValue value = walr.getValue();
+                            walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                                key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
+                            txIds.add(walr.getTransactionId());
+                            return txIds.size() < backRepairIndexForNDistinctTxIds;
+                        }
+                        return true;
                     }
                 });
                 LOG.info("Checked rowIndex:" + walIndex.getClass().getSimpleName()

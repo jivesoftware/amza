@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.service.replication.MemoryBackedHighWaterMarks;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.Marshaller;
 import com.jivesoftware.os.amza.shared.NoOpWALIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -36,7 +35,6 @@ public class EmbeddedAmzaServiceInitializer {
         AmzaStats amzaStats,
         RingHost ringHost,
         final TimestampedOrderIdProvider orderIdProvider,
-        Marshaller marshaller,
         final WALIndexProvider walIndexProvider,
         UpdatesSender updatesSender,
         UpdatesTaker updatesTaker,
@@ -106,7 +104,6 @@ public class EmbeddedAmzaServiceInitializer {
             amzaStats,
             ringHost,
             orderIdProvider,
-            marshaller,
             regionStorageProvider,
             tmpWALStorageProvider,
             tmpWALStorageProvider,

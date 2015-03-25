@@ -67,7 +67,7 @@ public class AmzaGetStress {
             StringBuilder url = new StringBuilder();
             url.append("http://");
             url.append(hostName).append(":").append(port);
-            url.append("/example/get");
+            url.append("/amza/get");
             url.append("?region=").append(regionName);
             url.append("&key=");
 

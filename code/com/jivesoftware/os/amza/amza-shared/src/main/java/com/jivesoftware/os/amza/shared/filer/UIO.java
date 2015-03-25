@@ -17,7 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.jivesoftware.os.amza.storage.filer;
+package com.jivesoftware.os.amza.shared.filer;
 
 import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
@@ -116,7 +116,7 @@ public class UIO {
      * @throws IOException
      */
     public static void write(IWriteable _filer, byte[] bytes,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         _filer.write(bytes);
     }
 
@@ -128,7 +128,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeBoolean(IWriteable _filer, boolean v,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         _filer.write(v ? 1 : 0);
     }
 
@@ -140,7 +140,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeByte(IWriteable _filer, int v,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         _filer.write(v);
     }
 
@@ -152,7 +152,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeShort(IWriteable _filer, int v,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         _filer.write(new byte[]{
             (byte) (v >>> 8),
             (byte) v
@@ -167,7 +167,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeChar(IWriteable _filer, int v,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         _filer.write(new byte[]{
             (byte) (v >>> 8),
             (byte) v
@@ -198,7 +198,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeLong(IWriteable _filer, long v,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         _filer.write(new byte[]{
             (byte) (v >>> 56),
             (byte) (v >>> 48),
@@ -270,7 +270,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeFloat(IWriteable _filer, float v,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         writeInt(_filer, Float.floatToIntBits(v), fieldName);
     }
 
@@ -282,7 +282,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeDouble(IWriteable _filer, double v,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         writeLong(_filer, Double.doubleToLongBits(v), fieldName);
     }
 
@@ -304,7 +304,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeBooleanArray(IWriteable _filer,
-            boolean[] array, String fieldName) throws IOException {
+        boolean[] array, String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -338,7 +338,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeByteArray(IWriteable _filer, byte[] array,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -362,7 +362,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeByteArray(IWriteable _filer, byte[] array,
-            int _start, int _len, String fieldName) throws IOException {
+        int _start, int _len, String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -384,7 +384,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeCharArray(IWriteable _filer, char[] array,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -413,7 +413,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeShortArray(IWriteable _filer, short[] array,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -442,7 +442,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeIntArray(IWriteable _filer, int[] array,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -473,7 +473,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeStringArray(IWriteable _filer, Object[] array,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -506,7 +506,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeLongArray(IWriteable _filer, long[] array,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -542,7 +542,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeLongArray(IWriteable _filer, long[] array,
-            int _start, int _len, String fieldName) throws IOException {
+        int _start, int _len, String fieldName) throws IOException {
         writeLength(_filer, _len);
         if (_len < 0) {
             return;
@@ -570,7 +570,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeFloatArray(IWriteable _filer, float[] array,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -600,7 +600,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeDoubleArray(IWriteable _filer, double[] array,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len;
         if (array == null) {
             len = -1;
@@ -634,7 +634,7 @@ public class UIO {
      * @throws IOException
      */
     public static void writeString(IWriteable _filer, String s,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         if (s == null) {
             s = "";
         }
@@ -677,7 +677,7 @@ public class UIO {
      * @throws IOException
      */
     public static boolean[] readBooleanArray(IReadable _filer,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len = readLength(_filer);
         if (len < 0) {
             return null;
@@ -761,7 +761,7 @@ public class UIO {
      * @throws IOException
      */
     public static short[] readShortArray(IReadable _filer,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len = readLength(_filer);
         if (len < 0) {
             return null;
@@ -824,7 +824,7 @@ public class UIO {
      * @throws IOException
      */
     public static String[] readStringArray(IReadable _filer,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len = readLength(_filer);
         if (len < 0) {
             return null;
@@ -888,7 +888,7 @@ public class UIO {
      * @throws IOException
      */
     public static float[] readFloatArray(IReadable _filer,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len = readLength(_filer);
         if (len < 0) {
             return null;
@@ -922,7 +922,7 @@ public class UIO {
      * @throws IOException
      */
     public static double[] readDoubleArray(IReadable _filer,
-            String fieldName) throws IOException {
+        String fieldName) throws IOException {
         int len = readLength(_filer);
         if (len < 0) {
             return null;
@@ -1703,5 +1703,9 @@ public class UIO {
      */
     public static long chunkLength(long _chunkPower) {
         return (long) Math.pow(2, _chunkPower);
+    }
+
+    public static void bytes(byte[] value, byte[] destination, int offset) {
+        System.arraycopy(value, 0, destination, offset, value.length);
     }
 }

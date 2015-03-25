@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.WALWriter;
-import com.jivesoftware.os.amza.storage.filer.IFiler;
+import com.jivesoftware.os.amza.shared.filer.IFiler;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
-import com.jivesoftware.os.amza.storage.filer.UIO;
 import java.util.ArrayList;
 import java.util.List;
 

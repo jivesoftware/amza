@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.storage.index;
 import com.jivesoftware.os.amza.shared.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.storage.filer.UIO;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.util.AbstractMap;
 import java.util.Collections;
 import org.testng.annotations.Test;

@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.storage.filer;
 
+import com.jivesoftware.os.amza.shared.filer.IFiler;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;

@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.AmzaRing;
-import com.jivesoftware.os.amza.shared.Marshaller;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -42,16 +41,13 @@ public class AmzaHostRing implements AmzaRing {
     private final RingHost ringHost;
     private final RegionProvider ringStoreProvider;
     private final TimestampedOrderIdProvider orderIdProvider;
-    private final Marshaller marshaller;
 
     public AmzaHostRing(RingHost ringHost,
         RegionProvider ringStoreProvider,
-        TimestampedOrderIdProvider orderIdProvider,
-        Marshaller marshaller) {
+        TimestampedOrderIdProvider orderIdProvider) {
         this.ringHost = ringHost;
         this.ringStoreProvider = ringStoreProvider;
         this.orderIdProvider = orderIdProvider;
-        this.marshaller = marshaller;
     }
 
     public RingHost getRingHost() {
@@ -86,7 +82,7 @@ public class AmzaHostRing implements AmzaRing {
                 @Override
                 public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                     if (!value.getTombstoned()) {
-                        ringHosts.add(marshaller.deserialize(value.getValue(), RingHost.class));
+                        ringHosts.add(RingHost.fromBytes(key.getKey()));
                     }
                     return true;
                 }
@@ -103,11 +99,11 @@ public class AmzaHostRing implements AmzaRing {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
-        byte[] rawRingHost = marshaller.serialize(ringHost);
         RegionName ringIndexKey = createRingName(ringName);
         RegionStore ringIndex = ringStoreProvider.get(ringIndexKey);
         RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.add(new WALKey(rawRingHost), rawRingHost);
+        byte[] rawRingHost = ringHost.toBytes();
+        tx.add(new WALKey(rawRingHost), new byte[0]);
         tx.commit();
     }
 
@@ -119,10 +115,10 @@ public class AmzaHostRing implements AmzaRing {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
-        byte[] rawRingHost = marshaller.serialize(ringHost);
         RegionName ringIndexKey = createRingName(ringName);
         RegionStore ringIndex = ringStoreProvider.get(ringIndexKey);
         RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
+        byte[] rawRingHost = ringHost.toBytes();
         tx.remove(new WALKey(rawRingHost));
         tx.commit();
     }

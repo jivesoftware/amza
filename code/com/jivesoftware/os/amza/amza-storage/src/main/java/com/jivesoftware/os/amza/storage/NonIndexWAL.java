@@ -107,8 +107,11 @@ public class NonIndexWAL implements WALStorage {
 
                     @Override
                     public boolean row(long rowPointer, byte rowType, byte[] rawWRow) throws Exception {
-                        RowMarshaller.WALRow row = rowMarshaller.fromRow(rawWRow);
-                        return walScan.row(row.getTransactionId(), row.getKey(), row.getValue());
+                        if (rowType > 0) {
+                            RowMarshaller.WALRow row = rowMarshaller.fromRow(rawWRow);
+                            return walScan.row(row.getTransactionId(), row.getKey(), row.getValue());
+                        }
+                        return true;
                     }
                 });
                 return null;
@@ -126,15 +129,18 @@ public class NonIndexWAL implements WALStorage {
 
                     @Override
                     public boolean row(long rowPointer, byte rowType, byte[] rawWRow) throws Exception {
-                        RowMarshaller.WALRow row = rowMarshaller.fromRow(rawWRow);
-                        if (row.getKey().compareTo(to) < 0) {
-                            if (from.compareTo(row.getKey()) <= 0) {
-                                walScan.row(row.getTransactionId(), row.getKey(), row.getValue());
+                        if (rowType > 0) {
+                            RowMarshaller.WALRow row = rowMarshaller.fromRow(rawWRow);
+                            if (row.getKey().compareTo(to) < 0) {
+                                if (from.compareTo(row.getKey()) <= 0) {
+                                    walScan.row(row.getTransactionId(), row.getKey(), row.getValue());
+                                }
+                                return true;
+                            } else {
+                                return false;
                             }
-                            return true;
-                        } else {
-                            return false;
                         }
+                        return true;
                     }
                 });
                 return null;
@@ -184,8 +190,11 @@ public class NonIndexWAL implements WALStorage {
                 rowReader.reverseScan(new WALReader.Stream() {
                     @Override
                     public boolean row(long rowPointer, byte rowType, byte[] row) throws Exception {
-                        RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
-                        return filteringRowStream.row(walr.getTransactionId(), walr.getKey(), walr.getValue());
+                        if (rowType > 0) {
+                            RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+                            return filteringRowStream.row(walr.getTransactionId(), walr.getKey(), walr.getValue());
+                        }
+                        return true;
                     }
                 });
                 return null;

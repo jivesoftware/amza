@@ -1,7 +1,7 @@
 /*
- * ICloseable.java.java
+ * IWriteable.java.java
  *
- * Created on 03-12-2010 11:13:05 PM
+ * Created on 03-12-2010 11:14:07 PM
  *
  * Copyright 2010 Jonathan Colt
  *
@@ -17,19 +17,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.jivesoftware.os.amza.storage.filer;
+package com.jivesoftware.os.amza.shared.filer;
 
 import java.io.IOException;
 
-/**
- *
- * @author Administrator
- */
-public interface ICloseable {
+public interface IWriteable extends ICloseable {
 
     /**
      *
+     * @param b
      * @throws IOException
      */
-    public void close() throws IOException;
+    public void write(int b) throws IOException;
+
+    /**
+     *
+     * @param b
+     * @throws IOException
+     */
+    public void write(byte b[]) throws IOException;
+
+    /**
+     *
+     * @param b
+     * @param _offset
+     * @param _len
+     * @throws IOException
+     */
+    public void write(byte b[], int _offset, int _len) throws IOException;
 }

@@ -21,10 +21,10 @@ import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
-import de.ruedigermoeller.serialization.FSTObjectInput;
-import de.ruedigermoeller.serialization.FSTObjectOutput;
 import java.io.IOException;
 import java.util.List;
+import org.nustaq.serialization.FSTObjectInput;
+import org.nustaq.serialization.FSTObjectOutput;
 
 /**
  *

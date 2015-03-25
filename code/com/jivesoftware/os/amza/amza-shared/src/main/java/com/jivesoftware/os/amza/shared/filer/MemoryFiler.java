@@ -13,9 +13,8 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.storage.filer;
+package com.jivesoftware.os.amza.shared.filer;
 
-import com.jivesoftware.os.amza.shared.filer.IFiler;
 import java.io.IOException;
 
 /**

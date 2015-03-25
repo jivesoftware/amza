@@ -41,7 +41,6 @@ import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
-import com.jivesoftware.os.amza.storage.FstMarshaller;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
 import com.jivesoftware.os.amza.storage.NonIndexWAL;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
@@ -53,7 +52,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
-import de.ruedigermoeller.serialization.FSTConfiguration;
 import java.io.File;
 import java.util.Collection;
 import java.util.HashSet;
@@ -195,14 +193,12 @@ public class AmzaTestCluster {
             }
         };
 
-        FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         AmzaStats amzaStats = new AmzaStats();
         MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
         AmzaService amzaService = new AmzaServiceInitializer().initialize(config,
             amzaStats,
             serviceHost,
             orderIdProvider,
-            marshaller,
             walStorageProvider,
             replicateAndResendStorageProvider,
             replicateAndResendStorageProvider,

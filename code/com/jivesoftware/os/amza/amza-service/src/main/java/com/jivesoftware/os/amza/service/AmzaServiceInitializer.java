@@ -64,13 +64,7 @@ public class AmzaServiceInitializer {
         Optional<TakeFailureListener> takeFailureListener,
         final RowChanges allRowChanges) throws Exception {
 
-        RowChanges rowChanges = new RowChanges() {
-            @Override
-            public void changes(RowsChanged rowsChanged) throws Exception {
-                allRowChanges.changes(rowsChanged);
-            }
-        };
-        AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(rowChanges);
+        AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(allRowChanges);
 
         final AtomicReference<AmzaRegionChangeReplicator> replicator = new AtomicReference<>();
         RegionProvider regionProvider = new RegionProvider(config.workingDirectories, "amza/stores", regionsWALStorageProvider, amzaRegionWatcher,

@@ -33,6 +33,7 @@ public class NonIndexWAL implements WALStorage {
     private final OrderIdProvider orderIdProvider;
     private final RowMarshaller<byte[]> rowMarshaller;
     private final WALTx rowsTx;
+    private final AtomicLong updateCount = new AtomicLong();
 
     public NonIndexWAL(RegionName regionName,
         OrderIdProvider orderIdProvider,
@@ -50,7 +51,10 @@ public class NonIndexWAL implements WALStorage {
 
     @Override
     public void compactTombstone(long removeTombstonedOlderThanTimestampId) throws Exception {
-        rowsTx.compact(regionName, removeTombstonedOlderThanTimestampId, null);
+        if (updateCount.get() > 0) {
+            rowsTx.compact(regionName, removeTombstonedOlderThanTimestampId, null);
+            updateCount.set(0);
+        }
     }
 
     @Override
@@ -92,6 +96,7 @@ public class NonIndexWAL implements WALStorage {
                     return null;
                 }
             });
+            updateCount.addAndGet(apply.size());
             return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALValue>(), ArrayListMultimap.<WALKey, WALValue>create());
         }
 

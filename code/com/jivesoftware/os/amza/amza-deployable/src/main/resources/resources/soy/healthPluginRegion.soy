@@ -11,7 +11,7 @@
     <div id="center"><div id="fig">
             <script type="text/javascript+protovis">
 var amzaChatter = amza.arc.fetch().data();
-var vis = new pv.Panel().width(880).height(310).bottom(200); var arc = vis.add(pv.Layout.Arc).nodes(amzaChatter.nodes).links(amzaChatter.links).directed(true); arc.link.add(pv.Line); var dotSize = function(d) d.linkDegree + 4; var bygroup = function(d) d.group; var fillDark = function() this.fillStyle().darker(); arc.node.add(pv.Dot).size(dotSize).fillStyle(pv.Colors.category19().by(bygroup)).strokeStyle(fillDark);arc.label.add(pv.Label); vis.render(); vis.render();
+var vis = new pv.Panel().width(880).height(310).bottom(200); var arc = vis.add(pv.Layout.Arc).nodes(amzaChatter.nodes).links(amzaChatter.links); arc.link.add(pv.Line); var dotSize = function(d) d.linkDegree + 4; var bygroup = function(d) d.group; var fillDark = function() this.fillStyle().darker(); arc.node.add(pv.Dot).size(dotSize).fillStyle(pv.Colors.category19().by(bygroup)).strokeStyle(fillDark);arc.label.add(pv.Label); vis.render(); vis.render();
             </script>
         </div></div>
 

@@ -13,12 +13,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaRegionCompactor {
 
-    private final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     private ScheduledExecutorService scheduledThreadPool;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaStats amzaStats;

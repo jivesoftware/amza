@@ -40,12 +40,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 /**
- *
  * Amza pronounced (AH m z ah )
- *
+ * <p/>
  * Sanskrit word meaning partition / share.
- *
- *
  */
 public class AmzaService implements AmzaInstance {
 
@@ -174,6 +171,17 @@ public class AmzaService implements AmzaInstance {
 
     public RowChanges unwatch(RegionName regionName) throws Exception {
         return regionWatcher.unwatch(regionName);
+    }
+
+    public boolean replicate(RegionName regionName, WALScanable rowUpdates) throws Exception {
+        AmzaHostRing amzaRing = getAmzaRing();
+        List<RingHost> ringHosts = amzaRing.getRing(regionName.getRingName());
+        if (ringHosts.contains(amzaRing.getRingHost())) {
+            regionProvider.get(regionName).commit(rowUpdates);
+            return true;
+        } else {
+            return changeReplicator.replicateUpdatesToRingHosts(regionName, rowUpdates, false, ringHosts.toArray(new RingHost[ringHosts.size()]));
+        }
     }
 
     @Override

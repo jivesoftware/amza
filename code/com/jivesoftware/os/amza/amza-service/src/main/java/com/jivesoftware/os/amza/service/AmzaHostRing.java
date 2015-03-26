@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 
 public class AmzaHostRing implements AmzaRing {
@@ -59,7 +60,7 @@ public class AmzaHostRing implements AmzaRing {
         if (ring.size() < desiredRingSize) {
             throw new IllegalStateException("Current master ring is not large enough to support a ring of size:" + desiredRingSize);
         }
-        Collections.shuffle(ring);
+        Collections.shuffle(ring, new Random(ringName.hashCode()));
         for (int i = 0; i < desiredRingSize; i++) {
             addRingHost(ringName, ring.get(i));
         }

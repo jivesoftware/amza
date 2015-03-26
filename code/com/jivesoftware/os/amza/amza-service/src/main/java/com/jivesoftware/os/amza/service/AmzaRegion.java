@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.service;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -121,8 +122,8 @@ public class AmzaRegion {
         tx.commit();
     }
 
-    public void takeRowUpdatesSince(long transationId, WALScan rowUpdates) throws Exception {
-        regionStore.takeRowUpdatesSince(transationId, rowUpdates);
+    public void takeRowUpdatesSince(long transationId, RowStream rowStream) throws Exception {
+        regionStore.takeRowUpdatesSince(transationId, rowStream);
     }
 
     //  Use for testing

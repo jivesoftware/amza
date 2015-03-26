@@ -43,7 +43,7 @@ public class RowsChanged implements WALScanable {
         return regionName;
     }
 
-    public long getOldestApply() {
+    public long getOldestRowTxId() {
         return oldestApply;
     }
 
@@ -97,4 +97,15 @@ public class RowsChanged implements WALScanable {
             }
         }
     }
+
+    @Override
+    public String toString() {
+        return "RowsChanged{"
+            + "regionName=" + regionName
+            + ", oldestApply=" + oldestApply
+            + ", apply=" + apply
+            + ", remove=" + remove
+            + ", clobber=" + clobber + '}';
+    }
+
 }

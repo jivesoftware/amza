@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -24,7 +23,7 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class MemoryWALIndex implements WALIndex, Serializable {
+public class MemoryWALIndex implements WALIndex {
 
     private final NavigableMap<WALKey, WALValue> index;
 
@@ -134,4 +133,8 @@ public class MemoryWALIndex implements WALIndex, Serializable {
 
     }
 
+    @Override
+    public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
+
+    }
 }

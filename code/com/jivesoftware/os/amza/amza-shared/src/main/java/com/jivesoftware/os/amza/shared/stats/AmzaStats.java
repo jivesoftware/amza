@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.stats;
+package com.jivesoftware.os.amza.shared.stats;
 
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -45,14 +45,18 @@ public class AmzaStats {
         public final AtomicLong getsLag = new AtomicLong();
         public final AtomicLong scans = new AtomicLong();
         public final AtomicLong scansLag = new AtomicLong();
-        public final AtomicLong takeUpdates = new AtomicLong();
-        public final AtomicLong takeUpdatesLag = new AtomicLong();
+        public final AtomicLong takes = new AtomicLong();
+        public final AtomicLong takesLag = new AtomicLong();
+        public final AtomicLong takeApplies = new AtomicLong();
+        public final AtomicLong takeAppliesLag = new AtomicLong();
         public final AtomicLong replicates = new AtomicLong();
         public final AtomicLong replicatesLag = new AtomicLong();
-        public final AtomicLong applies = new AtomicLong();
-        public final AtomicLong appliesLag = new AtomicLong();
         public final AtomicLong received = new AtomicLong();
         public final AtomicLong receivedLag = new AtomicLong();
+        public final AtomicLong receivedApplies = new AtomicLong();
+        public final AtomicLong receivedAppliesLag = new AtomicLong();
+        public final AtomicLong directApplies = new AtomicLong();
+        public final AtomicLong directAppliesLag = new AtomicLong();
     }
 
     public void took(RingHost host) {
@@ -124,36 +128,46 @@ public class AmzaStats {
         return grandTotals;
     }
 
-    public void took(RingHost from, RowsChanged changed) {
-        grandTotals.takeUpdates.addAndGet(changed.getApply().size());
-        Totals totals = regionTotals(changed.getRegionName());
-        totals.takeUpdates.addAndGet(changed.getApply().size());
-        totals.takeUpdatesLag.set(lag(changed));
-        logChanges("Took", changed);
+    public void took(RingHost from, RegionName regionName, int count, long smallestTxId) {
+        grandTotals.takes.addAndGet(count);
+        Totals totals = regionTotals(regionName);
+        totals.takes.addAndGet(count);
+        totals.takesLag.set(lag(smallestTxId));
     }
 
-    public void replicated(RingHost to, RowsChanged changed) {
-        grandTotals.replicates.addAndGet(changed.getApply().size());
-        Totals totals = regionTotals(changed.getRegionName());
-        totals.replicates.addAndGet(changed.getApply().size());
-        totals.replicatesLag.set(lag(changed));
-        logChanges("Replicated", changed);
+    public void tookApplied(RingHost from, RegionName regionName, int count, long smallestTxId) {
+        grandTotals.takeApplies.addAndGet(count);
+        Totals totals = regionTotals(regionName);
+        totals.takeApplies.addAndGet(count);
+        totals.takeAppliesLag.set(lag(smallestTxId));
     }
 
-    public void applied(RowsChanged changed) {
-        grandTotals.applies.addAndGet(changed.getApply().size());
-        Totals totals = regionTotals(changed.getRegionName());
-        totals.applies.addAndGet(changed.getApply().size());
-        totals.appliesLag.set(lag(changed));
-        logChanges("Applied", changed);
+    public void direct(RegionName regionName, int count, long smallestTxId) {
+        grandTotals.directApplies.addAndGet(count);
+        Totals totals = regionTotals(regionName);
+        totals.directApplies.addAndGet(count);
+        totals.directAppliesLag.set(lag(smallestTxId));
     }
 
-    public void received(RowsChanged changed) {
-        grandTotals.received.addAndGet(changed.getApply().size());
-        Totals totals = regionTotals(changed.getRegionName());
-        totals.received.addAndGet(changed.getApply().size());
-        totals.receivedLag.set(lag(changed));
-        logChanges("Received", changed);
+    public void replicated(RingHost to, RegionName regionName, int count, long smallestTxId) {
+        grandTotals.replicates.addAndGet(count);
+        Totals totals = regionTotals(regionName);
+        totals.replicates.addAndGet(count);
+        totals.replicatesLag.set(lag(smallestTxId));
+    }
+
+    public void received(RegionName regionName, int count, long smallestTxId) {
+        grandTotals.received.addAndGet(count);
+        Totals totals = regionTotals(regionName);
+        totals.received.addAndGet(count);
+        totals.receivedLag.set(lag(smallestTxId));
+    }
+
+    public void receivedApplied(RegionName regionName, int count, long smallestTxId) {
+        grandTotals.receivedApplies.addAndGet(count);
+        Totals totals = regionTotals(regionName);
+        totals.receivedApplies.addAndGet(count);
+        totals.receivedAppliesLag.set(lag(smallestTxId));
     }
 
     private Totals regionTotals(RegionName regionName) {
@@ -182,9 +196,12 @@ public class AmzaStats {
     }
 
     long lag(RowsChanged changed) {
-        long oldest = changed.getOldestApply();
+        return lag(changed.getOldestRowTxId());
+    }
+
+    long lag(long oldest) {
         if (oldest != Long.MAX_VALUE) {
-            long[] unpack = snowflakeIdPacker.unpack(changed.getOldestApply());
+            long[] unpack = snowflakeIdPacker.unpack(oldest);
             long lag = jiveEpochTimestampProvider.getApproximateTimestamp(System.currentTimeMillis()) - unpack[0];
             return lag;
         }

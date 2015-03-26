@@ -44,9 +44,9 @@ public class RowRegionNGTest {
                 return new MemoryWALIndex();
             }
         };
-        RegionName regionName = new RegionName("ring", "booya", null, null);
+        RegionName regionName = new RegionName(false, "ring", "booya");
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, 100);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider);
 
         final OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, new WALReplicator() {
@@ -54,7 +54,7 @@ public class RowRegionNGTest {
             @Override
             public void replicate(RowsChanged rowsChanged) throws Exception {
             }
-        }, 1000);
+        }, 1000, 1000);
         indexedWAL.load();
 
         final Random r = new Random();
@@ -136,9 +136,9 @@ public class RowRegionNGTest {
                 return new MemoryWALIndex();
             }
         };
-        RegionName regionName = new RegionName("ring", "booya", null, null);
+        RegionName regionName = new RegionName(false, "ring", "booya");
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, 100);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, new WALReplicator() {
@@ -146,7 +146,7 @@ public class RowRegionNGTest {
             @Override
             public void replicate(RowsChanged rowsChanged) throws Exception {
             }
-        }, 1000);
+        }, 1000, 1000);
         indexedWAL.load();
         WALValue value = indexedWAL.get(rk(1));
         Assert.assertNull(value);

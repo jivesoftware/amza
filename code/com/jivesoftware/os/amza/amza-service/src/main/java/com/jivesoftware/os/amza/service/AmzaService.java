@@ -24,10 +24,11 @@ import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -47,6 +48,7 @@ import java.util.Map.Entry;
 public class AmzaService implements AmzaInstance {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaHostRing amzaRing;
     private final AmzaRegionChangeReceiver changeReceiver;
@@ -55,7 +57,6 @@ public class AmzaService implements AmzaInstance {
     private final AmzaRegionCompactor regionCompactor;
     private final AmzaRegionWatcher regionWatcher;
     private final RegionProvider regionProvider;
-    private final RegionName regionIndexKey = new RegionName("MASTER", "REGION_INDEX", null, null);
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
         AmzaHostRing amzaRing,
@@ -88,7 +89,7 @@ public class AmzaService implements AmzaInstance {
         changeTaker.start();
         changeReplicator.start();
         regionCompactor.start();
-        changeTaker.takeChanges(); // HACK
+
     }
 
     synchronized public void stop() throws Exception {
@@ -103,33 +104,19 @@ public class AmzaService implements AmzaInstance {
         return orderIdProvider.getApproximateId(timestampId, wallClockMillis);
     }
 
-    private boolean createRegion(RegionName regionName) throws Exception {
-        byte[] rawRegionName = regionName.toBytes();
-
-        RegionStore regionNameIndex = regionProvider.get(regionIndexKey);
-        WALValue timestamptedRegionKey = regionNameIndex.get(new WALKey(rawRegionName));
-        if (timestamptedRegionKey == null) {
-            RowStoreUpdates tx = regionNameIndex.startTransaction(orderIdProvider.nextId());
-            tx.add(new WALKey(rawRegionName), rawRegionName);
-            tx.commit();
-            return true;
-        } else {
-            return !timestamptedRegionKey.getTombstoned();
-        }
+    public AmzaRegion createRegionIfAbsent(RegionName regionName, RegionProperties regionProperties) throws Exception {
+        RegionStore regionStore = regionProvider.createRegionStoreIfAbsent(regionName, regionProperties);
+        return new AmzaRegion(orderIdProvider, regionName, regionStore);
     }
 
     public AmzaRegion getRegion(RegionName regionName) throws Exception {
         byte[] rawRegionName = regionName.toBytes();
-        RegionStore regionStoreIndex = regionProvider.get(regionIndexKey);
-        WALValue timestampedKeyValueStoreName = regionStoreIndex.get(new WALKey(rawRegionName));
-        while (timestampedKeyValueStoreName == null) {
-            createRegion(regionName);
-            timestampedKeyValueStoreName = regionStoreIndex.get(new WALKey(rawRegionName));
-        }
-        if (timestampedKeyValueStoreName.getTombstoned()) {
+        RegionStore regionIndexStore = regionProvider.getRegionIndexStore();
+        WALValue timestampedKeyValueStoreName = regionIndexStore.get(new WALKey(rawRegionName));
+        if (timestampedKeyValueStoreName == null || timestampedKeyValueStoreName.getTombstoned()) {
             return null;
         } else {
-            RegionStore regionStore = regionProvider.get(regionName);
+            RegionStore regionStore = regionProvider.getRegionStore(regionName);
             return new AmzaRegion(orderIdProvider, regionName, regionStore);
         }
     }
@@ -143,6 +130,10 @@ public class AmzaService implements AmzaInstance {
         return regionNames;
     }
 
+    public RegionProperties getRegionProperties(RegionName regionName) throws Exception {
+        return regionProvider.getRegionProperties(regionName);
+    }
+
     public Map<RegionName, AmzaRegion> getRegions() throws Exception {
         Map<RegionName, AmzaRegion> regions = new HashMap<>();
         for (Entry<RegionName, RegionStore> regionStore : regionProvider.getAll()) {
@@ -154,8 +145,8 @@ public class AmzaService implements AmzaInstance {
     @Override
     public void destroyRegion(RegionName regionName) throws Exception {
         byte[] rawRegionName = regionName.toBytes();
-        RegionStore regionStore = regionProvider.get(regionIndexKey);
-        RowStoreUpdates tx = regionStore.startTransaction(orderIdProvider.nextId());
+        RegionStore regionIndexStore = regionProvider.getRegionIndexStore();
+        RowStoreUpdates tx = regionIndexStore.startTransaction(orderIdProvider.nextId());
         tx.remove(new WALKey(rawRegionName));
         tx.commit();
     }
@@ -174,19 +165,27 @@ public class AmzaService implements AmzaInstance {
     }
 
     public boolean replicate(RegionName regionName, WALScanable rowUpdates) throws Exception {
-        AmzaHostRing amzaRing = getAmzaRing();
-        List<RingHost> ringHosts = amzaRing.getRing(regionName.getRingName());
-        if (ringHosts.contains(amzaRing.getRingHost())) {
-            regionProvider.get(regionName).commit(rowUpdates);
+        AmzaHostRing amzaHostRing = getAmzaRing();
+        List<RingHost> ringHosts = amzaHostRing.getRing(regionName.getRingName());
+        if (ringHosts.contains(amzaHostRing.getRingHost())) {
+            regionProvider.getRegionStore(regionName).commit(rowUpdates);
             return true;
         } else {
-            return changeReplicator.replicateUpdatesToRingHosts(regionName, rowUpdates, false, ringHosts.toArray(new RingHost[ringHosts.size()]));
+            RegionProperties regionProperties = regionProvider.getRegionProperties(regionName);
+            return changeReplicator.replicateUpdatesToRingHosts(regionName,
+                rowUpdates,
+                false,
+                ringHosts.toArray(new RingHost[ringHosts.size()]),
+                regionProperties.replicationFactor);
         }
     }
 
     @Override
-    public void takeRowUpdates(RegionName regionName, long transationId, WALScan rowUpdates) throws Exception {
-        getRegion(regionName).takeRowUpdatesSince(transationId, rowUpdates);
+    public void takeRowUpdates(RegionName regionName, long transationId, RowStream rowStream) throws Exception {
+        AmzaRegion region = getRegion(regionName);
+        if (region != null) {
+            region.takeRowUpdatesSince(transationId, rowStream);
+        }
     }
 
     //------ Used for debugging ------
@@ -222,4 +221,5 @@ public class AmzaService implements AmzaInstance {
 //            });
         }
     }
+
 }

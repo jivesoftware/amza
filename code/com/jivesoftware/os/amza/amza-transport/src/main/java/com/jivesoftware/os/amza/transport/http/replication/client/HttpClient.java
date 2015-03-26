@@ -19,14 +19,10 @@ import java.util.Map;
 
 public interface HttpClient {
 
-    /**
-     * @param path everything but the leading "http/s://host:port"
-     */
     HttpResponse get(String path, Map<String, String> headers, int timeoutMillis) throws HttpClientException;
 
-    /**
-     * @param path everything but the leading "http/s://host:port"
-     */
     HttpResponse postJson(String path, String postJsonBody, Map<String, String> headers, int timeoutMillis) throws HttpClientException;
+
+    HttpStreamResponse streamingPost(String path, String postJsonBody, Map<String, String> headers) throws HttpClientException;
 
 }

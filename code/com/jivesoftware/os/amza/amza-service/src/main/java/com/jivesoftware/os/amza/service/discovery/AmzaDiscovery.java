@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.discovery;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaHostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -42,7 +43,7 @@ public class AmzaDiscovery {
     private final String clusterName;
     private final InetAddress multicastGroup;
     private final int multicastPort;
-    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
+    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2, new ThreadFactoryBuilder().setNameFormat("discovery-%d").build());
 
     public AmzaDiscovery(AmzaHostRing amzaRing,
         RingHost ringHost,

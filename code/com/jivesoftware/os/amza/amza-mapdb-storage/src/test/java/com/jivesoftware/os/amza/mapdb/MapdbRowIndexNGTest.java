@@ -19,9 +19,9 @@ import org.testng.annotations.Test;
 public class MapdbRowIndexNGTest {
 
     @Test
-    public void testPut() throws Exception  {
+    public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
-        RegionName regionName = new RegionName("r1", "t1", null, null);
+        RegionName regionName = new RegionName(false, "r1", "t1");
         MapdbWALIndex index = new MapdbWALIndex(dir0, regionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(1)), new WALValue(FilerIO.longBytes(1), System.currentTimeMillis(), false))));
@@ -52,7 +52,7 @@ public class MapdbRowIndexNGTest {
     public void testCompact() throws Exception {
 
         File dir0 = Files.createTempDir();
-        RegionName regionName = new RegionName("r1", "t1", null, null);
+        RegionName regionName = new RegionName(false, "r1", "t1");
         MapdbWALIndex index = new MapdbWALIndex(dir0, regionName);
 
         for (int i = 0; i < 50; i++) {

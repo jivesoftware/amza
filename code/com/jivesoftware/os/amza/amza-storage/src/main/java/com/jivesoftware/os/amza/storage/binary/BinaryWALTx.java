@@ -4,13 +4,14 @@ import com.google.common.base.Optional;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndex.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -21,10 +22,8 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -42,7 +41,6 @@ public class BinaryWALTx implements WALTx {
     private final String name;
     private final RowMarshaller<byte[]> rowMarshaller;
     private final WALIndexProvider rowsIndexProvider;
-    private final int backRepairIndexForNDistinctTxIds;
     private final AtomicLong lastEndOfLastRow = new AtomicLong(-1);
 
     private final RowIOProvider ioProvider;
@@ -52,15 +50,12 @@ public class BinaryWALTx implements WALTx {
         String name,
         RowIOProvider ioProvider,
         RowMarshaller<byte[]> rowMarshaller,
-        WALIndexProvider walIndexProvider,
-        int backRepairIndexForNDistinctTxIds) throws Exception {
+        WALIndexProvider walIndexProvider) throws Exception {
         this.dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
         this.name = name;
         this.ioProvider = ioProvider;
         this.rowMarshaller = rowMarshaller;
         this.rowsIndexProvider = walIndexProvider;
-        this.backRepairIndexForNDistinctTxIds = backRepairIndexForNDistinctTxIds;
-
         this.io = ioProvider.create(dir, name);
     }
 
@@ -91,11 +86,11 @@ public class BinaryWALTx implements WALTx {
             final WALIndex walIndex = rowsIndexProvider.createIndex(regionName);
             if (walIndex.isEmpty()) {
                 LOG.info(
-                    "Loading rowIndex:" + walIndex.getClass().getSimpleName()
+                    "Rebuilding rowIndex:" + walIndex.getClass().getSimpleName()
                     + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
-                io.scan(0, new WALReader.Stream() {
+                io.scan(0, new RowStream() {
                     @Override
-                    public boolean row(final long rowPointer, byte rowType, byte[] row) throws Exception {
+                    public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
                         if (rowType > 0) {
                             RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
                             WALKey key = walr.getKey();
@@ -108,35 +103,41 @@ public class BinaryWALTx implements WALTx {
                                 walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
                                     key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
                             }
-                            return true;
                         }
                         return true;
                     }
                 });
-                LOG.info("Loaded rowIndex:" + walIndex.getClass().getSimpleName()
+                LOG.info("Rebuild rowIndex:" + walIndex.getClass().getSimpleName()
                     + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                walIndex.commit();
             } else {
                 LOG.info("Checking rowIndex:" + walIndex.getClass().getSimpleName()
                     + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
-                final Set<Long> txIds = new HashSet<>();
-                io.reverseScan(new WALReader.Stream() {
-
+                io.reverseScan(new RowStream() {
+                    long commitedUpToTxId = Long.MIN_VALUE;
                     @Override
-                    public boolean row(long rowPointer, byte rowType, byte[] row) throws Exception {
+                    public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
                         if (rowType > 0) {
                             RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
                             WALKey key = walr.getKey();
                             WALValue value = walr.getValue();
                             walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                                key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
-                            txIds.add(walr.getTransactionId());
-                            return txIds.size() < backRepairIndexForNDistinctTxIds;
+                                key, new WALValue(UIO.longBytes(rowFP), value.getTimestampId(), value.getTombstoned()))));
                         }
-                        return true;
+                        if (rowType == WALWriter.SYSTEM_VERSION_1 && commitedUpToTxId == Long.MIN_VALUE) {
+                            long[] key_CommitedUpToTxId = UIO.bytesLongs(row);
+                            if (key_CommitedUpToTxId[0] == WALWriter.COMMIT_MARKER) {
+                                commitedUpToTxId = key_CommitedUpToTxId[1];
+                            }
+                            return true;
+                        } else {
+                            return rowTxId >= commitedUpToTxId;
+                        }
                     }
                 });
                 LOG.info("Checked rowIndex:" + walIndex.getClass().getSimpleName()
                     + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                walIndex.commit();
             }
             return walIndex;
         } finally {
@@ -246,14 +247,15 @@ public class BinaryWALTx implements WALTx {
 
         final List<WALKey> rowKeys = new ArrayList<>();
         final List<WALValue> rowValues = new ArrayList<>();
+        final List<Long> rowTxIds = new ArrayList<>();
         final List<Byte> rawRowTypes = new ArrayList<>();
         final List<byte[]> rawRows = new ArrayList<>();
         final AtomicLong batchSizeInBytes = new AtomicLong();
 
-        io.scan(startAtRow, new WALReader.Stream() {
+        io.scan(startAtRow, new RowStream() {
             @Override
-            public boolean row(final long rowPointer, byte rowType, final byte[] row) throws Exception {
-                if (rowPointer >= endOfLastRow) {
+            public boolean row(final long rowFP, long rowTxId, byte rowType, final byte[] row) throws Exception {
+                if (rowFP >= endOfLastRow) {
                     return false;
                 }
                 if (rowType < 0) { // TODO expose to caller which rowtypes they want to preserve. For now we discard all system rowtypes and keep all others.
@@ -271,6 +273,7 @@ public class BinaryWALTx implements WALTx {
                     } else {
                         rowKeys.add(key);
                         rowValues.add(value);
+                        rowTxIds.add(rowTxId);
                         rawRowTypes.add(rowType);
                         rawRows.add(row);
                         batchSizeInBytes.addAndGet(row.length);
@@ -281,26 +284,27 @@ public class BinaryWALTx implements WALTx {
                 }
                 long batchingSize = 1024 * 1024 * 10; // TODO expose to config
                 if (batchSizeInBytes.get() > batchingSize) {
-                    flush(compactionWALIndex, compactionIO, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
+                    flush(compactionWALIndex, compactionIO, rowTxIds, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
                 }
                 return true;
             }
 
         });
         if (!rawRows.isEmpty()) {
-            flush(compactionWALIndex, compactionIO, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
+            flush(compactionWALIndex, compactionIO, rowTxIds, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
         }
     }
 
     private void flush(CompactionWALIndex compactionWALIndex,
         RowIO compactionIO,
+        List<Long> rowTxIds,
         List<Byte> rawRowTypes,
         List<byte[]> rawRows,
         List<WALKey> rowKeys,
         List<WALValue> rowValues,
         AtomicLong batchSizeInBytes) throws Exception {
 
-        List<byte[]> rowPointers = compactionIO.write(rawRowTypes, rawRows, true);
+        List<byte[]> rowPointers = compactionIO.write(rowTxIds, rawRowTypes, rawRows, true);
         Collection<Map.Entry<WALKey, WALValue>> entries = new ArrayList<>(rowKeys.size());
         for (int i = 0; i < rowKeys.size(); i++) {
             WALValue rowValue = rowValues.get(i);

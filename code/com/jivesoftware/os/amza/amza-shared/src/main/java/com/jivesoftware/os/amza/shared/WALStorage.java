@@ -32,7 +32,9 @@ public interface WALStorage extends WALScanable {
 
     List<Boolean> containsKey(List<WALKey> keys) throws Exception;
 
-    void takeRowUpdatesSince(final long transactionId, WALScan rowUpdates) throws Exception;
+    void takeRowUpdatesSince(final long transactionId, RowStream rowUpdates) throws Exception;
 
     void compactTombstone(long removeTombstonedOlderThanNMillis) throws Exception;
+
+    void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception;
 }

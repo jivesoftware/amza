@@ -40,14 +40,14 @@ public class AmzaHostRing implements AmzaRing {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final RingHost ringHost;
-    private final RegionProvider ringStoreProvider;
+    private final RegionProvider regionProvider;
     private final TimestampedOrderIdProvider orderIdProvider;
 
     public AmzaHostRing(RingHost ringHost,
-        RegionProvider ringStoreProvider,
+        RegionProvider regionProvider,
         TimestampedOrderIdProvider orderIdProvider) {
         this.ringHost = ringHost;
-        this.ringStoreProvider = ringStoreProvider;
+        this.regionProvider = regionProvider;
         this.orderIdProvider = orderIdProvider;
     }
 
@@ -72,8 +72,7 @@ public class AmzaHostRing implements AmzaRing {
 
     @Override
     public List<RingHost> getRing(String ringName) throws Exception {
-        RegionName ringIndexKey = createRingName(ringName);
-        RegionStore ringIndex = ringStoreProvider.get(ringIndexKey);
+        RegionStore ringIndex = regionProvider.getRegionStore(createRingName(ringName));
         if (ringIndex == null) {
             LOG.warn("No ring defined for ringName:" + ringName);
             return new ArrayList<>();
@@ -100,8 +99,7 @@ public class AmzaHostRing implements AmzaRing {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
-        RegionName ringIndexKey = createRingName(ringName);
-        RegionStore ringIndex = ringStoreProvider.get(ringIndexKey);
+        RegionStore ringIndex = regionProvider.getRegionStore(createRingName(ringName));
         RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
         byte[] rawRingHost = ringHost.toBytes();
         tx.add(new WALKey(rawRingHost), new byte[0]);
@@ -116,8 +114,7 @@ public class AmzaHostRing implements AmzaRing {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
-        RegionName ringIndexKey = createRingName(ringName);
-        RegionStore ringIndex = ringStoreProvider.get(ringIndexKey);
+        RegionStore ringIndex = regionProvider.getRegionStore(createRingName(ringName));
         RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
         byte[] rawRingHost = ringHost.toBytes();
         tx.remove(new WALKey(rawRingHost));
@@ -126,6 +123,6 @@ public class AmzaHostRing implements AmzaRing {
 
     private RegionName createRingName(String ringName) {
         ringName = ringName.toUpperCase();
-        return new RegionName("MASTER", "RING_INDEX_" + ringName, null, null);
+        return new RegionName(true, "MASTER", "RING_INDEX_" + ringName);
     }
 }

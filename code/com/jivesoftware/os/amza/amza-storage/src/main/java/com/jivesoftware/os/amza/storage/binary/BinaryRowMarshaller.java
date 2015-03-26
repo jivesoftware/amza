@@ -24,9 +24,8 @@ import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
 public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
 
     @Override
-    public byte[] toRow(long transactionId, WALKey k, WALValue v) throws Exception {
+    public byte[] toRow(WALKey k, WALValue v) throws Exception {
         MemoryFiler filer = new MemoryFiler();
-        UIO.writeLong(filer, transactionId, "transactionId");
         UIO.writeByteArray(filer, v.getValue(), "value");
         UIO.writeLong(filer, v.getTimestampId(), "timestamp");
         UIO.writeBoolean(filer, v.getTombstoned(), "tombstone");
@@ -38,17 +37,11 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
     @Override
     public WALRow fromRow(byte[] row) throws Exception {
         MemoryFiler filer = new MemoryFiler(row);
-        final long transactionId = UIO.readLong(filer, "transactionId");
         final byte[] value = UIO.readByteArray(filer, "value");
         final long timestamp = UIO.readLong(filer, "timestamp");
         final boolean tombstone = UIO.readBoolean(filer, "tombstone");
         final byte[] key = UIO.readByteArray(filer, "key");
         return new WALRow() {
-
-            @Override
-            public long getTransactionId() {
-                return transactionId;
-            }
 
             @Override
             public WALKey getKey() {

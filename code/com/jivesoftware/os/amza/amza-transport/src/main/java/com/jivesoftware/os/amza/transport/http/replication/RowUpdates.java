@@ -18,22 +18,27 @@ package com.jivesoftware.os.amza.transport.http.replication;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
 import java.util.List;
 
 public class RowUpdates {
 
     private final long highestTransactionId;
     private final RegionName regionName;
-    private final List<byte[]> changes;
+    private final List<Long> rowTxIds;
+    private final List<byte[]> rows;
 
     @JsonCreator
     public RowUpdates(
-            @JsonProperty("highestTransactionId") long highestTransactionId,
-            @JsonProperty("tableName") RegionName regionName,
-            @JsonProperty("changes") List<byte[]> changes) {
+        @JsonProperty("highestTransactionId") long highestTransactionId,
+        @JsonProperty("tableName") RegionName regionName,
+        @JsonProperty("rowTxIds") List<Long> rowTxIds,
+        @JsonProperty("rows") List<byte[]> rows) {
         this.highestTransactionId = highestTransactionId;
         this.regionName = regionName;
-        this.changes = changes;
+        this.rowTxIds = rowTxIds;
+        this.rows = rows;
     }
 
     public long getHighestTransactionId() {
@@ -44,12 +49,29 @@ public class RowUpdates {
         return regionName;
     }
 
-    public List<byte[]> getChanges() {
-        return changes;
+    public List<Long> getRowTxIds() {
+        return rowTxIds;
+    }
+
+    public List<byte[]> getRows() {
+        return rows;
+    }
+
+    public void stream(RowMarshaller<byte[]> marshaller, WALScan scan) throws Exception {
+        for (int i = 0; i < rowTxIds.size(); i++) {
+            RowMarshaller.WALRow row = marshaller.fromRow(rows.get(i));
+            if (!scan.row(rowTxIds.get(i), row.getKey(), row.getValue())) {
+                break;
+            }
+        }
     }
 
     @Override
     public String toString() {
-        return "RowUpdates{" + "highestTransactionId=" + highestTransactionId + ", regionName=" + regionName + ", changes=" + changes + '}';
+        return "RowUpdates{"
+            + "highestTransactionId=" + highestTransactionId
+            + ", regionName=" + regionName
+            + ", highestTransactionId=" + highestTransactionId
+            + ", changes=" + rows + '}';
     }
 }

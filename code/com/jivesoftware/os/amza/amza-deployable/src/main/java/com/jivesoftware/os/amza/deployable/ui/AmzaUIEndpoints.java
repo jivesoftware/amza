@@ -18,10 +18,10 @@ package com.jivesoftware.os.amza.deployable.ui;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyService;
 import com.jivesoftware.os.amza.deployable.ui.utils.MinMaxLong;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
@@ -101,12 +101,34 @@ public class AmzaUIEndpoints {
                 for (RingHost r2 : ring) {
                     if (host.equals(r)) {
                         if (!host.equals(r2)) {
-                            weights.add((int) (amzaStats.getTotalTakes(r2) + amzaStats.getTotalOffered(r2)));
+                            weights.add((int) (amzaStats.getTotalTakes(r2)));
                         } else {
                             weights.add(0);
                         }
                     } else if (host.equals(r2)) {
-                        weights.add((int) (amzaStats.getTotalTakes(r) + amzaStats.getTotalOffered(r)));
+                        weights.add((int) (amzaStats.getTotalTakes(r)));
+                    } else {
+                        weights.add(0);
+                    }
+                }
+                for (RingHost r2 : ring) {
+                    weights.add(0);
+                }
+                matrix.add(weights);
+
+                weights = new ArrayList();
+                for (RingHost r2 : ring) {
+                    weights.add(0);
+                }
+                for (RingHost r2 : ring) {
+                    if (host.equals(r)) {
+                        if (!host.equals(r2)) {
+                            weights.add((int) (amzaStats.getTotalOffered(r2)));
+                        } else {
+                            weights.add(0);
+                        }
+                    } else if (host.equals(r2)) {
+                        weights.add((int) (amzaStats.getTotalOffered(r)));
                     } else {
                         weights.add(0);
                     }
@@ -156,24 +178,37 @@ public class AmzaUIEndpoints {
             }
 
             MinMaxLong range = new MinMaxLong();
+            range.value(0);
             String sourceName = hostAsString(host);
+            long[] offered = new long[ring.size()];
+            long[] takes = new long[ring.size()];
+
+            i = 0;
             for (RingHost r : ring) {
                 long totalOffered = amzaStats.getTotalOffered(r);
+                offered[i] = totalOffered;
                 if (totalOffered > 0) {
                     range.value(totalOffered);
                 }
 
                 long totalTakes = amzaStats.getTotalTakes(r);
+                takes[i] = totalTakes;
                 if (totalTakes > 0) {
                     range.value(totalOffered);
                 }
+                long total = totalOffered + totalTakes;
+                if (total > 0) {
+                    range.value(total);
+                }
+                i++;
             }
 
             List<Map<String, Integer>> links = new ArrayList();
             Integer root = index.get(sourceName);
+            i = 0;
             for (RingHost r : ring) {
-                long totalOffered = amzaStats.getTotalOffered(r);
-                long totalTakes = amzaStats.getTotalTakes(r);
+                long totalOffered = offered[i];
+                long totalTakes = takes[i];
                 long total = totalOffered + totalTakes; // TODO use applied from replicated vs took
                 if (totalOffered > 0) {
                     Integer source = index.get(sourceName + "-replicate");
@@ -189,7 +224,7 @@ public class AmzaUIEndpoints {
                     addLink(source, target, range, totalTakes, links);
                     addLink(root, target, range, total, links);
                 }
-
+                i++;
             }
             arcData.put("nodes", nodes);
             arcData.put("links", links);
@@ -201,11 +236,11 @@ public class AmzaUIEndpoints {
         }
     }
 
-    private void addLink(Integer source, Integer target, MinMaxLong range, long totalTakes, List<Map<String, Integer>> links) {
+    private void addLink(Integer source, Integer target, MinMaxLong range, long value, List<Map<String, Integer>> links) {
         Map<String, Integer> map = new HashMap<>();
         map.put("source", source);
         map.put("target", target);
-        map.put("value", (int) (range.zeroToOne(totalTakes) * 10));
+        map.put("value", 1 + (int) (range.zeroToOne(value) * 10));
         links.add(map);
     }
 

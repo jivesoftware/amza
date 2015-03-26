@@ -25,7 +25,7 @@ public class AmzaSetStress {
 
     public static void main(String[] args) throws URIException, IOException {
 
-        args = new String[]{"localhost", "1175", "1", "100000"};
+        args = new String[]{"localhost", "1175", "1", "10000"};
 
         final String hostName = args[0];
         final int port = Integer.parseInt(args[1]);
@@ -35,7 +35,7 @@ public class AmzaSetStress {
 
         String regionName = "lorem";
 
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 2; i++) {
             final String rname = regionName + i;
             MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
             final org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);

@@ -15,20 +15,28 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
+import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 
 public class RegionStore implements WALScanable {
 
+    private final AmzaStats amzaStats;
+    private final RegionName regionName;
     private final WALStorage walStorage;
     private final RowChanges rowChanges;
 
-    public RegionStore(WALStorage walStorage, RowChanges rowChanges) {
+    public RegionStore(AmzaStats amzaStats, RegionName regionName, WALStorage walStorage, RowChanges rowChanges) {
+        this.amzaStats = amzaStats;
+        this.regionName = regionName;
         this.walStorage = walStorage;
         this.rowChanges = rowChanges;
     }
@@ -59,12 +67,12 @@ public class RegionStore implements WALScanable {
         return walStorage.containsKey(key);
     }
 
-    public void takeRowUpdatesSince(long transactionId, WALScan rowUpdates) throws Exception {
-        walStorage.takeRowUpdatesSince(transactionId, rowUpdates);
+    public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
+        walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
     public RowStoreUpdates startTransaction(long timestamp) throws Exception {
-        return new RowStoreUpdates(this, new RowsStorageUpdates(walStorage, timestamp));
+        return new RowStoreUpdates(amzaStats, regionName, this, new RowsStorageUpdates(walStorage, timestamp));
     }
 
     public RowsChanged commit(WALScanable rowUpdates) throws Exception {
@@ -75,4 +83,7 @@ public class RegionStore implements WALScanable {
         return updateMap;
     }
 
+    public void updatedStorageDescriptor(WALStorageDescriptor storageDescriptor) throws Exception {
+        walStorage.updatedStorageDescriptor(storageDescriptor);
+    }
 }

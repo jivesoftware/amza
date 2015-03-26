@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.stats;
+package com.jivesoftware.os.amza.shared.stats;
 
 class CircularLongArray {
 

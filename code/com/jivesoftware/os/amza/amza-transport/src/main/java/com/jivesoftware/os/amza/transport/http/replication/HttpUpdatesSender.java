@@ -23,6 +23,7 @@ import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfig;
@@ -36,31 +37,43 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.commons.lang.mutable.MutableLong;
 
 public class HttpUpdatesSender implements UpdatesSender {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private final AmzaStats amzaStats;
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
 
+    public HttpUpdatesSender(AmzaStats amzaStats) {
+        this.amzaStats = amzaStats;
+    }
+
     @Override
-    public void sendUpdates(RingHost ringHost, RegionName tableName, WALScanable changes) throws Exception {
+    public void sendUpdates(final RingHost ringHost, final RegionName regionName, WALScanable changes) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+        final List<Long> rowTxIds = new ArrayList<>();
         final List<byte[]> rows = new ArrayList<>();
+        final MutableLong smallestTx = new MutableLong(Long.MAX_VALUE);
         changes.rowScan(new WALScan() {
             @Override
-            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
-                // We make this copy because we don't know how the value is being stored. By calling value.getValue()
-                // we ensure that the value from the tableIndex is real vs a pointer.
-                WALValue copy = new WALValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
-                rows.add(rowMarshaller.toRow(orderId, key, copy));
+            public boolean row(long txId, WALKey key, WALValue value) throws Exception {
+                if (txId < smallestTx.longValue()) {
+                    smallestTx.setValue(txId);
+                }
+                rowTxIds.add(txId);
+                rows.add(rowMarshaller.toRow(key, value));
                 return true;
             }
         });
         if (!rows.isEmpty()) {
             LOG.debug("Pushing " + rows.size() + " changes to " + ringHost);
-            RowUpdates changeSet = new RowUpdates(-1, tableName, rows);
+            RowUpdates changeSet = new RowUpdates(-1, regionName, rowTxIds, rows);
             getRequestHelper(ringHost).executeRequest(changeSet, "/amza/changes/add", Boolean.class, false);
+            amzaStats.replicated(ringHost, regionName, rows.size(), smallestTx.longValue());
+        } else {
+            amzaStats.replicated(ringHost, regionName, 0, Long.MAX_VALUE);
         }
     }
 

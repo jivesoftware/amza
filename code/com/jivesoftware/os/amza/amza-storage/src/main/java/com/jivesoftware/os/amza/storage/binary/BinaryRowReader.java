@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALReader;
-import com.jivesoftware.os.amza.shared.WALReader.Stream;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.filer.Filer;
 import com.jivesoftware.os.amza.storage.filer.FilerChannel;
@@ -31,7 +31,7 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public void reverseScan(Stream stream) throws Exception {
+    public void reverseScan(RowStream stream) throws Exception {
         long seekTo;
         synchronized (parent.lock()) {
             seekTo = parent.length() - 4; // last length int
@@ -43,6 +43,7 @@ public class BinaryRowReader implements WALReader {
         while (true) {
             long rowFP;
             byte rowType;
+            long rowTxId;
             byte[] row;
             if (seekTo >= 0) {
                 filer.seek(seekTo);
@@ -55,7 +56,8 @@ public class BinaryRowReader implements WALReader {
 
                 int length = UIO.readInt(filer, "length");
                 rowType = (byte) filer.read();
-                row = new byte[length - 1];
+                rowTxId = UIO.readLong(filer, "txId");
+                row = new byte[length - (1 + 8)];
                 filer.read(row);
                 rowFP = seekTo;
                 seekTo -= 4;
@@ -63,14 +65,14 @@ public class BinaryRowReader implements WALReader {
                 break;
             }
 
-            if (!stream.row(rowFP, rowType, row)) {
+            if (!stream.row(rowFP, rowTxId, rowType, row)) {
                 return;
             }
         }
     }
 
     @Override
-    public void scan(long offset, Stream stream) throws Exception {
+    public void scan(long offset, RowStream stream) throws Exception {
         long fileLength = 0;
         while (fileLength < parent.length()) {
             synchronized (parent.lock()) {
@@ -79,6 +81,7 @@ public class BinaryRowReader implements WALReader {
             FilerChannel filer = parent.fileChannelFiler();
             while (true) {
                 long rowFP;
+                long rowTxId;
                 byte rowType;
                 byte[] row;
                 filer.seek(offset);
@@ -86,7 +89,8 @@ public class BinaryRowReader implements WALReader {
                     rowFP = offset;
                     int length = UIO.readInt(filer, "length");
                     rowType = (byte) filer.read();
-                    row = new byte[length - 1];
+                    rowTxId = UIO.readLong(filer, "txId");
+                    row = new byte[length - (1 + 8)];
                     if (length > 1) {
                         filer.read(row);
                     }
@@ -95,7 +99,7 @@ public class BinaryRowReader implements WALReader {
                 } else {
                     break;
                 }
-                if (!stream.row(rowFP, rowType, row)) {
+                if (!stream.row(rowFP, rowTxId, rowType, row)) {
                     return;
                 }
             }

@@ -17,11 +17,11 @@ package com.jivesoftware.os.amza.shared;
 
 public interface HighwaterMarks {
 
-    void clearRing(RingHost ringHost);
+    void clearRing(RingHost ringHost) throws Exception;
 
-    void set(RingHost ringHost, RegionName regionName, long highWatermark);
+    void set(RingHost ringHost, RegionName regionName, int updates, long highWatermark) throws Exception;
 
-    void clear(RingHost ringHost, RegionName regionName);
+    void clear(RingHost ringHost, RegionName regionName) throws Exception;
 
-    Long get(RingHost ringHost, RegionName regionName);
+    Long get(RingHost ringHost, RegionName regionName) throws Exception;
 }

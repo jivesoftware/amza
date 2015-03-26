@@ -31,15 +31,16 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
-    public List<byte[]> write(List<Byte> rowType, List<byte[]> rows, boolean append) throws Exception {
+    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows, boolean append) throws Exception {
         List<Long> offests = new ArrayList<>();
         MemoryFiler memoryFiler = new MemoryFiler();
         int i = 0;
         for (byte[] row : rows) {
             offests.add(memoryFiler.getFilePointer());
-            int length = row.length + 1;
+            int length = (1 + 8) + row.length;
             UIO.writeInt(memoryFiler, length, "length");
             memoryFiler.write(rowType.get(i));
+            UIO.writeLong(memoryFiler, rowTxIds.get(i), "txId");
             memoryFiler.write(row);
             UIO.writeInt(memoryFiler, length, "length");
             i++;

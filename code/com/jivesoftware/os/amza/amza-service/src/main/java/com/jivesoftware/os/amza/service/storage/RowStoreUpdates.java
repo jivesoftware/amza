@@ -15,18 +15,26 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 
 public class RowStoreUpdates {
 
+    private final AmzaStats amzaStats;
+    private final RegionName regionName;
     private final RegionStore regionStore;
     private final RowsStorageUpdates rowsStorageChangeSet;
     private int changedCount = 0;
 
-    RowStoreUpdates(RegionStore regionStore, RowsStorageUpdates rowsStorageChangeSet) {
+    public RowStoreUpdates(AmzaStats amzaStats, RegionName regionName, RegionStore regionStore, RowsStorageUpdates rowsStorageChangeSet) {
+        this.amzaStats = amzaStats;
+        this.regionName = regionName;
         this.regionStore = regionStore;
         this.rowsStorageChangeSet = rowsStorageChangeSet;
     }
+
 
     public WALKey add(WALKey key, byte[] value) throws Exception {
         if (rowsStorageChangeSet.put(key, value)) {
@@ -51,7 +59,8 @@ public class RowStoreUpdates {
 
     public void commit() throws Exception {
         if (changedCount > 0) {
-            regionStore.commit(rowsStorageChangeSet);
+            RowsChanged commit = regionStore.commit(rowsStorageChangeSet);
+            amzaStats.direct(regionName, changedCount, commit.getOldestRowTxId());
         }
     }
 }

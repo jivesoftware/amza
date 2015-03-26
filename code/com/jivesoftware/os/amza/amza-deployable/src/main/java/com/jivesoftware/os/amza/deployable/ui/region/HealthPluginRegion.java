@@ -6,16 +6,15 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyRenderer;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.service.stats.AmzaStats.Totals;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -111,22 +110,23 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
                 ringMaps.add(ImmutableMap.of("host", r.getHost(), "port", String.valueOf(r.getPort())));
             }
             map.put("ring", ringMaps);
-
-            map.put("minKey", name.getMinKeyInclusive() == null ? "" : Arrays.toString(name.getMinKeyInclusive().getKey()));
-            map.put("maxKey", name.getMaxKeyExclusive() == null ? "" : Arrays.toString(name.getMaxKeyExclusive().getKey()));
         }
-        map.put("applies", String.valueOf(totals.applies.get()));
-        map.put("appliesLag", String.valueOf(totals.appliesLag.get()));
+        map.put("received", String.valueOf(totals.received.get()));
+        map.put("receivedLag", String.valueOf(totals.receivedLag.get()));
+        map.put("applies", String.valueOf(totals.receivedApplies.get()));
+        map.put("appliesLag", String.valueOf(totals.receivedAppliesLag.get()));
         map.put("gets", String.valueOf(totals.gets.get()));
         map.put("getsLag", String.valueOf(totals.getsLag.get()));
         map.put("scans", String.valueOf(totals.scans.get()));
         map.put("scansLag", String.valueOf(totals.scansLag.get()));
-        map.put("received", String.valueOf(totals.received.get()));
-        map.put("receivedLag", String.valueOf(totals.receivedLag.get()));
+        map.put("directApplies", String.valueOf(totals.directApplies.get()));
+        map.put("directAppliesLag", String.valueOf(totals.directAppliesLag.get()));
         map.put("replicates", String.valueOf(totals.replicates.get()));
         map.put("replicatesLag", String.valueOf(totals.replicatesLag.get()));
-        map.put("takeUpdates", String.valueOf(totals.takeUpdates.get()));
-        map.put("takeUpdatesLag", String.valueOf(totals.takeUpdatesLag.get()));
+        map.put("takes", String.valueOf(totals.takes.get()));
+        map.put("takesLag", String.valueOf(totals.takesLag.get()));
+        map.put("takeApplies", String.valueOf(totals.takeApplies.get()));
+        map.put("takeAppliesLag", String.valueOf(totals.takeAppliesLag.get()));
 
         return map;
     }

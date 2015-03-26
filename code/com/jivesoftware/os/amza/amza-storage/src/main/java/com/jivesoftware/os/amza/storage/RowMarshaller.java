@@ -20,12 +20,11 @@ import com.jivesoftware.os.amza.shared.WALValue;
 
 public interface RowMarshaller<R> {
 
-    R toRow(long orderId, WALKey key, WALValue value) throws Exception;
+    R toRow(WALKey key, WALValue value) throws Exception;
 
     WALRow fromRow(R row) throws Exception;
 
     public interface WALRow {
-        long getTransactionId();
         WALKey getKey();
         WALValue getValue();
     }

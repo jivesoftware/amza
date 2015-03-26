@@ -2,12 +2,14 @@ package com.jivesoftware.os.amza.storage;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
+import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
@@ -81,7 +83,6 @@ public class NonIndexWAL implements WALStorage {
         if (apply.isEmpty()) {
             return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALValue>(), ArrayListMultimap.<WALKey, WALValue>create());
         } else {
-            final long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
             rowsTx.write(new WALTx.WALWrite<Void>() {
                 @Override
                 public Void write(WALWriter rowWriter) throws Exception {
@@ -90,9 +91,13 @@ public class NonIndexWAL implements WALStorage {
                     for (Map.Entry<WALKey, WALValue> e : apply.entrySet()) {
                         WALKey key = e.getKey();
                         WALValue value = e.getValue();
-                        rawRows.add(rowMarshaller.toRow(transactionId, key, value));
+                        rawRows.add(rowMarshaller.toRow(key, value));
                     }
-                    rowWriter.write(Collections.nCopies(rawRows.size(), (byte) 0), rawRows, true);
+                    long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
+                    rowWriter.write(Collections.nCopies(rawRows.size(), transactionId),
+                        Collections.nCopies(rawRows.size(), (byte) WALWriter.VERSION_1),
+                        rawRows,
+                        true);
                     return null;
                 }
             });
@@ -108,13 +113,13 @@ public class NonIndexWAL implements WALStorage {
 
             @Override
             public Void read(WALReader reader) throws Exception {
-                reader.scan(0, new WALReader.Stream() {
+                reader.scan(0, new RowStream() {
 
                     @Override
-                    public boolean row(long rowPointer, byte rowType, byte[] rawWRow) throws Exception {
+                    public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawWRow) throws Exception {
                         if (rowType > 0) {
                             RowMarshaller.WALRow row = rowMarshaller.fromRow(rawWRow);
-                            return walScan.row(row.getTransactionId(), row.getKey(), row.getValue());
+                            return walScan.row(rowTxId, row.getKey(), row.getValue());
                         }
                         return true;
                     }
@@ -130,15 +135,15 @@ public class NonIndexWAL implements WALStorage {
 
             @Override
             public Void read(WALReader reader) throws Exception {
-                reader.scan(0, new WALReader.Stream() {
+                reader.scan(0, new RowStream() {
 
                     @Override
-                    public boolean row(long rowPointer, byte rowType, byte[] rawWRow) throws Exception {
+                    public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] rawWRow) throws Exception {
                         if (rowType > 0) {
                             RowMarshaller.WALRow row = rowMarshaller.fromRow(rawWRow);
                             if (row.getKey().compareTo(to) < 0) {
                                 if (from.compareTo(row.getKey()) <= 0) {
-                                    walScan.row(row.getTransactionId(), row.getKey(), row.getValue());
+                                    walScan.row(rowTxId, row.getKey(), row.getValue());
                                 }
                                 return true;
                             } else {
@@ -175,29 +180,16 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public void takeRowUpdatesSince(final long sinceTransactionId, final WALScan walScan) throws Exception {
-        final WALScan filteringRowStream = new WALScan() {
-            @Override
-            public boolean row(long transactionId, WALKey key, WALValue value) throws Exception {
-                if (transactionId > sinceTransactionId) {
-                    if (!walScan.row(transactionId, key, value)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-        };
-
+    public void takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
         rowsTx.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader rowReader) throws Exception {
-                rowReader.reverseScan(new WALReader.Stream() {
+                rowReader.reverseScan(new RowStream() {
                     @Override
-                    public boolean row(long rowPointer, byte rowType, byte[] row) throws Exception {
-                        if (rowType > 0) {
-                            RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
-                            return filteringRowStream.row(walr.getTransactionId(), walr.getKey(), walr.getValue());
+                    public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
+                        if (rowType > 0 && rowTxId > sinceTransactionId) {
+                            return rowStream.row(rowPointer, rowTxId, rowType, row);
                         }
                         return true;
                     }
@@ -206,6 +198,10 @@ public class NonIndexWAL implements WALStorage {
             }
         });
 
+    }
+
+    @Override
+    public void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception {
     }
 
 }

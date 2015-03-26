@@ -21,16 +21,15 @@ var vis = new pv.Panel().width(880).height(310).bottom(200); var arc = vis.add(p
              <table class="table table-condensed">
                 <thead>
                     <tr>
-                        <th>Actions</th>
                         <th>Name</th>
                         <th>Ring</th>
-                        <th>MinKey</th>
-                        <th>MaxKey</th>
                         <th><span class="glyphicon glyphicon-open"></span>{sp}Get</th>
                         <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Scan</th>
                         <th><span class="glyphicon glyphicon-upload"></span>{sp}Took</th>
+                        <th><span class="glyphicon glyphicon-import"></span>{sp}Took Applied</th>
                         <th><span class="glyphicon glyphicon-cloud-download"></span>{sp}Received</th>
-                        <th><span class="glyphicon glyphicon-save"></span>{sp}Applied</th>
+                        <th><span class="glyphicon glyphicon-import"></span>{sp}Received Applied</th>
+                        <th><span class="glyphicon glyphicon-save"></span>{sp}Direct Applied</th>
                         <th><span class="glyphicon glyphicon-cloud-upload"></span>Replicated</th>
                     </tr>
                 </thead>
@@ -38,46 +37,26 @@ var vis = new pv.Panel().width(880).height(310).bottom(200); var arc = vis.add(p
                     <tr>
                         <td></td>
                         <td></td>
-                        <td></td>
-                        <td></td>
-                        <td></td>
                         <td>{$grandTotals.gets}{sp}lag={$grandTotals.getsLag}millis</td>
                         <td>{$grandTotals.scans}{sp}lag={$grandTotals.scansLag}millis</td>
-                        <td>{$grandTotals.takeUpdates}{sp}lag={$grandTotals.takeUpdatesLag}millis</td>
+                        <td>{$grandTotals.takes}{sp}lag={$grandTotals.takesLag}millis</td>
+                        <td>{$grandTotals.takeApplies}{sp}lag={$grandTotals.takeAppliesLag}millis</td>
                         <td>{$grandTotals.received}{sp}lag={$grandTotals.receivedLag}millis</td>
                         <td>{$grandTotals.applies}{sp}lag={$grandTotals.appliesLag}millis</td>
+                        <td>{$grandTotals.directApplies}{sp}lag={$grandTotals.directAppliesLag}millis</td>
                         <td>{$grandTotals.replicates}{sp}lag={$grandTotals.replicatesLag}millis</td>
                     </tr>
                     {foreach $r in $regionTotals}
                         <tr>
-                            <td>
-                                <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default">
-                                    <span class="glyphicon glyphicon-trash"></span>
-                                </button>
-                                <button title="Remove" type="submit" name="action" value="compact" class="btn btn-default">
-                                    <span class="glyphicon glyphicon-compressed"></span>
-                                </button>
-                            </td>
                             <td>{$r.name}</td>
-                            <td>
-                                <div class="btn-group">
-                                    <button aria-expanded="false" type="button" data-toggle="dropdown" class="btn btn-default btn-sm dropdown-toggle">
-                                        {$r.ringName}<span class="caret"></span></button>
-                                    <ul class="dropdown-menu">
-                                        {foreach $ring in $r.ring}
-                                            <li><a target="ui_iframe" href="http://{$ring.host}:{$ring.port}/">
-                                                {$ring.host}:{$ring.port}</a></li>
-                                        {/foreach}
-                                    </ul>
-                                </div>
-                            </td>
-                            <td>{$r.minKey}</td>
-                            <td>{$r.maxKey}</td>
+                            <td>{$r.ringName}</td>
                             <td>{$r.gets}{sp}lag={$r.getsLag}millis</td>
                             <td>{$r.scans}{sp}lag={$r.scansLag}millis</td>
-                            <td>{$r.takeUpdates}{sp}lag={$r.takeUpdatesLag}millis</td>
+                            <td>{$r.takes}{sp}lag={$r.takesLag}millis</td>
+                            <td>{$r.takeApplies}{sp}lag={$r.takeAppliesLag}millis</td>
                             <td>{$r.received}{sp}lag={$r.receivedLag}millis</td>
                             <td>{$r.applies}{sp}lag={$r.appliesLag}millis</td>
+                            <td>{$r.directApplies}{sp}lag={$r.directAppliesLag}millis</td>
                             <td>{$r.replicates}{sp}lag={$grandTotals.replicatesLag}millis</td>
                         </tr>
                     {/foreach}

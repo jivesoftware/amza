@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.WALs;
@@ -8,9 +8,11 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -23,60 +25,69 @@ import java.util.concurrent.TimeUnit;
 public class AmzaRegionChangeReceiver {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private ScheduledExecutorService scheduledThreadPool;
+    private ScheduledExecutorService applyThreadPool;
+    private ScheduledExecutorService compactThreadPool;
     private final AmzaStats amzaStats;
     private final RegionProvider regionProvider;
     private final Map<RegionName, Long> highwaterMarks = new ConcurrentHashMap<>();
     private final WALs receivedWAL;
     private final long applyReplicasIntervalInMillis;
+    private final int numberOfApplierThreads;
+    private final Object[] receivedLocks;
 
     public AmzaRegionChangeReceiver(AmzaStats amzaStats,
         RegionProvider regionProvider,
         WALs receivedUpdatesWAL,
-        long applyReplicasIntervalInMillis) {
+        long applyReplicasIntervalInMillis,
+        int numberOfApplierThreads) {
         this.amzaStats = amzaStats;
         this.regionProvider = regionProvider;
         this.receivedWAL = receivedUpdatesWAL;
         this.applyReplicasIntervalInMillis = applyReplicasIntervalInMillis;
+        this.numberOfApplierThreads = numberOfApplierThreads;
+        this.receivedLocks = new Object[numberOfApplierThreads];
+        for (int i = 0; i < receivedLocks.length; i++) {
+            receivedLocks[i] = new Object();
+        }
     }
 
     public void receiveChanges(RegionName regionName, WALScanable changes) throws Exception {
         RowsChanged changed = receivedWAL.get(regionName).update(changes);
-        amzaStats.received(changed);
-        synchronized (this) {
-            this.notifyAll();
+        amzaStats.received(regionName, changed.getApply().size(), changed.getOldestRowTxId());
+
+        Object lock = receivedLocks[Math.abs(regionName.hashCode()) % numberOfApplierThreads];
+        synchronized (lock) {
+            lock.notifyAll();
         }
     }
 
     synchronized public void start() {
-        if (scheduledThreadPool == null) {
-            final int silenceBackToBackErrors = 100;
-            scheduledThreadPool = Executors.newScheduledThreadPool(2);
-            scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
-                int failedToReceive = 0;
-
-                @Override
-                public void run() {
-                    try {
-                        failedToReceive = 0;
-                        applyReceivedChanges();
-                    } catch (Exception x) {
-                        LOG.debug("Failing to replay apply replication.", x);
-                        if (failedToReceive % silenceBackToBackErrors == 0) {
-                            failedToReceive++;
-                            LOG.error("Failing to replay apply replication.", x);
+        if (applyThreadPool == null) {
+            applyThreadPool = Executors.newScheduledThreadPool(numberOfApplierThreads, new ThreadFactoryBuilder().setNameFormat("applyReceivedChanges-%d")
+                .build());
+            for (int i = 0; i < numberOfApplierThreads; i++) {
+                final int stripe = i;
+                applyThreadPool.scheduleWithFixedDelay(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            applyReceivedChanges(stripe);
+                        } catch (Throwable x) {
+                            LOG.warn("Failing to replay apply replication.", x);
                         }
                     }
-                }
-            }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
-
-            scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
+                }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
+            }
+        }
+        if (compactThreadPool == null) {
+            compactThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder().setNameFormat("compactReceivedChanges-%d").build());
+            compactThreadPool.scheduleWithFixedDelay(new Runnable() {
 
                 @Override
                 public void run() {
                     try {
                         compactReceivedChanges();
-                    } catch (Exception x) {
+                    } catch (Throwable x) {
                         LOG.error("Failing to compact.", x);
                     }
                 }
@@ -85,29 +96,45 @@ public class AmzaRegionChangeReceiver {
     }
 
     synchronized public void stop() {
-        if (scheduledThreadPool != null) {
-            this.scheduledThreadPool.shutdownNow();
-            this.scheduledThreadPool = null;
+        if (applyThreadPool != null) {
+            this.applyThreadPool.shutdownNow();
+            this.applyThreadPool = null;
+        }
+        if (compactThreadPool != null) {
+            this.compactThreadPool.shutdownNow();
+            this.compactThreadPool = null;
         }
     }
 
-    private void applyReceivedChanges() throws Exception {
+    private void applyReceivedChanges(int stripe) throws Exception {
+
+        // TODO is there a better way?
+        for (Entry<RegionName, RegionStore> e : regionProvider.getAll()) {
+            receivedWAL.get(e.getKey());
+        }
+
         while (true) {
             boolean appliedChanges = false;
             for (Map.Entry<RegionName, WALStorage> regionUpdates : receivedWAL.getAll()) {
                 RegionName regionName = regionUpdates.getKey();
-                WALStorage received = regionUpdates.getValue();
-                RegionStore region = regionProvider.get(regionName);
-                Long highWatermark = highwaterMarks.get(regionName);
-                HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor("Apply", highWatermark, received);
-                RowsChanged changed = region.commit(highwaterInterceptor);
-                amzaStats.applied(changed);
-                highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
-                appliedChanges |= !changed.isEmpty();
+                if (Math.abs(regionName.hashCode()) % numberOfApplierThreads == stripe) {
+                    WALStorage received = regionUpdates.getValue();
+                    RegionStore regionStore = regionProvider.getRegionStore(regionName);
+                    if (regionStore != null) {
+                        Long highWatermark = highwaterMarks.get(regionName);
+                        HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor("Apply", highWatermark, received);
+                        WALScanBatchinator batchinator = new WALScanBatchinator(amzaStats, regionName, regionStore);
+                        highwaterInterceptor.rowScan(batchinator);
+                        if (batchinator.flush()) {
+                            highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
+                            appliedChanges = true;
+                        }
+                    }
+                }
             }
             if (!appliedChanges) {
-                synchronized (this) {
-                    this.wait();
+                synchronized (receivedLocks[stripe]) {
+                    receivedLocks[stripe].wait();
                 }
             }
         }

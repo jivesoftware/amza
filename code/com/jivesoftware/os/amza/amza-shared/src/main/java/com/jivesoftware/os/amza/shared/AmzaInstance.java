@@ -21,7 +21,7 @@ public interface AmzaInstance {
 
     void updates(RegionName regionName, WALScanable updates) throws Exception;
 
-    void takeRowUpdates(RegionName regionName, long transationId, WALScan rowUpdates) throws Exception;
+    void takeRowUpdates(RegionName regionName, long rowTxId, RowStream rowStream) throws Exception;
 
     List<RegionName> getRegionNames();
 

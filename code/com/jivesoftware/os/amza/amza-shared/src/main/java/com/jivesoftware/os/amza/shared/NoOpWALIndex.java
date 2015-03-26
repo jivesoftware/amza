@@ -88,4 +88,8 @@ public class NoOpWALIndex implements WALIndex {
     public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
     }
 
+    @Override
+    public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
+    }
+
 }

@@ -51,4 +51,7 @@ public interface WALIndex extends WALScanable {
 
         void commit() throws Exception;
     }
+
+    void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors);
+
 }

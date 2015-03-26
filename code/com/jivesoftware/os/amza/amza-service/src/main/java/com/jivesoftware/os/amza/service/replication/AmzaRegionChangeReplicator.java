@@ -117,6 +117,13 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
 
         HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
         RingHost[] ringHosts = hostRing.getBelowRing();
+        return replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts);
+    }
+
+    public boolean replicateUpdatesToRingHosts(RegionName regionName,
+        WALScanable updates,
+        boolean enqueueForResendOnFailure,
+        RingHost[] ringHosts) throws Exception {
         if (ringHosts == null || ringHosts.length == 0) {
             if (enqueueForResendOnFailure) {
                 WALStorage resend = resendWAL.get(regionName);
@@ -147,7 +154,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                     }
                 }
             }
-            return ringWalker.wasAdequetlyReplicated();
+            return ringWalker.wasAdequatelyReplicated();
         }
     }
 

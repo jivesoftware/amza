@@ -5,9 +5,12 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaRing;
+import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -77,7 +80,7 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
                     row.put("name", regionName.getRegionName());
                     row.put("ringName", regionName.getRingName());
 
-                    List<RingHost> ring = amzaRing.getRing(regionName.getRegionName());
+                    List<RingHost> ring = amzaRing.getRing(regionName.getRingName());
                     List<Map<String, Object>> ringHosts = new ArrayList<>();
                     for (RingHost r : ring) {
                         Map<String, Object> ringHost = new HashMap<>();
@@ -92,12 +95,16 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
                         row.put("disabled", "?");
                         row.put("replicationFactor", "?");
                         row.put("takeFromFactor", "?");
+
+                        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
+                            new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
+                        row.put("walStorageDescriptor", walStorageDescriptor(storageDescriptor));
+
                     } else {
                         row.put("disabled", regionProperties.disabled);
                         row.put("replicationFactor", regionProperties.replicationFactor);
                         row.put("takeFromFactor", regionProperties.takeFromFactor);
-
-                        // TODO
+                        row.put("walStorageDescriptor", walStorageDescriptor(regionProperties.walStorageDescriptor));
                     }
 
                     rows.add(row);
@@ -111,6 +118,39 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
         }
 
         return renderer.render(template, data);
+    }
+
+    Map<String, Object> walStorageDescriptor(WALStorageDescriptor storageDescriptor) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("maxUpdatesBetweenCompactionHintMarker", String.valueOf(storageDescriptor.maxUpdatesBetweenCompactionHintMarker));
+        map.put("maxUpdatesBetweenIndexCommitMarker", String.valueOf(storageDescriptor.maxUpdatesBetweenIndexCommitMarker));
+        map.put("primaryIndexDescriptor", primaryIndexDescriptor(storageDescriptor.primaryIndexDescriptor));
+
+        List<Map<String, Object>> secondary = new ArrayList<>();
+        if (storageDescriptor.secondaryIndexDescriptors != null) {
+            for (SecondaryIndexDescriptor secondaryIndexDescriptor : storageDescriptor.secondaryIndexDescriptors) {
+                secondary.add(secondaryIndexDescriptor(secondaryIndexDescriptor));
+            }
+        }
+        map.put("secondaryIndexDescriptor", secondary);
+        return map;
+    }
+
+    Map<String, Object> primaryIndexDescriptor(PrimaryIndexDescriptor primaryIndexDescriptor) {
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("className", primaryIndexDescriptor.className);
+        map.put("ttlInMillis", primaryIndexDescriptor.ttlInMillis);
+        map.put("forceCompactionOnStartup", primaryIndexDescriptor.forceCompactionOnStartup);
+        //public Map<String, String> properties; //TODO
+        return map;
+    }
+
+    Map<String, Object> secondaryIndexDescriptor(SecondaryIndexDescriptor secondaryIndexDescriptor) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("className", secondaryIndexDescriptor.className);
+        //public Map<String, String> properties; //TODO
+        return map;
     }
 
     @Override

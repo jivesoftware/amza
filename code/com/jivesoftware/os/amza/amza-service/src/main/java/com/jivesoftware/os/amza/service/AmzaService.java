@@ -90,6 +90,7 @@ public class AmzaService implements AmzaInstance {
         changeReplicator.start();
         regionCompactor.start();
 
+        regionProvider.open();
     }
 
     synchronized public void stop() throws Exception {
@@ -117,17 +118,16 @@ public class AmzaService implements AmzaInstance {
             return null;
         } else {
             RegionStore regionStore = regionProvider.getRegionStore(regionName);
-            return new AmzaRegion(orderIdProvider, regionName, regionStore);
+            if (regionStore != null) {
+                return new AmzaRegion(orderIdProvider, regionName, regionStore);
+            }
+            return null;
         }
     }
 
     @Override
     public List<RegionName> getRegionNames() {
-        List<RegionName> regionNames = new ArrayList<>();
-        for (Entry<RegionName, RegionStore> regionStore : regionProvider.getAll()) {
-            regionNames.add(regionStore.getKey());
-        }
-        return regionNames;
+        return new ArrayList<>(regionProvider.getActiveRegions());
     }
 
     public RegionProperties getRegionProperties(RegionName regionName) throws Exception {
@@ -162,22 +162,6 @@ public class AmzaService implements AmzaInstance {
 
     public RowChanges unwatch(RegionName regionName) throws Exception {
         return regionWatcher.unwatch(regionName);
-    }
-
-    public boolean replicate(RegionName regionName, WALScanable rowUpdates) throws Exception {
-        AmzaHostRing amzaHostRing = getAmzaRing();
-        List<RingHost> ringHosts = amzaHostRing.getRing(regionName.getRingName());
-        if (ringHosts.contains(amzaHostRing.getRingHost())) {
-            regionProvider.getRegionStore(regionName).commit(rowUpdates);
-            return true;
-        } else {
-            RegionProperties regionProperties = regionProvider.getRegionProperties(regionName);
-            return changeReplicator.replicateUpdatesToRingHosts(regionName,
-                rowUpdates,
-                false,
-                ringHosts.toArray(new RingHost[ringHosts.size()]),
-                regionProperties.replicationFactor);
-        }
     }
 
     @Override

@@ -8,11 +8,11 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
+import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -52,7 +52,7 @@ public class AmzaRegionChangeReceiver {
     }
 
     public void receiveChanges(RegionName regionName, WALScanable changes) throws Exception {
-        RowsChanged changed = receivedWAL.get(regionName).update(changes);
+        RowsChanged changed = receivedWAL.get(regionName).update(WALStorageUpateMode.noReplication, changes);
         amzaStats.received(regionName, changed.getApply().size(), changed.getOldestRowTxId());
 
         Object lock = receivedLocks[Math.abs(regionName.hashCode()) % numberOfApplierThreads];
@@ -108,17 +108,11 @@ public class AmzaRegionChangeReceiver {
 
     private void applyReceivedChanges(int stripe) throws Exception {
 
-        // TODO is there a better way?
-        for (Entry<RegionName, RegionStore> e : regionProvider.getAll()) {
-            receivedWAL.get(e.getKey());
-        }
-
         while (true) {
             boolean appliedChanges = false;
-            for (Map.Entry<RegionName, WALStorage> regionUpdates : receivedWAL.getAll()) {
-                RegionName regionName = regionUpdates.getKey();
+            for (RegionName regionName: regionProvider.getActiveRegions()) {
+                WALStorage received = receivedWAL.get(regionName);
                 if (Math.abs(regionName.hashCode()) % numberOfApplierThreads == stripe) {
-                    WALStorage received = regionUpdates.getValue();
                     RegionStore regionStore = regionProvider.getRegionStore(regionName);
                     if (regionStore != null) {
                         Long highWatermark = highwaterMarks.get(regionName);
@@ -141,11 +135,10 @@ public class AmzaRegionChangeReceiver {
     }
 
     private void compactReceivedChanges() throws Exception {
-        for (Map.Entry<RegionName, WALStorage> changes : receivedWAL.getAll()) {
-            RegionName regionName = changes.getKey();
-            WALStorage regionWAL = changes.getValue();
+        for (RegionName regionName: regionProvider.getActiveRegions()) {
             Long highWatermark = highwaterMarks.get(regionName);
             if (highWatermark != null) {
+                WALStorage regionWAL = receivedWAL.get(regionName);
                 amzaStats.beginCompaction("Compacting Received:" + regionName);
                 try {
                     regionWAL.compactTombstone(highWatermark); // TODO should this be plus 1

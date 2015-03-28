@@ -3,6 +3,23 @@
  * which rely on jive.css...
  */
 
+.arc {
+  fill-opacity: .2;
+}
+
+.axis .fill {
+  stroke: #aaa;
+  stroke-width: 8px;
+  stroke-linecap: square;
+}
+
+.axis .stroke {
+  stroke: #fff;
+  stroke-width: 12px;
+  stroke-linecap: square;
+}
+
+
 /* Tenant/user picker: eliminate list item numbering */
 li.j-listitem {
     list-style: none;

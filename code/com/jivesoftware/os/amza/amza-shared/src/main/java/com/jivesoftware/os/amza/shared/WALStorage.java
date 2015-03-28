@@ -22,7 +22,7 @@ public interface WALStorage extends WALScanable {
     void load() throws Exception;
 
     // TODO Consider using a call back stream instead of returning RowsChanged
-    RowsChanged update(WALScanable rowUpdates) throws Exception;
+    RowsChanged update(WALStorageUpateMode upateMode, WALScanable rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
 

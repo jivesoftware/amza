@@ -4,7 +4,6 @@ import com.google.common.base.Optional;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaHostRing;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.WALs;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
@@ -14,6 +13,7 @@ import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
+import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 public class AmzaRegionChangeReplicator implements WALReplicator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     private ScheduledExecutorService resendThreadPool;
     private ScheduledExecutorService compactThreadPool;
     private final AmzaStats amzaStats;
@@ -121,65 +122,72 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         WALScanable updates,
         boolean enqueueForResendOnFailure) throws Exception {
 
-        HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
-        RingHost[] ringHosts = hostRing.getBelowRing();
         RegionProperties regionProperties = regionProvider.getRegionProperties(regionName);
-        return replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts, regionProperties.replicationFactor);
+        if (regionProperties != null) {
+            if (!regionProperties.disabled && regionProperties.replicationFactor > 0) {
+                HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
+                RingHost[] ringHosts = hostRing.getBelowRing();
+                if (ringHosts == null || ringHosts.length == 0) {
+                    if (enqueueForResendOnFailure) {
+                        WALStorage resend = resendWAL.get(regionName);
+                        resend.update(WALStorageUpateMode.noReplication, updates);
+                    }
+                    return false;
+                } else {
+                    return replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts, regionProperties.replicationFactor);
+                }
+            } else {
+                return true;
+            }
+        } else {
+            if (enqueueForResendOnFailure) {
+                WALStorage resend = resendWAL.get(regionName);
+                resend.update(WALStorageUpateMode.noReplication, updates);
+            }
+            return false;
+        }
     }
 
-    public boolean replicateUpdatesToRingHosts(RegionName regionName,
+    private boolean replicateUpdatesToRingHosts(RegionName regionName,
         WALScanable updates,
         boolean enqueueForResendOnFailure,
         RingHost[] ringHosts,
         int replicationFactor) throws Exception {
-        if (ringHosts == null || ringHosts.length == 0) {
-            if (enqueueForResendOnFailure) {
-                WALStorage resend = resendWAL.get(regionName);
-                resend.update(updates);
-            }
-            return false;
-        } else {
-            RingWalker ringWalker = new RingWalker(ringHosts, replicationFactor);
-            RingHost ringHost;
-            while ((ringHost = ringWalker.host()) != null) {
-                try {
-                    updatesSender.sendUpdates(ringHost, regionName, updates);
-                    amzaStats.offered(ringHost);
-                    if (sendFailureListener.isPresent()) {
-                        sendFailureListener.get().sent(ringHost);
-                    }
-                    ringWalker.success();
-                } catch (Exception x) {
-                    if (sendFailureListener.isPresent()) {
-                        sendFailureListener.get().failedToSend(ringHost, x);
-                    }
-                    ringWalker.failed();
-                    LOG.info("Failed to send changeset to ringHost:{}", new Object[]{ringHost}, x);
-                    if (enqueueForResendOnFailure) {
-                        WALStorage resend = resendWAL.get(regionName);
-                        resend.update(updates);
-                        enqueueForResendOnFailure = false;
-                    }
+
+        RingWalker ringWalker = new RingWalker(ringHosts, replicationFactor);
+        RingHost ringHost;
+        while ((ringHost = ringWalker.host()) != null) {
+            try {
+                updatesSender.sendUpdates(ringHost, regionName, updates);
+                amzaStats.offered(ringHost);
+                if (sendFailureListener.isPresent()) {
+                    sendFailureListener.get().sent(ringHost);
+                }
+                ringWalker.success();
+            } catch (Exception x) {
+                if (sendFailureListener.isPresent()) {
+                    sendFailureListener.get().failedToSend(ringHost, x);
+                }
+                ringWalker.failed();
+                LOG.info("Failed to send changeset to ringHost:{}", new Object[]{ringHost}, x);
+                if (enqueueForResendOnFailure) {
+                    WALStorage resend = resendWAL.get(regionName);
+                    resend.update(WALStorageUpateMode.noReplication, updates);
+                    enqueueForResendOnFailure = false;
                 }
             }
-            return ringWalker.wasAdequatelyReplicated();
         }
+        return ringWalker.wasAdequatelyReplicated();
     }
 
     void resendLocalChanges(int stripe) throws Exception {
 
-        // TODO eval why this is Hacky. This loads resend tables for stored tables.
-        for (Map.Entry<RegionName, RegionStore> region : regionProvider.getAll()) {
-            resendWAL.get(region.getKey());
-        }
-
-        for (Map.Entry<RegionName, WALStorage> failedUpdates : resendWAL.getAll()) {
-            RegionName regionName = failedUpdates.getKey();
+        for (RegionName regionName : regionProvider.getActiveRegions()) {
             if (Math.abs(regionName.hashCode()) % numberOfResendThreads == stripe) {
                 HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
                 RingHost[] ring = hostRing.getBelowRing();
                 if (ring.length > 0) {
-                    WALStorage resend = failedUpdates.getValue();
+                    WALStorage resend = resendWAL.get(regionName);
                     Long highWatermark = highwaterMarks.get(regionName);
                     HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor("Replicate", highWatermark, resend);
                     ReplicateBatchinator batchinator = new ReplicateBatchinator(regionName, this);
@@ -195,11 +203,10 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     }
 
     void compactResendChanges() throws Exception {
-        for (Map.Entry<RegionName, WALStorage> updates : resendWAL.getAll()) {
-            RegionName regionName = updates.getKey();
-            WALStorage regionWAL = updates.getValue();
+        for (RegionName regionName : regionProvider.getActiveRegions()) {
             Long highWatermark = highwaterMarks.get(regionName);
             if (highWatermark != null) {
+                WALStorage regionWAL = resendWAL.get(regionName);
                 amzaStats.beginCompaction("Compacting Resend:" + regionName);
                 try {
                     regionWAL.compactTombstone(highWatermark); // TODO should this be plus 1

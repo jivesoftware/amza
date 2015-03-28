@@ -3,6 +3,51 @@ window.$ = window.jQuery;
 window.amza = {};
 
 
+amza.stats = {
+    input: {},
+    requireFocus: true,
+    html: null, 
+    init: function () {
+        $stats = $('#stats');
+        
+//        if (amza.stats.requireFocus) {
+//            amza.onWindowFocus.push(function () {
+//                if (amza.stats.html) {
+//                    amza.stats;
+//                }
+//            });
+//        }
+
+        amza.stats.poll();
+    },
+    poll: function () {
+        $.ajax({
+            type: "GET",
+            url: "/ui/health/stats",
+            dataType: "html",
+            data: {
+                name: ""
+            },
+            //contentType: "application/json",
+            success: function (data) {
+                amza.stats.draw(data);
+            },
+            error: function () {
+                //TODO error message
+                console.log("error!");
+            }
+        });
+    },
+    draw: function (data) {
+        $('#stats').html(data);
+
+        if (!amza.stats.requireFocus || amza.windowFocused) {
+            //amza.stats.update();
+        }
+        setTimeout(amza.stats.poll, 1000);
+    }
+};
+
 amza.arc = {
     fetch: function () {
         var gotData;
@@ -13,13 +58,14 @@ amza.arc = {
                 gotData = data;
             },
             error: function () {
-                alert('We suck!');
+                alert('Arc suck!');
             }
         });
-        
-        return { data: function() {
-           if (gotData) return gotData;
-        }};
+
+        return {data: function () {
+                if (gotData)
+                    return gotData;
+            }};
     },
     init: function () {
         $.ajax("/arc", {
@@ -197,5 +243,20 @@ amza.chord = {
 $(document).ready(function () {
     if ($('#chord').length) {
         amza.chord.init();
+    }
+    if ($('#stats').length) {
+        amza.stats.init();
+    }
+});
+
+$(window).focus(function () {
+    amza.windowFocused = true;
+    for (var i = 0; i < amza.onWindowFocus.length; i++) {
+        amza.onWindowFocus[i]();
+    }
+}).blur(function () {
+    amza.windowFocused = false;
+    for (var i = 0; i < amza.onWindowBlur.length; i++) {
+        amza.onWindowBlur[i]();
     }
 });

@@ -219,6 +219,7 @@ public class Main {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/healthPluginRegion.soy"), "health.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRingPluginRegion.soy"), "amzaRing.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRegionsPluginRegion.soy"), "amzaRegions.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStats.soy"), "amzaStats.soy");
 
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();
@@ -228,7 +229,8 @@ public class Main {
 
         List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("fire", "Health", "/ui/health",
             HealthPluginEndpoints.class,
-            new HealthPluginRegion("soy.page.healthPluginRegion", renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
+            new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats",
+                renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
             new ManagePlugin("map-marker", "Amza Regions", "/ui/regions",
                 AmzaRegionsPluginEndpoints.class,
                 new AmzaRegionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaRing(), amzaService)),

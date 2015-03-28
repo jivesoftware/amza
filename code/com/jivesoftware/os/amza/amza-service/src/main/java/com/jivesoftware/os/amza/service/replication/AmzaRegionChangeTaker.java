@@ -14,6 +14,7 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
@@ -102,7 +103,9 @@ public class AmzaRegionChangeTaker {
                 if (Math.abs(regionName.hashCode()) % numberOfTakerThreads == stripe) {
                     HostRing hostRing = hostRingProvider.getHostRing(regionName.getRingName());
                     RegionProperties regionProperties = regionProvider.getRegionProperties(regionName);
-                    took |= takeChanges(hostRing.getAboveRing(), regionName, regionProperties.takeFromFactor);
+                    if (regionProperties != null && regionProperties.takeFromFactor > 0) {
+                        took |= takeChanges(hostRing.getAboveRing(), regionName, regionProperties.takeFromFactor);
+                    }
                 }
             }
             if (!took) {
@@ -217,7 +220,7 @@ public class AmzaRegionChangeTaker {
         public int flush() throws Exception {
             if (!batch.isEmpty()) {
                 amzaStats.took(ringHost, regionName, batch.size(), oldestTxId.longValue());
-                RowsChanged changes = regionStore.commit(new MemoryWALIndex(batch));
+                RowsChanged changes = regionStore.commit(WALStorageUpateMode.updateThenReplicate, new MemoryWALIndex(batch));
                 amzaStats.tookApplied(ringHost, regionName, changes.getApply().size(), changes.getOldestRowTxId());
             }
             if (flushed.get() > 0) {

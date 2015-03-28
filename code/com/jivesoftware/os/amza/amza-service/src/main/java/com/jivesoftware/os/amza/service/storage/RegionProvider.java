@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
+import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
@@ -33,7 +34,6 @@ import java.io.File;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class RegionProvider implements RowChanges {
 
@@ -49,7 +49,6 @@ public class RegionProvider implements RowChanges {
     private final WALStorageProvider walStorageProvider;
     private final RowChanges rowChanges;
     private final WALReplicator walReplicator;
-    private final AtomicReference<RegionStore> regionPropertiesRegionStore = new AtomicReference<>();
     private final ConcurrentHashMap<RegionName, RegionStore> regionStores = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RegionName, RegionProperties> regionProperties = new ConcurrentHashMap<>();
     private final StripingLocksProvider locksProvider = new StripingLocksProvider(1024); // TODO expose to config
@@ -77,12 +76,28 @@ public class RegionProvider implements RowChanges {
         return domain;
     }
 
-    public RegionStore getRegionIndexStore() throws Exception {
-        return getRegionStore(REGION_INDEX);
+    public void open() throws Exception {
+        RegionStore regionIndexStore = getRegionIndexStore();
+        regionIndexStore.rowScan(new WALScan() {
+
+            @Override
+            public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
+                RegionName regionName = RegionName.fromBytes(key.getKey());
+                RegionProperties properties = getRegionProperties(regionName);
+                if (properties != null) {
+                    getRegionStore(regionName);
+                }
+                return true;
+            }
+        });
     }
 
     public RegionStore getHighwaterIndexStore() throws Exception {
         return getRegionStore(HIGHWATER_MARK_INDEX);
+    }
+
+    private RegionStore getRegionPropertiesStore() throws Exception {
+        return getRegionStore(REGION_PROPERTIES);
     }
 
     public RegionStore createRegionStoreIfAbsent(RegionName regionName, RegionProperties properties) throws Exception {
@@ -106,23 +121,16 @@ public class RegionProvider implements RowChanges {
         if (regionStore != null) {
             return regionStore;
         }
-        RegionProperties properties = getRegionProperties(regionName);
-        if (properties == null) {
-            if (regionName.isSystemRegion()) {
-                if (regionName.equals(HIGHWATER_MARK_INDEX)) {
-                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                        new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
-                    properties = new RegionProperties(storageDescriptor, 0, 0, false);
-                } else {
-                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                        new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
-                    properties = new RegionProperties(storageDescriptor, 2, 2, false);
-                }
-                regionProperties.put(regionName, properties);
-            } else {
+        RegionProperties properties;
+        if (regionName.isSystemRegion()) {
+            properties = coldstartSystemRegionProperties(regionName);
+        } else {
+            properties = getRegionProperties(regionName);
+            if (properties == null) {
                 return null;
             }
         }
+
         synchronized (locksProvider.lock(regionName, 1234)) {
             regionStore = regionStores.get(regionName);
             if (regionStore != null) {
@@ -135,48 +143,22 @@ public class RegionProvider implements RowChanges {
             regionStore.load();
 
             regionStores.put(regionName, regionStore);
+            RowStoreUpdates tx;
             if (!regionName.equals(REGION_INDEX)) {
                 RegionStore regionIndexStore = getRegionIndexStore();
-                RowStoreUpdates tx = regionIndexStore.startTransaction(orderIdProvider.nextId());
-                byte[] rawRegionName = regionName.toBytes();
-                tx.add(new WALKey(rawRegionName), rawRegionName);
-                tx.commit();
+                tx = regionIndexStore.startTransaction(orderIdProvider.nextId());
             } else {
-                RowStoreUpdates tx = regionStore.startTransaction(orderIdProvider.nextId());
-                byte[] rawRegionName = regionName.toBytes();
-                tx.add(new WALKey(rawRegionName), rawRegionName);
-                tx.commit();
+                tx = regionStore.startTransaction(orderIdProvider.nextId());
             }
+            byte[] rawRegionName = regionName.toBytes();
+            tx.add(new WALKey(rawRegionName), rawRegionName);
+            tx.commit();
             return regionStore;
         }
     }
 
-    private RegionStore getOrCreateRegionPropertiesRegionStore() throws Exception {
-        RegionName regionName = REGION_PROPERTIES;
-        RegionStore store = regionPropertiesRegionStore.get();
-        if (store == null) {
-            synchronized (regionPropertiesRegionStore) {
-                store = regionPropertiesRegionStore.get();
-                if (store == null) {
-                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                        new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, true, null),
-                        null,
-                        Integer.MAX_VALUE,
-                        Integer.MIN_VALUE);
-
-                    File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
-                    WALStorage walStorage = walStorageProvider.create(workingDirectory,
-                        domain,
-                        regionName,
-                        storageDescriptor,
-                        walReplicator);
-                    store = new RegionStore(amzaStats, regionName, walStorage, rowChanges);
-                    store.load();
-                    regionPropertiesRegionStore.set(store);
-                }
-            }
-        }
-        return store;
+    public RegionStore getRegionIndexStore() throws Exception {
+        return getRegionStore(REGION_INDEX);
     }
 
     public RegionProperties getRegionProperties(RegionName regionName) throws Exception {
@@ -184,7 +166,10 @@ public class RegionProvider implements RowChanges {
         if (properties != null) {
             return properties;
         }
-        RegionStore regionPropertiesStore = getOrCreateRegionPropertiesRegionStore();
+        if (regionName.isSystemRegion()) {
+            return coldstartSystemRegionProperties(regionName);
+        }
+        RegionStore regionPropertiesStore = getRegionPropertiesStore();
         WALValue rawRegionProperties = regionPropertiesStore.get(new WALKey(regionName.toBytes()));
         if (rawRegionProperties == null || rawRegionProperties.getTombstoned()) {
             return null;
@@ -196,7 +181,7 @@ public class RegionProvider implements RowChanges {
 
     public void setRegionProperties(RegionName regionName, RegionProperties properties) throws Exception {
         regionProperties.put(regionName, properties);
-        RegionStore regionPropertiesStore = getOrCreateRegionPropertiesRegionStore();
+        RegionStore regionPropertiesStore = getRegionPropertiesStore();
         RowStoreUpdates rsu = regionPropertiesStore.startTransaction(orderIdProvider.nextId());
         rsu.add(new WALKey(regionName.toBytes()), regionPropertyMarshaller.toBytes(properties));
         rsu.commit();
@@ -206,9 +191,27 @@ public class RegionProvider implements RowChanges {
         return regionStores.entrySet();
     }
 
+    public Set<RegionName> getActiveRegions() {
+        return regionStores.keySet();
+    }
+
+    private RegionProperties coldstartSystemRegionProperties(RegionName regionName) {
+        RegionProperties properties;
+        if (regionName.equals(HIGHWATER_MARK_INDEX)) {
+            WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
+                new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
+            properties = new RegionProperties(storageDescriptor, 0, 0, false);
+        } else {
+            WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
+                new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
+            properties = new RegionProperties(storageDescriptor, 2, 2, false);
+        }
+        regionProperties.put(regionName, properties);
+        return properties;
+    }
+
     @Override
     public void changes(RowsChanged changes) throws Exception {
-        System.out.println("?????????????????????????????????????????????????????????????????????????");
         if (changes.getRegionName().equals(REGION_PROPERTIES)) {
             //TODO add metrics
             for (WALKey key : changes.getApply().keySet()) {
@@ -221,4 +224,5 @@ public class RegionProvider implements RowChanges {
             }
         }
     }
+
 }

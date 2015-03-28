@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
+import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
 import com.jivesoftware.os.filer.io.FilerIO;
@@ -119,7 +120,7 @@ public class RowRegionNGTest {
             WALKey key = new WALKey(FilerIO.intBytes(r.nextInt(range)));
             updates.put(Arrays.asList(new SimpleEntry<>(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false))));
         }
-        indexedWAL.update(updates);
+        indexedWAL.update(WALStorageUpateMode.updateThenReplicate, updates);
     }
 
     @Test
@@ -214,6 +215,6 @@ public class RowRegionNGTest {
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         MemoryWALIndex updates = new MemoryWALIndex();
         updates.put(Arrays.asList(new SimpleEntry<>(new WALKey(key), new WALValue(value, timestamp, remove))));
-        indexedWAL.update(updates);
+        indexedWAL.update(WALStorageUpateMode.updateThenReplicate, updates);
     }
 }

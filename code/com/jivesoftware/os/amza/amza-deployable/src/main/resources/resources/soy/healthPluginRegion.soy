@@ -4,17 +4,23 @@
  * @param ongoingCompactions
  * @param recentCompactions
  * @param totalCompactions
- * @param grandTotals
- * @param regionTotals
  */
 {template .healthPluginRegion}
+
+<p id="info">
+<p id="chart">
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/d3.hive.v0.min.js"></script>
+<script src="/static/scripts/amza-hive.js"></script>
+
+
     <div id="center"><div id="fig">
             <script type="text/javascript+protovis">
 var amzaChatter = amza.arc.fetch().data();
-var vis = new pv.Panel().width(880).height(310).bottom(200); var arc = vis.add(pv.Layout.Arc).nodes(amzaChatter.nodes).links(amzaChatter.links); arc.link.add(pv.Line); var dotSize = function(d) d.linkDegree + 4; var bygroup = function(d) d.group; var fillDark = function() this.fillStyle().darker(); arc.node.add(pv.Dot).size(dotSize).fillStyle(pv.Colors.category19().by(bygroup)).strokeStyle(fillDark);arc.label.add(pv.Label); vis.render(); vis.render();
+var vis = new pv.Panel().width(400).height(150).bottom(75); var arc = vis.add(pv.Layout.Arc).nodes(amzaChatter.nodes).links(amzaChatter.links); arc.link.add(pv.Line); var dotSize = function(d) d.linkDegree + 4; var bygroup = function(d) d.group; var fillDark = function() this.fillStyle().darker(); arc.node.add(pv.Dot).size(dotSize).fillStyle(pv.Colors.category19().by(bygroup)).strokeStyle(fillDark);arc.label.add(pv.Label); vis.render(); vis.render();
             </script>
         </div></div>
-
+    
     <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>{sp}Health</div>
         <div class="panel-body">
@@ -33,40 +39,14 @@ var vis = new pv.Panel().width(880).height(310).bottom(200); var arc = vis.add(p
                         <th><span class="glyphicon glyphicon-cloud-upload"></span>Replicated</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td></td>
-                        <td></td>
-                        <td>{$grandTotals.gets}{sp}lag={$grandTotals.getsLag}millis</td>
-                        <td>{$grandTotals.scans}{sp}lag={$grandTotals.scansLag}millis</td>
-                        <td>{$grandTotals.takes}{sp}lag={$grandTotals.takesLag}millis</td>
-                        <td>{$grandTotals.takeApplies}{sp}lag={$grandTotals.takeAppliesLag}millis</td>
-                        <td>{$grandTotals.received}{sp}lag={$grandTotals.receivedLag}millis</td>
-                        <td>{$grandTotals.applies}{sp}lag={$grandTotals.appliesLag}millis</td>
-                        <td>{$grandTotals.directApplies}{sp}lag={$grandTotals.directAppliesLag}millis</td>
-                        <td>{$grandTotals.replicates}{sp}lag={$grandTotals.replicatesLag}millis</td>
-                    </tr>
-                    {foreach $r in $regionTotals}
-                        <tr>
-                            <td>{$r.name}</td>
-                            <td>{$r.ringName}</td>
-                            <td>{$r.gets}{sp}lag={$r.getsLag}millis</td>
-                            <td>{$r.scans}{sp}lag={$r.scansLag}millis</td>
-                            <td>{$r.takes}{sp}lag={$r.takesLag}millis</td>
-                            <td>{$r.takeApplies}{sp}lag={$r.takeAppliesLag}millis</td>
-                            <td>{$r.received}{sp}lag={$r.receivedLag}millis</td>
-                            <td>{$r.applies}{sp}lag={$r.appliesLag}millis</td>
-                            <td>{$r.directApplies}{sp}lag={$r.directAppliesLag}millis</td>
-                            <td>{$r.replicates}{sp}lag={$grandTotals.replicatesLag}millis</td>
-                        </tr>
-                    {/foreach}
+                <tbody id="stats">
+                    
                 </tbody>
             </table>
-
-        
-     
         </div>
     </div>
+
+
     <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-tasks"></span>{sp}Compactions - ({$totalCompactions})</div>
         <div class="panel-body">

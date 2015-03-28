@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.service.storage;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 
 public class RowStoreUpdates {
@@ -59,7 +60,7 @@ public class RowStoreUpdates {
 
     public void commit() throws Exception {
         if (changedCount > 0) {
-            RowsChanged commit = regionStore.commit(rowsStorageChangeSet);
+            RowsChanged commit = regionStore.commit(WALStorageUpateMode.replicateThenUpdate, rowsStorageChangeSet);
             amzaStats.direct(regionName, changedCount, commit.getOldestRowTxId());
         }
     }

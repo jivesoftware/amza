@@ -90,6 +90,7 @@ public class AmzaServiceInitializer {
 
 
         RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, regionProvider, 1000);
+        //MemoryBackedHighWaterMarks highwaterMarks = new MemoryBackedHighWaterMarks();
         final AmzaHostRing amzaRing = new AmzaHostRing(ringHost, regionProvider, orderIdProvider);
         WALs resendWALs = new WALs(config.workingDirectories, "amza/WAL/resend", resendWALStorageProvider);
 

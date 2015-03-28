@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,18 +29,21 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
     private final String template;
+    private final String statsTemplate;
     private final SoyRenderer renderer;
     private final AmzaRing amzaRing;
     private final AmzaInstance amzaInstance;
     private final AmzaStats amzaStats;
 
     public HealthPluginRegion(String template,
+        String statsTemplate,
         SoyRenderer renderer,
         AmzaRing amzaRing,
         AmzaInstance amzaInstance,
         AmzaStats amzaStats
     ) {
         this.template = template;
+        this.statsTemplate = statsTemplate;
         this.renderer = renderer;
         this.amzaRing = amzaRing;
         this.amzaInstance = amzaInstance;
@@ -85,18 +89,32 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             }));
             data.put("totalCompactions", String.valueOf(amzaStats.getTotalCompactions()));
 
-            data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
-            List<Map<String, Object>> regionTotals = new ArrayList<>();
-            for (Map.Entry<RegionName, Totals> totals : amzaStats.getRegionTotals().entrySet()) {
-                regionTotals.add(regionTotals(totals.getKey(), totals.getValue()));
-            }
-            data.put("regionTotals", regionTotals);
-
         } catch (Exception e) {
             log.error("Unable to retrieve data", e);
         }
 
         return renderer.render(template, data);
+    }
+
+    public String renderStats() {
+        Map<String, Object> data = Maps.newHashMap();
+        try {
+            data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
+            List<Map<String, Object>> regionTotals = new ArrayList<>();
+            ArrayList<RegionName> regions = new ArrayList<>(amzaInstance.getRegionNames());
+            Collections.sort(regions);
+            for (RegionName regionName : regions) {
+                Totals totals = amzaStats.getRegionTotals().get(regionName);
+                if (totals == null) {
+                    totals = new Totals();
+                }
+                regionTotals.add(regionTotals(regionName, totals));
+            }
+            data.put("regionTotals", regionTotals);
+        } catch (Exception e) {
+            log.error("Unable to retrieve data", e);
+        }
+        return renderer.render(statsTemplate, data);
     }
 
     public Map<String, Object> regionTotals(RegionName name, AmzaStats.Totals totals) throws Exception {

@@ -4,6 +4,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -84,10 +85,18 @@ public class AmzaRegionCompactor {
         for (Map.Entry<RegionName, RegionStore> region : regionProvider.getAll()) {
             if (Math.abs(region.getKey().hashCode()) % numberOfCompactorThreads == stripe) {
                 RegionStore regionStore = region.getValue();
+                long ttlTimestampId = 0;
+                RegionProperties regionProperties = regionProvider.getRegionProperties(region.getKey());
+                if (regionProperties != null) {
+                    long ttlInMillis = regionProperties.walStorageDescriptor.primaryIndexDescriptor.ttlInMillis;
+                    if (ttlInMillis > 0) {
+                        ttlTimestampId = orderIdProvider.getApproximateId(orderIdProvider.nextId(), -ttlInMillis);
+                    }
+                }
                 try {
                     amzaStats.beginCompaction("Compacting Tombstones:" + region.getKey());
                     try {
-                        regionStore.compactTombstone(removeTombstonedOlderThanTimestampId);
+                        regionStore.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
                     } finally {
                         amzaStats.endCompaction("Compacting Tombstones:" + region.getKey());
                     }

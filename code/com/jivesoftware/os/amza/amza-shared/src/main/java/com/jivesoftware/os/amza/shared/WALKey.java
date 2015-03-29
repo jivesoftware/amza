@@ -50,7 +50,6 @@ public class WALKey implements Comparable<WALKey>, Serializable {
         return "walKey=" + Arrays.toString(key);
     }
 
-    // TODO better hashcode?
     @Override
     public int hashCode() {
         int hash = 3;

@@ -104,13 +104,14 @@ public class Main {
 
         RingHost ringHost;
         if (transport.equals("http")) {
-            ringHost = new RingHost(hostname, port); // TODO include rackId
+            ringHost = new RingHost(hostname, port);
         } else {
-            ringHost = new RingHost(hostname, tcpPort); // TODO include rackId
+            ringHost = new RingHost(hostname, tcpPort);
         }
 
         // todo need a better way to create writter id.
-        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(new Random().nextInt(512)));
+        int writerId = Integer.parseInt(System.getProperty("amza.id", String.valueOf(new Random().nextInt(512))));
+        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(writerId));
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -184,7 +185,6 @@ public class Main {
         IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);
         bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
         TcpServerInitializer initializer = new TcpServerInitializer();
-        // TODO include rackId
         final TcpServer server = initializer.initialize(new RingHost(hostname, tcpPort), numServerThreads, bufferProvider, framer, serverProtocol);
         server.start();
 

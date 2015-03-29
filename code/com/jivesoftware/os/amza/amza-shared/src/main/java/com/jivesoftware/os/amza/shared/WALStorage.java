@@ -21,7 +21,6 @@ public interface WALStorage extends WALScanable {
 
     void load() throws Exception;
 
-    // TODO Consider using a call back stream instead of returning RowsChanged
     RowsChanged update(WALStorageUpateMode upateMode, WALScanable rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
@@ -34,7 +33,7 @@ public interface WALStorage extends WALScanable {
 
     void takeRowUpdatesSince(final long transactionId, RowStream rowUpdates) throws Exception;
 
-    void compactTombstone(long removeTombstonedOlderThanNMillis) throws Exception;
+    void compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 
     void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception;
 }

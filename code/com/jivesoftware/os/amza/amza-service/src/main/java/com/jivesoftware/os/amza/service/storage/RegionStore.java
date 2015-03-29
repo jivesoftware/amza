@@ -56,8 +56,8 @@ public class RegionStore implements WALScanable {
         walStorage.rangeScan(from, to, walScan);
     }
 
-    public void compactTombstone(long removeTombstonedOlderThanTimestampId) throws Exception {
-        walStorage.compactTombstone(removeTombstonedOlderThanTimestampId);
+    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
+        walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
     }
 
     public WALValue get(WALKey key) throws Exception {

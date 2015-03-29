@@ -97,10 +97,10 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public void compactTombstone(long removeTombstonedOlderThanTimestampId) throws Exception {
+    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
 
         if ((clobberCount.get() + 1) / (newCount.get() + 1) > 2) { // TODO expose to config
-            Optional<WALTx.Compacted> compact = walTx.compact(regionName, removeTombstonedOlderThanTimestampId, walIndex.get());
+            Optional<WALTx.Compacted> compact = walTx.compact(regionName, removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
 
             if (compact.isPresent()) {
 

@@ -53,9 +53,9 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public void compactTombstone(long removeTombstonedOlderThanTimestampId) throws Exception {
+    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         if (updateCount.get() > 0) {
-            rowsTx.compact(regionName, removeTombstonedOlderThanTimestampId, null);
+            rowsTx.compact(regionName, removeTombstonedOlderThanTimestampId, ttlTimestampId, null);
             updateCount.set(0);
         }
     }

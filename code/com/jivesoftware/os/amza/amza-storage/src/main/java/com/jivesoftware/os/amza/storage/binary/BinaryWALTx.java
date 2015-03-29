@@ -115,6 +115,7 @@ public class BinaryWALTx implements WALTx {
                     + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
                 io.reverseScan(new RowStream() {
                     long commitedUpToTxId = Long.MIN_VALUE;
+
                     @Override
                     public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
                         if (rowType > 0) {
@@ -146,7 +147,10 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public Optional<Compacted> compact(final RegionName regionName, final long removeTombstonedOlderThanTimestampId, final WALIndex rowIndex) throws Exception {
+    public Optional<Compacted> compact(final RegionName regionName,
+        final long removeTombstonedOlderThanTimestampId,
+        final long ttlTimestampId,
+        final WALIndex rowIndex) throws Exception {
 
         final String metricPrefix = "region>" + regionName.getRegionName() + ">ring>" + regionName.getRingName() + ">";
         LOG.inc(metricPrefix + "checks");
@@ -172,8 +176,19 @@ public class BinaryWALTx implements WALTx {
         final AtomicLong keyCount = new AtomicLong();
         final AtomicLong removeCount = new AtomicLong();
         final AtomicLong tombstoneCount = new AtomicLong();
+        final AtomicLong ttlCount = new AtomicLong();
 
-        compact(0, endOfLastRow, rowIndex, compactionRowIndex, compactionIO, keyCount, removeCount, tombstoneCount, removeTombstonedOlderThanTimestampId);
+        compact(0,
+            endOfLastRow,
+            rowIndex,
+            compactionRowIndex,
+            compactionIO,
+            keyCount,
+            removeCount,
+            tombstoneCount,
+            ttlCount,
+            removeTombstonedOlderThanTimestampId,
+            ttlTimestampId);
 
         return Optional.<Compacted>of(new Compacted() {
 
@@ -186,9 +201,11 @@ public class BinaryWALTx implements WALTx {
                     AtomicLong catchupKeys = new AtomicLong();
                     AtomicLong catchupRemoves = new AtomicLong();
                     AtomicLong catchupTombstones = new AtomicLong();
+                    AtomicLong catchupTTL = new AtomicLong();
                     compact(endOfLastRow, Long.MAX_VALUE, rowIndex, compactionRowIndex, compactionIO,
-                        catchupKeys, catchupRemoves, catchupTombstones,
-                        removeTombstonedOlderThanTimestampId);
+                        catchupKeys, catchupRemoves, catchupTombstones, catchupTTL,
+                        removeTombstonedOlderThanTimestampId,
+                        ttlTimestampId);
                     compactionIO.flush();
                     long sizeAfterCompaction = compactionIO.sizeInBytes();
                     compactionIO.close();
@@ -212,10 +229,12 @@ public class BinaryWALTx implements WALTx {
                     LOG.set(ValueType.COUNT, metricPrefix + "keeps", keyCount.get());
                     LOG.set(ValueType.COUNT, metricPrefix + "removes", removeCount.get());
                     LOG.set(ValueType.COUNT, metricPrefix + "tombstones", tombstoneCount.get());
+                    LOG.set(ValueType.COUNT, metricPrefix + "ttl", ttlCount.get());
                     LOG.set(ValueType.COUNT, metricPrefix + "duration", System.currentTimeMillis() - start);
                     LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", catchupKeys.get());
                     LOG.set(ValueType.COUNT, metricPrefix + "catchupRemoves", catchupRemoves.get());
                     LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", catchupTombstones.get());
+                    LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", catchupTTL.get());
                     LOG.set(ValueType.COUNT, metricPrefix + "catchupDuration", System.currentTimeMillis() - startCatchup);
 
                     LOG.info("Compacted region " + dir.getAbsolutePath() + "/" + name
@@ -242,7 +261,9 @@ public class BinaryWALTx implements WALTx {
         final AtomicLong keyCount,
         final AtomicLong removeCount,
         final AtomicLong tombstoneCount,
-        final long removeTombstonedOlderThanTimestampId) throws
+        final AtomicLong ttlCount,
+        final long removeTombstonedOlderThanTimestampId,
+        final long ttlTimestampId) throws
         Exception {
 
         final List<WALKey> rowKeys = new ArrayList<>();
@@ -271,13 +292,17 @@ public class BinaryWALTx implements WALTx {
                     if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
                         tombstoneCount.incrementAndGet();
                     } else {
-                        rowKeys.add(key);
-                        rowValues.add(value);
-                        rowTxIds.add(rowTxId);
-                        rawRowTypes.add(rowType);
-                        rawRows.add(row);
-                        batchSizeInBytes.addAndGet(row.length);
-                        keyCount.incrementAndGet();
+                        if (value.getTimestampId() > ttlTimestampId) {
+                            rowKeys.add(key);
+                            rowValues.add(value);
+                            rowTxIds.add(rowTxId);
+                            rawRowTypes.add(rowType);
+                            rawRows.add(row);
+                            batchSizeInBytes.addAndGet(row.length);
+                            keyCount.incrementAndGet();
+                        } else {
+                            ttlCount.incrementAndGet();
+                        }
                     }
                 } else {
                     removeCount.incrementAndGet();

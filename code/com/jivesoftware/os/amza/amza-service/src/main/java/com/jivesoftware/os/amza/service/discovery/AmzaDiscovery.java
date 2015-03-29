@@ -79,7 +79,7 @@ public class AmzaDiscovery {
                                 LOG.debug("recieved:" + Arrays.toString(clusterHostPort));
                                 String host = clusterHostPort[1];
                                 int port = Integer.parseInt(clusterHostPort[2].trim());
-                                RingHost anotherRingHost = new RingHost(host, port); // TODO need to broadcast rack id
+                                RingHost anotherRingHost = new RingHost(host, port);
                                 List<RingHost> ring = amzaRing.getRing("master");
                                 if (!ring.contains(anotherRingHost)) {
                                     LOG.info("Adding host to the cluster: " + anotherRingHost);

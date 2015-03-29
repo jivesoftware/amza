@@ -209,7 +209,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 WALStorage regionWAL = resendWAL.get(regionName);
                 amzaStats.beginCompaction("Compacting Resend:" + regionName);
                 try {
-                    regionWAL.compactTombstone(highWatermark); // TODO should this be plus 1
+                    regionWAL.compactTombstone(highWatermark, highWatermark);
                 } finally {
                     amzaStats.endCompaction("Compacting Resend:" + regionName);
                 }

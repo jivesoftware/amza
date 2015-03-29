@@ -44,9 +44,6 @@ public class MemoryBackedHighWaterMarks implements HighwaterMarks {
         ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringHost);
         if (lastRegionTransactionIds != null) {
             lastRegionTransactionIds.remove(regionName);
-            //if (lastTableTransactionIds.isEmpty()) { // TODO do this is a thread safe way
-            //       lastTransactionIds.remove(ringHost);
-            //}
         }
     }
 

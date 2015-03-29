@@ -24,7 +24,10 @@ public interface WALTx {
 
     WALIndex load(RegionName regionName) throws Exception;
 
-    Optional<Compacted> compact(RegionName regionName, long removeTombstonedOlderThanNMillis, WALIndex rowIndex) throws Exception;
+    Optional<Compacted> compact(RegionName regionName,
+        long removeTombstonedOlderThanTimestampId,
+        long ttlTimestampId,
+        WALIndex rowIndex) throws Exception;
 
     public interface Compacted {
 

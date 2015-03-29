@@ -141,7 +141,7 @@ public class AmzaRegionChangeReceiver {
                 WALStorage regionWAL = receivedWAL.get(regionName);
                 amzaStats.beginCompaction("Compacting Received:" + regionName);
                 try {
-                    regionWAL.compactTombstone(highWatermark); // TODO should this be plus 1
+                    regionWAL.compactTombstone(highWatermark, highWatermark);
                 } finally {
                     amzaStats.endCompaction("Compacting Received:" + regionName);
                 }

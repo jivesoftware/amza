@@ -66,7 +66,7 @@ public class RowRegionNGTest {
             @Override
             public void run() {
                 try {
-                    indexedWAL.compactTombstone(0);
+                    indexedWAL.compactTombstone(0, Long.MAX_VALUE);
                 } catch (Exception x) {
                     x.printStackTrace();
                 }

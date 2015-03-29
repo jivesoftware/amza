@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
+import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
@@ -108,11 +109,17 @@ public class AmzaEndpoints {
     }
 
     AmzaRegion createRegionIfAbsent(String regionName) throws Exception {
+
+        List<RingHost> ring = amzaService.getAmzaRing().getRing("default");
+        if (ring.isEmpty()) {
+            amzaService.getAmzaRing().buildRandomSubRing("default", amzaService.getAmzaRing().getRing("system").size());
+        }
+
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("mapdb", Long.MAX_VALUE, false,
             null),
             null, 1000, 1000);
 
-        return amzaService.createRegionIfAbsent(new RegionName(false, "master", regionName),
+        return amzaService.createRegionIfAbsent(new RegionName(false, "default", regionName),
             new RegionProperties(storageDescriptor, 1, 1, false)
         );
     }

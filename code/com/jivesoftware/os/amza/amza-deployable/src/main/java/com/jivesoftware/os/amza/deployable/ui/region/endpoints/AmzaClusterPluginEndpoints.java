@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.deployable.ui.region.endpoints;
 
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.deployable.ui.region.AmzaRingPluginRegion;
-import com.jivesoftware.os.amza.deployable.ui.region.AmzaRingPluginRegion.AmzaRingPluginRegionInput;
+import com.jivesoftware.os.amza.deployable.ui.region.AmzaClusterPluginRegion;
+import com.jivesoftware.os.amza.deployable.ui.region.AmzaClusterPluginRegion.AmzaClusterPluginRegionInput;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyService;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
@@ -20,13 +20,13 @@ import javax.ws.rs.core.Response;
  *
  */
 @Singleton
-@Path("/ui/ring")
-public class AmzaRingPluginEndpoints {
+@Path("/ui/cluster")
+public class AmzaClusterPluginEndpoints {
 
     private final SoyService soyService;
-    private final AmzaRingPluginRegion pluginRegion;
+    private final AmzaClusterPluginRegion pluginRegion;
 
-    public AmzaRingPluginEndpoints(@Context SoyService soyService, @Context AmzaRingPluginRegion pluginRegion) {
+    public AmzaClusterPluginEndpoints(@Context SoyService soyService, @Context AmzaClusterPluginRegion pluginRegion) {
         this.soyService = soyService;
         this.pluginRegion = pluginRegion;
     }
@@ -36,7 +36,7 @@ public class AmzaRingPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaRingPluginRegionInput("", "", "")));
+            Optional.of(new AmzaClusterPluginRegionInput("", "", "")));
         return Response.ok(rendered).build();
     }
 
@@ -48,7 +48,7 @@ public class AmzaRingPluginEndpoints {
         @FormParam("port") @DefaultValue("") String port,
         @FormParam("action") @DefaultValue("") String action) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaRingPluginRegionInput(host, port, action)));
+            Optional.of(new AmzaClusterPluginRegionInput(host, port, action)));
         return Response.ok(rendered).build();
     }
 }

@@ -36,7 +36,6 @@ public class RowStoreUpdates {
         this.rowsStorageChangeSet = rowsStorageChangeSet;
     }
 
-
     public WALKey add(WALKey key, byte[] value) throws Exception {
         if (rowsStorageChangeSet.put(key, value)) {
             changedCount++;
@@ -59,8 +58,12 @@ public class RowStoreUpdates {
     }
 
     public void commit() throws Exception {
+        commit(WALStorageUpateMode.replicateThenUpdate);
+    }
+
+    public void commit(WALStorageUpateMode upateMode) throws Exception {
         if (changedCount > 0) {
-            RowsChanged commit = regionStore.commit(WALStorageUpateMode.replicateThenUpdate, rowsStorageChangeSet);
+            RowsChanged commit = regionStore.commit(upateMode, rowsStorageChangeSet);
             amzaStats.direct(regionName, changedCount, commit.getOldestRowTxId());
         }
     }

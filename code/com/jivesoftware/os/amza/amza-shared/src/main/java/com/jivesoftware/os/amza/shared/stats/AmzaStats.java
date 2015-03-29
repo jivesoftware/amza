@@ -132,42 +132,54 @@ public class AmzaStats {
         grandTotals.takes.addAndGet(count);
         Totals totals = regionTotals(regionName);
         totals.takes.addAndGet(count);
-        totals.takesLag.set(lag(smallestTxId));
+        long lag = lag(smallestTxId);
+        totals.takesLag.set(lag);
+        grandTotals.takesLag.set((grandTotals.takesLag.get() + lag) / 2);
     }
 
     public void tookApplied(RingHost from, RegionName regionName, int count, long smallestTxId) {
         grandTotals.takeApplies.addAndGet(count);
         Totals totals = regionTotals(regionName);
         totals.takeApplies.addAndGet(count);
-        totals.takeAppliesLag.set(lag(smallestTxId));
+        long lag = lag(smallestTxId);
+        totals.takeAppliesLag.set(lag);
+        grandTotals.takesLag.set((grandTotals.takesLag.get() + lag) / 2);
     }
 
     public void direct(RegionName regionName, int count, long smallestTxId) {
         grandTotals.directApplies.addAndGet(count);
         Totals totals = regionTotals(regionName);
         totals.directApplies.addAndGet(count);
-        totals.directAppliesLag.set(lag(smallestTxId));
+        long lag = lag(smallestTxId);
+        totals.directAppliesLag.set(lag);
+        grandTotals.directAppliesLag.set((grandTotals.directAppliesLag.get() + lag) / 2);
     }
 
     public void replicated(RingHost to, RegionName regionName, int count, long smallestTxId) {
         grandTotals.replicates.addAndGet(count);
         Totals totals = regionTotals(regionName);
         totals.replicates.addAndGet(count);
-        totals.replicatesLag.set(lag(smallestTxId));
+        long lag = lag(smallestTxId);
+        totals.replicatesLag.set(lag);
+        grandTotals.replicatesLag.set((grandTotals.replicatesLag.get() + lag) / 2);
     }
 
     public void received(RegionName regionName, int count, long smallestTxId) {
         grandTotals.received.addAndGet(count);
         Totals totals = regionTotals(regionName);
         totals.received.addAndGet(count);
-        totals.receivedLag.set(lag(smallestTxId));
+        long lag = lag(smallestTxId);
+        totals.receivedLag.set(lag);
+        grandTotals.receivedLag.set((grandTotals.receivedLag.get() + lag) / 2);
     }
 
     public void receivedApplied(RegionName regionName, int count, long smallestTxId) {
         grandTotals.receivedApplies.addAndGet(count);
         Totals totals = regionTotals(regionName);
         totals.receivedApplies.addAndGet(count);
-        totals.receivedAppliesLag.set(lag(smallestTxId));
+        long lag = lag(smallestTxId);
+        totals.receivedAppliesLag.set(lag);
+        grandTotals.receivedAppliesLag.set((grandTotals.receivedAppliesLag.get() + lag) / 2);
     }
 
     private Totals regionTotals(RegionName regionName) {

@@ -27,7 +27,7 @@ public class RingHost implements Comparable<RingHost> {
     private final String host;
     private final int port;
 
-    public byte[] toBytes() {
+    public byte[] toBytes() { // TODO convert to lex byte ordering?
         byte[] hostBytes = host.getBytes(StandardCharsets.UTF_8);
         byte[] bytes = new byte[1 + 4 + hostBytes.length];
         bytes[0] = 0; // version;

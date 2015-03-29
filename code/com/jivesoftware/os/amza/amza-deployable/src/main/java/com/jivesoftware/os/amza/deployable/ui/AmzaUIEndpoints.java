@@ -93,7 +93,7 @@ public class AmzaUIEndpoints {
     @Path("/chord")
     public Response chord() {
         try {
-            List<RingHost> ring = amzaRing.getRing("master");
+            List<RingHost> ring = amzaRing.getRing("system");
             Collections.sort(ring);
             List<List<Integer>> matrix = new ArrayList<>();
             for (RingHost r : ring) {
@@ -147,7 +147,7 @@ public class AmzaUIEndpoints {
     @Path("/arc")
     public Response arc() {
         try {
-            List<RingHost> ring = amzaRing.getRing("master");
+            List<RingHost> ring = amzaRing.getRing("system");
             Collections.sort(ring);
 
             Map<String, Integer> index = new HashMap<>();

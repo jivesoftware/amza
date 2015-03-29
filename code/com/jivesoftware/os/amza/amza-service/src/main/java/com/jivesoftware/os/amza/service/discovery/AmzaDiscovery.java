@@ -80,10 +80,10 @@ public class AmzaDiscovery {
                                 String host = clusterHostPort[1];
                                 int port = Integer.parseInt(clusterHostPort[2].trim());
                                 RingHost anotherRingHost = new RingHost(host, port);
-                                List<RingHost> ring = amzaRing.getRing("master");
+                                List<RingHost> ring = amzaRing.getRing("system");
                                 if (!ring.contains(anotherRingHost)) {
                                     LOG.info("Adding host to the cluster: " + anotherRingHost);
-                                    amzaRing.addRingHost("master", anotherRingHost);
+                                    amzaRing.addRingHost("system", anotherRingHost);
                                 }
                             }
                         }

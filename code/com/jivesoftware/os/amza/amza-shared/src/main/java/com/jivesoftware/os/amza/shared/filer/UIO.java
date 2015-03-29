@@ -23,6 +23,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 public class UIO {
 
@@ -638,7 +639,7 @@ public class UIO {
         if (s == null) {
             s = "";
         }
-        writeCharArray(_filer, s.toCharArray(), fieldName);
+        writeByteArray(_filer, s.getBytes(StandardCharsets.UTF_8), fieldName);
     }
 
     /**
@@ -975,7 +976,7 @@ public class UIO {
      * @throws IOException
      */
     public static String readString(IReadable _filer, String fieldName) throws IOException {
-        return new String(readCharArray(_filer, fieldName));
+        return new String(readByteArray(_filer, fieldName), StandardCharsets.UTF_8);
     }
 
     // Reading

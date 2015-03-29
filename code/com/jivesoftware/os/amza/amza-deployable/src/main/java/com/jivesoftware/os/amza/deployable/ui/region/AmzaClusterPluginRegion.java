@@ -15,8 +15,8 @@ import java.util.Map;
 /**
  *
  */
-// soy.page.amzaRingPluginRegion
-public class AmzaRingPluginRegion implements PageRegion<Optional<AmzaRingPluginRegion.AmzaRingPluginRegionInput>> {
+// soy.page.amzaClusterPluginRegion
+public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterPluginRegion.AmzaClusterPluginRegionInput>> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
@@ -24,7 +24,7 @@ public class AmzaRingPluginRegion implements PageRegion<Optional<AmzaRingPluginR
     private final SoyRenderer renderer;
     private final AmzaRing amzaRing;
 
-    public AmzaRingPluginRegion(String template,
+    public AmzaClusterPluginRegion(String template,
         SoyRenderer renderer,
         AmzaRing amzaRing) {
         this.template = template;
@@ -32,13 +32,13 @@ public class AmzaRingPluginRegion implements PageRegion<Optional<AmzaRingPluginR
         this.amzaRing = amzaRing;
     }
 
-    public static class AmzaRingPluginRegionInput {
+    public static class AmzaClusterPluginRegionInput {
 
         final String host;
         final String port;
         final String action;
 
-        public AmzaRingPluginRegionInput(String host, String port, String action) {
+        public AmzaClusterPluginRegionInput(String host, String port, String action) {
             this.host = host;
             this.port = port;
             this.action = action;
@@ -47,21 +47,21 @@ public class AmzaRingPluginRegion implements PageRegion<Optional<AmzaRingPluginR
     }
 
     @Override
-    public String render(Optional<AmzaRingPluginRegionInput> optionalInput) {
+    public String render(Optional<AmzaClusterPluginRegionInput> optionalInput) {
         Map<String, Object> data = Maps.newHashMap();
 
         try {
             if (optionalInput.isPresent()) {
-                AmzaRingPluginRegionInput input = optionalInput.get();
+                AmzaClusterPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
-                    amzaRing.addRingHost("master", new RingHost(input.host, Integer.parseInt(input.port)));
+                    amzaRing.addRingHost("system", new RingHost(input.host, Integer.parseInt(input.port)));
                 } else if (input.action.equals("remove")) {
-                    amzaRing.removeRingHost("master", new RingHost(input.host, Integer.parseInt(input.port)));
+                    amzaRing.removeRingHost("system", new RingHost(input.host, Integer.parseInt(input.port)));
                 }
 
                 List<Map<String, String>> rows = new ArrayList<>();
-                for (RingHost host : amzaRing.getRing("master")) {
+                for (RingHost host : amzaRing.getRing("system")) {
 
                     Map<String, String> row = new HashMap<>();
                     row.put("host", host.getHost());
@@ -81,7 +81,7 @@ public class AmzaRingPluginRegion implements PageRegion<Optional<AmzaRingPluginR
 
     @Override
     public String getTitle() {
-        return "Amza Ring";
+        return "Amza Cluster";
     }
 
 }

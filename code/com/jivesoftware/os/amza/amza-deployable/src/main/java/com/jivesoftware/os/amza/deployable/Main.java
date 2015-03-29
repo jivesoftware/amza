@@ -24,14 +24,16 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.tofu.SoyTofu;
 import com.jivesoftware.os.amza.deployable.ui.AmzaUIEndpoints;
 import com.jivesoftware.os.amza.deployable.ui.AmzaUIEndpoints.AmzaClusterName;
+import com.jivesoftware.os.amza.deployable.ui.region.AmzaClusterPluginRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.AmzaRegionsPluginRegion;
-import com.jivesoftware.os.amza.deployable.ui.region.AmzaRingPluginRegion;
+import com.jivesoftware.os.amza.deployable.ui.region.AmzaRingsPluginRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.HeaderRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.HealthPluginRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.HomeRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.ManagePlugin;
+import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaClusterPluginEndpoints;
 import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaRegionsPluginEndpoints;
-import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaRingPluginEndpoints;
+import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaRingsPluginEndpoints;
 import com.jivesoftware.os.amza.deployable.ui.region.endpoints.HealthPluginEndpoints;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyDataUtils;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyRenderer;
@@ -217,9 +219,11 @@ public class Main {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/chrome.soy"), "chome.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/homeRegion.soy"), "home.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/healthPluginRegion.soy"), "health.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRingPluginRegion.soy"), "amzaRing.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRingsPluginRegion.soy"), "amzaRings.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaClusterPluginRegion.soy"), "amzaCluster.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRegionsPluginRegion.soy"), "amzaRegions.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStats.soy"), "amzaStats.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
 
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();
@@ -231,12 +235,15 @@ public class Main {
             HealthPluginEndpoints.class,
             new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats",
                 renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
+            new ManagePlugin("repeat", "Amza Rings", "/ui/rings",
+                AmzaRingsPluginEndpoints.class,
+                new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getAmzaRing())),
             new ManagePlugin("map-marker", "Amza Regions", "/ui/regions",
                 AmzaRegionsPluginEndpoints.class,
                 new AmzaRegionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaRing(), amzaService)),
-            new ManagePlugin("leaf", "Amza Ring", "/ui/ring",
-                AmzaRingPluginEndpoints.class,
-                new AmzaRingPluginRegion("soy.page.amzaRingPluginRegion", renderer, amzaService.getAmzaRing())));
+            new ManagePlugin("leaf", "Amza Cluster", "/ui/cluster",
+                AmzaClusterPluginEndpoints.class,
+                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaRing())));
 
         jerseyEndpoints.addInjectable(SoyService.class, soyService);
 

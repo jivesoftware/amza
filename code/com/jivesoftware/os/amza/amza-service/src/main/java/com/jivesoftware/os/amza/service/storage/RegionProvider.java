@@ -37,9 +37,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class RegionProvider implements RowChanges {
 
-    public static final RegionName REGION_INDEX = new RegionName(true, "MASTER", "REGION_INDEX");
-    public static final RegionName REGION_PROPERTIES = new RegionName(true, "MASTER", "REGION_PROPERTIES");
-    public static final RegionName HIGHWATER_MARK_INDEX = new RegionName(true, "MASTER", "HIGHWATER_MARKS");
+    public static final RegionName RING_INDEX = new RegionName(true, "system", "RING_INDEX");
+    public static final RegionName REGION_INDEX = new RegionName(true, "system", "REGION_INDEX");
+    public static final RegionName REGION_PROPERTIES = new RegionName(true, "system", "REGION_PROPERTIES");
+    public static final RegionName HIGHWATER_MARK_INDEX = new RegionName(true, "system", "HIGHWATER_MARKS");
 
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
@@ -90,6 +91,10 @@ public class RegionProvider implements RowChanges {
                 return true;
             }
         });
+    }
+
+    public RegionStore getRingIndexStore() throws Exception {
+        return getRegionStore(RING_INDEX);
     }
 
     public RegionStore getHighwaterIndexStore() throws Exception {

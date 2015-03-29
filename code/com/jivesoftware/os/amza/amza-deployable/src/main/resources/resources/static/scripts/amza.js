@@ -240,12 +240,60 @@ amza.chord = {
     }
 };
 
+amza.overview = {
+    input: {},
+    requireFocus: true,
+    html: null, 
+    init: function () {
+        $overview = $('#overview');
+        
+//        if (amza.stats.requireFocus) {
+//            amza.onWindowFocus.push(function () {
+//                if (amza.stats.html) {
+//                    amza.stats;
+//                }
+//            });
+//        }
+
+        amza.overview.poll();
+    },
+    poll: function () {
+        $.ajax({
+            type: "GET",
+            url: "/ui/health/overview",
+            dataType: "html",
+            data: {
+                name: ""
+            },
+            //contentType: "application/json",
+            success: function (data) {
+                amza.overview.draw(data);
+            },
+            error: function () {
+                //TODO error message
+                console.log("error!");
+            }
+        });
+    },
+    draw: function (data) {
+        $('#overview').html(data);
+
+        if (!amza.overview.requireFocus || amza.windowFocused) {
+            //amza.stats.update();
+        }
+        setTimeout(amza.overview.poll, 1000);
+    }
+};
+
 $(document).ready(function () {
     if ($('#chord').length) {
         amza.chord.init();
     }
     if ($('#stats').length) {
         amza.stats.init();
+    }
+    if ($('#overview').length) {
+        amza.overview.init();
     }
 });
 

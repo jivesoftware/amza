@@ -178,13 +178,13 @@ public class AmzaTestCluster {
         //}
 
         try {
-            amzaService.getAmzaRing().addRingHost("MASTER", serviceHost); // ?? Hacky
+            amzaService.getAmzaRing().addRingHost("system", serviceHost); // ?? Hacky
             amzaService.getAmzaRing().addRingHost("test", serviceHost); // ?? Hacky
             if (lastAmzaService != null) {
-                amzaService.getAmzaRing().addRingHost("MASTER", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
+                amzaService.getAmzaRing().addRingHost("system", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
                 amzaService.getAmzaRing().addRingHost("test", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
 
-                lastAmzaService.getAmzaRing().addRingHost("MASTER", serviceHost); // ?? Hacky
+                lastAmzaService.getAmzaRing().addRingHost("system", serviceHost); // ?? Hacky
                 lastAmzaService.getAmzaRing().addRingHost("test", serviceHost); // ?? Hacky
             }
             lastAmzaService = amzaService;
@@ -310,8 +310,8 @@ public class AmzaTestCluster {
             regionNames.addAll(allARegions);
             regionNames.addAll(allBRegions);
 
-            List<RingHost> aRing = amzaService.getAmzaRing().getRing("MASTER");
-            List<RingHost> bRing = service.amzaService.getAmzaRing().getRing("MASTER");
+            List<RingHost> aRing = amzaService.getAmzaRing().getRing("system");
+            List<RingHost> bRing = service.amzaService.getAmzaRing().getRing("system");
             Collections.sort(aRing);
             Collections.sort(bRing);
 

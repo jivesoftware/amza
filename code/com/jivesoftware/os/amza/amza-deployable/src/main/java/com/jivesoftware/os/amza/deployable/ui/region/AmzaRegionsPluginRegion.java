@@ -140,7 +140,7 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
 
         Map<String, Object> map = new HashMap<>();
         map.put("className", primaryIndexDescriptor.className);
-        map.put("ttlInMillis", primaryIndexDescriptor.ttlInMillis);
+        map.put("ttlInMillis", String.valueOf(primaryIndexDescriptor.ttlInMillis));
         map.put("forceCompactionOnStartup", primaryIndexDescriptor.forceCompactionOnStartup);
         //public Map<String, String> properties; //TODO
         return map;

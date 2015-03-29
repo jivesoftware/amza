@@ -21,14 +21,17 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.AmzaRing;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,6 +40,30 @@ import java.util.Random;
 import java.util.Set;
 
 public class AmzaHostRing implements AmzaRing {
+
+    public static enum Status {
+
+        online((byte) 2), joining((byte) 1), off((byte) 0), leaving((byte) -1), offline((byte) -2);
+
+        public final byte b;
+
+        Status(byte b) {
+            this.b = b;
+        }
+
+        public byte[] toBytes() {
+            return new byte[]{b};
+        }
+
+        static Status fromBytes(byte[] b) {
+            for (Status v : values()) {
+                if (v.b == b[0]) {
+                    return v;
+                }
+            }
+            return null;
+        }
+    }
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final RingHost ringHost;
@@ -51,14 +78,31 @@ public class AmzaHostRing implements AmzaRing {
         this.orderIdProvider = orderIdProvider;
     }
 
+    private WALKey key(String ringName, RingHost ringHost) throws IOException {
+        MemoryFiler filer = new MemoryFiler();
+        UIO.writeString(filer, ringName.toUpperCase(), "ringName");
+        UIO.writeByte(filer, 0, "seperator");
+        if (ringHost != null) {
+            UIO.writeByteArray(filer, ringHost.toBytes(), "ringHost");
+        }
+        return new WALKey(filer.getBytes());
+    }
+
+    public RingHost keyToRingHost(WALKey key) throws IOException {
+        MemoryFiler filer = new MemoryFiler(key.getKey());
+        UIO.readString(filer, "ringName");
+        UIO.readByte(filer, "seperator");
+        return RingHost.fromBytes(UIO.readByteArray(filer, "ringHost"));
+    }
+
     public RingHost getRingHost() {
         return ringHost;
     }
 
     public void buildRandomSubRing(String ringName, int desiredRingSize) throws Exception {
-        List<RingHost> ring = getRing("MASTER");
+        List<RingHost> ring = getRing("system");
         if (ring.size() < desiredRingSize) {
-            throw new IllegalStateException("Current master ring is not large enough to support a ring of size:" + desiredRingSize);
+            throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
         Collections.shuffle(ring, new Random(ringName.hashCode()));
         for (int i = 0; i < desiredRingSize; i++) {
@@ -72,21 +116,21 @@ public class AmzaHostRing implements AmzaRing {
 
     @Override
     public List<RingHost> getRing(String ringName) throws Exception {
-        RegionStore ringIndex = regionProvider.getRegionStore(createRingName(ringName));
-        if (ringIndex == null) {
-            LOG.warn("No ring defined for ringName:" + ringName);
+        RegionStore ringIndex = regionProvider.getRingIndexStore();
+
+        final Set<RingHost> ringHosts = new HashSet<>();
+        WALKey from = key(ringName, null);
+        ringIndex.rangeScan(from, from.prefixUpperExclusive(), new WALScan() {
+            @Override
+            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
+                ringHosts.add(keyToRingHost(key));
+                return true;
+            }
+        });
+        if (ringHosts.isEmpty()) {
+            //LOG.warn("No ring defined for ringName:" + ringName);
             return new ArrayList<>();
         } else {
-            final Set<RingHost> ringHosts = new HashSet<>();
-            ringIndex.rowScan(new WALScan() {
-                @Override
-                public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
-                    if (!value.getTombstoned()) {
-                        ringHosts.add(RingHost.fromBytes(key.getKey()));
-                    }
-                    return true;
-                }
-            });
             return new ArrayList<>(ringHosts);
         }
     }
@@ -99,10 +143,9 @@ public class AmzaHostRing implements AmzaRing {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
-        RegionStore ringIndex = regionProvider.getRegionStore(createRingName(ringName));
+        RegionStore ringIndex = regionProvider.getRingIndexStore();
         RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        byte[] rawRingHost = ringHost.toBytes();
-        tx.add(new WALKey(rawRingHost), new byte[0]);
+        tx.add(key(ringName, ringHost), new byte[Status.online.b]);
         tx.commit();
     }
 
@@ -114,15 +157,23 @@ public class AmzaHostRing implements AmzaRing {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
-        RegionStore ringIndex = regionProvider.getRegionStore(createRingName(ringName));
+        RegionStore ringIndex = regionProvider.getRingIndexStore();
         RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        byte[] rawRingHost = ringHost.toBytes();
-        tx.remove(new WALKey(rawRingHost));
-        tx.commit();
+        tx.remove(key(ringName, ringHost));
+        tx.commit(WALStorageUpateMode.updateThenReplicate);
     }
 
-    private RegionName createRingName(String ringName) {
-        ringName = ringName.toUpperCase();
-        return new RegionName(true, "MASTER", "RING_INDEX_" + ringName);
+    @Override
+    public void allRings(final RingStream ringStream) throws Exception {
+        regionProvider.getRingIndexStore().rowScan(new WALScan() {
+
+            @Override
+            public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
+                MemoryFiler filer = new MemoryFiler(key.getKey());
+                String ringName = UIO.readString(filer, "ringName");
+                UIO.readByte(filer, "seperator");
+                return ringStream.stream(ringName, Status.fromBytes(value.getValue()).name(), RingHost.fromBytes(UIO.readByteArray(filer, "ringHost")));
+            }
+        });
     }
 }

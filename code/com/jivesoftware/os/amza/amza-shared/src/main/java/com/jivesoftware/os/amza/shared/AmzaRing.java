@@ -14,4 +14,11 @@ public interface AmzaRing {
 
     List<RingHost> getRing(String ringName) throws Exception;
 
+    void allRings(RingStream ringStream) throws Exception;
+
+    interface RingStream {
+
+        boolean stream(String ringName, String status, RingHost ringHost);
+    }
+
 }

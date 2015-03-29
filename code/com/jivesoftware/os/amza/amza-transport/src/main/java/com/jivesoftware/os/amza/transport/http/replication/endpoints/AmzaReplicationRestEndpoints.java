@@ -62,7 +62,7 @@ public class AmzaReplicationRestEndpoints {
     public Response addHost(final RingHost ringHost) {
         try {
             LOG.info("Attempting to add RingHost: " + ringHost);
-            amzaRing.addRingHost("master", ringHost);
+            amzaRing.addRingHost("system", ringHost);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + ringHost, x);
@@ -76,7 +76,7 @@ public class AmzaReplicationRestEndpoints {
     public Response removeHost(final RingHost ringHost) {
         try {
             LOG.info("Attempting to remove RingHost: " + ringHost);
-            amzaRing.removeRingHost("master", ringHost);
+            amzaRing.removeRingHost("system", ringHost);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + ringHost, x);
@@ -90,7 +90,7 @@ public class AmzaReplicationRestEndpoints {
     public Response getRing() {
         try {
             LOG.info("Attempting to get amza ring.");
-            List<RingHost> ring = amzaRing.getRing("master");
+            List<RingHost> ring = amzaRing.getRing("system");
             return ResponseHelper.INSTANCE.jsonResponse(ring);
         } catch (Exception x) {
             LOG.warn("Failed to get amza ring.", x);

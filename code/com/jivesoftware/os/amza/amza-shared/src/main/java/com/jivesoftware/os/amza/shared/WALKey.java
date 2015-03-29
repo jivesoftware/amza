@@ -36,13 +36,26 @@ public class WALKey implements Comparable<WALKey>, Serializable {
         return key;
     }
 
+    public WALKey prefixUpperExclusive() {
+        byte[] raw = new byte[key.length];
+        System.arraycopy(key, 0, raw, 0, key.length);
+
+        // given: [64,72,96,127]
+        // want: [64,72,97,-128]
+        for (int i = raw.length - 1; i >= 0; i--) {
+            if (raw[i] == Byte.MAX_VALUE) {
+                raw[i] = Byte.MIN_VALUE;
+            } else {
+                raw[i]++;
+                break;
+            }
+        }
+        return new WALKey(raw);
+    }
+
     @Override
     final public int compareTo(WALKey o) {
         return UnsignedBytes.lexicographicalComparator().compare(key, o.key);
-    }
-
-    final public long getCount() {
-        return key.length;
     }
 
     @Override
@@ -50,7 +63,6 @@ public class WALKey implements Comparable<WALKey>, Serializable {
         return "walKey=" + Arrays.toString(key);
     }
 
-    // TODO better hashcode?
     @Override
     public int hashCode() {
         int hash = 3;

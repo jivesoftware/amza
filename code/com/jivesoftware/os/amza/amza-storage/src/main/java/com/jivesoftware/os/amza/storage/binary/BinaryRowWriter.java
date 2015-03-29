@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.storage.binary;
 import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.IFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,27 +26,31 @@ import java.util.List;
 public class BinaryRowWriter implements WALWriter {
 
     private final IFiler filer;
+    private final IoStats ioStats;
 
-    public BinaryRowWriter(IFiler filer) {
+    public BinaryRowWriter(IFiler filer, IoStats ioStats) {
         this.filer = filer;
+        this.ioStats = ioStats;
     }
 
     @Override
-    public List<byte[]> write(List<Byte> rowType, List<byte[]> rows, boolean append) throws Exception {
+    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows, boolean append) throws Exception {
         List<Long> offests = new ArrayList<>();
         MemoryFiler memoryFiler = new MemoryFiler();
         int i = 0;
         for (byte[] row : rows) {
             offests.add(memoryFiler.getFilePointer());
-            int length = row.length + 1;
+            int length = (1 + 8) + row.length;
             UIO.writeInt(memoryFiler, length, "length");
             memoryFiler.write(rowType.get(i));
+            UIO.writeLong(memoryFiler, rowTxIds.get(i), "txId");
             memoryFiler.write(row);
             UIO.writeInt(memoryFiler, length, "length");
             i++;
         }
         byte[] bytes = memoryFiler.getBytes();
         long startFp;
+        ioStats.wrote.addAndGet(bytes.length);
         synchronized (filer.lock()) {
             if (append) {
                 startFp = filer.length();

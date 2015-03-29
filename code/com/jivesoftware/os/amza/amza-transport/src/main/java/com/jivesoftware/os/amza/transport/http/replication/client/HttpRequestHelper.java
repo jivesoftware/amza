@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 
 public class HttpRequestHelper {
@@ -78,8 +79,8 @@ public class HttpRequestHelper {
         try {
             postEntity = mapper.writeValueAsString(requestParamsObject);
         } catch (IOException e) {
-            throw new RuntimeException("Error serializing request parameters object to a string.  Object " +
-                "was " + requestParamsObject, e);
+            throw new RuntimeException("Error serializing request parameters object to a string.  Object "
+                + "was " + requestParamsObject, e);
         }
 
         byte[] responseBody = executePostJson(httpClient, endpointUrl, postEntity);
@@ -90,6 +91,19 @@ public class HttpRequestHelper {
         }
 
         return extractResultFromResponse(responseBody, resultClass);
+    }
+
+    public InputStream executeStreamingPostRequest(Object requestParamsObject, String endpointUrl) throws HttpClientException {
+
+        String postEntity;
+        try {
+            postEntity = mapper.writeValueAsString(requestParamsObject);
+        } catch (IOException e) {
+            throw new RuntimeException("Error serializing request parameters object to a string.  Object "
+                + "was " + requestParamsObject, e);
+        }
+
+        return httpClient.streamingPost(endpointUrl, postEntity, null).getInputStream();
     }
 
     private byte[] executeGetJson(HttpClient httpClient, String endpointUrl) {
@@ -107,22 +121,21 @@ public class HttpRequestHelper {
         }
 
         if (!isSuccessStatusCode(response.getStatusCode())) {
-            throw new RuntimeException("Received non success status code (" + response.getStatusCode() + ") " +
-                "from the server.  The reason phrase on the response was \"" + response.getStatusReasonPhrase() + "\" " +
-                "and the body of the response was \"" + new String(responseBody, UTF_8) + "\".");
+            throw new RuntimeException("Received non success status code (" + response.getStatusCode() + ") "
+                + "from the server.  The reason phrase on the response was \"" + response.getStatusReasonPhrase() + "\" "
+                + "and the body of the response was \"" + new String(responseBody, UTF_8) + "\".");
         }
 
         return responseBody;
     }
-
 
     private byte[] executePostJson(HttpClient httpClient, String endpointUrl, String postEntity) {
         HttpResponse response;
         try {
             response = httpClient.postJson(endpointUrl, postEntity, null, -1);
         } catch (HttpClientException e) {
-            throw new RuntimeException("Error posting query request to server.  The entity posted " +
-                "was \"" + postEntity + "\" and the endpoint posted to was \"" + endpointUrl + "\".", e);
+            throw new RuntimeException("Error posting query request to server.  The entity posted "
+                + "was \"" + postEntity + "\" and the endpoint posted to was \"" + endpointUrl + "\".", e);
         }
 
         byte[] responseBody = response.getResponseBody();
@@ -132,9 +145,9 @@ public class HttpRequestHelper {
         }
 
         if (!isSuccessStatusCode(response.getStatusCode())) {
-            throw new RuntimeException("Received non success status code (" + response.getStatusCode() + ") " +
-                "from the server.  The reason phrase on the response was \"" + response.getStatusReasonPhrase() + "\" " +
-                "and the body of the response was \"" + new String(responseBody, UTF_8) + "\".");
+            throw new RuntimeException("Received non success status code (" + response.getStatusCode() + ") "
+                + "from the server.  The reason phrase on the response was \"" + response.getStatusReasonPhrase() + "\" "
+                + "and the body of the response was \"" + new String(responseBody, UTF_8) + "\".");
         }
 
         return responseBody;
@@ -145,8 +158,8 @@ public class HttpRequestHelper {
         try {
             result = mapper.readValue(responseBody, 0, responseBody.length, resultClass);
         } catch (Exception e) {
-            throw new RuntimeException("Error deserializing response body into result " +
-                "object.  Response body was \"" + (responseBody != null ? new String(responseBody, UTF_8) : "null")
+            throw new RuntimeException("Error deserializing response body into result "
+                + "object.  Response body was \"" + (responseBody != null ? new String(responseBody, UTF_8) : "null")
                 + "\".", e);
         }
 

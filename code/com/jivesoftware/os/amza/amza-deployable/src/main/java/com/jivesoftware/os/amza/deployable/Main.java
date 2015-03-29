@@ -24,12 +24,16 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.tofu.SoyTofu;
 import com.jivesoftware.os.amza.deployable.ui.AmzaUIEndpoints;
 import com.jivesoftware.os.amza.deployable.ui.AmzaUIEndpoints.AmzaClusterName;
-import com.jivesoftware.os.amza.deployable.ui.region.AmzaRingPluginRegion;
+import com.jivesoftware.os.amza.deployable.ui.region.AmzaClusterPluginRegion;
+import com.jivesoftware.os.amza.deployable.ui.region.AmzaRegionsPluginRegion;
+import com.jivesoftware.os.amza.deployable.ui.region.AmzaRingsPluginRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.HeaderRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.HealthPluginRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.HomeRegion;
 import com.jivesoftware.os.amza.deployable.ui.region.ManagePlugin;
-import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaRingPluginEndpoints;
+import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaClusterPluginEndpoints;
+import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaRegionsPluginEndpoints;
+import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaRingsPluginEndpoints;
 import com.jivesoftware.os.amza.deployable.ui.region.endpoints.HealthPluginEndpoints;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyDataUtils;
 import com.jivesoftware.os.amza.deployable.ui.soy.SoyRenderer;
@@ -38,18 +42,20 @@ import com.jivesoftware.os.amza.mapdb.MapdbWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
+import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
+import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.WALIndexProvider;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
@@ -100,13 +106,14 @@ public class Main {
 
         RingHost ringHost;
         if (transport.equals("http")) {
-            ringHost = new RingHost(hostname, port); // TODO include rackId
+            ringHost = new RingHost(hostname, port);
         } else {
-            ringHost = new RingHost(hostname, tcpPort); // TODO include rackId
+            ringHost = new RingHost(hostname, tcpPort);
         }
 
         // todo need a better way to create writter id.
-        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(new Random().nextInt(512)));
+        int writerId = Integer.parseInt(System.getProperty("amza.id", String.valueOf(new Random().nextInt(512))));
+        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(writerId));
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -120,7 +127,8 @@ public class Main {
             "./rowIndexs/data2",
             "./rowIndexs/data3"};
 
-        final WALIndexProvider walIndexProvider = new MapdbWALIndexProvider(rowIndexDirs);
+        WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
+        indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(rowIndexDirs));
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
@@ -137,15 +145,29 @@ public class Main {
         UpdatesTaker taker = new TcpUpdatesTaker(tcpClientProvider, clientProtocol);
 
         if (transport.equals("http")) {
-            changeSetSender = new HttpUpdatesSender();
-            taker = new HttpUpdatesTaker();
+            changeSetSender = new HttpUpdatesSender(amzaStats);
+            taker = new HttpUpdatesTaker(amzaStats);
         }
+
+        RegionPropertyMarshaller regionPropertyMarshaller = new RegionPropertyMarshaller() {
+
+            @Override
+            public RegionProperties fromBytes(byte[] bytes) throws Exception {
+                return mapper.readValue(bytes, RegionProperties.class);
+            }
+
+            @Override
+            public byte[] toBytes(RegionProperties regionProperties) throws Exception {
+                return mapper.writeValueAsBytes(regionProperties);
+            }
+        };
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             ringHost,
             orderIdProvider,
-            walIndexProvider,
+            regionPropertyMarshaller,
+            indexProviderRegistry,
             changeSetSender,
             taker,
             Optional.<SendFailureListener>absent(),
@@ -165,7 +187,6 @@ public class Main {
         IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);
         bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
         TcpServerInitializer initializer = new TcpServerInitializer();
-        // TODO include rackId
         final TcpServer server = initializer.initialize(new RingHost(hostname, tcpPort), numServerThreads, bufferProvider, framer, serverProtocol);
         server.start();
 
@@ -198,7 +219,11 @@ public class Main {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/chrome.soy"), "chome.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/homeRegion.soy"), "home.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/healthPluginRegion.soy"), "health.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRingPluginRegion.soy"), "amzaRing.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRingsPluginRegion.soy"), "amzaRings.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaClusterPluginRegion.soy"), "amzaCluster.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRegionsPluginRegion.soy"), "amzaRegions.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStats.soy"), "amzaStats.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
 
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();
@@ -206,12 +231,19 @@ public class Main {
         SoyService soyService = new SoyService(renderer, new HeaderRegion("soy.chrome.headerRegion", renderer),
             new HomeRegion("soy.page.homeRegion", renderer));
 
-        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("fire", "Health", "/ui/health",
+        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("dashboard", "Metrics", "/ui/health",
             HealthPluginEndpoints.class,
-            new HealthPluginRegion("soy.page.healthPluginRegion", renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
-            new ManagePlugin("leaf", "Amza Ring", "/ui/ring",
-                AmzaRingPluginEndpoints.class,
-                new AmzaRingPluginRegion("soy.page.amzaRingPluginRegion", renderer, amzaService.getAmzaRing())));
+            new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats",
+                renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
+            new ManagePlugin("repeat", "Amza Rings", "/ui/rings",
+                AmzaRingsPluginEndpoints.class,
+                new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getAmzaRing())),
+            new ManagePlugin("map-marker", "Amza Regions", "/ui/regions",
+                AmzaRegionsPluginEndpoints.class,
+                new AmzaRegionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaRing(), amzaService)),
+            new ManagePlugin("leaf", "Amza Cluster", "/ui/cluster",
+                AmzaClusterPluginEndpoints.class,
+                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaRing())));
 
         jerseyEndpoints.addInjectable(SoyService.class, soyService);
 

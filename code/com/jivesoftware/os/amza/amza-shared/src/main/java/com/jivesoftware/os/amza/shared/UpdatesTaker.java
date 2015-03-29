@@ -17,5 +17,8 @@ package com.jivesoftware.os.amza.shared;
 
 public interface UpdatesTaker {
 
-    void takeUpdates(RingHost ringHost, RegionName regionName, long transationId, WALScan updates) throws Exception;
+    void streamingTakeUpdates(RingHost ringHost,
+        RegionName partitionName,
+        long transactionId,
+        RowStream tookRowUpdates) throws Exception;
 }

@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>shared-lib-build-management</artifactId>
-        <version>0.26</version>
+        <version>0.28</version>
         <relativePath>../inheritance-poms/shared-lib-build-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -27,6 +27,14 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.jive.utils</groupId>
+            <artifactId>ordered-id</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.mlogger</groupId>
+            <artifactId>core</artifactId>
         </dependency>
     </dependencies>
     <name>amza-shared</name>

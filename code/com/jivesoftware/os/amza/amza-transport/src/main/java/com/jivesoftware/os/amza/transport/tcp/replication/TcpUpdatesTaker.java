@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.transport.tcp.replication;
 
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.RowUpdatesPayload;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.TakeRowUpdatesRequestPayload;
@@ -43,14 +43,13 @@ public class TcpUpdatesTaker implements UpdatesTaker {
         this.indexReplicationProtocol = indexReplicationProtocol;
     }
 
-    @Override
-    public  void takeUpdates(RingHost ringHost, RegionName tableName,
-            long transationId, final WALScan tookStream) throws Exception {
+    public void takeUpdates(RingHost ringHost, RegionName tableName,
+        long transationId, final RowStream tookStream) throws Exception {
         TcpClient client = clientProvider.getClientForHost(ringHost);
         try {
             TakeRowUpdatesRequestPayload requestPayload = new TakeRowUpdatesRequestPayload(tableName, transationId);
             Message message = new Message(indexReplicationProtocol.nextInteractionId(),
-                    indexReplicationProtocol.OPCODE_REQUEST_CHANGESET, true, requestPayload);
+                indexReplicationProtocol.OPCODE_REQUEST_CHANGESET, true, requestPayload);
 
             client.sendMessage(message);
 
@@ -96,5 +95,10 @@ public class TcpUpdatesTaker implements UpdatesTaker {
         } finally {
             clientProvider.returnClient(client);
         }
+    }
+
+    @Override
+    public void streamingTakeUpdates(RingHost ringHost, RegionName partitionName, long transactionId, RowStream tookRowUpdates) throws Exception {
+        throw new UnsupportedOperationException("Time bomb for someone lucky!");
     }
 }

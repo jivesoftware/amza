@@ -19,24 +19,29 @@ import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
-import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.RowUpdates;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.ArrayList;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.List;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import org.apache.commons.lang.mutable.MutableLong;
+import javax.ws.rs.core.StreamingOutput;
 
 @Path("/amza")
 public class AmzaReplicationRestEndpoints {
@@ -57,7 +62,7 @@ public class AmzaReplicationRestEndpoints {
     public Response addHost(final RingHost ringHost) {
         try {
             LOG.info("Attempting to add RingHost: " + ringHost);
-            amzaRing.addRingHost("master", ringHost);
+            amzaRing.addRingHost("system", ringHost);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + ringHost, x);
@@ -71,7 +76,7 @@ public class AmzaReplicationRestEndpoints {
     public Response removeHost(final RingHost ringHost) {
         try {
             LOG.info("Attempting to remove RingHost: " + ringHost);
-            amzaRing.removeRingHost("master", ringHost);
+            amzaRing.removeRingHost("system", ringHost);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + ringHost, x);
@@ -85,7 +90,7 @@ public class AmzaReplicationRestEndpoints {
     public Response getRing() {
         try {
             LOG.info("Attempting to get amza ring.");
-            List<RingHost> ring = amzaRing.getRing("master");
+            List<RingHost> ring = amzaRing.getRing("system");
             return ResponseHelper.INSTANCE.jsonResponse(ring);
         } catch (Exception x) {
             LOG.warn("Failed to get amza ring.", x);
@@ -126,51 +131,54 @@ public class AmzaReplicationRestEndpoints {
         return new WALScanable() {
             @Override
             public void rowScan(WALScan walScan) throws Exception {
-                for (byte[] row : changeSet.getChanges()) {
-                    RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
-                    if (!walScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
-                        return;
-                    }
-                }
+                changeSet.stream(rowMarshaller, walScan);
             }
 
             @Override
             public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
-                for (byte[] row : changeSet.getChanges()) {
-                    RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
-                    if (!walScan.row(walr.getTransactionId(), walr.getKey(), walr.getValue())) {
-                        return;
-                    }
-                }
+                changeSet.stream(rowMarshaller, walScan);
             }
-
         };
     }
 
     @POST
-    @Consumes("application/json")
-    @Path("/changes/take")
-    public Response take(final RowUpdates rowUpdates) {
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/changes/streamingTake")
+    public Response streamingTake(final RowUpdates rowUpdates) {
         try {
 
-            final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-            final List<byte[]> rows = new ArrayList<>();
-            final MutableLong highestTransactionId = new MutableLong();
-            amzaInstance.takeRowUpdates(rowUpdates.getRegionName(), rowUpdates.getHighestTransactionId(), new WALScan() {
+            StreamingOutput stream = new StreamingOutput() {
                 @Override
-                public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
-                    rows.add(rowMarshaller.toRow(orderId, key, value));
-                    if (orderId > highestTransactionId.longValue()) {
-                        highestTransactionId.setValue(orderId);
+                public void write(OutputStream os) throws IOException, WebApplicationException {
+                    BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
+                    final DataOutputStream dos = new DataOutputStream(bos);
+                    try {
+                        amzaInstance.takeRowUpdates(rowUpdates.getRegionName(), rowUpdates.getHighestTransactionId(), new RowStream() {
+                            @Override
+                            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
+                                dos.writeByte(1);
+                                dos.writeLong(rowTxId);
+                                dos.writeByte(rowType);
+                                dos.writeInt(row.length);
+                                dos.write(row);
+                                return true;
+                            }
+                        });
+                        dos.writeByte(0); // last entry marker
+                    } catch (Exception x) {
+                        LOG.error("Failed to stream takes.", x);
+                        throw new IOException("Failed to stream takes.", x);
+                    } finally {
+                        dos.flush();
                     }
-                    return true;
                 }
-            });
-
-            return ResponseHelper.INSTANCE.jsonResponse(new RowUpdates(highestTransactionId.longValue(), rowUpdates.getRegionName(), rows));
+            };
+            return Response.ok(stream).build();
         } catch (Exception x) {
             LOG.warn("Failed to apply changeset: " + rowUpdates, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to changeset " + rowUpdates, x);
         }
     }
+
 }

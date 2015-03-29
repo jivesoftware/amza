@@ -1,0 +1,36 @@
+{namespace soy.page}
+
+/**
+* @param title
+* @param progress
+* @param value
+*/
+{template .amzaStackedProgress}
+    
+    <div class="row">
+        <div class="col-sm-2">
+            {$title}
+        </div>
+        <div class="col-sm-8">
+            <div class="progress">
+                <div class="progress-bar progress-bar-success" style="width: {if $progress > 70}70{else}{$progress}{/if}%">
+                    <span class="sr-only"></span>
+                </div>
+                {if $progress > 70}
+                    <div class="progress-bar progress-bar-warning progress-bar-striped" style="width: {if $progress > 90}20{else}{$progress-70}{/if}%">
+                        <span class="sr-only"></span>
+                    </div>
+                {/if}
+                {if $progress > 90}
+                    <div class="progress-bar progress-bar-danger" style="width: {if $progress > 100}10{else}{$progress-90}{/if}%">
+                        <span class="sr-only"></span>
+                    </div>
+                {/if}
+            </div>
+        </div>
+        <div class="col-sm-2">
+            <span class="badge">{$value}</span>
+        </div>
+    </div>
+
+{/template}

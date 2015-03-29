@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.IFiler;
@@ -27,12 +28,12 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public void scan(long offset, Stream rowStream) throws Exception {
+    public void scan(long offset, RowStream rowStream) throws Exception {
         rowReader.scan(offset, rowStream);
     }
 
     @Override
-    public void reverseScan(Stream rowStream) throws Exception {
+    public void reverseScan(RowStream rowStream) throws Exception {
         rowReader.reverseScan(rowStream);
     }
 
@@ -42,8 +43,8 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public List<byte[]> write(List<Byte> rowTypes, List<byte[]> rows, boolean append) throws Exception {
-        return rowWriter.write(rowTypes, rows, append);
+    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowTypes, List<byte[]> rows, boolean append) throws Exception {
+        return rowWriter.write(rowTxIds, rowTypes, rows, append);
     }
 
     @Override

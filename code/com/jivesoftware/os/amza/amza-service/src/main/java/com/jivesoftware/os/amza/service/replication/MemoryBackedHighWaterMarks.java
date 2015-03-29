@@ -30,7 +30,7 @@ public class MemoryBackedHighWaterMarks implements HighwaterMarks {
     }
 
     @Override
-    public void set(RingHost ringHost, RegionName regionName, long highWatermark) {
+    public void set(RingHost ringHost, RegionName regionName, int update, long highWatermark) {
         ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringHost);
         if (lastRegionTransactionIds == null) {
             lastRegionTransactionIds = new ConcurrentHashMap<>();
@@ -44,9 +44,6 @@ public class MemoryBackedHighWaterMarks implements HighwaterMarks {
         ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringHost);
         if (lastRegionTransactionIds != null) {
             lastRegionTransactionIds.remove(regionName);
-            //if (lastTableTransactionIds.isEmpty()) { // TODO do this is a thread safe way
-            //       lastTransactionIds.remove(ringHost);
-            //}
         }
     }
 

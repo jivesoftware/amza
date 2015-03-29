@@ -17,6 +17,6 @@ package com.jivesoftware.os.amza.shared;
 
 public interface WALScan {
 
-    boolean row(long transactionId, WALKey key, WALValue value) throws Exception;
+    boolean row(long rowTxId, WALKey key, WALValue value) throws Exception;
 
 }

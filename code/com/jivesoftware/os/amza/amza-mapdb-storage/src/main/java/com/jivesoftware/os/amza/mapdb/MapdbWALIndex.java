@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.mapdb;
 
+import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
@@ -41,7 +43,7 @@ public class MapdbWALIndex implements WALIndex {
         File active = new File(dir, "active");
         active.mkdirs();
         File regionFile = new File(active, "region");
-        db = DBMaker.newFileDB(regionFile).mmapFileEnable().make();
+        db = DBMaker.newFileDB(regionFile).cacheSoftRefEnable().mmapFileEnable().closeOnJvmShutdown().make();
         index = db.getTreeMap("region");
         db.commit();
         LOG.info("Opening " + active.getAbsolutePath() + " " + index.size());
@@ -116,7 +118,7 @@ public class MapdbWALIndex implements WALIndex {
 
     @Override
     public void commit() {
-
+        db.commit();
     }
 
     @Override
@@ -224,5 +226,10 @@ public class MapdbWALIndex implements WALIndex {
                 }
             }
         };
+    }
+
+    @Override
+    public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
+
     }
 }

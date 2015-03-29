@@ -2,10 +2,9 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
-import com.jivesoftware.os.amza.service.replication.MemoryBackedHighWaterMarks;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.NoOpWALIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -16,7 +15,9 @@ import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
+import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
 import com.jivesoftware.os.amza.storage.NonIndexWAL;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
@@ -31,11 +32,12 @@ import java.io.File;
  */
 public class EmbeddedAmzaServiceInitializer {
 
-    public AmzaService initialize(AmzaServiceConfig amzaServiceConfig,
-        AmzaStats amzaStats,
+    public AmzaService initialize(final AmzaServiceConfig amzaServiceConfig,
+        final AmzaStats amzaStats,
         RingHost ringHost,
         final TimestampedOrderIdProvider orderIdProvider,
-        final WALIndexProvider walIndexProvider,
+        RegionPropertyMarshaller regionPropertyMarshaller,
+        final WALIndexProviderRegistry indexProviderRegistry,
         UpdatesSender updatesSender,
         UpdatesTaker updatesTaker,
         Optional<SendFailureListener> sendFailureListener,
@@ -44,17 +46,19 @@ public class EmbeddedAmzaServiceInitializer {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
-        final int backRepairIndexForNDistinctTxIds = 1000;
         WALStorageProvider regionStorageProvider = new WALStorageProvider() {
             @Override
             public WALStorage create(File workingDirectory,
                 String domain,
                 RegionName regionName,
+                WALStorageDescriptor storageDescriptor,
                 WALReplicator rowReplicator) throws Exception {
+
+                WALIndexProvider walIndexProvider = indexProviderRegistry.getWALIndexProvider(storageDescriptor);
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider();
+                RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
                 return new IndexedWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
@@ -62,10 +66,10 @@ public class EmbeddedAmzaServiceInitializer {
                         regionName.getRegionName() + ".kvt",
                         rowIOProvider,
                         rowMarshaller,
-                        walIndexProvider,
-                        backRepairIndexForNDistinctTxIds),
+                        walIndexProvider),
                     rowReplicator,
-                    1000);
+                    storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
+                    storageDescriptor.maxUpdatesBetweenIndexCommitMarker);
             }
         };
 
@@ -82,11 +86,12 @@ public class EmbeddedAmzaServiceInitializer {
             public WALStorage create(File workingDirectory,
                 String domain,
                 RegionName regionName,
+                WALStorageDescriptor storageDescriptor,
                 WALReplicator rowReplicator) throws Exception {
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider();
+                RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
                 return new NonIndexWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
@@ -94,22 +99,21 @@ public class EmbeddedAmzaServiceInitializer {
                         regionName.getRegionName() + ".kvt",
                         rowIOProvider,
                         rowMarshaller,
-                        tmpWALIndexProvider,
-                        backRepairIndexForNDistinctTxIds));
+                        tmpWALIndexProvider));
             }
         };
 
-        MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
+
         return new AmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             ringHost,
             orderIdProvider,
+            regionPropertyMarshaller,
             regionStorageProvider,
             tmpWALStorageProvider,
             tmpWALStorageProvider,
             updatesSender,
             updatesTaker,
-            highWaterMarks,
             sendFailureListener,
             takeFailureListener,
             allRowChanges);

@@ -17,14 +17,10 @@ package com.jivesoftware.os.amza.shared;
 
 public interface WALReader {
 
-    static interface Stream {
 
-        boolean row(long rowPointer, byte rowType, byte[] row) throws Exception;
-    }
+    void scan(long offset, RowStream rowStream) throws Exception;
 
-    void scan(long offset, Stream rowStream) throws Exception;
-
-    void reverseScan(Stream rowStream) throws Exception;
+    void reverseScan(RowStream rowStream) throws Exception;
 
     byte[] read(byte[] rowPointer) throws Exception;
 }

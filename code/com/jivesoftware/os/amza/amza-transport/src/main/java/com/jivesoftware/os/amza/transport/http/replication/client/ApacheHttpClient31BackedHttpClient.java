@@ -33,6 +33,7 @@ import org.apache.commons.httpclient.HttpMethodBase;
 import org.apache.commons.httpclient.HttpState;
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.commons.httpclient.StatusLine;
+import org.apache.commons.httpclient.methods.EntityEnclosingMethod;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.methods.StringRequestEntity;
@@ -41,9 +42,7 @@ import org.apache.commons.io.IOUtils;
 class ApacheHttpClient31BackedHttpClient implements HttpClient {
 
     public static final String CONTENT_TYPE_HEADER_NAME = "Content-Type";
-
     public static final String APPLICATION_JSON_CONTENT_TYPE = "application/json";
-
     public static final String APPLICATION_OCTET_STREAM_TYPE = "application/octet-stream";
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger(true);
@@ -54,9 +53,47 @@ class ApacheHttpClient31BackedHttpClient implements HttpClient {
     private static final int JSON_POST_LOG_LENGTH_LIMIT = 2048;
 
     public ApacheHttpClient31BackedHttpClient(org.apache.commons.httpclient.HttpClient client,
-            Map<String, String> headersForEveryRequest) {
+        Map<String, String> headersForEveryRequest) {
         this.client = client;
         this.headersForEveryRequest = headersForEveryRequest;
+    }
+
+    @Override
+    public HttpStreamResponse streamingPost(String path, String postJsonBody, Map<String, String> headers) throws HttpClientException {
+        return executePostJsonStreamingResponse(new PostMethod(path), postJsonBody, headers);
+    }
+
+    private HttpStreamResponse executePostJsonStreamingResponse(EntityEnclosingMethod method, String jsonBody, Map<String, String> headers)
+        throws HttpClientException {
+        try {
+            setRequestHeaders(headers, method);
+
+            method.setRequestEntity(new StringRequestEntity(jsonBody, APPLICATION_JSON_CONTENT_TYPE, "UTF-8"));
+            method.setRequestHeader(CONTENT_TYPE_HEADER_NAME, APPLICATION_JSON_CONTENT_TYPE);
+            return executeStream(method);
+        } catch (Exception e) {
+            String trimmedMethodBody = (jsonBody.length() > JSON_POST_LOG_LENGTH_LIMIT)
+                ? jsonBody.substring(0, JSON_POST_LOG_LENGTH_LIMIT) : jsonBody;
+            throw new HttpClientException("Error executing " + method.getName() + " request to: "
+                + client.getHostConfiguration().getHostURL() + " path: " + method.getPath() + " JSON body: " + trimmedMethodBody, e);
+        }
+    }
+
+    private HttpStreamResponse executeStream(HttpMethod method) throws Exception {
+
+        applyHeadersCommonToAllRequests(method);
+
+        int status = client.executeMethod(method);
+        checkStreamStatus(status, method);
+        StatusLine statusLine = method.getStatusLine();
+        return new HttpStreamResponse(statusLine.getStatusCode(), statusLine.getReasonPhrase(), method.getResponseBodyAsStream());
+    }
+
+    private void checkStreamStatus(int status, HttpMethod httpMethod) throws HttpClientException {
+        LOG.debug("Got status: {} {}", status, httpMethod.getStatusText());
+        if (status < 200 || status >= 300) {
+            throw new HttpClientException("Bad status : " + httpMethod.getStatusLine());
+        }
     }
 
     @Override
@@ -72,7 +109,7 @@ class ApacheHttpClient31BackedHttpClient implements HttpClient {
             return execute(get);
         } catch (Exception e) {
             throw new HttpClientException("Error executing GET request to: " + client.getHostConfiguration().getHostURL()
-                    + " path: " + path, e);
+                + " path: " + path, e);
         }
     }
 
@@ -117,20 +154,20 @@ class ApacheHttpClient31BackedHttpClient implements HttpClient {
                 return execute(post);
             }
         } catch (Exception e) {
-            String trimmedPostBody = (postJsonBody.length() > JSON_POST_LOG_LENGTH_LIMIT) ?
-                    postJsonBody.substring(0, JSON_POST_LOG_LENGTH_LIMIT) : postJsonBody;
+            String trimmedPostBody = (postJsonBody.length() > JSON_POST_LOG_LENGTH_LIMIT)
+                ? postJsonBody.substring(0, JSON_POST_LOG_LENGTH_LIMIT) : postJsonBody;
             throw new HttpClientException("Error executing POST request to: "
-                    + client.getHostConfiguration().getHostURL() + " path: " + path + " JSON body: " + trimmedPostBody, e);
+                + client.getHostConfiguration().getHostURL() + " path: " + path + " JSON body: " + trimmedPostBody, e);
         }
     }
 
     @Override
     public String toString() {
         return "ApacheHttpClient31BackedHttpClient{"
-                + "client=" + client
-                + ", headersForEveryRequest=" + headersForEveryRequest
-                + ", consumerKey=" + consumerKey
-                + '}';
+            + "client=" + client
+            + ", headersForEveryRequest=" + headersForEveryRequest
+            + ", consumerKey=" + consumerKey
+            + '}';
     }
 
     private HttpResponse execute(HttpMethod method) throws IOException {
@@ -168,12 +205,11 @@ class ApacheHttpClient31BackedHttpClient implements HttpClient {
                     httpInfo.append("Exception sending request");
                 }
                 httpInfo.append(" in ").append(elapsedTime).append(" ms ").append(method.getName()).append(" ")
-                        .append(safeHostString(client.getHostConfiguration())).append(method.getURI());
+                    .append(safeHostString(client.getHostConfiguration())).append(method.getURI());
                 LOG.debug(httpInfo.toString());
             }
         }
     }
-
 
     private void setRequestHeaders(Map<String, String> headers, HttpMethodBase method) {
         if (headers != null) {
@@ -189,7 +225,6 @@ class ApacheHttpClient31BackedHttpClient implements HttpClient {
         }
     }
 
-
     void setState(HttpState state) {
         client.setState(state);
     }
@@ -204,6 +239,5 @@ class ApacheHttpClient31BackedHttpClient implements HttpClient {
         }
         return "";
     }
-
 
 }

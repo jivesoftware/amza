@@ -20,10 +20,10 @@ import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReceiver;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeTaker;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionCompactor;
-import com.jivesoftware.os.amza.service.replication.MemoryBackedHighWaterMarks;
+import com.jivesoftware.os.amza.service.replication.RegionBackHighwaterMarks;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.WALs;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -33,6 +33,7 @@ import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -40,79 +41,93 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
-        public int replicationFactor = 1;
-        public int takeFromFactor = 1;
+        public String[] workingDirectories = new String[]{"./var/data/"};
+
         public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
         public int takeFromNeighborsIntervalInMillis = 1000;
+
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
+
+        public int numberOfResendThreads = 8;
+        public int numberOfApplierThreads = 8;
+        public int numberOfCompactorThreads = 8;
+        public int numberOfTakerThreads = 8;
+
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
         AmzaStats amzaStats,
         RingHost ringHost,
         TimestampedOrderIdProvider orderIdProvider,
+        RegionPropertyMarshaller regionPropertyMarshaller,
         WALStorageProvider regionsWALStorageProvider,
         WALStorageProvider replicaWALStorageProvider,
         WALStorageProvider resendWALStorageProvider,
         UpdatesSender updatesSender,
         UpdatesTaker updatesTaker,
-        MemoryBackedHighWaterMarks highWaterMarks,
         Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
         final RowChanges allRowChanges) throws Exception {
 
-        RowChanges rowChanges = new RowChanges() {
-            @Override
-            public void changes(RowsChanged rowsChanged) throws Exception {
-                allRowChanges.changes(rowsChanged);
-            }
-        };
-        AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(rowChanges);
+        AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(allRowChanges);
 
         final AtomicReference<AmzaRegionChangeReplicator> replicator = new AtomicReference<>();
-        RegionProvider regionProvider = new RegionProvider(config.workingDirectories, "amza/stores", regionsWALStorageProvider, amzaRegionWatcher,
+        RegionProvider regionProvider = new RegionProvider(amzaStats,
+            orderIdProvider,
+            regionPropertyMarshaller,
+            config.workingDirectories,
+            "amza/stores",
+            regionsWALStorageProvider,
+            amzaRegionWatcher,
             new WALReplicator() {
                 @Override
                 public void replicate(RowsChanged rowsChanged) throws Exception {
                     replicator.get().replicate(rowsChanged);
                 }
             });
+
+
+        RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, regionProvider, 1000);
+        //MemoryBackedHighWaterMarks highwaterMarks = new MemoryBackedHighWaterMarks();
         final AmzaHostRing amzaRing = new AmzaHostRing(ringHost, regionProvider, orderIdProvider);
         WALs resendWALs = new WALs(config.workingDirectories, "amza/WAL/resend", resendWALStorageProvider);
 
         AmzaRegionChangeReplicator changeReplicator = new AmzaRegionChangeReplicator(amzaStats,
             amzaRing,
             regionProvider,
-            config.replicationFactor,
             resendWALs,
             updatesSender,
             sendFailureListener,
-            config.resendReplicasIntervalInMillis);
+            config.resendReplicasIntervalInMillis,
+            config.numberOfResendThreads);
+
         replicator.set(changeReplicator);
 
         WALs replicatedWALs = new WALs(config.workingDirectories, "amza/WAL/replicated", replicaWALStorageProvider);
         AmzaRegionChangeReceiver changeReceiver = new AmzaRegionChangeReceiver(amzaStats,
             regionProvider,
             replicatedWALs,
-            config.applyReplicasIntervalInMillis);
+            config.applyReplicasIntervalInMillis,
+            config.numberOfApplierThreads
+        );
 
         AmzaRegionChangeTaker changeTaker = new AmzaRegionChangeTaker(amzaStats,
             amzaRing,
             regionProvider,
-            config.takeFromFactor,
-            highWaterMarks,
+            highwaterMarks,
             updatesTaker,
             takeFailureListener,
-            config.takeFromNeighborsIntervalInMillis);
+            config.takeFromNeighborsIntervalInMillis,
+            config.numberOfTakerThreads);
 
         AmzaRegionCompactor regionCompactor = new AmzaRegionCompactor(amzaStats,
             regionProvider,
             orderIdProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
-            config.compactTombstoneIfOlderThanNMillis);
+            config.compactTombstoneIfOlderThanNMillis,
+            config.numberOfCompactorThreads);
 
         AmzaService service = new AmzaService(orderIdProvider,
             amzaRing,

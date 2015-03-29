@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import java.io.IOException;
@@ -29,10 +29,10 @@ import org.nustaq.serialization.FSTObjectOutput;
 /**
  *
  */
-public class RowUpdatesPayload implements MessagePayload, WALScanable {
+public class RowUpdatesPayload implements MessagePayload {
 
     private RegionName mapName;
-    private long largestTransactionId;
+    private long largestTxId;
     private List<WALKey> keys;
     private List<WALValue> values;
 
@@ -44,7 +44,7 @@ public class RowUpdatesPayload implements MessagePayload, WALScanable {
 
     public RowUpdatesPayload(RegionName mapName, long largestTransactionId, List<WALKey> keys, List<WALValue> values) {
         this.mapName = mapName;
-        this.largestTransactionId = largestTransactionId;
+        this.largestTxId = largestTransactionId;
         this.keys = keys;
         this.values = values;
     }
@@ -52,7 +52,7 @@ public class RowUpdatesPayload implements MessagePayload, WALScanable {
     @Override
     public void serialize(FSTObjectOutput output) throws IOException {
         output.writeObject(mapName, RegionName.class);
-        output.writeLong(largestTransactionId);
+        output.writeLong(largestTxId);
         output.writeObject(keys, List.class);
         output.writeObject(values, List.class);
     }
@@ -60,7 +60,7 @@ public class RowUpdatesPayload implements MessagePayload, WALScanable {
     @Override
     public void deserialize(FSTObjectInput input) throws Exception {
         this.mapName = (RegionName) input.readObject(RegionName.class);
-        this.largestTransactionId = input.readLong();
+        this.largestTxId = input.readLong();
         this.keys = (List<WALKey>) input.readObject(List.class);
         this.values = (List<WALValue>) input.readObject(List.class);
     }
@@ -73,19 +73,18 @@ public class RowUpdatesPayload implements MessagePayload, WALScanable {
         return keys.size();
     }
 
-    @Override
-    public void rowScan(WALScan walScan) throws Exception {
+    public void rowScan(RowStream walScan) throws Exception {
         for (int i = 0; i < keys.size(); i++) {
-            if (!walScan.row(largestTransactionId, keys.get(i), values.get(i))) {
-                return;
-            }
+// TODO fix
+//            if (!walScan.row(largestTxId, keys.get(i), values.get(i))) {
+//                return;
+//            }
         }
     }
 
-    @Override
     public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
         for (int i = 0; i < keys.size(); i++) {
-            if (!walScan.row(largestTransactionId, keys.get(i), values.get(i))) {
+            if (!walScan.row(largestTxId, keys.get(i), values.get(i))) {
                 return;
             }
         }

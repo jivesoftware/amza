@@ -18,7 +18,6 @@ package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.ApplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.Message;
@@ -83,7 +82,8 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
 
         try {
             RowUpdatesPayload payload = request.getPayload();
-            amzaInstance.updates(payload.getMapName(), payload);
+            // TODO fix
+            //amzaInstance.updates(payload.getMapName(), payload);
 
             final Message response = new Message(request.getInteractionId(), OPCODE_OK, true);
             LOG.trace("Returning from change set push {}", response);
@@ -114,28 +114,29 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
             final List<WALKey> keys = new ArrayList<>();
             final List<WALValue> values = new ArrayList<>();
             final MutableLong highestId = new MutableLong(-1);
-            amzaInstance.takeRowUpdates(mapName, highestTransactionId, new WALScan() {
-                @Override
-                public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
-                    keys.add(key);
-                    // We make this copy because we don't know how the value is being stored. By calling value.getValue()
-                    // we ensure that the value from the tableIndex is real vs a pointer.
-                    WALValue copy = new WALValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
-                    values.add(copy);
-                    if (highestId.longValue() < orderId) {
-                        highestId.setValue(orderId);
-                    }
-                    if (keys.size() > batchSize) {
-                        RowUpdatesPayload sendChangeSetPayload = new RowUpdatesPayload(mapName, highestId.longValue(), keys, values);
-                        Message responseMsg = new Message(interactionId, OPCODE_RESPOND_CHANGESET, false, sendChangeSetPayload);
-                        LOG.trace("Writing response from change set request {}", responseMsg);
-                        responseWriter.writeMessage(responseMsg);
-                        keys.clear();
-                        values.clear();
-                    }
-                    return true;
-                }
-            });
+// TODO fix
+//            amzaInstance.takeRowUpdates(mapName, highestTransactionId, new RowStream() {
+//                @Override
+//                public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
+//                    keys.add(key);
+//                    // We make this copy because we don't know how the value is being stored. By calling value.getValue()
+//                    // we ensure that the value from the tableIndex is real vs a pointer.
+//                    WALValue copy = new WALValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
+//                    values.add(copy);
+//                    if (highestId.longValue() < orderId) {
+//                        highestId.setValue(orderId);
+//                    }
+//                    if (keys.size() > batchSize) {
+//                        RowUpdatesPayload sendChangeSetPayload = new RowUpdatesPayload(mapName, highestId.longValue(), keys, values);
+//                        Message responseMsg = new Message(interactionId, OPCODE_RESPOND_CHANGESET, false, sendChangeSetPayload);
+//                        LOG.trace("Writing response from change set request {}", responseMsg);
+//                        responseWriter.writeMessage(responseMsg);
+//                        keys.clear();
+//                        values.clear();
+//                    }
+//                    return true;
+//                }
+//            });
 
             RowUpdatesPayload sendChangeSetPayload = new RowUpdatesPayload(mapName, highestId.longValue(), keys, values);
             Message responseMsg = new Message(interactionId, OPCODE_RESPOND_CHANGESET, true, sendChangeSetPayload);

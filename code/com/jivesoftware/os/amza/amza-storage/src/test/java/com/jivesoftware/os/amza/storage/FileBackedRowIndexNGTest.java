@@ -23,7 +23,7 @@ public class FileBackedRowIndexNGTest {
         File dir0 = Files.createTempDir();
         File dir1 = Files.createTempDir();
         File dir2 = Files.createTempDir();
-        RegionName regionName = new RegionName("r1", "t1", null, null);
+        RegionName regionName = new RegionName(false, "r1", "t1");
 
         FileBackedWALIndex index = new FileBackedWALIndex(regionName, 4, false, 0, new File[]{dir0, dir1, dir2});
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
@@ -56,7 +56,7 @@ public class FileBackedRowIndexNGTest {
         File dir0 = Files.createTempDir();
         File dir1 = Files.createTempDir();
         File dir2 = Files.createTempDir();
-        RegionName regionName = new RegionName("r1", "t1", null, null);
+        RegionName regionName = new RegionName(false, "r1", "t1");
         FileBackedWALIndex index = new FileBackedWALIndex(regionName, 4, false, 0, new File[]{dir0, dir1, dir2});
 
         for (int i = 0; i < 50; i++) {

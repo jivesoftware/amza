@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.test;
 
+import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -25,22 +26,9 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import org.apache.commons.io.FileUtils;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 public class AmzaServiceTest {
-
-    @BeforeClass
-    public static void setUpClass() throws Exception {
-        FileUtils.deleteDirectory(new File("./tmp"));
-    }
-
-    @AfterClass
-    public static void tearDownClass() throws Exception {
-        FileUtils.deleteDirectory(new File("./tmp"));
-    }
 
     @Test(enabled = true)
     public void testAddToReplicatedWAL() throws Exception {
@@ -54,12 +42,13 @@ public class AmzaServiceTest {
 
         final Random random = new Random();
 
-        final AmzaTestCluster cluster = new AmzaTestCluster(new File("./tmp"), 0, 0);
+        File createTempDir = Files.createTempDir();
+        final AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
 
         for (int i = 0; i < maxNumberOfServices; i++) {
             cluster.newNode(new RingHost("localhost", i));
         }
-        final RegionName regionName = new RegionName("test", "region1", null, null);
+        final RegionName regionName = new RegionName(false, "test", "region1");
         final CountDownLatch latch = new CountDownLatch(1);
         Executors.newSingleThreadExecutor().submit(new Runnable() {
             int removeService = maxRemovedServices;
@@ -72,6 +61,7 @@ public class AmzaServiceTest {
                     try {
                         AmzaNode node = cluster.get(new RingHost("localhost", random.nextInt(maxNumberOfServices)));
                         if (node != null) {
+                            node.create(regionName);
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
                             WALKey indexKey = new WALKey(key.getBytes());

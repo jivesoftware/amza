@@ -15,46 +15,41 @@
  */
 package com.jivesoftware.os.amza.test;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.AmzaChangeIdPacker;
 import com.jivesoftware.os.amza.service.AmzaRegion;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
+import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
+import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.MemoryBackedHighWaterMarks;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.MemoryWALIndex;
-import com.jivesoftware.os.amza.shared.NoOpWALIndex;
+import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
+import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.WALIndex;
-import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
-import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageProvider;
-import com.jivesoftware.os.amza.storage.IndexedWAL;
-import com.jivesoftware.os.amza.storage.NonIndexWAL;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
-import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
+import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -96,9 +91,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort() };
-        config.replicationFactor = 2;
-        config.takeFromFactor = 2;
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort()};
         config.resendReplicasIntervalInMillis = 100;
         config.applyReplicasIntervalInMillis = 100;
         config.takeFromNeighborsIntervalInMillis = 1000;
@@ -120,15 +113,12 @@ public class AmzaTestCluster {
         UpdatesTaker taker = new UpdatesTaker() {
 
             @Override
-            public void takeUpdates(RingHost ringHost,
-                RegionName regionName,
-                long transationId,
-                WALScan rowStream) throws Exception {
+            public void streamingTakeUpdates(RingHost ringHost, RegionName regionName, long transactionId, RowStream tookRowUpdates) throws Exception {
                 AmzaNode service = cluster.get(ringHost);
                 if (service == null) {
                     throw new IllegalStateException("Service doesn't exists for " + ringHost);
                 } else {
-                    service.takeRegion(regionName, transationId, rowStream);
+                    service.takeRegion(regionName, transactionId, tookRowUpdates);
                 }
             }
         };
@@ -137,74 +127,31 @@ public class AmzaTestCluster {
         final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(serviceHost.getPort()),
             new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
 
-        final WALIndexProvider walIndexProvider = new WALIndexProvider() {
+        final ObjectMapper mapper = new ObjectMapper();
+        RegionPropertyMarshaller regionPropertyMarshaller = new RegionPropertyMarshaller() {
 
             @Override
-            public WALIndex createIndex(RegionName regionName) throws Exception {
-
-                return new MemoryWALIndex();
+            public RegionProperties fromBytes(byte[] bytes) throws Exception {
+                return mapper.readValue(bytes, RegionProperties.class);
             }
-        };
-
-        WALStorageProvider walStorageProvider = new WALStorageProvider() {
-            @Override
-            public WALStorage create(File workingDirectory, String domain, RegionName regionName, WALReplicator walReplicator) throws Exception {
-                File dir = new File(workingDirectory, domain + File.separator);
-                dir.getParentFile().mkdirs();
-                RowMarshaller<byte[]> rowMarshaller = new BinaryRowMarshaller();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider();
-                return new IndexedWAL(regionName,
-                    orderIdProvider,
-                    rowMarshaller,
-                    new BinaryWALTx(dir,
-                        regionName.getRegionName() + ".kvt",
-                        rowIOProvider,
-                        rowMarshaller,
-                        walIndexProvider,
-                        100), walReplicator, 1000);
-            }
-        };
-
-        final WALIndexProvider replicateAndResendWALIndexProvider = new WALIndexProvider() {
 
             @Override
-            public WALIndex createIndex(RegionName regionName) throws Exception {
-
-                return new NoOpWALIndex();
-            }
-        };
-
-        WALStorageProvider replicateAndResendStorageProvider = new WALStorageProvider() {
-            @Override
-            public WALStorage create(File workingDirectory, String domain, RegionName regionName, WALReplicator walReplicator) throws Exception {
-                File dir = new File(workingDirectory, domain + File.separator);
-                dir.getParentFile().mkdirs();
-                RowMarshaller<byte[]> rowMarshaller = new BinaryRowMarshaller();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider();
-                return new NonIndexWAL(regionName,
-                    orderIdProvider,
-                    rowMarshaller,
-                    new BinaryWALTx(dir,
-                        regionName.getRegionName() + ".kvt",
-                        rowIOProvider,
-                        rowMarshaller,
-                        replicateAndResendWALIndexProvider,
-                        100));
+            public byte[] toBytes(RegionProperties regionProperties) throws Exception {
+                return mapper.writeValueAsBytes(regionProperties);
             }
         };
 
         AmzaStats amzaStats = new AmzaStats();
         MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
-        AmzaService amzaService = new AmzaServiceInitializer().initialize(config,
+
+        AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
             amzaStats,
             serviceHost,
             orderIdProvider,
-            walStorageProvider,
-            replicateAndResendStorageProvider,
-            replicateAndResendStorageProvider,
+            regionPropertyMarshaller,
+            new WALIndexProviderRegistry(),
             changeSetSender,
             taker,
-            highWaterMarks,
             Optional.<SendFailureListener>absent(),
             Optional.<TakeFailureListener>absent(),
             new RowChanges() {
@@ -217,7 +164,7 @@ public class AmzaTestCluster {
         amzaService.start();
 
         //if (serviceHost.getPort() % 2 == 0) {
-        final RegionName regionName = new RegionName("test", "region1", null, null);
+        final RegionName regionName = new RegionName(false, "test", "region1");
         amzaService.watch(regionName, new RowChanges() {
             @Override
             public void changes(RowsChanged changes) throws Exception {
@@ -230,16 +177,22 @@ public class AmzaTestCluster {
         });
         //}
 
-        amzaService.getAmzaRing().addRingHost("test", serviceHost); // ?? Hacky
-        amzaService.getAmzaRing().addRingHost("MASTER", serviceHost); // ?? Hacky
-        if (lastAmzaService != null) {
-            amzaService.getAmzaRing().addRingHost("test", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
-            amzaService.getAmzaRing().addRingHost("MASTER", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
+        try {
+            amzaService.getAmzaRing().addRingHost("system", serviceHost); // ?? Hacky
+            amzaService.getAmzaRing().addRingHost("test", serviceHost); // ?? Hacky
+            if (lastAmzaService != null) {
+                amzaService.getAmzaRing().addRingHost("system", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
+                amzaService.getAmzaRing().addRingHost("test", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
 
-            lastAmzaService.getAmzaRing().addRingHost("test", serviceHost); // ?? Hacky
-            lastAmzaService.getAmzaRing().addRingHost("MASTER", serviceHost); // ?? Hacky
+                lastAmzaService.getAmzaRing().addRingHost("system", serviceHost); // ?? Hacky
+                lastAmzaService.getAmzaRing().addRingHost("test", serviceHost); // ?? Hacky
+            }
+            lastAmzaService = amzaService;
+        } catch (Exception x) {
+            x.printStackTrace();
+            System.out.println("FAILED CONNECTING RING");
+            System.exit(1);
         }
-        lastAmzaService = amzaService;
 
         service = new AmzaNode(serviceHost, amzaService, highWaterMarks);
         cluster.put(serviceHost, service);
@@ -280,6 +233,12 @@ public class AmzaTestCluster {
             amzaService.stop();
         }
 
+        public void create(RegionName regionName) throws Exception {
+            WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
+                new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
+            amzaService.createRegionIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
+        }
+
         void addToReplicatedWAL(RegionName mapName, WALScanable changes) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
@@ -307,11 +266,12 @@ public class AmzaTestCluster {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }
+
             AmzaRegion amzaRegion = amzaService.getRegion(regionName);
             return amzaRegion.get(key);
         }
 
-        public void takeRegion(RegionName regionName, long transationId, WALScan rowStream) throws Exception {
+        public void takeRegion(RegionName regionName, long transationId, RowStream rowStream) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }
@@ -350,9 +310,28 @@ public class AmzaTestCluster {
             regionNames.addAll(allARegions);
             regionNames.addAll(allBRegions);
 
+            List<RingHost> aRing = amzaService.getAmzaRing().getRing("system");
+            List<RingHost> bRing = service.amzaService.getAmzaRing().getRing("system");
+            Collections.sort(aRing);
+            Collections.sort(bRing);
+
+            if (!aRing.equals(bRing)) {
+                System.out.println(aRing + "-vs-" + bRing);
+                return false;
+            }
+
             for (RegionName regionName : regionNames) {
+                if (regionName.equals(RegionProvider.HIGHWATER_MARK_INDEX)) {
+                    continue;
+                }
+
                 AmzaRegion a = amzaService.getRegion(regionName);
                 AmzaRegion b = service.amzaService.getRegion(regionName);
+                if (a == null || b == null) {
+                    System.out.println(regionName + " " + amzaService.getAmzaRing().getRingHost() + " " + a + " -- vs --"
+                        + service.amzaService.getAmzaRing().getRingHost() + " " + b);
+                    return false;
+                }
                 if (!a.compare(b)) {
                     amzaService.printService(amzaService.getAmzaRing().getRingHost());
                     System.out.println("-- vs --");
@@ -364,5 +343,6 @@ public class AmzaTestCluster {
             }
             return true;
         }
+
     }
 }

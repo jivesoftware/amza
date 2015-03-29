@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.storage;
 
+import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
@@ -498,5 +500,9 @@ public class FileBackedWALIndex implements WALIndex {
                 }
             }
         };
+    }
+
+    @Override
+    public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
     }
 }

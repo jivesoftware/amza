@@ -40,4 +40,18 @@ public class HealthPluginEndpoints {
         return Response.ok(rendered).build();
     }
 
+    @GET
+    @Produces(MediaType.TEXT_HTML)
+    @Path("/stats")
+    public Response stats() {
+        return Response.ok(pluginRegion.renderStats()).build();
+    }
+
+    @GET
+    @Produces(MediaType.TEXT_HTML)
+    @Path("/overview")
+    public Response overview() throws Exception {
+        return Response.ok(pluginRegion.renderOverview()).build();
+    }
+
 }

@@ -22,5 +22,6 @@ public interface WALStorageProvider {
     WALStorage create(File workingDirectory,
             String domain,
             RegionName regionName,
+            WALStorageDescriptor storageDescriptor,
             WALReplicator walReplicator) throws Exception;
 }

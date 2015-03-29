@@ -17,8 +17,12 @@ package com.jivesoftware.os.amza.deployable;
 
 import com.jivesoftware.os.amza.service.AmzaRegion;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RegionProperties;
+import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -53,7 +57,7 @@ public class AmzaEndpoints {
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            AmzaRegion amzaRegion = amzaService.getRegion(new RegionName("master", region, null, null));
+            AmzaRegion amzaRegion = createRegionIfAbsent(region);
             List<Entry<WALKey, byte[]>> entries = new ArrayList<>();
             String[] keys = key.split(",");
             String[] values = value.split(",");
@@ -81,7 +85,7 @@ public class AmzaEndpoints {
                 rowKeys.add(new WALKey(k.getBytes()));
             }
 
-            AmzaRegion amzaRegion = amzaService.getRegion(new RegionName("master", region, null, null));
+            AmzaRegion amzaRegion = createRegionIfAbsent(region);
             List<byte[]> got = amzaRegion.get(rowKeys);
             return ResponseHelper.INSTANCE.jsonResponse(got);
         } catch (Exception x) {
@@ -96,11 +100,27 @@ public class AmzaEndpoints {
     public Response remove(@QueryParam("region") String region,
         @QueryParam("key") String key) {
         try {
-            AmzaRegion amzaRegion = amzaService.getRegion(new RegionName("master", region, null, null));
+            AmzaRegion amzaRegion = createRegionIfAbsent(region);
             return Response.ok(amzaRegion.remove(new WALKey(key.getBytes())), MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove region:" + region + " key:" + key, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to remove region:" + region + " key:" + key, x);
         }
+    }
+
+    AmzaRegion createRegionIfAbsent(String regionName) throws Exception {
+
+        List<RingHost> ring = amzaService.getAmzaRing().getRing("default");
+        if (ring.isEmpty()) {
+            amzaService.getAmzaRing().buildRandomSubRing("default", amzaService.getAmzaRing().getRing("system").size());
+        }
+
+        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("mapdb", Long.MAX_VALUE, false,
+            null),
+            null, 1000, 1000);
+
+        return amzaService.createRegionIfAbsent(new RegionName(false, "default", regionName),
+            new RegionProperties(storageDescriptor, 1, 1, false)
+        );
     }
 }

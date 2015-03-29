@@ -73,7 +73,7 @@ public class AmzaRegionChangeReceiver {
                         try {
                             applyReceivedChanges(stripe);
                         } catch (Throwable x) {
-                            LOG.warn("Failing to replay apply replication.", x);
+                            LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                         }
                     }
                 }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
@@ -110,7 +110,7 @@ public class AmzaRegionChangeReceiver {
 
         while (true) {
             boolean appliedChanges = false;
-            for (RegionName regionName: regionProvider.getActiveRegions()) {
+            for (RegionName regionName : regionProvider.getActiveRegions()) {
                 WALStorage received = receivedWAL.get(regionName);
                 if (Math.abs(regionName.hashCode()) % numberOfApplierThreads == stripe) {
                     RegionStore regionStore = regionProvider.getRegionStore(regionName);
@@ -135,7 +135,7 @@ public class AmzaRegionChangeReceiver {
     }
 
     private void compactReceivedChanges() throws Exception {
-        for (RegionName regionName: regionProvider.getActiveRegions()) {
+        for (RegionName regionName : regionProvider.getActiveRegions()) {
             Long highWatermark = highwaterMarks.get(regionName);
             if (highWatermark != null) {
                 WALStorage regionWAL = receivedWAL.get(regionName);

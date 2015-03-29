@@ -85,12 +85,13 @@ public class AmzaService implements AmzaInstance {
     }
 
     synchronized public void start() throws Exception {
+        regionProvider.open();
+
         changeReceiver.start();
         changeTaker.start();
         changeReplicator.start();
         regionCompactor.start();
 
-        regionProvider.open();
     }
 
     synchronized public void stop() throws Exception {

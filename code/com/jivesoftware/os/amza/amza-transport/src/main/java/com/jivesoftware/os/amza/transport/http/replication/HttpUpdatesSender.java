@@ -56,6 +56,8 @@ public class HttpUpdatesSender implements UpdatesSender {
         final List<Long> rowTxIds = new ArrayList<>();
         final List<byte[]> rows = new ArrayList<>();
         final MutableLong smallestTx = new MutableLong(Long.MAX_VALUE);
+        final MutableLong wrote = new MutableLong();
+
         changes.rowScan(new WALScan() {
             @Override
             public boolean row(long txId, WALKey key, WALValue value) throws Exception {
@@ -63,7 +65,9 @@ public class HttpUpdatesSender implements UpdatesSender {
                     smallestTx.setValue(txId);
                 }
                 rowTxIds.add(txId);
-                rows.add(rowMarshaller.toRow(key, value));
+                byte[] rowBytes = rowMarshaller.toRow(key, value);
+                wrote.add(rowBytes.length);
+                rows.add(rowBytes);
                 return true;
             }
         });
@@ -72,6 +76,7 @@ public class HttpUpdatesSender implements UpdatesSender {
             RowUpdates changeSet = new RowUpdates(-1, regionName, rowTxIds, rows);
             getRequestHelper(ringHost).executeRequest(changeSet, "/amza/changes/add", Boolean.class, false);
             amzaStats.replicated(ringHost, regionName, rows.size(), smallestTx.longValue());
+            amzaStats.netStats.wrote.set(wrote.longValue());
         } else {
             amzaStats.replicated(ringHost, regionName, 0, Long.MAX_VALUE);
         }

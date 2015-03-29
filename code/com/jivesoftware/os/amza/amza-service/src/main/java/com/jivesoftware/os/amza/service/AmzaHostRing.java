@@ -144,9 +144,13 @@ public class AmzaHostRing implements AmzaRing {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
         RegionStore ringIndex = regionProvider.getRingIndexStore();
-        RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.add(key(ringName, ringHost), new byte[Status.online.b]);
-        tx.commit();
+        WALKey key = key(ringName, ringHost);
+        WALValue had = ringIndex.get(key);
+        if (had == null) {
+            RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
+            tx.add(key, new byte[Status.online.b]);
+            tx.commit();
+        }
     }
 
     @Override
@@ -158,9 +162,13 @@ public class AmzaHostRing implements AmzaRing {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
         RegionStore ringIndex = regionProvider.getRingIndexStore();
-        RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
-        tx.remove(key(ringName, ringHost));
-        tx.commit(WALStorageUpateMode.updateThenReplicate);
+        WALKey key = key(ringName, ringHost);
+        WALValue had = ringIndex.get(key);
+        if (had != null) {
+            RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
+            tx.remove(key);
+            tx.commit(WALStorageUpateMode.updateThenReplicate);
+        }
     }
 
     @Override

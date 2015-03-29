@@ -86,8 +86,8 @@ public class BinaryWALTx implements WALTx {
             final WALIndex walIndex = rowsIndexProvider.createIndex(regionName);
             if (walIndex.isEmpty()) {
                 LOG.info(
-                    "Rebuilding rowIndex:" + walIndex.getClass().getSimpleName()
-                    + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
+                    "Rebuilding " + walIndex.getClass().getSimpleName()
+                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
                 io.scan(0, new RowStream() {
                     @Override
                     public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
@@ -107,12 +107,12 @@ public class BinaryWALTx implements WALTx {
                         return true;
                     }
                 });
-                LOG.info("Rebuild rowIndex:" + walIndex.getClass().getSimpleName()
-                    + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                LOG.info("Rebuilt " + walIndex.getClass().getSimpleName()
+                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
                 walIndex.commit();
             } else {
-                LOG.info("Checking rowIndex:" + walIndex.getClass().getSimpleName()
-                    + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                LOG.info("Checking " + walIndex.getClass().getSimpleName()
+                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
                 io.reverseScan(new RowStream() {
                     long commitedUpToTxId = Long.MIN_VALUE;
 
@@ -136,8 +136,8 @@ public class BinaryWALTx implements WALTx {
                         }
                     }
                 });
-                LOG.info("Checked rowIndex:" + walIndex.getClass().getSimpleName()
-                    + " region:" + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                LOG.info("Checked " + walIndex.getClass().getSimpleName()
+                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
                 walIndex.commit();
             }
             return walIndex;

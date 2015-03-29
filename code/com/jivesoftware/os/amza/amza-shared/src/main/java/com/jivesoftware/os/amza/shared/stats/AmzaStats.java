@@ -1,5 +1,7 @@
 package com.jivesoftware.os.amza.shared.stats;
 
+import com.google.common.collect.ConcurrentHashMultiset;
+import com.google.common.collect.Multiset;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -35,6 +37,12 @@ public class AmzaStats {
 
     private final Totals grandTotals = new Totals();
     private final Map<RegionName, Totals> regionTotals = new ConcurrentHashMap<>();
+
+    public final Multiset takeErrors = ConcurrentHashMultiset.create();
+    public final Multiset replicateErrors = ConcurrentHashMultiset.create();
+
+    public final IoStats ioStats = new IoStats();
+    public final NetStats netStats = new NetStats();
 
     public AmzaStats() {
     }

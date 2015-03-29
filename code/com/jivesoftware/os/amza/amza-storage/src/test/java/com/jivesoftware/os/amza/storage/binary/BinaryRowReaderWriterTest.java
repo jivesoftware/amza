@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.Filer;
 import java.io.File;
 import java.util.ArrayList;
@@ -40,10 +41,10 @@ public class BinaryRowReaderWriterTest {
     @Test
     public void testRead() throws Exception {
         File dir = Files.createTempDir();
-
+        IoStats ioStats = new IoStats();
         Filer filer = new Filer(new File(dir, "booya").getAbsolutePath(), "rw");
-        BinaryRowReader binaryRowReader = new BinaryRowReader(filer);
-        BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer);
+        BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats);
+        BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
         ReadStream readStream = new ReadStream();
         binaryRowReader.reverseScan(readStream);
@@ -80,11 +81,12 @@ public class BinaryRowReaderWriterTest {
     public void testOpenCloseAppend() throws Exception {
         File dir = Files.createTempDir();
 
+        IoStats ioStats = new IoStats();
         Random rand = new Random();
         for (int i = 0; i < 1000; i++) {
             Filer filer = new Filer(new File(dir, "foo").getAbsolutePath(), "rw");
-            BinaryRowReader binaryRowReader = new BinaryRowReader(filer);
-            BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer);
+            BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats);
+            BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
             ReadStream readStream = new ReadStream();
 

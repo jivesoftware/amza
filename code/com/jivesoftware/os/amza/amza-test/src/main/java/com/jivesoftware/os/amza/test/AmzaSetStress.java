@@ -25,7 +25,7 @@ public class AmzaSetStress {
 
     public static void main(String[] args) throws URIException, IOException {
 
-        args = new String[]{"localhost", "1175", "1", "10000"};
+        args = new String[]{"localhost", "1175", "1", "1000"};
 
         final String hostName = args[0];
         final int port = Integer.parseInt(args[1]);

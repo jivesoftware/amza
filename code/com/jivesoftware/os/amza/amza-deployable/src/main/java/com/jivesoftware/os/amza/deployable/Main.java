@@ -146,7 +146,7 @@ public class Main {
 
         if (transport.equals("http")) {
             changeSetSender = new HttpUpdatesSender(amzaStats);
-            taker = new HttpUpdatesTaker();
+            taker = new HttpUpdatesTaker(amzaStats);
         }
 
         RegionPropertyMarshaller regionPropertyMarshaller = new RegionPropertyMarshaller() {
@@ -224,14 +224,14 @@ public class Main {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRegionsPluginRegion.soy"), "amzaRegions.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStats.soy"), "amzaStats.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
-
+        
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();
         SoyRenderer renderer = new SoyRenderer(tofu, new SoyDataUtils());
         SoyService soyService = new SoyService(renderer, new HeaderRegion("soy.chrome.headerRegion", renderer),
             new HomeRegion("soy.page.homeRegion", renderer));
 
-        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("fire", "Health", "/ui/health",
+        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("dashboard", "Metrics", "/ui/health",
             HealthPluginEndpoints.class,
             new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats",
                 renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),

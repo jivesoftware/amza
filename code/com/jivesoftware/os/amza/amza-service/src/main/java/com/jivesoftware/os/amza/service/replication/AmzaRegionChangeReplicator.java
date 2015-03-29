@@ -76,7 +76,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                         try {
                             resendLocalChanges(stripe);
                         } catch (Throwable x) {
-                            LOG.warn("Failed while resending replicas.", x);
+                            LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                         }
                     }
                 }, resendReplicasIntervalInMillis, resendReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
@@ -92,7 +92,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                     try {
                         compactResendChanges();
                     } catch (Throwable x) {
-                        LOG.error("Failing to compact.", x);
+                        LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                     }
                 }
             }, 1, 1, TimeUnit.MINUTES);
@@ -160,6 +160,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
             try {
                 updatesSender.sendUpdates(ringHost, regionName, updates);
                 amzaStats.offered(ringHost);
+                amzaStats.replicateErrors.setCount(ringHost, 0);
                 if (sendFailureListener.isPresent()) {
                     sendFailureListener.get().sent(ringHost);
                 }
@@ -169,7 +170,11 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                     sendFailureListener.get().failedToSend(ringHost, x);
                 }
                 ringWalker.failed();
-                LOG.info("Failed to send changeset to ringHost:{}", new Object[]{ringHost}, x);
+                if (amzaStats.replicateErrors.count(ringHost) == 0) {
+                    LOG.warn("Can't replicate to host:{}", ringHost);
+                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[]{ringHost, regionName, replicationFactor}, x);
+                }
+                amzaStats.replicateErrors.add(ringHost);
                 if (enqueueForResendOnFailure) {
                     WALStorage resend = resendWAL.get(regionName);
                     resend.update(WALStorageUpateMode.noReplication, updates);
@@ -210,6 +215,8 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 amzaStats.beginCompaction("Compacting Resend:" + regionName);
                 try {
                     regionWAL.compactTombstone(highWatermark, highWatermark);
+                } catch (Exception x) {
+                    LOG.warn("Failing to compact:" + regionName, x);
                 } finally {
                     amzaStats.endCompaction("Compacting Resend:" + regionName);
                 }

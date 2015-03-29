@@ -33,7 +33,7 @@ import java.io.File;
 public class EmbeddedAmzaServiceInitializer {
 
     public AmzaService initialize(final AmzaServiceConfig amzaServiceConfig,
-        AmzaStats amzaStats,
+        final AmzaStats amzaStats,
         RingHost ringHost,
         final TimestampedOrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
@@ -58,7 +58,7 @@ public class EmbeddedAmzaServiceInitializer {
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider();
+                RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
                 return new IndexedWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
@@ -91,7 +91,7 @@ public class EmbeddedAmzaServiceInitializer {
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider();
+                RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
                 return new NonIndexWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,

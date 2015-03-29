@@ -18,6 +18,7 @@
                                 <th>Name</th>
                                 <th>RingName</th>
                                 <th>Disabled</th>
+                                <th>Index</th>
                                 <th>ReplicationFactor</th>
                                 <th>TakeFromFactor</th>
                             </tr>
@@ -45,6 +46,7 @@
                                         class="form-control" placeholder="Name" value=""
                                         name="name" id="hostPicker"  title="">
                                     </td>
+                                    <td>TODO</td>
                                     <td>
                                         <input type="number" name="replicationFactor" min="0" max="65536" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
                                         class="form-control" placeholder="replicationFactor" value=""  title="">
@@ -91,6 +93,7 @@
                                             class="form-control" placeholder="Name" value="{$r.disabled}"
                                             name="name" id="hostPicker"  title="{$r.disabled}">
                                         </td>
+                                        <td>TODO</td>
                                         <td>
                                             <input type="number" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
                                             placeholder="replicationFactor" value="{$r.replicationFactor}" name="replicationFactor" class="form-control">

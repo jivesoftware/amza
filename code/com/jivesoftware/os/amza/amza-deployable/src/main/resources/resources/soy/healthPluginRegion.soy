@@ -7,6 +7,7 @@
  */
 {template .healthPluginRegion}
      <div class="panel panel-default">
+/**
 <div class="panel-body">
     <div id="center"><div id="fig">
             <script type="text/javascript+protovis">
@@ -14,10 +15,10 @@ var amzaChatter = amza.arc.fetch().data();
 var vis = new pv.Panel().width(450).height(270).bottom(90); var arc = vis.add(pv.Layout.Arc).nodes(amzaChatter.nodes).links(amzaChatter.links); arc.link.add(pv.Line); var dotSize = function(d) d.linkDegree + 4; var bygroup = function(d) d.group; var fillDark = function() this.fillStyle().darker(); arc.node.add(pv.Dot).size(dotSize).fillStyle(pv.Colors.category19().by(bygroup)).strokeStyle(fillDark);arc.label.add(pv.Label); vis.render(); vis.render();
             </script>
         </div></div>
- </div></div>
+ </div></div>*/
     
     <div class="panel panel-default">
-        <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>{sp}Health</div>
+        <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>{sp}Metrics</div>
         <div class="panel-body">
              <table class="table table-condensed">
                 <thead>

@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
 import com.jivesoftware.os.filer.io.FilerIO;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -35,7 +36,8 @@ public class RowRegionNGTest {
     public void concurrencyTest() throws Exception {
         File walDir = Files.createTempDir();
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider();
+        IoStats ioStats = new IoStats();
+        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats);
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
         final WALIndexProvider indexProvider = new WALIndexProvider() {
@@ -127,7 +129,9 @@ public class RowRegionNGTest {
     public void eventualConsitencyTest() throws Exception {
         File walDir = Files.createTempDir();
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider();
+        IoStats ioStats = new IoStats();
+
+        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats);
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
         final WALIndexProvider indexProvider = new WALIndexProvider() {

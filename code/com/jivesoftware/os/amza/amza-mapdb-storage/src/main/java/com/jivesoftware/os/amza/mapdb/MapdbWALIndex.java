@@ -43,7 +43,7 @@ public class MapdbWALIndex implements WALIndex {
         File active = new File(dir, "active");
         active.mkdirs();
         File regionFile = new File(active, "region");
-        db = DBMaker.newFileDB(regionFile).mmapFileEnable().closeOnJvmShutdown().make();
+        db = DBMaker.newFileDB(regionFile).cacheSoftRefEnable().mmapFileEnable().closeOnJvmShutdown().make();
         index = db.getTreeMap("region");
         db.commit();
         LOG.info("Opening " + active.getAbsolutePath() + " " + index.size());

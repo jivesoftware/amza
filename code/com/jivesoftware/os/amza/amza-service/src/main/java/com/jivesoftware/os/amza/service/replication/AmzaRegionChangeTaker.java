@@ -79,7 +79,7 @@ public class AmzaRegionChangeTaker {
                         try {
                             takeChanges(stripe);
                         } catch (Throwable x) {
-                            LOG.warn("Failing to take from above and below.", x);
+                            LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                         }
                     }
                 }, takeFromNeighborsIntervalInMillis, takeFromNeighborsIntervalInMillis, TimeUnit.MILLISECONDS);
@@ -141,6 +141,7 @@ public class AmzaRegionChangeTaker {
                         flushedChanges = true;
                     }
                     amzaStats.took(ringHost);
+                    amzaStats.takeErrors.setCount(ringHost, 0);
                     if (takeFailureListener.isPresent()) {
                         takeFailureListener.get().tookFrom(ringHost);
                     }
@@ -155,7 +156,11 @@ public class AmzaRegionChangeTaker {
                     if (takeFailureListener.isPresent()) {
                         takeFailureListener.get().failedToTake(ringHost, x);
                     }
-                    LOG.warn("Can't takeFrom host:" + ringHost, x);
+                    if (amzaStats.takeErrors.count(ringHost) == 0) {
+                        LOG.warn("Can't take from host:{}", ringHost);
+                        LOG.trace("Can't take from host:{} region:{} takeFromFactor:{}", new Object[]{ringHost, regionName, takeFromFactor}, x);
+                    }
+                    amzaStats.takeErrors.add(ringHost);
                 }
             }
         }

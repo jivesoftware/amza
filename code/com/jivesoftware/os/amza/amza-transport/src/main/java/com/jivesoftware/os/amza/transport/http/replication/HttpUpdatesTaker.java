@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfig;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfiguration;
@@ -32,10 +33,16 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.commons.lang.mutable.MutableLong;
 
 public class HttpUpdatesTaker implements UpdatesTaker {
 
+    private final AmzaStats amzaStats;
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
+
+    public HttpUpdatesTaker(AmzaStats amzaStats) {
+        this.amzaStats = amzaStats;
+    }
 
     @Override
     public void streamingTakeUpdates(RingHost ringHost,
@@ -47,6 +54,7 @@ public class HttpUpdatesTaker implements UpdatesTaker {
 
         InputStream inputStream = getRequestHelper(ringHost).executeStreamingPostRequest(changeSet, "/amza/changes/streamingTake");
         BufferedInputStream bis = new BufferedInputStream(inputStream, 8096); // TODO config??
+        final MutableLong read = new MutableLong();
         try (DataInputStream dis = new DataInputStream(bis)) {
             byte eosMarks;
             while ((eosMarks = dis.readByte()) == 1) {
@@ -55,9 +63,11 @@ public class HttpUpdatesTaker implements UpdatesTaker {
                 long rowType = dis.readByte();
                 byte[] rowBytes = new byte[dis.readInt()];
                 dis.readFully(rowBytes);
+                read.add(rowBytes.length);
                 tookRowUpdates.row(rowType, rowTxId, eosMarks, rowBytes);
             }
         }
+        amzaStats.netStats.read.addAndGet(read.longValue());
     }
 
     HttpRequestHelper getRequestHelper(RingHost ringHost

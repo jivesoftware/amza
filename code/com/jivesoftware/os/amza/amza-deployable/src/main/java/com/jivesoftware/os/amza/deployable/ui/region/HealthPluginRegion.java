@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
+import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.lang.management.GarbageCollectorMXBean;
@@ -25,6 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import javax.management.Attribute;
 import javax.management.AttributeList;
 import javax.management.InstanceNotFoundException;
@@ -178,16 +180,22 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
     public String renderOverview() throws Exception {
 
         StringBuilder sb = new StringBuilder();
-        sb.append("<p>" + runtimeBean.getUptime() + " millis uptime");
+        sb.append("<p>uptime<span class=\"badge\">" + getDurationBreakdown(runtimeBean.getUptime()) + "</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspdiskR<span class=\"badge\">" + humanReadableByteCount(amzaStats.ioStats.read.get(), false) + "</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspdiskW<span class=\"badge\">" + humanReadableByteCount(amzaStats.ioStats.wrote.get(), false) + "</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspnetR<span class=\"badge\">" + humanReadableByteCount(amzaStats.netStats.read.get(), false) + "</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspnetW<span class=\"badge\">" + humanReadableByteCount(amzaStats.netStats.wrote.get(), false) + "</span>");
+
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",
-            (int) ((processCpuLoad / Runtime.getRuntime().availableProcessors()) * 100),
+            (int) (processCpuLoad),
             String.valueOf(processCpuLoad) + " cpu load"));
 
         double memoryLoad = (double) memoryBean.getHeapMemoryUsage().getUsed() / (double) memoryBean.getHeapMemoryUsage().getMax();
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
-            String.valueOf(memoryBean.getHeapMemoryUsage().getUsed()) + " used out of " + memoryBean.getHeapMemoryUsage().getMax()));
+            String.valueOf(humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false))));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -196,41 +204,53 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         double gcLoad = (double) s / (double) runtimeBean.getUptime();
         sb.append(progress("GC",
             (int) (gcLoad * 100),
-            String.valueOf(s) + "millis total gc"));
+            getDurationBreakdown(s) + " total gc"));
 
         Totals grandTotal = amzaStats.getGrandTotal();
 
-        sb.append(progress("Gets",
+        sb.append(progress("Gets (" + grandTotal.gets + ")",
             (int) (((double) grandTotal.getsLag.longValue() / 1000d) * 100),
-            String.valueOf(grandTotal.getsLag.longValue()) + "millis lag"));
+            String.valueOf(getDurationBreakdown(grandTotal.getsLag.longValue())) + " lag"));
 
-        sb.append(progress("Scans",
+        sb.append(progress("Scans (" + grandTotal.scans + ")",
             (int) (((double) grandTotal.scansLag.longValue() / 1000d) * 100),
-            String.valueOf(grandTotal.scansLag.longValue()) + "millis lag"));
+            String.valueOf(getDurationBreakdown(grandTotal.scansLag.longValue())) + " lag"));
 
-        sb.append(progress("Took",
-            (int) (((double) grandTotal.takesLag.longValue() / 1000d) * 100),
-            String.valueOf(grandTotal.takesLag.longValue()) + "millis lag"));
-
-        sb.append(progress("Took Applied",
-            (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
-            String.valueOf(grandTotal.takeAppliesLag.longValue()) + "millis lag"));
-
-        sb.append(progress("Received",
-            (int) (((double) grandTotal.receivedLag.longValue() / 1000d) * 100),
-            String.valueOf(grandTotal.receivedLag.longValue()) + "millis lag"));
-
-        sb.append(progress("Received Applied",
-            (int) (((double) grandTotal.receivedAppliesLag.longValue() / 1000d) * 100),
-            String.valueOf(grandTotal.receivedAppliesLag.longValue()) + "millis lag"));
-
-        sb.append(progress("Direct Applied",
+        sb.append(progress("Direct Applied (" + grandTotal.directApplies + ")",
             (int) (((double) grandTotal.directAppliesLag.longValue() / 1000d) * 100),
-            String.valueOf(grandTotal.directAppliesLag.longValue()) + "millis lag"));
+            String.valueOf(getDurationBreakdown(grandTotal.directAppliesLag.longValue())) + " lag"));
 
-        sb.append(progress("Replicated",
+        sb.append(progress("Took Applied(" + grandTotal.takeApplies + ")",
+            (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
+            String.valueOf(getDurationBreakdown(grandTotal.takeAppliesLag.longValue())) + " lag"));
+
+        sb.append(progress("Received Applied (" + grandTotal.receivedApplies + ")",
+            (int) (((double) grandTotal.receivedAppliesLag.longValue() / 1000d) * 100),
+            String.valueOf(getDurationBreakdown(grandTotal.receivedAppliesLag.longValue())) + " lag"));
+
+        sb.append(progress("Replicated (" + grandTotal.replicates + ")",
             (int) (((double) grandTotal.replicatesLag.longValue() / 1000d) * 100),
-            String.valueOf(grandTotal.replicatesLag.longValue()) + "millis lag"));
+            String.valueOf(getDurationBreakdown(grandTotal.replicatesLag.longValue())) + " lag"));
+
+        sb.append(progress("Took (" + grandTotal.takes + ")",
+            (int) (((double) grandTotal.takesLag.longValue() / 10000d) * 100),
+            String.valueOf(getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag"));
+
+        sb.append(progress("Received (" + grandTotal.received + ")",
+            (int) (((double) grandTotal.receivedLag.longValue() / 10000d) * 100),
+            String.valueOf(getDurationBreakdown(grandTotal.receivedLag.longValue())) + " lag"));
+
+        sb.append("<p><pre>");
+        for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {
+            sb.append("ERROR ").append(l).append("\n");
+        }
+        for (String l : LoggerSummary.INSTANCE.lastNWarns.get()) {
+            sb.append("WARN ").append(l).append("\n");
+        }
+        for (String l : LoggerSummary.INSTANCE.lastNInfos.get()) {
+            sb.append("INFO ").append(l).append("\n");
+        }
+        sb.append("</pre><p>");
 
         return sb.toString();
     }
@@ -265,6 +285,52 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
     @Override
     public String getTitle() {
         return "Health";
+    }
+
+    public static String humanReadableByteCount(long bytes, boolean si) {
+        int unit = si ? 1000 : 1024;
+        if (bytes < unit) {
+            return bytes + " B";
+        }
+        int exp = (int) (Math.log(bytes) / Math.log(unit));
+        String pre = (si ? "kMGTPE" : "KMGTPE").charAt(exp - 1) + (si ? "" : "i");
+        return String.format("%.1f %sB", bytes / Math.pow(unit, exp), pre);
+    }
+
+    public static String getDurationBreakdown(long millis) {
+        if (millis < 0) {
+            return String.valueOf(millis);
+        }
+
+        long days = TimeUnit.MILLISECONDS.toDays(millis);
+        millis -= TimeUnit.DAYS.toMillis(days);
+        long hours = TimeUnit.MILLISECONDS.toHours(millis);
+        millis -= TimeUnit.HOURS.toMillis(hours);
+        long minutes = TimeUnit.MILLISECONDS.toMinutes(millis);
+        millis -= TimeUnit.MINUTES.toMillis(minutes);
+        long seconds = TimeUnit.MILLISECONDS.toSeconds(millis);
+        millis -= TimeUnit.SECONDS.toMillis(seconds);
+
+        StringBuilder sb = new StringBuilder(64);
+        if (days > 0) {
+            sb.append(days);
+            sb.append(" Days ");
+        }
+        if (hours > 0) {
+            sb.append(hours);
+            sb.append(":");
+        }
+        if (minutes > 0) {
+            sb.append(minutes);
+            sb.append(":");
+        }
+        if (seconds > 0) {
+            sb.append(seconds);
+            sb.append(".");
+        }
+        sb.append(millis);
+
+        return (sb.toString());
     }
 
 }

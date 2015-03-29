@@ -224,7 +224,7 @@ public class Main {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRegionsPluginRegion.soy"), "amzaRegions.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStats.soy"), "amzaStats.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
-        
+
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();
         SoyRenderer renderer = new SoyRenderer(tofu, new SoyDataUtils());

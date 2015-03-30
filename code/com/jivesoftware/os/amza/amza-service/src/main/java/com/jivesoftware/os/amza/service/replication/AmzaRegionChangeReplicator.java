@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.HostRing;
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaHostRing;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.WALs;
+import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;

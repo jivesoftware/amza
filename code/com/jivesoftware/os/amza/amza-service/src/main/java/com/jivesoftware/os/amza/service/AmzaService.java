@@ -40,7 +40,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.Executors;
 
 /**
  * Amza pronounced (AH m z ah )
@@ -95,17 +94,7 @@ public class AmzaService implements AmzaInstance {
 
     synchronized public void start() throws Exception {
 
-        Executors.newSingleThreadExecutor().submit(new Runnable() {
-
-            @Override
-            public void run() {
-                try {
-                    regionProvider.open();
-                } catch (Exception x) {
-                    LOG.warn("Encountered the following while open all regions.", x);
-                }
-            }
-        });
+        regionProvider.open();
 
         changeReceiver.start();
         changeTaker.start();

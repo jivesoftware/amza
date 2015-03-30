@@ -15,9 +15,11 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import java.util.Map;
+
 public interface UpdatesTaker {
 
-    void streamingTakeUpdates(RingHost ringHost,
+    Map<RingHost, Long> streamingTakeUpdates(RingHost ringHost,
         RegionName partitionName,
         long transactionId,
         RowStream tookRowUpdates) throws Exception;

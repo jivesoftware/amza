@@ -18,7 +18,7 @@ import javax.ws.rs.core.Response;
  *
  */
 @Singleton
-@Path("/ui/health")
+@Path("/ui/metrics")
 public class HealthPluginEndpoints {
 
     private final SoyService soyService;

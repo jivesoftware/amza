@@ -13,9 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.service.replication;
-
-import com.jivesoftware.os.amza.shared.RingHost;
+package com.jivesoftware.os.amza.shared;
 
 public class HostRing {
 

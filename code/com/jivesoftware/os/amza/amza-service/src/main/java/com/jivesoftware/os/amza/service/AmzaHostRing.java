@@ -15,12 +15,12 @@
  */
 package com.jivesoftware.os.amza.service;
 
-import com.jivesoftware.os.amza.service.replication.HostRing;
 import com.jivesoftware.os.amza.service.replication.HostRingBuilder;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.AmzaRing;
+import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
@@ -110,6 +110,7 @@ public class AmzaHostRing implements AmzaRing {
         }
     }
 
+    @Override
     public HostRing getHostRing(String ringName) throws Exception {
         return new HostRingBuilder().build(ringHost, getRing(ringName));
     }

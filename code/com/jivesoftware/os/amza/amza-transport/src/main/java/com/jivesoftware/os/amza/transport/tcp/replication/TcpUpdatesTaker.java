@@ -28,6 +28,7 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvid
 import com.jivesoftware.os.jive.utils.base.interfaces.CallbackStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Map;
 
 /**
  *
@@ -98,7 +99,8 @@ public class TcpUpdatesTaker implements UpdatesTaker {
     }
 
     @Override
-    public void streamingTakeUpdates(RingHost ringHost, RegionName partitionName, long transactionId, RowStream tookRowUpdates) throws Exception {
+    public Map<RingHost, Long> streamingTakeUpdates(RingHost ringHost, RegionName partitionName, long transactionId, RowStream tookRowUpdates)
+        throws Exception {
         throw new UnsupportedOperationException("Time bomb for someone lucky!");
     }
 }

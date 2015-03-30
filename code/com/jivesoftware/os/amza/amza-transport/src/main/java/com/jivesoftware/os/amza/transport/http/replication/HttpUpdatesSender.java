@@ -76,7 +76,7 @@ public class HttpUpdatesSender implements UpdatesSender {
             RowUpdates changeSet = new RowUpdates(-1, regionName, rowTxIds, rows);
             getRequestHelper(ringHost).executeRequest(changeSet, "/amza/changes/add", Boolean.class, false);
             amzaStats.replicated(ringHost, regionName, rows.size(), smallestTx.longValue());
-            amzaStats.netStats.wrote.set(wrote.longValue());
+            amzaStats.netStats.wrote.addAndGet(wrote.longValue());
         } else {
             amzaStats.replicated(ringHost, regionName, 0, Long.MAX_VALUE);
         }

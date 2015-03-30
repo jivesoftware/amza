@@ -49,6 +49,7 @@ import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
+import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
@@ -210,7 +211,8 @@ public class Main {
             .addEndpoint(AmzaEndpoints.class)
             .addInjectable(AmzaService.class, amzaService)
             .addEndpoint(AmzaReplicationRestEndpoints.class)
-            .addInjectable(AmzaInstance.class, amzaService);
+            .addInjectable(AmzaInstance.class, amzaService)
+            .addInjectable(HighwaterMarks.class, amzaService.getHighwaterMarks());
 
         SoyFileSet.Builder soyFileSetBuilder = new SoyFileSet.Builder();
 
@@ -231,7 +233,7 @@ public class Main {
         SoyService soyService = new SoyService(renderer, new HeaderRegion("soy.chrome.headerRegion", renderer),
             new HomeRegion("soy.page.homeRegion", renderer));
 
-        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("dashboard", "Metrics", "/ui/health",
+        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("dashboard", "Metrics", "/ui/metrics",
             HealthPluginEndpoints.class,
             new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats",
                 renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),

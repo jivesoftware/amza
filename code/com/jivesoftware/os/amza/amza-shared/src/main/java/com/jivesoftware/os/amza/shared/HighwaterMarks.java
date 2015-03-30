@@ -19,7 +19,7 @@ public interface HighwaterMarks {
 
     void clearRing(RingHost ringHost) throws Exception;
 
-    void set(RingHost ringHost, RegionName regionName, int updates, long highWatermark) throws Exception;
+    void setIfLarger(RingHost ringHost, RegionName regionName, int updates, long highWatermark) throws Exception;
 
     void clear(RingHost ringHost, RegionName regionName) throws Exception;
 

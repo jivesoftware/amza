@@ -30,12 +30,16 @@ import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class RegionProvider implements RowChanges {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     public static final RegionName RING_INDEX = new RegionName(true, "system", "RING_INDEX");
     public static final RegionName REGION_INDEX = new RegionName(true, "system", "REGION_INDEX");
@@ -84,9 +88,13 @@ public class RegionProvider implements RowChanges {
             @Override
             public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
                 RegionName regionName = RegionName.fromBytes(key.getKey());
-                RegionProperties properties = getRegionProperties(regionName);
-                if (properties != null) {
-                    getRegionStore(regionName);
+                try {
+                    RegionProperties properties = getRegionProperties(regionName);
+                    if (properties != null) {
+                        getRegionStore(regionName);
+                    }
+                } catch (Exception x) {
+                    LOG.warn("Encountered the following opening region:" + regionName, x);
                 }
                 return true;
             }

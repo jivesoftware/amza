@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.service.AmzaHostRing;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
+import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
@@ -22,6 +23,7 @@ import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -134,10 +136,13 @@ public class AmzaRegionChangeTaker {
                         highwaterMark = -1L;
                     }
                     TakeRowStream takeRowStream = new TakeRowStream(amzaStats, regionName, regionStore, ringHost, highwaterMark);
-                    updatesTaker.streamingTakeUpdates(ringHost, regionName, highwaterMark, takeRowStream);
+                    Map<RingHost, Long> otherHighwaterMarks = updatesTaker.streamingTakeUpdates(ringHost, regionName, highwaterMark, takeRowStream);
                     int updates = takeRowStream.flush();
+                    for (Entry<RingHost, Long> otherHighwaterMark : otherHighwaterMarks.entrySet()) {
+                        highwaterMarks.setIfLarger(otherHighwaterMark.getKey(), regionName, updates, otherHighwaterMark.getValue());
+                    }
                     if (updates > 0) {
-                        highwaterMarks.set(ringHost, regionName, updates, takeRowStream.highWaterMark.longValue());
+                        highwaterMarks.setIfLarger(ringHost, regionName, updates, takeRowStream.highWaterMark.longValue());
                         flushedChanges = true;
                     }
                     amzaStats.took(ringHost);

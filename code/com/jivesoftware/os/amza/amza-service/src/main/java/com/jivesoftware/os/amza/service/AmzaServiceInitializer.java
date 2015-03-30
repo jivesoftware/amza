@@ -131,6 +131,7 @@ public class AmzaServiceInitializer {
 
         AmzaService service = new AmzaService(orderIdProvider,
             amzaRing,
+            highwaterMarks,
             changeReceiver,
             changeTaker,
             changeReplicator,

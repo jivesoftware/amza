@@ -17,6 +17,8 @@ package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
+import com.jivesoftware.os.amza.shared.HighwaterMarks;
+import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -49,11 +51,14 @@ public class AmzaReplicationRestEndpoints {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRing amzaRing;
     private final AmzaInstance amzaInstance;
+    private final HighwaterMarks highwaterMarks;
 
     public AmzaReplicationRestEndpoints(@Context AmzaRing amzaRing,
-        @Context AmzaInstance amzaInstance) {
+        @Context AmzaInstance amzaInstance,
+        @Context HighwaterMarks highwaterMarks) {
         this.amzaRing = amzaRing;
         this.amzaInstance = amzaInstance;
+        this.highwaterMarks = highwaterMarks;
     }
 
     @POST
@@ -154,7 +159,21 @@ public class AmzaReplicationRestEndpoints {
                     BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
                     final DataOutputStream dos = new DataOutputStream(bos);
                     try {
-                        amzaInstance.takeRowUpdates(rowUpdates.getRegionName(), rowUpdates.getHighestTransactionId(), new RowStream() {
+                        RegionName regionName = rowUpdates.getRegionName();
+                        HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
+                        for (RingHost ringHost : hostRing.getAboveRing()) {
+                            Long highwatermark = highwaterMarks.get(ringHost, regionName);
+                            if (highwatermark != null) {
+                                byte[] ringHostBytes = ringHost.toBytes();
+                                dos.writeByte(1);
+                                dos.writeInt(ringHostBytes.length);
+                                dos.write(ringHostBytes);
+                                dos.writeLong(highwatermark);
+                            }
+                        }
+                        dos.writeByte(0); // last entry marker
+
+                        amzaInstance.takeRowUpdates(regionName, rowUpdates.getHighestTransactionId(), new RowStream() {
                             @Override
                             public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
                                 dos.writeByte(1);

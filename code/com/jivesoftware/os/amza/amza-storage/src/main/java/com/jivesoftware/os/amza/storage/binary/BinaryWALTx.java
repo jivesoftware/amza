@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
@@ -88,6 +89,7 @@ public class BinaryWALTx implements WALTx {
                 LOG.info(
                     "Rebuilding " + walIndex.getClass().getSimpleName()
                     + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
+                final MutableLong rebuilt = new MutableLong();
                 io.scan(0, new RowStream() {
                     @Override
                     public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
@@ -103,16 +105,18 @@ public class BinaryWALTx implements WALTx {
                                 walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
                                     key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
                             }
+                            rebuilt.add(1);
                         }
                         return true;
                     }
                 });
-                LOG.info("Rebuilt " + walIndex.getClass().getSimpleName()
+                LOG.info("Rebuilt (" + rebuilt.longValue() + ")" + walIndex.getClass().getSimpleName()
                     + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
                 walIndex.commit();
             } else {
                 LOG.info("Checking " + walIndex.getClass().getSimpleName()
                     + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                final MutableLong repair = new MutableLong();
                 io.reverseScan(new RowStream() {
                     long commitedUpToTxId = Long.MIN_VALUE;
 
@@ -124,6 +128,7 @@ public class BinaryWALTx implements WALTx {
                             WALValue value = walr.getValue();
                             walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
                                 key, new WALValue(UIO.longBytes(rowFP), value.getTimestampId(), value.getTombstoned()))));
+                            repair.add(1);
                         }
                         if (rowType == WALWriter.SYSTEM_VERSION_1 && commitedUpToTxId == Long.MIN_VALUE) {
                             long[] key_CommitedUpToTxId = UIO.bytesLongs(row);
@@ -136,7 +141,7 @@ public class BinaryWALTx implements WALTx {
                         }
                     }
                 });
-                LOG.info("Checked " + walIndex.getClass().getSimpleName()
+                LOG.info("Checked (" + repair.longValue() + ")" + walIndex.getClass().getSimpleName()
                     + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
                 walIndex.commit();
             }

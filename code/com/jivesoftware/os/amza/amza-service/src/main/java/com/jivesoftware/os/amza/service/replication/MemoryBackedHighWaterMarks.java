@@ -30,13 +30,23 @@ public class MemoryBackedHighWaterMarks implements HighwaterMarks {
     }
 
     @Override
-    public void set(RingHost ringHost, RegionName regionName, int update, long highWatermark) {
+    public void setIfLarger(RingHost ringHost, RegionName regionName, int update, long highWatermark) {
         ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringHost);
         if (lastRegionTransactionIds == null) {
             lastRegionTransactionIds = new ConcurrentHashMap<>();
             lastTransactionIds.put(ringHost, lastRegionTransactionIds);
         }
-        lastRegionTransactionIds.put(regionName, highWatermark);
+        Long got = lastRegionTransactionIds.get(regionName);
+        if (got == null) {
+            Long had = lastRegionTransactionIds.putIfAbsent(regionName, highWatermark);
+            if (had < highWatermark) {
+                lastRegionTransactionIds.put(regionName, had);
+            }
+        } else {
+            if (got < highWatermark) {
+                lastRegionTransactionIds.put(regionName, highWatermark);
+            }
+        }
     }
 
     @Override

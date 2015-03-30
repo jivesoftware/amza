@@ -8,6 +8,8 @@ import java.util.List;
  */
 public interface AmzaRing {
 
+    HostRing getHostRing(String ringName) throws Exception;
+
     void addRingHost(String ringName, RingHost ringHost) throws Exception;
 
     void removeRingHost(String ringName, RingHost ringHost) throws Exception;

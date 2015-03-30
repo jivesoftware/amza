@@ -23,7 +23,7 @@ amza.stats = {
     poll: function () {
         $.ajax({
             type: "GET",
-            url: "/ui/health/stats",
+            url: "/ui/metrics/stats",
             dataType: "html",
             data: {
                 name: ""
@@ -260,7 +260,7 @@ amza.overview = {
     poll: function () {
         $.ajax({
             type: "GET",
-            url: "/ui/health/overview",
+            url: "/ui/metrics/overview",
             dataType: "html",
             data: {
                 name: ""

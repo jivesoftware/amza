@@ -48,6 +48,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -113,13 +114,17 @@ public class AmzaTestCluster {
         UpdatesTaker taker = new UpdatesTaker() {
 
             @Override
-            public void streamingTakeUpdates(RingHost ringHost, RegionName regionName, long transactionId, RowStream tookRowUpdates) throws Exception {
+            public Map<RingHost, Long> streamingTakeUpdates(RingHost ringHost,
+                RegionName regionName,
+                long transactionId,
+                RowStream tookRowUpdates) throws Exception {
                 AmzaNode service = cluster.get(ringHost);
                 if (service == null) {
                     throw new IllegalStateException("Service doesn't exists for " + ringHost);
                 } else {
                     service.takeRegion(regionName, transactionId, tookRowUpdates);
                 }
+                return new HashMap<>();
             }
         };
 

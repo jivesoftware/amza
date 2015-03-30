@@ -23,6 +23,7 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -39,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Executors;
 
 /**
  * Amza pronounced (AH m z ah )
@@ -51,6 +53,7 @@ public class AmzaService implements AmzaInstance {
 
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaHostRing amzaRing;
+    private final HighwaterMarks highwaterMarks;
     private final AmzaRegionChangeReceiver changeReceiver;
     private final AmzaRegionChangeTaker changeTaker;
     private final AmzaRegionChangeReplicator changeReplicator;
@@ -60,6 +63,7 @@ public class AmzaService implements AmzaInstance {
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
         AmzaHostRing amzaRing,
+        HighwaterMarks highwaterMarks,
         AmzaRegionChangeReceiver changeReceiver,
         AmzaRegionChangeTaker changeTaker,
         AmzaRegionChangeReplicator changeReplicator,
@@ -68,6 +72,7 @@ public class AmzaService implements AmzaInstance {
         AmzaRegionWatcher regionWatcher) {
         this.orderIdProvider = orderIdProvider;
         this.amzaRing = amzaRing;
+        this.highwaterMarks = highwaterMarks;
         this.changeReceiver = changeReceiver;
         this.changeTaker = changeTaker;
         this.changeReplicator = changeReplicator;
@@ -80,12 +85,27 @@ public class AmzaService implements AmzaInstance {
         return amzaRing;
     }
 
+    public HighwaterMarks getHighwaterMarks() {
+        return highwaterMarks;
+    }
+
     public RegionProvider getRegionProvider() {
         return regionProvider;
     }
 
     synchronized public void start() throws Exception {
-        regionProvider.open();
+
+        Executors.newSingleThreadExecutor().submit(new Runnable() {
+
+            @Override
+            public void run() {
+                try {
+                    regionProvider.open();
+                } catch (Exception x) {
+                    LOG.warn("Encountered the following while open all regions.", x);
+                }
+            }
+        });
 
         changeReceiver.start();
         changeTaker.start();

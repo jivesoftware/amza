@@ -42,7 +42,7 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
     }
 
     @Override
-    public void set(RingHost ringHost, RegionName regionName, int updates, long highwaterTxId) throws Exception {
+    public void setIfLarger(RingHost ringHost, RegionName regionName, int updates, long highwaterTxId) throws Exception {
         ConcurrentHashMap<RegionName, HighwaterMark> regionHighwaterMarks = hostHighwaterMarks.get(ringHost);
         if (regionHighwaterMarks == null) {
             regionHighwaterMarks = new ConcurrentHashMap<>();

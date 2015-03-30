@@ -32,6 +32,8 @@ import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -45,7 +47,7 @@ public class HttpUpdatesTaker implements UpdatesTaker {
     }
 
     @Override
-    public void streamingTakeUpdates(RingHost ringHost,
+    public Map<RingHost, Long> streamingTakeUpdates(RingHost ringHost,
         RegionName regionName,
         long transactionId,
         RowStream tookRowUpdates) throws Exception {
@@ -55,8 +57,16 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         InputStream inputStream = getRequestHelper(ringHost).executeStreamingPostRequest(changeSet, "/amza/changes/streamingTake");
         BufferedInputStream bis = new BufferedInputStream(inputStream, 8096); // TODO config??
         final MutableLong read = new MutableLong();
+        Map<RingHost, Long> neighborsHighwaterMarks = new HashMap<>();
         try (DataInputStream dis = new DataInputStream(bis)) {
             byte eosMarks;
+            while ((eosMarks = dis.readByte()) == 1) {
+                byte[] ringHostBytes = new byte[dis.readInt()];
+                dis.readFully(ringHostBytes);
+                long highwaterMark = dis.readLong();
+                neighborsHighwaterMarks.put(RingHost.fromBytes(ringHostBytes), highwaterMark);
+
+            }
             while ((eosMarks = dis.readByte()) == 1) {
 
                 long rowTxId = dis.readLong();
@@ -68,6 +78,8 @@ public class HttpUpdatesTaker implements UpdatesTaker {
             }
         }
         amzaStats.netStats.read.addAndGet(read.longValue());
+        return neighborsHighwaterMarks;
+
     }
 
     HttpRequestHelper getRequestHelper(RingHost ringHost

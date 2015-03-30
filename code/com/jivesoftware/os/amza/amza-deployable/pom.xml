@@ -53,6 +53,11 @@
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-ui</artifactId>
+            <version>0.30-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
             <version>0.30-SNAPSHOT</version>
         </dependency>
@@ -121,11 +126,6 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.google.template</groupId>
-            <artifactId>soy</artifactId>
-            <version>2012-12-21</version>
         </dependency>
     </dependencies>
     <name>amza-deployable</name>

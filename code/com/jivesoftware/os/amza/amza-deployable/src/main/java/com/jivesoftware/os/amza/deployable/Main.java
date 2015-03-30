@@ -19,25 +19,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
-import com.google.template.soy.SoyFileSet;
-import com.google.template.soy.tofu.SoyTofu;
-import com.jivesoftware.os.amza.deployable.ui.AmzaUIEndpoints;
-import com.jivesoftware.os.amza.deployable.ui.AmzaUIEndpoints.AmzaClusterName;
-import com.jivesoftware.os.amza.deployable.ui.region.AmzaClusterPluginRegion;
-import com.jivesoftware.os.amza.deployable.ui.region.AmzaRegionsPluginRegion;
-import com.jivesoftware.os.amza.deployable.ui.region.AmzaRingsPluginRegion;
-import com.jivesoftware.os.amza.deployable.ui.region.HeaderRegion;
-import com.jivesoftware.os.amza.deployable.ui.region.HealthPluginRegion;
-import com.jivesoftware.os.amza.deployable.ui.region.HomeRegion;
-import com.jivesoftware.os.amza.deployable.ui.region.ManagePlugin;
-import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaClusterPluginEndpoints;
-import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaRegionsPluginEndpoints;
-import com.jivesoftware.os.amza.deployable.ui.region.endpoints.AmzaRingsPluginEndpoints;
-import com.jivesoftware.os.amza.deployable.ui.region.endpoints.HealthPluginEndpoints;
-import com.jivesoftware.os.amza.deployable.ui.soy.SoyDataUtils;
-import com.jivesoftware.os.amza.deployable.ui.soy.SoyRenderer;
-import com.jivesoftware.os.amza.deployable.ui.soy.SoyService;
 import com.jivesoftware.os.amza.mapdb.MapdbWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
@@ -48,7 +29,6 @@ import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -71,13 +51,13 @@ import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServer;
 import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServerInitializer;
+import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
-import java.util.List;
 import java.util.Random;
 import org.nustaq.serialization.FSTConfiguration;
 
@@ -207,59 +187,27 @@ public class Main {
         System.out.println("|      Tcp Replication Service Online");
         System.out.println("-----------------------------------------------------------------------");
 
-        JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
+        final JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
             .addEndpoint(AmzaEndpoints.class)
             .addInjectable(AmzaService.class, amzaService)
             .addEndpoint(AmzaReplicationRestEndpoints.class)
             .addInjectable(AmzaInstance.class, amzaService)
             .addInjectable(HighwaterMarks.class, amzaService.getHighwaterMarks());
 
-        SoyFileSet.Builder soyFileSetBuilder = new SoyFileSet.Builder();
+        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, amzaStats, new AmzaUIInitializer.InjectionCallback() {
 
-        System.out.println("Add....");
+            @Override
+            public void addEndpoint(Class clazz) {
+                System.out.println("Adding endpoint=" + clazz);
+                jerseyEndpoints.addEndpoint(clazz);
+            }
 
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/chrome.soy"), "chome.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/homeRegion.soy"), "home.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/healthPluginRegion.soy"), "health.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRingsPluginRegion.soy"), "amzaRings.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaClusterPluginRegion.soy"), "amzaCluster.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaRegionsPluginRegion.soy"), "amzaRegions.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStats.soy"), "amzaStats.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
-
-        SoyFileSet sfs = soyFileSetBuilder.build();
-        SoyTofu tofu = sfs.compileToTofu();
-        SoyRenderer renderer = new SoyRenderer(tofu, new SoyDataUtils());
-        SoyService soyService = new SoyService(renderer, new HeaderRegion("soy.chrome.headerRegion", renderer),
-            new HomeRegion("soy.page.homeRegion", renderer));
-
-        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("dashboard", "Metrics", "/ui/metrics",
-            HealthPluginEndpoints.class,
-            new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats",
-                renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
-            new ManagePlugin("repeat", "Amza Rings", "/ui/rings",
-                AmzaRingsPluginEndpoints.class,
-                new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getAmzaRing())),
-            new ManagePlugin("map-marker", "Amza Regions", "/ui/regions",
-                AmzaRegionsPluginEndpoints.class,
-                new AmzaRegionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaRing(), amzaService)),
-            new ManagePlugin("leaf", "Amza Cluster", "/ui/cluster",
-                AmzaClusterPluginEndpoints.class,
-                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaRing())));
-
-        jerseyEndpoints.addInjectable(SoyService.class, soyService);
-
-        for (ManagePlugin plugin : plugins) {
-            soyService.registerPlugin(plugin);
-            jerseyEndpoints.addEndpoint(plugin.endpointsClass);
-            jerseyEndpoints.addInjectable(plugin.region.getClass(), plugin.region);
-        }
-
-        jerseyEndpoints.addEndpoint(AmzaUIEndpoints.class);
-        jerseyEndpoints.addInjectable(AmzaClusterName.class, new AmzaClusterName((clusterName == null) ? "manual" : clusterName));
-        jerseyEndpoints.addInjectable(AmzaRing.class, amzaService.getAmzaRing());
-        jerseyEndpoints.addInjectable(AmzaStats.class, amzaStats);
-        jerseyEndpoints.addInjectable(RingHost.class, ringHost);
+            @Override
+            public void addInjectable(Class clazz, Object instance) {
+                System.out.println("Injecting " + clazz + " " + instance);
+                jerseyEndpoints.addInjectable(clazz, instance);
+            }
+        });
 
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);
         initializeRestfulServer.addClasspathResource("/resources");

@@ -24,7 +24,7 @@ import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 
@@ -76,8 +76,8 @@ public class RegionStore implements WALScanable {
         return new RowStoreUpdates(amzaStats, regionName, this, new RowsStorageUpdates(walStorage, timestamp));
     }
 
-    public RowsChanged commit(WALStorageUpateMode upateMode, WALScanable rowUpdates) throws Exception {
-        RowsChanged updateMap = walStorage.update(upateMode, rowUpdates);
+    public RowsChanged commit(WALStorageUpdateMode updateMode, WALScanable rowUpdates) throws Exception {
+        RowsChanged updateMap = walStorage.update(updateMode, rowUpdates);
         if (rowChanges != null && !updateMap.isEmpty()) {
             rowChanges.changes(updateMap);
         }

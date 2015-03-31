@@ -174,6 +174,18 @@ public class AmzaService implements AmzaInstance {
         return regionWatcher.unwatch(regionName);
     }
 
+    public boolean replicate(RegionName regionName, WALScanable rowUpdates, int replicateToNHosts, int requireNReplicas) throws Exception {
+        AmzaHostRing amzaHostRing = getAmzaRing();
+        List<RingHost> ringHosts = amzaHostRing.getRing(regionName.getRingName());
+        //TODO consider spinning until we reach quorum, or force election to the sub-ring
+        int numReplicated = changeReplicator.replicateUpdatesToRingHosts(regionName,
+            rowUpdates,
+            false,
+            ringHosts.toArray(new RingHost[ringHosts.size()]),
+            replicateToNHosts);
+        return numReplicated >= requireNReplicas;
+    }
+
     @Override
     public void takeRowUpdates(RegionName regionName, long transationId, RowStream rowStream) throws Exception {
         AmzaRegion region = getRegion(regionName);

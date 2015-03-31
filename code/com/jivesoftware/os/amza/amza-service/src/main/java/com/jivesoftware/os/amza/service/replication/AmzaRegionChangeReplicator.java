@@ -14,7 +14,7 @@ import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -131,11 +131,13 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 if (ringHosts == null || ringHosts.length == 0) {
                     if (enqueueForResendOnFailure) {
                         WALStorage resend = resendWAL.get(regionName);
-                        resend.update(WALStorageUpateMode.noReplication, updates);
+                        resend.update(WALStorageUpdateMode.noReplication, updates);
                     }
                     return false;
                 } else {
-                    return replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts, regionProperties.replicationFactor);
+                    int numReplicated = replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts,
+                        regionProperties.replicationFactor);
+                    return numReplicated >= regionProperties.replicationFactor;
                 }
             } else {
                 return true;
@@ -143,13 +145,13 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         } else {
             if (enqueueForResendOnFailure) {
                 WALStorage resend = resendWAL.get(regionName);
-                resend.update(WALStorageUpateMode.noReplication, updates);
+                resend.update(WALStorageUpdateMode.noReplication, updates);
             }
             return false;
         }
     }
 
-    private boolean replicateUpdatesToRingHosts(RegionName regionName,
+    public int replicateUpdatesToRingHosts(RegionName regionName,
         WALScanable updates,
         boolean enqueueForResendOnFailure,
         RingHost[] ringHosts,
@@ -178,12 +180,12 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 amzaStats.replicateErrors.add(ringHost);
                 if (enqueueForResendOnFailure) {
                     WALStorage resend = resendWAL.get(regionName);
-                    resend.update(WALStorageUpateMode.noReplication, updates);
+                    resend.update(WALStorageUpdateMode.noReplication, updates);
                     enqueueForResendOnFailure = false;
                 }
             }
         }
-        return ringWalker.wasAdequatelyReplicated();
+        return ringWalker.getNumReplicated();
     }
 
     void resendLocalChanges(int stripe) throws Exception {

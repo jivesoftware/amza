@@ -24,7 +24,7 @@ import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -168,7 +168,7 @@ public class AmzaHostRing implements AmzaRing {
         if (had != null) {
             RowStoreUpdates tx = ringIndex.startTransaction(orderIdProvider.nextId());
             tx.remove(key);
-            tx.commit(WALStorageUpateMode.updateThenReplicate);
+            tx.commit(WALStorageUpdateMode.updateThenReplicate);
         }
     }
 

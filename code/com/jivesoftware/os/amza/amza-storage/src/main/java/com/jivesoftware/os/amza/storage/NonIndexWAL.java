@@ -10,7 +10,7 @@ import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
@@ -66,7 +66,7 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public RowsChanged update(WALStorageUpateMode upateMode, WALScanable updates) throws Exception {
+    public RowsChanged update(WALStorageUpdateMode updateMode, WALScanable updates) throws Exception {
         final AtomicLong oldestApplied = new AtomicLong(Long.MAX_VALUE);
         final NavigableMap<WALKey, WALValue> apply = new TreeMap<>();
 

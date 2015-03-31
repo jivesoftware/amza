@@ -31,7 +31,7 @@ import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
@@ -186,7 +186,7 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public RowsChanged update(WALStorageUpateMode upateMode, WALScanable updates) throws Exception {
+    public RowsChanged update(WALStorageUpdateMode updateMode, WALScanable updates) throws Exception {
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final NavigableMap<WALKey, WALValue> apply = new ConcurrentSkipListMap<>();
         final NavigableMap<WALKey, WALValue> removes = new TreeMap<>();
@@ -233,7 +233,7 @@ public class IndexedWAL implements WALStorage {
                 }
             }
 
-            if (walReplicator != null && upateMode == WALStorageUpateMode.replicateThenUpdate && !apply.isEmpty()) {
+            if (walReplicator != null && updateMode == WALStorageUpdateMode.replicateThenUpdate && !apply.isEmpty()) {
                 walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers));
             }
 
@@ -294,7 +294,7 @@ public class IndexedWAL implements WALStorage {
                     rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
                 }
 
-                if (walReplicator != null && upateMode == WALStorageUpateMode.updateThenReplicate && !apply.isEmpty()) {
+                if (walReplicator != null && updateMode == WALStorageUpdateMode.updateThenReplicate && !apply.isEmpty()) {
                     walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers));
                 }
             }

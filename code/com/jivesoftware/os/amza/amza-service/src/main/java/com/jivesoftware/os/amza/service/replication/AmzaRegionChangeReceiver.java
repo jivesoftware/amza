@@ -8,7 +8,7 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -52,7 +52,7 @@ public class AmzaRegionChangeReceiver {
     }
 
     public void receiveChanges(RegionName regionName, WALScanable changes) throws Exception {
-        RowsChanged changed = receivedWAL.get(regionName).update(WALStorageUpateMode.noReplication, changes);
+        RowsChanged changed = receivedWAL.get(regionName).update(WALStorageUpdateMode.noReplication, changes);
         amzaStats.received(regionName, changed.getApply().size(), changed.getOldestRowTxId());
 
         Object lock = receivedLocks[Math.abs(regionName.hashCode()) % numberOfApplierThreads];

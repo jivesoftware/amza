@@ -240,7 +240,7 @@ public class AmzaTestCluster {
 
         public void create(RegionName regionName) throws Exception {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
+                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
             amzaService.createRegionIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
         }
 

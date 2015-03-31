@@ -3,12 +3,11 @@ package com.jivesoftware.os.amza.shared;
 import java.util.Map;
 
 /**
- *
  * @author jonathan.colt
  */
 public class PrimaryIndexDescriptor {
     public String className;
-    public long ttlInMillis = Long.MAX_VALUE;
+    public long ttlInMillis = 0;
     public boolean forceCompactionOnStartup = false;
     public Map<String, String> properties;
 

@@ -220,7 +220,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             (int) (((double) grandTotal.directAppliesLag.longValue() / 1000d) * 100),
             String.valueOf(getDurationBreakdown(grandTotal.directAppliesLag.longValue())) + " lag"));
 
-        sb.append(progress("Took Applied(" + grandTotal.takeApplies + ")",
+        sb.append(progress("Took Applied (" + grandTotal.takeApplies + ")",
             (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
             String.valueOf(getDurationBreakdown(grandTotal.takeAppliesLag.longValue())) + " lag"));
 

@@ -115,8 +115,7 @@ public class AmzaEndpoints {
             amzaService.getAmzaRing().buildRandomSubRing("default", amzaService.getAmzaRing().getRing("system").size());
         }
 
-        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("mapdb", Long.MAX_VALUE, false,
-            null),
+        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("mapdb", 0, false, null),
             null, 1000, 1000);
 
         return amzaService.createRegionIfAbsent(new RegionName(false, "default", regionName),

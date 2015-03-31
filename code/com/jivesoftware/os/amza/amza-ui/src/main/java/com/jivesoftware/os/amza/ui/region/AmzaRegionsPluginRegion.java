@@ -97,7 +97,7 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
                         row.put("takeFromFactor", "?");
 
                         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                            new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
+                            new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
                         row.put("walStorageDescriptor", walStorageDescriptor(storageDescriptor));
 
                     } else {

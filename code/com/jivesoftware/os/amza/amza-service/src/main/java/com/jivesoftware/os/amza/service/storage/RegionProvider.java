@@ -212,11 +212,11 @@ public class RegionProvider implements RowChanges {
         RegionProperties properties;
         if (regionName.equals(HIGHWATER_MARK_INDEX)) {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
+                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
             properties = new RegionProperties(storageDescriptor, 0, 0, false);
         } else {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", Long.MAX_VALUE, false, null), null, 1000, 1000);
+                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
             properties = new RegionProperties(storageDescriptor, 2, 2, false);
         }
         regionProperties.put(regionName, properties);

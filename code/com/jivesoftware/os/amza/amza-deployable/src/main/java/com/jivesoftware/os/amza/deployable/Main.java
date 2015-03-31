@@ -227,7 +227,7 @@ public class Main {
             System.out.println("-----------------------------------------------------------------------");
         } else {
             System.out.println("-----------------------------------------------------------------------");
-            System.out.println("|     Amze Service is in manual Discovery mode.  No cluster name was specified");
+            System.out.println("|     Amza Service is in manual Discovery mode.  No cluster name was specified");
             System.out.println("-----------------------------------------------------------------------");
         }
     }

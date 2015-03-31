@@ -21,7 +21,7 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALStorageUpateMode;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import java.util.TreeMap;
@@ -70,7 +70,7 @@ class WALScanBatchinator implements WALScan {
 
     public boolean flush() throws Exception {
         if (!batch.isEmpty()) {
-            RowsChanged changes = regionStore.commit(WALStorageUpateMode.updateThenReplicate, new MemoryWALIndex(batch));
+            RowsChanged changes = regionStore.commit(WALStorageUpdateMode.updateThenReplicate, new MemoryWALIndex(batch));
             amzaStats.receivedApplied(regionName, changes.getApply().size(), changes.getOldestRowTxId());
             batch.clear();
         }

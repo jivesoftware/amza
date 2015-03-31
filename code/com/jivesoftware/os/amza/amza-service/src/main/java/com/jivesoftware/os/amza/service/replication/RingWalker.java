@@ -52,8 +52,8 @@ class RingWalker {
         failed++;
     }
 
-    public boolean wasAdequatelyReplicated() {
-        return replicated >= replicationFactor;
+    public int getNumReplicated() {
+        return replicated;
     }
 
 }

@@ -4,7 +4,7 @@ package com.jivesoftware.os.amza.shared;
  *
  * @author jonathan.colt
  */
-public enum WALStorageUpateMode {
+public enum WALStorageUpdateMode {
 
     noReplication, updateThenReplicate, replicateThenUpdate;
 }

@@ -34,6 +34,7 @@ import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -59,6 +60,7 @@ public class AmzaServiceInitializer {
 
     public AmzaService initialize(AmzaServiceConfig config,
         AmzaStats amzaStats,
+        BinaryRowMarshaller rowMarshaller,
         RingHost ringHost,
         TimestampedOrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
@@ -88,13 +90,13 @@ public class AmzaServiceInitializer {
                 }
             });
 
-
         RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, regionProvider, 1000);
         //MemoryBackedHighWaterMarks highwaterMarks = new MemoryBackedHighWaterMarks();
         final AmzaHostRing amzaRing = new AmzaHostRing(ringHost, regionProvider, orderIdProvider);
         WALs resendWALs = new WALs(config.workingDirectories, "amza/WAL/resend", resendWALStorageProvider);
 
         AmzaRegionChangeReplicator changeReplicator = new AmzaRegionChangeReplicator(amzaStats,
+            rowMarshaller,
             amzaRing,
             regionProvider,
             resendWALs,
@@ -107,6 +109,7 @@ public class AmzaServiceInitializer {
 
         WALs replicatedWALs = new WALs(config.workingDirectories, "amza/WAL/replicated", replicaWALStorageProvider);
         AmzaRegionChangeReceiver changeReceiver = new AmzaRegionChangeReceiver(amzaStats,
+            rowMarshaller,
             regionProvider,
             replicatedWALs,
             config.applyReplicasIntervalInMillis,

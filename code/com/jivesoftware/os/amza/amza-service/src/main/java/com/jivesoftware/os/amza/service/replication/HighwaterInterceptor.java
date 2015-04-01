@@ -1,59 +1,51 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.WALStorage;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jonathan.colt
  */
-public class HighwaterInterceptor implements WALScanable {
+public class HighwaterInterceptor {
 
-    private final String context;
     private final long initialHighwaterMark;
     private final AtomicLong highaterMark;
-    private final WALScanable scanable;
+    private final WALStorage wal;
 
-    public HighwaterInterceptor(String context, Long initialHighwaterMark, WALScanable scanable) {
-        this.context = context;
+    public HighwaterInterceptor(Long initialHighwaterMark, WALStorage wal) {
         this.initialHighwaterMark = initialHighwaterMark == null ? -1 : initialHighwaterMark;
         this.highaterMark = new AtomicLong(this.initialHighwaterMark);
-        this.scanable = scanable;
+        this.wal = wal;
     }
 
     public long getHighwater() {
         return highaterMark.get();
     }
 
-    @Override
-    public void rowScan(final WALScan walScan) throws Exception {
-        scanable.rowScan(new WALScanHighwaterInterceptor(walScan));
+    public void rowScan(final RowStream rowStream) throws Exception {
+        wal.takeRowUpdatesSince(initialHighwaterMark, new WALScanHighwaterInterceptor(rowStream));
     }
 
-    @Override
-    public void rangeScan(WALKey from, WALKey to, final WALScan walScan) throws Exception {
-        scanable.rangeScan(from, to, new WALScanHighwaterInterceptor(walScan));
-    }
+    class WALScanHighwaterInterceptor implements RowStream {
 
-    class WALScanHighwaterInterceptor implements WALScan {
+        private final RowStream rowStream;
 
-        private final WALScan walScan;
-
-        public WALScanHighwaterInterceptor(WALScan walScan) {
-            this.walScan = walScan;
+        public WALScanHighwaterInterceptor(RowStream rowStream) {
+            this.rowStream = rowStream;
         }
 
         @Override
-        public boolean row(long transactionId, WALKey key, WALValue value) throws Exception {
-            if (transactionId <= initialHighwaterMark) {
+        public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
+
+            if (rowTxId <= initialHighwaterMark) {
                 return true;
             }
-            if (walScan.row(transactionId, key, value)) {
+
+            if (rowStream.row(rowFP, rowTxId, rowType, row)) {
                 long got = highaterMark.get();
-                while (got < transactionId) {
-                    highaterMark.compareAndSet(got, transactionId);
+                while (got < rowTxId) {
+                    highaterMark.compareAndSet(got, rowTxId);
                     got = highaterMark.get();
                 }
                 return true;
@@ -61,5 +53,6 @@ public class HighwaterInterceptor implements WALScanable {
                 return false;
             }
         }
+
     }
 }

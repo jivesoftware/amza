@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
@@ -28,6 +29,7 @@ public class AmzaRegionChangeReceiver {
     private ScheduledExecutorService applyThreadPool;
     private ScheduledExecutorService compactThreadPool;
     private final AmzaStats amzaStats;
+    private final RowMarshaller<byte[]> rowMarshaller;
     private final RegionProvider regionProvider;
     private final Map<RegionName, Long> highwaterMarks = new ConcurrentHashMap<>();
     private final WALs receivedWAL;
@@ -36,11 +38,13 @@ public class AmzaRegionChangeReceiver {
     private final Object[] receivedLocks;
 
     public AmzaRegionChangeReceiver(AmzaStats amzaStats,
+        RowMarshaller<byte[]> rowMarshaller,
         RegionProvider regionProvider,
         WALs receivedUpdatesWAL,
         long applyReplicasIntervalInMillis,
         int numberOfApplierThreads) {
         this.amzaStats = amzaStats;
+        this.rowMarshaller = rowMarshaller;
         this.regionProvider = regionProvider;
         this.receivedWAL = receivedUpdatesWAL;
         this.applyReplicasIntervalInMillis = applyReplicasIntervalInMillis;
@@ -116,8 +120,8 @@ public class AmzaRegionChangeReceiver {
                     RegionStore regionStore = regionProvider.getRegionStore(regionName);
                     if (regionStore != null) {
                         Long highWatermark = highwaterMarks.get(regionName);
-                        HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor("Apply", highWatermark, received);
-                        WALScanBatchinator batchinator = new WALScanBatchinator(amzaStats, regionName, regionStore);
+                        HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, received);
+                        WALScanBatchinator batchinator = new WALScanBatchinator(amzaStats, rowMarshaller, regionName, regionStore);
                         highwaterInterceptor.rowScan(batchinator);
                         if (batchinator.flush()) {
                             highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());

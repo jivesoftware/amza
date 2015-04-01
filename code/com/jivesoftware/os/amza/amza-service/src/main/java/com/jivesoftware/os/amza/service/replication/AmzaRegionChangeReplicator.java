@@ -16,6 +16,7 @@ import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
@@ -35,6 +36,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     private ScheduledExecutorService resendThreadPool;
     private ScheduledExecutorService compactThreadPool;
     private final AmzaStats amzaStats;
+    private final RowMarshaller<byte[]> rowMarshaller;
     private final AmzaHostRing amzaRing;
     private final RegionProvider regionProvider;
     private final WALs resendWAL;
@@ -45,6 +47,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     private final int numberOfResendThreads;
 
     public AmzaRegionChangeReplicator(AmzaStats amzaStats,
+        RowMarshaller<byte[]> rowMarshaller,
         AmzaHostRing amzaRing,
         RegionProvider regionProvider,
         WALs resendWAL,
@@ -54,6 +57,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         int numberOfResendThreads) {
 
         this.amzaStats = amzaStats;
+        this.rowMarshaller = rowMarshaller;
         this.amzaRing = amzaRing;
         this.regionProvider = regionProvider;
         this.resendWAL = resendWAL;
@@ -197,8 +201,8 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 if (ring.length > 0) {
                     WALStorage resend = resendWAL.get(regionName);
                     Long highWatermark = highwaterMarks.get(regionName);
-                    HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor("Replicate", highWatermark, resend);
-                    ReplicateBatchinator batchinator = new ReplicateBatchinator(regionName, this);
+                    HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, resend);
+                    ReplicateBatchinator batchinator = new ReplicateBatchinator(rowMarshaller, regionName, this);
                     highwaterInterceptor.rowScan(batchinator);
                     if (batchinator.flush()) {
                         highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());

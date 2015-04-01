@@ -17,9 +17,10 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.shared.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
 import java.util.TreeMap;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -28,23 +29,28 @@ import org.apache.commons.lang.mutable.MutableLong;
  *
  * @author jonathan.colt
  */
-class ReplicateBatchinator implements WALScan {
+class ReplicateBatchinator implements RowStream {
 
+    private final RowMarshaller<byte[]> rowMarshaller;
     private final RegionName regionName;
     private final AmzaRegionChangeReplicator replicator;
     private final TreeMap<WALKey, WALValue> batch = new TreeMap<>();
     private final MutableLong lastTxId;
     private final MutableBoolean flushed = new MutableBoolean(false);
 
-    public ReplicateBatchinator(RegionName regionName, AmzaRegionChangeReplicator replicator) {
+    public ReplicateBatchinator(RowMarshaller<byte[]> rowMarshaller, RegionName regionName, AmzaRegionChangeReplicator replicator) {
+        this.rowMarshaller = rowMarshaller;
         this.regionName = regionName;
         this.replicator = replicator;
         this.lastTxId = new MutableLong(Long.MIN_VALUE);
     }
 
     @Override
-    public boolean row(long txId, WALKey key, WALValue value) throws Exception {
+    public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawRow) throws Exception {
         flushed.setValue(true);
+        RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
+        WALKey key = row.getKey();
+        WALValue value = row.getValue();
         WALValue got = batch.get(key);
         if (got == null) {
             batch.put(key, value);
@@ -54,9 +60,9 @@ class ReplicateBatchinator implements WALScan {
             }
         }
         if (lastTxId.longValue() == Long.MIN_VALUE) {
-            lastTxId.setValue(txId);
-        } else if (lastTxId.longValue() != txId) {
-            lastTxId.setValue(txId);
+            lastTxId.setValue(rowTxId);
+        } else if (lastTxId.longValue() != rowTxId) {
+            lastTxId.setValue(rowTxId);
             flush();
         }
         return true;

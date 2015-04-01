@@ -230,7 +230,7 @@ public class AmzaRegionChangeTaker {
         public int flush() throws Exception {
             if (!batch.isEmpty()) {
                 amzaStats.took(ringHost, regionName, batch.size(), oldestTxId.longValue());
-                RowsChanged changes = regionStore.commit(WALStorageUpdateMode.updateThenReplicate, new MemoryWALIndex(batch));
+                RowsChanged changes = regionStore.commit(WALStorageUpdateMode.noReplication, new MemoryWALIndex(batch));
                 amzaStats.tookApplied(ringHost, regionName, changes.getApply().size(), changes.getOldestRowTxId());
             }
             if (flushed.get() > 0) {

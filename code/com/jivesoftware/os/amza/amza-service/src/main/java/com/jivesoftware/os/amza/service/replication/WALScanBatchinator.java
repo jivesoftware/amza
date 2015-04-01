@@ -18,12 +18,13 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
 import java.util.TreeMap;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -32,37 +33,40 @@ import org.apache.commons.lang.mutable.MutableLong;
  *
  * @author jonathan.colt
  */
-class WALScanBatchinator implements WALScan {
+class WALScanBatchinator implements RowStream {
 
     private final AmzaStats amzaStats;
+    private final RowMarshaller<byte[]> rowMarshaller;
     private final RegionName regionName;
     private final RegionStore regionStore;
     private final TreeMap<WALKey, WALValue> batch = new TreeMap<>();
     private final MutableLong lastTxId;
     private final MutableBoolean flushed = new MutableBoolean(false);
 
-    public WALScanBatchinator(AmzaStats amzaStats, RegionName regionName, RegionStore regionStore) {
+    public WALScanBatchinator(AmzaStats amzaStats, RowMarshaller<byte[]> rowMarshaller, RegionName regionName, RegionStore regionStore) {
         this.amzaStats = amzaStats;
+        this.rowMarshaller = rowMarshaller;
         this.regionName = regionName;
         this.regionStore = regionStore;
         this.lastTxId = new MutableLong(Long.MIN_VALUE);
     }
 
     @Override
-    public boolean row(long txId, WALKey key, WALValue value) throws Exception {
+    public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawRow) throws Exception {
         flushed.setValue(true);
-        WALValue got = batch.get(key);
+        RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
+        WALValue got = batch.get(row.getKey());
         if (got == null) {
-            batch.put(key, value);
+            batch.put(row.getKey(), row.getValue());
         } else {
-            if (got.getTimestampId() < value.getTimestampId()) {
-                batch.put(key, value);
+            if (got.getTimestampId() < row.getValue().getTimestampId()) {
+                batch.put(row.getKey(), row.getValue());
             }
         }
         if (lastTxId.longValue() == Long.MIN_VALUE) {
-            lastTxId.setValue(txId);
-        } else if (lastTxId.longValue() != txId) {
-            lastTxId.setValue(txId);
+            lastTxId.setValue(rowTxId);
+        } else if (lastTxId.longValue() != rowTxId) {
+            lastTxId.setValue(rowTxId);
             flush();
         }
         return true;
@@ -70,7 +74,7 @@ class WALScanBatchinator implements WALScan {
 
     public boolean flush() throws Exception {
         if (!batch.isEmpty()) {
-            RowsChanged changes = regionStore.commit(WALStorageUpdateMode.updateThenReplicate, new MemoryWALIndex(batch));
+            RowsChanged changes = regionStore.commit(WALStorageUpdateMode.noReplication, new MemoryWALIndex(batch));
             amzaStats.receivedApplied(regionName, changes.getApply().size(), changes.getOldestRowTxId());
             batch.clear();
         }

@@ -103,9 +103,9 @@ public class EmbeddedAmzaServiceInitializer {
             }
         };
 
-
         return new AmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
+            rowMarshaller,
             ringHost,
             orderIdProvider,
             regionPropertyMarshaller,

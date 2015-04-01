@@ -105,6 +105,12 @@
             <version>0.36-SNAPSHOT</version>
             <type>jar</type>
         </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-berkeleydb-storage</artifactId>
+            <version>0.36-SNAPSHOT</version>
+            <type>jar</type>
+        </dependency>
         <!--        <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-mavibot-storage</artifactId>

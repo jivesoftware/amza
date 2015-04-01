@@ -112,11 +112,6 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    public void clear() throws Exception {
-
-    }
-
-    @Override
     public void commit() {
         db.commit();
     }

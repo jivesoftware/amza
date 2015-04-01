@@ -351,11 +351,6 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public void clear() {
-        // TODO remove file from FS
-    }
-
-    @Override
     synchronized public void commit() {
 
     }

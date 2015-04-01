@@ -50,10 +50,6 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public void clear() throws Exception {
-    }
-
-    @Override
     public void commit() throws Exception {
     }
 

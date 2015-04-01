@@ -31,8 +31,6 @@ public interface WALIndex extends WALScanable {
 
     boolean isEmpty() throws Exception;
 
-    void clear() throws Exception;
-
     /**
      * Force persistence of all changes
      * @throws java.lang.Exception

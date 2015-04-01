@@ -105,11 +105,6 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void clear() {
-        index.clear();
-    }
-
-    @Override
     public CompactionWALIndex startCompaction() throws Exception {
 
         final MemoryWALIndex rowsIndex = new MemoryWALIndex();

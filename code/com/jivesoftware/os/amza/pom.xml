@@ -20,6 +20,7 @@
         <module>amza-shared</module>
         <module>amza-storage</module>
         <module>amza-mapdb-storage</module>
+        <module>amza-berkeleydb-storage</module>
         <module>amza-ui</module>
         <module>amza-deployable</module>
     </modules>

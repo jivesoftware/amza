@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.mapdb;
+package com.jivesoftware.os.amza.berkeleydb;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.RegionName;
@@ -13,15 +13,15 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
- * @author jonathan.colt
+ *
  */
-public class MapdbRowIndexNGTest {
+public class BerkeleyDBWALIndexTest {
 
     @Test
     public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
         RegionName regionName = new RegionName(false, "r1", "t1");
-        MapdbWALIndex index = new MapdbWALIndex(dir0, regionName);
+        BerkeleyDBWALIndex index = new BerkeleyDBWALIndex(dir0, regionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(1)), new WALValue(FilerIO.longBytes(1), System.currentTimeMillis(), false))));
 
@@ -30,7 +30,7 @@ public class MapdbRowIndexNGTest {
         index.close();
 
         // reopen
-        index = new MapdbWALIndex(dir0, regionName);
+        index = new BerkeleyDBWALIndex(dir0, regionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(2)), new WALValue(FilerIO.longBytes(2), System.currentTimeMillis(), false))));
         got = index.get(Collections.singletonList(new WALKey(FilerIO.intBytes(2)))).get(0);
@@ -52,7 +52,7 @@ public class MapdbRowIndexNGTest {
 
         File dir0 = Files.createTempDir();
         RegionName regionName = new RegionName(false, "r1", "t1");
-        MapdbWALIndex index = new MapdbWALIndex(dir0, regionName);
+        BerkeleyDBWALIndex index = new BerkeleyDBWALIndex(dir0, regionName);
 
         for (int i = 0; i < 50; i++) {
             index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
@@ -78,4 +78,5 @@ public class MapdbRowIndexNGTest {
             Assert.assertEquals(FilerIO.bytesLong(got.getValue()), i);
         }
     }
+
 }

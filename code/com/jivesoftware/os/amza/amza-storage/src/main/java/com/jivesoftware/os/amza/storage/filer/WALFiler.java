@@ -48,7 +48,7 @@ public class WALFiler extends RandomAccessFile implements IFiler {
     public IFiler fileChannelMemMapFiler() throws IOException {
         final FileChannel channel = getChannel();
         // TODO handle larger files;
-        return new ByteBufferBackedFiler(channel.map(FileChannel.MapMode.READ_ONLY, 0, (int)length()));
+        return new ByteBufferBackedFiler(channel.map(FileChannel.MapMode.READ_ONLY, 0, (int) length()));
     }
 
     @Override

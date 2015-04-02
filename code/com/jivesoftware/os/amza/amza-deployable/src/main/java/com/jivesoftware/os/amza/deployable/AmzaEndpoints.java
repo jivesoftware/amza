@@ -78,7 +78,6 @@ public class AmzaEndpoints {
     public Response get(@QueryParam("region") String region,
         @QueryParam("key") String key) {
         try {
-            LOG.warn("Getting:" + region + " key:" + key);
             String[] keys = key.split(",");
             List<WALKey> rowKeys = new ArrayList<>();
             for (String k : keys) {

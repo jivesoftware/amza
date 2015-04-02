@@ -15,9 +15,16 @@
  */
 package com.jivesoftware.os.amza.test;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.google.common.base.Charsets;
+import com.google.common.collect.Sets;
+import com.google.common.io.BaseEncoding;
 import de.svenjacobs.loremipsum.LoremIpsum;
 import java.io.IOException;
 import java.util.Random;
+import java.util.Set;
 import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
 import org.apache.commons.httpclient.StatusLine;
 import org.apache.commons.httpclient.URIException;
@@ -28,10 +35,11 @@ public class AmzaGetStress {
 
     private static final Random rand = new Random();
     private static final LoremIpsum loremIpsum = new LoremIpsum();
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     public static void main(String[] args) throws URIException, IOException {
 
-        args = new String[]{"localhost", "1185", "1", "10000"};
+        args = new String[]{"localhost", "1195", "1", "10000"};
 
         final String hostName = args[0];
         final int port = Integer.parseInt(args[1]);
@@ -41,7 +49,7 @@ public class AmzaGetStress {
 
         String regionName = "lorem";
 
-        for (int i = 0; i < 1; i++) {
+        for (int i = 0; i < 8; i++) {
             final String rname = regionName + i;
             MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
             final org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);
@@ -71,11 +79,13 @@ public class AmzaGetStress {
             url.append("?region=").append(regionName);
             url.append("&key=");
 
+            Set<String> expectedValues = Sets.newHashSet();
             for (int b = 0; b < batchSize; b++) {
                 if (b > 0) {
                     url.append(',');
                 }
                 url.append(b + "k" + key);
+                expectedValues.add(b + "v" + key);
             }
 
             String encodedUrl = URIUtil.encodeQuery(url.toString());
@@ -88,7 +98,16 @@ public class AmzaGetStress {
 
                         statusLine = method.getStatusLine();
                         if (statusLine.getStatusCode() == 200) {
-                            System.out.println("Got:" + new String(method.getResponseBody()));
+                            //System.out.println("Got:" + new String(method.getResponseBody()));
+                            ArrayNode response = mapper.readValue(method.getResponseBodyAsString(), ArrayNode.class);
+                            for (JsonNode value : response) {
+                                if (!value.isNull()) {
+                                    expectedValues.remove(new String(BaseEncoding.base64().decode(value.textValue()), Charsets.UTF_8));
+                                }
+                            }
+                            if (!expectedValues.isEmpty()) {
+                                System.out.println("Missing values in " + regionName + " for key " + key + ": " + expectedValues);
+                            }
                             break;
                         }
                     } catch (Exception x) {

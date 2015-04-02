@@ -156,16 +156,23 @@ public class RegionProvider implements RowChanges {
             regionStore.load();
 
             regionStores.put(regionName, regionStore);
-            RowStoreUpdates tx;
+            byte[] rawRegionName = regionName.toBytes();
+            WALKey regionKey = new WALKey(rawRegionName);
+            RowStoreUpdates tx = null;
             if (!regionName.equals(REGION_INDEX)) {
                 RegionStore regionIndexStore = getRegionIndexStore();
-                tx = regionIndexStore.startTransaction(orderIdProvider.nextId());
+                if (!regionIndexStore.containsKey(regionKey)) {
+                    tx = regionIndexStore.startTransaction(orderIdProvider.nextId());
+                }
             } else {
-                tx = regionStore.startTransaction(orderIdProvider.nextId());
+                if (!regionStore.containsKey(regionKey)) {
+                    tx = regionStore.startTransaction(orderIdProvider.nextId());
+                }
             }
-            byte[] rawRegionName = regionName.toBytes();
-            tx.add(new WALKey(rawRegionName), rawRegionName);
-            tx.commit();
+            if (tx != null) {
+                tx.add(regionKey, rawRegionName);
+                tx.commit();
+            }
             return regionStore;
         }
     }

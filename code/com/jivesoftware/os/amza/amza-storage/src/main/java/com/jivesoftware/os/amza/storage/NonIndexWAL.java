@@ -35,6 +35,7 @@ public class NonIndexWAL implements WALStorage {
     private final OrderIdProvider orderIdProvider;
     private final RowMarshaller<byte[]> rowMarshaller;
     private final WALTx rowsTx;
+    private final Object oneTransactionAtATimeLock = new Object();
     private final AtomicLong updateCount = new AtomicLong();
 
     public NonIndexWAL(RegionName regionName,
@@ -93,10 +94,12 @@ public class NonIndexWAL implements WALStorage {
                         WALValue value = e.getValue();
                         rawRows.add(rowMarshaller.toRow(key, value));
                     }
-                    long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
-                    rowWriter.write(Collections.nCopies(rawRows.size(), transactionId),
-                        Collections.nCopies(rawRows.size(), (byte) WALWriter.VERSION_1),
-                        rawRows);
+                    synchronized (oneTransactionAtATimeLock) {
+                        long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
+                        rowWriter.write(Collections.nCopies(rawRows.size(), transactionId),
+                            Collections.nCopies(rawRows.size(), (byte) WALWriter.VERSION_1),
+                            rawRows);
+                    }
                     return null;
                 }
             });

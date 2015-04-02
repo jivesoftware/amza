@@ -35,7 +35,7 @@ public class AmzaSetStress {
 
         String regionName = "lorem";
 
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 8; i++) {
             final String rname = regionName + i;
             MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
             final org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);

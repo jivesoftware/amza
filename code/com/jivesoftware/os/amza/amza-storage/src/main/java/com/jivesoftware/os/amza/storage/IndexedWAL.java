@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -65,6 +66,7 @@ public class IndexedWAL implements WALStorage {
     private final WALReplicator walReplicator;
     private final AtomicReference<WALIndex> walIndex = new AtomicReference<>(null);
     private final Object oneWriterAtATimeLock = new Object();
+    private final Object oneTransactionAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
     private final AtomicInteger maxUpdatesBetweenCompactionHintMarker;
     private final AtomicInteger maxUpdatesBetweenIndexCommitMarker;
@@ -162,26 +164,30 @@ public class IndexedWAL implements WALStorage {
     }
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
-        long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
-        rowWriter.write(
-            Collections.nCopies(1, transactionId),
-            Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-            Collections.singletonList(FilerIO.longsBytes(new long[]{
-                WALWriter.COMPACTION_HINTS_KEY,
-                newCount.get(),
-                clobberCount.get()
-            })));
-        updateCount.set(0);
+        synchronized (oneTransactionAtATimeLock) {
+            long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
+            rowWriter.write(
+                Collections.nCopies(1, transactionId),
+                Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
+                Collections.singletonList(FilerIO.longsBytes(new long[] {
+                    WALWriter.COMPACTION_HINTS_KEY,
+                    newCount.get(),
+                    clobberCount.get()
+                })));
+            updateCount.set(0);
+        }
     }
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
-        long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
-        rowWriter.write(
-            Collections.nCopies(1, transactionId),
-            Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-            Collections.singletonList(FilerIO.longsBytes(new long[]{
-                WALWriter.COMMIT_MARKER,
-                indexCommitedUpToTxId})));
+        synchronized (oneTransactionAtATimeLock) {
+            long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
+            rowWriter.write(
+                Collections.nCopies(1, transactionId),
+                Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
+                Collections.singletonList(FilerIO.longsBytes(new long[] {
+                    WALWriter.COMMIT_MARKER,
+                    indexCommitedUpToTxId })));
+        }
     }
 
     @Override
@@ -232,8 +238,10 @@ public class IndexedWAL implements WALStorage {
                 }
             }
 
+            List<Future<?>> futures = Lists.newArrayListWithCapacity(2);
+
             if (walReplicator != null && updateMode == WALStorageUpdateMode.replicateThenUpdate && !apply.isEmpty()) {
-                walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers));
+                futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
             }
 
             final NavigableMap<WALKey, byte[]> keyToRowPointer = new TreeMap<>();
@@ -241,7 +249,6 @@ public class IndexedWAL implements WALStorage {
             if (apply.isEmpty()) {
                 rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
-
                 walTx.write(new WALTx.WALWrite<Void>() {
                     @Override
                     public Void write(WALWriter rowWriter) throws Exception {
@@ -254,12 +261,16 @@ public class IndexedWAL implements WALStorage {
                             keys.add(key);
                             rawRows.add(rowMarshaller.toRow(key, value));
                         }
-                        long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
-                        indexCommitedUpToTxId.setValue(transactionId);
-                        List<byte[]> rowPointers = rowWriter.write(
-                            Collections.nCopies(rawRows.size(), transactionId),
-                            Collections.nCopies(rawRows.size(), WALWriter.VERSION_1),
-                            rawRows);
+
+                        List<byte[]> rowPointers;
+                        synchronized (oneTransactionAtATimeLock) {
+                            long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
+                            indexCommitedUpToTxId.setValue(transactionId);
+                            rowPointers = rowWriter.write(
+                                Collections.nCopies(rawRows.size(), transactionId),
+                                Collections.nCopies(rawRows.size(), WALWriter.VERSION_1),
+                                rawRows);
+                        }
 
                         for (int i = 0; i < rowPointers.size(); i++) {
                             keyToRowPointer.put(keys.get(i), rowPointers.get(i));
@@ -317,6 +328,10 @@ public class IndexedWAL implements WALStorage {
 
                 });
             }
+            for (Future<?> future : futures) {
+                future.get();
+            }
+
             return rowsChanged;
         } finally {
             tickleMeElmophore.release();

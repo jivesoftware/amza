@@ -47,8 +47,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
         this.dir = dir;
         this.regionName = regionName;
         // Open the environment, creating one if it does not exist
-        EnvironmentConfig envConfig = new EnvironmentConfig();
-        envConfig.setAllowCreate(true);
+        EnvironmentConfig envConfig = new EnvironmentConfig()
+            .setAllowCreate(true);
         File active = new File(dir, "active");
         active.mkdirs();
         this.environment = new Environment(active, envConfig);

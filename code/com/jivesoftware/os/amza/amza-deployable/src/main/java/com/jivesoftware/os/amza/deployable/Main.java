@@ -166,12 +166,6 @@ public class Main {
                 }
             });
 
-        amzaService.start();
-
-        System.out.println("-----------------------------------------------------------------------");
-        System.out.println("|      Amza Service Online");
-        System.out.println("-----------------------------------------------------------------------");
-
         IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);
         bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
         TcpServerInitializer initializer = new TcpServerInitializer();
@@ -224,6 +218,12 @@ public class Main {
 
         System.out.println("-----------------------------------------------------------------------");
         System.out.println("|      Jetty Service Online");
+        System.out.println("-----------------------------------------------------------------------");
+
+        amzaService.start();
+
+        System.out.println("-----------------------------------------------------------------------");
+        System.out.println("|      Amza Service Online");
         System.out.println("-----------------------------------------------------------------------");
 
         if (clusterName != null) {

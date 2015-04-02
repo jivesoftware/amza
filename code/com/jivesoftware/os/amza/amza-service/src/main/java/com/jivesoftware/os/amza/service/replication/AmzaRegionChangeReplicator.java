@@ -20,8 +20,11 @@ import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -41,6 +44,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     private final RegionProvider regionProvider;
     private final WALs resendWAL;
     private final UpdatesSender updatesSender;
+    private final ExecutorService sendExecutor;
     private final Optional<SendFailureListener> sendFailureListener;
     private final Map<RegionName, Long> highwaterMarks = new ConcurrentHashMap<>();
     private final long resendReplicasIntervalInMillis;
@@ -52,6 +56,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         RegionProvider regionProvider,
         WALs resendWAL,
         UpdatesSender updatesSender,
+        ExecutorService sendExecutor,
         Optional<SendFailureListener> sendFailureListener,
         long resendReplicasIntervalInMillis,
         int numberOfResendThreads) {
@@ -62,6 +67,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         this.regionProvider = regionProvider;
         this.resendWAL = resendWAL;
         this.updatesSender = updatesSender;
+        this.sendExecutor = sendExecutor;
         this.sendFailureListener = sendFailureListener;
         this.resendReplicasIntervalInMillis = resendReplicasIntervalInMillis;
         this.numberOfResendThreads = numberOfResendThreads;
@@ -118,41 +124,46 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     }
 
     @Override
-    public void replicate(RowsChanged rowsChanged) throws Exception {
-        replicateLocalUpdates(rowsChanged.getRegionName(), rowsChanged, true);
+    public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
+        return replicateLocalUpdates(rowsChanged.getRegionName(), rowsChanged, true);
     }
 
-    public boolean replicateLocalUpdates(
-        RegionName regionName,
-        WALScanable updates,
-        boolean enqueueForResendOnFailure) throws Exception {
+    public Future<Boolean> replicateLocalUpdates(
+        final RegionName regionName,
+        final WALScanable updates,
+        final boolean enqueueForResendOnFailure) throws Exception {
 
-        RegionProperties regionProperties = regionProvider.getRegionProperties(regionName);
-        if (regionProperties != null) {
-            if (!regionProperties.disabled && regionProperties.replicationFactor > 0) {
-                HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
-                RingHost[] ringHosts = hostRing.getBelowRing();
-                if (ringHosts == null || ringHosts.length == 0) {
+        final RegionProperties regionProperties = regionProvider.getRegionProperties(regionName);
+        return sendExecutor.submit(new Callable<Boolean>() {
+            @Override
+            public Boolean call() throws Exception {
+                if (regionProperties != null) {
+                    if (!regionProperties.disabled && regionProperties.replicationFactor > 0) {
+                        HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
+                        RingHost[] ringHosts = hostRing.getBelowRing();
+                        if (ringHosts == null || ringHosts.length == 0) {
+                            if (enqueueForResendOnFailure) {
+                                WALStorage resend = resendWAL.get(regionName);
+                                resend.update(WALStorageUpdateMode.noReplication, updates);
+                            }
+                            return false;
+                        } else {
+                            int numReplicated = replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts,
+                                regionProperties.replicationFactor);
+                            return numReplicated >= regionProperties.replicationFactor;
+                        }
+                    } else {
+                        return true;
+                    }
+                } else {
                     if (enqueueForResendOnFailure) {
                         WALStorage resend = resendWAL.get(regionName);
                         resend.update(WALStorageUpdateMode.noReplication, updates);
                     }
                     return false;
-                } else {
-                    int numReplicated = replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts,
-                        regionProperties.replicationFactor);
-                    return numReplicated >= regionProperties.replicationFactor;
                 }
-            } else {
-                return true;
             }
-        } else {
-            if (enqueueForResendOnFailure) {
-                WALStorage resend = resendWAL.get(regionName);
-                resend.update(WALStorageUpdateMode.noReplication, updates);
-            }
-            return false;
-        }
+        });
     }
 
     public int replicateUpdatesToRingHosts(RegionName regionName,

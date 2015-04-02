@@ -2,8 +2,9 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaRegion;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -100,22 +101,22 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             HealthPluginRegionInput input = optionalInput.get();
 
             List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();
-            data.put("ongoingCompactions", (Object) Lists.transform(ongoingCompactions, new Function<Map.Entry<String, Long>, Map<String, String>>() {
-
-                @Override
-                public Map<String, String> apply(Map.Entry<String, Long> input) {
-                    return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
-                }
-            }));
+            data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
+                new Function<Map.Entry<String, Long>, Map<String, String>>() {
+                    @Override
+                    public Map<String, String> apply(Map.Entry<String, Long> input) {
+                        return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
+                    }
+                }));
 
             List<Map.Entry<String, Long>> recentCompaction = amzaStats.recentCompaction();
-            data.put("recentCompactions", (Object) Lists.transform(recentCompaction, new Function<Map.Entry<String, Long>, Map<String, String>>() {
-
-                @Override
-                public Map<String, String> apply(Map.Entry<String, Long> input) {
-                    return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
-                }
-            }));
+            data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
+                new Function<Map.Entry<String, Long>, Map<String, String>>() {
+                    @Override
+                    public Map<String, String> apply(Map.Entry<String, Long> input) {
+                        return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
+                    }
+                }));
             data.put("totalCompactions", String.valueOf(amzaStats.getTotalCompactions()));
 
         } catch (Exception e) {
@@ -271,7 +272,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

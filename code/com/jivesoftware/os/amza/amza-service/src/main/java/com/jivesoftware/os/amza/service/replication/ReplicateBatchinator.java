@@ -70,7 +70,7 @@ class ReplicateBatchinator implements RowStream {
 
     public boolean flush() throws Exception {
         if (!batch.isEmpty()) {
-            if (replicator.replicateLocalUpdates(regionName, new MemoryWALIndex(batch), false)) {
+            if (replicator.replicateLocalUpdates(regionName, new MemoryWALIndex(batch), false).get()) {
                 batch.clear();
             }
         }

@@ -157,7 +157,7 @@ public class BinaryRowReader implements WALReader {
         if (fileLength == 0) {
             return null;
         }
-        IFiler filer = parent.fileChannelMemMapFiler();
+        IFiler filer = parent.fileChannelFiler();
         filer.seek(UIO.bytesLong(rowPointer));
         int length = UIO.readInt(filer, "length");
         long rowType = (byte) filer.read();

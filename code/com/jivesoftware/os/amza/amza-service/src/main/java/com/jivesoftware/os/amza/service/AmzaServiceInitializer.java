@@ -36,6 +36,8 @@ import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class AmzaServiceInitializer {
@@ -55,6 +57,7 @@ public class AmzaServiceInitializer {
         public int numberOfApplierThreads = 2;
         public int numberOfCompactorThreads = 2;
         public int numberOfTakerThreads = 2;
+        public int numberOfReplicatorThreads = 24;
 
     }
 
@@ -85,8 +88,8 @@ public class AmzaServiceInitializer {
             amzaRegionWatcher,
             new WALReplicator() {
                 @Override
-                public void replicate(RowsChanged rowsChanged) throws Exception {
-                    replicator.get().replicate(rowsChanged);
+                public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
+                    return replicator.get().replicate(rowsChanged);
                 }
             });
 
@@ -101,6 +104,7 @@ public class AmzaServiceInitializer {
             regionProvider,
             resendWALs,
             updatesSender,
+            Executors.newFixedThreadPool(config.numberOfReplicatorThreads),
             sendFailureListener,
             config.resendReplicasIntervalInMillis,
             config.numberOfResendThreads);

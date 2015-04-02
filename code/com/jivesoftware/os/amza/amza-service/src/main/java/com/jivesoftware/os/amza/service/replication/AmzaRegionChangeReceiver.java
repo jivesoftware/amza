@@ -77,7 +77,7 @@ public class AmzaRegionChangeReceiver {
                         try {
                             applyReceivedChanges(stripe);
                         } catch (Throwable x) {
-                            LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
+                            LOG.warn("Shouldn't have gotten here. Implementors please catch your exceptions.", x);
                         }
                     }
                 }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);

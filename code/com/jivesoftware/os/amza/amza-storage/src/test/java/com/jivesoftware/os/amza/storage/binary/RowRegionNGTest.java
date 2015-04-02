@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.io.Files;
+import com.google.common.util.concurrent.Futures;
 import com.jivesoftware.os.amza.shared.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -21,6 +22,7 @@ import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.testng.Assert;
@@ -55,7 +57,8 @@ public class RowRegionNGTest {
         final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, new WALReplicator() {
 
             @Override
-            public void replicate(RowsChanged rowsChanged) throws Exception {
+            public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
+                return Futures.immediateFuture(true);
             }
         }, 1000, 1000);
         indexedWAL.load();
@@ -149,7 +152,8 @@ public class RowRegionNGTest {
         IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, new WALReplicator() {
 
             @Override
-            public void replicate(RowsChanged rowsChanged) throws Exception {
+            public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
+                return Futures.immediateFuture(true);
             }
         }, 1000, 1000);
         indexedWAL.load();

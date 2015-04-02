@@ -190,4 +190,8 @@ public class AmzaRegion {
         System.out.println("region:" + amzaRegion.regionName.getRegionName() + " compared:" + compared + " keys");
         return passed.booleanValue();
     }
+
+    public long size() throws Exception {
+        return regionStore.size();
+    }
 }

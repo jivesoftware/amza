@@ -334,7 +334,7 @@ public class BinaryWALTx implements WALTx {
         List<WALValue> rowValues,
         AtomicLong batchSizeInBytes) throws Exception {
 
-        List<byte[]> rowPointers = compactionIO.write(rowTxIds, rawRowTypes, rawRows, true);
+        List<byte[]> rowPointers = compactionIO.write(rowTxIds, rawRowTypes, rawRows);
         Collection<Map.Entry<WALKey, WALValue>> entries = new ArrayList<>(rowKeys.size());
         for (int i = 0; i < rowKeys.size(); i++) {
             WALValue rowValue = rowValues.get(i);

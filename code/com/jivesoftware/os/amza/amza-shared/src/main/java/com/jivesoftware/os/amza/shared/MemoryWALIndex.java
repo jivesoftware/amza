@@ -73,6 +73,11 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
+    public long size() throws Exception {
+        return index.size();
+    }
+
+    @Override
     public List<Boolean> containsKey(List<WALKey> keys) {
         List<Boolean> contains = new ArrayList<>(keys.size());
         for (WALKey key : keys) {

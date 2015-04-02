@@ -34,7 +34,7 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
-    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows, boolean append) throws Exception {
+    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows) throws Exception {
         List<Long> offests = new ArrayList<>();
         MemoryFiler memoryFiler = new MemoryFiler();
         int i = 0;
@@ -52,16 +52,9 @@ public class BinaryRowWriter implements WALWriter {
         long startFp;
         ioStats.wrote.addAndGet(bytes.length);
         synchronized (filer.lock()) {
-            if (append) {
-                startFp = filer.length();
-                filer.seek(startFp); // seek to end of file.
-                filer.write(bytes);
-            } else {
-                startFp = 0;
-                filer.seek(0);
-                filer.write(bytes);
-                filer.eof(); // trim file to size.
-            }
+            startFp = filer.length();
+            filer.seek(startFp); // seek to end of file.
+            filer.write(bytes);
             filer.flush();
         }
         List<byte[]> rowPointers = new ArrayList<>();

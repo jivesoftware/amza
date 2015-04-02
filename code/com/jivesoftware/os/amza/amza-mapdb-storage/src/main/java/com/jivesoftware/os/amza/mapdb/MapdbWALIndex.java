@@ -112,8 +112,23 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    public void commit() {
-        db.commit();
+    public long size() throws Exception {
+        lock.acquire();
+        try {
+            return index.size();
+        } finally {
+            lock.release();
+        }
+    }
+
+    @Override
+    public void commit() throws Exception {
+        lock.acquire();
+        try {
+            db.commit();
+        } finally {
+            lock.release();
+        }
     }
 
     @Override

@@ -6,16 +6,15 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
 /**
- *
  * @author jonathan.colt
  */
 public class FilerChannel implements IFiler {
 
-    private final Filer parent;
+    private final WALFiler parent;
     private final FileChannel fc;
     private long fp;
 
-    public FilerChannel(Filer parent, FileChannel fc) {
+    public FilerChannel(WALFiler parent, FileChannel fc) {
         this.parent = parent;
         this.fc = fc;
     }
@@ -27,7 +26,7 @@ public class FilerChannel implements IFiler {
 
     @Override
     public void seek(long position) throws IOException {
-        if (position > fc.size()) {
+        if (position > parent.length()) {
             throw new IOException("seek overflow " + position + " " + this);
         }
         fp = position;
@@ -36,7 +35,7 @@ public class FilerChannel implements IFiler {
     @Override
     public long skip(long position) throws IOException {
         long newFP = fp + position;
-        if (newFP > fc.size()) {
+        if (newFP > parent.length()) {
             throw new IndexOutOfBoundsException("FP out of bounds " + fp + " " + this);
         }
         fp = newFP;
@@ -45,7 +44,7 @@ public class FilerChannel implements IFiler {
 
     @Override
     public long length() throws IOException {
-        return fc.size();
+        return parent.length();
     }
 
     @Override
@@ -106,7 +105,7 @@ public class FilerChannel implements IFiler {
 
     @Override
     public void write(int b) throws IOException {
-        ByteBuffer bb = ByteBuffer.wrap(new byte[]{(byte) b});
+        ByteBuffer bb = ByteBuffer.wrap(new byte[] { (byte) b });
         fc.write(bb, fp);
         fp++;
     }

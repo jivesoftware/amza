@@ -50,6 +50,11 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
+    public long size() throws Exception {
+        return 0;
+    }
+
+    @Override
     public void commit() throws Exception {
     }
 

@@ -171,7 +171,7 @@ public class IndexedWAL implements WALStorage {
                 WALWriter.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
-            })), true);
+            })));
         updateCount.set(0);
     }
 
@@ -182,7 +182,7 @@ public class IndexedWAL implements WALStorage {
             Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
             Collections.singletonList(FilerIO.longsBytes(new long[]{
                 WALWriter.COMMIT_MARKER,
-                indexCommitedUpToTxId})), true);
+                indexCommitedUpToTxId})));
     }
 
     @Override
@@ -260,8 +260,7 @@ public class IndexedWAL implements WALStorage {
                         List<byte[]> rowPointers = rowWriter.write(
                             Collections.nCopies(rawRows.size(), transactionId),
                             Collections.nCopies(rawRows.size(), WALWriter.VERSION_1),
-                            rawRows,
-                            true);
+                            rawRows);
 
                         for (int i = 0; i < rowPointers.size(); i++) {
                             keyToRowPointer.put(keys.get(i), rowPointers.get(i));
@@ -449,6 +448,17 @@ public class IndexedWAL implements WALStorage {
         try {
             WALIndex wali = walIndex.get();
             wali.updatedDescriptors(walStorageDescriptor.primaryIndexDescriptor, walStorageDescriptor.secondaryIndexDescriptors);
+        } finally {
+            tickleMeElmophore.release();
+        }
+    }
+
+    @Override
+    public long size() throws Exception {
+        tickleMeElmophore.acquire();
+        try {
+            WALIndex wali = this.walIndex.get();
+            return wali.size();
         } finally {
             tickleMeElmophore.release();
         }

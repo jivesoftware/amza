@@ -87,4 +87,8 @@ public class RegionStore implements WALScanable {
     public void updatedStorageDescriptor(WALStorageDescriptor storageDescriptor) throws Exception {
         walStorage.updatedStorageDescriptor(storageDescriptor);
     }
+
+    public long size() throws Exception {
+        return walStorage.size();
+    }
 }

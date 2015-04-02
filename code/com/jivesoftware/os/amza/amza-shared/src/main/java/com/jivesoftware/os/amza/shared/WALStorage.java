@@ -36,4 +36,6 @@ public interface WALStorage extends WALScanable {
     void compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 
     void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception;
+
+    long size() throws Exception;
 }

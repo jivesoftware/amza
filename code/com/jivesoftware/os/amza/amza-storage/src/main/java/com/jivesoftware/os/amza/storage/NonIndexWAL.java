@@ -97,8 +97,7 @@ public class NonIndexWAL implements WALStorage {
                     long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
                     rowWriter.write(Collections.nCopies(rawRows.size(), transactionId),
                         Collections.nCopies(rawRows.size(), (byte) WALWriter.VERSION_1),
-                        rawRows,
-                        true);
+                        rawRows);
                     return null;
                 }
             });
@@ -178,6 +177,11 @@ public class NonIndexWAL implements WALStorage {
     @Override
     public List<Boolean> containsKey(List<WALKey> keys) throws Exception {
         throw new UnsupportedOperationException("NonIndexWAL doesn't support gets.");
+    }
+
+    @Override
+    public long size() throws Exception {
+        throw new UnsupportedOperationException("NonIndexWAL doesn't support count.");
     }
 
     @Override

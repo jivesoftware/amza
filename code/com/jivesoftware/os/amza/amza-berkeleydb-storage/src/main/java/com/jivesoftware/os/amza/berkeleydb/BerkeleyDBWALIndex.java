@@ -54,8 +54,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
         this.environment = new Environment(active, envConfig);
 
         // Open the database, creating one if it does not exist
-        DatabaseConfig dbConfig = new DatabaseConfig();
-        dbConfig.setAllowCreate(true);
+        DatabaseConfig dbConfig = new DatabaseConfig()
+            .setAllowCreate(true);
         this.database = environment.openDatabase(null, regionName.getRegionName(), dbConfig);
 
         LOG.info("Opening " + active.getAbsolutePath() + " " + database.count());
@@ -161,7 +161,13 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public void commit() {
+    public void commit() throws Exception {
+        lock.acquire();
+        try {
+            environment.flushLog(false);
+        } finally {
+            lock.release();
+        }
     }
 
     @Override
@@ -227,6 +233,16 @@ public class BerkeleyDBWALIndex implements WALIndex {
             if (cursor != null) {
                 cursor.close();
             }
+        }
+    }
+
+    @Override
+    public long size() throws Exception {
+        lock.acquire();
+        try {
+            return database.count();
+        } finally {
+            lock.release();
         }
     }
 

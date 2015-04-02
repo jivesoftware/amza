@@ -43,8 +43,8 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowTypes, List<byte[]> rows, boolean append) throws Exception {
-        return rowWriter.write(rowTxIds, rowTypes, rows, append);
+    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowTypes, List<byte[]> rows) throws Exception {
+        return rowWriter.write(rowTxIds, rowTypes, rows);
     }
 
     @Override
@@ -56,7 +56,6 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     public void move(File destinationDir) throws Exception {
         File destinationFile = new File(destinationDir, file.getName());
         Files.move(file, destinationFile);
-
     }
 
     @Override

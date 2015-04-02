@@ -418,6 +418,20 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
+    synchronized public long size() {
+        try {
+            SkipListMapContext slmc = ensureCapacity(0);
+            if (slmc != null) {
+                return SkipListMapStore.INSTANCE.getCount(filer, sls);
+            } else {
+                return 0;
+            }
+        } catch (Exception x) {
+            throw new RuntimeException("Failure while computing size.", x);
+        }
+    }
+
+    @Override
     public CompactionWALIndex startCompaction() throws Exception {
         final String prefix = regionName.getRegionName() + "-" + regionName.getRingName();
         final File[] compactingDirectories = new File[directories.length];

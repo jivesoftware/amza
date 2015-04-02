@@ -17,10 +17,10 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALReader;
+import com.jivesoftware.os.amza.shared.filer.IFiler;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
-import com.jivesoftware.os.amza.storage.filer.FilerChannel;
 import com.jivesoftware.os.amza.storage.filer.WALFiler;
 import java.io.IOException;
 
@@ -40,7 +40,7 @@ public class BinaryRowReader implements WALReader {
         synchronized (parent.lock()) {
             boundaryFp = parent.length();
         }
-        FilerChannel filerChannel = parent.fileChannelFiler();
+        IFiler filerChannel = parent.fileChannelMemMapFiler();
         if (boundaryFp == 0) {
             return;
         }
@@ -115,7 +115,7 @@ public class BinaryRowReader implements WALReader {
                 synchronized (parent.lock()) {
                     fileLength = parent.length();
                 }
-                FilerChannel filer = parent.fileChannelFiler();
+                IFiler filer = parent.fileChannelMemMapFiler();
                 while (true) {
                     long rowFP;
                     long rowTxId;
@@ -157,7 +157,7 @@ public class BinaryRowReader implements WALReader {
         if (fileLength == 0) {
             return null;
         }
-        FilerChannel filer = parent.fileChannelFiler();
+        IFiler filer = parent.fileChannelMemMapFiler();
         filer.seek(UIO.bytesLong(rowPointer));
         int length = UIO.readInt(filer, "length");
         long rowType = (byte) filer.read();

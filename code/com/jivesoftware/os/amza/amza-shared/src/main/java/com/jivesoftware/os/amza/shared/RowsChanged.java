@@ -15,23 +15,21 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import com.google.common.collect.Multimap;
 import java.util.Map;
-import java.util.NavigableMap;
 
 public class RowsChanged implements WALScanable {
 
     private final RegionName regionName;
     private final long oldestApply;
-    private final NavigableMap<WALKey, WALValue> apply;
-    private final NavigableMap<WALKey, WALValue> remove;
-    private final Multimap<WALKey, WALValue> clobber;
+    private final Map<WALKey, WALValue> apply;
+    private final Map<WALKey, WALValue> remove;
+    private final Map<WALKey, WALValue> clobber;
 
     public RowsChanged(RegionName regionName,
         long oldestApply,
-        NavigableMap<WALKey, WALValue> apply,
-        NavigableMap<WALKey, WALValue> remove,
-        Multimap<WALKey, WALValue> clobber) {
+        Map<WALKey, WALValue> apply,
+        Map<WALKey, WALValue> remove,
+        Map<WALKey, WALValue> clobber) {
         this.regionName = regionName;
         this.oldestApply = oldestApply;
         this.apply = apply;
@@ -47,15 +45,15 @@ public class RowsChanged implements WALScanable {
         return oldestApply;
     }
 
-    public NavigableMap<WALKey, WALValue> getApply() {
+    public Map<WALKey, WALValue> getApply() {
         return apply;
     }
 
-    public NavigableMap<WALKey, WALValue> getRemove() {
+    public Map<WALKey, WALValue> getRemove() {
         return remove;
     }
 
-    public Multimap<WALKey, WALValue> getClobbered() {
+    public Map<WALKey, WALValue> getClobbered() {
         return clobber;
     }
 
@@ -66,10 +64,7 @@ public class RowsChanged implements WALScanable {
         if (remove != null && !remove.isEmpty()) {
             return false;
         }
-        if (clobber != null && !clobber.isEmpty()) {
-            return false;
-        }
-        return true;
+        return !(clobber != null && !clobber.isEmpty());
     }
 
     @Override
@@ -85,18 +80,6 @@ public class RowsChanged implements WALScanable {
         }
     }
 
-    @Override
-    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
-        for (Map.Entry<WALKey, WALValue> e : apply.subMap(from, to).entrySet()) {
-            try {
-                if (!walScan.row(-1, e.getKey(), e.getValue())) {
-                    break;
-                }
-            } catch (Throwable ex) {
-                throw new RuntimeException("Error while streaming entry set.", ex);
-            }
-        }
-    }
 
     @Override
     public String toString() {

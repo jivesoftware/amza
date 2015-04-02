@@ -17,9 +17,7 @@ package com.jivesoftware.os.amza.storage;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
-import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -42,11 +40,12 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -188,9 +187,9 @@ public class IndexedWAL implements WALStorage {
     @Override
     public RowsChanged update(WALStorageUpdateMode updateMode, WALScanable updates) throws Exception {
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
-        final NavigableMap<WALKey, WALValue> apply = new ConcurrentSkipListMap<>();
-        final NavigableMap<WALKey, WALValue> removes = new TreeMap<>();
-        final Multimap<WALKey, WALValue> clobbers = ArrayListMultimap.create();
+        final Map<WALKey, WALValue> apply = new ConcurrentHashMap<>();
+        final Map<WALKey, WALValue> removes = new HashMap<>();
+        final Map<WALKey, WALValue> clobbers = new HashMap();
 
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();

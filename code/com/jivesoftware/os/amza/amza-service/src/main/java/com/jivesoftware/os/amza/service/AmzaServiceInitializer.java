@@ -51,10 +51,10 @@ public class AmzaServiceInitializer {
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
 
-        public int numberOfResendThreads = 8;
-        public int numberOfApplierThreads = 8;
-        public int numberOfCompactorThreads = 8;
-        public int numberOfTakerThreads = 8;
+        public int numberOfResendThreads = 2;
+        public int numberOfApplierThreads = 2;
+        public int numberOfCompactorThreads = 2;
+        public int numberOfTakerThreads = 2;
 
     }
 

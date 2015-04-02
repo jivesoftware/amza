@@ -17,7 +17,7 @@ package com.jivesoftware.os.amza.shared;
 
 import java.util.List;
 
-public interface WALStorage extends WALScanable {
+public interface WALStorage extends RangeScannable {
 
     void load() throws Exception;
 

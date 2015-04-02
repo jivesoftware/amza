@@ -8,13 +8,13 @@ import java.nio.channels.FileChannel;
 /**
  * @author jonathan.colt
  */
-public class FilerChannel implements IFiler {
+public class WALFilerChannelReader implements IFiler {
 
     private final WALFiler parent;
     private final FileChannel fc;
     private long fp;
 
-    public FilerChannel(WALFiler parent, FileChannel fc) {
+    public WALFilerChannelReader(WALFiler parent, FileChannel fc) {
         this.parent = parent;
         this.fc = fc;
     }

@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.storage.filer;
 
+import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
 import com.jivesoftware.os.amza.shared.filer.IFiler;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -39,9 +40,15 @@ public class WALFiler extends RandomAccessFile implements IFiler {
         this.size = new AtomicLong(super.length());
     }
 
-    public FilerChannel fileChannelFiler() {
+    public WALFilerChannelReader fileChannelFiler() {
         final FileChannel channel = getChannel();
-        return new FilerChannel(this, channel);
+        return new WALFilerChannelReader(this, channel);
+    }
+
+    public IFiler fileChannelMemMapFiler() throws IOException {
+        final FileChannel channel = getChannel();
+        // TODO handle larger files;
+        return new ByteBufferBackedFiler(channel.map(FileChannel.MapMode.READ_ONLY, 0, (int)length()));
     }
 
     @Override

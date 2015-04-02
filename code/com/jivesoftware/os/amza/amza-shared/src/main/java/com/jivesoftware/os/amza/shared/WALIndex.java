@@ -19,7 +19,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-public interface WALIndex extends WALScanable {
+public interface WALIndex extends RangeScannable {
 
     void put(Collection<? extends Map.Entry<WALKey, WALValue>> entry) throws Exception;
 

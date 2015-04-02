@@ -19,6 +19,4 @@ public interface WALScanable {
 
     void rowScan(WALScan walScan) throws Exception;
 
-    void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception;
-
 }

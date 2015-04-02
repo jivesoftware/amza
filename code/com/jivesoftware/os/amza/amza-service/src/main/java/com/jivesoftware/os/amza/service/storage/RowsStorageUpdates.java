@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALValue;
 import java.util.Map.Entry;
@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 /**
  * Not thread safe. Each Thread should get their own ReadThroughChangeSet.
  */
-public class RowsStorageUpdates implements WALScanable {
+public class RowsStorageUpdates implements RangeScannable {
 
     private final WALStorage walStorage;
     private final ConcurrentSkipListMap<WALKey, WALValue> changes;

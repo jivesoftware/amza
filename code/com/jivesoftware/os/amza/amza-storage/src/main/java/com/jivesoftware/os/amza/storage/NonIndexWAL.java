@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.storage;
 
-import com.google.common.collect.ArrayListMultimap;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -82,7 +81,7 @@ public class NonIndexWAL implements WALStorage {
         });
 
         if (apply.isEmpty()) {
-            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALValue>(), ArrayListMultimap.<WALKey, WALValue>create());
+            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALValue>(), new TreeMap<WALKey, WALValue>());
         } else {
             rowsTx.write(new WALTx.WALWrite<Void>() {
                 @Override
@@ -102,7 +101,7 @@ public class NonIndexWAL implements WALStorage {
                 }
             });
             updateCount.addAndGet(apply.size());
-            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALValue>(), ArrayListMultimap.<WALKey, WALValue>create());
+            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALValue>(), new TreeMap<WALKey, WALValue>());
         }
 
     }

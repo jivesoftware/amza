@@ -22,7 +22,6 @@ import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
@@ -136,11 +135,6 @@ public class AmzaReplicationRestEndpoints {
         return new WALScanable() {
             @Override
             public void rowScan(WALScan walScan) throws Exception {
-                changeSet.stream(rowMarshaller, walScan);
-            }
-
-            @Override
-            public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
                 changeSet.stream(rowMarshaller, walScan);
             }
         };

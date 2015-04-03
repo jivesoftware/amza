@@ -160,11 +160,13 @@ public class BinaryRowReader implements WALReader {
         IFiler filer = parent.fileChannelFiler();
         filer.seek(UIO.bytesLong(rowPointer));
         int length = UIO.readInt(filer, "length");
-        long rowType = (byte) filer.read();
-        byte[] row = new byte[length - 1];
-        if (length > 1) {
+        byte rowType = UIO.readByte(filer, "rowType");
+        long rowTxId = UIO.readLong(filer, "txId");
+        byte[] row = new byte[length - (1 + 8)];
+        if (row.length > 0) {
             filer.read(row);
         }
         return row;
     }
+
 }

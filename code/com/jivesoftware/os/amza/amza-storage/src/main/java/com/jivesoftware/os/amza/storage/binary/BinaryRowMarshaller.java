@@ -58,7 +58,6 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
     @Override
     public byte[] valueFromRow(byte[] row) throws Exception {
         MemoryFiler filer = new MemoryFiler(row);
-        UIO.readLong(filer, "transactionId");
         return UIO.readByteArray(filer, "value");
     }
 }

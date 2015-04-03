@@ -1,5 +1,6 @@
-package com.jivesoftware.os.amza.service.storage;
+package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;

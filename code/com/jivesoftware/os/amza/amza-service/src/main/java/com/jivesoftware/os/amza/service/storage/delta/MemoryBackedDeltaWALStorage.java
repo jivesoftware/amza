@@ -1,9 +1,10 @@
-package com.jivesoftware.os.amza.service.storage;
+package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -21,24 +22,16 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author jonathan.colt
@@ -127,8 +120,9 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         return regionDelta;
     }
 
+    @Override
     public void compact(final RegionProvider regionProvider) throws Exception {
-        if (true || updateSinceLastCompaction.longValue() < 100_000) { // TODO or some memory pressure BS!
+        if (updateSinceLastCompaction.longValue() < 100_000) { // TODO or some memory pressure BS!
             return;
         }
 
@@ -232,7 +226,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
 
-                DeltaWAL.DeltaWALApplied updateApplied = deltaWAL.update(regionName, oldestAppliedTimestamp, apply);
+                DeltaWAL.DeltaWALApplied updateApplied = deltaWAL.update(regionName, apply);
 
                 RegionDelta delta = getRegionDeltas(regionName);
                 synchronized (oneWriterAtATimeLock) {
@@ -338,7 +332,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         tickleMeElmophore.acquire();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
-            final PeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
+            final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
             rangeScannable.rangeScan(from, to, new WALScan() {
                 Map.Entry<WALKey, WALValue> d;
 
@@ -383,7 +377,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         tickleMeElmophore.acquire();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
-            final PeekableElmoIterator iterator = delta.rowScanIterator();
+            final DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
             scanable.rowScan(new WALScan() {
                 Map.Entry<WALKey, WALValue> d;
 
@@ -445,243 +439,4 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         return count + storage.size();
     }
 
-    static final class PeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALValue>> {
-
-        private final Iterator<Map.Entry<WALKey, WALValue>> iterator;
-        private final Iterator<Map.Entry<WALKey, WALValue>> compactingIterator;
-        private Map.Entry<WALKey, WALValue> last;
-        private Map.Entry<WALKey, WALValue> iNext;
-        private Map.Entry<WALKey, WALValue> cNext;
-
-        public PeekableElmoIterator(Iterator<Map.Entry<WALKey, WALValue>> iterator,
-            Iterator<Map.Entry<WALKey, WALValue>> compactingIterator) {
-            this.iterator = iterator;
-            this.compactingIterator = compactingIterator;
-        }
-
-        public void eos() {
-            last = null;
-        }
-
-        public Map.Entry<WALKey, WALValue> last() {
-            return last;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return (iNext != null || cNext != null) || iterator.hasNext() || compactingIterator.hasNext();
-        }
-
-        @Override
-        public Map.Entry<WALKey, WALValue> next() {
-            if (iNext == null && iterator.hasNext()) {
-                iNext = iterator.next();
-            }
-            if (cNext == null && compactingIterator.hasNext()) {
-                cNext = compactingIterator.next();
-            }
-            if (iNext != null && cNext != null) {
-                int compare = iNext.getKey().compareTo(cNext.getKey());
-                if (compare == 0) {
-                    if (iNext.getValue().getTimestampId() > cNext.getValue().getTimestampId()) {
-                        last = iNext;
-                    } else {
-                        last = cNext;
-                    }
-                    iNext = null;
-                    cNext = null;
-                } else if (compare < 0) {
-                    last = iNext;
-                    iNext = null;
-                } else {
-                    last = cNext;
-                    cNext = null;
-                }
-            } else if (iNext != null) {
-                last = iNext;
-                iNext = null;
-            } else if (cNext != null) {
-                last = cNext;
-                cNext = null;
-            } else {
-                throw new NoSuchElementException();
-            }
-            return last;
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("Not supported ever!");
-        }
-
-    }
-
-    static class RegionDelta {
-
-        private final RegionName regionName;
-        private final DeltaWAL deltaWAL;
-        private final ConcurrentNavigableMap<WALKey, WALValue> index = new ConcurrentSkipListMap<>();
-        private final ConcurrentSkipListMap<Long, Collection<byte[]>> txIdWAL = new ConcurrentSkipListMap<>();
-        private final AtomicReference<RegionDelta> compacting;
-
-        RegionDelta(RegionName regionName, DeltaWAL deltaWAL, RegionDelta compacting) {
-            this.regionName = regionName;
-            this.deltaWAL = deltaWAL;
-            this.compacting = new AtomicReference<>(compacting);
-        }
-
-        WALValue get(WALKey key) throws Exception {
-            WALValue got = index.get(key);
-            if (got == null) {
-                RegionDelta regionDelta = compacting.get();
-                if (regionDelta != null) {
-                    return regionDelta.get(key);
-                }
-                return null;
-            }
-            return deltaWAL.hydrate(regionName, got.getValue());
-        }
-
-        DeltaResult<List<WALValue>> get(List<WALKey> keys) throws Exception {
-            boolean missed = false;
-            List<WALValue> result = new ArrayList<>(keys.size());
-            for (WALKey key : keys) {
-                WALValue got = get(key);
-                missed |= (got == null);
-                result.add(got);
-            }
-            return new DeltaResult<>(missed, result);
-        }
-
-        boolean containsKey(WALKey key) {
-            if (index.get(key) != null) {
-                return true;
-            }
-            RegionDelta regionDelta = compacting.get();
-            if (regionDelta != null) {
-                return regionDelta.containsKey(key);
-            }
-            return false;
-        }
-
-        DeltaResult<List<Boolean>> containsKey(List<WALKey> keys) {
-            boolean missed = false;
-            List<Boolean> result = new ArrayList<>(keys.size());
-            for (WALKey key : keys) {
-                boolean got = containsKey(key);
-                missed |= got;
-                result.add(got);
-            }
-            return new DeltaResult<>(missed, result);
-        }
-
-        void put(WALKey key, WALValue rowValue) {
-            index.put(key, rowValue);
-        }
-
-        Set<WALKey> keySet() {
-            Set<WALKey> keySet = index.keySet();
-            RegionDelta regionDelta = compacting.get();
-            if (regionDelta != null) {
-                HashSet<WALKey> all = new HashSet<>(keySet);
-                all.addAll(regionDelta.keySet());
-                return all;
-            }
-            return keySet;
-        }
-
-        PeekableElmoIterator rangeScanIterator(WALKey from, WALKey to) {
-            Iterator<Map.Entry<WALKey, WALValue>> iterator = index.subMap(from, to).entrySet().iterator();
-            Iterator<Map.Entry<WALKey, WALValue>> compactingIterator = Iterators.emptyIterator();
-            RegionDelta regionDelta = compacting.get();
-            if (regionDelta != null) {
-                compactingIterator = regionDelta.index.subMap(from, to).entrySet().iterator();
-            }
-            return new PeekableElmoIterator(iterator, compactingIterator);
-        }
-
-        PeekableElmoIterator rowScanIterator() {
-            Iterator<Map.Entry<WALKey, WALValue>> iterator = index.entrySet().iterator();
-            Iterator<Map.Entry<WALKey, WALValue>> compactingIterator = Iterators.emptyIterator();
-            RegionDelta regionDelta = compacting.get();
-            if (regionDelta != null) {
-                compactingIterator = regionDelta.index.entrySet().iterator();
-            }
-            return new PeekableElmoIterator(iterator, compactingIterator);
-        }
-
-        void appendTxFps(long rowTxId, long rowFP) {
-            Collection<byte[]> fps = txIdWAL.get(rowTxId);
-            if (fps == null) {
-                fps = new ArrayList<>();
-                txIdWAL.put(rowTxId, fps);
-            }
-            fps.add(UIO.longBytes(rowFP));
-        }
-
-        void appendTxFps(long rowTxId, Collection<byte[]> rowFPs) {
-            Collection<byte[]> fps = txIdWAL.get(rowTxId);
-            if (fps == null) {
-                fps = new ArrayList<>();
-                txIdWAL.put(rowTxId, fps);
-            }
-            fps.addAll(rowFPs);
-        }
-
-        boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-            ConcurrentNavigableMap<Long, Collection<byte[]>> tailMap = txIdWAL.tailMap(transactionId);
-            deltaWAL.takeRows(tailMap, rowStream);
-
-            if (!txIdWAL.isEmpty() && txIdWAL.firstEntry().getKey() <= transactionId) {
-                return true;
-            }
-
-            RegionDelta regionDelta = compacting.get();
-            if (regionDelta != null) {
-                if (regionDelta.takeRowUpdatesSince(transactionId, rowStream)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        long compact(RegionProvider regionProvider) throws Exception {
-            final RegionDelta compact = compacting.get();
-            long largestTxId = 0;
-            if (compact != null) {
-                largestTxId = compact.txIdWAL.lastKey();
-                RegionStore regionStore = regionProvider.getRegionStore(compact.regionName);
-                regionStore.directCommit(largestTxId, new WALScanable() {
-
-                    @Override
-                    public void rowScan(WALScan walScan) {
-                        for (Map.Entry<WALKey, WALValue> e : compact.index.entrySet()) {
-                            try {
-                                if (!walScan.row(-1, e.getKey(), compact.deltaWAL.hydrate(compact.regionName, e.getValue().getValue()))) {
-                                    break;
-                                }
-                            } catch (Throwable ex) {
-                                throw new RuntimeException("Error while streaming entry set.", ex);
-                            }
-                        }
-                    }
-                });
-
-            }
-            compacting.set(null);
-            return largestTxId;
-        }
-    }
-
-    public static class DeltaResult<R> {
-
-        public final boolean missed;
-        public final R result;
-
-        public DeltaResult(boolean missed, R result) {
-            this.missed = missed;
-            this.result = result;
-        }
-
-    }
 }

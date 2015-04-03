@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.storage;
+package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -11,8 +11,6 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -22,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -30,8 +27,6 @@ import org.apache.commons.lang.mutable.MutableLong;
  * @author jonathan.colt
  */
 public class DeltaWAL {
-
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final RegionName regionName;
     private final OrderIdProvider orderIdProvider;
@@ -61,7 +56,7 @@ public class DeltaWAL {
         });
     }
 
-    public WALKey addRegionTopkey(RegionName regionName, WALKey key) throws IOException {
+    WALKey regionPrefixedKey(RegionName regionName, WALKey key) throws IOException {
         byte[] regionNameBytes = regionName.toBytes();
         ByteBuffer bb = ByteBuffer.allocate(2 + regionNameBytes.length + 4 + key.getKey().length);
         bb.putShort((short) regionNameBytes.length);
@@ -71,7 +66,7 @@ public class DeltaWAL {
         return new WALKey(bb.array());
     }
 
-    public DeltaWALApplied update(final RegionName regionName, AtomicLong oldestApplied, final Map<WALKey, WALValue> apply) throws Exception {
+    public DeltaWALApplied update(final RegionName regionName, final Map<WALKey, WALValue> apply) throws Exception {
         final NavigableMap<WALKey, byte[]> keyToRowPointer = new TreeMap<>();
 
         final MutableLong txId = new MutableLong();
@@ -84,7 +79,7 @@ public class DeltaWAL {
                     WALKey key = e.getKey();
                     WALValue value = e.getValue();
                     keys.add(key);
-                    key = addRegionTopkey(regionName, key);
+                    key = regionPrefixedKey(regionName, key);
                     rawRows.add(rowMarshaller.toRow(key, value));
                 }
                 long transactionId;
@@ -107,15 +102,23 @@ public class DeltaWAL {
 
     }
 
-    void takeRows(final ConcurrentNavigableMap<Long, Collection<byte[]>> tailMap, final RowStream rowStream) throws Exception {
+    void takeRows(final NavigableMap<Long, Collection<byte[]>> tailMap, final RowStream rowStream) throws Exception {
         rowsTx.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader reader) throws Exception {
                 for (Map.Entry<Long, Collection<byte[]>> entry : tailMap.entrySet()) {
                     for (byte[] fp : entry.getValue()) {
-                        byte[] read = reader.read(fp);
-                        if (!rowStream.row(UIO.bytesLong(fp), entry.getKey(), BinaryRowWriter.VERSION_1, read)) {// TODO Ah were to get rowType
+                        byte[] rawRow = reader.read(fp);
+                        RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
+                        ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
+                        byte[] regionNameBytes = new byte[bb.getShort()];
+                        bb.get(regionNameBytes);
+                        byte[] keyBytes = new byte[bb.getInt()];
+                        bb.get(keyBytes);
+
+                        if (!rowStream.row(UIO.bytesLong(fp), entry.getKey(), BinaryRowWriter.VERSION_1,
+                            rowMarshaller.toRow(new WALKey(keyBytes), row.getValue()))) { // TODO Ah were to get rowType
                             return null;
                         }
                     }
@@ -126,18 +129,25 @@ public class DeltaWAL {
 
     }
 
-    WALValue hydrate(RegionName regionName, final byte[] rowPointer) throws Exception {
-        return rowsTx.read(new WALTx.WALRead<WALValue>() {
-
-            @Override
-            public WALValue read(WALReader reader) throws Exception {
-                return rowMarshaller.fromRow(reader.read(rowPointer)).getValue();
-            }
-        });
+    WALValue hydrate(RegionName regionName, final WALValue rowPointer) throws Exception {
+        try {
+            byte[] row = rowsTx.read(new WALTx.WALRead<byte[]>() {
+                @Override
+                public byte[] read(WALReader rowReader) throws Exception {
+                    return rowReader.read(rowPointer.getValue());
+                }
+            });
+            byte[] value = rowMarshaller.valueFromRow(row);
+            return new WALValue(value,
+                rowPointer.getTimestampId(),
+                rowPointer.getTombstoned());
+        } catch (Exception x) {
+            throw new RuntimeException("Failed to hydrtate " + rowPointer, x);
+        }
     }
 
     void compact(long maxTxId) throws Exception {
-        rowsTx.compact(regionName, maxTxId, maxTxId, null);
+        rowsTx.compact(regionName, 0, maxTxId, null);
     }
 
     public static class DeltaWALApplied {
@@ -149,7 +159,5 @@ public class DeltaWAL {
             this.keyToRowPointer = keyToRowPointer;
             this.txId = txId;
         }
-
     }
-
 }

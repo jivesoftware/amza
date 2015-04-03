@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.service.storage.delta.DeltaWALStorage;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowChanges;
@@ -96,7 +97,7 @@ public class RegionStore implements RangeScannable {
         return updateMap;
     }
 
-    void directCommit(long txId, WALScanable scanable) throws Exception {
+    public void directCommit(long txId, WALScanable scanable) throws Exception {
         walStorage.update(txId, WALStorageUpdateMode.noReplication, scanable);
     }
 

@@ -42,7 +42,7 @@ public class BinaryRowWriter implements WALWriter {
             offests.add(memoryFiler.getFilePointer());
             int length = (1 + 8) + row.length;
             UIO.writeInt(memoryFiler, length, "length");
-            memoryFiler.write(rowType.get(i));
+            UIO.writeByte(memoryFiler, rowType.get(i), "rowType");
             UIO.writeLong(memoryFiler, rowTxIds.get(i), "txId");
             memoryFiler.write(row);
             UIO.writeInt(memoryFiler, length, "length");

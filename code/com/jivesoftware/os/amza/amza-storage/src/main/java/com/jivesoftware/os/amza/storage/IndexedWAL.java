@@ -169,7 +169,7 @@ public class IndexedWAL implements WALStorage {
             rowWriter.write(
                 Collections.nCopies(1, transactionId),
                 Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-                Collections.singletonList(FilerIO.longsBytes(new long[] {
+                Collections.singletonList(FilerIO.longsBytes(new long[]{
                     WALWriter.COMPACTION_HINTS_KEY,
                     newCount.get(),
                     clobberCount.get()
@@ -184,14 +184,14 @@ public class IndexedWAL implements WALStorage {
             rowWriter.write(
                 Collections.nCopies(1, transactionId),
                 Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-                Collections.singletonList(FilerIO.longsBytes(new long[] {
+                Collections.singletonList(FilerIO.longsBytes(new long[]{
                     WALWriter.COMMIT_MARKER,
-                    indexCommitedUpToTxId })));
+                    indexCommitedUpToTxId})));
         }
     }
 
     @Override
-    public RowsChanged update(WALStorageUpdateMode updateMode, WALScanable updates) throws Exception {
+    public RowsChanged update(final Long overrideTxId, WALStorageUpdateMode updateMode, WALScanable updates) throws Exception {
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final Map<WALKey, WALValue> apply = new ConcurrentHashMap<>();
         final Map<WALKey, WALValue> removes = new HashMap<>();
@@ -261,10 +261,9 @@ public class IndexedWAL implements WALStorage {
                             keys.add(key);
                             rawRows.add(rowMarshaller.toRow(key, value));
                         }
-
                         List<byte[]> rowPointers;
                         synchronized (oneTransactionAtATimeLock) {
-                            long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
+                            long transactionId = (overrideTxId != null) ? overrideTxId : orderIdProvider.nextId();
                             indexCommitedUpToTxId.setValue(transactionId);
                             rowPointers = rowWriter.write(
                                 Collections.nCopies(rawRows.size(), transactionId),

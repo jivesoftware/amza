@@ -66,7 +66,7 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public RowsChanged update(WALStorageUpdateMode updateMode, WALScanable updates) throws Exception {
+    public RowsChanged update(final Long overrideTxId, WALStorageUpdateMode updateMode, WALScanable updates) throws Exception {
         final AtomicLong oldestApplied = new AtomicLong(Long.MAX_VALUE);
         final NavigableMap<WALKey, WALValue> apply = new TreeMap<>();
 
@@ -95,7 +95,7 @@ public class NonIndexWAL implements WALStorage {
                         rawRows.add(rowMarshaller.toRow(key, value));
                     }
                     synchronized (oneTransactionAtATimeLock) {
-                        long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
+                        long transactionId = (overrideTxId != null) ? overrideTxId : orderIdProvider.nextId();
                         rowWriter.write(Collections.nCopies(rawRows.size(), transactionId),
                             Collections.nCopies(rawRows.size(), (byte) WALWriter.VERSION_1),
                             rawRows);

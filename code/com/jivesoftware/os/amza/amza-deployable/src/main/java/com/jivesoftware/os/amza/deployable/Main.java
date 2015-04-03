@@ -150,6 +150,7 @@ public class Main {
             }
         };
 
+
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             ringHost,

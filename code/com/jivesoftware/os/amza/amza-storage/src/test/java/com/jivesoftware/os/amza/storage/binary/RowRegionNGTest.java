@@ -125,7 +125,7 @@ public class RowRegionNGTest {
             WALKey key = new WALKey(FilerIO.intBytes(r.nextInt(range)));
             updates.put(Arrays.asList(new SimpleEntry<>(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false))));
         }
-        indexedWAL.update(WALStorageUpdateMode.updateThenReplicate, updates);
+        indexedWAL.update(null, WALStorageUpdateMode.updateThenReplicate, updates);
     }
 
     @Test
@@ -223,6 +223,6 @@ public class RowRegionNGTest {
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         MemoryWALIndex updates = new MemoryWALIndex();
         updates.put(Arrays.asList(new SimpleEntry<>(new WALKey(key), new WALValue(value, timestamp, remove))));
-        indexedWAL.update(WALStorageUpdateMode.updateThenReplicate, updates);
+        indexedWAL.update(null, WALStorageUpdateMode.updateThenReplicate, updates);
     }
 }

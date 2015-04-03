@@ -21,7 +21,7 @@ public interface WALStorage extends RangeScannable {
 
     void load() throws Exception;
 
-    RowsChanged update(WALStorageUpdateMode upateMode, WALScanable rowUpdates) throws Exception;
+    RowsChanged update(Long overrideTxId, WALStorageUpdateMode upateMode, WALScanable rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
 

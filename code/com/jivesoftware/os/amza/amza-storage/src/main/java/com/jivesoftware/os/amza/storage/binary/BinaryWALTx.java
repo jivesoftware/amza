@@ -41,7 +41,7 @@ public class BinaryWALTx implements WALTx {
     private final File dir;
     private final String name;
     private final RowMarshaller<byte[]> rowMarshaller;
-    private final WALIndexProvider rowsIndexProvider;
+    private final WALIndexProvider walIndexProvider;
     private final AtomicLong lastEndOfLastRow = new AtomicLong(-1);
 
     private final RowIOProvider ioProvider;
@@ -56,7 +56,7 @@ public class BinaryWALTx implements WALTx {
         this.name = name;
         this.ioProvider = ioProvider;
         this.rowMarshaller = rowMarshaller;
-        this.rowsIndexProvider = walIndexProvider;
+        this.walIndexProvider = walIndexProvider;
         this.io = ioProvider.create(dir, name);
     }
 
@@ -84,7 +84,7 @@ public class BinaryWALTx implements WALTx {
     public WALIndex load(RegionName regionName) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
-            final WALIndex walIndex = rowsIndexProvider.createIndex(regionName);
+            final WALIndex walIndex = walIndexProvider.createIndex(regionName);
             if (walIndex.isEmpty()) {
                 LOG.info(
                     "Rebuilding " + walIndex.getClass().getSimpleName()

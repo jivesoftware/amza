@@ -144,7 +144,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                         if (ringHosts == null || ringHosts.length == 0) {
                             if (enqueueForResendOnFailure) {
                                 WALStorage resend = resendWAL.get(regionName);
-                                resend.update(WALStorageUpdateMode.noReplication, updates);
+                                resend.update(null, WALStorageUpdateMode.noReplication, updates);
                             }
                             return false;
                         } else {
@@ -158,7 +158,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 } else {
                     if (enqueueForResendOnFailure) {
                         WALStorage resend = resendWAL.get(regionName);
-                        resend.update(WALStorageUpdateMode.noReplication, updates);
+                        resend.update(null, WALStorageUpdateMode.noReplication, updates);
                     }
                     return false;
                 }
@@ -195,7 +195,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 amzaStats.replicateErrors.add(ringHost);
                 if (enqueueForResendOnFailure) {
                     WALStorage resend = resendWAL.get(regionName);
-                    resend.update(WALStorageUpdateMode.noReplication, updates);
+                    resend.update(null, WALStorageUpdateMode.noReplication, updates);
                     enqueueForResendOnFailure = false;
                 }
             }

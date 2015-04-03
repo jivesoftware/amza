@@ -33,14 +33,25 @@ public class RegionStore implements RangeScannable {
 
     private final AmzaStats amzaStats;
     private final RegionName regionName;
+    private final DeltaWALStorage deltaWALStorage;
     private final WALStorage walStorage;
     private final RowChanges rowChanges;
 
-    public RegionStore(AmzaStats amzaStats, RegionName regionName, WALStorage walStorage, RowChanges rowChanges) {
+    public RegionStore(AmzaStats amzaStats,
+        RegionName regionName,
+        DeltaWALStorage deltaWALStorage,
+        WALStorage walStorage,
+        RowChanges rowChanges) {
+
         this.amzaStats = amzaStats;
         this.regionName = regionName;
+        this.deltaWALStorage = deltaWALStorage;
         this.walStorage = walStorage;
         this.rowChanges = rowChanges;
+    }
+
+    public WALStorage getWalStorage() {
+        return walStorage;
     }
 
     public void load() throws Exception {
@@ -49,12 +60,12 @@ public class RegionStore implements RangeScannable {
 
     @Override
     public void rowScan(WALScan walScan) throws Exception {
-        walStorage.rowScan(walScan);
+        deltaWALStorage.rowScan(regionName, walStorage, walScan);
     }
 
     @Override
     public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
-        walStorage.rangeScan(from, to, walScan);
+        deltaWALStorage.rangeScan(regionName, walStorage, from, to, walScan);
     }
 
     public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
@@ -62,15 +73,15 @@ public class RegionStore implements RangeScannable {
     }
 
     public WALValue get(WALKey key) throws Exception {
-        return walStorage.get(key);
+        return deltaWALStorage.get(regionName, walStorage, key);
     }
 
     public boolean containsKey(WALKey key) throws Exception {
-        return walStorage.containsKey(key);
+        return deltaWALStorage.containsKey(regionName, walStorage, key);
     }
 
     public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        walStorage.takeRowUpdatesSince(transactionId, rowStream);
+        deltaWALStorage.takeRowUpdatesSince(regionName, walStorage, transactionId, rowStream);
     }
 
     public RowStoreUpdates startTransaction(long timestamp) throws Exception {
@@ -78,11 +89,15 @@ public class RegionStore implements RangeScannable {
     }
 
     public RowsChanged commit(WALStorageUpdateMode updateMode, WALScanable rowUpdates) throws Exception {
-        RowsChanged updateMap = walStorage.update(updateMode, rowUpdates);
+        RowsChanged updateMap = deltaWALStorage.update(regionName, walStorage, updateMode, rowUpdates);
         if (rowChanges != null && !updateMap.isEmpty()) {
             rowChanges.changes(updateMap);
         }
         return updateMap;
+    }
+
+    void directCommit(long txId, WALScanable scanable) throws Exception {
+        walStorage.update(txId, WALStorageUpdateMode.noReplication, scanable);
     }
 
     public void updatedStorageDescriptor(WALStorageDescriptor storageDescriptor) throws Exception {
@@ -90,6 +105,7 @@ public class RegionStore implements RangeScannable {
     }
 
     public long size() throws Exception {
-        return walStorage.size();
+        return deltaWALStorage.size(regionName, walStorage);
     }
+
 }

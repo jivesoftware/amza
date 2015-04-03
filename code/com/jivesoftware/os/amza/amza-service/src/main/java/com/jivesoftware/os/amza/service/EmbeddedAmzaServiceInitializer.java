@@ -5,13 +5,12 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
-import com.jivesoftware.os.amza.shared.NoOpWALIndex;
+import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
@@ -73,14 +72,6 @@ public class EmbeddedAmzaServiceInitializer {
             }
         };
 
-        final WALIndexProvider tmpWALIndexProvider = new WALIndexProvider() {
-
-            @Override
-            public WALIndex createIndex(RegionName regionName) throws Exception {
-                return new NoOpWALIndex();
-            }
-        };
-
         WALStorageProvider tmpWALStorageProvider = new WALStorageProvider() {
             @Override
             public WALStorage create(File workingDirectory,
@@ -99,7 +90,7 @@ public class EmbeddedAmzaServiceInitializer {
                         regionName.getRegionName() + ".kvt",
                         rowIOProvider,
                         rowMarshaller,
-                        tmpWALIndexProvider));
+                        new NoOpWALIndexProvider()));
             }
         };
 

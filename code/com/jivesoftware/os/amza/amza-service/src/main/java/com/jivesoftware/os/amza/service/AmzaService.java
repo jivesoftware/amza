@@ -187,10 +187,10 @@ public class AmzaService implements AmzaInstance {
     }
 
     @Override
-    public void takeRowUpdates(RegionName regionName, long transationId, RowStream rowStream) throws Exception {
+    public void takeRowUpdates(RegionName regionName, long transactionId, RowStream rowStream) throws Exception {
         AmzaRegion region = getRegion(regionName);
         if (region != null) {
-            region.takeRowUpdatesSince(transationId, rowStream);
+            region.takeRowUpdatesSince(transactionId, rowStream);
         }
     }
 

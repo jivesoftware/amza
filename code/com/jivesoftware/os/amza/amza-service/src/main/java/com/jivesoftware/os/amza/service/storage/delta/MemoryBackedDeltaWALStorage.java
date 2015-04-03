@@ -66,6 +66,8 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
     @Override
     public void load(final RegionProvider regionProvider) throws Exception {
+        LOG.info("Reloading deltas...");
+        long start = System.currentTimeMillis();
         synchronized (oneWriterAtATimeLock) {
             deltaWAL.load(new RowStream() {
 
@@ -95,6 +97,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                                     delta.put(key, new WALValue(UIO.longBytes(rowFP), value.getTimestampId(), value.getTombstoned()));
                                 }
                             }
+                            //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
                             delta.appendTxFps(rowTxId, rowFP);
                         } finally {
                             tickleMeElmophore.release();
@@ -105,6 +108,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 }
             });
         }
+        LOG.info("Reloaded deltas in {} ms", (System.currentTimeMillis() - start));
     }
 
     // todo any one call this should have atleast 1 numTickleMeElmaphore
@@ -122,7 +126,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
     @Override
     public void compact(final RegionProvider regionProvider) throws Exception {
-        if (updateSinceLastCompaction.longValue() < 100_000) { // TODO or some memory pressure BS!
+        if (true || updateSinceLastCompaction.longValue() < 100_000) { // TODO or some memory pressure BS!
             return;
         }
 
@@ -234,10 +238,10 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
 
-                DeltaWAL.DeltaWALApplied updateApplied = deltaWAL.update(regionName, apply);
-
                 RegionDelta delta = getRegionDeltas(regionName);
                 synchronized (oneWriterAtATimeLock) {
+                    DeltaWAL.DeltaWALApplied updateApplied = deltaWAL.update(regionName, apply);
+
                     for (Map.Entry<WALKey, WALValue> entry : apply.entrySet()) {
                         WALKey key = entry.getKey();
                         WALValue value = entry.getValue();
@@ -258,7 +262,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 }
 
                 if (walReplicator != null && updateMode == WALStorageUpdateMode.updateThenReplicate && !apply.isEmpty()) {
-                    walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers));
+                    futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
                 }
             }
             for (Future<?> future : futures) {
@@ -296,7 +300,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         } finally {
             tickleMeElmophore.release();
         }
-        if (got != null) {
+        if (got == null) {
             got = storage.get(key);
         }
         return got;

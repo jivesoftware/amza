@@ -17,12 +17,17 @@ package com.jivesoftware.os.amza.storage.filer;
 
 import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
 import com.jivesoftware.os.amza.shared.filer.IFiler;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class WALFiler extends RandomAccessFile implements IFiler {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     public static long totalFilesOpenCount;
     public static long totalReadByteCount;
@@ -33,6 +38,9 @@ public class WALFiler extends RandomAccessFile implements IFiler {
 
     private final String fileName;
     private final AtomicLong size;
+
+    private final AtomicReference<ByteBufferBackedFiler> memMapFiler = new AtomicReference<>();
+    private final AtomicLong memMapFilerLength = new AtomicLong(-1);
 
     public WALFiler(String name, String mode) throws IOException {
         super(name, mode);
@@ -45,10 +53,22 @@ public class WALFiler extends RandomAccessFile implements IFiler {
         return new WALFilerChannelReader(this, channel);
     }
 
-    public IFiler fileChannelMemMapFiler() throws IOException {
-        final FileChannel channel = getChannel();
-        // TODO handle larger files;
-        return new ByteBufferBackedFiler(channel.map(FileChannel.MapMode.READ_ONLY, 0, (int) length()));
+    public IFiler fileChannelMemMapFiler(long size) throws IOException {
+        if (size <= memMapFilerLength.get()) {
+            return memMapFiler.get().duplicate();
+        }
+        synchronized (memMapFiler) {
+            if (size <= memMapFilerLength.get()) {
+                return memMapFiler.get();
+            }
+            final FileChannel channel = getChannel();
+            long newLength = length();
+            // TODO handle larger files
+            ByteBufferBackedFiler newFiler = new ByteBufferBackedFiler(channel.map(FileChannel.MapMode.READ_ONLY, 0, (int) newLength));
+            memMapFiler.set(newFiler);
+            memMapFilerLength.set(newLength);
+            return newFiler.duplicate();
+        }
     }
 
     @Override

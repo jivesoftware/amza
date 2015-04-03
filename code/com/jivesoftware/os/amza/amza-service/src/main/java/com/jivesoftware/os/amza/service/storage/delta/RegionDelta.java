@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
@@ -34,7 +35,7 @@ class RegionDelta {
     private final RegionName regionName;
     private final DeltaWAL deltaWAL;
     private final ConcurrentNavigableMap<WALKey, WALValue> index = new ConcurrentSkipListMap<>();
-    private final ConcurrentSkipListMap<Long, Collection<byte[]>> txIdWAL = new ConcurrentSkipListMap<>();
+    private final ConcurrentSkipListMap<Long, List<byte[]>> txIdWAL = new ConcurrentSkipListMap<>();
     final AtomicReference<RegionDelta> compacting;
 
     RegionDelta(RegionName regionName, DeltaWAL deltaWAL, RegionDelta compacting) {
@@ -124,7 +125,7 @@ class RegionDelta {
     }
 
     void appendTxFps(long rowTxId, long rowFP) {
-        Collection<byte[]> fps = txIdWAL.get(rowTxId);
+        List<byte[]> fps = txIdWAL.get(rowTxId);
         if (fps == null) {
             fps = new ArrayList<>();
             txIdWAL.put(rowTxId, fps);
@@ -133,16 +134,15 @@ class RegionDelta {
     }
 
     void appendTxFps(long rowTxId, Collection<byte[]> rowFPs) {
-        Collection<byte[]> fps = txIdWAL.get(rowTxId);
-        if (fps == null) {
-            fps = new ArrayList<>();
-            txIdWAL.put(rowTxId, fps);
+        List<byte[]> fps = txIdWAL.get(rowTxId);
+        if (fps != null) {
+            throw new IllegalStateException("Already appended this txId: " + rowTxId);
         }
-        fps.addAll(rowFPs);
+        txIdWAL.put(rowTxId, ImmutableList.copyOf(rowFPs));
     }
 
     boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        ConcurrentNavigableMap<Long, Collection<byte[]>> tailMap = txIdWAL.tailMap(transactionId);
+        ConcurrentNavigableMap<Long, List<byte[]>> tailMap = txIdWAL.tailMap(transactionId, false);
         deltaWAL.takeRows(tailMap, rowStream);
         if (!txIdWAL.isEmpty() && txIdWAL.firstEntry().getKey() <= transactionId) {
             return true;

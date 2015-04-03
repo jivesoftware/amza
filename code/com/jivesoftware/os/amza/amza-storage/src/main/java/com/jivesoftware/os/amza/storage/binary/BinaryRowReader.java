@@ -40,7 +40,7 @@ public class BinaryRowReader implements WALReader {
         synchronized (parent.lock()) {
             boundaryFp = parent.length();
         }
-        IFiler filerChannel = parent.fileChannelMemMapFiler();
+        IFiler filerChannel = parent.fileChannelMemMapFiler(boundaryFp);
         if (boundaryFp == 0) {
             return;
         }
@@ -115,7 +115,7 @@ public class BinaryRowReader implements WALReader {
                 synchronized (parent.lock()) {
                     fileLength = parent.length();
                 }
-                IFiler filer = parent.fileChannelMemMapFiler();
+                IFiler filer = parent.fileChannelMemMapFiler(fileLength);
                 while (true) {
                     long rowFP;
                     long rowTxId;
@@ -157,11 +157,18 @@ public class BinaryRowReader implements WALReader {
         if (fileLength == 0) {
             return null;
         }
-        IFiler filer = parent.fileChannelFiler();
-        filer.seek(UIO.bytesLong(rowPointer));
+
+        long position = UIO.bytesLong(rowPointer);
+        IFiler filer = parent.fileChannelMemMapFiler(position + 4);
+
+        filer.seek(position);
         int length = UIO.readInt(filer, "length");
-        byte rowType = UIO.readByte(filer, "rowType");
-        long rowTxId = UIO.readLong(filer, "txId");
+
+        if (position + 4 + length > filer.length()) {
+            filer = parent.fileChannelMemMapFiler(position + 4 + length);
+        }
+
+        filer.seek(position + 4 + 1 + 8);
         byte[] row = new byte[length - (1 + 8)];
         if (row.length > 0) {
             filer.read(row);

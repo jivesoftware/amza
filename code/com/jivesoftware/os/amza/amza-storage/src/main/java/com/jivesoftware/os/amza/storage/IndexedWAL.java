@@ -238,7 +238,7 @@ public class IndexedWAL implements WALStorage {
                 }
             }
 
-            List<Future<?>> futures = Lists.newArrayListWithCapacity(2);
+            List<Future<?>> futures = Lists.newArrayListWithCapacity(1);
 
             if (walReplicator != null && updateMode == WALStorageUpdateMode.replicateThenUpdate && !apply.isEmpty()) {
                 futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
@@ -303,7 +303,7 @@ public class IndexedWAL implements WALStorage {
                 }
 
                 if (walReplicator != null && updateMode == WALStorageUpdateMode.updateThenReplicate && !apply.isEmpty()) {
-                    walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers));
+                    futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
                 }
             }
 

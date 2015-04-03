@@ -122,8 +122,8 @@ public class AmzaRegion {
         tx.commit();
     }
 
-    public void takeRowUpdatesSince(long transationId, RowStream rowStream) throws Exception {
-        regionStore.takeRowUpdatesSince(transationId, rowStream);
+    public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
+        regionStore.takeRowUpdatesSince(transactionId, rowStream);
     }
 
     //  Use for testing

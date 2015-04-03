@@ -28,6 +28,10 @@ public class ByteBufferBackedFiler implements IFiler {
         return this;
     }
 
+    public ByteBufferBackedFiler duplicate() {
+        return new ByteBufferBackedFiler(buffer.duplicate());
+    }
+
     @Override
     public void seek(long position) throws IOException {
         buffer.position((int) position); // what a pain! limited to an int!

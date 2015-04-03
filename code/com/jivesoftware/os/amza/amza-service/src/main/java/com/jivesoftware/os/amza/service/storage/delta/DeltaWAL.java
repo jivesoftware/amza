@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -15,7 +16,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -103,13 +103,15 @@ public class DeltaWAL {
 
     }
 
-    void takeRows(final NavigableMap<Long, Collection<byte[]>> tailMap, final RowStream rowStream) throws Exception {
+    void takeRows(final NavigableMap<Long, List<byte[]>> tailMap, final RowStream rowStream) throws Exception {
         rowsTx.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader reader) throws Exception {
-                for (Map.Entry<Long, Collection<byte[]>> entry : tailMap.entrySet()) {
-                    for (byte[] fp : entry.getValue()) {
+                // reverse everything so highest FP is first, helps minimize mmap extensions
+                for (Long key : tailMap.descendingKeySet()) {
+                    List<byte[]> rowFPs = Lists.reverse(tailMap.get(key));
+                    for (byte[] fp : rowFPs) {
                         byte[] rawRow = reader.read(fp);
                         RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
                         ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
@@ -118,7 +120,7 @@ public class DeltaWAL {
                         byte[] keyBytes = new byte[bb.getInt()];
                         bb.get(keyBytes);
 
-                        if (!rowStream.row(UIO.bytesLong(fp), entry.getKey(), BinaryRowWriter.VERSION_1,
+                        if (!rowStream.row(UIO.bytesLong(fp), key, BinaryRowWriter.VERSION_1,
                             rowMarshaller.toRow(new WALKey(keyBytes), row.getValue()))) { // TODO Ah were to get rowType
                             return null;
                         }

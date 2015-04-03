@@ -158,12 +158,11 @@ class RegionDelta {
 
     long compact(RegionProvider regionProvider) throws Exception {
         final RegionDelta compact = compacting.get();
-        Long largestTxId = 0L;
+        long largestTxId = 0L;
         if (compact != null) {
             LOG.info("Merging deltas for " + compact.regionName);
-            Long lastKey = compact.txIdWAL.lastKey();
-            if (lastKey != null) {
-                largestTxId = lastKey;
+            if (!compact.txIdWAL.isEmpty()) {
+                largestTxId = compact.txIdWAL.lastKey();;
                 RegionStore regionStore = regionProvider.getRegionStore(compact.regionName);
                 regionStore.directCommit(largestTxId,
                     new WALScanable() {

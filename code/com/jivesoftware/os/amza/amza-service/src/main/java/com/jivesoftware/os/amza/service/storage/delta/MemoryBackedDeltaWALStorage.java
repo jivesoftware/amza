@@ -126,7 +126,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
     @Override
     public void compact(final RegionProvider regionProvider) throws Exception {
-        if (true || updateSinceLastCompaction.longValue() < 100_000) { // TODO or some memory pressure BS!
+        if (updateSinceLastCompaction.longValue() < 100_000) { // TODO or some memory pressure BS!
             return;
         }
 

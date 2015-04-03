@@ -56,6 +56,29 @@ class RegionDelta {
         return deltaWAL.hydrate(regionName, got);
     }
 
+    WALValue getPointer(WALKey key) throws Exception {
+        WALValue got = index.get(key);
+        if (got != null) {
+            return got;
+        }
+        RegionDelta regionDelta = compacting.get();
+        if (regionDelta != null) {
+            return regionDelta.getPointer(key);
+        }
+        return null;
+    }
+
+    DeltaResult<List<WALValue>> getPointers(List<WALKey> keys) throws Exception {
+        boolean missed = false;
+        List<WALValue> result = new ArrayList<>(keys.size());
+        for (WALKey key : keys) {
+            WALValue got = getPointer(key);
+            missed |= (got == null);
+            result.add(got);
+        }
+        return new DeltaResult<>(missed, result);
+    }
+
     DeltaResult<List<WALValue>> get(List<WALKey> keys) throws Exception {
         boolean missed = false;
         List<WALValue> result = new ArrayList<>(keys.size());

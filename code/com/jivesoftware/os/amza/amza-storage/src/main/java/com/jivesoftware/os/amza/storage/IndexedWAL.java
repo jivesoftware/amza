@@ -396,6 +396,18 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
+    public List<WALValue> getPointers(List<WALKey> keys) throws Exception {
+        List<WALValue> gots;
+        tickleMeElmophore.acquire();
+        try {
+            gots = walIndex.get().get(keys);
+        } finally {
+            tickleMeElmophore.release();
+        }
+        return gots;
+    }
+
+    @Override
     public boolean containsKey(WALKey key) throws Exception {
         return containsKey(Collections.singletonList(key)).get(0);
     }

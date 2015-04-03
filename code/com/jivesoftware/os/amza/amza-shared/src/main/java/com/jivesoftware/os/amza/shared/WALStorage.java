@@ -29,6 +29,8 @@ public interface WALStorage extends RangeScannable {
 
     List<WALValue> get(List<WALKey> keys) throws Exception;
 
+    List<WALValue> getPointers(List<WALKey> keys) throws Exception;
+
     List<Boolean> containsKey(List<WALKey> keys) throws Exception;
 
     void takeRowUpdatesSince(final long transactionId, RowStream rowUpdates) throws Exception;

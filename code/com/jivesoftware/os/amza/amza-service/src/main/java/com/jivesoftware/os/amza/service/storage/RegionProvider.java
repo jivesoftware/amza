@@ -50,7 +50,7 @@ public class RegionProvider implements RowChanges {
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
     private final RegionPropertyMarshaller regionPropertyMarshaller;
-    private final DeltaWALStorage deltaWALStorage;
+    private final DeltaWALStorage[] deltaWALStorages;
     private final String[] workingDirectories;
     private final String domain;
     private final WALStorageProvider walStorageProvider;
@@ -63,7 +63,7 @@ public class RegionProvider implements RowChanges {
     public RegionProvider(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
-        DeltaWALStorage deltaWALStorage,
+        DeltaWALStorage[] deltaWALStorages,
         String[] workingDirectories,
         String domain,
         WALStorageProvider walStorageProvider,
@@ -73,7 +73,7 @@ public class RegionProvider implements RowChanges {
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.regionPropertyMarshaller = regionPropertyMarshaller;
-        this.deltaWALStorage = deltaWALStorage;
+        this.deltaWALStorages = deltaWALStorages;
         this.workingDirectories = workingDirectories;
         this.domain = domain;
         this.walStorageProvider = walStorageProvider;
@@ -158,7 +158,7 @@ public class RegionProvider implements RowChanges {
             WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, regionName, properties.walStorageDescriptor, walReplicator);
             DeltaWALStorage dws = new NoOpDeltaWALStorage();
             if (!regionName.isSystemRegion()) {
-                dws = deltaWALStorage;
+                dws = deltaWALStorages[Math.abs(regionName.hashCode()) % deltaWALStorages.length];
             }
             regionStore = new RegionStore(amzaStats, regionName, dws, walStorage, rowChanges);
             regionStore.load();

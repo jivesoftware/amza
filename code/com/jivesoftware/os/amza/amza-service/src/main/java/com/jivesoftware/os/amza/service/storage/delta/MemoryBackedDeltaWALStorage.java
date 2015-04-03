@@ -44,24 +44,25 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     private final RowMarshaller<byte[]> rowMarshaller;
     private final DeltaWAL deltaWAL;
     private final WALReplicator walReplicator;
+    private final long compactAfterNUpdates;
     private final ConcurrentHashMap<RegionName, RegionDelta> regionDeltas = new ConcurrentHashMap<>();
     private final Object oneWriterAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
     private final ExecutorService compactionThreads;
-    private final AtomicLong updateSinceLastCompaction;
+    private final AtomicLong updateSinceLastCompaction = new AtomicLong();
 
-    public MemoryBackedDeltaWALStorage(RowMarshaller<byte[]> rowMarshaller,
+    public MemoryBackedDeltaWALStorage(int index,
+        RowMarshaller<byte[]> rowMarshaller,
         DeltaWAL deltaWAL,
-        WALReplicator walReplicator) {
+        WALReplicator walReplicator,
+        long compactAfterNUpdates) {
 
         this.rowMarshaller = rowMarshaller;
         this.deltaWAL = deltaWAL;
         this.walReplicator = walReplicator;
+        this.compactAfterNUpdates = compactAfterNUpdates;
         this.compactionThreads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(),
-            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build()); // TODO pass in
-
-        this.updateSinceLastCompaction = new AtomicLong();
-
+            new ThreadFactoryBuilder().setNameFormat("compact-deltas-" + index + "-%d").build()); // TODO pass in
     }
 
     @Override
@@ -92,7 +93,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                             WALKey key = new WALKey(keyBytes);
                             WALValue regionValue = regionStore.get(key);
                             if (regionValue == null || regionValue.getTimestampId() <= value.getTimestampId()) {
-                                WALValue got = delta.get(key);
+                                WALValue got = delta.getPointer(key);
                                 if (got == null || got.getTimestampId() < value.getTimestampId()) {
                                     delta.put(key, new WALValue(UIO.longBytes(rowFP), value.getTimestampId(), value.getTombstoned()));
                                 }
@@ -126,9 +127,10 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
     @Override
     public void compact(final RegionProvider regionProvider) throws Exception {
-        if (updateSinceLastCompaction.longValue() < 100_000) { // TODO or some memory pressure BS!
+        if (updateSinceLastCompaction.get() < compactAfterNUpdates) { // TODO or some memory pressure BS!
             return;
         }
+        updateSinceLastCompaction.set(0);
 
         final List<Future<Long>> futures = new ArrayList<>();
         tickleMeElmophore.acquire(numTickleMeElmaphore);
@@ -207,24 +209,25 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         try {
             RowsChanged rowsChanged;
 
-            List<WALValue> currentValues = getInternal(regionName, storage, keys);
+            // only grabbing pointers means our removes and clobbers don't include the old values, but for now this is more efficient.
+            List<WALValue> currentValues = getPointers(regionName, storage, keys);
             for (int i = 0; i < keys.size(); i++) {
                 WALKey key = keys.get(i);
-                WALValue current = currentValues.get(i);
+                WALValue currentPointer = currentValues.get(i);
                 WALValue update = values.get(i);
-                if (current == null) {
+                if (currentPointer == null) {
                     apply.put(key, update);
                     if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
                         oldestAppliedTimestamp.set(update.getTimestampId());
                     }
-                } else if (current.getTimestampId() < update.getTimestampId()) {
+                } else if (currentPointer.getTimestampId() < update.getTimestampId()) {
                     apply.put(key, update);
                     if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
                         oldestAppliedTimestamp.set(update.getTimestampId());
                     }
-                    clobbers.put(key, current);
-                    if (update.getTombstoned() && !current.getTombstoned()) {
-                        removes.put(key, current);
+                    clobbers.put(key, currentPointer);
+                    if (update.getTombstoned() && !currentPointer.getTombstoned()) {
+                        removes.put(key, currentPointer);
                     }
                 }
             }
@@ -248,10 +251,8 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                         byte[] rowPointer = updateApplied.keyToRowPointer.get(key);
                         WALValue rowValue = new WALValue(rowPointer, value.getTimestampId(), value.getTombstoned());
 
-                        WALValue got = delta.get(key);
-                        if (got == null) {
-                            delta.put(key, rowValue);
-                        } else if (got.getTimestampId() < value.getTimestampId()) {
+                        WALValue got = delta.getPointer(key);
+                        if (got == null || got.getTimestampId() < value.getTimestampId()) {
                             delta.put(key, rowValue);
                         } else {
                             apply.remove(key);
@@ -320,10 +321,10 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
     }
 
-    private List<WALValue> getInternal(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception {
-        DeltaResult<List<WALValue>> deltas = getRegionDeltas(regionName).get(keys);
+    private List<WALValue> getPointers(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception {
+        DeltaResult<List<WALValue>> deltas = getRegionDeltas(regionName).getPointers(keys);
         if (deltas.missed) {
-            List<WALValue> got = storage.get(keys);
+            List<WALValue> got = storage.getPointers(keys);
             List<WALValue> values = new ArrayList<>(keys.size());
             for (int i = 0; i < keys.size(); i++) {
                 WALValue delta = deltas.result.get(i);
@@ -374,6 +375,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 }
                 while (iterator.hasNext()) {
                     d = iterator.next();
+                    WALValue got = deltaWAL.hydrate(regionName, d.getValue());
                     if (!walScan.row(-1, d.getKey(), d.getValue())) {
                         return;
                     }
@@ -385,7 +387,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     }
 
     @Override
-    public void rowScan(RegionName regionName, WALScanable scanable, final WALScan walScan) throws Exception {
+    public void rowScan(final RegionName regionName, WALScanable scanable, final WALScan walScan) throws Exception {
         tickleMeElmophore.acquire();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
@@ -399,7 +401,8 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                         d = iterator.next();
                     }
                     while (d != null && d.getKey().compareTo(key) <= 0) {
-                        if (!walScan.row(-1, d.getKey(), d.getValue())) {
+                        WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                        if (!walScan.row(-1, d.getKey(), got)) {
                             return false;
                         }
                         if (iterator.hasNext()) {
@@ -419,7 +422,8 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 }
                 while (iterator.hasNext()) {
                     d = iterator.next();
-                    if (!walScan.row(-1, d.getKey(), d.getValue())) {
+                    WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                    if (!walScan.row(-1, d.getKey(), got)) {
                         return;
                     }
                 }

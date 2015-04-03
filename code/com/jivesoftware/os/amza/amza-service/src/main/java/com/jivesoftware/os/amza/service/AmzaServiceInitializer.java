@@ -61,7 +61,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[]{"./var/data/"};
+        public String[] workingDirectories = new String[] { "./var/data/" };
 
         public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
@@ -104,38 +104,48 @@ public class AmzaServiceInitializer {
             }
         };
 
-        File walDir = new File(config.workingDirectories[0], "delta-wal");
-        RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats);
-        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, "delta-wal", ioProvider, rowMarshaller, new NoOpWALIndexProvider());
-        DeltaWAL deltaWAL = new DeltaWAL(new RegionName(true, "delta-wal", "delta-wal"), orderIdProvider, rowMarshaller, deltaWALRowsTx);
-        final DeltaWALStorage deltaWALStorage = new MemoryBackedDeltaWALStorage(rowMarshaller, deltaWAL, walReplicator);
+        int deltaStorageStripes = 3;
+        long maxUpdatesBeforeCompaction = 400_000;
+        long compactAfterNUpdates = maxUpdatesBeforeCompaction / deltaStorageStripes;
+        DeltaWALStorage[] deltaWALStorages = new DeltaWALStorage[deltaStorageStripes];
+        for (int i = 0; i < deltaWALStorages.length; i++) {
+            File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
+            RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats);
+            WALTx deltaWALRowsTx = new BinaryWALTx(walDir, "delta-wal-" + i, ioProvider, rowMarshaller, new NoOpWALIndexProvider());
+            DeltaWAL deltaWAL = new DeltaWAL(new RegionName(true, "delta-wal", "delta-wal-" + i), orderIdProvider, rowMarshaller, deltaWALRowsTx);
+            deltaWALStorages[i] = new MemoryBackedDeltaWALStorage(i, rowMarshaller, deltaWAL, walReplicator, compactAfterNUpdates);
+        }
 
         final RegionProvider regionProvider = new RegionProvider(amzaStats,
             orderIdProvider,
             regionPropertyMarshaller,
-            deltaWALStorage,
+            deltaWALStorages,
             config.workingDirectories,
             "amza/stores",
             regionsWALStorageProvider,
             amzaRegionWatcher,
             walReplicator);
 
-        deltaWALStorage.load(regionProvider);
+        for (DeltaWALStorage deltaWALStorage : deltaWALStorages) {
+            deltaWALStorage.load(regionProvider);
+        }
+
         ScheduledExecutorService compactDeltaWALThread = Executors.newScheduledThreadPool(1,
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
 
         // HACK
-        compactDeltaWALThread.scheduleAtFixedRate(new Runnable() {
-
-            @Override
-            public void run() {
-                try {
-                    deltaWALStorage.compact(regionProvider);
-                } catch (Throwable x) {
-                    LOG.error("Compactor failed.", x);
+        for (final DeltaWALStorage deltaWALStorage : deltaWALStorages) {
+            compactDeltaWALThread.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        deltaWALStorage.compact(regionProvider);
+                    } catch (Throwable x) {
+                        LOG.error("Compactor failed.", x);
+                    }
                 }
-            }
-        }, 1, 1, TimeUnit.MINUTES);
+            }, 1, 1, TimeUnit.MINUTES);
+        }
 
         RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, regionProvider, 1000);
         //MemoryBackedHighWaterMarks highwaterMarks = new MemoryBackedHighWaterMarks();

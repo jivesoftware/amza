@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -147,7 +148,12 @@ public class DeltaWAL {
     }
 
     void compact(long maxTxId) throws Exception {
-        rowsTx.compact(regionName, 0, maxTxId, null);
+        Optional<WALTx.Compacted> compact = rowsTx.compact(regionName, 0, maxTxId, null);
+        if (compact.isPresent()) {
+            synchronized (oneTxAtATimeLock) {
+                compact.get().getCompactedWALIndex();
+            }
+        }
     }
 
     public static class DeltaWALApplied {

@@ -159,17 +159,25 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         }
 
         long maxTxId = 0;
-        boolean success = false;
+        boolean failed = false;
         for (Future<Long> f : futures) {
             Long txId = f.get();
-            success |= (txId == null);
-            if (txId > maxTxId) {
-                maxTxId = txId;
+            if (txId != null) {
+                if (txId > maxTxId) {
+                    maxTxId = txId;
+                }
+            } else {
+                failed = true;
             }
         }
-        if (success) {
-            deltaWAL.compact(maxTxId);
+        if (!failed) {
+            // TODO fix how do we do this an fix the fps in the RegionDeltas?
+            //deltaWAL.compact(maxTxId);
+            LOG.info("Compacted delta regions.");
+        } else {
+            LOG.warn("Compaction of delta regiond FAILED.");
         }
+
     }
 
     @Override

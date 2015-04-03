@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.storage;
 
+import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -55,8 +56,11 @@ public class NonIndexWAL implements WALStorage {
     @Override
     public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         if (updateCount.get() > 0) {
-            rowsTx.compact(regionName, removeTombstonedOlderThanTimestampId, ttlTimestampId, null);
-            updateCount.set(0);
+            Optional<WALTx.Compacted> compact = rowsTx.compact(regionName, removeTombstonedOlderThanTimestampId, ttlTimestampId, null);
+            if (compact.isPresent()) {
+                compact.get().getCompactedWALIndex();
+                updateCount.set(0);
+            }
         }
     }
 

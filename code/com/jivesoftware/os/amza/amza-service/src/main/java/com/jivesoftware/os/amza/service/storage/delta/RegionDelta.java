@@ -10,6 +10,8 @@ import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -26,6 +28,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author jonathan.colt
  */
 class RegionDelta {
+
+    public static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final RegionName regionName;
     private final DeltaWAL deltaWAL;
@@ -156,6 +160,7 @@ class RegionDelta {
         final RegionDelta compact = compacting.get();
         long largestTxId = 0;
         if (compact != null) {
+            LOG.info("Merging deltas for " + compact.regionName);
             largestTxId = compact.txIdWAL.lastKey();
             RegionStore regionStore = regionProvider.getRegionStore(compact.regionName);
             regionStore.directCommit(largestTxId,
@@ -173,6 +178,8 @@ class RegionDelta {
                         }
                     }
                 });
+            LOG.info("Merged deltas for " + compact.regionName);
+
         }
         compacting.set(null);
         return largestTxId;

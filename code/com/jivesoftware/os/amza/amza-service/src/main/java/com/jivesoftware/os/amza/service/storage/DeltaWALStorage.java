@@ -10,7 +10,6 @@ import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
-import java.util.List;
 
 /**
  *
@@ -27,10 +26,6 @@ public interface DeltaWALStorage {
     WALValue get(RegionName regionName, WALStorage storage, WALKey key) throws Exception;
 
     boolean containsKey(RegionName regionName, WALStorage storage, WALKey key) throws Exception;
-
-    List<WALValue> get(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception;
-
-    List<Boolean> containsKey(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception;
 
     void takeRowUpdatesSince(RegionName regionName, WALStorage storage, final long transactionId, RowStream rowUpdates) throws Exception;
 

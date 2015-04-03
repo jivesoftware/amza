@@ -10,7 +10,6 @@ import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
-import java.util.List;
 
 /**
  *
@@ -39,16 +38,6 @@ public class NoOpDeltaWALStorage implements DeltaWALStorage {
     @Override
     public boolean containsKey(RegionName regionName, WALStorage storage, WALKey key) throws Exception {
         return storage.containsKey(key);
-    }
-
-    @Override
-    public List<WALValue> get(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception {
-        return storage.get(keys);
-    }
-
-    @Override
-    public List<Boolean> containsKey(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception {
-        return storage.containsKey(keys);
     }
 
     @Override

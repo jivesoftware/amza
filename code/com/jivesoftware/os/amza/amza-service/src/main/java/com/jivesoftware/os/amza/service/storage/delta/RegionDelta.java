@@ -158,26 +158,29 @@ class RegionDelta {
 
     long compact(RegionProvider regionProvider) throws Exception {
         final RegionDelta compact = compacting.get();
-        long largestTxId = 0;
+        Long largestTxId = 0L;
         if (compact != null) {
             LOG.info("Merging deltas for " + compact.regionName);
-            largestTxId = compact.txIdWAL.lastKey();
-            RegionStore regionStore = regionProvider.getRegionStore(compact.regionName);
-            regionStore.directCommit(largestTxId,
-                new WALScanable() {
-                    @Override
-                    public void rowScan(WALScan walScan) {
-                        for (Map.Entry<WALKey, WALValue> e : compact.index.entrySet()) {
-                            try {
-                                if (!walScan.row(-1, e.getKey(), compact.deltaWAL.hydrate(compact.regionName, e.getValue()))) {
-                                    break;
+            Long lastKey = compact.txIdWAL.lastKey();
+            if (lastKey != null) {
+                largestTxId = lastKey;
+                RegionStore regionStore = regionProvider.getRegionStore(compact.regionName);
+                regionStore.directCommit(largestTxId,
+                    new WALScanable() {
+                        @Override
+                        public void rowScan(WALScan walScan) {
+                            for (Map.Entry<WALKey, WALValue> e : compact.index.entrySet()) {
+                                try {
+                                    if (!walScan.row(-1, e.getKey(), compact.deltaWAL.hydrate(compact.regionName, e.getValue()))) {
+                                        break;
+                                    }
+                                } catch (Throwable ex) {
+                                    throw new RuntimeException("Error while streaming entry set.", ex);
                                 }
-                            } catch (Throwable ex) {
-                                throw new RuntimeException("Error while streaming entry set.", ex);
                             }
                         }
-                    }
-                });
+                    });
+            }
             LOG.info("Merged deltas for " + compact.regionName);
 
         }

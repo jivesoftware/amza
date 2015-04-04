@@ -9,10 +9,11 @@ import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -93,9 +94,9 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                             WALKey key = new WALKey(keyBytes);
                             WALValue regionValue = regionStore.get(key);
                             if (regionValue == null || regionValue.getTimestampId() <= value.getTimestampId()) {
-                                WALValue got = delta.getPointer(key);
+                                WALPointer got = delta.getPointer(key);
                                 if (got == null || got.getTimestampId() < value.getTimestampId()) {
-                                    delta.put(key, new WALValue(UIO.longBytes(rowFP), value.getTimestampId(), value.getTombstoned()));
+                                    delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
                                 }
                             }
                             //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
@@ -187,16 +188,16 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     }
 
     @Override
-    public RowsChanged update(RegionName regionName, WALStorage storage, WALStorageUpdateMode updateMode, WALScanable updates) throws Exception {
+    public RowsChanged update(RegionName regionName, WALStorage storage, WALStorageUpdateMode updateMode, Scannable<WALValue> updates) throws Exception {
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final Map<WALKey, WALValue> apply = new ConcurrentHashMap<>();
-        final Map<WALKey, WALValue> removes = new HashMap<>();
-        final Map<WALKey, WALValue> clobbers = new HashMap<>();
+        final Map<WALKey, WALPointer> removes = new HashMap<>();
+        final Map<WALKey, WALPointer> clobbers = new HashMap<>();
 
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
-        updates.rowScan(new WALScan() {
+        updates.rowScan(new Scan<WALValue>() {
             @Override
             public boolean row(long transactionId, WALKey key, WALValue update) throws Exception {
                 keys.add(key);
@@ -210,10 +211,10 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
             RowsChanged rowsChanged;
 
             // only grabbing pointers means our removes and clobbers don't include the old values, but for now this is more efficient.
-            List<WALValue> currentValues = getPointers(regionName, storage, keys);
+            List<WALPointer> currentPointers = getPointers(regionName, storage, keys);
             for (int i = 0; i < keys.size(); i++) {
                 WALKey key = keys.get(i);
-                WALValue currentPointer = currentValues.get(i);
+                WALPointer currentPointer = currentPointers.get(i);
                 WALValue update = values.get(i);
                 if (currentPointer == null) {
                     apply.put(key, update);
@@ -248,12 +249,12 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                     for (Map.Entry<WALKey, WALValue> entry : apply.entrySet()) {
                         WALKey key = entry.getKey();
                         WALValue value = entry.getValue();
-                        byte[] rowPointer = updateApplied.keyToRowPointer.get(key);
-                        WALValue rowValue = new WALValue(rowPointer, value.getTimestampId(), value.getTombstoned());
+                        long pointer = UIO.bytesLong(updateApplied.keyToRowPointer.get(key));
+                        WALPointer rowPointer = new WALPointer(pointer, value.getTimestampId(), value.getTombstoned());
 
-                        WALValue got = delta.getPointer(key);
+                        WALPointer got = delta.getPointer(key);
                         if (got == null || got.getTimestampId() < value.getTimestampId()) {
-                            delta.put(key, rowValue);
+                            delta.put(key, rowPointer);
                         } else {
                             apply.remove(key);
                         }
@@ -321,13 +322,13 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
     }
 
-    private List<WALValue> getPointers(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception {
-        DeltaResult<List<WALValue>> deltas = getRegionDeltas(regionName).getPointers(keys);
+    private List<WALPointer> getPointers(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception {
+        DeltaResult<List<WALPointer>> deltas = getRegionDeltas(regionName).getPointers(keys);
         if (deltas.missed) {
-            List<WALValue> got = storage.getPointers(keys);
-            List<WALValue> values = new ArrayList<>(keys.size());
+            List<WALPointer> got = storage.getPointers(keys);
+            List<WALPointer> values = new ArrayList<>(keys.size());
             for (int i = 0; i < keys.size(); i++) {
-                WALValue delta = deltas.result.get(i);
+                WALPointer delta = deltas.result.get(i);
                 if (delta == null) {
                     values.add(got.get(i));
                 } else {
@@ -341,13 +342,14 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     }
 
     @Override
-    public void rangeScan(RegionName regionName, RangeScannable rangeScannable, WALKey from, WALKey to, final WALScan walScan) throws Exception {
+    public void rangeScan(final RegionName regionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to, final Scan<WALValue> scan)
+        throws Exception {
         tickleMeElmophore.acquire();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
             final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
-            rangeScannable.rangeScan(from, to, new WALScan() {
-                Map.Entry<WALKey, WALValue> d;
+            rangeScannable.rangeScan(from, to, new Scan<WALValue>() {
+                Map.Entry<WALKey, WALPointer> d;
 
                 @Override
                 public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
@@ -355,7 +357,8 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                         d = iterator.next();
                     }
                     while (d != null && d.getKey().compareTo(key) <= 0) {
-                        if (!walScan.row(-1, d.getKey(), d.getValue())) {
+                        WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                        if (!scan.row(-1, d.getKey(), got)) {
                             return false;
                         }
                         if (iterator.hasNext()) {
@@ -364,19 +367,20 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                             iterator.eos();
                         }
                     }
-                    return walScan.row(-1, key, value);
+                    return scan.row(-1, key, value);
                 }
             });
 
-            Map.Entry<WALKey, WALValue> d = iterator.last();
+            Map.Entry<WALKey, WALPointer> d = iterator.last();
             if (d != null || iterator.hasNext()) {
                 if (d != null) {
-                    walScan.row(-1, d.getKey(), d.getValue());
+                    WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                    scan.row(-1, d.getKey(), got);
                 }
                 while (iterator.hasNext()) {
                     d = iterator.next();
                     WALValue got = deltaWAL.hydrate(regionName, d.getValue());
-                    if (!walScan.row(-1, d.getKey(), d.getValue())) {
+                    if (!scan.row(-1, d.getKey(), got)) {
                         return;
                     }
                 }
@@ -387,13 +391,13 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     }
 
     @Override
-    public void rowScan(final RegionName regionName, WALScanable scanable, final WALScan walScan) throws Exception {
+    public void rowScan(final RegionName regionName, Scannable<WALValue> scanable, final Scan<WALValue> scan) throws Exception {
         tickleMeElmophore.acquire();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
             final DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
-            scanable.rowScan(new WALScan() {
-                Map.Entry<WALKey, WALValue> d;
+            scanable.rowScan(new Scan<WALValue>() {
+                Map.Entry<WALKey, WALPointer> d;
 
                 @Override
                 public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
@@ -402,7 +406,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                     }
                     while (d != null && d.getKey().compareTo(key) <= 0) {
                         WALValue got = deltaWAL.hydrate(regionName, d.getValue());
-                        if (!walScan.row(-1, d.getKey(), got)) {
+                        if (!scan.row(-1, d.getKey(), got)) {
                             return false;
                         }
                         if (iterator.hasNext()) {
@@ -411,19 +415,20 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                             iterator.eos();
                         }
                     }
-                    return walScan.row(-1, key, value);
+                    return scan.row(-1, key, value);
                 }
             });
 
-            Map.Entry<WALKey, WALValue> d = iterator.last();
+            Map.Entry<WALKey, WALPointer> d = iterator.last();
             if (d != null || iterator.hasNext()) {
                 if (d != null) {
-                    walScan.row(-1, d.getKey(), d.getValue());
+                    WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                    scan.row(-1, d.getKey(), got);
                 }
                 while (iterator.hasNext()) {
                     d = iterator.next();
                     WALValue got = deltaWAL.hydrate(regionName, d.getValue());
-                    if (!walScan.row(-1, d.getKey(), got)) {
+                    if (!scan.row(-1, d.getKey(), got)) {
                         return;
                     }
                 }

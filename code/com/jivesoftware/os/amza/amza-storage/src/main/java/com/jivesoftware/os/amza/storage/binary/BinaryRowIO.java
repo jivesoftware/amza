@@ -38,8 +38,8 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public byte[] read(byte[] rowPointer) throws Exception {
-        return rowReader.read(rowPointer);
+    public byte[] read(long pointer) throws Exception {
+        return rowReader.read(pointer);
     }
 
     @Override

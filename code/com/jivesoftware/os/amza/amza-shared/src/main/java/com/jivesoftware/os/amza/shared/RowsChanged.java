@@ -17,19 +17,19 @@ package com.jivesoftware.os.amza.shared;
 
 import java.util.Map;
 
-public class RowsChanged implements WALScanable {
+public class RowsChanged implements Scannable<WALValue> {
 
     private final RegionName regionName;
     private final long oldestApply;
     private final Map<WALKey, WALValue> apply;
-    private final Map<WALKey, WALValue> remove;
-    private final Map<WALKey, WALValue> clobber;
+    private final Map<WALKey, WALPointer> remove;
+    private final Map<WALKey, WALPointer> clobber;
 
     public RowsChanged(RegionName regionName,
         long oldestApply,
         Map<WALKey, WALValue> apply,
-        Map<WALKey, WALValue> remove,
-        Map<WALKey, WALValue> clobber) {
+        Map<WALKey, WALPointer> remove,
+        Map<WALKey, WALPointer> clobber) {
         this.regionName = regionName;
         this.oldestApply = oldestApply;
         this.apply = apply;
@@ -49,11 +49,11 @@ public class RowsChanged implements WALScanable {
         return apply;
     }
 
-    public Map<WALKey, WALValue> getRemove() {
+    public Map<WALKey, WALPointer> getRemove() {
         return remove;
     }
 
-    public Map<WALKey, WALValue> getClobbered() {
+    public Map<WALKey, WALPointer> getClobbered() {
         return clobber;
     }
 
@@ -68,10 +68,10 @@ public class RowsChanged implements WALScanable {
     }
 
     @Override
-    public void rowScan(WALScan walScan) {
+    public void rowScan(Scan<WALValue> scan) {
         for (Map.Entry<WALKey, WALValue> e : apply.entrySet()) {
             try {
-                if (!walScan.row(-1, e.getKey(), e.getValue())) {
+                if (!scan.row(-1, e.getKey(), e.getValue())) {
                     break;
                 }
             } catch (Throwable ex) {

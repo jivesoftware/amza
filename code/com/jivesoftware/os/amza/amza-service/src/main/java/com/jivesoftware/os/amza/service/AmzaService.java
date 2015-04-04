@@ -29,8 +29,8 @@ import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -162,7 +162,7 @@ public class AmzaService implements AmzaInstance {
     }
 
     @Override
-    public void updates(RegionName regionName, WALScanable rowUpdates) throws Exception {
+    public void updates(RegionName regionName, Scannable<WALValue> rowUpdates) throws Exception {
         changeReceiver.receiveChanges(regionName, rowUpdates);
     }
 
@@ -174,7 +174,7 @@ public class AmzaService implements AmzaInstance {
         return regionWatcher.unwatch(regionName);
     }
 
-    public boolean replicate(RegionName regionName, WALScanable rowUpdates, int replicateToNHosts, int requireNReplicas) throws Exception {
+    public boolean replicate(RegionName regionName, Scannable<WALValue> rowUpdates, int replicateToNHosts, int requireNReplicas) throws Exception {
         AmzaHostRing amzaHostRing = getAmzaRing();
         List<RingHost> ringHosts = amzaHostRing.getRing(regionName.getRingName());
         //TODO consider spinning until we reach quorum, or force election to the sub-ring

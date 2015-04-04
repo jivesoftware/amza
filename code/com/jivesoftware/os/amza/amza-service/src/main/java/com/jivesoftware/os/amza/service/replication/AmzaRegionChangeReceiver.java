@@ -5,9 +5,9 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.WALs;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -23,7 +23,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaRegionChangeReceiver {
@@ -59,14 +58,14 @@ public class AmzaRegionChangeReceiver {
         }
     }
 
-    public void receiveChanges(RegionName regionName, final WALScanable changes) throws Exception {
+    public void receiveChanges(RegionName regionName, final Scannable<WALValue> changes) throws Exception {
 
         final byte[] regionNameBytes = regionName.toBytes();
-        WALScanable receivedScannable = new WALScanable() {
+        Scannable<WALValue> receivedScannable = new Scannable<WALValue>() {
 
             @Override
-            public void rowScan(final WALScan walScan) throws Exception {
-                changes.rowScan(new WALScan() {
+            public void rowScan(final Scan<WALValue> walScan) throws Exception {
+                changes.rowScan(new Scan<WALValue>() {
 
                     @Override
                     public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
@@ -96,16 +95,16 @@ public class AmzaRegionChangeReceiver {
                 .build());
             //for (int i = 0; i < numberOfApplierThreads; i++) {
             //    final int stripe = i;
-                applyThreadPool.scheduleWithFixedDelay(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            applyReceivedChanges(0);
-                        } catch (Throwable x) {
-                            LOG.warn("Shouldn't have gotten here. Implementors please catch your exceptions.", x);
-                        }
+            applyThreadPool.scheduleWithFixedDelay(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        applyReceivedChanges(0);
+                    } catch (Throwable x) {
+                        LOG.warn("Shouldn't have gotten here. Implementors please catch your exceptions.", x);
                     }
-                }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
+                }
+            }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
             //}
         }
         if (compactThreadPool == null) {

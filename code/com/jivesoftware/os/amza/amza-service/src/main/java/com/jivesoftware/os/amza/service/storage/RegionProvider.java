@@ -21,9 +21,9 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
@@ -87,7 +87,7 @@ public class RegionProvider implements RowChanges {
 
     public void open() throws Exception {
         RegionStore regionIndexStore = getRegionIndexStore();
-        regionIndexStore.rowScan(new WALScan() {
+        regionIndexStore.rowScan(new Scan<WALValue>() {
 
             @Override
             public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {

@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -70,7 +70,7 @@ class ReplicateBatchinator implements RowStream {
 
     public boolean flush() throws Exception {
         if (!batch.isEmpty()) {
-            if (replicator.replicateLocalUpdates(regionName, new MemoryWALIndex(batch), false).get()) {
+            if (replicator.replicateLocalUpdates(regionName, new MemoryWALUpdates(batch), false).get()) {
                 batch.clear();
             }
         }

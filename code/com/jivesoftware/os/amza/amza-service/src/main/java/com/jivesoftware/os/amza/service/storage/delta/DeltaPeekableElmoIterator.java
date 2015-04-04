@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -10,14 +10,14 @@ import java.util.NoSuchElementException;
  *
  * @author jonathan.colt
  */
-final class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALValue>> {
-    private final Iterator<Map.Entry<WALKey, WALValue>> iterator;
-    private final Iterator<Map.Entry<WALKey, WALValue>> compactingIterator;
-    private Map.Entry<WALKey, WALValue> last;
-    private Map.Entry<WALKey, WALValue> iNext;
-    private Map.Entry<WALKey, WALValue> cNext;
+final class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALPointer>> {
+    private final Iterator<Map.Entry<WALKey, WALPointer>> iterator;
+    private final Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator;
+    private Map.Entry<WALKey, WALPointer> last;
+    private Map.Entry<WALKey, WALPointer> iNext;
+    private Map.Entry<WALKey, WALPointer> cNext;
 
-    public DeltaPeekableElmoIterator(Iterator<Map.Entry<WALKey, WALValue>> iterator, Iterator<Map.Entry<WALKey, WALValue>> compactingIterator) {
+    public DeltaPeekableElmoIterator(Iterator<Map.Entry<WALKey, WALPointer>> iterator, Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator) {
         this.iterator = iterator;
         this.compactingIterator = compactingIterator;
     }
@@ -26,7 +26,7 @@ final class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALV
         last = null;
     }
 
-    public Map.Entry<WALKey, WALValue> last() {
+    public Map.Entry<WALKey, WALPointer> last() {
         return last;
     }
 
@@ -36,7 +36,7 @@ final class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALV
     }
 
     @Override
-    public Map.Entry<WALKey, WALValue> next() {
+    public Map.Entry<WALKey, WALPointer> next() {
         if (iNext == null && iterator.hasNext()) {
             iNext = iterator.next();
         }

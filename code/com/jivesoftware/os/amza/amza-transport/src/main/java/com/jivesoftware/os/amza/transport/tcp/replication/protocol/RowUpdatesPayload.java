@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.transport.tcp.replication.protocol;
 
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
 import java.io.IOException;
@@ -82,9 +82,9 @@ public class RowUpdatesPayload implements MessagePayload {
         }
     }
 
-    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
+    public void rangeScan(WALKey from, WALKey to, Scan<WALValue> scan) throws Exception {
         for (int i = 0; i < keys.size(); i++) {
-            if (!walScan.row(largestTxId, keys.get(i), values.get(i))) {
+            if (!scan.row(largestTxId, keys.get(i), values.get(i))) {
                 return;
             }
         }

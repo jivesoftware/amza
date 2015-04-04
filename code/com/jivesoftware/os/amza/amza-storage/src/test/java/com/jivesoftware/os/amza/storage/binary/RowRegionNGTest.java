@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.storage.binary;
 import com.google.common.io.Files;
 import com.google.common.util.concurrent.Futures;
 import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALIndex;
@@ -18,7 +19,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
 import java.util.AbstractMap.SimpleEntry;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -120,10 +121,10 @@ public class RowRegionNGTest {
     }
 
     private void addBatch(Random r, OrderIdProviderImpl idProvider, IndexedWAL indexedWAL, int range, int start, int length) throws Exception {
-        MemoryWALIndex updates = new MemoryWALIndex();
+        MemoryWALUpdates updates = new MemoryWALUpdates();
         for (int i = start; i < start + length; i++) {
             WALKey key = new WALKey(FilerIO.intBytes(r.nextInt(range)));
-            updates.put(Arrays.asList(new SimpleEntry<>(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false))));
+            updates.put(Collections.singletonList(new SimpleEntry<>(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false))));
         }
         indexedWAL.update(null, WALStorageUpdateMode.updateThenReplicate, updates);
     }
@@ -221,8 +222,8 @@ public class RowRegionNGTest {
     }
 
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
-        MemoryWALIndex updates = new MemoryWALIndex();
-        updates.put(Arrays.asList(new SimpleEntry<>(new WALKey(key), new WALValue(value, timestamp, remove))));
+        MemoryWALUpdates updates = new MemoryWALUpdates();
+        updates.put(Collections.singletonList(new SimpleEntry<>(new WALKey(key), new WALValue(value, timestamp, remove))));
         indexedWAL.update(null, WALStorageUpdateMode.updateThenReplicate, updates);
     }
 }

@@ -1,13 +1,13 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
@@ -39,7 +39,7 @@ public class IndexReplicationTest {
     private RingHost localHost = new RingHost("localhost", 7766);
     private TcpClientProvider tcpClientProvider;
     private OrderIdProvider idProvider;
-    private AtomicReference<WALScanable> receivedPut = new AtomicReference<>();
+    private AtomicReference<Scannable<WALValue>> receivedPut = new AtomicReference<>();
     private AtomicReference<RowUpdatesPayload> toTake = new AtomicReference<>();
     private IndexReplicationProtocol applicationProtocol;
 
@@ -102,12 +102,12 @@ public class IndexReplicationTest {
         changes.put(new WALKey("1".getBytes()), val1);
         changes.put(new WALKey("2".getBytes()), val2);
 
-        sender.sendUpdates(localHost, tableName, new MemoryWALIndex(changes));
+        sender.sendUpdates(localHost, tableName, new MemoryWALUpdates(changes));
 
-        WALScanable received = receivedPut.get();
+        Scannable<WALValue> received = receivedPut.get();
         Assert.assertNotNull(received);
         final NavigableMap<WALKey, WALValue> receivedApply = new ConcurrentSkipListMap<>();
-        received.rowScan(new WALScan() {
+        received.rowScan(new Scan<WALValue>() {
 
             @Override
             public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
@@ -158,10 +158,10 @@ public class IndexReplicationTest {
 
     }
 
-    private AmzaInstance amzaInstance(final AtomicReference<WALScanable> put, final AtomicReference<RowUpdatesPayload> take) {
+    private AmzaInstance amzaInstance(final AtomicReference<Scannable<WALValue>> put, final AtomicReference<RowUpdatesPayload> take) {
         return new AmzaInstance() {
             @Override
-            public void updates(RegionName tableName, WALScanable changes) throws Exception {
+            public void updates(RegionName tableName, Scannable<WALValue> changes) throws Exception {
                 put.set(changes);
             }
 

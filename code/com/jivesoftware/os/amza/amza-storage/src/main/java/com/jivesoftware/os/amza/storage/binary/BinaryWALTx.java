@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndex.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
@@ -97,13 +98,13 @@ public class BinaryWALTx implements WALTx {
                             RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
                             WALKey key = walr.getKey();
                             WALValue value = walr.getValue();
-                            WALValue current = walIndex.get(Collections.singletonList(key)).get(0);
+                            WALPointer current = walIndex.getPointers(Collections.singletonList(key)).get(0);
                             if (current == null) {
                                 walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                                    key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
+                                    key, new WALPointer(rowPointer, value.getTimestampId(), value.getTombstoned()))));
                             } else if (current.getTimestampId() < value.getTimestampId()) {
                                 walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                                    key, new WALValue(UIO.longBytes(rowPointer), value.getTimestampId(), value.getTombstoned()))));
+                                    key, new WALPointer(rowPointer, value.getTimestampId(), value.getTombstoned()))));
                             }
                             rebuilt.add(1);
                         }
@@ -127,7 +128,7 @@ public class BinaryWALTx implements WALTx {
                             WALKey key = walr.getKey();
                             WALValue value = walr.getValue();
                             walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                                key, new WALValue(UIO.longBytes(rowFP), value.getTimestampId(), value.getTombstoned()))));
+                                key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()))));
                             repair.add(1);
                         }
                         if (rowType == WALWriter.SYSTEM_VERSION_1 && commitedUpToTxId == Long.MIN_VALUE) {
@@ -292,7 +293,7 @@ public class BinaryWALTx implements WALTx {
                 WALKey key = walr.getKey();
                 WALValue value = walr.getValue();
 
-                WALValue got = rowIndex == null ? null : rowIndex.get(Collections.singletonList(key)).get(0);
+                WALPointer got = (rowIndex == null) ? null : rowIndex.getPointers(Collections.singletonList(key)).get(0);
                 if (got == null || value.getTimestampId() >= got.getTimestampId()) {
                     if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
                         tombstoneCount.incrementAndGet();
@@ -335,11 +336,11 @@ public class BinaryWALTx implements WALTx {
         AtomicLong batchSizeInBytes) throws Exception {
 
         List<byte[]> rowPointers = compactionIO.write(rowTxIds, rawRowTypes, rawRows);
-        Collection<Map.Entry<WALKey, WALValue>> entries = new ArrayList<>(rowKeys.size());
+        Collection<Map.Entry<WALKey, WALPointer>> entries = new ArrayList<>(rowKeys.size());
         for (int i = 0; i < rowKeys.size(); i++) {
             WALValue rowValue = rowValues.get(i);
             entries.add(new AbstractMap.SimpleEntry<>(rowKeys.get(i),
-                new WALValue(rowPointers.get(i), rowValue.getTimestampId(), rowValue.getTombstoned())));
+                new WALPointer(UIO.bytesLong(rowPointers.get(i)), rowValue.getTimestampId(), rowValue.getTombstoned())));
         }
         if (compactionWALIndex != null) {
             compactionWALIndex.put(entries);

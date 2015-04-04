@@ -35,11 +35,12 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -92,7 +93,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort()};
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort() };
         config.resendReplicasIntervalInMillis = 100;
         config.applyReplicasIntervalInMillis = 100;
         config.takeFromNeighborsIntervalInMillis = 1000;
@@ -100,8 +101,7 @@ public class AmzaTestCluster {
 
         UpdatesSender changeSetSender = new UpdatesSender() {
             @Override
-            public void sendUpdates(RingHost ringHost,
-                RegionName mapName, WALScanable changes) throws Exception {
+            public void sendUpdates(RingHost ringHost, RegionName mapName, Scannable<WALValue> changes) throws Exception {
                 AmzaNode service = cluster.get(ringHost);
                 if (service == null) {
                     throw new IllegalStateException("Service doesn't exists for " + ringHost);
@@ -244,7 +244,7 @@ public class AmzaTestCluster {
             amzaService.createRegionIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
         }
 
-        void addToReplicatedWAL(RegionName mapName, WALScanable changes) throws Exception {
+        void addToReplicatedWAL(RegionName mapName, Scannable<WALValue> changes) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }

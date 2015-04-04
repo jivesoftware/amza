@@ -10,11 +10,12 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -29,7 +30,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaRegionChangeReplicator implements WALReplicator {
@@ -130,7 +130,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
 
     public Future<Boolean> replicateLocalUpdates(
         final RegionName regionName,
-        final WALScanable updates,
+        final Scannable<WALValue> updates,
         final boolean enqueueForResendOnFailure) throws Exception {
 
         final RegionProperties regionProperties = regionProvider.getRegionProperties(regionName);
@@ -167,7 +167,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     }
 
     public int replicateUpdatesToRingHosts(RegionName regionName,
-        WALScanable updates,
+        Scannable<WALValue> updates,
         boolean enqueueForResendOnFailure,
         RingHost[] ringHosts,
         int replicationFactor) throws Exception {
@@ -190,7 +190,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 ringWalker.failed();
                 if (amzaStats.replicateErrors.count(ringHost) == 0) {
                     LOG.warn("Can't replicate to host:{}", ringHost);
-                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[]{ringHost, regionName, replicationFactor}, x);
+                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[] { ringHost, regionName, replicationFactor }, x);
                 }
                 amzaStats.replicateErrors.add(ringHost);
                 if (enqueueForResendOnFailure) {

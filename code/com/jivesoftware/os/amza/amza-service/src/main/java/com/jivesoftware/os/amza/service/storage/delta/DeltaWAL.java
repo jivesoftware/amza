@@ -5,6 +5,7 @@ import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -112,7 +113,7 @@ public class DeltaWAL {
                 for (Long key : tailMap.descendingKeySet()) {
                     List<byte[]> rowFPs = Lists.reverse(tailMap.get(key));
                     for (byte[] fp : rowFPs) {
-                        byte[] rawRow = reader.read(fp);
+                        byte[] rawRow = reader.read(UIO.bytesLong(fp));
                         RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
                         ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
                         byte[] regionNameBytes = new byte[bb.getShort()];
@@ -132,12 +133,12 @@ public class DeltaWAL {
 
     }
 
-    WALValue hydrate(RegionName regionName, final WALValue rowPointer) throws Exception {
+    WALValue hydrate(RegionName regionName, final WALPointer rowPointer) throws Exception {
         try {
             byte[] row = rowsTx.read(new WALTx.WALRead<byte[]>() {
                 @Override
                 public byte[] read(WALReader rowReader) throws Exception {
-                    return rowReader.read(rowPointer.getValue());
+                    return rowReader.read(rowPointer.getFp());
                 }
             });
             byte[] value = rowMarshaller.valueFromRow(row);

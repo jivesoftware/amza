@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-public interface WALScanable {
+public interface Scannable<S> {
 
-    void rowScan(WALScan walScan) throws Exception;
+    void rowScan(Scan<S> scan) throws Exception;
 
 }

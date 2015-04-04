@@ -6,9 +6,10 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -25,7 +26,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- *
  * @author jonathan.colt
  */
 class RegionDelta {
@@ -34,7 +34,7 @@ class RegionDelta {
 
     private final RegionName regionName;
     private final DeltaWAL deltaWAL;
-    private final ConcurrentNavigableMap<WALKey, WALValue> index = new ConcurrentSkipListMap<>();
+    private final ConcurrentNavigableMap<WALKey, WALPointer> index = new ConcurrentSkipListMap<>();
     private final ConcurrentSkipListMap<Long, List<byte[]>> txIdWAL = new ConcurrentSkipListMap<>();
     final AtomicReference<RegionDelta> compacting;
 
@@ -45,7 +45,7 @@ class RegionDelta {
     }
 
     WALValue get(WALKey key) throws Exception {
-        WALValue got = index.get(key);
+        WALPointer got = index.get(key);
         if (got == null) {
             RegionDelta regionDelta = compacting.get();
             if (regionDelta != null) {
@@ -56,8 +56,8 @@ class RegionDelta {
         return deltaWAL.hydrate(regionName, got);
     }
 
-    WALValue getPointer(WALKey key) throws Exception {
-        WALValue got = index.get(key);
+    WALPointer getPointer(WALKey key) throws Exception {
+        WALPointer got = index.get(key);
         if (got != null) {
             return got;
         }
@@ -68,11 +68,11 @@ class RegionDelta {
         return null;
     }
 
-    DeltaResult<List<WALValue>> getPointers(List<WALKey> keys) throws Exception {
+    DeltaResult<List<WALPointer>> getPointers(List<WALKey> keys) throws Exception {
         boolean missed = false;
-        List<WALValue> result = new ArrayList<>(keys.size());
+        List<WALPointer> result = new ArrayList<>(keys.size());
         for (WALKey key : keys) {
-            WALValue got = getPointer(key);
+            WALPointer got = getPointer(key);
             missed |= (got == null);
             result.add(got);
         }
@@ -112,8 +112,8 @@ class RegionDelta {
         return new DeltaResult<>(missed, result);
     }
 
-    void put(WALKey key, WALValue rowValue) {
-        index.put(key, rowValue);
+    void put(WALKey key, WALPointer rowPointer) {
+        index.put(key, rowPointer);
     }
 
     Set<WALKey> keySet() {
@@ -128,8 +128,8 @@ class RegionDelta {
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(WALKey from, WALKey to) {
-        Iterator<Map.Entry<WALKey, WALValue>> iterator = index.subMap(from, to).entrySet().iterator();
-        Iterator<Map.Entry<WALKey, WALValue>> compactingIterator = Iterators.emptyIterator();
+        Iterator<Map.Entry<WALKey, WALPointer>> iterator = index.subMap(from, to).entrySet().iterator();
+        Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
             compactingIterator = regionDelta.index.subMap(from, to).entrySet().iterator();
@@ -138,8 +138,8 @@ class RegionDelta {
     }
 
     DeltaPeekableElmoIterator rowScanIterator() {
-        Iterator<Map.Entry<WALKey, WALValue>> iterator = index.entrySet().iterator();
-        Iterator<Map.Entry<WALKey, WALValue>> compactingIterator = Iterators.emptyIterator();
+        Iterator<Map.Entry<WALKey, WALPointer>> iterator = index.entrySet().iterator();
+        Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
             compactingIterator = regionDelta.index.entrySet().iterator();
@@ -185,15 +185,15 @@ class RegionDelta {
         if (compact != null) {
             LOG.info("Merging deltas for " + compact.regionName);
             if (!compact.txIdWAL.isEmpty()) {
-                largestTxId = compact.txIdWAL.lastKey();;
+                largestTxId = compact.txIdWAL.lastKey();
                 RegionStore regionStore = regionProvider.getRegionStore(compact.regionName);
                 regionStore.directCommit(largestTxId,
-                    new WALScanable() {
+                    new Scannable<WALValue>() {
                         @Override
-                        public void rowScan(WALScan walScan) {
-                            for (Map.Entry<WALKey, WALValue> e : compact.index.entrySet()) {
+                        public void rowScan(Scan<WALValue> scan) {
+                            for (Map.Entry<WALKey, WALPointer> e : compact.index.entrySet()) {
                                 try {
-                                    if (!walScan.row(-1, e.getKey(), compact.deltaWAL.hydrate(compact.regionName, e.getValue()))) {
+                                    if (!scan.row(-1, e.getKey(), compact.deltaWAL.hydrate(compact.regionName, e.getValue()))) {
                                         break;
                                     }
                                 } catch (Throwable ex) {

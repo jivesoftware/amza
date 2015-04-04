@@ -25,13 +25,13 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 public class MemoryWALIndex implements WALIndex {
 
-    private final NavigableMap<WALKey, WALValue> index;
+    private final NavigableMap<WALKey, WALPointer> index;
 
     public MemoryWALIndex() {
-        this(new ConcurrentSkipListMap<WALKey, WALValue>());
+        this(new ConcurrentSkipListMap<WALKey, WALPointer>());
     }
 
-    public MemoryWALIndex(NavigableMap<WALKey, WALValue> index) {
+    public MemoryWALIndex(NavigableMap<WALKey, WALPointer> index) {
         this.index = index;
     }
 
@@ -46,22 +46,22 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(WALScan walScan) throws Exception {
-        for (Entry<WALKey, WALValue> e : index.entrySet()) {
+    public void rowScan(Scan<WALPointer> scan) throws Exception {
+        for (Entry<WALKey, WALPointer> e : index.entrySet()) {
             WALKey key = e.getKey();
-            WALValue value = e.getValue();
-            if (!walScan.row(-1, key, value)) {
+            WALPointer rowPointer = e.getValue();
+            if (!scan.row(-1, key, rowPointer)) {
                 break;
             }
         }
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
-        for (Entry<WALKey, WALValue> e : index.subMap(from, to).entrySet()) {
+    public void rangeScan(WALKey from, WALKey to, Scan<WALPointer> scan) throws Exception {
+        for (Entry<WALKey, WALPointer> e : index.subMap(from, to).entrySet()) {
             WALKey key = e.getKey();
-            WALValue value = e.getValue();
-            if (!walScan.row(-1, key, value)) {
+            WALPointer rowPointer = e.getValue();
+            if (!scan.row(-1, key, rowPointer)) {
                 break;
             }
         }
@@ -87,8 +87,8 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public List<WALValue> get(List<WALKey> keys) {
-        List<WALValue> gots = new ArrayList<>(keys.size());
+    public List<WALPointer> getPointers(List<WALKey> keys) {
+        List<WALPointer> gots = new ArrayList<>(keys.size());
         for (WALKey key : keys) {
             gots.add(index.get(key));
         }
@@ -96,8 +96,8 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void put(Collection<? extends Map.Entry<WALKey, WALValue>> entrys) {
-        for (Map.Entry<WALKey, WALValue> entry : entrys) {
+    public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entrys) {
+        for (Map.Entry<WALKey, WALPointer> entry : entrys) {
             index.put(entry.getKey(), entry.getValue());
         }
     }
@@ -116,7 +116,7 @@ public class MemoryWALIndex implements WALIndex {
         return new CompactionWALIndex() {
 
             @Override
-            public void put(Collection<? extends Map.Entry<WALKey, WALValue>> entries) {
+            public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) {
                 rowsIndex.put(entries);
             }
 

@@ -17,10 +17,10 @@ package com.jivesoftware.os.amza.transport.tcp.replication;
 
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.RowUpdatesPayload;
@@ -48,12 +48,12 @@ public class TcpUpdatesSender implements UpdatesSender {
     }
 
     @Override
-    public void sendUpdates(final RingHost ringHost, final RegionName tableName, WALScanable changes) throws Exception {
+    public void sendUpdates(final RingHost ringHost, final RegionName tableName, Scannable<WALValue> changes) throws Exception {
         final int batchSize = 10; // TODO expose to config;
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
         final MutableLong highestId = new MutableLong(-1);
-        changes.rowScan(new WALScan() {
+        changes.rowScan(new Scan<WALValue>() {
             @Override
             public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                 keys.add(key);

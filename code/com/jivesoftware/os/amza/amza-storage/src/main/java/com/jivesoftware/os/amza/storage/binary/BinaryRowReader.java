@@ -149,7 +149,7 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public byte[] read(byte[] rowPointer) throws IOException {
+    public byte[] read(long position) throws IOException {
         long fileLength;
         synchronized (parent.lock()) {
             fileLength = parent.length();
@@ -158,7 +158,6 @@ public class BinaryRowReader implements WALReader {
             return null;
         }
 
-        long position = UIO.bytesLong(rowPointer);
         IFiler filer = parent.fileChannelMemMapFiler(position + 4);
 
         filer.seek(position);

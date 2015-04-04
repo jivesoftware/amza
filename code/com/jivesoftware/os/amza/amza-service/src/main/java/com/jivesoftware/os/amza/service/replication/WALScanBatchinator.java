@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.service.storage.RegionStore;
-import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -74,7 +74,7 @@ class WALScanBatchinator implements RowStream {
 
     public boolean flush() throws Exception {
         if (!batch.isEmpty()) {
-            RowsChanged changes = regionStore.commit(WALStorageUpdateMode.noReplication, new MemoryWALIndex(batch));
+            RowsChanged changes = regionStore.commit(WALStorageUpdateMode.noReplication, new MemoryWALUpdates(batch));
             amzaStats.receivedApplied(regionName, changes.getApply().size(), changes.getOldestRowTxId());
             batch.clear();
         }

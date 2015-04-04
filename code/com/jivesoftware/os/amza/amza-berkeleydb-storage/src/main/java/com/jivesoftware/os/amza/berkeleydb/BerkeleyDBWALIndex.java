@@ -2,11 +2,11 @@ package com.jivesoftware.os.amza.berkeleydb;
 
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -61,10 +61,10 @@ public class BerkeleyDBWALIndex implements WALIndex {
         LOG.info("Opening " + active.getAbsolutePath() + " " + database.count());
     }
 
-    private DatabaseEntry walValueToEntry(WALValue value) {
-        byte[] valueBytes = value.getValue();
-        long timestamp = value.getTimestampId();
-        boolean tombstoned = value.getTombstoned();
+    private DatabaseEntry walPointerToEntry(WALPointer rowPointer) {
+        byte[] valueBytes = UIO.longBytes(rowPointer.getFp());
+        long timestamp = rowPointer.getTimestampId();
+        boolean tombstoned = rowPointer.getTombstoned();
         byte[] entryBytes = new byte[valueBytes.length + 8 + 1];
         System.arraycopy(valueBytes, 0, entryBytes, 0, valueBytes.length);
         UIO.longBytes(timestamp, entryBytes, valueBytes.length);
@@ -72,21 +72,21 @@ public class BerkeleyDBWALIndex implements WALIndex {
         return new DatabaseEntry(entryBytes);
     }
 
-    private WALValue entryToWALValue(DatabaseEntry entry) {
+    private WALPointer entryToWALPointer(DatabaseEntry entry) {
         byte[] entryBytes = entry.getData();
         byte[] valueBytes = new byte[entryBytes.length - 8 - 1];
         System.arraycopy(entryBytes, 0, valueBytes, 0, valueBytes.length);
         long timestamp = UIO.bytesLong(entryBytes, valueBytes.length);
         boolean tombstoned = (entryBytes[valueBytes.length + 8] == (byte) 1);
-        return new WALValue(valueBytes, timestamp, tombstoned);
+        return new WALPointer(UIO.bytesLong(valueBytes), timestamp, tombstoned);
     }
 
     @Override
-    public void put(Collection<? extends Map.Entry<WALKey, WALValue>> entries) throws Exception {
+    public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) throws Exception {
         lock.acquire();
         try {
-            for (Map.Entry<WALKey, WALValue> entry : entries) {
-                database.put(null, new DatabaseEntry(entry.getKey().getKey()), walValueToEntry(entry.getValue()));
+            for (Map.Entry<WALKey, WALPointer> entry : entries) {
+                database.put(null, new DatabaseEntry(entry.getKey().getKey()), walPointerToEntry(entry.getValue()));
             }
         } finally {
             lock.release();
@@ -94,15 +94,15 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public List<WALValue> get(List<WALKey> keys) throws Exception {
+    public List<WALPointer> getPointers(List<WALKey> keys) throws Exception {
         lock.acquire();
         try {
-            List<WALValue> gots = new ArrayList<>(keys.size());
+            List<WALPointer> gots = new ArrayList<>(keys.size());
             DatabaseEntry value = new DatabaseEntry();
             for (WALKey key : keys) {
                 OperationStatus status = database.get(null, new DatabaseEntry(key.getKey()), value, LockMode.READ_UNCOMMITTED);
                 if (status == OperationStatus.SUCCESS) {
-                    gots.add(entryToWALValue(value));
+                    gots.add(entryToWALPointer(value));
                 } else {
                     gots.add(null);
                 }
@@ -185,7 +185,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(final WALScan walScan) throws Exception {
+    public void rowScan(final Scan<WALPointer> scan) throws Exception {
         lock.acquire();
         Cursor cursor = null;
         try {
@@ -194,8 +194,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
             DatabaseEntry valueEntry = new DatabaseEntry();
             while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
                 WALKey key = new WALKey(keyEntry.getData());
-                WALValue value = entryToWALValue(valueEntry);
-                if (!walScan.row(-1, key, value)) {
+                WALPointer rowPointer = entryToWALPointer(valueEntry);
+                if (!scan.row(-1, key, rowPointer)) {
                     break;
                 }
             }
@@ -208,7 +208,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public void rangeScan(WALKey from, WALKey to, final WALScan walScan) throws Exception {
+    synchronized public void rangeScan(WALKey from, WALKey to, final Scan<WALPointer> scan) throws Exception {
         lock.acquire();
         Cursor cursor = null;
         try {
@@ -221,8 +221,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     if (key.compareTo(to) >= 0) {
                         break;
                     }
-                    WALValue value = entryToWALValue(valueEntry);
-                    if (!walScan.row(-1, key, value)) {
+                    WALPointer value = entryToWALPointer(valueEntry);
+                    if (!scan.row(-1, key, value)) {
                         break;
                     }
                 }
@@ -263,7 +263,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
         return new CompactionWALIndex() {
 
             @Override
-            public void put(Collection<? extends Map.Entry<WALKey, WALValue>> entries) throws Exception {
+            public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) throws Exception {
                 compactedWALIndex.put(entries);
             }
 

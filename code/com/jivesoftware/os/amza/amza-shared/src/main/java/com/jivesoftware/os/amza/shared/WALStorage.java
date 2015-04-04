@@ -17,11 +17,11 @@ package com.jivesoftware.os.amza.shared;
 
 import java.util.List;
 
-public interface WALStorage extends RangeScannable {
+public interface WALStorage extends RangeScannable<WALValue> {
 
     void load() throws Exception;
 
-    RowsChanged update(Long overrideTxId, WALStorageUpdateMode upateMode, WALScanable rowUpdates) throws Exception;
+    RowsChanged update(Long overrideTxId, WALStorageUpdateMode upateMode, Scannable<WALValue> rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
 
@@ -29,7 +29,7 @@ public interface WALStorage extends RangeScannable {
 
     List<WALValue> get(List<WALKey> keys) throws Exception;
 
-    List<WALValue> getPointers(List<WALKey> keys) throws Exception;
+    List<WALPointer> getPointers(List<WALKey> keys) throws Exception;
 
     List<Boolean> containsKey(List<WALKey> keys) throws Exception;
 

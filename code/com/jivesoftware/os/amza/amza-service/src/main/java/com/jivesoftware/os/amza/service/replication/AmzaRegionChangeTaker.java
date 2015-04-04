@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.HostRing;
-import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -230,7 +230,7 @@ public class AmzaRegionChangeTaker {
         public int flush() throws Exception {
             if (!batch.isEmpty()) {
                 amzaStats.took(ringHost, regionName, batch.size(), oldestTxId.longValue());
-                RowsChanged changes = regionStore.commit(WALStorageUpdateMode.noReplication, new MemoryWALIndex(batch));
+                RowsChanged changes = regionStore.commit(WALStorageUpdateMode.noReplication, new MemoryWALUpdates(batch));
                 amzaStats.tookApplied(ringHost, regionName, changes.getApply().size(), changes.getOldestRowTxId());
             }
             if (flushed.get() > 0) {

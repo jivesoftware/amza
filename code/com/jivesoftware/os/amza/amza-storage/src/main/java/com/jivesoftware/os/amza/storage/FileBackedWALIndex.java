@@ -2,14 +2,13 @@ package com.jivesoftware.os.amza.storage;
 
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.filer.io.AutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.filer.io.FileBackedMemMappedByteBufferFactory;
-import com.jivesoftware.os.filer.io.FilerIO;
 import com.jivesoftware.os.filer.io.api.KeyRange;
 import com.jivesoftware.os.filer.io.map.MapStore;
 import com.jivesoftware.os.filer.io.map.SkipListMapContext;
@@ -48,9 +47,7 @@ public class FileBackedWALIndex implements WALIndex {
         int keySize,
         boolean variableKeySizes,
         int directoryOffset,
-        File... directories
-    ) {
-
+        File... directories) {
         this.regionName = regionName;
         this.keySize = keySize;
         this.variableKeySizes = variableKeySizes;
@@ -251,28 +248,25 @@ public class FileBackedWALIndex implements WALIndex {
 
     }
 
-    byte[] ser(WALValue value) {
+    byte[] ser(WALPointer value) {
         ByteBuffer bb = ByteBuffer.allocate(payloadSize);
-        if (value.getValue().length != 8) {
-            throw new RuntimeException("This is expected to be a FP");
-        }
-        bb.put(value.getValue());
+        bb.putLong(value.getFp());
         bb.putLong(value.getTimestampId());
         bb.put(value.getTombstoned() ? (byte) 1 : 0);
 
         return bb.array();
     }
 
-    WALValue der(byte[] value) {
+    WALPointer der(byte[] value) {
         ByteBuffer bb = ByteBuffer.wrap(value);
-        return new WALValue(FilerIO.longBytes(bb.getLong()), bb.getLong(), bb.get() == 1 ? true : false);
+        return new WALPointer(bb.getLong(), bb.getLong(), bb.get() == 1 ? true : false);
     }
 
     @Override
-    synchronized public void put(Collection<? extends Map.Entry<WALKey, WALValue>> entries) {
+    synchronized public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) {
         try {
             SkipListMapContext slmc = ensureCapacity(entries.size());
-            for (Map.Entry<WALKey, WALValue> entry : entries) {
+            for (Map.Entry<WALKey, WALPointer> entry : entries) {
                 SkipListMapStore.INSTANCE.add(filer, slmc, entry.getKey().getKey(), ser(entry.getValue()));
             }
         } catch (Exception x) {
@@ -281,10 +275,10 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public List<WALValue> get(List<WALKey> keys) {
+    synchronized public List<WALPointer> getPointers(List<WALKey> keys) {
         try {
             SkipListMapContext slmc = ensureCapacity(0);
-            List<WALValue> gots = new ArrayList<>(keys.size());
+            List<WALPointer> gots = new ArrayList<>(keys.size());
             if (slmc != null) {
                 for (WALKey key : keys) {
                     byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key.getKey());
@@ -295,7 +289,7 @@ public class FileBackedWALIndex implements WALIndex {
                     }
                 }
             } else {
-                gots.addAll(Collections.<WALValue>nCopies(keys.size(), null));
+                gots.addAll(Collections.<WALPointer>nCopies(keys.size(), null));
             }
             return gots;
 
@@ -361,7 +355,7 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public void rowScan(final WALScan walScan) throws Exception {
+    synchronized public void rowScan(final Scan<WALPointer> scan) throws Exception {
         try {
             SkipListMapContext slmc = ensureCapacity(0);
             if (slmc != null) {
@@ -371,9 +365,9 @@ public class FileBackedWALIndex implements WALIndex {
                     public boolean stream(byte[] key) throws IOException {
                         byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key);
                         if (got != null) {
-                            WALValue value = der(got);
+                            WALPointer value = der(got);
                             try {
-                                return walScan.row(-1, new WALKey(key), value);
+                                return scan.row(-1, new WALKey(key), value);
                             } catch (Exception e) {
                                 throw new RuntimeException("Error in rowScan.", e);
                             }
@@ -389,7 +383,7 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public void rangeScan(WALKey from, WALKey to, final WALScan walScan) throws Exception {
+    synchronized public void rangeScan(WALKey from, WALKey to, final Scan<WALPointer> scan) throws Exception {
         try {
             List<KeyRange> ranges = Collections.singletonList(new KeyRange(from.getKey(), to.getKey()));
             SkipListMapContext slmc = ensureCapacity(0);
@@ -400,9 +394,9 @@ public class FileBackedWALIndex implements WALIndex {
                     public boolean stream(byte[] key) throws IOException {
                         byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key);
                         if (got != null) {
-                            WALValue value = der(got);
+                            WALPointer value = der(got);
                             try {
-                                return walScan.row(-1, new WALKey(key), value);
+                                return scan.row(-1, new WALKey(key), value);
                             } catch (Exception e) {
                                 throw new RuntimeException("Error in rangeScan.", e);
                             }
@@ -464,7 +458,7 @@ public class FileBackedWALIndex implements WALIndex {
         return new CompactionWALIndex() {
 
             @Override
-            public void put(Collection<? extends Map.Entry<WALKey, WALValue>> entries) {
+            public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) {
                 fileBackedRowIndex.put(entries);
             }
 

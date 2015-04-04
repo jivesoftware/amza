@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -79,14 +80,14 @@ public class DeltaWALNGTest {
 
         for (Entry<WALKey, byte[]> e : update1.keyToRowPointer.entrySet()) {
             System.out.println("hydrate:" + new String(e.getKey().getKey()) + " @ fp=" + UIO.bytesLong(e.getValue()));
-            WALValue hydrate = deltaWAL.hydrate(regionName, new WALValue(e.getValue(), 0, false));
+            WALValue hydrate = deltaWAL.hydrate(regionName, new WALPointer(UIO.bytesLong(e.getValue()), 0, false));
             System.out.println(new String(hydrate.getValue()));
             Assert.assertEquals(hydrate.getValue(), apply1.get(e.getKey()).getValue());
         }
 
         for (Entry<WALKey, byte[]> e : update2.keyToRowPointer.entrySet()) {
             System.out.println("hydrate:" + new String(e.getKey().getKey()) + " @ fp=" + UIO.bytesLong(e.getValue()));
-            WALValue hydrate = deltaWAL.hydrate(regionName, new WALValue(e.getValue(), 0, false));
+            WALValue hydrate = deltaWAL.hydrate(regionName, new WALPointer(UIO.bytesLong(e.getValue()), 0, false));
             System.out.println(new String(hydrate.getValue()));
             Assert.assertEquals(hydrate.getValue(), apply2.get(e.getKey()).getValue());
         }

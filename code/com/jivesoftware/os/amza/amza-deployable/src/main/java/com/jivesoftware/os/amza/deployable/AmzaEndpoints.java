@@ -15,6 +15,8 @@
  */
 package com.jivesoftware.os.amza.deployable;
 
+import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.AmzaRegion;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
@@ -29,11 +31,14 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -69,6 +74,26 @@ public class AmzaEndpoints {
         } catch (Exception x) {
             LOG.warn("Failed to set region:" + region + " key:" + key + " value:" + value, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to set region:" + region + " key:" + key + " value:" + value, x);
+        }
+    }
+
+    @POST
+    @Consumes("application/json")
+    @Path("/multiSet/{region}")
+    public Response multiSet(@PathParam("region") String region, Map<String, String> values) {
+        try {
+            AmzaRegion amzaRegion = createRegionIfAbsent(region);
+            amzaRegion.set(Iterables.transform(values.entrySet(), new Function<Entry<String, String>, Entry<WALKey, byte[]>>() {
+
+                @Override
+                public Entry<WALKey, byte[]> apply(Entry<String, String> input) {
+                    return new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()), input.getValue().getBytes());
+                }
+            }));
+            return Response.ok("ok", MediaType.TEXT_PLAIN).build();
+        } catch (Exception x) {
+            LOG.warn("Failed to set region:" + region + " values:" + values, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to set region:" + region + " values:" + values, x);
         }
     }
 

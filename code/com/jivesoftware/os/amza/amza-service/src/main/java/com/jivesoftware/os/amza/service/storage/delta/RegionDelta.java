@@ -21,9 +21,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
@@ -34,6 +36,8 @@ class RegionDelta {
 
     private final RegionName regionName;
     private final DeltaWAL deltaWAL;
+    private final MutableLong[] stripedKeyHighwaterTimestamps;
+    private final Map<WALKey, WALPointer> ballsIndex = new ConcurrentHashMap<>();
     private final ConcurrentNavigableMap<WALKey, WALPointer> index = new ConcurrentSkipListMap<>();
     private final ConcurrentSkipListMap<Long, List<byte[]>> txIdWAL = new ConcurrentSkipListMap<>();
     final AtomicReference<RegionDelta> compacting;
@@ -42,10 +46,16 @@ class RegionDelta {
         this.regionName = regionName;
         this.deltaWAL = deltaWAL;
         this.compacting = new AtomicReference<>(compacting);
+        int numKeyHighwaterStripes = 1024;// TODO expose to config
+        this.stripedKeyHighwaterTimestamps = new MutableLong[numKeyHighwaterStripes];
+        for (int i = 0; i < stripedKeyHighwaterTimestamps.length; i++) {
+            stripedKeyHighwaterTimestamps[i] = new MutableLong();
+        }
     }
 
     WALValue get(WALKey key) throws Exception {
-        WALPointer got = index.get(key);
+        WALPointer got = ballsIndex.get(key);
+        //got = index.get(key);
         if (got == null) {
             RegionDelta regionDelta = compacting.get();
             if (regionDelta != null) {
@@ -57,7 +67,8 @@ class RegionDelta {
     }
 
     WALPointer getPointer(WALKey key) throws Exception {
-        WALPointer got = index.get(key);
+        WALPointer got = ballsIndex.get(key);
+        //WALPointer got = index.get(key);
         if (got != null) {
             return got;
         }
@@ -91,14 +102,19 @@ class RegionDelta {
     }
 
     boolean containsKey(WALKey key) {
-        if (index.get(key) != null) {
+        WALPointer got = ballsIndex.get(key);
+        if (got != null) {
             return true;
         }
+//            if (index.get(key) != null) {
+//                return true;
+//            }
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
             return regionDelta.containsKey(key);
         }
         return false;
+
     }
 
     DeltaResult<List<Boolean>> containsKey(List<WALKey> keys) {
@@ -112,12 +128,25 @@ class RegionDelta {
         return new DeltaResult<>(missed, result);
     }
 
+    long getLargestTimestampForKeyStripe(WALKey key) {
+        int highwaterTimestampIndex = Math.abs(key.hashCode()) % stripedKeyHighwaterTimestamps.length;
+        return stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue();
+    }
+
     void put(WALKey key, WALPointer rowPointer) {
+        int highwaterTimestampIndex = Math.abs(key.hashCode()) % stripedKeyHighwaterTimestamps.length;
+        synchronized (stripedKeyHighwaterTimestamps[highwaterTimestampIndex]) {
+            stripedKeyHighwaterTimestamps[highwaterTimestampIndex].setValue(Math.max(
+                stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue(),
+                rowPointer.getTimestampId()));
+        }
+        ballsIndex.put(key, rowPointer);
         index.put(key, rowPointer);
     }
 
     Set<WALKey> keySet() {
-        Set<WALKey> keySet = index.keySet();
+        Set<WALKey> keySet = ballsIndex.keySet();
+        //Set<WALKey> keySet = index.keySet();
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
             HashSet<WALKey> all = new HashSet<>(keySet);

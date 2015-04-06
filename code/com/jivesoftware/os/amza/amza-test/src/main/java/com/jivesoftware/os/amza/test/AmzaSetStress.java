@@ -15,13 +15,22 @@
  */
 package com.jivesoftware.os.amza.test;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
 import org.apache.commons.httpclient.StatusLine;
 import org.apache.commons.httpclient.URIException;
-import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.commons.httpclient.methods.PostMethod;
+import org.apache.commons.httpclient.methods.StringRequestEntity;
 
 public class AmzaSetStress {
+
+    public static final String CONTENT_TYPE_HEADER_NAME = "Content-Type";
+    public static final String APPLICATION_JSON_CONTENT_TYPE = "application/json";
+    public static final String APPLICATION_OCTET_STREAM_TYPE = "application/octet-stream";
+    public static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static void main(String[] args) throws URIException, IOException {
 
@@ -35,7 +44,7 @@ public class AmzaSetStress {
 
         String regionName = "lorem";
 
-        for (int i = 0; i < 8; i++) {
+        for (int i = 8; i < 16; i++) {
             final String rname = regionName + i;
             MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
             final org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);
@@ -61,31 +70,25 @@ public class AmzaSetStress {
             StringBuilder url = new StringBuilder();
             url.append("http://");
             url.append(hostName).append(":").append(port);
-            url.append("/amza/set");
-            url.append("?region=").append(regionName);
-            url.append("&key=");
+            url.append("/amza/multiSet");
+            url.append("/").append(regionName);
 
+            Map<String, String> values = new LinkedHashMap<>();
             for (int b = 0; b < batchSize; b++) {
-                if (b > 0) {
-                    url.append(',');
-                }
-                url.append(b + "k" + key);
-            }
-            url.append("&value=");
-            for (int b = 0; b < batchSize; b++) {
-                if (b > 0) {
-                    url.append(',');
-                }
-                url.append(b + "v" + key);
+
+                values.put(b + "k" + key, b + "v" + key);
             }
 
+            String postJsonBody = MAPPER.writeValueAsString(values);
             while (true) {
-                GetMethod method = new GetMethod(url.toString());
+                PostMethod method = new PostMethod(url.toString());
+                method.setRequestEntity(new StringRequestEntity(postJsonBody, APPLICATION_JSON_CONTENT_TYPE, "UTF-8"));
+                method.setRequestHeader(CONTENT_TYPE_HEADER_NAME, APPLICATION_JSON_CONTENT_TYPE);
+
                 StatusLine statusLine;
                 try {
                     try {
                         httpClient.executeMethod(method);
-
                         statusLine = method.getStatusLine();
                         if (statusLine.getStatusCode() == 200) {
                             break;

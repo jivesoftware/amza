@@ -15,31 +15,44 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.service.storage.delta.DeltaWALStorage;
+import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 
-public class RegionStore implements WALScanable {
+public class RegionStore implements RangeScannable<WALValue> {
 
     private final AmzaStats amzaStats;
     private final RegionName regionName;
+    private final DeltaWALStorage deltaWALStorage;
     private final WALStorage walStorage;
     private final RowChanges rowChanges;
 
-    public RegionStore(AmzaStats amzaStats, RegionName regionName, WALStorage walStorage, RowChanges rowChanges) {
+    public RegionStore(AmzaStats amzaStats,
+        RegionName regionName,
+        DeltaWALStorage deltaWALStorage,
+        WALStorage walStorage,
+        RowChanges rowChanges) {
+
         this.amzaStats = amzaStats;
         this.regionName = regionName;
+        this.deltaWALStorage = deltaWALStorage;
         this.walStorage = walStorage;
         this.rowChanges = rowChanges;
+    }
+
+    public WALStorage getWalStorage() {
+        return walStorage;
     }
 
     public void load() throws Exception {
@@ -47,13 +60,13 @@ public class RegionStore implements WALScanable {
     }
 
     @Override
-    public void rowScan(WALScan walScan) throws Exception {
-        walStorage.rowScan(walScan);
+    public void rowScan(Scan<WALValue> scan) throws Exception {
+        deltaWALStorage.rowScan(regionName, walStorage, scan);
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
-        walStorage.rangeScan(from, to, walScan);
+    public void rangeScan(WALKey from, WALKey to, Scan<WALValue> scan) throws Exception {
+        deltaWALStorage.rangeScan(regionName, walStorage, from, to, scan);
     }
 
     public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
@@ -61,30 +74,39 @@ public class RegionStore implements WALScanable {
     }
 
     public WALValue get(WALKey key) throws Exception {
-        return walStorage.get(key);
+        return deltaWALStorage.get(regionName, walStorage, key);
     }
 
     public boolean containsKey(WALKey key) throws Exception {
-        return walStorage.containsKey(key);
+        return deltaWALStorage.containsKey(regionName, walStorage, key);
     }
 
     public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        walStorage.takeRowUpdatesSince(transactionId, rowStream);
+        deltaWALStorage.takeRowUpdatesSince(regionName, walStorage, transactionId, rowStream);
     }
 
     public RowStoreUpdates startTransaction(long timestamp) throws Exception {
         return new RowStoreUpdates(amzaStats, regionName, this, new RowsStorageUpdates(walStorage, timestamp));
     }
 
-    public RowsChanged commit(WALStorageUpdateMode updateMode, WALScanable rowUpdates) throws Exception {
-        RowsChanged updateMap = walStorage.update(updateMode, rowUpdates);
+    public RowsChanged commit(WALStorageUpdateMode updateMode, Scannable<WALValue> rowUpdates) throws Exception {
+        RowsChanged updateMap = deltaWALStorage.update(regionName, walStorage, updateMode, rowUpdates);
         if (rowChanges != null && !updateMap.isEmpty()) {
             rowChanges.changes(updateMap);
         }
         return updateMap;
     }
 
+    public void directCommit(long txId, Scannable<WALValue> scanable) throws Exception {
+        walStorage.update(txId, WALStorageUpdateMode.noReplication, scanable);
+    }
+
     public void updatedStorageDescriptor(WALStorageDescriptor storageDescriptor) throws Exception {
         walStorage.updatedStorageDescriptor(storageDescriptor);
     }
+
+    public long size() throws Exception {
+        return deltaWALStorage.size(regionName, walStorage);
+    }
+
 }

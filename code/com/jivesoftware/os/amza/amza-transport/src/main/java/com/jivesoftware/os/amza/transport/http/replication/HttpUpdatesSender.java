@@ -18,10 +18,10 @@ package com.jivesoftware.os.amza.transport.http.replication;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
@@ -50,7 +50,7 @@ public class HttpUpdatesSender implements UpdatesSender {
     }
 
     @Override
-    public void sendUpdates(final RingHost ringHost, final RegionName regionName, WALScanable changes) throws Exception {
+    public void sendUpdates(final RingHost ringHost, final RegionName regionName, Scannable<WALValue> changes) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         final List<Long> rowTxIds = new ArrayList<>();
@@ -58,7 +58,7 @@ public class HttpUpdatesSender implements UpdatesSender {
         final MutableLong smallestTx = new MutableLong(Long.MAX_VALUE);
         final MutableLong wrote = new MutableLong();
 
-        changes.rowScan(new WALScan() {
+        changes.rowScan(new Scan<WALValue>() {
             @Override
             public boolean row(long txId, WALKey key, WALValue value) throws Exception {
                 if (txId < smallestTx.longValue()) {

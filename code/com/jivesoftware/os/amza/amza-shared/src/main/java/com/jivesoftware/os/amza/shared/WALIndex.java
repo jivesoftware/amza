@@ -19,11 +19,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-public interface WALIndex extends WALScanable {
+public interface WALIndex extends RangeScannable<WALPointer> {
 
-    void put(Collection<? extends Map.Entry<WALKey, WALValue>> entry) throws Exception;
+    void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception;
 
-    List<WALValue> get(List<WALKey> key) throws Exception;
+    WALPointer getPointer(WALKey key) throws Exception;
+
+    WALPointer[] getPointers(WALKey[] keys) throws Exception;
 
     List<Boolean> containsKey(List<WALKey> key) throws Exception;
 
@@ -31,7 +33,7 @@ public interface WALIndex extends WALScanable {
 
     boolean isEmpty() throws Exception;
 
-    void clear() throws Exception;
+    long size() throws Exception;
 
     /**
      * Force persistence of all changes
@@ -43,9 +45,9 @@ public interface WALIndex extends WALScanable {
 
     CompactionWALIndex startCompaction() throws Exception;
 
-    public interface CompactionWALIndex {
+    interface CompactionWALIndex {
 
-        void put(Collection<? extends Map.Entry<WALKey, WALValue>> entry) throws Exception;
+        void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception;
 
         void abort() throws Exception;
 

@@ -17,17 +17,19 @@ package com.jivesoftware.os.amza.shared;
 
 import java.util.List;
 
-public interface WALStorage extends WALScanable {
+public interface WALStorage extends RangeScannable<WALValue> {
 
     void load() throws Exception;
 
-    RowsChanged update(WALStorageUpdateMode upateMode, WALScanable rowUpdates) throws Exception;
+    RowsChanged update(Long overrideTxId, WALStorageUpdateMode upateMode, Scannable<WALValue> rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
 
+    WALValue[] get(WALKey[] keys) throws Exception;
+
     boolean containsKey(WALKey key) throws Exception;
 
-    List<WALValue> get(List<WALKey> keys) throws Exception;
+    WALPointer[] getPointers(WALKey[] consumableKeys, List<WALValue> values) throws Exception;
 
     List<Boolean> containsKey(List<WALKey> keys) throws Exception;
 
@@ -36,4 +38,6 @@ public interface WALStorage extends WALScanable {
     void compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 
     void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception;
+
+    long size() throws Exception;
 }

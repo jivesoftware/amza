@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
+import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.mapdb.MapdbWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
@@ -103,13 +104,19 @@ public class Main {
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
         final AmzaStats amzaStats = new AmzaStats();
 
-        final String[] rowIndexDirs = new String[]{
-            "./rowIndexs/data1",
-            "./rowIndexs/data2",
-            "./rowIndexs/data3"};
+        final String[] mapdbRowIndexDirs = new String[]{
+            "./mapdb/data1",
+            "./mapdb/data2",
+            "./mapdb/data3"};
+
+        final String[] berkeleydbRowIndexDirs = new String[]{
+            "./berkeleydb/data1",
+            "./berkeleydb/data2",
+            "./berkeleydb/data3"};
 
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
-        indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(rowIndexDirs));
+        indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(mapdbRowIndexDirs));
+        indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(berkeleydbRowIndexDirs));
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
@@ -143,6 +150,7 @@ public class Main {
             }
         };
 
+
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             ringHost,
@@ -158,12 +166,6 @@ public class Main {
                 public void changes(RowsChanged changes) throws Exception {
                 }
             });
-
-        amzaService.start();
-
-        System.out.println("-----------------------------------------------------------------------");
-        System.out.println("|      Amza Service Online");
-        System.out.println("-----------------------------------------------------------------------");
 
         IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);
         bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
@@ -217,6 +219,12 @@ public class Main {
 
         System.out.println("-----------------------------------------------------------------------");
         System.out.println("|      Jetty Service Online");
+        System.out.println("-----------------------------------------------------------------------");
+
+        amzaService.start();
+
+        System.out.println("-----------------------------------------------------------------------");
+        System.out.println("|      Amza Service Online");
         System.out.println("-----------------------------------------------------------------------");
 
         if (clusterName != null) {

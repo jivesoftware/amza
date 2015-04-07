@@ -19,7 +19,7 @@ import java.util.List;
 
 public interface AmzaInstance {
 
-    void updates(RegionName regionName, WALScanable updates) throws Exception;
+    void updates(RegionName regionName, Scannable<WALValue> updates) throws Exception;
 
     void takeRowUpdates(RegionName regionName, long rowTxId, RowStream rowStream) throws Exception;
 

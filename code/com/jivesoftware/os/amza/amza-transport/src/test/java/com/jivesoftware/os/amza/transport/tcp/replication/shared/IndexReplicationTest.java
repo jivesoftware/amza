@@ -1,13 +1,13 @@
 package com.jivesoftware.os.amza.transport.tcp.replication.shared;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
@@ -19,7 +19,9 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessageP
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -39,7 +41,7 @@ public class IndexReplicationTest {
     private RingHost localHost = new RingHost("localhost", 7766);
     private TcpClientProvider tcpClientProvider;
     private OrderIdProvider idProvider;
-    private AtomicReference<WALScanable> receivedPut = new AtomicReference<>();
+    private AtomicReference<Scannable<WALValue>> receivedPut = new AtomicReference<>();
     private AtomicReference<RowUpdatesPayload> toTake = new AtomicReference<>();
     private IndexReplicationProtocol applicationProtocol;
 
@@ -94,7 +96,7 @@ public class IndexReplicationTest {
         TcpUpdatesSender sender = new TcpUpdatesSender(tcpClientProvider, applicationProtocol);
 
         RegionName tableName = new RegionName(false, "test", "test");
-        NavigableMap<WALKey, WALValue> changes = new ConcurrentSkipListMap<>();
+        Map<WALKey, WALValue> changes = new HashMap<>();
 
         WALValue val1 = new WALValue("blah".getBytes(), idProvider.nextId(), false);
         WALValue val2 = new WALValue("meh".getBytes(), idProvider.nextId(), false);
@@ -102,12 +104,12 @@ public class IndexReplicationTest {
         changes.put(new WALKey("1".getBytes()), val1);
         changes.put(new WALKey("2".getBytes()), val2);
 
-        sender.sendUpdates(localHost, tableName, new MemoryWALIndex(changes));
+        sender.sendUpdates(localHost, tableName, new MemoryWALUpdates(changes));
 
-        WALScanable received = receivedPut.get();
+        Scannable<WALValue> received = receivedPut.get();
         Assert.assertNotNull(received);
         final NavigableMap<WALKey, WALValue> receivedApply = new ConcurrentSkipListMap<>();
-        received.rowScan(new WALScan() {
+        received.rowScan(new Scan<WALValue>() {
 
             @Override
             public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
@@ -158,10 +160,10 @@ public class IndexReplicationTest {
 
     }
 
-    private AmzaInstance amzaInstance(final AtomicReference<WALScanable> put, final AtomicReference<RowUpdatesPayload> take) {
+    private AmzaInstance amzaInstance(final AtomicReference<Scannable<WALValue>> put, final AtomicReference<RowUpdatesPayload> take) {
         return new AmzaInstance() {
             @Override
-            public void updates(RegionName tableName, WALScanable changes) throws Exception {
+            public void updates(RegionName tableName, Scannable<WALValue> changes) throws Exception {
                 put.set(changes);
             }
 

@@ -27,12 +27,17 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public void put(
-        Collection<? extends Map.Entry<WALKey, WALValue>> entry) throws Exception {
+        Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception {
     }
 
     @Override
-    public List<WALValue> get(List<WALKey> key) throws Exception {
-        return Collections.nCopies(key.size(), null);
+    public WALPointer getPointer(WALKey key) throws Exception {
+        return null;
+    }
+
+    @Override
+    public WALPointer[] getPointers(WALKey[] keys) throws Exception {
+        return new WALPointer[keys.length];
     }
 
     @Override
@@ -50,7 +55,8 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public void clear() throws Exception {
+    public long size() throws Exception {
+        return 0;
     }
 
     @Override
@@ -67,7 +73,7 @@ public class NoOpWALIndex implements WALIndex {
 
             @Override
             public void put(
-                Collection<? extends Map.Entry<WALKey, WALValue>> entry) throws Exception {
+                Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception {
             }
 
             @Override
@@ -81,11 +87,11 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(WALScan walScan) throws Exception {
+    public void rowScan(Scan<WALPointer> scan) throws Exception {
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
+    public void rangeScan(WALKey from, WALKey to, Scan<WALPointer> scan) throws Exception {
     }
 
     @Override

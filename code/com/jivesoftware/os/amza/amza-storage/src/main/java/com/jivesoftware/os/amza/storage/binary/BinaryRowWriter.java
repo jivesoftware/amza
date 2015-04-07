@@ -17,9 +17,9 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.IFiler;
+import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
-import com.jivesoftware.os.amza.storage.filer.MemoryFiler;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,7 +34,7 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
-    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows, boolean append) throws Exception {
+    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows) throws Exception {
         List<Long> offests = new ArrayList<>();
         MemoryFiler memoryFiler = new MemoryFiler();
         int i = 0;
@@ -42,7 +42,7 @@ public class BinaryRowWriter implements WALWriter {
             offests.add(memoryFiler.getFilePointer());
             int length = (1 + 8) + row.length;
             UIO.writeInt(memoryFiler, length, "length");
-            memoryFiler.write(rowType.get(i));
+            UIO.writeByte(memoryFiler, rowType.get(i), "rowType");
             UIO.writeLong(memoryFiler, rowTxIds.get(i), "txId");
             memoryFiler.write(row);
             UIO.writeInt(memoryFiler, length, "length");
@@ -52,16 +52,9 @@ public class BinaryRowWriter implements WALWriter {
         long startFp;
         ioStats.wrote.addAndGet(bytes.length);
         synchronized (filer.lock()) {
-            if (append) {
-                startFp = filer.length();
-                filer.seek(startFp); // seek to end of file.
-                filer.write(bytes);
-            } else {
-                startFp = 0;
-                filer.seek(0);
-                filer.write(bytes);
-                filer.eof(); // trim file to size.
-            }
+            startFp = filer.length();
+            filer.seek(startFp); // seek to end of file.
+            filer.write(bytes);
             filer.flush();
         }
         List<byte[]> rowPointers = new ArrayList<>();

@@ -1,7 +1,10 @@
 package com.jivesoftware.os.amza.storage.binary;
 
+import com.google.common.collect.Maps;
 import com.google.common.io.Files;
+import com.google.common.util.concurrent.Futures;
 import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALIndex;
@@ -16,11 +19,11 @@ import com.jivesoftware.os.filer.io.FilerIO;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
-import java.util.AbstractMap.SimpleEntry;
-import java.util.Arrays;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.testng.Assert;
@@ -55,7 +58,8 @@ public class RowRegionNGTest {
         final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, new WALReplicator() {
 
             @Override
-            public void replicate(RowsChanged rowsChanged) throws Exception {
+            public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
+                return Futures.immediateFuture(true);
             }
         }, 1000, 1000);
         indexedWAL.load();
@@ -117,12 +121,12 @@ public class RowRegionNGTest {
     }
 
     private void addBatch(Random r, OrderIdProviderImpl idProvider, IndexedWAL indexedWAL, int range, int start, int length) throws Exception {
-        MemoryWALIndex updates = new MemoryWALIndex();
+        Map<WALKey, WALValue> updates = Maps.newHashMap();
         for (int i = start; i < start + length; i++) {
             WALKey key = new WALKey(FilerIO.intBytes(r.nextInt(range)));
-            updates.put(Arrays.asList(new SimpleEntry<>(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false))));
+            updates.put(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false));
         }
-        indexedWAL.update(WALStorageUpdateMode.updateThenReplicate, updates);
+        indexedWAL.update(null, WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(updates));
     }
 
     @Test
@@ -149,7 +153,8 @@ public class RowRegionNGTest {
         IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, new WALReplicator() {
 
             @Override
-            public void replicate(RowsChanged rowsChanged) throws Exception {
+            public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
+                return Futures.immediateFuture(true);
             }
         }, 1000, 1000);
         indexedWAL.load();
@@ -217,8 +222,8 @@ public class RowRegionNGTest {
     }
 
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
-        MemoryWALIndex updates = new MemoryWALIndex();
-        updates.put(Arrays.asList(new SimpleEntry<>(new WALKey(key), new WALValue(value, timestamp, remove))));
-        indexedWAL.update(WALStorageUpdateMode.updateThenReplicate, updates);
+        Map<WALKey, WALValue> updates = Maps.newHashMap();
+        updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
+        indexedWAL.update(null, WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(updates));
     }
 }

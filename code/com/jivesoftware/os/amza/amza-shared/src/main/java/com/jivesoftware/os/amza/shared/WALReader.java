@@ -22,5 +22,5 @@ public interface WALReader {
 
     void reverseScan(RowStream rowStream) throws Exception;
 
-    byte[] read(byte[] rowPointer) throws Exception;
+    byte[] read(long position) throws Exception;
 }

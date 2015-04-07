@@ -38,8 +38,8 @@ public class AmzaStats {
     private final Totals grandTotals = new Totals();
     private final Map<RegionName, Totals> regionTotals = new ConcurrentHashMap<>();
 
-    public final Multiset takeErrors = ConcurrentHashMultiset.create();
-    public final Multiset replicateErrors = ConcurrentHashMultiset.create();
+    public final Multiset<RingHost> takeErrors = ConcurrentHashMultiset.create();
+    public final Multiset<RingHost> replicateErrors = ConcurrentHashMultiset.create();
 
     public final IoStats ioStats = new IoStats();
     public final NetStats netStats = new NetStats();

@@ -22,8 +22,8 @@ import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
@@ -52,7 +52,7 @@ public class AmzaHostRing implements AmzaRing {
         }
 
         public byte[] toBytes() {
-            return new byte[]{b};
+            return new byte[] { b };
         }
 
         static Status fromBytes(byte[] b) {
@@ -121,7 +121,7 @@ public class AmzaHostRing implements AmzaRing {
 
         final Set<RingHost> ringHosts = new HashSet<>();
         WALKey from = key(ringName, null);
-        ringIndex.rangeScan(from, from.prefixUpperExclusive(), new WALScan() {
+        ringIndex.rangeScan(from, from.prefixUpperExclusive(), new Scan<WALValue>() {
             @Override
             public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
                 ringHosts.add(keyToRingHost(key));
@@ -174,7 +174,7 @@ public class AmzaHostRing implements AmzaRing {
 
     @Override
     public void allRings(final RingStream ringStream) throws Exception {
-        regionProvider.getRingIndexStore().rowScan(new WALScan() {
+        regionProvider.getRingIndexStore().rowScan(new Scan<WALValue>() {
 
             @Override
             public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {

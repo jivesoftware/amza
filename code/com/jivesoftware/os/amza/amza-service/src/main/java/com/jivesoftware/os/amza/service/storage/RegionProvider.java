@@ -15,14 +15,15 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.service.storage.delta.DeltaWALStorage;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALScan;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
@@ -49,6 +50,7 @@ public class RegionProvider implements RowChanges {
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
     private final RegionPropertyMarshaller regionPropertyMarshaller;
+    private final DeltaWALStorage[] deltaWALStorages;
     private final String[] workingDirectories;
     private final String domain;
     private final WALStorageProvider walStorageProvider;
@@ -61,6 +63,7 @@ public class RegionProvider implements RowChanges {
     public RegionProvider(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
+        DeltaWALStorage[] deltaWALStorages,
         String[] workingDirectories,
         String domain,
         WALStorageProvider walStorageProvider,
@@ -70,6 +73,7 @@ public class RegionProvider implements RowChanges {
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.regionPropertyMarshaller = regionPropertyMarshaller;
+        this.deltaWALStorages = deltaWALStorages;
         this.workingDirectories = workingDirectories;
         this.domain = domain;
         this.walStorageProvider = walStorageProvider;
@@ -83,7 +87,7 @@ public class RegionProvider implements RowChanges {
 
     public void open() throws Exception {
         RegionStore regionIndexStore = getRegionIndexStore();
-        regionIndexStore.rowScan(new WALScan() {
+        regionIndexStore.rowScan(new Scan<WALValue>() {
 
             @Override
             public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
@@ -152,20 +156,31 @@ public class RegionProvider implements RowChanges {
 
             File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
             WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, regionName, properties.walStorageDescriptor, walReplicator);
-            regionStore = new RegionStore(amzaStats, regionName, walStorage, rowChanges);
+            DeltaWALStorage dws = new NoOpDeltaWALStorage();
+            if (!regionName.isSystemRegion()) {
+                dws = deltaWALStorages[Math.abs(regionName.hashCode()) % deltaWALStorages.length];
+            }
+            regionStore = new RegionStore(amzaStats, regionName, dws, walStorage, rowChanges);
             regionStore.load();
 
             regionStores.put(regionName, regionStore);
-            RowStoreUpdates tx;
+            byte[] rawRegionName = regionName.toBytes();
+            WALKey regionKey = new WALKey(rawRegionName);
+            RowStoreUpdates tx = null;
             if (!regionName.equals(REGION_INDEX)) {
                 RegionStore regionIndexStore = getRegionIndexStore();
-                tx = regionIndexStore.startTransaction(orderIdProvider.nextId());
+                if (!regionIndexStore.containsKey(regionKey)) {
+                    tx = regionIndexStore.startTransaction(orderIdProvider.nextId());
+                }
             } else {
-                tx = regionStore.startTransaction(orderIdProvider.nextId());
+                if (!regionStore.containsKey(regionKey)) {
+                    tx = regionStore.startTransaction(orderIdProvider.nextId());
+                }
             }
-            byte[] rawRegionName = regionName.toBytes();
-            tx.add(new WALKey(rawRegionName), rawRegionName);
-            tx.commit();
+            if (tx != null) {
+                tx.add(regionKey, rawRegionName);
+                tx.commit();
+            }
             return regionStore;
         }
     }

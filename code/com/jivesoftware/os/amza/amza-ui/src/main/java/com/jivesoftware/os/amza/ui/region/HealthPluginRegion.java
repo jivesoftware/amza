@@ -2,10 +2,12 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.service.AmzaRegion;
+import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -47,7 +49,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
     private final String statsTemplate;
     private final SoyRenderer renderer;
     private final AmzaRing amzaRing;
-    private final AmzaInstance amzaInstance;
+    private final AmzaService amzaService;
     private final AmzaStats amzaStats;
 
     private final List<GarbageCollectorMXBean> garbageCollectors;
@@ -60,14 +62,14 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         String statsTemplate,
         SoyRenderer renderer,
         AmzaRing amzaRing,
-        AmzaInstance amzaInstance,
+        AmzaService amzaService,
         AmzaStats amzaStats
     ) {
         this.template = template;
         this.statsTemplate = statsTemplate;
         this.renderer = renderer;
         this.amzaRing = amzaRing;
-        this.amzaInstance = amzaInstance;
+        this.amzaService = amzaService;
         this.amzaStats = amzaStats;
 
         garbageCollectors = ManagementFactory.getGarbageCollectorMXBeans();
@@ -99,22 +101,22 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             HealthPluginRegionInput input = optionalInput.get();
 
             List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();
-            data.put("ongoingCompactions", (Object) Lists.transform(ongoingCompactions, new Function<Map.Entry<String, Long>, Map<String, String>>() {
-
-                @Override
-                public Map<String, String> apply(Map.Entry<String, Long> input) {
-                    return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
-                }
-            }));
+            data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
+                new Function<Map.Entry<String, Long>, Map<String, String>>() {
+                    @Override
+                    public Map<String, String> apply(Map.Entry<String, Long> input) {
+                        return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
+                    }
+                }));
 
             List<Map.Entry<String, Long>> recentCompaction = amzaStats.recentCompaction();
-            data.put("recentCompactions", (Object) Lists.transform(recentCompaction, new Function<Map.Entry<String, Long>, Map<String, String>>() {
-
-                @Override
-                public Map<String, String> apply(Map.Entry<String, Long> input) {
-                    return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
-                }
-            }));
+            data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
+                new Function<Map.Entry<String, Long>, Map<String, String>>() {
+                    @Override
+                    public Map<String, String> apply(Map.Entry<String, Long> input) {
+                        return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
+                    }
+                }));
             data.put("totalCompactions", String.valueOf(amzaStats.getTotalCompactions()));
 
         } catch (Exception e) {
@@ -129,7 +131,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         try {
             data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
             List<Map<String, Object>> regionTotals = new ArrayList<>();
-            ArrayList<RegionName> regions = new ArrayList<>(amzaInstance.getRegionNames());
+            ArrayList<RegionName> regions = new ArrayList<>(amzaService.getRegionNames());
             Collections.sort(regions);
             for (RegionName regionName : regions) {
                 Totals totals = amzaStats.getRegionTotals().get(regionName);
@@ -156,6 +158,9 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
                 ringMaps.add(ImmutableMap.of("host", r.getHost(), "port", String.valueOf(r.getPort())));
             }
             map.put("ring", ringMaps);
+
+            AmzaRegion region = amzaService.getRegion(name);
+            map.put("count", String.valueOf(region.size()));
         }
         map.put("received", String.valueOf(totals.received.get()));
         map.put("receivedLag", String.valueOf(totals.receivedLag.get()));
@@ -267,7 +272,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

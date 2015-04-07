@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-public interface WALScan {
+public interface Scannable<S> {
 
-    boolean row(long rowTxId, WALKey key, WALValue value) throws Exception;
+    void rowScan(Scan<S> scan) throws Exception;
 
 }

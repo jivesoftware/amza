@@ -18,7 +18,8 @@ package com.jivesoftware.os.amza.transport.http.replication;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.WALScan;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import java.util.List;
 
@@ -57,7 +58,7 @@ public class RowUpdates {
         return rows;
     }
 
-    public void stream(RowMarshaller<byte[]> marshaller, WALScan scan) throws Exception {
+    public void stream(RowMarshaller<byte[]> marshaller, Scan<WALValue> scan) throws Exception {
         for (int i = 0; i < rowTxIds.size(); i++) {
             RowMarshaller.WALRow row = marshaller.fromRow(rows.get(i));
             if (!scan.row(rowTxIds.get(i), row.getKey(), row.getValue())) {

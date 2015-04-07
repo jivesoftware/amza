@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.HostRing;
-import com.jivesoftware.os.amza.shared.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -22,9 +22,9 @@ import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.TreeMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -179,7 +179,7 @@ public class AmzaRegionChangeTaker {
         private final RegionStore regionStore;
         private final RingHost ringHost;
         private final MutableLong highWaterMark;
-        private final TreeMap<WALKey, WALValue> batch = new TreeMap<>();
+        private final Map<WALKey, WALValue> batch = new HashMap<>();
         private final MutableLong oldestTxId = new MutableLong(Long.MAX_VALUE);
         private final MutableLong lastTxId;
         private final AtomicInteger flushed = new AtomicInteger(0);
@@ -230,7 +230,7 @@ public class AmzaRegionChangeTaker {
         public int flush() throws Exception {
             if (!batch.isEmpty()) {
                 amzaStats.took(ringHost, regionName, batch.size(), oldestTxId.longValue());
-                RowsChanged changes = regionStore.commit(WALStorageUpdateMode.updateThenReplicate, new MemoryWALIndex(batch));
+                RowsChanged changes = regionStore.commit(WALStorageUpdateMode.noReplication, new MemoryWALUpdates(batch));
                 amzaStats.tookApplied(ringHost, regionName, changes.getApply().size(), changes.getOldestRowTxId());
             }
             if (flushed.get() > 0) {

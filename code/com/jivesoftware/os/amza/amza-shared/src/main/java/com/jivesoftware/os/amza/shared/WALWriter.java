@@ -25,9 +25,7 @@ public interface WALWriter {
     public static final long COMPACTION_HINTS_KEY = 0;
     public static final long COMMIT_MARKER = 1;
 
-
-
-    List<byte[]> write(List<Long> txId, List<Byte> rowType, List<byte[]> rows, boolean append) throws Exception;
+    List<byte[]> write(List<Long> txId, List<Byte> rowType, List<byte[]> rows) throws Exception;
 
     long getEndOfLastRow() throws Exception;
 }

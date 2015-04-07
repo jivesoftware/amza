@@ -2,11 +2,11 @@ package com.jivesoftware.os.amza.mapdb;
 
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
@@ -22,7 +22,6 @@ import org.mapdb.DB;
 import org.mapdb.DBMaker;
 
 /**
- *
  * @author jonathan.colt
  */
 public class MapdbWALIndex implements WALIndex {
@@ -35,7 +34,7 @@ public class MapdbWALIndex implements WALIndex {
     private final RegionName regionName;
     private final File dir;
     private DB db;
-    private ConcurrentNavigableMap<WALKey, WALValue> index;
+    private ConcurrentNavigableMap<WALKey, WALPointer> index;
 
     public MapdbWALIndex(File dir, RegionName regionName) {
         this.dir = dir;
@@ -50,10 +49,10 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    public void put(Collection<? extends Map.Entry<WALKey, WALValue>> entries) throws Exception {
+    public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) throws Exception {
         lock.acquire();
         try {
-            for (Map.Entry<WALKey, WALValue> entry : entries) {
+            for (Map.Entry<WALKey, WALPointer> entry : entries) {
                 index.put(entry.getKey(), entry.getValue());
             }
         } finally {
@@ -62,12 +61,27 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    public List<WALValue> get(List<WALKey> keys) throws Exception {
+    public WALPointer getPointer(WALKey key) throws Exception {
         lock.acquire();
         try {
-            List<WALValue> gots = new ArrayList<>(keys.size());
-            for (WALKey key : keys) {
-                gots.add(index.get(key));
+            return index.get(key);
+        } finally {
+            lock.release();
+        }
+    }
+
+    @Override
+    public WALPointer[] getPointers(WALKey[] consumableKeys) throws Exception {
+        lock.acquire();
+        try {
+            WALPointer[] gots = new WALPointer[consumableKeys.length];
+            for (int i = 0; i < consumableKeys.length; i++) {
+                if (consumableKeys[i] != null) {
+                    gots[i] = index.get(consumableKeys[i]);
+                    if (gots[i] != null) {
+                        consumableKeys[i] = null;
+                    }
+                }
             }
             return gots;
         } finally {
@@ -112,13 +126,23 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    public void clear() throws Exception {
-
+    public long size() throws Exception {
+        lock.acquire();
+        try {
+            return index.size();
+        } finally {
+            lock.release();
+        }
     }
 
     @Override
-    public void commit() {
-        db.commit();
+    public void commit() throws Exception {
+        lock.acquire();
+        try {
+            db.commit();
+        } finally {
+            lock.release();
+        }
     }
 
     @Override
@@ -139,13 +163,13 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(final WALScan walScan) throws Exception {
+    public void rowScan(final Scan<WALPointer> scan) throws Exception {
         lock.acquire();
         try {
-            for (Map.Entry<WALKey, WALValue> e : index.entrySet()) {
+            for (Map.Entry<WALKey, WALPointer> e : index.entrySet()) {
                 WALKey key = e.getKey();
-                WALValue value = e.getValue();
-                if (!walScan.row(-1, key, value)) {
+                WALPointer rowPointer = e.getValue();
+                if (!scan.row(-1, key, rowPointer)) {
                     break;
                 }
             }
@@ -155,14 +179,14 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public void rangeScan(WALKey from, WALKey to, final WALScan walScan) throws Exception {
+    synchronized public void rangeScan(WALKey from, WALKey to, final Scan<WALPointer> scan) throws Exception {
         lock.acquire();
         try {
 
-            for (Map.Entry<WALKey, WALValue> e : index.subMap(from, to).entrySet()) {
+            for (Map.Entry<WALKey, WALPointer> e : index.subMap(from, to).entrySet()) {
                 WALKey key = e.getKey();
-                WALValue value = e.getValue();
-                if (!walScan.row(-1, key, value)) {
+                WALPointer rowPointer = e.getValue();
+                if (!scan.row(-1, key, rowPointer)) {
                     break;
                 }
             }
@@ -188,7 +212,7 @@ public class MapdbWALIndex implements WALIndex {
         return new CompactionWALIndex() {
 
             @Override
-            public void put(Collection<? extends Map.Entry<WALKey, WALValue>> entries) throws Exception {
+            public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) throws Exception {
                 compactedRowIndex.put(entries);
             }
 

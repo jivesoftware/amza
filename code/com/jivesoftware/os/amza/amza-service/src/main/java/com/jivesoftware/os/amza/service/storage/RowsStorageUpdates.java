@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.RangeScannable;
+import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALScan;
-import com.jivesoftware.os.amza.shared.WALScanable;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALValue;
 import java.util.Map.Entry;
@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 /**
  * Not thread safe. Each Thread should get their own ReadThroughChangeSet.
  */
-public class RowsStorageUpdates implements WALScanable {
+public class RowsStorageUpdates implements RangeScannable<WALValue> {
 
     private final WALStorage walStorage;
     private final ConcurrentSkipListMap<WALKey, WALValue> changes;
@@ -39,18 +39,18 @@ public class RowsStorageUpdates implements WALScanable {
     }
 
     @Override
-    public void rowScan(WALScan walScan) throws Exception {
+    public void rowScan(Scan<WALValue> scan) throws Exception {
         for (Entry<WALKey, WALValue> e : changes.entrySet()) {
-            if (!walScan.row(timestamp, e.getKey(), e.getValue())) {
+            if (!scan.row(timestamp, e.getKey(), e.getValue())) {
                 return;
             }
         }
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, WALScan walScan) throws Exception {
+    public void rangeScan(WALKey from, WALKey to, Scan<WALValue> scan) throws Exception {
         for (Entry<WALKey, WALValue> e : changes.subMap(from, to).entrySet()) {
-            if (!walScan.row(timestamp, e.getKey(), e.getValue())) {
+            if (!scan.row(timestamp, e.getKey(), e.getValue())) {
                 return;
             }
         }

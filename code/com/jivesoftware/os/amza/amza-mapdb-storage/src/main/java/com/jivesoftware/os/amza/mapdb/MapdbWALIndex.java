@@ -61,12 +61,27 @@ public class MapdbWALIndex implements WALIndex {
     }
 
     @Override
-    public List<WALPointer> getPointers(List<WALKey> keys) throws Exception {
+    public WALPointer getPointer(WALKey key) throws Exception {
         lock.acquire();
         try {
-            List<WALPointer> gots = new ArrayList<>(keys.size());
-            for (WALKey key : keys) {
-                gots.add(index.get(key));
+            return index.get(key);
+        } finally {
+            lock.release();
+        }
+    }
+
+    @Override
+    public WALPointer[] getPointers(WALKey[] consumableKeys) throws Exception {
+        lock.acquire();
+        try {
+            WALPointer[] gots = new WALPointer[consumableKeys.length];
+            for (int i = 0; i < consumableKeys.length; i++) {
+                if (consumableKeys[i] != null) {
+                    gots[i] = index.get(consumableKeys[i]);
+                    if (gots[i] != null) {
+                        consumableKeys[i] = null;
+                    }
+                }
             }
             return gots;
         } finally {

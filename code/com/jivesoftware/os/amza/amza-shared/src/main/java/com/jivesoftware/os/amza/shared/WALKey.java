@@ -22,6 +22,7 @@ import java.util.Arrays;
 public class WALKey implements Comparable<WALKey>, Serializable {
 
     private final byte[] key;
+    private transient int hashCode = 0;
 
     public WALKey(byte[] key) {
         this.key = key;
@@ -65,9 +66,12 @@ public class WALKey implements Comparable<WALKey>, Serializable {
 
     @Override
     public int hashCode() {
-        int hash = 3;
-        hash = 83 * hash + Arrays.hashCode(this.key);
-        return hash;
+        if (hashCode == 0) {
+            int hash = 3;
+            hash = 83 * hash + Arrays.hashCode(this.key);
+            hashCode = hash;
+        }
+        return hashCode;
     }
 
     @Override

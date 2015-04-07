@@ -25,11 +25,11 @@ import de.svenjacobs.loremipsum.LoremIpsum;
 import java.io.IOException;
 import java.util.Random;
 import java.util.Set;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
-import org.apache.commons.httpclient.StatusLine;
-import org.apache.commons.httpclient.URIException;
-import org.apache.commons.httpclient.methods.GetMethod;
-import org.apache.commons.httpclient.util.URIUtil;
+import org.apache.http.HttpResponse;
+import org.apache.http.StatusLine;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 
 public class AmzaGetStress {
 
@@ -37,7 +37,7 @@ public class AmzaGetStress {
     private static final LoremIpsum loremIpsum = new LoremIpsum();
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    public static void main(String[] args) throws URIException, IOException {
+    public static void main(String[] args) throws IOException {
 
         args = new String[]{"localhost", "1195", "1", "10000"};
 
@@ -51,8 +51,7 @@ public class AmzaGetStress {
 
         for (int i = 0; i < 8; i++) {
             final String rname = regionName + i;
-            MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
-            final org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);
+            final org.apache.http.client.HttpClient httpClient = HttpClients.createDefault();
 
             Thread t = new Thread() {
                 @Override
@@ -68,8 +67,8 @@ public class AmzaGetStress {
         }
     }
 
-    private static void get(org.apache.commons.httpclient.HttpClient httpClient,
-        String hostName, int port, String regionName, int firstDocId, int count, int batchSize) throws URIException, IOException, InterruptedException {
+    private static void get(org.apache.http.client.HttpClient httpClient,
+        String hostName, int port, String regionName, int firstDocId, int count, int batchSize) throws IOException, InterruptedException {
         long start = System.currentTimeMillis();
         for (int key = firstDocId; key < count; key++) {
             StringBuilder url = new StringBuilder();
@@ -84,23 +83,22 @@ public class AmzaGetStress {
                 if (b > 0) {
                     url.append(',');
                 }
-                url.append(b + "k" + key);
+                url.append(b).append('k').append(key);
                 expectedValues.add(b + "v" + key);
             }
 
-            String encodedUrl = URIUtil.encodeQuery(url.toString());
             while (true) {
-                GetMethod method = new GetMethod(encodedUrl);
+                HttpGet method = new HttpGet(url.toString());
                 StatusLine statusLine;
                 try {
                     try {
-                        httpClient.executeMethod(method);
+                        HttpResponse response = httpClient.execute(method);
 
-                        statusLine = method.getStatusLine();
+                        statusLine = response.getStatusLine();
                         if (statusLine.getStatusCode() == 200) {
                             //System.out.println("Got:" + new String(method.getResponseBody()));
-                            ArrayNode response = mapper.readValue(method.getResponseBodyAsString(), ArrayNode.class);
-                            for (JsonNode value : response) {
+                            ArrayNode node = mapper.readValue(EntityUtils.toString(response.getEntity()), ArrayNode.class);
+                            for (JsonNode value : node) {
                                 if (!value.isNull()) {
                                     expectedValues.remove(new String(BaseEncoding.base64().decode(value.textValue()), Charsets.UTF_8));
                                 }

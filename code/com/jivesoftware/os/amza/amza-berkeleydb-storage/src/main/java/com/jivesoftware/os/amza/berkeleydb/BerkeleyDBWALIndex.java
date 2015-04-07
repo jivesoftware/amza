@@ -26,6 +26,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FileUtils;
 
 /**
@@ -36,12 +38,15 @@ public class BerkeleyDBWALIndex implements WALIndex {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private static final int numPermits = 1024;
-    private final Semaphore lock = new Semaphore(numPermits, true);
 
     private final RegionName regionName;
     private final File dir;
     private Environment environment;
     private Database database;
+
+    private final Semaphore lock = new Semaphore(numPermits, true);
+    private final AtomicLong count = new AtomicLong(-1);
+    private final AtomicInteger commits = new AtomicInteger(0);
 
     public BerkeleyDBWALIndex(File dir, RegionName regionName) throws Exception {
         this.dir = dir;
@@ -94,17 +99,34 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public List<WALPointer> getPointers(List<WALKey> keys) throws Exception {
+    public WALPointer getPointer(WALKey key) throws Exception {
         lock.acquire();
         try {
-            List<WALPointer> gots = new ArrayList<>(keys.size());
             DatabaseEntry value = new DatabaseEntry();
-            for (WALKey key : keys) {
-                OperationStatus status = database.get(null, new DatabaseEntry(key.getKey()), value, LockMode.READ_UNCOMMITTED);
-                if (status == OperationStatus.SUCCESS) {
-                    gots.add(entryToWALPointer(value));
-                } else {
-                    gots.add(null);
+            OperationStatus status = database.get(null, new DatabaseEntry(key.getKey()), value, LockMode.READ_UNCOMMITTED);
+            if (status == OperationStatus.SUCCESS) {
+                return entryToWALPointer(value);
+            }
+            return null;
+        } finally {
+            lock.release();
+        }
+    }
+
+    @Override
+    public WALPointer[] getPointers(WALKey[] consumableKeys) throws Exception {
+        lock.acquire();
+        try {
+            WALPointer[] gots = new WALPointer[consumableKeys.length];
+            DatabaseEntry value = new DatabaseEntry();
+            for (int i = 0; i < consumableKeys.length; i++) {
+                WALKey key = consumableKeys[i];
+                if (consumableKeys[i] != null) {
+                    OperationStatus status = database.get(null, new DatabaseEntry(key.getKey()), value, LockMode.READ_UNCOMMITTED);
+                    if (status == OperationStatus.SUCCESS) {
+                        gots[i] = entryToWALPointer(value);
+                        consumableKeys[i] = null;
+                    }
                 }
             }
             return gots;
@@ -161,10 +183,35 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
+    public long size() throws Exception {
+        lock.acquire();
+        try {
+            long size = count.get();
+            if (size >= 0) {
+                return size;
+            }
+            int numCommits = commits.get();
+            size = database.count();
+            synchronized (commits) {
+                if (numCommits == commits.get()) {
+                    count.set(size);
+                }
+            }
+            return size;
+        } finally {
+            lock.release();
+        }
+    }
+
+    @Override
     public void commit() throws Exception {
         lock.acquire();
         try {
             environment.flushLog(false);
+            synchronized (commits) {
+                count.set(-1);
+                commits.incrementAndGet();
+            }
         } finally {
             lock.release();
         }
@@ -233,16 +280,6 @@ public class BerkeleyDBWALIndex implements WALIndex {
             if (cursor != null) {
                 cursor.close();
             }
-        }
-    }
-
-    @Override
-    public long size() throws Exception {
-        lock.acquire();
-        try {
-            return database.count();
-        } finally {
-            lock.release();
         }
     }
 

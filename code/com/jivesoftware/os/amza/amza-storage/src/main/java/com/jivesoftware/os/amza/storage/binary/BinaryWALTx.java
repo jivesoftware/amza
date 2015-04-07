@@ -98,7 +98,7 @@ public class BinaryWALTx implements WALTx {
                             RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
                             WALKey key = walr.getKey();
                             WALValue value = walr.getValue();
-                            WALPointer current = walIndex.getPointers(Collections.singletonList(key)).get(0);
+                            WALPointer current = walIndex.getPointer(key);
                             if (current == null) {
                                 walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
                                     key, new WALPointer(rowPointer, value.getTimestampId(), value.getTombstoned()))));
@@ -293,7 +293,7 @@ public class BinaryWALTx implements WALTx {
                 WALKey key = walr.getKey();
                 WALValue value = walr.getValue();
 
-                WALPointer got = (rowIndex == null) ? null : rowIndex.getPointers(Collections.singletonList(key)).get(0);
+                WALPointer got = (rowIndex == null) ? null : rowIndex.getPointer(key);
                 if (got == null || value.getTimestampId() >= got.getTimestampId()) {
                     if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
                         tombstoneCount.incrementAndGet();

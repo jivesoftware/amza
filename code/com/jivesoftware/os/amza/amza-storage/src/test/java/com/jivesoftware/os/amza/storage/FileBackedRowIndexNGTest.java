@@ -18,7 +18,7 @@ import org.testng.annotations.Test;
 public class FileBackedRowIndexNGTest {
 
     @Test
-    public void testPut() {
+    public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
         File dir1 = Files.createTempDir();
         File dir2 = Files.createTempDir();
@@ -28,14 +28,14 @@ public class FileBackedRowIndexNGTest {
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(1)), new WALPointer(1L, System.currentTimeMillis(), false))));
 
-        WALPointer got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(1)))).get(0);
+        WALPointer got = index.getPointer(new WALKey(FilerIO.intBytes(1)));
         Assert.assertEquals(got.getFp(), 1L);
 
         // reopen
         index = new FileBackedWALIndex(regionName, 4, false, 0, new File[] { dir0, dir1, dir2 });
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(2)), new WALPointer(2L, System.currentTimeMillis(), false))));
-        got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(2)))).get(0);
+        got = index.getPointer(new WALKey(FilerIO.intBytes(2)));
         Assert.assertEquals(got.getFp(), 2L);
 
         for (int i = 0; i < 100; i++) {
@@ -44,7 +44,7 @@ public class FileBackedRowIndexNGTest {
         }
 
         for (int i = 0; i < 100; i++) {
-            got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(i)))).get(0);
+            got = index.getPointer(new WALKey(FilerIO.intBytes(i)));
             Assert.assertEquals(got.getFp(), (long) i);
         }
     }
@@ -65,7 +65,7 @@ public class FileBackedRowIndexNGTest {
         }
 
         for (int i = 0; i < 50; i++) {
-            WALPointer got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(i)))).get(0);
+            WALPointer got = index.getPointer(new WALKey(FilerIO.intBytes(i)));
             Assert.assertEquals(got.getFp(), (long) i);
         }
 
@@ -78,7 +78,7 @@ public class FileBackedRowIndexNGTest {
         startCompaction.commit();
 
         for (int i = 100; i < 200; i++) {
-            WALPointer got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(i)))).get(0);
+            WALPointer got = index.getPointer(new WALKey(FilerIO.intBytes(i)));
             Assert.assertEquals(got.getFp(), (long) i);
         }
     }

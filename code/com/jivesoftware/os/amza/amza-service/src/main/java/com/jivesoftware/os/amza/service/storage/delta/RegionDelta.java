@@ -25,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
@@ -36,9 +35,8 @@ class RegionDelta {
 
     private final RegionName regionName;
     private final DeltaWAL deltaWAL;
-    private final MutableLong[] stripedKeyHighwaterTimestamps;
-    private final Map<WALKey, WALPointer> ballsIndex = new ConcurrentHashMap<>();
-    private final ConcurrentNavigableMap<WALKey, WALPointer> index = new ConcurrentSkipListMap<>();
+    private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>();
+    private final ConcurrentNavigableMap<WALKey, WALPointer> orderedIndex = new ConcurrentSkipListMap<>();
     private final ConcurrentSkipListMap<Long, List<byte[]>> txIdWAL = new ConcurrentSkipListMap<>();
     final AtomicReference<RegionDelta> compacting;
 
@@ -46,16 +44,10 @@ class RegionDelta {
         this.regionName = regionName;
         this.deltaWAL = deltaWAL;
         this.compacting = new AtomicReference<>(compacting);
-        int numKeyHighwaterStripes = 1024;// TODO expose to config
-        this.stripedKeyHighwaterTimestamps = new MutableLong[numKeyHighwaterStripes];
-        for (int i = 0; i < stripedKeyHighwaterTimestamps.length; i++) {
-            stripedKeyHighwaterTimestamps[i] = new MutableLong();
-        }
     }
 
     WALValue get(WALKey key) throws Exception {
-        WALPointer got = ballsIndex.get(key);
-        //got = index.get(key);
+        WALPointer got = pointerIndex.get(key);
         if (got == null) {
             RegionDelta regionDelta = compacting.get();
             if (regionDelta != null) {
@@ -67,8 +59,7 @@ class RegionDelta {
     }
 
     WALPointer getPointer(WALKey key) throws Exception {
-        WALPointer got = ballsIndex.get(key);
-        //WALPointer got = index.get(key);
+        WALPointer got = pointerIndex.get(key);
         if (got != null) {
             return got;
         }
@@ -79,13 +70,20 @@ class RegionDelta {
         return null;
     }
 
-    DeltaResult<List<WALPointer>> getPointers(List<WALKey> keys) throws Exception {
+    DeltaResult<WALPointer[]> getPointers(WALKey[] consumableKeys) throws Exception {
         boolean missed = false;
-        List<WALPointer> result = new ArrayList<>(keys.size());
-        for (WALKey key : keys) {
-            WALPointer got = getPointer(key);
-            missed |= (got == null);
-            result.add(got);
+        WALPointer[] result = new WALPointer[consumableKeys.length];
+        for (int i = 0; i < consumableKeys.length; i++) {
+            WALKey key = consumableKeys[i];
+            if (key != null) {
+                WALPointer got = getPointer(key);
+                if (got != null) {
+                    result[i] = got;
+                    consumableKeys[i] = null;
+                } else {
+                    missed = true;
+                }
+            }
         }
         return new DeltaResult<>(missed, result);
     }
@@ -102,13 +100,10 @@ class RegionDelta {
     }
 
     boolean containsKey(WALKey key) {
-        WALPointer got = ballsIndex.get(key);
+        WALPointer got = pointerIndex.get(key);
         if (got != null) {
             return true;
         }
-//            if (index.get(key) != null) {
-//                return true;
-//            }
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
             return regionDelta.containsKey(key);
@@ -128,24 +123,13 @@ class RegionDelta {
         return new DeltaResult<>(missed, result);
     }
 
-    long getLargestTimestampForKeyStripe(WALKey key) {
-        int highwaterTimestampIndex = Math.abs(key.hashCode()) % stripedKeyHighwaterTimestamps.length;
-        return stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue();
-    }
-
     void put(WALKey key, WALPointer rowPointer) {
-        int highwaterTimestampIndex = Math.abs(key.hashCode()) % stripedKeyHighwaterTimestamps.length;
-        synchronized (stripedKeyHighwaterTimestamps[highwaterTimestampIndex]) {
-            stripedKeyHighwaterTimestamps[highwaterTimestampIndex].setValue(Math.max(
-                stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue(),
-                rowPointer.getTimestampId()));
-        }
-        ballsIndex.put(key, rowPointer);
-        index.put(key, rowPointer);
+        pointerIndex.put(key, rowPointer);
+        orderedIndex.put(key, rowPointer);
     }
 
     Set<WALKey> keySet() {
-        Set<WALKey> keySet = ballsIndex.keySet();
+        Set<WALKey> keySet = pointerIndex.keySet();
         //Set<WALKey> keySet = index.keySet();
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
@@ -157,21 +141,21 @@ class RegionDelta {
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(WALKey from, WALKey to) {
-        Iterator<Map.Entry<WALKey, WALPointer>> iterator = index.subMap(from, to).entrySet().iterator();
+        Iterator<Map.Entry<WALKey, WALPointer>> iterator = orderedIndex.subMap(from, to).entrySet().iterator();
         Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
-            compactingIterator = regionDelta.index.subMap(from, to).entrySet().iterator();
+            compactingIterator = regionDelta.orderedIndex.subMap(from, to).entrySet().iterator();
         }
         return new DeltaPeekableElmoIterator(iterator, compactingIterator);
     }
 
     DeltaPeekableElmoIterator rowScanIterator() {
-        Iterator<Map.Entry<WALKey, WALPointer>> iterator = index.entrySet().iterator();
+        Iterator<Map.Entry<WALKey, WALPointer>> iterator = orderedIndex.entrySet().iterator();
         Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
-            compactingIterator = regionDelta.index.entrySet().iterator();
+            compactingIterator = regionDelta.orderedIndex.entrySet().iterator();
         }
         return new DeltaPeekableElmoIterator(iterator, compactingIterator);
     }
@@ -220,7 +204,7 @@ class RegionDelta {
                     new Scannable<WALValue>() {
                         @Override
                         public void rowScan(Scan<WALValue> scan) {
-                            for (Map.Entry<WALKey, WALPointer> e : compact.index.entrySet()) {
+                            for (Map.Entry<WALKey, WALPointer> e : compact.orderedIndex.entrySet()) {
                                 try {
                                     if (!scan.row(-1, e.getKey(), compact.deltaWAL.hydrate(compact.regionName, e.getValue()))) {
                                         break;

@@ -25,7 +25,7 @@ public class MapdbRowIndexNGTest {
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(1)), new WALPointer(1L, System.currentTimeMillis(), false))));
 
-        WALPointer got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(1)))).get(0);
+        WALPointer got = index.getPointer(new WALKey(FilerIO.intBytes(1)));
         Assert.assertEquals(got.getFp(), 1L);
         index.close();
 
@@ -33,7 +33,7 @@ public class MapdbRowIndexNGTest {
         index = new MapdbWALIndex(dir0, regionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(2)), new WALPointer(2L, System.currentTimeMillis(), false))));
-        got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(2)))).get(0);
+        got = index.getPointer(new WALKey(FilerIO.intBytes(2)));
         Assert.assertEquals(got.getFp(), 2L);
 
         for (int i = 0; i < 100; i++) {
@@ -42,7 +42,7 @@ public class MapdbRowIndexNGTest {
         }
 
         for (int i = 0; i < 100; i++) {
-            got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(i)))).get(0);
+            got = index.getPointer(new WALKey(FilerIO.intBytes(i)));
             Assert.assertEquals(got.getFp(), (long) i);
         }
     }
@@ -61,7 +61,7 @@ public class MapdbRowIndexNGTest {
         }
 
         for (int i = 0; i < 50; i++) {
-            WALPointer got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(i)))).get(0);
+            WALPointer got = index.getPointer(new WALKey(FilerIO.intBytes(i)));
             Assert.assertEquals(got.getFp(), (long) i);
         }
 
@@ -74,7 +74,7 @@ public class MapdbRowIndexNGTest {
         startCompaction.commit();
 
         for (int i = 100; i < 200; i++) {
-            WALPointer got = index.getPointers(Collections.singletonList(new WALKey(FilerIO.intBytes(i)))).get(0);
+            WALPointer got = index.getPointer(new WALKey(FilerIO.intBytes(i)));
             Assert.assertEquals(got.getFp(), (long) i);
         }
     }

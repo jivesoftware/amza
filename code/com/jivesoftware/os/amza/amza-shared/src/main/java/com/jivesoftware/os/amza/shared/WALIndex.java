@@ -23,7 +23,9 @@ public interface WALIndex extends RangeScannable<WALPointer> {
 
     void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception;
 
-    List<WALPointer> getPointers(List<WALKey> key) throws Exception;
+    WALPointer getPointer(WALKey key) throws Exception;
+
+    WALPointer[] getPointers(WALKey[] keys) throws Exception;
 
     List<Boolean> containsKey(List<WALKey> key) throws Exception;
 

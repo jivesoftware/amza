@@ -18,10 +18,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -69,7 +69,7 @@ public class DeltaWAL {
     }
 
     public DeltaWALApplied update(final RegionName regionName, final Map<WALKey, WALValue> apply) throws Exception {
-        final NavigableMap<WALKey, byte[]> keyToRowPointer = new TreeMap<>();
+        final Map<WALKey, byte[]> keyToRowPointer = new HashMap<>();
 
         final MutableLong txId = new MutableLong();
         rowsTx.write(new WALTx.WALWrite<Void>() {
@@ -161,10 +161,10 @@ public class DeltaWAL {
 
     public static class DeltaWALApplied {
 
-        public final NavigableMap<WALKey, byte[]> keyToRowPointer;
+        public final Map<WALKey, byte[]> keyToRowPointer;
         public final long txId;
 
-        public DeltaWALApplied(NavigableMap<WALKey, byte[]> keyToRowPointer, long txId) {
+        public DeltaWALApplied(Map<WALKey, byte[]> keyToRowPointer, long txId) {
             this.keyToRowPointer = keyToRowPointer;
             this.txId = txId;
         }

@@ -31,8 +31,13 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public List<WALPointer> getPointers(List<WALKey> key) throws Exception {
-        return Collections.nCopies(key.size(), null);
+    public WALPointer getPointer(WALKey key) throws Exception {
+        return null;
+    }
+
+    @Override
+    public WALPointer[] getPointers(WALKey[] keys) throws Exception {
+        return new WALPointer[keys.length];
     }
 
     @Override

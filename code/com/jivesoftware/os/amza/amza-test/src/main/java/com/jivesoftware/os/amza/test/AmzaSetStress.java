@@ -19,11 +19,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
-import org.apache.commons.httpclient.StatusLine;
-import org.apache.commons.httpclient.URIException;
-import org.apache.commons.httpclient.methods.PostMethod;
-import org.apache.commons.httpclient.methods.StringRequestEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.StatusLine;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.HttpClients;
 
 public class AmzaSetStress {
 
@@ -32,7 +33,7 @@ public class AmzaSetStress {
     public static final String APPLICATION_OCTET_STREAM_TYPE = "application/octet-stream";
     public static final ObjectMapper MAPPER = new ObjectMapper();
 
-    public static void main(String[] args) throws URIException, IOException {
+    public static void main(String[] args) throws IOException {
 
         args = new String[]{"localhost", "1175", "1", "10000"};
 
@@ -44,10 +45,9 @@ public class AmzaSetStress {
 
         String regionName = "lorem";
 
-        for (int i = 8; i < 16; i++) {
+        for (int i = 0; i < 8; i++) {
             final String rname = regionName + i;
-            MultiThreadedHttpConnectionManager connectionManager = new MultiThreadedHttpConnectionManager();
-            final org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);
+            final org.apache.http.client.HttpClient httpClient = HttpClients.createDefault();
 
             Thread t = new Thread() {
                 @Override
@@ -63,8 +63,8 @@ public class AmzaSetStress {
         }
     }
 
-    private static void feed(org.apache.commons.httpclient.HttpClient httpClient,
-        String hostName, int port, String regionName, int firstDocId, int count, int batchSize) throws URIException, IOException, InterruptedException {
+    private static void feed(org.apache.http.client.HttpClient httpClient,
+        String hostName, int port, String regionName, int firstDocId, int count, int batchSize) throws IOException, InterruptedException {
         long start = System.currentTimeMillis();
         for (int key = firstDocId; key < count; key++) {
             StringBuilder url = new StringBuilder();
@@ -81,15 +81,15 @@ public class AmzaSetStress {
 
             String postJsonBody = MAPPER.writeValueAsString(values);
             while (true) {
-                PostMethod method = new PostMethod(url.toString());
-                method.setRequestEntity(new StringRequestEntity(postJsonBody, APPLICATION_JSON_CONTENT_TYPE, "UTF-8"));
-                method.setRequestHeader(CONTENT_TYPE_HEADER_NAME, APPLICATION_JSON_CONTENT_TYPE);
+                HttpPost method = new HttpPost(url.toString());
+                method.setEntity(new StringEntity(postJsonBody, ContentType.APPLICATION_JSON));
+                method.setHeader(CONTENT_TYPE_HEADER_NAME, APPLICATION_JSON_CONTENT_TYPE);
 
                 StatusLine statusLine;
                 try {
                     try {
-                        httpClient.executeMethod(method);
-                        statusLine = method.getStatusLine();
+                        HttpResponse response = httpClient.execute(method);
+                        statusLine = response.getStatusLine();
                         if (statusLine.getStatusCode() == 200) {
                             break;
                         }

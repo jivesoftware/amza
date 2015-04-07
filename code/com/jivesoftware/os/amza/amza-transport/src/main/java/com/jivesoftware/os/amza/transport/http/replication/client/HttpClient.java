@@ -19,9 +19,9 @@ import java.util.Map;
 
 public interface HttpClient {
 
-    HttpResponse get(String path, Map<String, String> headers, int timeoutMillis) throws HttpClientException;
+    HttpResponse get(String path, Map<String, String> headers) throws HttpClientException;
 
-    HttpResponse postJson(String path, String postJsonBody, Map<String, String> headers, int timeoutMillis) throws HttpClientException;
+    HttpResponse postJson(String path, String postJsonBody, Map<String, String> headers) throws HttpClientException;
 
     HttpStreamResponse streamingPost(String path, String postJsonBody, Map<String, String> headers) throws HttpClientException;
 

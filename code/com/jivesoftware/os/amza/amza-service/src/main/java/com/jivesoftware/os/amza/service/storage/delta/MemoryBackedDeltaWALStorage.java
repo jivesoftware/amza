@@ -211,10 +211,10 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
             RowsChanged rowsChanged;
 
             // only grabbing pointers means our removes and clobbers don't include the old values, but for now this is more efficient.
-            List<WALPointer> currentPointers = getPointers(regionName, storage, keys);
+            WALPointer[] currentPointers = getPointers(regionName, storage, keys, values);
             for (int i = 0; i < keys.size(); i++) {
                 WALKey key = keys.get(i);
-                WALPointer currentPointer = currentPointers.get(i);
+                WALPointer currentPointer = currentPointers[i];
                 WALValue update = values.get(i);
                 if (currentPointer == null) {
                     apply.put(key, update);
@@ -318,24 +318,21 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         } finally {
             tickleMeElmophore.release();
         }
-        return contains ? true : storage.containsKey(key);
-
+        return contains || storage.containsKey(key);
     }
 
-    private List<WALPointer> getPointers(RegionName regionName, WALStorage storage, List<WALKey> keys) throws Exception {
-        DeltaResult<List<WALPointer>> deltas = getRegionDeltas(regionName).getPointers(keys);
+    private WALPointer[] getPointers(RegionName regionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws Exception {
+        WALKey[] consumableKeys = keys.toArray(new WALKey[keys.size()]);
+        DeltaResult<WALPointer[]> deltas = getRegionDeltas(regionName).getPointers(consumableKeys);
         if (deltas.missed) {
-            List<WALPointer> got = storage.getPointers(keys);
-            List<WALPointer> values = new ArrayList<>(keys.size());
-            for (int i = 0; i < keys.size(); i++) {
-                WALPointer delta = deltas.result.get(i);
-                if (delta == null) {
-                    values.add(got.get(i));
-                } else {
-                    values.add(delta);
+            WALPointer[] pointers = deltas.result;
+            WALPointer[] got = storage.getPointers(consumableKeys, values);
+            for (int i = 0; i < pointers.length; i++) {
+                if (pointers[i] == null) {
+                    pointers[i] = got[i];
                 }
             }
-            return values;
+            return pointers;
         } else {
             return deltas.result;
         }

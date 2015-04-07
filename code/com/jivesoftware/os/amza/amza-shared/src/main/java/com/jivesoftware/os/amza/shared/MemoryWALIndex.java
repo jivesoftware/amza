@@ -87,10 +87,20 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public List<WALPointer> getPointers(List<WALKey> keys) {
-        List<WALPointer> gots = new ArrayList<>(keys.size());
-        for (WALKey key : keys) {
-            gots.add(index.get(key));
+    public WALPointer getPointer(WALKey key) throws Exception {
+        return index.get(key);
+    }
+
+    @Override
+    public WALPointer[] getPointers(WALKey[] consumableKeys) {
+        WALPointer[] gots = new WALPointer[consumableKeys.length];
+        for (int i = 0; i < consumableKeys.length; i++) {
+            if (consumableKeys[i] != null) {
+                gots[i] = index.get(consumableKeys[i]);
+                if (gots[i] != null) {
+                    consumableKeys[i] = null;
+                }
+            }
         }
         return gots;
     }

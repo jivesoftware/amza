@@ -19,7 +19,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.Charset;
 
 public class HttpRequestHelper {
@@ -93,7 +92,7 @@ public class HttpRequestHelper {
         return extractResultFromResponse(responseBody, resultClass);
     }
 
-    public InputStream executeStreamingPostRequest(Object requestParamsObject, String endpointUrl) throws HttpClientException {
+    public HttpStreamResponse executeStreamingPostRequest(Object requestParamsObject, String endpointUrl) throws HttpClientException {
 
         String postEntity;
         try {
@@ -103,13 +102,13 @@ public class HttpRequestHelper {
                 + "was " + requestParamsObject, e);
         }
 
-        return httpClient.streamingPost(endpointUrl, postEntity, null).getInputStream();
+        return httpClient.streamingPost(endpointUrl, postEntity, null);
     }
 
     private byte[] executeGetJson(HttpClient httpClient, String endpointUrl) {
         HttpResponse response;
         try {
-            response = httpClient.get(endpointUrl, null, -1);
+            response = httpClient.get(endpointUrl, null);
         } catch (HttpClientException e) {
             throw new RuntimeException("Error posting query request to server.  The endpoint posted to was \"" + endpointUrl + "\".", e);
         }
@@ -132,7 +131,7 @@ public class HttpRequestHelper {
     private byte[] executePostJson(HttpClient httpClient, String endpointUrl, String postEntity) {
         HttpResponse response;
         try {
-            response = httpClient.postJson(endpointUrl, postEntity, null, -1);
+            response = httpClient.postJson(endpointUrl, postEntity, null);
         } catch (HttpClientException e) {
             throw new RuntimeException("Error posting query request to server.  The entity posted "
                 + "was \"" + postEntity + "\" and the endpoint posted to was \"" + endpointUrl + "\".", e);

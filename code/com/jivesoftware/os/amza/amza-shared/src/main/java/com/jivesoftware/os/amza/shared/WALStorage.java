@@ -25,11 +25,11 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     WALValue get(WALKey key) throws Exception;
 
+    WALValue[] get(WALKey[] keys) throws Exception;
+
     boolean containsKey(WALKey key) throws Exception;
 
-    List<WALValue> get(List<WALKey> keys) throws Exception;
-
-    List<WALPointer> getPointers(List<WALKey> keys) throws Exception;
+    WALPointer[] getPointers(WALKey[] consumableKeys, List<WALValue> values) throws Exception;
 
     List<Boolean> containsKey(List<WALKey> keys) throws Exception;
 

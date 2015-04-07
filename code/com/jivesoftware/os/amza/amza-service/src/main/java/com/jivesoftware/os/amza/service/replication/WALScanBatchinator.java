@@ -25,7 +25,8 @@ import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import java.util.TreeMap;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -39,7 +40,7 @@ class WALScanBatchinator implements RowStream {
     private final RowMarshaller<byte[]> rowMarshaller;
     private final RegionName regionName;
     private final RegionStore regionStore;
-    private final TreeMap<WALKey, WALValue> batch = new TreeMap<>();
+    private final Map<WALKey, WALValue> batch = new HashMap<>();
     private final MutableLong lastTxId;
     private final MutableBoolean flushed = new MutableBoolean(false);
 

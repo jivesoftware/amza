@@ -19,7 +19,9 @@ import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessageP
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -94,7 +96,7 @@ public class IndexReplicationTest {
         TcpUpdatesSender sender = new TcpUpdatesSender(tcpClientProvider, applicationProtocol);
 
         RegionName tableName = new RegionName(false, "test", "test");
-        NavigableMap<WALKey, WALValue> changes = new ConcurrentSkipListMap<>();
+        Map<WALKey, WALValue> changes = new HashMap<>();
 
         WALValue val1 = new WALValue("blah".getBytes(), idProvider.nextId(), false);
         WALValue val2 = new WALValue("meh".getBytes(), idProvider.nextId(), false);

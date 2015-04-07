@@ -21,7 +21,8 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import java.util.TreeMap;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -34,7 +35,7 @@ class ReplicateBatchinator implements RowStream {
     private final RowMarshaller<byte[]> rowMarshaller;
     private final RegionName regionName;
     private final AmzaRegionChangeReplicator replicator;
-    private final TreeMap<WALKey, WALValue> batch = new TreeMap<>();
+    private final Map<WALKey, WALValue> batch = new HashMap<>();
     private final MutableLong lastTxId;
     private final MutableBoolean flushed = new MutableBoolean(false);
 

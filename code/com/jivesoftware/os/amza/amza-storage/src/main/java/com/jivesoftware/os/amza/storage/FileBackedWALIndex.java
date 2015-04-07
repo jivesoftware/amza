@@ -275,21 +275,37 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public List<WALPointer> getPointers(List<WALKey> keys) {
+    public WALPointer getPointer(WALKey key) throws Exception {
         try {
             SkipListMapContext slmc = ensureCapacity(0);
-            List<WALPointer> gots = new ArrayList<>(keys.size());
             if (slmc != null) {
-                for (WALKey key : keys) {
-                    byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key.getKey());
-                    if (got != null) {
-                        gots.add(der(got));
-                    } else {
-                        gots.add(null);
+                byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key.getKey());
+                if (got != null) {
+                    return der(got);
+                }
+            }
+            return null;
+        } catch (Exception x) {
+            throw new RuntimeException("Failure while putting.", x);
+        }
+    }
+
+    @Override
+    synchronized public WALPointer[] getPointers(WALKey[] consumableKeys) throws Exception {
+        try {
+            SkipListMapContext slmc = ensureCapacity(0);
+            WALPointer[] gots = new WALPointer[consumableKeys.length];
+            if (slmc != null) {
+                for (int i = 0; i < consumableKeys.length; i++) {
+                    WALKey key = consumableKeys[i];
+                    if (key != null) {
+                        byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key.getKey());
+                        if (got != null) {
+                            gots[i] = der(got);
+                            consumableKeys[i] = null;
+                        }
                     }
                 }
-            } else {
-                gots.addAll(Collections.<WALPointer>nCopies(keys.size(), null));
             }
             return gots;
 

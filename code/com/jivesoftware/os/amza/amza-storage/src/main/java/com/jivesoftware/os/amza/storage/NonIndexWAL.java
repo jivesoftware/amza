@@ -168,16 +168,16 @@ public class NonIndexWAL implements WALStorage {
 
     @Override
     public WALValue get(WALKey key) throws Exception {
-        return get(Collections.singletonList(key)).get(0);
-    }
-
-    @Override
-    public List<WALValue> get(List<WALKey> keys) throws Exception {
         throw new UnsupportedOperationException("NonIndexWAL doesn't support gets.");
     }
 
     @Override
-    public List<WALPointer> getPointers(List<WALKey> keys) throws Exception {
+    public WALValue[] get(WALKey[] keys) throws Exception {
+        throw new UnsupportedOperationException("NonIndexWAL doesn't support gets.");
+    }
+
+    @Override
+    public WALPointer[] getPointers(WALKey[] consumableKeys, List<WALValue> values) throws Exception {
         throw new UnsupportedOperationException("NonIndexWAL doesn't support getPointers.");
     }
 

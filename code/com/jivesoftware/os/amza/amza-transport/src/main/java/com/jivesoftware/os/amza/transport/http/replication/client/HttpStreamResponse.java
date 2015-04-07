@@ -1,17 +1,20 @@
 package com.jivesoftware.os.amza.transport.http.replication.client;
 
 import java.io.InputStream;
+import org.apache.http.client.methods.HttpRequestBase;
 
 public class HttpStreamResponse {
 
     protected final int statusCode;
     protected final String statusReasonPhrase;
-    InputStream inputStream;
+    protected InputStream inputStream;
+    protected final HttpRequestBase requestBase;
 
-    public HttpStreamResponse(int statusCode, String statusReasonPhrase, InputStream inputStream) {
+    public HttpStreamResponse(int statusCode, String statusReasonPhrase, InputStream inputStream, HttpRequestBase requestBase) {
         this.statusCode = statusCode;
         this.statusReasonPhrase = statusReasonPhrase;
         this.inputStream = inputStream;
+        this.requestBase = requestBase;
     }
 
     public InputStream getInputStream() {
@@ -24,5 +27,9 @@ public class HttpStreamResponse {
 
     public String getStatusReasonPhrase() {
         return statusReasonPhrase;
+    }
+
+    public void close() {
+        requestBase.reset();
     }
 }

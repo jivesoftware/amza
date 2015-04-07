@@ -15,20 +15,14 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.Collection;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 
-public class MemoryWALUpdates implements RangeScannable<WALValue> {
+public class MemoryWALUpdates implements Scannable<WALValue> {
 
-    private final NavigableMap<WALKey, WALValue> updates;
+    private final Map<WALKey, WALValue> updates;
 
-    public MemoryWALUpdates() {
-        this(new ConcurrentSkipListMap<WALKey, WALValue>());
-    }
-
-    public MemoryWALUpdates(NavigableMap<WALKey, WALValue> updates) {
+    public MemoryWALUpdates(Map<WALKey, WALValue> updates) {
         this.updates = updates;
     }
 
@@ -40,29 +34,6 @@ public class MemoryWALUpdates implements RangeScannable<WALValue> {
             if (!scan.row(-1, key, value)) {
                 break;
             }
-        }
-    }
-
-    @Override
-    public void rangeScan(WALKey from, WALKey to, Scan<WALValue> scan) throws Exception {
-        for (Entry<WALKey, WALValue> e : updates.subMap(from, to).entrySet()) {
-            WALKey key = e.getKey();
-            WALValue value = e.getValue();
-            if (!scan.row(-1, key, value)) {
-                break;
-            }
-        }
-    }
-
-    public void put(Collection<? extends Entry<WALKey, WALValue>> entrys) {
-        for (Entry<WALKey, WALValue> entry : entrys) {
-            updates.put(entry.getKey(), entry.getValue());
-        }
-    }
-
-    public void remove(Collection<WALKey> keys) {
-        for (WALKey key : keys) {
-            updates.remove(key);
         }
     }
 }

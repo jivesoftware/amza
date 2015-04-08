@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
@@ -25,6 +26,8 @@ import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
+import java.io.IOException;
+import java.util.Set;
 
 /**
  *
@@ -44,6 +47,7 @@ public class EmbeddedAmzaServiceInitializer {
         final RowChanges allRowChanges) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+        final RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
 
         WALStorageProvider regionStorageProvider = new WALStorageProvider() {
             @Override
@@ -57,18 +61,32 @@ public class EmbeddedAmzaServiceInitializer {
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
                 return new IndexedWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
                     new BinaryWALTx(directory,
-                        regionName.getRegionName() + ".kvt",
+                        regionName.toBase64(),
                         rowIOProvider,
                         rowMarshaller,
                         walIndexProvider),
                     rowReplicator,
                     storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
                     storageDescriptor.maxUpdatesBetweenIndexCommitMarker);
+            }
+
+            @Override
+            public Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException {
+                Set<RegionName> regionNames = Sets.newHashSet();
+                for (String workingDirectory : workingDirectories) {
+                    File directory = new File(workingDirectory, domain);
+                    if (directory.exists() && directory.isDirectory()) {
+                        Set<String> regions = BinaryWALTx.listExisting(directory, rowIOProvider);
+                        for (String region : regions) {
+                            regionNames.add(RegionName.fromBase64(region));
+                        }
+                    }
+                }
+                return regionNames;
             }
         };
 
@@ -82,15 +100,29 @@ public class EmbeddedAmzaServiceInitializer {
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
                 return new NonIndexWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
                     new BinaryWALTx(directory,
-                        regionName.getRegionName() + ".kvt",
+                        regionName.toBase64(),
                         rowIOProvider,
                         rowMarshaller,
                         new NoOpWALIndexProvider()));
+            }
+
+            @Override
+            public Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException {
+                Set<RegionName> regionNames = Sets.newHashSet();
+                for (String workingDirectory : workingDirectories) {
+                    File directory = new File(workingDirectory, domain);
+                    if (directory.exists() && directory.isDirectory()) {
+                        Set<String> regions = BinaryWALTx.listExisting(directory, rowIOProvider);
+                        for (String region : regions) {
+                            regionNames.add(RegionName.fromBase64(region));
+                        }
+                    }
+                }
+                return regionNames;
             }
         };
 

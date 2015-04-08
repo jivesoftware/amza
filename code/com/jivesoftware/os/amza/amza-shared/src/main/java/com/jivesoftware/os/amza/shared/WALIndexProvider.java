@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-public interface WALIndexProvider {
+public interface WALIndexProvider<T extends WALIndex> {
 
-    WALIndex createIndex(RegionName regionName) throws Exception;
+    T createIndex(RegionName regionName) throws Exception;
 }

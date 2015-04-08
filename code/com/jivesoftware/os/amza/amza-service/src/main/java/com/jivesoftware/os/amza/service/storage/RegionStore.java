@@ -105,8 +105,8 @@ public class RegionStore implements RangeScannable<WALValue> {
         walStorage.updatedStorageDescriptor(storageDescriptor);
     }
 
-    public long size() throws Exception {
-        return deltaWALStorage.size(regionName, walStorage);
+    public long count() throws Exception {
+        return deltaWALStorage.count(regionName, walStorage);
     }
 
 }

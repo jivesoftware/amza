@@ -21,7 +21,7 @@ public class BerkeleyDBWALIndexTest {
     public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
         RegionName regionName = new RegionName(false, "r1", "t1");
-        BerkeleyDBWALIndex index = new BerkeleyDBWALIndex(dir0, regionName);
+        BerkeleyDBWALIndex index = getIndex(dir0, regionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(1)), new WALPointer(1L, System.currentTimeMillis(), false))));
 
@@ -30,7 +30,7 @@ public class BerkeleyDBWALIndexTest {
         index.close();
 
         // reopen
-        index = new BerkeleyDBWALIndex(dir0, regionName);
+        index = getIndex(dir0, regionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(2)), new WALPointer(2L, System.currentTimeMillis(), false))));
         got = index.getPointer(new WALKey(FilerIO.intBytes(2)));
@@ -52,7 +52,7 @@ public class BerkeleyDBWALIndexTest {
 
         File dir0 = Files.createTempDir();
         RegionName regionName = new RegionName(false, "r1", "t1");
-        BerkeleyDBWALIndex index = new BerkeleyDBWALIndex(dir0, regionName);
+        BerkeleyDBWALIndex index = getIndex(dir0, regionName);
 
         for (int i = 0; i < 50; i++) {
             index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
@@ -77,6 +77,10 @@ public class BerkeleyDBWALIndexTest {
             WALPointer got = index.getPointer(new WALKey(FilerIO.intBytes(i)));
             Assert.assertEquals(got.getFp(), (long) i);
         }
+    }
+
+    private BerkeleyDBWALIndex getIndex(File dir0, RegionName regionName) throws Exception {
+        return new BerkeleyDBWALIndexProvider(new String[] { dir0.getAbsolutePath() }, 1).createIndex(regionName);
     }
 
 }

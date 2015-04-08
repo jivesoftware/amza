@@ -56,8 +56,8 @@ public class NoOpDeltaWALStorage implements DeltaWALStorage {
     }
 
     @Override
-    public long size(RegionName regionName, WALStorage storage) throws Exception {
-        return storage.size();
+    public long count(RegionName regionName, WALStorage storage) throws Exception {
+        return storage.count();
     }
 
 }

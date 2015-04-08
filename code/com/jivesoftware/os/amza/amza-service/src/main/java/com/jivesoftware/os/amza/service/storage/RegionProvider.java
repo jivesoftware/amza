@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALStorage;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
@@ -37,6 +38,11 @@ import java.io.File;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RegionProvider implements RowChanges {
 
@@ -86,23 +92,82 @@ public class RegionProvider implements RowChanges {
     }
 
     public void open() throws Exception {
+
         RegionStore regionIndexStore = getRegionIndexStore();
+        final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+        final AtomicInteger numOpened = new AtomicInteger(0);
+        final AtomicInteger numFailed = new AtomicInteger(0);
+        final AtomicInteger total = new AtomicInteger(0);
         regionIndexStore.rowScan(new Scan<WALValue>() {
 
             @Override
             public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                RegionName regionName = RegionName.fromBytes(key.getKey());
+                final RegionName regionName = RegionName.fromBytes(key.getKey());
                 try {
                     RegionProperties properties = getRegionProperties(regionName);
                     if (properties != null) {
-                        getRegionStore(regionName);
+                        total.incrementAndGet();
+                        openExecutor.submit(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    getRegionStore(regionName);
+                                    numOpened.incrementAndGet();
+                                } catch (Throwable t) {
+                                    LOG.warn("Encountered the following opening region:" + regionName, t);
+                                    numFailed.incrementAndGet();
+                                }
+                            }
+                        });
                     }
                 } catch (Exception x) {
-                    LOG.warn("Encountered the following opening region:" + regionName, x);
+                    LOG.warn("Encountered the following getting properties for region:" + regionName, x);
                 }
                 return true;
             }
         });
+        openExecutor.shutdown();
+        while (!openExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+            LOG.info("Still opening regions: opened={} failed={} total={}", numOpened.get(), numFailed.get(), total.get());
+        }
+
+        ExecutorService deltaLoadExecutor = Executors.newFixedThreadPool(deltaWALStorages.length);
+        int stripe = 0;
+        for (final DeltaWALStorage deltaWALStorage : deltaWALStorages) {
+            final int _stripe = stripe;
+            stripe++;
+            deltaLoadExecutor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        deltaWALStorage.load(RegionProvider.this);
+                    } catch (Throwable t) {
+                        LOG.warn("Encountered the following loading a stripe " + _stripe, t);
+                    }
+                }
+            });
+        }
+        deltaLoadExecutor.shutdown();
+        while (!deltaLoadExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+            LOG.info("Still loading deltas");
+        }
+
+        ScheduledExecutorService compactDeltaWALThread = Executors.newScheduledThreadPool(1,
+            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
+
+        for (final DeltaWALStorage deltaWALStorage : deltaWALStorages) {
+            compactDeltaWALThread.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        deltaWALStorage.compact(RegionProvider.this);
+                    } catch (Throwable x) {
+                        LOG.error("Compactor failed.", x);
+                    }
+                }
+            }, 1, 1, TimeUnit.MINUTES);
+        }
+
     }
 
     public RegionStore getRingIndexStore() throws Exception {
@@ -217,6 +282,10 @@ public class RegionProvider implements RowChanges {
 
     public Set<Map.Entry<RegionName, RegionStore>> getAll() {
         return regionStores.entrySet();
+    }
+
+    public boolean exists(RegionName regionName) {
+        return regionStores.containsKey(regionName);
     }
 
     public Set<RegionName> getActiveRegions() {

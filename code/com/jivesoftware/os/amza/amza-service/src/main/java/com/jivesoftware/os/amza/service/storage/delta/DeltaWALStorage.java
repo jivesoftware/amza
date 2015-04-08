@@ -33,5 +33,5 @@ public interface DeltaWALStorage {
 
     void rowScan(RegionName regionName, Scannable<WALValue> scanable, Scan<WALValue> scan) throws Exception;
 
-    long size(RegionName regionName, WALStorage storage) throws Exception;
+    long count(RegionName regionName, WALStorage storage) throws Exception;
 }

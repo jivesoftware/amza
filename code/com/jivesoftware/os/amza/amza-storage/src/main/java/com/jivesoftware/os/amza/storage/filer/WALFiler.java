@@ -64,6 +64,9 @@ public class WALFiler extends RandomAccessFile implements IFiler {
             final FileChannel channel = getChannel();
             long newLength = length();
             // TODO handle larger files
+            if (newLength >= Integer.MAX_VALUE) {
+                return null;
+            }
             ByteBufferBackedFiler newFiler = new ByteBufferBackedFiler(channel.map(FileChannel.MapMode.READ_ONLY, 0, (int) newLength));
             memMapFiler.set(newFiler);
             memMapFilerLength.set(newLength);

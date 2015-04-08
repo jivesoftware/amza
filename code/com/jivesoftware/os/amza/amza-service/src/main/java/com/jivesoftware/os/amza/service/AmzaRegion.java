@@ -191,7 +191,7 @@ public class AmzaRegion {
         return passed.booleanValue();
     }
 
-    public long size() throws Exception {
-        return regionStore.size();
+    public long count() throws Exception {
+        return regionStore.count();
     }
 }

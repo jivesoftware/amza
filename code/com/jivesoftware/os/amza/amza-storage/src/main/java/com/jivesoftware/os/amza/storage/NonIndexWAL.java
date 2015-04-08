@@ -55,19 +55,26 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
+    public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         if (updateCount.get() > 0) {
             Optional<WALTx.Compacted> compact = rowsTx.compact(regionName, removeTombstonedOlderThanTimestampId, ttlTimestampId, null);
             if (compact.isPresent()) {
-                compact.get().getCompactedWALIndex();
+                WALTx.CommittedCompacted compacted = compact.get().commit();
                 updateCount.set(0);
+                return compacted.sizeInBytes;
             }
         }
+        return -1;
     }
 
     @Override
     public void load() throws Exception {
 
+    }
+
+    @Override
+    public boolean delete(boolean ifEmpty) throws Exception {
+        return rowsTx.delete(ifEmpty);
     }
 
     @Override
@@ -192,7 +199,7 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public long size() throws Exception {
+    public long count() throws Exception {
         throw new UnsupportedOperationException("NonIndexWAL doesn't support count.");
     }
 

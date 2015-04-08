@@ -41,6 +41,8 @@ public interface WALIndex extends RangeScannable<WALPointer> {
      */
     void commit() throws Exception;
 
+    void close() throws Exception;
+
     void compact() throws Exception;
 
     CompactionWALIndex startCompaction() throws Exception;

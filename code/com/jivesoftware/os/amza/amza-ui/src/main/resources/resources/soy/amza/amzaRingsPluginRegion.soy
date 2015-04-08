@@ -23,7 +23,7 @@
                         </thead>
                         <tbody>
                             <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
-                                method="get" name="addRingHost">
+                                method="post" name="addRingHost">
                                 <tr style="background-color:#ddd;">
                                     <td>
                                         <button title="Filter" type="submit" name="action" value="add" class="btn btn-default"><span class="glyphicon glyphicon-search"></span></button>
@@ -50,7 +50,7 @@
 
                             {foreach $r in $rings}
                                 <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
-                                    method="get" name="removeRingHost">
+                                    method="post" name="removeRingHost">
                                     <tr>    
                                         <input type="hidden" name="ringName" value="{$r.ringName}">
                                         <input type="hidden" name="host" value="{$r.host}">

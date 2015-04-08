@@ -160,7 +160,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             map.put("ring", ringMaps);
 
             AmzaRegion region = amzaService.getRegion(name);
-            map.put("count", String.valueOf(region.size()));
+            map.put("count", String.valueOf(region.count()));
         }
         map.put("received", String.valueOf(totals.received.get()));
         map.put("receivedLag", String.valueOf(totals.receivedLag.get()));

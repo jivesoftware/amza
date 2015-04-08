@@ -150,6 +150,7 @@ public class MapdbWALIndex implements WALIndex {
 
     }
 
+    @Override
     public void close() throws Exception {
         lock.acquire(numPermits);
         try {

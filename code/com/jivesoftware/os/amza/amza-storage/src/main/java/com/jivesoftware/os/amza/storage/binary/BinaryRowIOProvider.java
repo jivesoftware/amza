@@ -3,6 +3,9 @@ package com.jivesoftware.os.amza.storage.binary;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.WALFiler;
 import java.io.File;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  *
@@ -26,4 +29,9 @@ public class BinaryRowIOProvider implements RowIOProvider {
         return new BinaryRowIO(file, filer, rowReader, rowWriter);
     }
 
+    @Override
+    public List<File> listExisting(File dir) {
+        File[] existing = dir.listFiles();
+        return existing != null ? Arrays.asList(existing) : Collections.<File>emptyList();
+    }
 }

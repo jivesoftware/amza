@@ -106,26 +106,25 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
+    public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
 
         if ((clobberCount.get() + 1) / (newCount.get() + 1) > 2) { // TODO expose to config
             Optional<WALTx.Compacted> compact = walTx.compact(regionName, removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
 
             if (compact.isPresent()) {
-
                 tickleMeElmophore.acquire(numTickleMeElmaphore);
                 try {
-                    WALIndex compactedRowsIndex = compact.get().getCompactedWALIndex();
-                    walIndex.set(compactedRowsIndex);
+                    WALTx.CommittedCompacted compacted = compact.get().commit();
+                    walIndex.set(compacted.index);
                     newCount.set(0);
                     clobberCount.set(0);
-
+                    return compacted.sizeInBytes;
                 } finally {
                     tickleMeElmophore.release(numTickleMeElmaphore);
                 }
             }
-
         }
+        return -1;
     }
 
     @Override
@@ -169,6 +168,11 @@ public class IndexedWAL implements WALStorage {
         } finally {
             tickleMeElmophore.release(numTickleMeElmaphore);
         }
+    }
+
+    @Override
+    public boolean delete(boolean ifEmpty) throws Exception {
+        throw new UnsupportedOperationException("Not yet!");
     }
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
@@ -522,7 +526,7 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public long size() throws Exception {
+    public long count() throws Exception {
         tickleMeElmophore.acquire();
         try {
             WALIndex wali = this.walIndex.get();

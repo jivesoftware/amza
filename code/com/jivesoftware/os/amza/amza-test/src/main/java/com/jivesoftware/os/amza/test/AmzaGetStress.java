@@ -39,7 +39,7 @@ public class AmzaGetStress {
 
     public static void main(String[] args) throws IOException {
 
-        args = new String[]{"localhost", "1195", "1", "10000"};
+        args = new String[]{"soa-integ-data11.phx1.jivehosted.com", "1185", "1", "10000"};
 
         final String hostName = args[0];
         final int port = Integer.parseInt(args[1]);
@@ -49,7 +49,7 @@ public class AmzaGetStress {
 
         String regionName = "lorem";
 
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 1024; i++) {
             final String rname = regionName + i;
             final org.apache.http.client.HttpClient httpClient = HttpClients.createDefault();
 

@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.RegionName;
@@ -25,8 +26,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
@@ -36,6 +39,7 @@ public class BinaryWALTx implements WALTx {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private static final String SUFFIX = ".kvt";
     private static final int NUM_PERMITS = 1024;
 
     private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
@@ -49,16 +53,29 @@ public class BinaryWALTx implements WALTx {
     private RowIO io;
 
     public BinaryWALTx(File baseDir,
-        String name,
+        String prefix,
         RowIOProvider ioProvider,
         RowMarshaller<byte[]> rowMarshaller,
         WALIndexProvider walIndexProvider) throws Exception {
         this.dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
-        this.name = name;
+        this.name = prefix + SUFFIX;
         this.ioProvider = ioProvider;
         this.rowMarshaller = rowMarshaller;
         this.walIndexProvider = walIndexProvider;
         this.io = ioProvider.create(dir, name);
+    }
+
+    public static Set<String> listExisting(File baseDir, RowIOProvider ioProvider) {
+        File dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
+        List<File> files = ioProvider.listExisting(dir);
+        Set<String> names = Sets.newHashSet();
+        for (File file : files) {
+            String name = file.getName();
+            if (name.endsWith(SUFFIX)) {
+                names.add(name.substring(0, name.indexOf(SUFFIX)));
+            }
+        }
+        return names;
     }
 
     @Override
@@ -89,7 +106,7 @@ public class BinaryWALTx implements WALTx {
             if (walIndex.isEmpty()) {
                 LOG.info(
                     "Rebuilding " + walIndex.getClass().getSimpleName()
-                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
+                        + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
                 final MutableLong rebuilt = new MutableLong();
                 io.scan(0, new RowStream() {
                     @Override
@@ -153,6 +170,25 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
+    public boolean delete(boolean ifEmpty) throws Exception {
+        compactionLock.acquire(NUM_PERMITS);
+        try {
+            if (!ifEmpty || io.sizeInBytes() == 0) {
+                try {
+                    io.close();
+                } catch (Exception x) {
+                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[] { dir.getAbsolutePath() }, x);
+                }
+                FileUtils.deleteDirectory(dir);
+                return true;
+            }
+            return false;
+        } finally {
+            compactionLock.release(NUM_PERMITS);
+        }
+    }
+
+    @Override
     public Optional<Compacted> compact(final RegionName regionName,
         final long removeTombstonedOlderThanTimestampId,
         final long ttlTimestampId,
@@ -199,7 +235,7 @@ public class BinaryWALTx implements WALTx {
         return Optional.<Compacted>of(new Compacted() {
 
             @Override
-            public WALIndex getCompactedWALIndex() throws Exception {
+            public CommittedCompacted commit() throws Exception {
 
                 compactionLock.acquire(NUM_PERMITS);
                 try {
@@ -246,11 +282,13 @@ public class BinaryWALTx implements WALTx {
                     LOG.info("Compacted region " + dir.getAbsolutePath() + "/" + name
                         + " was:" + sizeBeforeCompaction + "bytes "
                         + " isNow:" + sizeAfterCompaction + "bytes.");
-                    compactionRowIndex.commit();
+                    if (compactionRowIndex != null) {
+                        compactionRowIndex.commit();
+                    }
 
                     long endOfLastRow = io.getEndOfLastRow();
                     lastEndOfLastRow.set(endOfLastRow);
-                    return rowIndex;
+                    return new CommittedCompacted(sizeAfterCompaction, rowIndex);
                 } finally {
                     compactionLock.release(NUM_PERMITS);
                 }

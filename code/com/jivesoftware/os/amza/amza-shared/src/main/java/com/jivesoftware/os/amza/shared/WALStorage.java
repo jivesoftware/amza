@@ -21,6 +21,8 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     void load() throws Exception;
 
+    boolean delete(boolean ifEmpty) throws Exception;
+
     RowsChanged update(Long overrideTxId, WALStorageUpdateMode upateMode, Scannable<WALValue> rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
@@ -35,9 +37,9 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     void takeRowUpdatesSince(final long transactionId, RowStream rowUpdates) throws Exception;
 
-    void compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
+    long compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 
     void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception;
 
-    long size() throws Exception;
+    long count() throws Exception;
 }

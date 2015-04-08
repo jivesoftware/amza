@@ -7,7 +7,6 @@ import com.jivesoftware.os.amza.shared.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
@@ -43,10 +42,10 @@ public class RowRegionNGTest {
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats);
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
-        final WALIndexProvider indexProvider = new WALIndexProvider() {
+        final WALIndexProvider<MemoryWALIndex> indexProvider = new WALIndexProvider<MemoryWALIndex>() {
 
             @Override
-            public WALIndex createIndex(RegionName regionName) throws Exception {
+            public MemoryWALIndex createIndex(RegionName regionName) throws Exception {
                 return new MemoryWALIndex();
             }
         };
@@ -138,10 +137,10 @@ public class RowRegionNGTest {
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats);
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
-        final WALIndexProvider indexProvider = new WALIndexProvider() {
+        final WALIndexProvider<MemoryWALIndex> indexProvider = new WALIndexProvider<MemoryWALIndex>() {
 
             @Override
-            public WALIndex createIndex(RegionName regionName) throws Exception {
+            public MemoryWALIndex createIndex(RegionName regionName) throws Exception {
                 return new MemoryWALIndex();
             }
         };

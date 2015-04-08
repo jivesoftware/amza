@@ -61,7 +61,7 @@ public class FileBackedWALIndex implements WALIndex {
         }
 
         if (filer == null) {
-            String prefix = regionName.getRegionName() + "-" + regionName.getRingName();
+            String prefix = regionName.toBase64();
             byte[] headKey = new byte[keySize];
             Arrays.fill(headKey, Byte.MIN_VALUE);
 
@@ -168,7 +168,7 @@ public class FileBackedWALIndex implements WALIndex {
             }
         } else {
             if (MapStore.INSTANCE.isFull(sls.mapContext)) {
-                String prefix = regionName.getRegionName() + "-" + regionName.getRingName();
+                String prefix = regionName.toBase64();
                 byte[] headKey = new byte[keySize];
                 Arrays.fill(headKey, Byte.MIN_VALUE);
 
@@ -366,6 +366,11 @@ public class FileBackedWALIndex implements WALIndex {
     }
 
     @Override
+    public void close() throws Exception {
+
+    }
+
+    @Override
     synchronized public void compact() {
 
     }
@@ -443,7 +448,7 @@ public class FileBackedWALIndex implements WALIndex {
 
     @Override
     public CompactionWALIndex startCompaction() throws Exception {
-        final String prefix = regionName.getRegionName() + "-" + regionName.getRingName();
+        final String prefix = regionName.toBase64();
         final File[] compactingDirectories = new File[directories.length];
         final File[] compactedDirectories = new File[directories.length];
         for (int i = 0; i < directories.length; i++) {

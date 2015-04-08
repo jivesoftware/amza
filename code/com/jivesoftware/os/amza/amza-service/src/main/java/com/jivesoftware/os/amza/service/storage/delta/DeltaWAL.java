@@ -154,7 +154,7 @@ public class DeltaWAL {
         Optional<WALTx.Compacted> compact = rowsTx.compact(regionName, 0, maxTxId, null);
         if (compact.isPresent()) {
             synchronized (oneTxAtATimeLock) {
-                compact.get().getCompactedWALIndex();
+                compact.get().commit();
             }
         }
     }

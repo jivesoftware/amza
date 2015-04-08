@@ -93,7 +93,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                             RegionDelta delta = getRegionDeltas(regionName);
                             WALKey key = new WALKey(keyBytes);
                             WALValue regionValue = regionStore.get(key);
-                            if (regionValue == null || regionValue.getTimestampId() <= value.getTimestampId()) {
+                            if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
                                 WALPointer got = delta.getPointer(key);
                                 if (got == null || got.getTimestampId() < value.getTimestampId()) {
                                     delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
@@ -444,7 +444,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
      * @throws Exception
      */
     @Override
-    public long size(RegionName regionName, WALStorage storage) throws Exception {
+    public long count(RegionName regionName, WALStorage storage) throws Exception {
         int count = 0;
         tickleMeElmophore.acquire();
         try {
@@ -454,7 +454,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         } finally {
             tickleMeElmophore.release();
         }
-        return count + storage.size();
+        return count + storage.count();
     }
 
 }

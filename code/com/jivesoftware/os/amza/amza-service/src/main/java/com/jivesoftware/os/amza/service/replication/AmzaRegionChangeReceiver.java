@@ -21,24 +21,27 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import org.apache.commons.lang.mutable.MutableBoolean;
 
 /**
  * @author jonathan.colt
  */
 public class AmzaRegionChangeReceiver {
 
-    private static RegionName RECEIVED = new RegionName(true, "received", "received");
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private static RegionName RECEIVED = new RegionName(true, "received", "received");
+
     private ScheduledExecutorService applyThreadPool;
     private ScheduledExecutorService compactThreadPool;
+
     private final AmzaStats amzaStats;
     private final RowMarshaller<byte[]> rowMarshaller;
     private final RegionProvider regionProvider;
-    private final Map<RegionName, Long> highwaterMarks = new ConcurrentHashMap<>();
     private final WALs receivedWAL;
     private final long applyReplicasIntervalInMillis;
     private final int numberOfApplierThreads;
     private final Object[] receivedLocks;
+    private final Map<RegionName, Long> highwaterMarks = new ConcurrentHashMap<>();
 
     public AmzaRegionChangeReceiver(AmzaStats amzaStats,
         RowMarshaller<byte[]> rowMarshaller,
@@ -61,7 +64,7 @@ public class AmzaRegionChangeReceiver {
     public void receiveChanges(RegionName regionName, final Scannable<WALValue> changes) throws Exception {
 
         final byte[] regionNameBytes = regionName.toBytes();
-        Scannable<WALValue> receivedScannable = new Scannable<WALValue>() {
+        final Scannable<WALValue> receivedScannable = new Scannable<WALValue>() {
 
             @Override
             public void rowScan(final Scan<WALValue> walScan) throws Exception {
@@ -80,7 +83,14 @@ public class AmzaRegionChangeReceiver {
             }
         };
 
-        RowsChanged changed = receivedWAL.get(RECEIVED).update(null, WALStorageUpdateMode.noReplication, receivedScannable);
+        RegionName receivedRegionName = regionProvider.exists(regionName) ? RECEIVED : regionName;
+        RowsChanged changed = receivedWAL.execute(receivedRegionName, new WALs.Tx<RowsChanged>() {
+            @Override
+            public RowsChanged execute(WALStorage storage) throws Exception {
+                return storage.update(null, WALStorageUpdateMode.noReplication, receivedScannable);
+            }
+        });
+
         amzaStats.received(regionName, changed.getApply().size(), changed.getOldestRowTxId());
 
         Object lock = receivedLocks[Math.abs(regionName.hashCode()) % numberOfApplierThreads];
@@ -137,39 +147,34 @@ public class AmzaRegionChangeReceiver {
     private void applyReceivedChanges(int stripe) throws Exception {
 
         while (true) {
-            boolean appliedChanges = false;
-//            for (RegionName regionName : regionProvider.getActiveRegions()) {
-//                WALStorage received = receivedWAL.get(regionName);
-//                if (Math.abs(regionName.hashCode()) % numberOfApplierThreads == stripe) {
-//                    RegionStore regionStore = regionProvider.getRegionStore(regionName);
-//                    if (regionStore != null) {
-//                        Long highWatermark = highwaterMarks.get(regionName);
-//                        HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, received);
-//                        WALScanBatchinator batchinator = new WALScanBatchinator(amzaStats, rowMarshaller, regionName, regionStore);
-//                        highwaterInterceptor.rowScan(batchinator);
-//                        if (batchinator.flush()) {
-//                            highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
-//                            appliedChanges = true;
-//                        }
-//                    }
-//                }
-//            }
+            final MutableBoolean appliedChanges = new MutableBoolean(false);
+            final MutableBoolean failedChanges = new MutableBoolean(false);
             try {
-                WALStorage received = receivedWAL.get(RECEIVED);
-                if (received != null) {
-                    Long highWatermark = highwaterMarks.get(RECEIVED);
-                    HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, received);
-                    MultiRegionWALScanBatchinator batchinator = new MultiRegionWALScanBatchinator(amzaStats, rowMarshaller, regionProvider);
-                    highwaterInterceptor.rowScan(batchinator);
-                    if (batchinator.flush()) {
-                        highwaterMarks.put(RECEIVED, highwaterInterceptor.getHighwater());
-                        appliedChanges = true;
+                for (final RegionName regionName : receivedWAL.getAllRegions()) {
+                    try {
+                        receivedWAL.execute(regionName, new WALs.Tx<Void>() {
+                            @Override
+                            public Void execute(WALStorage received) throws Exception {
+                                Long highWatermark = highwaterMarks.get(regionName);
+                                HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, received);
+                                MultiRegionWALScanBatchinator batchinator = new MultiRegionWALScanBatchinator(amzaStats, rowMarshaller, regionProvider);
+                                highwaterInterceptor.rowScan(batchinator);
+                                if (batchinator.flush()) {
+                                    highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
+                                    appliedChanges.setValue(true);
+                                }
+                                return null;
+                            }
+                        });
+                    } catch (Exception x) {
+                        LOG.warn("Apply receive changes failed for {}", new Object[] { regionName }, x);
+                        failedChanges.setValue(true);
                     }
                 }
 
-                if (!appliedChanges) {
+                if (!appliedChanges.booleanValue()) {
                     synchronized (receivedLocks[stripe]) {
-                        receivedLocks[stripe].wait();
+                        receivedLocks[stripe].wait(failedChanges.booleanValue() ? 1_000 : 0);
                     }
                 }
             } catch (Exception x) {
@@ -179,15 +184,23 @@ public class AmzaRegionChangeReceiver {
     }
 
     private void compactReceivedChanges() throws Exception {
-        for (RegionName regionName : regionProvider.getActiveRegions()) {
-            Long highWatermark = highwaterMarks.get(regionName);
+        for (final RegionName regionName : receivedWAL.getAllRegions()) {
+            final Long highWatermark = highwaterMarks.get(regionName);
             if (highWatermark != null) {
-                WALStorage regionWAL = receivedWAL.get(regionName);
-                amzaStats.beginCompaction("Compacting Received:" + regionName);
-                try {
-                    regionWAL.compactTombstone(highWatermark, highWatermark);
-                } finally {
-                    amzaStats.endCompaction("Compacting Received:" + regionName);
+                boolean compactedToEmpty = receivedWAL.execute(regionName, new WALs.Tx<Boolean>() {
+                    @Override
+                    public Boolean execute(WALStorage regionWAL) throws Exception {
+                        amzaStats.beginCompaction("Compacting Received:" + regionName);
+                        try {
+                            long sizeInBytes = regionWAL.compactTombstone(highWatermark, highWatermark);
+                            return sizeInBytes == 0;
+                        } finally {
+                            amzaStats.endCompaction("Compacting Received:" + regionName);
+                        }
+                    }
+                });
+                if (compactedToEmpty && !regionName.equals(RECEIVED)) {
+                    receivedWAL.removeIfEmpty(regionName);
                 }
             }
         }

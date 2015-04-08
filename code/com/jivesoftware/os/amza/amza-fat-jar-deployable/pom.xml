@@ -5,30 +5,37 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>executable-build-management</artifactId>
-        <version>0.37-SNAPSHOT</version>
+        <version>0.36-SNAPSHOT</version>
         <relativePath>../inheritance-poms/executable-build-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
-    <artifactId>amza-deployable</artifactId>
-    <version>0.402-SNAPSHOT</version>
+    <artifactId>amza-fat-jar-deployable</artifactId>
     <properties>
-        <java.main>com.jivesoftware.os.amza.deployable.AmzaMain</java.main>
-        <assembly.home>${project.basedir}</assembly.home>
+        <module.type>shared_lib</module.type>
     </properties>
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>2.3</version>
+                <configuration>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.jivesoftware.os.amza.deployable.Main</mainClass>
+                        </manifest>
+                    </archive>
+                    <appendAssemblyId>false</appendAssemblyId>
+                    <finalName>amza</finalName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+
     <dependencies>
-        <dependency>
-            <groupId>com.jivesoftware.os.upena</groupId>
-            <artifactId>upena-main</artifactId>
-            <type>jar</type>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.jive.utils</groupId>
-            <artifactId>health</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.jive.utils</groupId>
-            <artifactId>merlin-config</artifactId>
-        </dependency>
         <dependency>
             <groupId>javax.inject</groupId>
             <artifactId>javax.inject</artifactId>
@@ -42,17 +49,17 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-service</artifactId>
-            <version>0.37-SNAPSHOT</version>
+            <version>0.36-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-ui</artifactId>
-            <version>0.37-SNAPSHOT</version>
+            <version>0.36-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
-            <version>0.37-SNAPSHOT</version>
+            <version>0.36-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -65,6 +72,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.jive.utils</groupId>
             <artifactId>base</artifactId>
+            <type>jar</type>
         </dependency>
         <dependency>
             <groupId>org.xerial.snappy</groupId>
@@ -82,17 +90,33 @@
             <type>jar</type>
         </dependency>
         <dependency>
+            <groupId>de.ruedigermoeller</groupId>
+            <artifactId>fst</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-transport</artifactId>
-            <version>0.37-SNAPSHOT</version>
+            <version>0.36-SNAPSHOT</version>
+            <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-mapdb-storage</artifactId>
+            <version>0.36-SNAPSHOT</version>
             <type>jar</type>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-berkeleydb-storage</artifactId>
-            <version>0.37-SNAPSHOT</version>
+            <version>0.36-SNAPSHOT</version>
             <type>jar</type>
         </dependency>
+        <!--        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-mavibot-storage</artifactId>
+            <version>0.20-SNAPSHOT</version>
+            <type>jar</type>
+        </dependency>-->
         <dependency>
             <groupId>com.jivesoftware.os.mlogger</groupId>
             <artifactId>core</artifactId>
@@ -110,4 +134,5 @@
             <artifactId>guava</artifactId>
         </dependency>
     </dependencies>
+    <name>amza-fat-jar-deployable</name>
 </project>

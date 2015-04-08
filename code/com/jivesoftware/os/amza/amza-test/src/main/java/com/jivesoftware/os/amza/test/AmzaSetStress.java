@@ -35,7 +35,7 @@ public class AmzaSetStress {
 
     public static void main(String[] args) throws IOException {
 
-        args = new String[]{"localhost", "1175", "1", "10000"};
+        args = new String[]{"soa-integ-data12.phx1.jivehosted.com", "1185", "1", "10000"};
 
         final String hostName = args[0];
         final int port = Integer.parseInt(args[1]);

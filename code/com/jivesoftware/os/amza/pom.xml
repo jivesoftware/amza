@@ -22,6 +22,7 @@
         <module>amza-mapdb-storage</module>
         <module>amza-berkeleydb-storage</module>
         <module>amza-ui</module>
+        <module>amza-fat-jar-deployable</module>
         <module>amza-deployable</module>
     </modules>
 </project>

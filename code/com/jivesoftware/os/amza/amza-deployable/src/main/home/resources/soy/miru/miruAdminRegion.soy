@@ -1,0 +1,33 @@
+{namespace soy.miru.page}
+
+/**
+ * Status
+ * @param? ingressedTotal
+ * @param? ingressedStatus
+ */
+{template .adminRegion}
+    {if $ingressedStatus}
+        <div class="panel panel-default">
+            <div class="panel-heading">Ingressed:{$ingressedTotal}</div>
+                <div class="panel-body">
+                    <table class="table table-condensed">
+                        <thead>
+                            <tr>
+                                <th>Ingressed</th>
+                                <th>TenantId</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {foreach $status in $ingressedStatus}
+                                <tr>
+                                    <td>{$status.ingressed}</td>
+                                    <td>{$status.tenantId}</td>
+                                </tr>
+                            {/foreach}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {/if}
+{/template}

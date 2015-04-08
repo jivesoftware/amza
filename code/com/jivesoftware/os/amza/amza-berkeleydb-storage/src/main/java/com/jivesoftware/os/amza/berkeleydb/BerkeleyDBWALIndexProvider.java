@@ -20,7 +20,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider {
     @Override
     public WALIndex createIndex(RegionName regionName) throws Exception {
         File baseRegionDir = new File(new File(baseDirs[Math.abs(regionName.hashCode()) % baseDirs.length]),
-            regionName.getRegionName() + "-" + regionName.getRingName());
+            "bkdb" + File.separator + regionName.getRegionName() + "-" + regionName.getRingName());
         File regionDir = new File(baseRegionDir, AmzaVersionConstants.LATEST_VERSION);
         return new BerkeleyDBWALIndex(regionDir, regionName);
     }

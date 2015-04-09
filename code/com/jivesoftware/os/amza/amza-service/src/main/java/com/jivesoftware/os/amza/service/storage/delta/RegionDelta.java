@@ -192,7 +192,7 @@ class RegionDelta {
         return false;
     }
 
-    long compact(RegionProvider regionProvider) throws Exception {
+    void compact(RegionProvider regionProvider) throws Exception {
         final RegionDelta compact = compacting.get();
         long largestTxId = 0L;
         if (compact != null) {
@@ -220,7 +220,6 @@ class RegionDelta {
 
         }
         compacting.set(null);
-        return largestTxId;
     }
 
 }

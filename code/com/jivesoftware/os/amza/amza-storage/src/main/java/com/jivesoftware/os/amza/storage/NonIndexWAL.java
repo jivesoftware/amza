@@ -57,11 +57,11 @@ public class NonIndexWAL implements WALStorage {
     @Override
     public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         if (updateCount.get() > 0) {
-            Optional<WALTx.Compacted> compact = rowsTx.compact(regionName, removeTombstonedOlderThanTimestampId, ttlTimestampId, null);
+            Optional<WALTx.Compacted> compact = rowsTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, null);
             if (compact.isPresent()) {
                 WALTx.CommittedCompacted compacted = compact.get().commit();
                 updateCount.set(0);
-                return compacted.sizeInBytes;
+                return compacted.sizeAfterCompaction;
             }
         }
         return -1;

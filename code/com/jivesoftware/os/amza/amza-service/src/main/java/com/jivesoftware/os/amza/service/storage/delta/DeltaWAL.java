@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -28,20 +27,20 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class DeltaWAL {
+public class DeltaWAL implements Comparable<DeltaWAL> {
 
-    private final RegionName regionName;
+    private final long id;
     private final OrderIdProvider orderIdProvider;
     private final RowMarshaller<byte[]> rowMarshaller;
     private final WALTx rowsTx;
     private final AtomicLong updateCount = new AtomicLong();
     private final Object oneTxAtATimeLock = new Object();
 
-    public DeltaWAL(RegionName regionName,
+    public DeltaWAL(long id,
         OrderIdProvider orderIdProvider,
         RowMarshaller<byte[]> rowMarshaller,
         WALTx rowsTx) {
-        this.regionName = regionName;
+        this.id = id;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
         this.rowsTx = rowsTx;
@@ -150,13 +149,15 @@ public class DeltaWAL {
         }
     }
 
-    void compact(long maxTxId) throws Exception {
-        Optional<WALTx.Compacted> compact = rowsTx.compact(regionName, 0, maxTxId, null);
-        if (compact.isPresent()) {
-            synchronized (oneTxAtATimeLock) {
-                compact.get().commit();
-            }
+    void destroy() throws Exception {
+        synchronized (oneTxAtATimeLock) {
+            rowsTx.delete(false);
         }
+    }
+
+    @Override
+    public int compareTo(DeltaWAL o) {
+        return Long.compare(id, o.id);
     }
 
     public static class DeltaWALApplied {

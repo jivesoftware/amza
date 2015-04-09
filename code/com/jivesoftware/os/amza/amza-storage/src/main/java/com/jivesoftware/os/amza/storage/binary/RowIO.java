@@ -17,4 +17,6 @@ public interface RowIO extends WALReader, WALWriter {
     void flush() throws Exception;
 
     void close() throws Exception;
+
+    void delete() throws Exception;
 }

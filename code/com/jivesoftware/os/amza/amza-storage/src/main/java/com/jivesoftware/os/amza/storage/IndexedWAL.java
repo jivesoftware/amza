@@ -38,6 +38,7 @@ import com.jivesoftware.os.filer.io.FilerIO;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.mlogger.core.ValueType;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -109,8 +110,8 @@ public class IndexedWAL implements WALStorage {
     public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
 
         if ((clobberCount.get() + 1) / (newCount.get() + 1) > 2) { // TODO expose to config
-            Optional<WALTx.Compacted> compact = walTx.compact(regionName, removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
-
+            final String metricPrefix = "region>" + regionName.getRegionName() + ">ring>" + regionName.getRingName() + ">";
+            Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
             if (compact.isPresent()) {
                 tickleMeElmophore.acquire(numTickleMeElmaphore);
                 try {
@@ -118,10 +119,29 @@ public class IndexedWAL implements WALStorage {
                     walIndex.set(compacted.index);
                     newCount.set(0);
                     clobberCount.set(0);
-                    return compacted.sizeInBytes;
+
+                    LOG.set(ValueType.COUNT, metricPrefix + "sizeBeforeCompaction", compacted.sizeBeforeCompaction);
+                    LOG.set(ValueType.COUNT, metricPrefix + "sizeAfterCompaction", compacted.sizeAfterCompaction);
+                    LOG.set(ValueType.COUNT, metricPrefix + "keeps", compacted.keyCount);
+                    LOG.set(ValueType.COUNT, metricPrefix + "removes", compacted.removeCount);
+                    LOG.set(ValueType.COUNT, metricPrefix + "tombstones", compacted.tombstoneCount);
+                    LOG.set(ValueType.COUNT, metricPrefix + "ttl", compacted.ttlCount);
+                    LOG.set(ValueType.COUNT, metricPrefix + "duration", compacted.duration);
+                    LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", compacted.catchupKeys);
+                    LOG.set(ValueType.COUNT, metricPrefix + "catchupRemoves", compacted.catchupRemoves);
+                    LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", compacted.catchupTombstones);
+                    LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", compacted.catchupTTL);
+                    LOG.set(ValueType.COUNT, metricPrefix + "catchupDuration", compacted.catchupDuration);
+                    LOG.inc(metricPrefix + "compacted");
+
+                    return compacted.sizeAfterCompaction;
                 } finally {
                     tickleMeElmophore.release(numTickleMeElmaphore);
                 }
+
+            } else {
+                LOG.inc(metricPrefix + "checks");
+
             }
         }
         return -1;
@@ -181,7 +201,7 @@ public class IndexedWAL implements WALStorage {
             rowWriter.write(
                 Collections.nCopies(1, transactionId),
                 Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-                Collections.singletonList(FilerIO.longsBytes(new long[] {
+                Collections.singletonList(FilerIO.longsBytes(new long[]{
                     WALWriter.COMPACTION_HINTS_KEY,
                     newCount.get(),
                     clobberCount.get()
@@ -196,9 +216,9 @@ public class IndexedWAL implements WALStorage {
             rowWriter.write(
                 Collections.nCopies(1, transactionId),
                 Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-                Collections.singletonList(FilerIO.longsBytes(new long[] {
+                Collections.singletonList(FilerIO.longsBytes(new long[]{
                     WALWriter.COMMIT_MARKER,
-                    indexCommitedUpToTxId })));
+                    indexCommitedUpToTxId})));
         }
     }
 
@@ -208,9 +228,9 @@ public class IndexedWAL implements WALStorage {
             rowWriter.write(
                 Collections.nCopies(1, transactionId),
                 Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-                Collections.singletonList(FilerIO.longsBytes(new long[] {
+                Collections.singletonList(FilerIO.longsBytes(new long[]{
                     WALWriter.COMMIT_MARKER,
-                    indexCommitedUpToTxId })));
+                    indexCommitedUpToTxId})));
         }
     }
 

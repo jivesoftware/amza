@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.filer.IFiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import org.apache.commons.io.FileUtils;
 
 /**
  *
@@ -71,6 +72,11 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     @Override
     public void close() throws IOException {
         filer.close();
+    }
+
+    @Override
+    public void delete() throws Exception {
+        FileUtils.deleteQuietly(file);
     }
 
 }

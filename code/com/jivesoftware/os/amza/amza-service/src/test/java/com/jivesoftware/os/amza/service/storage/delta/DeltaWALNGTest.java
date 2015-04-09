@@ -37,7 +37,7 @@ public class DeltaWALNGTest {
         final RowMarshaller<byte[]> marshaller = new BinaryRowMarshaller();
         WALTx walTX = new BinaryWALTx(tmp, "test", new BinaryRowIOProvider(new IoStats()), marshaller, new NoOpWALIndexProvider());
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        DeltaWAL deltaWAL = new DeltaWAL(regionName, ids,
+        DeltaWAL deltaWAL = new DeltaWAL(0, ids,
             marshaller,
             walTX);
 

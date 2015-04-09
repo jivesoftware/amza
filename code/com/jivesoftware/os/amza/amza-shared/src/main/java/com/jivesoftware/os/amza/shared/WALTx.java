@@ -16,8 +16,7 @@ public interface WALTx {
 
     boolean delete(boolean ifEmpty) throws Exception;
 
-    Optional<Compacted> compact(RegionName regionName,
-        long removeTombstonedOlderThanTimestampId,
+    Optional<Compacted> compact(long removeTombstonedOlderThanTimestampId,
         long ttlTimestampId,
         WALIndex rowIndex) throws Exception;
 
@@ -38,12 +37,37 @@ public interface WALTx {
 
     class CommittedCompacted {
 
-        public final long sizeInBytes;
         public final WALIndex index;
+        public final long sizeBeforeCompaction;
+        public final long sizeAfterCompaction;
+        public final long keyCount;
+        public final long removeCount;
+        public final long tombstoneCount;
+        public final long ttlCount;
+        public final long duration;
+        public final long catchupKeys;
+        public final long catchupRemoves;
+        public final long catchupTombstones;
+        public final long catchupTTL;
+        public final long catchupDuration;
 
-        public CommittedCompacted(long sizeInBytes, WALIndex index) {
-            this.sizeInBytes = sizeInBytes;
+        public CommittedCompacted(WALIndex index, long sizeBeforeCompaction, long sizeAfterCompaction, long keyCount, long removeCount,
+            long tombstoneCount, long ttlCount, long duration, long catchupKeys, long catchupRemoves, long catchupTombstones, long catchupTTL,
+            long catchupDuration) {
             this.index = index;
+            this.sizeBeforeCompaction = sizeBeforeCompaction;
+            this.sizeAfterCompaction = sizeAfterCompaction;
+            this.keyCount = keyCount;
+            this.removeCount = removeCount;
+            this.tombstoneCount = tombstoneCount;
+            this.ttlCount = ttlCount;
+            this.duration = duration;
+            this.catchupKeys = catchupKeys;
+            this.catchupRemoves = catchupRemoves;
+            this.catchupTombstones = catchupTombstones;
+            this.catchupTTL = catchupTTL;
+            this.catchupDuration = catchupDuration;
         }
+
     }
 }

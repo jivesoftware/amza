@@ -33,6 +33,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author jonathan.colt
@@ -42,8 +43,10 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
+    private final int index;
     private final RowMarshaller<byte[]> rowMarshaller;
-    private final DeltaWAL deltaWAL;
+    private final DeltaWALFactory deltaWALFactory;
+    private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
     private final WALReplicator walReplicator;
     private final long compactAfterNUpdates;
     private final ConcurrentHashMap<RegionName, RegionDelta> regionDeltas = new ConcurrentHashMap<>();
@@ -54,12 +57,13 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
     public MemoryBackedDeltaWALStorage(int index,
         RowMarshaller<byte[]> rowMarshaller,
-        DeltaWAL deltaWAL,
+        DeltaWALFactory deltaWALFactory,
         WALReplicator walReplicator,
         long compactAfterNUpdates) {
 
+        this.index = index;
         this.rowMarshaller = rowMarshaller;
-        this.deltaWAL = deltaWAL;
+        this.deltaWALFactory = deltaWALFactory;
         this.walReplicator = walReplicator;
         this.compactAfterNUpdates = compactAfterNUpdates;
         this.compactionThreads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(),
@@ -71,53 +75,72 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         LOG.info("Reloading deltas...");
         long start = System.currentTimeMillis();
         synchronized (oneWriterAtATimeLock) {
-            deltaWAL.load(new RowStream() {
+            List<DeltaWAL> deltaWALs = deltaWALFactory.list();
+            if (deltaWALs.isEmpty()) {
+                deltaWAL.set(deltaWALFactory.create());
+            } else {
+                for (int i = 0; i < deltaWALs.size(); i++) {
+                    final DeltaWAL wal = deltaWALs.get(i);
+                    if (i > 0) {
+                        compactDelta(regionProvider, deltaWAL.get(), new Callable<DeltaWAL>() {
 
-                @Override
-                public boolean row(long rowFP, final long rowTxId, byte rowType, byte[] rawRow) throws Exception {
-                    RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
-                    WALValue value = row.getValue();
-                    ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
-                    byte[] regionNameBytes = new byte[bb.getShort()];
-                    bb.get(regionNameBytes);
-                    final byte[] keyBytes = new byte[bb.getInt()];
-                    bb.get(keyBytes);
+                            @Override
+                            public DeltaWAL call() throws Exception {
+                                return wal;
+                            }
+                        });
+                    }
+                    deltaWAL.set(wal);
+                    wal.load(new RowStream() {
 
-                    RegionName regionName = RegionName.fromBytes(regionNameBytes);
-                    RegionStore regionStore = regionProvider.getRegionStore(regionName);
-                    if (regionStore == null) {
-                        LOG.error("Should be impossible must fix! Your it :) regionName:" + regionName);
-                    } else {
-                        tickleMeElmophore.acquire();
-                        try {
-                            RegionDelta delta = getRegionDeltas(regionName);
-                            WALKey key = new WALKey(keyBytes);
-                            WALValue regionValue = regionStore.get(key);
-                            if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
-                                WALPointer got = delta.getPointer(key);
-                                if (got == null || got.getTimestampId() < value.getTimestampId()) {
-                                    delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
+                        @Override
+                        public boolean row(long rowFP, final long rowTxId, byte rowType, byte[] rawRow) throws Exception {
+                            RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
+                            WALValue value = row.getValue();
+                            ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
+                            byte[] regionNameBytes = new byte[bb.getShort()];
+                            bb.get(regionNameBytes);
+                            final byte[] keyBytes = new byte[bb.getInt()];
+                            bb.get(keyBytes);
+
+                            RegionName regionName = RegionName.fromBytes(regionNameBytes);
+                            RegionStore regionStore = regionProvider.getRegionStore(regionName);
+                            if (regionStore == null) {
+                                LOG.error("Should be impossible must fix! Your it :) regionName:" + regionName);
+                            } else {
+                                tickleMeElmophore.acquire();
+                                try {
+                                    RegionDelta delta = getRegionDeltas(regionName);
+                                    WALKey key = new WALKey(keyBytes);
+                                    WALValue regionValue = regionStore.get(key);
+                                    if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
+                                        WALPointer got = delta.getPointer(key);
+                                        if (got == null || got.getTimestampId() < value.getTimestampId()) {
+                                            delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
+                                        }
+                                    }
+                                    //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
+                                    delta.appendTxFps(rowTxId, rowFP);
+                                } finally {
+                                    tickleMeElmophore.release();
                                 }
                             }
-                            //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
-                            delta.appendTxFps(rowTxId, rowFP);
-                        } finally {
-                            tickleMeElmophore.release();
+                            updateSinceLastCompaction.incrementAndGet();
+                            return true;
                         }
-                    }
-                    updateSinceLastCompaction.incrementAndGet();
-                    return true;
+                    });
+
                 }
-            });
+            }
         }
-        LOG.info("Reloaded deltas in {} ms", (System.currentTimeMillis() - start));
+        LOG.info("Reloaded deltas {} in {} ms", index, (System.currentTimeMillis() - start));
     }
 
     // todo any one call this should have atleast 1 numTickleMeElmaphore
     private RegionDelta getRegionDeltas(RegionName regionName) {
         RegionDelta regionDelta = regionDeltas.get(regionName);
         if (regionDelta == null) {
-            regionDelta = new RegionDelta(regionName, deltaWAL, null);
+            regionDelta = new RegionDelta(regionName, deltaWAL.get(), null);
             RegionDelta had = regionDeltas.putIfAbsent(regionName, regionDelta);
             if (had != null) {
                 regionDelta = had;
@@ -133,7 +156,18 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         }
         updateSinceLastCompaction.set(0);
 
-        final List<Future<Long>> futures = new ArrayList<>();
+        compactDelta(regionProvider, deltaWAL.get(), new Callable<DeltaWAL>() {
+
+            @Override
+            public DeltaWAL call() throws Exception {
+                return deltaWALFactory.create();
+            }
+        });
+
+    }
+
+    private void compactDelta(final RegionProvider regionProvider, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
+        final List<Future<Boolean>> futures = new ArrayList<>();
         tickleMeElmophore.acquire(numTickleMeElmaphore);
         try {
             for (Map.Entry<RegionName, RegionDelta> e : regionDeltas.entrySet()) {
@@ -143,48 +177,46 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 }
             }
             LOG.info("Compacting delta regions...");
+            DeltaWAL newDeltaWAL = newWAL.call();
+            deltaWAL.set(newDeltaWAL);
             for (Map.Entry<RegionName, RegionDelta> e : regionDeltas.entrySet()) {
-                final RegionDelta regionDelta = new RegionDelta(e.getKey(), deltaWAL, e.getValue());
+                final RegionDelta regionDelta = new RegionDelta(e.getKey(), newDeltaWAL, e.getValue());
                 regionDeltas.put(e.getKey(), regionDelta);
-                futures.add(compactionThreads.submit(new Callable<Long>() {
+                futures.add(compactionThreads.submit(new Callable<Boolean>() {
 
                     @Override
-                    public Long call() throws Exception {
+                    public Boolean call() throws Exception {
                         try {
-                            return regionDelta.compact(regionProvider);
+                            regionDelta.compact(regionProvider);
+                            return true;
                         } catch (Exception x) {
                             LOG.error("Failed to compact:" + regionDelta, x);
-                            // TODO what todo?
-                            return null;
+                            return false;
                         }
                     }
                 }));
             }
-
         } finally {
             tickleMeElmophore.release(numTickleMeElmaphore);
         }
-
-        long maxTxId = 0;
         boolean failed = false;
-        for (Future<Long> f : futures) {
-            Long txId = f.get();
-            if (txId != null) {
-                if (txId > maxTxId) {
-                    maxTxId = txId;
-                }
-            } else {
+        for (Future<Boolean> f : futures) {
+            Boolean success = f.get();
+            if (success != null && !success) {
                 failed = true;
             }
         }
-        if (!failed) {
-            // TODO fix how do we do this an fix the fps in the RegionDeltas?
-            //deltaWAL.compact(maxTxId);
-            LOG.info("Compacted delta regions.");
-        } else {
-            LOG.warn("Compaction of delta regiond FAILED.");
+        tickleMeElmophore.acquire(numTickleMeElmaphore);
+        try {
+            if (!failed) {
+                wal.destroy();
+                LOG.info("Compacted delta regions.");
+            } else {
+                LOG.warn("Compaction of delta region FAILED.");
+            }
+        } finally {
+            tickleMeElmophore.release(numTickleMeElmaphore);
         }
-
     }
 
     @Override
@@ -208,6 +240,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
         tickleMeElmophore.acquire();
         try {
+            DeltaWAL wal = deltaWAL.get();
             RowsChanged rowsChanged;
 
             // only grabbing pointers means our removes and clobbers don't include the old values, but for now this is more efficient.
@@ -244,7 +277,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
                 RegionDelta delta = getRegionDeltas(regionName);
                 synchronized (oneWriterAtATimeLock) {
-                    DeltaWAL.DeltaWALApplied updateApplied = deltaWAL.update(regionName, apply);
+                    DeltaWAL.DeltaWALApplied updateApplied = wal.update(regionName, apply);
 
                     for (Map.Entry<WALKey, WALValue> entry : apply.entrySet()) {
                         WALKey key = entry.getKey();
@@ -343,6 +376,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
         throws Exception {
         tickleMeElmophore.acquire();
         try {
+            final DeltaWAL wal = deltaWAL.get();
             RegionDelta delta = getRegionDeltas(regionName);
             final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
             rangeScannable.rangeScan(from, to, new Scan<WALValue>() {
@@ -354,7 +388,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                         d = iterator.next();
                     }
                     while (d != null && d.getKey().compareTo(key) <= 0) {
-                        WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                        WALValue got = wal.hydrate(regionName, d.getValue());
                         if (!scan.row(-1, d.getKey(), got)) {
                             return false;
                         }
@@ -371,12 +405,12 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
             Map.Entry<WALKey, WALPointer> d = iterator.last();
             if (d != null || iterator.hasNext()) {
                 if (d != null) {
-                    WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                    WALValue got = wal.hydrate(regionName, d.getValue());
                     scan.row(-1, d.getKey(), got);
                 }
                 while (iterator.hasNext()) {
                     d = iterator.next();
-                    WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                    WALValue got = wal.hydrate(regionName, d.getValue());
                     if (!scan.row(-1, d.getKey(), got)) {
                         return;
                     }
@@ -391,6 +425,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     public void rowScan(final RegionName regionName, Scannable<WALValue> scanable, final Scan<WALValue> scan) throws Exception {
         tickleMeElmophore.acquire();
         try {
+            final DeltaWAL wal = deltaWAL.get();
             RegionDelta delta = getRegionDeltas(regionName);
             final DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
             scanable.rowScan(new Scan<WALValue>() {
@@ -402,7 +437,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                         d = iterator.next();
                     }
                     while (d != null && d.getKey().compareTo(key) <= 0) {
-                        WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                        WALValue got = wal.hydrate(regionName, d.getValue());
                         if (!scan.row(-1, d.getKey(), got)) {
                             return false;
                         }
@@ -419,12 +454,12 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
             Map.Entry<WALKey, WALPointer> d = iterator.last();
             if (d != null || iterator.hasNext()) {
                 if (d != null) {
-                    WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                    WALValue got = wal.hydrate(regionName, d.getValue());
                     scan.row(-1, d.getKey(), got);
                 }
                 while (iterator.hasNext()) {
                     d = iterator.next();
-                    WALValue got = deltaWAL.hydrate(regionName, d.getValue());
+                    WALValue got = wal.hydrate(regionName, d.getValue());
                     if (!scan.row(-1, d.getKey(), got)) {
                         return;
                     }

@@ -26,11 +26,9 @@ import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.WALs;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.MemoryBackedDeltaWALStorage;
-import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -38,12 +36,8 @@ import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
-import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
-import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -107,10 +101,8 @@ public class AmzaServiceInitializer {
         DeltaWALStorage[] deltaWALStorages = new DeltaWALStorage[deltaStorageStripes];
         for (int i = 0; i < deltaWALStorages.length; i++) {
             File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
-            RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats);
-            WALTx deltaWALRowsTx = new BinaryWALTx(walDir, "delta-wal-" + i, ioProvider, rowMarshaller, new NoOpWALIndexProvider());
-            DeltaWAL deltaWAL = new DeltaWAL(new RegionName(true, "delta-wal", "delta-wal-" + i), orderIdProvider, rowMarshaller, deltaWALRowsTx);
-            deltaWALStorages[i] = new MemoryBackedDeltaWALStorage(i, rowMarshaller, deltaWAL, walReplicator, compactAfterNUpdates);
+            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, amzaStats.ioStats, rowMarshaller);
+            deltaWALStorages[i] = new MemoryBackedDeltaWALStorage(i, rowMarshaller, deltaWALFactory, walReplicator, compactAfterNUpdates);
         }
 
         final RegionProvider regionProvider = new RegionProvider(amzaStats,

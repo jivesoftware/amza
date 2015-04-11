@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.service.storage.delta.DeltaWALStorage;
+import com.jivesoftware.os.amza.service.storage.delta.StripeWALStorage;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -15,19 +16,28 @@ import com.jivesoftware.os.amza.shared.WALValue;
 /**
  * @author jonathan.colt
  */
-public class NoOpDeltaWALStorage implements DeltaWALStorage {
+public class SystemStripeWALStorage implements StripeWALStorage {
 
     @Override
-    public void load(RegionProvider regionProvider) throws Exception {
+    public void load(RegionIndex regionIndex) throws Exception {
     }
 
     @Override
-    public void compact(RegionProvider regionProvider) throws Exception {
+    public void flush(boolean fsync) throws Exception {
     }
 
     @Override
-    public RowsChanged update(RegionName regionName, WALStorage storage, WALStorageUpdateMode upateMode, Scannable<WALValue> rowUpdates) throws Exception {
-        return storage.update(null, upateMode, rowUpdates);
+    public void compact(RegionIndex regionIndex) throws Exception {
+    }
+
+    @Override
+    public RowsChanged update(RegionName regionName,
+        WALStorage storage,
+        WALReplicator replicator,
+        WALStorageUpdateMode mode,
+        Scannable<WALValue> updates) throws Exception {
+
+        return storage.update(null, replicator, mode, updates);
     }
 
     @Override
@@ -59,5 +69,4 @@ public class NoOpDeltaWALStorage implements DeltaWALStorage {
     public long count(RegionName regionName, WALStorage storage) throws Exception {
         return storage.count();
     }
-
 }

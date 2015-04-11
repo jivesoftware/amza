@@ -84,7 +84,7 @@ public class WALs {
             WALStorage storage = walStores.get(regionName);
             if (storage == null) {
                 File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
-                storage = walStorageProvider.create(workingDirectory, storeName, regionName, null, null);
+                storage = walStorageProvider.create(workingDirectory, storeName, regionName, null);
                 storage.load();
                 walStores.put(regionName, storage);
             }

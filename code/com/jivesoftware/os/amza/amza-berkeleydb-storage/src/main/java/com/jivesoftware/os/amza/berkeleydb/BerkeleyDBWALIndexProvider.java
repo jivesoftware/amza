@@ -33,8 +33,17 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     }
 
     @Override
-
     public BerkeleyDBWALIndex createIndex(RegionName regionName) throws Exception {
-        return new BerkeleyDBWALIndex(environments[Math.abs(regionName.hashCode()) % environments.length], "active", regionName.toBase64());
+        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, regionName.toBase64());
+        return new BerkeleyDBWALIndex(environments[Math.abs(regionName.hashCode()) % environments.length], name);
     }
+
+    @Override
+    public void deleteIndex(RegionName regionName) throws Exception {
+        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, regionName.toBase64());
+        for (BerkeleyDBWALIndexName n : name.all()) {
+            environments[Math.abs(regionName.hashCode()) % environments.length].removeDatabase(null, n.getName());
+        }
+    }
+
 }

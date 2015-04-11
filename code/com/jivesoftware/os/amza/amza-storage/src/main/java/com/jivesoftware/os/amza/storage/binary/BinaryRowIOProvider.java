@@ -14,9 +14,11 @@ import java.util.List;
 public class BinaryRowIOProvider implements RowIOProvider {
 
     private final IoStats ioStats;
+    private final int corruptionParanoiaFactor;
 
-    public BinaryRowIOProvider(IoStats ioStats) {
+    public BinaryRowIOProvider(IoStats ioStats, int corruptionParanoiaFactor) {
         this.ioStats = ioStats;
+        this.corruptionParanoiaFactor = corruptionParanoiaFactor;
     }
 
     @Override
@@ -24,7 +26,7 @@ public class BinaryRowIOProvider implements RowIOProvider {
         dir.mkdirs();
         File file = new File(dir, name);
         WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw");
-        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats);
+        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
         return new BinaryRowIO(file, filer, rowReader, rowWriter);
     }

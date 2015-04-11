@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
+import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Prefix;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
@@ -37,7 +38,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     private static final int numPermits = 1024;
 
     private final Environment environment;
-    private final String name;
+    private final BerkeleyDBWALIndexName name;
     private final DatabaseConfig dbConfig;
     private Database database;
 
@@ -45,18 +46,14 @@ public class BerkeleyDBWALIndex implements WALIndex {
     private final AtomicLong count = new AtomicLong(-1);
     private final AtomicInteger commits = new AtomicInteger(0);
 
-    public BerkeleyDBWALIndex(Environment environment, String prefix, String name) throws Exception {
+    public BerkeleyDBWALIndex(Environment environment, BerkeleyDBWALIndexName name) throws Exception {
         this.environment = environment;
         this.name = name;
 
         // Open the database, creating one if it does not exist
         this.dbConfig = new DatabaseConfig()
             .setAllowCreate(true);
-        this.database = environment.openDatabase(null, getDatabaseName(prefix), dbConfig);
-    }
-
-    private String getDatabaseName(String prefix) {
-        return prefix + "-" + name;
+        this.database = environment.openDatabase(null, name.getName(), dbConfig);
     }
 
     private DatabaseEntry walPointerToEntry(WALPointer rowPointer) {
@@ -266,8 +263,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     if (!scan.row(-1, key, value)) {
                         break;
                     }
-                }
-                while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                } while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
             }
         } finally {
             lock.release();
@@ -279,11 +275,11 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
     @Override
     public CompactionWALIndex startCompaction() throws Exception {
-        removeDatabase("compacting");
-        removeDatabase("compacted");
-        removeDatabase("backup");
+        removeDatabase(Prefix.compacting);
+        removeDatabase(Prefix.compacted);
+        removeDatabase(Prefix.backup);
 
-        final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(environment, "compacting", name);
+        final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(environment, name.prefixName(BerkeleyDBWALIndexName.Prefix.compacting));
 
         return new CompactionWALIndex() {
 
@@ -305,21 +301,21 @@ public class BerkeleyDBWALIndex implements WALIndex {
             public void commit() throws Exception {
                 lock.acquire(numPermits);
                 try {
-                    LOG.info("Committing before swap: {}", getDatabaseName("active"));
+                    LOG.info("Committing before swap: {}", name.getName());
 
                     compactingWALIndex.close();
-                    renameDatabase("compacting", "compacted");
+                    renameDatabase(Prefix.compacting, Prefix.compacted);
 
                     database.close();
                     database = null;
-                    renameDatabase("active", "backup");
+                    renameDatabase(Prefix.active, Prefix.backup);
 
-                    renameDatabase("compacted", "active");
-                    removeDatabase("backup");
+                    renameDatabase(Prefix.compacted, Prefix.active);
+                    removeDatabase(Prefix.backup);
 
-                    database = environment.openDatabase(null, getDatabaseName("active"), dbConfig);
+                    database = environment.openDatabase(null, name.getName(), dbConfig);
 
-                    LOG.info("Committing after swap: {}", getDatabaseName("active"));
+                    LOG.info("Committing after swap: {}", name.getName());
                 } finally {
                     lock.release(numPermits);
                 }
@@ -327,13 +323,13 @@ public class BerkeleyDBWALIndex implements WALIndex {
         };
     }
 
-    private void renameDatabase(String fromPrefix, String toPrefix) {
-        environment.renameDatabase(null, getDatabaseName(fromPrefix), getDatabaseName(toPrefix));
+    private void renameDatabase(Prefix fromPrefix, Prefix toPrefix) {
+        environment.renameDatabase(null, name.prefixName(fromPrefix).getName(), name.prefixName(toPrefix).getName());
     }
 
-    private void removeDatabase(String prefix) {
+    private void removeDatabase(Prefix prefix) {
         try {
-            environment.removeDatabase(null, getDatabaseName(prefix));
+            environment.removeDatabase(null, name.prefixName(prefix).getName());
         } catch (DatabaseNotFoundException e) {
             // yummm
         }

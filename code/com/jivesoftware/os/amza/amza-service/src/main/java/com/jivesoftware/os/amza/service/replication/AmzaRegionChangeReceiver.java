@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.WALs;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -36,7 +36,8 @@ public class AmzaRegionChangeReceiver {
 
     private final AmzaStats amzaStats;
     private final RowMarshaller<byte[]> rowMarshaller;
-    private final RegionProvider regionProvider;
+    private final RegionIndex regionIndex;
+    private final RegionStripeProvider regionStripeProvider;
     private final WALs receivedWAL;
     private final long applyReplicasIntervalInMillis;
     private final int numberOfApplierThreads;
@@ -45,13 +46,15 @@ public class AmzaRegionChangeReceiver {
 
     public AmzaRegionChangeReceiver(AmzaStats amzaStats,
         RowMarshaller<byte[]> rowMarshaller,
-        RegionProvider regionProvider,
+        RegionIndex regionIndex,
+        RegionStripeProvider regionStripeProvider,
         WALs receivedUpdatesWAL,
         long applyReplicasIntervalInMillis,
         int numberOfApplierThreads) {
         this.amzaStats = amzaStats;
         this.rowMarshaller = rowMarshaller;
-        this.regionProvider = regionProvider;
+        this.regionIndex = regionIndex;
+        this.regionStripeProvider = regionStripeProvider;
         this.receivedWAL = receivedUpdatesWAL;
         this.applyReplicasIntervalInMillis = applyReplicasIntervalInMillis;
         this.numberOfApplierThreads = numberOfApplierThreads;
@@ -83,11 +86,11 @@ public class AmzaRegionChangeReceiver {
             }
         };
 
-        RegionName receivedRegionName = regionProvider.exists(regionName) ? RECEIVED : regionName;
+        RegionName receivedRegionName = regionIndex.exists(regionName) ? RECEIVED : regionName;
         RowsChanged changed = receivedWAL.execute(receivedRegionName, new WALs.Tx<RowsChanged>() {
             @Override
             public RowsChanged execute(WALStorage storage) throws Exception {
-                return storage.update(null, WALStorageUpdateMode.noReplication, receivedScannable);
+                return storage.update(null, null, WALStorageUpdateMode.noReplication, receivedScannable);
             }
         });
 
@@ -157,7 +160,7 @@ public class AmzaRegionChangeReceiver {
                             public Void execute(WALStorage received) throws Exception {
                                 Long highWatermark = highwaterMarks.get(regionName);
                                 HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, received);
-                                MultiRegionWALScanBatchinator batchinator = new MultiRegionWALScanBatchinator(amzaStats, rowMarshaller, regionProvider);
+                                MultiRegionWALScanBatchinator batchinator = new MultiRegionWALScanBatchinator(amzaStats, rowMarshaller, regionStripeProvider);
                                 highwaterInterceptor.rowScan(batchinator);
                                 if (batchinator.flush()) {
                                     highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
@@ -167,7 +170,7 @@ public class AmzaRegionChangeReceiver {
                             }
                         });
                     } catch (Exception x) {
-                        LOG.warn("Apply receive changes failed for {}", new Object[] { regionName }, x);
+                        LOG.warn("Apply receive changes failed for {}", new Object[]{regionName}, x);
                         failedChanges.setValue(true);
                     }
                 }

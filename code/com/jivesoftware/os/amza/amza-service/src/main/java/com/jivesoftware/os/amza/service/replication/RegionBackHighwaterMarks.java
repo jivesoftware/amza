@@ -1,16 +1,22 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.google.common.collect.ListMultimap;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALReplicator;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -18,16 +24,19 @@ import java.util.concurrent.atomic.AtomicLong;
 public class RegionBackHighwaterMarks implements HighwaterMarks {
 
     private final OrderIdProvider orderIdProvider;
-    private final RegionProvider regionProvider;
+    private final RegionStripe systemRegionStripe;
+    private final WALReplicator replicator;
     private final int flushHighwatermarkAfterNUpdates;
     private final ConcurrentHashMap<RingHost, ConcurrentHashMap<RegionName, HighwaterMark>> hostHighwaterMarks = new ConcurrentHashMap<>();
 
     public RegionBackHighwaterMarks(OrderIdProvider orderIdProvider,
         RingHost rootHost,
-        RegionProvider regionProvider,
+        RegionStripe systemRegionStripe,
+        WALReplicator replicator,
         int flushHighwatermarkAfterNUpdates) {
         this.orderIdProvider = orderIdProvider;
-        this.regionProvider = regionProvider;
+        this.systemRegionStripe = systemRegionStripe;
+        this.replicator = replicator;
         this.flushHighwatermarkAfterNUpdates = flushHighwatermarkAfterNUpdates;
     }
 
@@ -42,7 +51,7 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
     }
 
     @Override
-    public void setIfLarger(RingHost ringHost, RegionName regionName, int updates, long highwaterTxId) throws Exception {
+    public void setIfLarger(final RingHost ringHost, final RegionName regionName, int updates, long highwaterTxId) throws Exception {
         ConcurrentHashMap<RegionName, HighwaterMark> regionHighwaterMarks = hostHighwaterMarks.get(ringHost);
         if (regionHighwaterMarks == null) {
             regionHighwaterMarks = new ConcurrentHashMap<>();
@@ -56,22 +65,21 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
         if (had != null) {
             highwaterMark = had;
         }
-        int total = highwaterMark.update(highwaterTxId, updates);
-        if (total > flushHighwatermarkAfterNUpdates) {
-            highwaterMark.update(highwaterTxId, -total);
-            RowStoreUpdates rsu = regionProvider.getHighwaterIndexStore().startTransaction(orderIdProvider.nextId());
-            rsu.add(walKey(ringHost, regionName), UIO.longBytes(highwaterMark.getTxId()));
-            rsu.commit();
-        }
+        highwaterMark.update(highwaterTxId, updates);
     }
 
     @Override
-    public void clear(RingHost ringHost, RegionName regionName) throws Exception {
+    public void clear(final RingHost ringHost, final RegionName regionName) throws Exception {
         ConcurrentHashMap<RegionName, HighwaterMark> regionHighwaterMarks = hostHighwaterMarks.get(ringHost);
         if (regionHighwaterMarks != null) {
-            RowStoreUpdates rsu = regionProvider.getHighwaterIndexStore().startTransaction(orderIdProvider.nextId());
-            rsu.remove(walKey(ringHost, regionName));
-            rsu.commit();
+            systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate,
+                new Scannable<WALValue>() {
+
+                    @Override
+                    public void rowScan(Scan<WALValue> scan) throws Exception {
+                        scan.row(-1, walKey(ringHost, regionName), new WALValue(null, orderIdProvider.nextId(), true));
+                    }
+                });
             regionHighwaterMarks.remove(regionName);
         }
     }
@@ -88,7 +96,7 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
         }
         HighwaterMark highwaterMark = regionHighwaterMarks.get(regionName);
         if (highwaterMark == null) {
-            WALValue got = regionProvider.getHighwaterIndexStore().get(walKey(ringHost, regionName));
+            WALValue got = systemRegionStripe.get(RegionProvider.HIGHWATER_MARK_INDEX, walKey(ringHost, regionName));
             long txtId = -1L;
             if (got != null) {
                 txtId = UIO.bytesLong(got.getValue());
@@ -104,16 +112,51 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
     }
 
     @Override
-    public void clearRing(RingHost ringHost) throws Exception {
-        ConcurrentHashMap<RegionName, HighwaterMark> regions = hostHighwaterMarks.get(ringHost);
+    public void clearRing(final RingHost ringHost) throws Exception {
+        final ConcurrentHashMap<RegionName, HighwaterMark> regions = hostHighwaterMarks.get(ringHost);
         if (regions != null && !regions.isEmpty()) {
-            RowStoreUpdates rsu = regionProvider.getHighwaterIndexStore().startTransaction(orderIdProvider.nextId());
-            for (RegionName regionName : regions.keySet()) {
-                rsu.remove(walKey(ringHost, regionName));
-            }
-            rsu.commit();
+            systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate,
+                new Scannable<WALValue>() {
+
+                    @Override
+                    public void rowScan(Scan<WALValue> scan) throws Exception {
+                        long timestamp = orderIdProvider.nextId();
+                        for (RegionName regionName : regions.keySet()) {
+                            scan.row(-1, walKey(ringHost, regionName), new WALValue(null, timestamp, true));
+                        }
+                    }
+                });
+
         }
         hostHighwaterMarks.remove(ringHost);
+    }
+
+    @Override
+    public void flush(final ListMultimap<RingHost, RegionName> flush) throws Exception {
+
+        systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate,
+            new Scannable<WALValue>() {
+
+                @Override
+                public void rowScan(Scan<WALValue> scan) throws Exception {
+                    long timestamp = orderIdProvider.nextId();
+                    for (Entry<RingHost, Collection<RegionName>> e : flush.asMap().entrySet()) {
+                        final ConcurrentHashMap<RegionName, HighwaterMark> highwaterMarks = hostHighwaterMarks.get(e.getKey());
+                        if (highwaterMarks != null) {
+                            for (RegionName regionName : e.getValue()) {
+                                HighwaterMark highwaterMark = highwaterMarks.get(regionName);
+                                if (highwaterMark != null && highwaterMark.updates.get() > 0) {
+                                    long txId = highwaterMark.getTxId();
+                                    int total = highwaterMark.updates.get();
+                                    scan.row(-1, walKey(e.getKey(), regionName), new WALValue(UIO.longBytes(txId), timestamp, false));
+                                    highwaterMark.update(txId, -total);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        );
     }
 
     static class HighwaterMark {
@@ -140,6 +183,5 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
         public long getTxId() {
             return txId.get();
         }
-
     }
 }

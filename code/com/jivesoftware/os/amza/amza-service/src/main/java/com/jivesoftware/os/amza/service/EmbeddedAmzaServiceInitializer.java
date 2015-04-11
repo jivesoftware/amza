@@ -13,7 +13,6 @@ import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
@@ -34,7 +33,7 @@ import java.util.Set;
  */
 public class EmbeddedAmzaServiceInitializer {
 
-    public AmzaService initialize(final AmzaServiceConfig amzaServiceConfig,
+    public AmzaService initialize(final AmzaServiceConfig config,
         final AmzaStats amzaStats,
         RingHost ringHost,
         final TimestampedOrderIdProvider orderIdProvider,
@@ -47,29 +46,29 @@ public class EmbeddedAmzaServiceInitializer {
         final RowChanges allRowChanges) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-        final RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
+        final RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor);
 
-        WALStorageProvider regionStorageProvider = new WALStorageProvider() {
+        WALStorageProvider walStorageProvider = new WALStorageProvider() {
             @Override
             public WALStorage create(File workingDirectory,
                 String domain,
                 RegionName regionName,
-                WALStorageDescriptor storageDescriptor,
-                WALReplicator rowReplicator) throws Exception {
+                WALStorageDescriptor storageDescriptor) throws Exception {
 
                 WALIndexProvider walIndexProvider = indexProviderRegistry.getWALIndexProvider(storageDescriptor);
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
+
+                BinaryWALTx binaryWALTx = new BinaryWALTx(directory,
+                    regionName.toBase64(),
+                    rowIOProvider,
+                    rowMarshaller,
+                    walIndexProvider);
+
                 return new IndexedWAL(regionName,
                     orderIdProvider,
-                    rowMarshaller,
-                    new BinaryWALTx(directory,
-                        regionName.toBase64(),
-                        rowIOProvider,
-                        rowMarshaller,
-                        walIndexProvider),
-                    rowReplicator,
+                    rowMarshaller, binaryWALTx,
                     storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
                     storageDescriptor.maxUpdatesBetweenIndexCommitMarker);
             }
@@ -95,8 +94,7 @@ public class EmbeddedAmzaServiceInitializer {
             public WALStorage create(File workingDirectory,
                 String domain,
                 RegionName regionName,
-                WALStorageDescriptor storageDescriptor,
-                WALReplicator rowReplicator) throws Exception {
+                WALStorageDescriptor storageDescriptor) throws Exception {
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
@@ -126,13 +124,13 @@ public class EmbeddedAmzaServiceInitializer {
             }
         };
 
-        return new AmzaServiceInitializer().initialize(amzaServiceConfig,
+        return new AmzaServiceInitializer().initialize(config,
             amzaStats,
             rowMarshaller,
             ringHost,
             orderIdProvider,
             regionPropertyMarshaller,
-            regionStorageProvider,
+            walStorageProvider,
             tmpWALStorageProvider,
             tmpWALStorageProvider,
             updatesSender,

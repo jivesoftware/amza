@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * @author jonathan.colt
  */
-public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
+public class DeltaStripeWALStorage implements StripeWALStorage {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
@@ -47,7 +47,6 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     private final RowMarshaller<byte[]> rowMarshaller;
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
-    private final WALReplicator walReplicator;
     private final long compactAfterNUpdates;
     private final ConcurrentHashMap<RegionName, RegionDelta> regionDeltas = new ConcurrentHashMap<>();
     private final Object oneWriterAtATimeLock = new Object();
@@ -55,23 +54,21 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     private final ExecutorService compactionThreads;
     private final AtomicLong updateSinceLastCompaction = new AtomicLong();
 
-    public MemoryBackedDeltaWALStorage(int index,
+    public DeltaStripeWALStorage(int index,
         RowMarshaller<byte[]> rowMarshaller,
         DeltaWALFactory deltaWALFactory,
-        WALReplicator walReplicator,
         long compactAfterNUpdates) {
 
         this.index = index;
         this.rowMarshaller = rowMarshaller;
         this.deltaWALFactory = deltaWALFactory;
-        this.walReplicator = walReplicator;
         this.compactAfterNUpdates = compactAfterNUpdates;
         this.compactionThreads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(),
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-" + index + "-%d").build()); // TODO pass in
     }
 
     @Override
-    public void load(final RegionProvider regionProvider) throws Exception {
+    public void load(final RegionIndex regionIndex) throws Exception {
         LOG.info("Reloading deltas...");
         long start = System.currentTimeMillis();
         synchronized (oneWriterAtATimeLock) {
@@ -82,7 +79,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 for (int i = 0; i < deltaWALs.size(); i++) {
                     final DeltaWAL wal = deltaWALs.get(i);
                     if (i > 0) {
-                        compactDelta(regionProvider, deltaWAL.get(), new Callable<DeltaWAL>() {
+                        compactDelta(regionIndex, deltaWAL.get(), new Callable<DeltaWAL>() {
 
                             @Override
                             public DeltaWAL call() throws Exception {
@@ -104,7 +101,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                             bb.get(keyBytes);
 
                             RegionName regionName = RegionName.fromBytes(regionNameBytes);
-                            RegionStore regionStore = regionProvider.getRegionStore(regionName);
+                            RegionStore regionStore = regionIndex.get(regionName);
                             if (regionStore == null) {
                                 LOG.error("Should be impossible must fix! Your it :) regionName:" + regionName);
                             } else {
@@ -133,14 +130,26 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                 }
             }
         }
-        LOG.info("Reloaded deltas {} in {} ms", index, (System.currentTimeMillis() - start));
+        LOG.info("Reloaded deltas stripe:{} in {} ms", index, (System.currentTimeMillis() - start));
+    }
+
+    @Override
+    public void flush(boolean fsync) throws Exception {
+        DeltaWAL wal = deltaWAL.get();
+        if (wal != null) {
+            wal.flush(fsync);
+        }
     }
 
     // todo any one call this should have atleast 1 numTickleMeElmaphore
     private RegionDelta getRegionDeltas(RegionName regionName) {
         RegionDelta regionDelta = regionDeltas.get(regionName);
         if (regionDelta == null) {
-            regionDelta = new RegionDelta(regionName, deltaWAL.get(), null);
+            DeltaWAL wal = deltaWAL.get();
+            if (wal == null) {
+                throw new IllegalStateException("Delta WAL is currently unavailable.");
+            }
+            regionDelta = new RegionDelta(regionName, wal, null);
             RegionDelta had = regionDeltas.putIfAbsent(regionName, regionDelta);
             if (had != null) {
                 regionDelta = had;
@@ -150,13 +159,13 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     }
 
     @Override
-    public void compact(final RegionProvider regionProvider) throws Exception {
+    public void compact(final RegionIndex regionIndex) throws Exception {
         if (updateSinceLastCompaction.get() < compactAfterNUpdates) { // TODO or some memory pressure BS!
             return;
         }
         updateSinceLastCompaction.set(0);
 
-        compactDelta(regionProvider, deltaWAL.get(), new Callable<DeltaWAL>() {
+        compactDelta(regionIndex, deltaWAL.get(), new Callable<DeltaWAL>() {
 
             @Override
             public DeltaWAL call() throws Exception {
@@ -166,7 +175,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
 
     }
 
-    private void compactDelta(final RegionProvider regionProvider, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
+    private void compactDelta(final RegionIndex regionIndex, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
         final List<Future<Boolean>> futures = new ArrayList<>();
         tickleMeElmophore.acquire(numTickleMeElmaphore);
         try {
@@ -187,7 +196,7 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                     @Override
                     public Boolean call() throws Exception {
                         try {
-                            regionDelta.compact(regionProvider);
+                            regionDelta.compact(regionIndex);
                             return true;
                         } catch (Exception x) {
                             LOG.error("Failed to compact:" + regionDelta, x);
@@ -220,7 +229,11 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
     }
 
     @Override
-    public RowsChanged update(RegionName regionName, WALStorage storage, WALStorageUpdateMode updateMode, Scannable<WALValue> updates) throws Exception {
+    public RowsChanged update(RegionName regionName,
+        WALStorage storage,
+        WALReplicator replicator,
+        WALStorageUpdateMode mode,
+        Scannable<WALValue> updates) throws Exception {
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final Map<WALKey, WALValue> apply = new ConcurrentHashMap<>();
@@ -267,8 +280,8 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
             }
 
             List<Future<?>> futures = Lists.newArrayListWithCapacity(1);
-            if (walReplicator != null && updateMode == WALStorageUpdateMode.replicateThenUpdate && !apply.isEmpty()) {
-                futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
+            if (replicator != null && mode == WALStorageUpdateMode.replicateThenUpdate && !apply.isEmpty()) {
+                futures.add(replicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
             }
 
             if (apply.isEmpty()) {
@@ -296,8 +309,8 @@ public class MemoryBackedDeltaWALStorage implements DeltaWALStorage {
                     rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
                 }
 
-                if (walReplicator != null && updateMode == WALStorageUpdateMode.updateThenReplicate && !apply.isEmpty()) {
-                    futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
+                if (replicator != null && mode == WALStorageUpdateMode.updateThenReplicate && !apply.isEmpty()) {
+                    futures.add(replicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
                 }
             }
             for (Future<?> future : futures) {

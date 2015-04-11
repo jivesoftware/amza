@@ -17,21 +17,58 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALReader;
-import com.jivesoftware.os.amza.shared.filer.IFiler;
+import com.jivesoftware.os.amza.shared.filer.IReadable;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.WALFiler;
+import com.jivesoftware.os.amza.storage.filer.WALFilerChannelReader;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.EOFException;
 import java.io.IOException;
 
 public class BinaryRowReader implements WALReader {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final WALFiler parent; // TODO use mem-mapping and bb.dupliate to remove all the hard locks
     private final IoStats ioStats;
+    private final int corruptionParanoiaFactor;
 
-    public BinaryRowReader(WALFiler parent, IoStats ioStats) {
+    public BinaryRowReader(WALFiler parent, IoStats ioStats, int corruptionParanoiaFactor) {
         this.parent = parent;
         this.ioStats = ioStats;
+        this.corruptionParanoiaFactor = corruptionParanoiaFactor;
+    }
+
+    boolean validate() throws IOException {
+        synchronized (parent.lock()) {
+            WALFilerChannelReader filer = parent.fileChannelFiler();
+            boolean valid = true;
+            long seekTo = filer.length();
+            for (int i = 0; i < corruptionParanoiaFactor; i++) {
+                if (seekTo > 0) {
+                    filer.seek(seekTo - 4);
+                    int tailLength = UIO.readInt(filer, "length");
+                    seekTo -= (tailLength + 8);
+                    if (seekTo < 0) {
+                        valid = false;
+                        break;
+                    } else {
+                        filer.seek(seekTo);
+                        int headLength = UIO.readInt(filer, "length");
+                        if (tailLength != headLength) {
+                            LOG.error("Read a head length of " + headLength + " and tail length of " + tailLength);
+                            valid = false;
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+            return valid;
+        }
     }
 
     @Override
@@ -40,7 +77,7 @@ public class BinaryRowReader implements WALReader {
         synchronized (parent.lock()) {
             boundaryFp = parent.length();
         }
-        IFiler parentFiler = parent.fileChannelMemMapFiler(boundaryFp);
+        IReadable parentFiler = parent.fileChannelMemMapFiler(boundaryFp);
         if (parentFiler == null) {
             parentFiler = parent.fileChannelFiler();
         }
@@ -110,7 +147,7 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public void scan(long offset, RowStream stream) throws Exception {
+    public void scan(long offset, boolean allowRepairs, RowStream stream) throws Exception {
         long fileLength = 0;
         long read = 0;
         try {
@@ -118,7 +155,7 @@ public class BinaryRowReader implements WALReader {
                 synchronized (parent.lock()) {
                     fileLength = parent.length();
                 }
-                IFiler filer = parent.fileChannelMemMapFiler(fileLength);
+                IReadable filer = parent.fileChannelMemMapFiler(fileLength);
                 if (filer == null) {
                     filer = parent.fileChannelFiler();
                 }
@@ -131,6 +168,23 @@ public class BinaryRowReader implements WALReader {
                     if (offset < fileLength) {
                         rowFP = offset;
                         int length = UIO.readInt(filer, "length");
+                        if (offset + length + 8 > fileLength) {
+                            if (allowRepairs) {
+                                // Corruption encoutered.
+                                // There is a huge assumption here that this is only called once at startup.
+                                // If this is encountred some time other than startup there will be data loss and WALIndex corruption.
+                                filer.seek(offset);
+                                synchronized (parent.lock()) {
+                                    LOG.warn("Truncated corrupt WAL. " + parent);
+                                    parent.eof();
+                                }
+                            } else {
+                                String msg = "Scan terminated prematurely due a corruption at fp:" + offset + ". " + parent;
+                                LOG.error(msg);
+                                throw new EOFException(msg);
+                            }
+                            break;
+                        }
                         rowType = (byte) filer.read();
                         rowTxId = UIO.readLong(filer, "txId");
                         row = new byte[length - (1 + 8)];
@@ -157,34 +211,41 @@ public class BinaryRowReader implements WALReader {
     @Override
     public byte[] read(long position) throws IOException {
         long fileLength;
-        synchronized (parent.lock()) {
-            fileLength = parent.length();
-        }
-        if (fileLength == 0) {
-            return null;
-        }
+        int length = -1;
+        try {
 
-        IFiler filer = parent.fileChannelMemMapFiler(position + 4);
-        if (filer == null) {
-            filer = parent.fileChannelFiler();
-        }
+            synchronized (parent.lock()) {
+                fileLength = parent.length();
+            }
+            if (fileLength == 0) {
+                return null;
+            }
 
-        filer.seek(position);
-        int length = UIO.readInt(filer, "length");
-
-        if (position + 4 + length > filer.length()) {
-            filer = parent.fileChannelMemMapFiler(position + 4 + length);
+            IReadable filer = parent.fileChannelMemMapFiler(position + 4);
             if (filer == null) {
                 filer = parent.fileChannelFiler();
             }
-        }
 
-        filer.seek(position + 4 + 1 + 8);
-        byte[] row = new byte[length - (1 + 8)];
-        if (row.length > 0) {
-            filer.read(row);
+            filer.seek(position);
+            length = UIO.readInt(filer, "length");
+
+            if (position + 4 + length > filer.length()) {
+                filer = parent.fileChannelMemMapFiler(position + 4 + length);
+                if (filer == null) {
+                    filer = parent.fileChannelFiler();
+                }
+            }
+
+            filer.seek(position + 4 + 1 + 8);
+            byte[] row = new byte[length - (1 + 8)];
+            if (row.length > 0) {
+                filer.read(row);
+            }
+            return row;
+        } catch (NegativeArraySizeException x) {
+            LOG.error("FAILED to read length:" + length + " bytes at position:" + position + " in file of length:" + length + " " + parent);
+            throw x;
         }
-        return row;
     }
 
 }

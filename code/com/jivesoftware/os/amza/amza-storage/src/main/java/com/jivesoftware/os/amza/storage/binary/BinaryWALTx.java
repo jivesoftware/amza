@@ -97,16 +97,28 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
+    public void flush(boolean fsync) throws Exception {
+        io.flush(fsync);
+    }
+
+    @Override
     public WALIndex load(RegionName regionName) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
+
+            if (!io.validate()) {
+                LOG.warn("Encountered a corrupt WAL. Removing wal index for " + regionName + " ...");
+                walIndexProvider.deleteIndex(regionName);
+                LOG.warn("Removed wal index for " + regionName + ".");
+            }
+
             final WALIndex walIndex = walIndexProvider.createIndex(regionName);
             if (walIndex.isEmpty()) {
                 LOG.info(
                     "Rebuilding " + walIndex.getClass().getSimpleName()
                     + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
                 final MutableLong rebuilt = new MutableLong();
-                io.scan(0, new RowStream() {
+                io.scan(0, true, new RowStream() {
                     @Override
                     public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
                         if (rowType > 0) {
@@ -240,7 +252,7 @@ public class BinaryWALTx implements WALTx {
                         catchupKeys, catchupRemoves, catchupTombstones, catchupTTL,
                         removeTombstonedOlderThanTimestampId,
                         ttlTimestampId);
-                    compactionIO.flush();
+                    compactionIO.flush(true);
                     long sizeAfterCompaction = compactionIO.sizeInBytes();
                     compactionIO.close();
 
@@ -298,7 +310,7 @@ public class BinaryWALTx implements WALTx {
         final List<byte[]> rawRows = new ArrayList<>();
         final AtomicLong batchSizeInBytes = new AtomicLong();
 
-        io.scan(startAtRow, new RowStream() {
+        io.scan(startAtRow, false, new RowStream() {
             @Override
             public boolean row(final long rowFP, long rowTxId, byte rowType, final byte[] row) throws Exception {
                 if (rowFP >= endOfLastRow) {

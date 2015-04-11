@@ -93,7 +93,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort()};
         config.resendReplicasIntervalInMillis = 100;
         config.applyReplicasIntervalInMillis = 100;
         config.takeFromNeighborsIntervalInMillis = 1000;
@@ -286,6 +286,8 @@ public class AmzaTestCluster {
             AmzaRegion got = amzaService.getRegion(regionName);
             if (got != null) {
                 got.takeRowUpdatesSince(transationId, rowStream);
+            } else {
+                throw new RuntimeException("Failed to take because region:" + regionName + " is missing");
             }
         }
 
@@ -294,7 +296,6 @@ public class AmzaTestCluster {
                 System.out.println(serviceHost.getHost() + ":" + serviceHost.getPort() + " is OFF flapped:" + flapped);
                 return;
             }
-            amzaService.printService(serviceHost);
         }
 
         public boolean compare(AmzaNode service) throws Exception {
@@ -315,8 +316,8 @@ public class AmzaTestCluster {
             regionNames.addAll(allARegions);
             regionNames.addAll(allBRegions);
 
-            List<RingHost> aRing = amzaService.getAmzaRing().getRing("system");
-            List<RingHost> bRing = service.amzaService.getAmzaRing().getRing("system");
+            List<RingHost> aRing = amzaService.getAmzaRingReader().getRing("system");
+            List<RingHost> bRing = service.amzaService.getAmzaRingReader().getRing("system");
             Collections.sort(aRing);
             Collections.sort(bRing);
 
@@ -338,10 +339,6 @@ public class AmzaTestCluster {
                     return false;
                 }
                 if (!a.compare(b)) {
-                    amzaService.printService(amzaService.getAmzaRing().getRingHost());
-                    System.out.println("-- vs --");
-                    service.amzaService.printService(service.amzaService.getAmzaRing().getRingHost());
-
                     System.out.println(highWaterMarks + " -vs- " + service.highWaterMarks);
                     return false;
                 }

@@ -27,4 +27,9 @@ public class MapdbWALIndexProvider implements WALIndexProvider<MapdbWALIndex> {
         File regionDir = new File(baseDir, regionName.toBase64());
         return new MapdbWALIndex(regionDir, regionName);
     }
+
+    @Override
+    public void deleteIndex(RegionName regionName) throws Exception {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
 }

@@ -15,6 +15,8 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import com.google.common.collect.ListMultimap;
+
 public interface HighwaterMarks {
 
     void clearRing(RingHost ringHost) throws Exception;
@@ -24,4 +26,6 @@ public interface HighwaterMarks {
     void clear(RingHost ringHost, RegionName regionName) throws Exception;
 
     Long get(RingHost ringHost, RegionName regionName) throws Exception;
+
+    void flush(ListMultimap<RingHost, RegionName> flush) throws Exception;
 }

@@ -14,6 +14,8 @@ public interface WALTx {
 
     WALIndex load(RegionName regionName) throws Exception;
 
+    void flush(boolean fsync) throws Exception;
+
     boolean delete(boolean ifEmpty) throws Exception;
 
     Optional<Compacted> compact(long removeTombstonedOlderThanTimestampId,

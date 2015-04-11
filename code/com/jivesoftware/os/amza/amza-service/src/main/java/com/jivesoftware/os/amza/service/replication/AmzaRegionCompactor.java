@@ -1,15 +1,13 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.service.storage.RegionStore;
+import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -24,20 +22,20 @@ public class AmzaRegionCompactor {
     private ScheduledExecutorService scheduledThreadPool;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaStats amzaStats;
-    private final RegionProvider regionProvider;
+    private final RegionIndex regionIndex;
     private final long checkIfCompactionIsNeededIntervalInMillis;
     private final long removeTombstonedOlderThanNMillis;
     private final int numberOfCompactorThreads;
 
     public AmzaRegionCompactor(AmzaStats amzaStats,
-        RegionProvider regionProvider,
+        RegionIndex regionIndex,
         TimestampedOrderIdProvider orderIdProvider,
         long checkIfCompactionIsNeededIntervalInMillis,
         final long removeTombstonedOlderThanNMillis,
         int numberOfCompactorThreads) {
 
         this.amzaStats = amzaStats;
-        this.regionProvider = regionProvider;
+        this.regionIndex = regionIndex;
         this.orderIdProvider = orderIdProvider;
         this.checkIfCompactionIsNeededIntervalInMillis = checkIfCompactionIsNeededIntervalInMillis;
         this.removeTombstonedOlderThanNMillis = removeTombstonedOlderThanNMillis;
@@ -82,11 +80,10 @@ public class AmzaRegionCompactor {
     }
 
     private void compactTombstone(int stripe, long removeTombstonedOlderThanTimestampId) throws Exception {
-        for (Map.Entry<RegionName, RegionStore> region : regionProvider.getAll()) {
-            if (Math.abs(region.getKey().hashCode()) % numberOfCompactorThreads == stripe) {
-                RegionStore regionStore = region.getValue();
+        for (RegionName regionName : regionIndex.getActiveRegions()) {
+            if (Math.abs(regionName.hashCode()) % numberOfCompactorThreads == stripe) {
                 long ttlTimestampId = 0;
-                RegionProperties regionProperties = regionProvider.getRegionProperties(region.getKey());
+                RegionProperties regionProperties = regionIndex.getProperties(regionName);
                 if (regionProperties != null) {
                     long ttlInMillis = regionProperties.walStorageDescriptor.primaryIndexDescriptor.ttlInMillis;
                     if (ttlInMillis > 0) {
@@ -94,14 +91,14 @@ public class AmzaRegionCompactor {
                     }
                 }
                 try {
-                    amzaStats.beginCompaction("Compacting Tombstones:" + region.getKey());
+                    amzaStats.beginCompaction("Compacting Tombstones:" + regionName);
                     try {
-                        regionStore.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
+                        regionIndex.get(regionName).compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
                     } finally {
-                        amzaStats.endCompaction("Compacting Tombstones:" + region.getKey());
+                        amzaStats.endCompaction("Compacting Tombstones:" + regionName);
                     }
                 } catch (Exception x) {
-                    LOG.warn("Failed to compact tombstones region:" + region.getKey(), x);
+                    LOG.warn("Failed to compact tombstones region:" + regionName, x);
                 }
             }
         }

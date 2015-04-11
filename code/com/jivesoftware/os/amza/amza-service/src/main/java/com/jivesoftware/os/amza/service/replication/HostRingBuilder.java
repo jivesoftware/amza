@@ -40,7 +40,7 @@ public class HostRingBuilder {
             index++;
         }
         if (rootIndex == -1) {
-            LOG.warn("serviceHost: " + serviceHost + " is not a memeber of the ring.");
+            LOG.warn("serviceHost: " + serviceHost + " is not a member of the ring.");
             return new HostRing(new RingHost[0], new RingHost[0]);
         }
 

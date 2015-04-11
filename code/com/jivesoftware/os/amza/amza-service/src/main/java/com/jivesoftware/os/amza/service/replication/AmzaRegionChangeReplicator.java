@@ -2,8 +2,8 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.AmzaHostRing;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.AmzaRingReader;
+import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.WALs;
 import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RegionName;
@@ -40,8 +40,8 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     private ScheduledExecutorService compactThreadPool;
     private final AmzaStats amzaStats;
     private final RowMarshaller<byte[]> rowMarshaller;
-    private final AmzaHostRing amzaRing;
-    private final RegionProvider regionProvider;
+    private final AmzaRingReader amzaRing;
+    private final RegionIndex regionIndex;
     private final WALs resendWAL;
     private final UpdatesSender updatesSender;
     private final ExecutorService sendExecutor;
@@ -52,8 +52,8 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
 
     public AmzaRegionChangeReplicator(AmzaStats amzaStats,
         RowMarshaller<byte[]> rowMarshaller,
-        AmzaHostRing amzaRing,
-        RegionProvider regionProvider,
+        AmzaRingReader amzaRing,
+        RegionIndex regionIndex,
         WALs resendWAL,
         UpdatesSender updatesSender,
         ExecutorService sendExecutor,
@@ -64,7 +64,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         this.amzaStats = amzaStats;
         this.rowMarshaller = rowMarshaller;
         this.amzaRing = amzaRing;
-        this.regionProvider = regionProvider;
+        this.regionIndex = regionIndex;
         this.resendWAL = resendWAL;
         this.updatesSender = updatesSender;
         this.sendExecutor = sendExecutor;
@@ -133,7 +133,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         final Scannable<WALValue> updates,
         final boolean enqueueForResendOnFailure) throws Exception {
 
-        final RegionProperties regionProperties = regionProvider.getRegionProperties(regionName);
+        final RegionProperties regionProperties = regionIndex.getProperties(regionName);
         return sendExecutor.submit(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
@@ -146,7 +146,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                                 resendWAL.execute(regionName, new WALs.Tx<Void>() {
                                     @Override
                                     public Void execute(WALStorage resend) throws Exception {
-                                        resend.update(null, WALStorageUpdateMode.noReplication, updates);
+                                        resend.update(null, null, WALStorageUpdateMode.noReplication, updates);
                                         return null;
                                     }
                                 });
@@ -165,7 +165,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                         resendWAL.execute(regionName, new WALs.Tx<Void>() {
                             @Override
                             public Void execute(WALStorage resend) throws Exception {
-                                resend.update(null, WALStorageUpdateMode.noReplication, updates);
+                                resend.update(null, null, WALStorageUpdateMode.noReplication, updates);
                                 return null;
                             }
                         });
@@ -207,7 +207,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                     resendWAL.execute(regionName, new WALs.Tx<Void>() {
                         @Override
                         public Void execute(WALStorage resend) throws Exception {
-                            resend.update(null, WALStorageUpdateMode.noReplication, updates);
+                            resend.update(null, null, WALStorageUpdateMode.noReplication, updates);
                             return null;
                         }
                     });
@@ -220,7 +220,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
 
     void resendLocalChanges(int stripe) throws Exception {
 
-        for (final RegionName regionName : regionProvider.getActiveRegions()) {
+        for (final RegionName regionName : regionIndex.getActiveRegions()) {
             if (Math.abs(regionName.hashCode()) % numberOfResendThreads == stripe) {
                 HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
                 RingHost[] ring = hostRing.getBelowRing();
@@ -246,7 +246,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     }
 
     void compactResendChanges() throws Exception {
-        for (final RegionName regionName : regionProvider.getActiveRegions()) {
+        for (final RegionName regionName : regionIndex.getActiveRegions()) {
             final Long highWatermark = highwaterMarks.get(regionName);
             if (highWatermark != null) {
                 boolean compactedToEmpty = resendWAL.execute(regionName, new WALs.Tx<Boolean>() {

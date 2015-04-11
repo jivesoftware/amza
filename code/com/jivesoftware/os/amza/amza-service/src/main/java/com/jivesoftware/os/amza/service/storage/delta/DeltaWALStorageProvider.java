@@ -9,5 +9,5 @@ import com.jivesoftware.os.amza.shared.WALStorage;
  */
 public interface DeltaWALStorageProvider {
 
-    DeltaWALStorage getDeltaWALStorage(RegionName regionName, WALStorage storage);
+    StripeWALStorage getDeltaWALStorage(RegionName regionName, WALStorage storage);
 }

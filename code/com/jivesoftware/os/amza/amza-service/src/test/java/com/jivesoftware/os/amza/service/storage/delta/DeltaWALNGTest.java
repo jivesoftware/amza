@@ -35,7 +35,7 @@ public class DeltaWALNGTest {
         RegionName regionName = new RegionName(true, "test", "test");
         File tmp = Files.createTempDir();
         final RowMarshaller<byte[]> marshaller = new BinaryRowMarshaller();
-        WALTx walTX = new BinaryWALTx(tmp, "test", new BinaryRowIOProvider(new IoStats()), marshaller, new NoOpWALIndexProvider());
+        WALTx walTX = new BinaryWALTx(tmp, "test", new BinaryRowIOProvider(new IoStats(), 1), marshaller, new NoOpWALIndexProvider());
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         DeltaWAL deltaWAL = new DeltaWAL(0, ids,
             marshaller,

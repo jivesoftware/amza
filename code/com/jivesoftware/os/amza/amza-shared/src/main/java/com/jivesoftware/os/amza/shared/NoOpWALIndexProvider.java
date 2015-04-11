@@ -11,4 +11,8 @@ public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
         return new NoOpWALIndex();
     }
 
+    @Override
+    public void deleteIndex(RegionName regionName) throws Exception {
+    }
+
 }

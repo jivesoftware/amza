@@ -156,6 +156,9 @@ public class WALFiler extends RandomAccessFile implements IFiler {
     }
 
     @Override
-    public void flush() throws IOException {
+    public void flush(boolean fsync) throws IOException {
+        if (fsync) {
+            getFD().sync();
+        }
     }
 }

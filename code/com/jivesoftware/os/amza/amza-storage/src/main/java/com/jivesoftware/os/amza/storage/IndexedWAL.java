@@ -65,7 +65,6 @@ public class IndexedWAL implements WALStorage {
     private final OrderIdProvider orderIdProvider;
     private final RowMarshaller<byte[]> rowMarshaller;
     private final WALTx walTx;
-    private final WALReplicator walReplicator;
     private final AtomicInteger maxUpdatesBetweenCompactionHintMarker;
     private final AtomicInteger maxUpdatesBetweenIndexCommitMarker;
     private final MutableLong[] stripedKeyHighwaterTimestamps;
@@ -83,7 +82,6 @@ public class IndexedWAL implements WALStorage {
         OrderIdProvider orderIdProvider,
         RowMarshaller<byte[]> rowMarshaller,
         WALTx walTx,
-        WALReplicator walReplicator,
         int maxUpdatesBetweenCompactionHintMarker,
         int maxUpdatesBetweenIndexCommitMarker) {
 
@@ -91,7 +89,6 @@ public class IndexedWAL implements WALStorage {
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
         this.walTx = walTx;
-        this.walReplicator = walReplicator;
         this.maxUpdatesBetweenCompactionHintMarker = new AtomicInteger(maxUpdatesBetweenCompactionHintMarker);
         this.maxUpdatesBetweenIndexCommitMarker = new AtomicInteger(maxUpdatesBetweenIndexCommitMarker);
 
@@ -110,39 +107,43 @@ public class IndexedWAL implements WALStorage {
     public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
 
         if ((clobberCount.get() + 1) / (newCount.get() + 1) > 2) { // TODO expose to config
-            final String metricPrefix = "region>" + regionName.getRegionName() + ">ring>" + regionName.getRingName() + ">";
-            Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
-            if (compact.isPresent()) {
-                tickleMeElmophore.acquire(numTickleMeElmaphore);
-                try {
-                    WALTx.CommittedCompacted compacted = compact.get().commit();
-                    walIndex.set(compacted.index);
-                    newCount.set(0);
-                    clobberCount.set(0);
+            return compact(removeTombstonedOlderThanTimestampId, ttlTimestampId);
+        }
+        return -1;
+    }
 
-                    LOG.set(ValueType.COUNT, metricPrefix + "sizeBeforeCompaction", compacted.sizeBeforeCompaction);
-                    LOG.set(ValueType.COUNT, metricPrefix + "sizeAfterCompaction", compacted.sizeAfterCompaction);
-                    LOG.set(ValueType.COUNT, metricPrefix + "keeps", compacted.keyCount);
-                    LOG.set(ValueType.COUNT, metricPrefix + "removes", compacted.removeCount);
-                    LOG.set(ValueType.COUNT, metricPrefix + "tombstones", compacted.tombstoneCount);
-                    LOG.set(ValueType.COUNT, metricPrefix + "ttl", compacted.ttlCount);
-                    LOG.set(ValueType.COUNT, metricPrefix + "duration", compacted.duration);
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", compacted.catchupKeys);
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupRemoves", compacted.catchupRemoves);
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", compacted.catchupTombstones);
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", compacted.catchupTTL);
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupDuration", compacted.catchupDuration);
-                    LOG.inc(metricPrefix + "compacted");
+    private long compact(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
+        final String metricPrefix = "region>" + regionName.getRegionName() + ">ring>" + regionName.getRingName() + ">";
+        Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
+        if (compact.isPresent()) {
+            tickleMeElmophore.acquire(numTickleMeElmaphore);
+            try {
+                WALTx.CommittedCompacted compacted = compact.get().commit();
+                walIndex.set(compacted.index);
+                newCount.set(0);
+                clobberCount.set(0);
 
-                    return compacted.sizeAfterCompaction;
-                } finally {
-                    tickleMeElmophore.release(numTickleMeElmaphore);
-                }
+                LOG.set(ValueType.COUNT, metricPrefix + "sizeBeforeCompaction", compacted.sizeBeforeCompaction);
+                LOG.set(ValueType.COUNT, metricPrefix + "sizeAfterCompaction", compacted.sizeAfterCompaction);
+                LOG.set(ValueType.COUNT, metricPrefix + "keeps", compacted.keyCount);
+                LOG.set(ValueType.COUNT, metricPrefix + "removes", compacted.removeCount);
+                LOG.set(ValueType.COUNT, metricPrefix + "tombstones", compacted.tombstoneCount);
+                LOG.set(ValueType.COUNT, metricPrefix + "ttl", compacted.ttlCount);
+                LOG.set(ValueType.COUNT, metricPrefix + "duration", compacted.duration);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", compacted.catchupKeys);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupRemoves", compacted.catchupRemoves);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", compacted.catchupTombstones);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", compacted.catchupTTL);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupDuration", compacted.catchupDuration);
+                LOG.inc(metricPrefix + "compacted");
 
-            } else {
-                LOG.inc(metricPrefix + "checks");
-
+                return compacted.sizeAfterCompaction;
+            } finally {
+                tickleMeElmophore.release(numTickleMeElmaphore);
             }
+
+        } else {
+            LOG.inc(metricPrefix + "checks");
         }
         return -1;
     }
@@ -151,6 +152,7 @@ public class IndexedWAL implements WALStorage {
     public void load() throws Exception {
         tickleMeElmophore.acquire(numTickleMeElmaphore);
         try {
+
             walIndex.compareAndSet(null, walTx.load(regionName));
 
             final AtomicLong rowsVisited = new AtomicLong(maxUpdatesBetweenCompactionHintMarker.get());
@@ -185,9 +187,15 @@ public class IndexedWAL implements WALStorage {
                 }
 
             });
+
         } finally {
             tickleMeElmophore.release(numTickleMeElmaphore);
         }
+    }
+
+    @Override
+    public void flush(boolean fsync) throws Exception {
+        walTx.flush(fsync);
     }
 
     @Override
@@ -235,7 +243,10 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public RowsChanged update(final Long overrideTxId, WALStorageUpdateMode updateMode, Scannable<WALValue> updates) throws Exception {
+    public RowsChanged update(final Long overrideTxId,
+        WALReplicator walReplicator,
+        WALStorageUpdateMode updateMode,
+        Scannable<WALValue> updates) throws Exception {
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final Map<WALKey, WALValue> apply = new ConcurrentHashMap<>();
         final Map<WALKey, WALPointer> removes = new HashMap<>();
@@ -378,7 +389,6 @@ public class IndexedWAL implements WALStorage {
             for (Future<?> future : futures) {
                 future.get();
             }
-
             return rowsChanged;
         } finally {
             tickleMeElmophore.release();

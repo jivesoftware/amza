@@ -15,13 +15,16 @@
  */
 package com.jivesoftware.os.amza.service;
 
-import com.jivesoftware.os.amza.service.storage.RegionStore;
+import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
+import com.jivesoftware.os.amza.service.storage.RowsStorageUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,14 +35,23 @@ import org.apache.commons.lang.mutable.MutableInt;
 
 public class AmzaRegion {
 
+    private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
     private final RegionName regionName;
-    private final RegionStore regionStore;
+    private final WALReplicator replicator;
+    private final RegionStripe regionStripe;
 
-    public AmzaRegion(OrderIdProvider orderIdProvider, RegionName regionName, RegionStore regionStore) {
-        this.regionName = regionName;
+    public AmzaRegion(AmzaStats amzaStats,
+        OrderIdProvider orderIdProvider,
+        RegionName regionName,
+        WALReplicator replicator,
+        RegionStripe regionStripe) {
+
+        this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
-        this.regionStore = regionStore;
+        this.regionName = regionName;
+        this.replicator = replicator;
+        this.regionStripe = regionStripe;
     }
 
     public RegionName getRegionName() {
@@ -50,14 +62,16 @@ public class AmzaRegion {
         if (value == null) {
             throw new IllegalStateException("Value cannot be null.");
         }
-        RowStoreUpdates tx = regionStore.startTransaction(orderIdProvider.nextId());
+        long timestamp = orderIdProvider.nextId();
+        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe, timestamp));
         tx.add(key, value);
-        tx.commit();
+        tx.commit(replicator);
         return key;
     }
 
     public void set(Iterable<Entry<WALKey, byte[]>> entries) throws Exception {
-        RowStoreUpdates tx = regionStore.startTransaction(orderIdProvider.nextId());
+        long timestamp = orderIdProvider.nextId();
+        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe, timestamp));
         for (Entry<WALKey, byte[]> e : entries) {
             WALKey k = e.getKey();
             byte[] v = e.getValue();
@@ -66,11 +80,11 @@ public class AmzaRegion {
             }
             tx.add(k, v);
         }
-        tx.commit();
+        tx.commit(replicator);
     }
 
     public byte[] get(WALKey key) throws Exception {
-        WALValue got = regionStore.get(key);
+        WALValue got = regionStripe.get(regionName, key);
         if (got == null) {
             return null;
         }
@@ -90,7 +104,7 @@ public class AmzaRegion {
 
     public void get(Iterable<WALKey> keys, Scan<WALValue> valuesStream) throws Exception {
         for (final WALKey key : keys) {
-            WALValue rowIndexValue = regionStore.get(key);
+            WALValue rowIndexValue = regionStripe.get(regionName, key);
             if (rowIndexValue != null && !rowIndexValue.getTombstoned()) {
                 if (!valuesStream.row(-1, key, rowIndexValue)) {
                     return;
@@ -100,44 +114,44 @@ public class AmzaRegion {
     }
 
     public void scan(Scan<WALValue> stream) throws Exception {
-        regionStore.rowScan(stream);
+        regionStripe.rowScan(regionName, stream);
     }
 
     public void rangeScan(WALKey from, WALKey to, Scan<WALValue> stream) throws Exception {
-        regionStore.rangeScan(from, to, stream);
+        regionStripe.rangeScan(regionName, from, to, stream);
     }
 
     public boolean remove(WALKey key) throws Exception {
-        RowStoreUpdates tx = regionStore.startTransaction(orderIdProvider.nextId());
+        RowStoreUpdates tx = regionStripe.startTransaction(regionName, orderIdProvider.nextId());
         tx.remove(key);
-        tx.commit();
+        tx.commit(replicator);
         return true;
     }
 
     public void remove(Iterable<WALKey> keys) throws Exception {
-        RowStoreUpdates tx = regionStore.startTransaction(orderIdProvider.nextId());
+        RowStoreUpdates tx = regionStripe.startTransaction(regionName, orderIdProvider.nextId());
         for (WALKey key : keys) {
             tx.remove(key);
         }
-        tx.commit();
+        tx.commit(replicator);
     }
 
     public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        regionStore.takeRowUpdatesSince(transactionId, rowStream);
+        regionStripe.takeRowUpdatesSince(regionName, transactionId, rowStream);
     }
 
     //  Use for testing
     public boolean compare(final AmzaRegion amzaRegion) throws Exception {
         final MutableInt compared = new MutableInt(0);
         final MutableBoolean passed = new MutableBoolean(true);
-        amzaRegion.regionStore.rowScan(new Scan<WALValue>() {
+        amzaRegion.scan(new Scan<WALValue>() {
 
             @Override
             public boolean row(long txid, WALKey key, WALValue value) {
                 try {
                     compared.increment();
 
-                    WALValue timestampedValue = regionStore.get(key);
+                    WALValue timestampedValue = regionStripe.get(regionName, key);
                     String comparing = regionName.getRingName() + ":" + regionName.getRegionName()
                         + " to " + amzaRegion.regionName.getRingName() + ":" + amzaRegion.regionName.getRegionName() + "\n";
 
@@ -192,6 +206,6 @@ public class AmzaRegion {
     }
 
     public long count() throws Exception {
-        return regionStore.count();
+        return regionStripe.count(regionName);
     }
 }

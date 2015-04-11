@@ -15,9 +15,11 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 
@@ -25,14 +27,14 @@ public class RowStoreUpdates {
 
     private final AmzaStats amzaStats;
     private final RegionName regionName;
-    private final RegionStore regionStore;
+    private final RegionStripe regionStripe;
     private final RowsStorageUpdates rowsStorageChangeSet;
     private int changedCount = 0;
 
-    public RowStoreUpdates(AmzaStats amzaStats, RegionName regionName, RegionStore regionStore, RowsStorageUpdates rowsStorageChangeSet) {
+    public RowStoreUpdates(AmzaStats amzaStats, RegionName regionName, RegionStripe regionStripe, RowsStorageUpdates rowsStorageChangeSet) {
         this.amzaStats = amzaStats;
         this.regionName = regionName;
-        this.regionStore = regionStore;
+        this.regionStripe = regionStripe;
         this.rowsStorageChangeSet = rowsStorageChangeSet;
     }
 
@@ -57,13 +59,13 @@ public class RowStoreUpdates {
         }
     }
 
-    public void commit() throws Exception {
-        commit(WALStorageUpdateMode.replicateThenUpdate);
+    public void commit(WALReplicator replicator) throws Exception {
+        commit(replicator, WALStorageUpdateMode.replicateThenUpdate);
     }
 
-    public void commit(WALStorageUpdateMode upateMode) throws Exception {
+    public void commit(WALReplicator replicator, WALStorageUpdateMode mode) throws Exception {
         if (changedCount > 0) {
-            RowsChanged commit = regionStore.commit(upateMode, rowsStorageChangeSet);
+            RowsChanged commit = regionStripe.commit(regionName, replicator, mode, rowsStorageChangeSet);
             amzaStats.direct(regionName, changedCount, commit.getOldestRowTxId());
         }
     }

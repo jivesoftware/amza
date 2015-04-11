@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALReader;
+import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -36,7 +37,7 @@ public class NonIndexWAL implements WALStorage {
     private final RegionName regionName;
     private final OrderIdProvider orderIdProvider;
     private final RowMarshaller<byte[]> rowMarshaller;
-    private final WALTx rowsTx;
+    private final WALTx wal;
     private final Object oneTransactionAtATimeLock = new Object();
     private final AtomicLong updateCount = new AtomicLong();
 
@@ -47,7 +48,7 @@ public class NonIndexWAL implements WALStorage {
         this.regionName = regionName;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
-        this.rowsTx = rowsTx;
+        this.wal = rowsTx;
     }
 
     public RegionName getRegionName() {
@@ -57,7 +58,7 @@ public class NonIndexWAL implements WALStorage {
     @Override
     public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         if (updateCount.get() > 0) {
-            Optional<WALTx.Compacted> compact = rowsTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, null);
+            Optional<WALTx.Compacted> compact = wal.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, null);
             if (compact.isPresent()) {
                 WALTx.CommittedCompacted compacted = compact.get().commit();
                 updateCount.set(0);
@@ -69,16 +70,24 @@ public class NonIndexWAL implements WALStorage {
 
     @Override
     public void load() throws Exception {
+    }
 
+    @Override
+    public void flush(boolean fsync) throws Exception {
+        wal.flush(fsync);
     }
 
     @Override
     public boolean delete(boolean ifEmpty) throws Exception {
-        return rowsTx.delete(ifEmpty);
+        return wal.delete(ifEmpty);
     }
 
     @Override
-    public RowsChanged update(final Long overrideTxId, WALStorageUpdateMode updateMode, Scannable<WALValue> updates) throws Exception {
+    public RowsChanged update(final Long overrideTxId,
+        WALReplicator walReplicator,
+        WALStorageUpdateMode updateMode,
+        Scannable<WALValue> updates) throws Exception {
+
         final AtomicLong oldestApplied = new AtomicLong(Long.MAX_VALUE);
         final NavigableMap<WALKey, WALValue> apply = new TreeMap<>();
 
@@ -96,7 +105,7 @@ public class NonIndexWAL implements WALStorage {
         if (apply.isEmpty()) {
             return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALPointer>(), new TreeMap<WALKey, WALPointer>());
         } else {
-            rowsTx.write(new WALTx.WALWrite<Void>() {
+            wal.write(new WALTx.WALWrite<Void>() {
                 @Override
                 public Void write(WALWriter rowWriter) throws Exception {
 
@@ -123,11 +132,11 @@ public class NonIndexWAL implements WALStorage {
 
     @Override
     public void rowScan(final Scan<WALValue> scan) throws Exception {
-        rowsTx.read(new WALTx.WALRead<Void>() {
+        wal.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader reader) throws Exception {
-                reader.scan(0, new RowStream() {
+                reader.scan(0, false, new RowStream() {
 
                     @Override
                     public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawWRow) throws Exception {
@@ -145,11 +154,11 @@ public class NonIndexWAL implements WALStorage {
 
     @Override
     public void rangeScan(final WALKey from, final WALKey to, final Scan<WALValue> scan) throws Exception {
-        rowsTx.read(new WALTx.WALRead<Void>() {
+        wal.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader reader) throws Exception {
-                reader.scan(0, new RowStream() {
+                reader.scan(0, false, new RowStream() {
 
                     @Override
                     public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] rawWRow) throws Exception {
@@ -205,7 +214,7 @@ public class NonIndexWAL implements WALStorage {
 
     @Override
     public void takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
-        rowsTx.read(new WALTx.WALRead<Void>() {
+        wal.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader rowReader) throws Exception {
@@ -227,5 +236,4 @@ public class NonIndexWAL implements WALStorage {
     @Override
     public void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception {
     }
-
 }

@@ -195,7 +195,7 @@ class RegionDelta {
     void compact(RegionIndex regionIndex) throws Exception {
         final RegionDelta compact = compacting.get();
         if (compact != null) {
-            LOG.info("Merging (" + orderedIndex.size() + ") deltas for " + compact.regionName);
+            LOG.info("Merging (" + compact.orderedIndex.size() + ") deltas for " + compact.regionName);
             if (!compact.txIdWAL.isEmpty()) {
                 long largestTxId = compact.txIdWAL.lastKey();
                 RegionStore regionStore = regionIndex.get(compact.regionName);

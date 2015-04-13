@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.WALFiler;
 import java.io.File;
@@ -33,6 +34,28 @@ import org.testng.annotations.Test;
  */
 public class BinaryRowReaderWriterTest {
 
+    @Test
+    public void testValidate() throws Exception {
+
+        File dir = Files.createTempDir();
+        IoStats ioStats = new IoStats();
+        WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw");
+        BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 3);
+        BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
+
+        binaryRowWriter.write(Collections.nCopies(1, 0L), Collections.nCopies(1, (byte) 1), Collections.singletonList(new byte[]{1, 2, 3, 4}));
+        binaryRowWriter.write(Collections.nCopies(1, 1L), Collections.nCopies(1, (byte) 1), Collections.singletonList(new byte[]{1, 2, 3, 5}));
+        binaryRowWriter.write(Collections.nCopies(1, 2L), Collections.nCopies(1, (byte) 1), Collections.singletonList(new byte[]{1, 2, 3, 6}));
+
+        Assert.assertTrue(binaryRowReader.validate());
+
+        filer.seek(filer.length());
+        UIO.writeByte(filer, (byte) 56, "corrupt");
+
+        Assert.assertFalse(binaryRowReader.validate());
+
+    }
+
     /**
      * Test of read method, of class BinaryRowReader.
      *
@@ -43,7 +66,7 @@ public class BinaryRowReaderWriterTest {
         File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
         WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw");
-        BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats);
+        BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
         ReadStream readStream = new ReadStream();
@@ -51,12 +74,12 @@ public class BinaryRowReaderWriterTest {
         Assert.assertTrue(readStream.rows.isEmpty());
         readStream.clear();
 
-        binaryRowReader.scan(0, readStream);
+        binaryRowReader.scan(0, false, readStream);
         Assert.assertTrue(readStream.rows.isEmpty());
         readStream.clear();
 
         binaryRowWriter.write(Collections.nCopies(1, 0L), Collections.nCopies(1, (byte) 1), Collections.singletonList(new byte[]{1, 2, 3, 4}));
-        binaryRowReader.scan(0, readStream);
+        binaryRowReader.scan(0, false, readStream);
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
 
@@ -65,7 +88,7 @@ public class BinaryRowReaderWriterTest {
         readStream.clear();
 
         binaryRowWriter.write(Collections.nCopies(1, 2L), Collections.nCopies(1, (byte) 1), Collections.singletonList(new byte[]{2, 3, 4, 5}));
-        binaryRowReader.scan(0, readStream);
+        binaryRowReader.scan(0, false, readStream);
         Assert.assertEquals(readStream.rows.size(), 2);
         readStream.clear();
 
@@ -82,7 +105,7 @@ public class BinaryRowReaderWriterTest {
         File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
         WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw");
-        BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats);
+        BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
         ReadStream readStream = new ReadStream();
@@ -98,7 +121,7 @@ public class BinaryRowReaderWriterTest {
 
         for (int i = 0; i < 10; i++) {
             long start = System.currentTimeMillis();
-            binaryRowReader.scan(0, readStream);
+            binaryRowReader.scan(0, false, readStream);
             System.out.println("Forward scan in " + (System.currentTimeMillis() - start) + " ms");
             Assert.assertEquals(readStream.rows.size(), numEntries);
             readStream.clear();
@@ -119,7 +142,7 @@ public class BinaryRowReaderWriterTest {
         Random rand = new Random();
         for (int i = 0; i < 1000; i++) {
             WALFiler filer = new WALFiler(new File(dir, "foo").getAbsolutePath(), "rw");
-            BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats);
+            BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
             BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
             ReadStream readStream = new ReadStream();

@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -15,13 +16,19 @@ import com.jivesoftware.os.amza.shared.WALValue;
 /**
  * @author jonathan.colt
  */
-public interface DeltaWALStorage {
+public interface StripeWALStorage {
 
-    void load(RegionProvider regionProvider) throws Exception;
+    void load(RegionIndex regionIndex) throws Exception;
 
-    void compact(RegionProvider regionProvider) throws Exception;
+    void flush(boolean fsync) throws Exception;
 
-    RowsChanged update(RegionName regionName, WALStorage storage, WALStorageUpdateMode upateMode, Scannable<WALValue> rowUpdates) throws Exception;
+    void compact(RegionIndex regionIndex) throws Exception;
+
+    RowsChanged update(RegionName regionName,
+        WALStorage storage,
+        WALReplicator replicator,
+        WALStorageUpdateMode mode,
+        Scannable<WALValue> updates) throws Exception;
 
     WALValue get(RegionName regionName, WALStorage storage, WALKey key) throws Exception;
 
@@ -33,5 +40,5 @@ public interface DeltaWALStorage {
 
     void rowScan(RegionName regionName, Scannable<WALValue> scanable, Scan<WALValue> scan) throws Exception;
 
-    long size(RegionName regionName, WALStorage storage) throws Exception;
+    long count(RegionName regionName, WALStorage storage) throws Exception;
 }

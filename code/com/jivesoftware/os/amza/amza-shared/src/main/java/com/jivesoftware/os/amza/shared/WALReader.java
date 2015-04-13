@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.shared;
 public interface WALReader {
 
 
-    void scan(long offset, RowStream rowStream) throws Exception;
+    void scan(long offset, boolean allowRepairs, RowStream rowStream) throws Exception;
 
     void reverseScan(RowStream rowStream) throws Exception;
 

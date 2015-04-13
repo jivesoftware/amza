@@ -22,5 +22,4 @@ public interface AmzaRing {
 
         boolean stream(String ringName, String status, RingHost ringHost);
     }
-
 }

@@ -42,19 +42,6 @@ public interface IFiler extends IReadable, IWriteable {
 
     /**
      *
-     * @return
-     */
-    public Object lock();
-
-    /**
-     *
-     * @param position
-     * @throws IOException
-     */
-    public void seek(long position) throws IOException;
-
-    /**
-     *
      * @param position
      * @return
      * @throws IOException
@@ -63,22 +50,10 @@ public interface IFiler extends IReadable, IWriteable {
 
     /**
      *
-     * @return @throws IOException
-     */
-    public long length() throws IOException;
-
-    /**
-     *
      * @param len
      * @throws IOException
      */
     public void setLength(long len) throws IOException;
-
-    /**
-     *
-     * @return @throws IOException
-     */
-    public long getFilePointer() throws IOException;
 
     /**
      *
@@ -90,5 +65,5 @@ public interface IFiler extends IReadable, IWriteable {
      *
      * @throws IOException
      */
-    public void flush() throws IOException;
+    public void flush(boolean fsync) throws IOException;
 }

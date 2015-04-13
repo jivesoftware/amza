@@ -15,241 +15,85 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.service.storage.delta.DeltaWALStorage;
-import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALStorageProvider;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.io.File;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
-public class RegionProvider implements RowChanges {
-
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+public class RegionProvider {
 
     public static final RegionName RING_INDEX = new RegionName(true, "system", "RING_INDEX");
     public static final RegionName REGION_INDEX = new RegionName(true, "system", "REGION_INDEX");
     public static final RegionName REGION_PROPERTIES = new RegionName(true, "system", "REGION_PROPERTIES");
     public static final RegionName HIGHWATER_MARK_INDEX = new RegionName(true, "system", "HIGHWATER_MARKS");
 
-    private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
     private final RegionPropertyMarshaller regionPropertyMarshaller;
-    private final DeltaWALStorage[] deltaWALStorages;
-    private final String[] workingDirectories;
-    private final String domain;
-    private final WALStorageProvider walStorageProvider;
+    private final AmzaRegionChangeReplicator replicator;
+    private final RegionIndex regionIndex;
     private final RowChanges rowChanges;
-    private final WALReplicator walReplicator;
-    private final ConcurrentHashMap<RegionName, RegionStore> regionStores = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<RegionName, RegionProperties> regionProperties = new ConcurrentHashMap<>();
-    private final StripingLocksProvider locksProvider = new StripingLocksProvider(1024); // TODO expose to config
 
-    public RegionProvider(AmzaStats amzaStats,
-        OrderIdProvider orderIdProvider,
+    public RegionProvider(OrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
-        DeltaWALStorage[] deltaWALStorages,
-        String[] workingDirectories,
-        String domain,
-        WALStorageProvider walStorageProvider,
-        RowChanges rowChanges,
-        WALReplicator rowReplicator) {
+        AmzaRegionChangeReplicator replicator,
+        RegionIndex regionIndex,
+        RowChanges rowChanges) {
 
-        this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.regionPropertyMarshaller = regionPropertyMarshaller;
-        this.deltaWALStorages = deltaWALStorages;
-        this.workingDirectories = workingDirectories;
-        this.domain = domain;
-        this.walStorageProvider = walStorageProvider;
+        this.replicator = replicator;
+        this.regionIndex = regionIndex;
         this.rowChanges = rowChanges;
-        this.walReplicator = rowReplicator;
-    }
-
-    public String getName() {
-        return domain;
-    }
-
-    public void open() throws Exception {
-        RegionStore regionIndexStore = getRegionIndexStore();
-        regionIndexStore.rowScan(new Scan<WALValue>() {
-
-            @Override
-            public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                RegionName regionName = RegionName.fromBytes(key.getKey());
-                try {
-                    RegionProperties properties = getRegionProperties(regionName);
-                    if (properties != null) {
-                        getRegionStore(regionName);
-                    }
-                } catch (Exception x) {
-                    LOG.warn("Encountered the following opening region:" + regionName, x);
-                }
-                return true;
-            }
-        });
-    }
-
-    public RegionStore getRingIndexStore() throws Exception {
-        return getRegionStore(RING_INDEX);
-    }
-
-    public RegionStore getHighwaterIndexStore() throws Exception {
-        return getRegionStore(HIGHWATER_MARK_INDEX);
-    }
-
-    private RegionStore getRegionPropertiesStore() throws Exception {
-        return getRegionStore(REGION_PROPERTIES);
     }
 
     public RegionStore createRegionStoreIfAbsent(RegionName regionName, RegionProperties properties) throws Exception {
-        RegionStore regionStore = regionStores.get(regionName);
-        if (regionStore != null) {
-            return regionStore;
-        }
-        RegionProperties existing = getRegionProperties(regionName);
-        if (existing == null) {
-            if (regionName.isSystemRegion()) {
-                regionProperties.put(regionName, properties);
-            } else {
-                setRegionProperties(regionName, properties);
-            }
-        }
-        return getRegionStore(regionName);
-    }
-
-    public RegionStore getRegionStore(RegionName regionName) throws Exception {
-        RegionStore regionStore = regionStores.get(regionName);
-        if (regionStore != null) {
-            return regionStore;
-        }
-        RegionProperties properties;
         if (regionName.isSystemRegion()) {
-            properties = coldstartSystemRegionProperties(regionName);
-        } else {
-            properties = getRegionProperties(regionName);
-            if (properties == null) {
-                return null;
-            }
+            throw new IllegalArgumentException("You cannot create system regions.");
         }
-
-        synchronized (locksProvider.lock(regionName, 1234)) {
-            regionStore = regionStores.get(regionName);
+        RegionStore regionStore = regionIndex.get(regionName);
+        if (regionStore == null) {
+            setRegionProperties(regionName, properties);
+            regionStore = regionIndex.get(regionName);
             if (regionStore != null) {
-                return regionStore;
-            }
+                final byte[] rawRegionName = regionName.toBytes();
+                final WALKey regionKey = new WALKey(rawRegionName);
+                RegionStore regionIndexStore = regionName.equals(REGION_INDEX) ? regionStore : regionIndex.get(REGION_INDEX);
+                RowsChanged changed = regionIndexStore.directCommit(null, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
 
-            File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
-            WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, regionName, properties.walStorageDescriptor, walReplicator);
-            DeltaWALStorage dws = new NoOpDeltaWALStorage();
-            if (!regionName.isSystemRegion()) {
-                dws = deltaWALStorages[Math.abs(regionName.hashCode()) % deltaWALStorages.length];
-            }
-            regionStore = new RegionStore(amzaStats, regionName, dws, walStorage, rowChanges);
-            regionStore.load();
-
-            regionStores.put(regionName, regionStore);
-            byte[] rawRegionName = regionName.toBytes();
-            WALKey regionKey = new WALKey(rawRegionName);
-            RowStoreUpdates tx = null;
-            if (!regionName.equals(REGION_INDEX)) {
-                RegionStore regionIndexStore = getRegionIndexStore();
-                if (!regionIndexStore.containsKey(regionKey)) {
-                    tx = regionIndexStore.startTransaction(orderIdProvider.nextId());
-                }
-            } else {
-                if (!regionStore.containsKey(regionKey)) {
-                    tx = regionStore.startTransaction(orderIdProvider.nextId());
+                    @Override
+                    public void rowScan(Scan<WALValue> scan) throws Exception {
+                        scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
+                    }
+                });
+                regionIndexStore.flush(true);
+                if (!changed.isEmpty()) {
+                    rowChanges.changes(changed);
                 }
             }
-            if (tx != null) {
-                tx.add(regionKey, rawRegionName);
-                tx.commit();
+        }
+        return regionStore;
+    }
+
+    public void setRegionProperties(final RegionName regionName, final RegionProperties properties) throws Exception {
+        regionIndex.putProperties(regionName, properties);
+        RegionStore regionPropertiesStore = regionIndex.get(REGION_PROPERTIES);
+        RowsChanged changed = regionPropertiesStore.directCommit(null, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
+
+            @Override
+            public void rowScan(Scan<WALValue> scan) throws Exception {
+                scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(regionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
             }
-            return regionStore;
-        }
-    }
-
-    public RegionStore getRegionIndexStore() throws Exception {
-        return getRegionStore(REGION_INDEX);
-    }
-
-    public RegionProperties getRegionProperties(RegionName regionName) throws Exception {
-        RegionProperties properties = regionProperties.get(regionName);
-        if (properties != null) {
-            return properties;
-        }
-        if (regionName.isSystemRegion()) {
-            return coldstartSystemRegionProperties(regionName);
-        }
-        RegionStore regionPropertiesStore = getRegionPropertiesStore();
-        WALValue rawRegionProperties = regionPropertiesStore.get(new WALKey(regionName.toBytes()));
-        if (rawRegionProperties == null || rawRegionProperties.getTombstoned()) {
-            return null;
-        }
-        properties = regionPropertyMarshaller.fromBytes(rawRegionProperties.getValue());
-        regionProperties.put(regionName, properties);
-        return properties;
-    }
-
-    public void setRegionProperties(RegionName regionName, RegionProperties properties) throws Exception {
-        regionProperties.put(regionName, properties);
-        RegionStore regionPropertiesStore = getRegionPropertiesStore();
-        RowStoreUpdates rsu = regionPropertiesStore.startTransaction(orderIdProvider.nextId());
-        rsu.add(new WALKey(regionName.toBytes()), regionPropertyMarshaller.toBytes(properties));
-        rsu.commit();
-    }
-
-    public Set<Map.Entry<RegionName, RegionStore>> getAll() {
-        return regionStores.entrySet();
-    }
-
-    public Set<RegionName> getActiveRegions() {
-        return regionStores.keySet();
-    }
-
-    private RegionProperties coldstartSystemRegionProperties(RegionName regionName) {
-        RegionProperties properties;
-        if (regionName.equals(HIGHWATER_MARK_INDEX)) {
-            WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new RegionProperties(storageDescriptor, 0, 0, false);
-        } else {
-            WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new RegionProperties(storageDescriptor, 2, 2, false);
-        }
-        regionProperties.put(regionName, properties);
-        return properties;
-    }
-
-    @Override
-    public void changes(RowsChanged changes) throws Exception {
-        if (changes.getRegionName().equals(REGION_PROPERTIES)) {
-            //TODO add metrics
-            for (WALKey key : changes.getApply().keySet()) {
-                regionProperties.remove(RegionName.fromBytes(key.getKey()));
-                RegionStore store = regionStores.get(changes.getRegionName());
-                if (store != null) {
-                    RegionProperties properties = getRegionProperties(changes.getRegionName());
-                    store.updatedStorageDescriptor(properties.walStorageDescriptor);
-                }
-            }
+        });
+        regionPropertiesStore.flush(true);
+        if (!changed.isEmpty()) {
+            rowChanges.changes(changed);
         }
     }
 

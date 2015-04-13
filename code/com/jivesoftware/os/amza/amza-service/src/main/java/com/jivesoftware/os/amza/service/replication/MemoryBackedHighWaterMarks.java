@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.service.replication;
 
+import com.google.common.collect.ListMultimap;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
@@ -73,6 +74,10 @@ public class MemoryBackedHighWaterMarks implements HighwaterMarks {
     @Override
     public String toString() {
         return "MemoryBackedHighWaterMarks{" + "lastTransactionIds=" + lastTransactionIds + '}';
+    }
+
+    @Override
+    public void flush(ListMultimap<RingHost, RegionName> flush) throws Exception {
     }
 
 }

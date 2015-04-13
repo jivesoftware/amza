@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
@@ -12,7 +13,6 @@ import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
@@ -25,13 +25,15 @@ import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
+import java.io.IOException;
+import java.util.Set;
 
 /**
  *
  */
 public class EmbeddedAmzaServiceInitializer {
 
-    public AmzaService initialize(final AmzaServiceConfig amzaServiceConfig,
+    public AmzaService initialize(final AmzaServiceConfig config,
         final AmzaStats amzaStats,
         RingHost ringHost,
         final TimestampedOrderIdProvider orderIdProvider,
@@ -44,31 +46,46 @@ public class EmbeddedAmzaServiceInitializer {
         final RowChanges allRowChanges) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+        final RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor);
 
-        WALStorageProvider regionStorageProvider = new WALStorageProvider() {
+        WALStorageProvider walStorageProvider = new WALStorageProvider() {
             @Override
             public WALStorage create(File workingDirectory,
                 String domain,
                 RegionName regionName,
-                WALStorageDescriptor storageDescriptor,
-                WALReplicator rowReplicator) throws Exception {
+                WALStorageDescriptor storageDescriptor) throws Exception {
 
                 WALIndexProvider walIndexProvider = indexProviderRegistry.getWALIndexProvider(storageDescriptor);
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
+
+                BinaryWALTx binaryWALTx = new BinaryWALTx(directory,
+                    regionName.toBase64(),
+                    rowIOProvider,
+                    rowMarshaller,
+                    walIndexProvider);
+
                 return new IndexedWAL(regionName,
                     orderIdProvider,
-                    rowMarshaller,
-                    new BinaryWALTx(directory,
-                        regionName.getRegionName() + ".kvt",
-                        rowIOProvider,
-                        rowMarshaller,
-                        walIndexProvider),
-                    rowReplicator,
+                    rowMarshaller, binaryWALTx,
                     storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
                     storageDescriptor.maxUpdatesBetweenIndexCommitMarker);
+            }
+
+            @Override
+            public Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException {
+                Set<RegionName> regionNames = Sets.newHashSet();
+                for (String workingDirectory : workingDirectories) {
+                    File directory = new File(workingDirectory, domain);
+                    if (directory.exists() && directory.isDirectory()) {
+                        Set<String> regions = BinaryWALTx.listExisting(directory, rowIOProvider);
+                        for (String region : regions) {
+                            regionNames.add(RegionName.fromBase64(region));
+                        }
+                    }
+                }
+                return regionNames;
             }
         };
 
@@ -77,30 +94,43 @@ public class EmbeddedAmzaServiceInitializer {
             public WALStorage create(File workingDirectory,
                 String domain,
                 RegionName regionName,
-                WALStorageDescriptor storageDescriptor,
-                WALReplicator rowReplicator) throws Exception {
+                WALStorageDescriptor storageDescriptor) throws Exception {
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
-                RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats);
                 return new NonIndexWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
                     new BinaryWALTx(directory,
-                        regionName.getRegionName() + ".kvt",
+                        regionName.toBase64(),
                         rowIOProvider,
                         rowMarshaller,
                         new NoOpWALIndexProvider()));
             }
+
+            @Override
+            public Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException {
+                Set<RegionName> regionNames = Sets.newHashSet();
+                for (String workingDirectory : workingDirectories) {
+                    File directory = new File(workingDirectory, domain);
+                    if (directory.exists() && directory.isDirectory()) {
+                        Set<String> regions = BinaryWALTx.listExisting(directory, rowIOProvider);
+                        for (String region : regions) {
+                            regionNames.add(RegionName.fromBase64(region));
+                        }
+                    }
+                }
+                return regionNames;
+            }
         };
 
-        return new AmzaServiceInitializer().initialize(amzaServiceConfig,
+        return new AmzaServiceInitializer().initialize(config,
             amzaStats,
             rowMarshaller,
             ringHost,
             orderIdProvider,
             regionPropertyMarshaller,
-            regionStorageProvider,
+            walStorageProvider,
             tmpWALStorageProvider,
             tmpWALStorageProvider,
             updatesSender,

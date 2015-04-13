@@ -16,12 +16,15 @@
 package com.jivesoftware.os.amza.shared;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.Set;
 
 public interface WALStorageProvider {
 
     WALStorage create(File workingDirectory,
-            String domain,
-            RegionName regionName,
-            WALStorageDescriptor storageDescriptor,
-            WALReplicator walReplicator) throws Exception;
+        String domain,
+        RegionName regionName,
+        WALStorageDescriptor storageDescriptor) throws Exception;
+
+    Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException;
 }

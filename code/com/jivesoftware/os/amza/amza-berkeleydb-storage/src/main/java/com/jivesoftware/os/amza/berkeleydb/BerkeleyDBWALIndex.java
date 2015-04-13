@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
+import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Prefix;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.WALIndex;
@@ -14,12 +14,11 @@ import com.sleepycat.je.Cursor;
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.DatabaseEntry;
+import com.sleepycat.je.DatabaseNotFoundException;
 import com.sleepycat.je.DiskOrderedCursor;
 import com.sleepycat.je.Environment;
-import com.sleepycat.je.EnvironmentConfig;
 import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,7 +27,6 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.commons.io.FileUtils;
 
 /**
  * @author jonathan.colt
@@ -39,31 +37,23 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
     private static final int numPermits = 1024;
 
-    private final RegionName regionName;
-    private final File dir;
-    private Environment environment;
+    private final Environment environment;
+    private final BerkeleyDBWALIndexName name;
+    private final DatabaseConfig dbConfig;
     private Database database;
 
     private final Semaphore lock = new Semaphore(numPermits, true);
     private final AtomicLong count = new AtomicLong(-1);
     private final AtomicInteger commits = new AtomicInteger(0);
 
-    public BerkeleyDBWALIndex(File dir, RegionName regionName) throws Exception {
-        this.dir = dir;
-        this.regionName = regionName;
-        // Open the environment, creating one if it does not exist
-        EnvironmentConfig envConfig = new EnvironmentConfig()
-            .setAllowCreate(true);
-        File active = new File(dir, "active");
-        active.mkdirs();
-        this.environment = new Environment(active, envConfig);
+    public BerkeleyDBWALIndex(Environment environment, BerkeleyDBWALIndexName name) throws Exception {
+        this.environment = environment;
+        this.name = name;
 
         // Open the database, creating one if it does not exist
-        DatabaseConfig dbConfig = new DatabaseConfig()
+        this.dbConfig = new DatabaseConfig()
             .setAllowCreate(true);
-        this.database = environment.openDatabase(null, regionName.getRegionName(), dbConfig);
-
-        LOG.info("Opening " + active.getAbsolutePath() + " " + database.count());
+        this.database = environment.openDatabase(null, name.getName(), dbConfig);
     }
 
     private DatabaseEntry walPointerToEntry(WALPointer rowPointer) {
@@ -221,6 +211,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     public void compact() {
     }
 
+    @Override
     public void close() throws Exception {
         lock.acquire(numPermits);
         try {
@@ -272,8 +263,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     if (!scan.row(-1, key, value)) {
                         break;
                     }
-                }
-                while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                } while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
             }
         } finally {
             lock.release();
@@ -285,29 +275,23 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
     @Override
     public CompactionWALIndex startCompaction() throws Exception {
-        final File compacting = new File(dir, "compacting");
-        FileUtils.deleteDirectory(compacting);
+        removeDatabase(Prefix.compacting);
+        removeDatabase(Prefix.compacted);
+        removeDatabase(Prefix.backup);
 
-        final File compacted = new File(dir, "compacted");
-        FileUtils.deleteDirectory(compacted);
-
-        final File backup = new File(dir, "backup");
-        FileUtils.deleteDirectory(backup);
-
-        compacting.mkdirs();
-        final BerkeleyDBWALIndex compactedWALIndex = new BerkeleyDBWALIndex(compacting, regionName);
+        final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(environment, name.prefixName(BerkeleyDBWALIndexName.Prefix.compacting));
 
         return new CompactionWALIndex() {
 
             @Override
             public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) throws Exception {
-                compactedWALIndex.put(entries);
+                compactingWALIndex.put(entries);
             }
 
             @Override
             public void abort() throws Exception {
                 try {
-                    compactedWALIndex.close();
+                    compactingWALIndex.close();
                 } catch (IOException ex) {
                     throw new RuntimeException();
                 }
@@ -317,31 +301,38 @@ public class BerkeleyDBWALIndex implements WALIndex {
             public void commit() throws Exception {
                 lock.acquire(numPermits);
                 try {
-                    long countTs = System.currentTimeMillis();
-                    long count = database.count();
-                    LOG.info("Committing before swap: {} {} (counted={}ms)", new File(dir, "active"), count, (System.currentTimeMillis() - countTs));
+                    LOG.info("Committing before swap: {}", name.getName());
+
+                    compactingWALIndex.close();
+                    renameDatabase(Prefix.compacting, Prefix.compacted);
 
                     database.close();
-                    environment.close();
                     database = null;
-                    environment = null;
+                    renameDatabase(Prefix.active, Prefix.backup);
 
-                    FileUtils.moveDirectory(new File(compacting, "active"), compacted);
-                    FileUtils.moveDirectory(new File(dir, "active"), backup);
-                    FileUtils.moveDirectory(compacted, new File(dir, "active"));
-                    FileUtils.deleteDirectory(backup);
+                    renameDatabase(Prefix.compacted, Prefix.active);
+                    removeDatabase(Prefix.backup);
 
-                    environment = compactedWALIndex.environment;
-                    database = compactedWALIndex.database;
+                    database = environment.openDatabase(null, name.getName(), dbConfig);
 
-                    countTs = System.currentTimeMillis();
-                    count = database.count();
-                    LOG.info("Committing after swap: {} {} (counted={}ms)", new File(dir, "active"), count, (System.currentTimeMillis() - countTs));
+                    LOG.info("Committing after swap: {}", name.getName());
                 } finally {
                     lock.release(numPermits);
                 }
             }
         };
+    }
+
+    private void renameDatabase(Prefix fromPrefix, Prefix toPrefix) {
+        environment.renameDatabase(null, name.prefixName(fromPrefix).getName(), name.prefixName(toPrefix).getName());
+    }
+
+    private void removeDatabase(Prefix prefix) {
+        try {
+            environment.removeDatabase(null, name.prefixName(prefix).getName());
+        } catch (DatabaseNotFoundException e) {
+            // yummm
+        }
     }
 
     @Override

@@ -41,6 +41,11 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
+    public void close() throws Exception {
+
+    }
+
+    @Override
     public void compact() {
 
     }

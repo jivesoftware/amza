@@ -160,7 +160,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             map.put("ring", ringMaps);
 
             AmzaRegion region = amzaService.getRegion(name);
-            map.put("count", String.valueOf(region.size()));
+            map.put("count", String.valueOf(region.count()));
         }
         map.put("received", String.valueOf(totals.received.get()));
         map.put("receivedLag", String.valueOf(totals.receivedLag.get()));
@@ -272,7 +272,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;
@@ -317,21 +317,41 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         millis -= TimeUnit.SECONDS.toMillis(seconds);
 
         StringBuilder sb = new StringBuilder(64);
-        if (days > 0) {
+        boolean showRemaining = false;
+        if (showRemaining || days > 0) {
             sb.append(days);
             sb.append(" Days ");
+            showRemaining = true;
         }
-        if (hours > 0) {
+        if (showRemaining || hours > 0) {
+            if (hours < 10) {
+                sb.append('0');
+            }
             sb.append(hours);
             sb.append(":");
+            showRemaining = true;
         }
-        if (minutes > 0) {
+        if (showRemaining || minutes > 0) {
+            if (minutes < 10) {
+                sb.append('0');
+            }
             sb.append(minutes);
             sb.append(":");
+            showRemaining = true;
         }
-        if (seconds > 0) {
+        if (showRemaining || seconds > 0) {
+            if (seconds < 10) {
+                sb.append('0');
+            }
             sb.append(seconds);
             sb.append(".");
+            showRemaining = true;
+        }
+        if (millis < 100) {
+            sb.append('0');
+        }
+        if (millis < 10) {
+            sb.append('0');
         }
         sb.append(millis);
 

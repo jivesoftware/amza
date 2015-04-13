@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.RegionName;
@@ -17,7 +18,6 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.jivesoftware.os.mlogger.core.ValueType;
 import java.io.File;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -25,6 +25,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -36,6 +37,7 @@ public class BinaryWALTx implements WALTx {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private static final String SUFFIX = ".kvt";
     private static final int NUM_PERMITS = 1024;
 
     private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
@@ -49,16 +51,29 @@ public class BinaryWALTx implements WALTx {
     private RowIO io;
 
     public BinaryWALTx(File baseDir,
-        String name,
+        String prefix,
         RowIOProvider ioProvider,
         RowMarshaller<byte[]> rowMarshaller,
         WALIndexProvider walIndexProvider) throws Exception {
         this.dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
-        this.name = name;
+        this.name = prefix + SUFFIX;
         this.ioProvider = ioProvider;
         this.rowMarshaller = rowMarshaller;
         this.walIndexProvider = walIndexProvider;
         this.io = ioProvider.create(dir, name);
+    }
+
+    public static Set<String> listExisting(File baseDir, RowIOProvider ioProvider) {
+        File dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
+        List<File> files = ioProvider.listExisting(dir);
+        Set<String> names = Sets.newHashSet();
+        for (File file : files) {
+            String name = file.getName();
+            if (name.endsWith(SUFFIX)) {
+                names.add(name.substring(0, name.indexOf(SUFFIX)));
+            }
+        }
+        return names;
     }
 
     @Override
@@ -82,16 +97,28 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
+    public void flush(boolean fsync) throws Exception {
+        io.flush(fsync);
+    }
+
+    @Override
     public WALIndex load(RegionName regionName) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
+
+            if (!io.validate()) {
+                LOG.warn("Encountered a corrupt WAL. Removing wal index for " + regionName + " ...");
+                walIndexProvider.deleteIndex(regionName);
+                LOG.warn("Removed wal index for " + regionName + ".");
+            }
+
             final WALIndex walIndex = walIndexProvider.createIndex(regionName);
             if (walIndex.isEmpty()) {
                 LOG.info(
                     "Rebuilding " + walIndex.getClass().getSimpleName()
                     + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
                 final MutableLong rebuilt = new MutableLong();
-                io.scan(0, new RowStream() {
+                io.scan(0, true, new RowStream() {
                     @Override
                     public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
                         if (rowType > 0) {
@@ -153,13 +180,29 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public Optional<Compacted> compact(final RegionName regionName,
-        final long removeTombstonedOlderThanTimestampId,
+    public boolean delete(boolean ifEmpty) throws Exception {
+        compactionLock.acquire(NUM_PERMITS);
+        try {
+            if (!ifEmpty || io.sizeInBytes() == 0) {
+                try {
+                    io.close();
+                } catch (Exception x) {
+                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[]{dir.getAbsolutePath()}, x);
+                }
+                io.delete();
+                return true;
+            }
+            return false;
+        } finally {
+            compactionLock.release(NUM_PERMITS);
+        }
+    }
+
+    @Override
+    public Optional<Compacted> compact(final long removeTombstonedOlderThanTimestampId,
         final long ttlTimestampId,
         final WALIndex rowIndex) throws Exception {
 
-        final String metricPrefix = "region>" + regionName.getRegionName() + ">ring>" + regionName.getRingName() + ">";
-        LOG.inc(metricPrefix + "checks");
         final long endOfLastRow = io.getEndOfLastRow();
         if (lastEndOfLastRow.get() == -1) {
             lastEndOfLastRow.set(endOfLastRow);
@@ -168,11 +211,8 @@ public class BinaryWALTx implements WALTx {
         if (endOfLastRow < lastEndOfLastRow.get() * 2) {
             return Optional.absent();
         }
-        LOG.info("Compacting region:" + regionName + "...");
         lastEndOfLastRow.set(endOfLastRow);
         final long start = System.currentTimeMillis();
-
-        LOG.inc(metricPrefix + "compacted");
 
         final WALIndex.CompactionWALIndex compactionRowIndex = rowIndex != null ? rowIndex.startCompaction() : null;
 
@@ -199,7 +239,7 @@ public class BinaryWALTx implements WALTx {
         return Optional.<Compacted>of(new Compacted() {
 
             @Override
-            public WALIndex getCompactedWALIndex() throws Exception {
+            public CommittedCompacted commit() throws Exception {
 
                 compactionLock.acquire(NUM_PERMITS);
                 try {
@@ -212,7 +252,7 @@ public class BinaryWALTx implements WALTx {
                         catchupKeys, catchupRemoves, catchupTombstones, catchupTTL,
                         removeTombstonedOlderThanTimestampId,
                         ttlTimestampId);
-                    compactionIO.flush();
+                    compactionIO.flush(true);
                     long sizeAfterCompaction = compactionIO.sizeInBytes();
                     compactionIO.close();
 
@@ -230,27 +270,18 @@ public class BinaryWALTx implements WALTx {
                     // Reopen the world
                     io = ioProvider.create(dir, name);
 
-                    LOG.set(ValueType.COUNT, metricPrefix + "sizeBeforeCompaction", sizeBeforeCompaction);
-                    LOG.set(ValueType.COUNT, metricPrefix + "sizeAfterCompaction", sizeAfterCompaction);
-                    LOG.set(ValueType.COUNT, metricPrefix + "keeps", keyCount.get());
-                    LOG.set(ValueType.COUNT, metricPrefix + "removes", removeCount.get());
-                    LOG.set(ValueType.COUNT, metricPrefix + "tombstones", tombstoneCount.get());
-                    LOG.set(ValueType.COUNT, metricPrefix + "ttl", ttlCount.get());
-                    LOG.set(ValueType.COUNT, metricPrefix + "duration", System.currentTimeMillis() - start);
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", catchupKeys.get());
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupRemoves", catchupRemoves.get());
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", catchupTombstones.get());
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", catchupTTL.get());
-                    LOG.set(ValueType.COUNT, metricPrefix + "catchupDuration", System.currentTimeMillis() - startCatchup);
-
                     LOG.info("Compacted region " + dir.getAbsolutePath() + "/" + name
                         + " was:" + sizeBeforeCompaction + "bytes "
                         + " isNow:" + sizeAfterCompaction + "bytes.");
-                    compactionRowIndex.commit();
+                    if (compactionRowIndex != null) {
+                        compactionRowIndex.commit();
+                    }
 
                     long endOfLastRow = io.getEndOfLastRow();
                     lastEndOfLastRow.set(endOfLastRow);
-                    return rowIndex;
+                    return new CommittedCompacted(rowIndex, sizeBeforeCompaction, sizeAfterCompaction, keyCount.longValue(), removeCount.longValue(),
+                        tombstoneCount.longValue(), ttlCount.longValue(), System.currentTimeMillis() - start, catchupKeys.longValue(),
+                        catchupRemoves.longValue(), catchupTombstones.longValue(), catchupTTL.longValue(), System.currentTimeMillis() - startCatchup);
                 } finally {
                     compactionLock.release(NUM_PERMITS);
                 }
@@ -279,7 +310,7 @@ public class BinaryWALTx implements WALTx {
         final List<byte[]> rawRows = new ArrayList<>();
         final AtomicLong batchSizeInBytes = new AtomicLong();
 
-        io.scan(startAtRow, new RowStream() {
+        io.scan(startAtRow, false, new RowStream() {
             @Override
             public boolean row(final long rowFP, long rowTxId, byte rowType, final byte[] row) throws Exception {
                 if (rowFP >= endOfLastRow) {

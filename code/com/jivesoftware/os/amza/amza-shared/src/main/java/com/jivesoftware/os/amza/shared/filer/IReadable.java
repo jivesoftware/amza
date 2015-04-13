@@ -25,7 +25,7 @@ import java.io.IOException;
  *
  * @author Administrator
  */
-public interface IReadable extends ICloseable {
+public interface IReadable extends ICloseable, ISeekable {
 
     /**
      *

@@ -4,11 +4,15 @@ package com.jivesoftware.os.amza.shared;
  *
  * @author jonathan.colt
  */
-public class NoOpWALIndexProvider implements WALIndexProvider {
+public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
 
     @Override
-    public WALIndex createIndex(RegionName regionName) throws Exception {
+    public NoOpWALIndex createIndex(RegionName regionName) throws Exception {
         return new NoOpWALIndex();
+    }
+
+    @Override
+    public void deleteIndex(RegionName regionName) throws Exception {
     }
 
 }

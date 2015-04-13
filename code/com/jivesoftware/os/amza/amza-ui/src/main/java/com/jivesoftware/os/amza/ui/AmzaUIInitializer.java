@@ -10,12 +10,14 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaClusterPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaRegionsPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaRingsPluginEndpoints;
+import com.jivesoftware.os.amza.ui.endpoints.AmzaStressPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaUIEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaUIEndpoints.AmzaClusterName;
 import com.jivesoftware.os.amza.ui.endpoints.HealthPluginEndpoints;
 import com.jivesoftware.os.amza.ui.region.AmzaClusterPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaRegionsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaRingsPluginRegion;
+import com.jivesoftware.os.amza.ui.region.AmzaStressPluginRegion;
 import com.jivesoftware.os.amza.ui.region.HeaderRegion;
 import com.jivesoftware.os.amza.ui.region.HealthPluginRegion;
 import com.jivesoftware.os.amza.ui.region.HomeRegion;
@@ -26,7 +28,6 @@ import com.jivesoftware.os.amza.ui.soy.SoyService;
 import java.util.List;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaUIInitializer {
@@ -50,6 +51,7 @@ public class AmzaUIInitializer {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaRegionsPluginRegion.soy"), "amzaRegions.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStats.soy"), "amzaStats.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStressPluginRegion.soy"), "amzaStress.soy");
 
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();
@@ -57,19 +59,22 @@ public class AmzaUIInitializer {
         SoyService soyService = new SoyService(renderer, new HeaderRegion("soy.chrome.headerRegion", renderer),
             new HomeRegion("soy.page.homeRegion", renderer));
 
-        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
-            HealthPluginEndpoints.class,
-            new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats",
-                renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
-            new ManagePlugin("repeat", "Amza Rings", "/amza/ui/rings",
+        List<ManagePlugin> plugins = Lists.newArrayList(
+            new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
+                HealthPluginEndpoints.class,
+                new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats", renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
+            new ManagePlugin("repeat", "Rings", "/amza/ui/rings",
                 AmzaRingsPluginEndpoints.class,
                 new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getAmzaRing())),
-            new ManagePlugin("map-marker", "Amza Regions", "/amza/ui/regions",
+            new ManagePlugin("map-marker", "Regions", "/amza/ui/regions",
                 AmzaRegionsPluginEndpoints.class,
                 new AmzaRegionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaRing(), amzaService)),
-            new ManagePlugin("leaf", "Amza Cluster", "/amza/ui/cluster",
+            new ManagePlugin("leaf", "Cluster", "/amza/ui/cluster",
                 AmzaClusterPluginEndpoints.class,
-                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaRing())));
+                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaRing())),
+            new ManagePlugin("scale", "Stress", "/amza/ui/stress",
+                AmzaStressPluginEndpoints.class,
+                new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService)));
 
         injectionCallback.addInjectable(SoyService.class, soyService);
 

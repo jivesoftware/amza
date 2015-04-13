@@ -21,7 +21,7 @@ package com.jivesoftware.os.amza.shared.filer;
 
 import java.io.IOException;
 
-public interface IWriteable extends ICloseable {
+public interface IWriteable extends ICloseable, ISeekable {
 
     /**
      *

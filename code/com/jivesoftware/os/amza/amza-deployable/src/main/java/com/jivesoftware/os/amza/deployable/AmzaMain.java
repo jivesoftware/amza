@@ -114,7 +114,7 @@ public class AmzaMain {
             final AmzaStats amzaStats = new AmzaStats();
 
             WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
-            indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs));
+            indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
 
             HttpUpdatesSender changeSetSender = new HttpUpdatesSender(amzaStats);
             HttpUpdatesTaker taker = new HttpUpdatesTaker(amzaStats);

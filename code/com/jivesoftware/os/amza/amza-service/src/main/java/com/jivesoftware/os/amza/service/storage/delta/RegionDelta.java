@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
+import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -130,7 +131,6 @@ class RegionDelta {
 
     Set<WALKey> keySet() {
         Set<WALKey> keySet = pointerIndex.keySet();
-        //Set<WALKey> keySet = index.keySet();
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
             HashSet<WALKey> all = new HashSet<>(keySet);
@@ -192,15 +192,16 @@ class RegionDelta {
         return false;
     }
 
-    long compact(RegionProvider regionProvider) throws Exception {
+    void compact(RegionIndex regionIndex) throws Exception {
         final RegionDelta compact = compacting.get();
-        long largestTxId = 0L;
         if (compact != null) {
-            LOG.info("Merging deltas for " + compact.regionName);
             if (!compact.txIdWAL.isEmpty()) {
-                largestTxId = compact.txIdWAL.lastKey();
-                RegionStore regionStore = regionProvider.getRegionStore(compact.regionName);
+                LOG.info("Merging (" + compact.orderedIndex.size() + ") deltas for " + compact.regionName);
+                long largestTxId = compact.txIdWAL.lastKey();
+                RegionStore regionStore = regionIndex.get(compact.regionName);
                 regionStore.directCommit(largestTxId,
+                    null,
+                    WALStorageUpdateMode.noReplication,
                     new Scannable<WALValue>() {
                         @Override
                         public void rowScan(Scan<WALValue> scan) {
@@ -215,12 +216,10 @@ class RegionDelta {
                             }
                         }
                     });
+                LOG.info("Merged deltas for " + compact.regionName);
             }
-            LOG.info("Merged deltas for " + compact.regionName);
-
         }
         compacting.set(null);
-        return largestTxId;
     }
 
 }

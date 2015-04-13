@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.filer.IFiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import org.apache.commons.io.FileUtils;
 
 /**
  *
@@ -28,8 +29,13 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public void scan(long offset, RowStream rowStream) throws Exception {
-        rowReader.scan(offset, rowStream);
+    public boolean validate() throws Exception {
+        return rowReader.validate();
+    }
+
+    @Override
+    public void scan(long offset, boolean allowRepairs, RowStream rowStream) throws Exception {
+        rowReader.scan(offset, allowRepairs, rowStream);
     }
 
     @Override
@@ -64,13 +70,18 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public void flush() throws Exception {
-        filer.flush();
+    public void flush(boolean fsync) throws Exception {
+        filer.flush(fsync);
     }
 
     @Override
     public void close() throws IOException {
         filer.close();
+    }
+
+    @Override
+    public void delete() throws Exception {
+        FileUtils.deleteQuietly(file);
     }
 
 }

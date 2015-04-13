@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.shared;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.io.BaseEncoding;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
@@ -27,6 +28,7 @@ public class RegionName implements Comparable<RegionName> {
     private final boolean systemRegion;
     private final String ringName;
     private final String regionName;
+    private transient int hash = 0;
 
     public byte[] toBytes() throws IOException {
         MemoryFiler memoryFiler = new MemoryFiler();
@@ -46,6 +48,14 @@ public class RegionName implements Comparable<RegionName> {
                 UIO.readString(memoryFiler, "ringName"));
         }
         throw new IOException("Invalid version:" + bytes[0]);
+    }
+
+    public String toBase64() throws IOException {
+        return BaseEncoding.base64Url().encode(toBytes());
+    }
+
+    public static RegionName fromBase64(String base64) throws IOException {
+        return fromBytes(BaseEncoding.base64Url().decode(base64));
     }
 
     @JsonCreator
@@ -80,10 +90,14 @@ public class RegionName implements Comparable<RegionName> {
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 29 * hash + (this.systemRegion ? 1 : 0);
-        hash = 29 * hash + Objects.hashCode(this.ringName);
-        hash = 29 * hash + Objects.hashCode(this.regionName);
+        int hash = this.hash;
+        if (hash == 0) {
+            hash = 7;
+            hash = 29 * hash + (this.systemRegion ? 1 : 0);
+            hash = 29 * hash + Objects.hashCode(this.ringName);
+            hash = 29 * hash + Objects.hashCode(this.regionName);
+            this.hash = hash;
+        }
         return hash;
     }
 

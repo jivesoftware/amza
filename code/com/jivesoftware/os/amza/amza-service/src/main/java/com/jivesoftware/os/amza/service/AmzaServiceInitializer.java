@@ -16,44 +16,45 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Predicate;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReceiver;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeTaker;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionCompactor;
 import com.jivesoftware.os.amza.service.replication.RegionBackHighwaterMarks;
+import com.jivesoftware.os.amza.service.replication.RegionStripe;
+import com.jivesoftware.os.amza.service.replication.RegionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.SystemStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.WALs;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaWALStorage;
-import com.jivesoftware.os.amza.service.storage.delta.MemoryBackedDeltaWALStorage;
-import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
-import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
-import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class AmzaServiceInitializer {
 
@@ -61,7 +62,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = new String[]{"./var/data/"};
 
         public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
@@ -75,6 +76,12 @@ public class AmzaServiceInitializer {
         public int numberOfCompactorThreads = 8;
         public int numberOfTakerThreads = 8;
         public int numberOfReplicatorThreads = 24;
+
+        public int corruptionParanoiaFactor = 10;
+
+        public int numberOfDeltaStripes = 4;
+        public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
+        public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
 
     }
 
@@ -91,71 +98,24 @@ public class AmzaServiceInitializer {
         UpdatesTaker updatesTaker,
         Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
-        final RowChanges allRowChanges) throws Exception {
+        RowChanges allRowChanges) throws Exception {
 
         AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(allRowChanges);
 
-        final AtomicReference<AmzaRegionChangeReplicator> replicator = new AtomicReference<>();
+        RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor);
 
-        WALReplicator walReplicator = new WALReplicator() {
-            @Override
-            public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
-                return replicator.get().replicate(rowsChanged);
-            }
-        };
+        RegionIndex regionIndex = new RegionIndex(amzaStats, config.workingDirectories, "amza/stores", regionsWALStorageProvider, regionPropertyMarshaller);
+        regionIndex.open();
 
-        int deltaStorageStripes = 3;
-        long maxUpdatesBeforeCompaction = 400_000;
-        long compactAfterNUpdates = maxUpdatesBeforeCompaction / deltaStorageStripes;
-        DeltaWALStorage[] deltaWALStorages = new DeltaWALStorage[deltaStorageStripes];
-        for (int i = 0; i < deltaWALStorages.length; i++) {
-            File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
-            RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats);
-            WALTx deltaWALRowsTx = new BinaryWALTx(walDir, "delta-wal-" + i, ioProvider, rowMarshaller, new NoOpWALIndexProvider());
-            DeltaWAL deltaWAL = new DeltaWAL(new RegionName(true, "delta-wal", "delta-wal-" + i), orderIdProvider, rowMarshaller, deltaWALRowsTx);
-            deltaWALStorages[i] = new MemoryBackedDeltaWALStorage(i, rowMarshaller, deltaWAL, walReplicator, compactAfterNUpdates);
-        }
+        AmzaRingReader amzaReadHostRing = new AmzaRingReader(ringHost, regionIndex);
 
-        final RegionProvider regionProvider = new RegionProvider(amzaStats,
-            orderIdProvider,
-            regionPropertyMarshaller,
-            deltaWALStorages,
-            config.workingDirectories,
-            "amza/stores",
-            regionsWALStorageProvider,
-            amzaRegionWatcher,
-            walReplicator);
-
-        for (DeltaWALStorage deltaWALStorage : deltaWALStorages) {
-            deltaWALStorage.load(regionProvider);
-        }
-
-        ScheduledExecutorService compactDeltaWALThread = Executors.newScheduledThreadPool(1,
-            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
-
-        // HACK
-        for (final DeltaWALStorage deltaWALStorage : deltaWALStorages) {
-            compactDeltaWALThread.scheduleAtFixedRate(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        deltaWALStorage.compact(regionProvider);
-                    } catch (Throwable x) {
-                        LOG.error("Compactor failed.", x);
-                    }
-                }
-            }, 1, 1, TimeUnit.MINUTES);
-        }
-
-        RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, regionProvider, 1000);
-        //MemoryBackedHighWaterMarks highwaterMarks = new MemoryBackedHighWaterMarks();
-        final AmzaHostRing amzaRing = new AmzaHostRing(ringHost, regionProvider, orderIdProvider);
         WALs resendWALs = new WALs(config.workingDirectories, "amza/WAL/resend", resendWALStorageProvider);
+        resendWALs.load();
 
-        AmzaRegionChangeReplicator changeReplicator = new AmzaRegionChangeReplicator(amzaStats,
+        AmzaRegionChangeReplicator replicator = new AmzaRegionChangeReplicator(amzaStats,
             rowMarshaller,
-            amzaRing,
-            regionProvider,
+            amzaReadHostRing,
+            regionIndex,
             resendWALs,
             updatesSender,
             Executors.newFixedThreadPool(config.numberOfReplicatorThreads),
@@ -163,20 +123,105 @@ public class AmzaServiceInitializer {
             config.resendReplicasIntervalInMillis,
             config.numberOfResendThreads);
 
-        replicator.set(changeReplicator);
+        RegionStripe systemRegionStripe = new RegionStripe(amzaStats, orderIdProvider, regionIndex, new SystemStripeWALStorage(), amzaRegionWatcher,
+            new Predicate<RegionName>() {
+
+                @Override
+                public boolean apply(RegionName input) {
+                    return input.isSystemRegion();
+                }
+            });
+
+        final int deltaStorageStripes = config.numberOfDeltaStripes;
+        long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
+        
+        RegionStripe[] regionStripes = new RegionStripe[deltaStorageStripes];
+        for (int i = 0; i < deltaStorageStripes; i++) {
+            File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
+            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, rowMarshaller);
+            DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(i, rowMarshaller, deltaWALFactory, maxUpdatesBeforeCompaction);
+            final int stripeId = i;
+            regionStripes[i] = new RegionStripe(amzaStats, orderIdProvider, regionIndex, deltaWALStorage, amzaRegionWatcher,
+                new Predicate<RegionName>() {
+
+                    @Override
+                    public boolean apply(RegionName input) {
+                        if (!input.isSystemRegion()) {
+
+                            return Math.abs(input.hashCode()) % deltaStorageStripes == stripeId;
+                        }
+                        return false;
+                    }
+                });
+        }
+
+        RegionStripeProvider regionStripeProvider = new RegionStripeProvider(systemRegionStripe, regionIndex, regionStripes);
+
+        RegionProvider regionProvider = new RegionProvider(
+            orderIdProvider,
+            regionPropertyMarshaller,
+            replicator,
+            regionIndex,
+            allRowChanges);
+
+        ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(regionStripes.length,
+            new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
+        List<Future> futures = new ArrayList<>();
+        for (final RegionStripe regionStripe : regionStripes) {
+            futures.add(stripeLoaderThreadPool.submit(new Runnable() {
+
+                @Override
+                public void run() {
+                    try {
+                        regionStripe.load();
+                    } catch (Exception x) {
+                        LOG.error("Failed while loading " + regionStripe, x);
+                        throw new RuntimeException(x);
+                    }
+                }
+            }));
+        }
+        for (Future future : futures) {
+            future.get();
+        }
+        stripeLoaderThreadPool.shutdown();
+
+        ScheduledExecutorService compactDeltasThreadPool = Executors.newScheduledThreadPool(config.numberOfCompactorThreads,
+            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
+        for (final RegionStripe regionStripe : regionStripes) {
+            compactDeltasThreadPool.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        regionStripe.compact();
+                    } catch (Throwable x) {
+                        LOG.error("Compactor failed.", x);
+                    }
+                }
+            }, config.deltaStripeCompactionIntervalInMillis, config.deltaStripeCompactionIntervalInMillis, TimeUnit.MILLISECONDS);
+        }
+
+        AmzaHostRing amzaRing = new AmzaHostRing(amzaReadHostRing, systemRegionStripe, replicator, orderIdProvider);
+
+        RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, systemRegionStripe, replicator);
 
         WALs replicatedWALs = new WALs(config.workingDirectories, "amza/WAL/replicated", replicaWALStorageProvider);
+        replicatedWALs.load();
+
         AmzaRegionChangeReceiver changeReceiver = new AmzaRegionChangeReceiver(amzaStats,
             rowMarshaller,
-            regionProvider,
+            regionIndex,
+            regionStripeProvider,
             replicatedWALs,
             config.applyReplicasIntervalInMillis,
             config.numberOfApplierThreads
         );
 
         AmzaRegionChangeTaker changeTaker = new AmzaRegionChangeTaker(amzaStats,
-            amzaRing,
-            regionProvider,
+            amzaReadHostRing,
+            regionIndex,
+            regionStripeProvider,
+            regionStripes,
             highwaterMarks,
             updatesTaker,
             takeFailureListener,
@@ -184,21 +229,25 @@ public class AmzaServiceInitializer {
             config.numberOfTakerThreads);
 
         AmzaRegionCompactor regionCompactor = new AmzaRegionCompactor(amzaStats,
-            regionProvider,
+            regionIndex,
             orderIdProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
             config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
-        AmzaService service = new AmzaService(orderIdProvider,
+        return new AmzaService(orderIdProvider,
+            amzaStats,
+            amzaReadHostRing,
             amzaRing,
             highwaterMarks,
             changeReceiver,
             changeTaker,
-            changeReplicator,
+            replicator,
             regionCompactor,
+            regionIndex,
             regionProvider,
+            regionStripeProvider,
+            replicator,
             amzaRegionWatcher);
-        return service;
     }
 }

@@ -104,19 +104,14 @@ public class Main {
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
         final AmzaStats amzaStats = new AmzaStats();
 
-        final String[] mapdbRowIndexDirs = new String[]{
-            "./mapdb/data1",
-            "./mapdb/data2",
-            "./mapdb/data3"};
+        final String[] workingDirs = System.getProperty("amza.working.dirs", "./data1,./data2,./data3")
+            .split(",");
+        amzaServiceConfig.workingDirectories = workingDirs;
 
-        final String[] berkeleydbRowIndexDirs = new String[]{
-            "./berkeleydb/data1",
-            "./berkeleydb/data2",
-            "./berkeleydb/data3"};
 
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
-        indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(mapdbRowIndexDirs));
-        indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(berkeleydbRowIndexDirs));
+        indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(workingDirs));
+        indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
 
         FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
         marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());

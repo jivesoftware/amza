@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.shared;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.io.BaseEncoding;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public class WALValue implements Serializable {
@@ -51,7 +51,7 @@ public class WALValue implements Serializable {
 
     @Override
     public String toString() {
-        return "WALValue{" + "timestamp=" + timestamp + ", tombstoned=" + tombstoned + ", value=" + BaseEncoding.base64().encode(value) + '}';
+        return "WALValue{" + "timestamp=" + timestamp + ", tombstoned=" + tombstoned + ", value=" + new String(value, StandardCharsets.US_ASCII) + '}';
     }
 
     @Override

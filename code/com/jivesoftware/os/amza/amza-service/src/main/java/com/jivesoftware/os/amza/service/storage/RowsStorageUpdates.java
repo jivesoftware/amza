@@ -15,10 +15,11 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.shared.RangeScannable;
+import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALValue;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -28,12 +29,14 @@ import java.util.concurrent.ConcurrentSkipListMap;
  */
 public class RowsStorageUpdates implements RangeScannable<WALValue> {
 
-    private final WALStorage walStorage;
+    private final RegionName regionName;
+    private final RegionStripe regionStripe;
     private final ConcurrentSkipListMap<WALKey, WALValue> changes;
     private final long timestamp;
 
-    RowsStorageUpdates(WALStorage walStorage, long timestamp) {
-        this.walStorage = walStorage;
+    public RowsStorageUpdates(RegionName regionName, RegionStripe regionStripe, long timestamp) {
+        this.regionName = regionName;
+        this.regionStripe = regionStripe;
         this.timestamp = timestamp;
         this.changes = new ConcurrentSkipListMap<>();
     }
@@ -60,14 +63,14 @@ public class RowsStorageUpdates implements RangeScannable<WALValue> {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        return walStorage.containsKey(key);
+        return regionStripe.containsKey(regionName, key);
     }
 
     public byte[] getValue(WALKey key) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        WALValue got = walStorage.get(key);
+        WALValue got = regionStripe.get(regionName, key);
         if (got == null || got.getTombstoned()) {
             return null;
         }
@@ -78,7 +81,7 @@ public class RowsStorageUpdates implements RangeScannable<WALValue> {
         if (key == null) {
             return null;
         }
-        return walStorage.get(key);
+        return regionStripe.get(regionName, key);
     }
 
     public boolean put(WALKey key, byte[] value) throws Exception {
@@ -94,7 +97,7 @@ public class RowsStorageUpdates implements RangeScannable<WALValue> {
         if (key == null) {
             return false;
         }
-        WALValue current = walStorage.get(key);
+        WALValue current = regionStripe.get(regionName, key);
         byte[] value = (current != null) ? current.getValue() : null;
         WALValue update = new WALValue(value, timestamp, true);
         if (current == null || current.getTimestampId() < update.getTimestampId()) {

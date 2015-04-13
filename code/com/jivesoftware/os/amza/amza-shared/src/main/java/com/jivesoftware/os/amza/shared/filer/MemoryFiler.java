@@ -179,7 +179,7 @@ public class MemoryFiler implements IFiler {
     }
 
     @Override
-    public void flush() throws IOException {
+    public void flush(boolean fsync) throws IOException {
     }
 
     private static byte[] trim(byte[] src, int count) {

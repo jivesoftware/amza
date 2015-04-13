@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.shared;
 
 import com.google.common.primitives.UnsignedBytes;
 import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public class WALKey implements Comparable<WALKey>, Serializable {
@@ -61,7 +62,7 @@ public class WALKey implements Comparable<WALKey>, Serializable {
 
     @Override
     public String toString() {
-        return "walKey=" + Arrays.toString(key);
+        return "WALKey{" + "key=" + new String(key, StandardCharsets.US_ASCII) + '}';
     }
 
     @Override

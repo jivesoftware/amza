@@ -66,7 +66,7 @@ public class ByteBufferBackedFiler implements IFiler {
     }
 
     @Override
-    public void flush() throws IOException {
+    public void flush(boolean fsync) throws IOException {
     }
 
     @Override

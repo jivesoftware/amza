@@ -14,7 +14,11 @@ public interface RowIO extends WALReader, WALWriter {
 
     long sizeInBytes() throws Exception;
 
-    void flush() throws Exception;
+    void flush(boolean fsync) throws Exception;
 
     void close() throws Exception;
+
+    void delete() throws Exception;
+
+    boolean validate() throws Exception;
 }

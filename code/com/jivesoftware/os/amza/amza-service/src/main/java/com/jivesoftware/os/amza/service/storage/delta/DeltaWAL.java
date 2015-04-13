@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -28,34 +27,38 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class DeltaWAL {
+public class DeltaWAL implements Comparable<DeltaWAL> {
 
-    private final RegionName regionName;
+    private final long id;
     private final OrderIdProvider orderIdProvider;
     private final RowMarshaller<byte[]> rowMarshaller;
-    private final WALTx rowsTx;
+    private final WALTx wal;
     private final AtomicLong updateCount = new AtomicLong();
     private final Object oneTxAtATimeLock = new Object();
 
-    public DeltaWAL(RegionName regionName,
+    public DeltaWAL(long id,
         OrderIdProvider orderIdProvider,
         RowMarshaller<byte[]> rowMarshaller,
-        WALTx rowsTx) {
-        this.regionName = regionName;
+        WALTx wal) {
+        this.id = id;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
-        this.rowsTx = rowsTx;
+        this.wal = wal;
     }
 
     public void load(final RowStream rowStream) throws Exception {
-        rowsTx.read(new WALTx.WALRead<Void>() {
+        wal.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader reader) throws Exception {
-                reader.scan(0, rowStream);
+                reader.scan(0, true, rowStream);
                 return null;
             }
         });
+    }
+
+    public void flush(boolean fsync) throws Exception {
+        wal.flush(fsync);
     }
 
     WALKey regionPrefixedKey(RegionName regionName, WALKey key) throws IOException {
@@ -72,7 +75,7 @@ public class DeltaWAL {
         final Map<WALKey, byte[]> keyToRowPointer = new HashMap<>();
 
         final MutableLong txId = new MutableLong();
-        rowsTx.write(new WALTx.WALWrite<Void>() {
+        wal.write(new WALTx.WALWrite<Void>() {
             @Override
             public Void write(WALWriter rowWriter) throws Exception {
                 List<WALKey> keys = new ArrayList<>();
@@ -105,7 +108,7 @@ public class DeltaWAL {
     }
 
     void takeRows(final NavigableMap<Long, List<byte[]>> tailMap, final RowStream rowStream) throws Exception {
-        rowsTx.read(new WALTx.WALRead<Void>() {
+        wal.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader reader) throws Exception {
@@ -135,7 +138,7 @@ public class DeltaWAL {
 
     WALValue hydrate(RegionName regionName, final WALPointer rowPointer) throws Exception {
         try {
-            byte[] row = rowsTx.read(new WALTx.WALRead<byte[]>() {
+            byte[] row = wal.read(new WALTx.WALRead<byte[]>() {
                 @Override
                 public byte[] read(WALReader rowReader) throws Exception {
                     return rowReader.read(rowPointer.getFp());
@@ -150,13 +153,15 @@ public class DeltaWAL {
         }
     }
 
-    void compact(long maxTxId) throws Exception {
-        Optional<WALTx.Compacted> compact = rowsTx.compact(regionName, 0, maxTxId, null);
-        if (compact.isPresent()) {
-            synchronized (oneTxAtATimeLock) {
-                compact.get().getCompactedWALIndex();
-            }
+    void destroy() throws Exception {
+        synchronized (oneTxAtATimeLock) {
+            wal.delete(false);
         }
+    }
+
+    @Override
+    public int compareTo(DeltaWAL o) {
+        return Long.compare(id, o.id);
     }
 
     public static class DeltaWALApplied {

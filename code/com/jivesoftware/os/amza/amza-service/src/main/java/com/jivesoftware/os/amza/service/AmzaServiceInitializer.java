@@ -79,6 +79,10 @@ public class AmzaServiceInitializer {
 
         public int corruptionParanoiaFactor = 10;
 
+        public int numberOfDeltaStripes = 4;
+        public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
+        public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
+
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
@@ -128,15 +132,14 @@ public class AmzaServiceInitializer {
                 }
             });
 
-        final int deltaStorageStripes = 4;
-        long maxUpdatesBeforeCompaction = 400_000;
-        long compactAfterNUpdates = maxUpdatesBeforeCompaction / deltaStorageStripes;
-
+        final int deltaStorageStripes = config.numberOfDeltaStripes;
+        long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
+        
         RegionStripe[] regionStripes = new RegionStripe[deltaStorageStripes];
         for (int i = 0; i < deltaStorageStripes; i++) {
             File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, rowMarshaller);
-            DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(i, rowMarshaller, deltaWALFactory, compactAfterNUpdates);
+            DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(i, rowMarshaller, deltaWALFactory, maxUpdatesBeforeCompaction);
             final int stripeId = i;
             regionStripes[i] = new RegionStripe(amzaStats, orderIdProvider, regionIndex, deltaWALStorage, amzaRegionWatcher,
                 new Predicate<RegionName>() {
@@ -195,7 +198,7 @@ public class AmzaServiceInitializer {
                         LOG.error("Compactor failed.", x);
                     }
                 }
-            }, 1, 1, TimeUnit.MINUTES); // TODO expose to config
+            }, config.deltaStripeCompactionIntervalInMillis, config.deltaStripeCompactionIntervalInMillis, TimeUnit.MILLISECONDS);
         }
 
         AmzaHostRing amzaRing = new AmzaHostRing(amzaReadHostRing, systemRegionStripe, replicator, orderIdProvider);

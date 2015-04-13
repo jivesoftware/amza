@@ -106,6 +106,8 @@ public class Main {
 
         final String[] workingDirs = System.getProperty("amza.working.dirs", "./data1,./data2,./data3")
             .split(",");
+        amzaServiceConfig.workingDirectories = workingDirs;
+
 
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
         indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(workingDirs));

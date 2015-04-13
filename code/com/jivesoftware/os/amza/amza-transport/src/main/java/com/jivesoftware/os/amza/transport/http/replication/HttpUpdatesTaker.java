@@ -32,7 +32,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -56,10 +55,10 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         long transactionId,
         RowStream tookRowUpdates) throws Exception {
 
-        RowUpdates changeSet = new RowUpdates(transactionId, regionName, new ArrayList<Long>(), new ArrayList<byte[]>());
+        TakeRequest takeRequest = new TakeRequest(transactionId, regionName);
 
         long t1 = System.currentTimeMillis();
-        HttpStreamResponse httpStreamResponse = getRequestHelper(ringHost).executeStreamingPostRequest(changeSet, "/amza/changes/streamingTake");
+        HttpStreamResponse httpStreamResponse = getRequestHelper(ringHost).executeStreamingPostRequest(takeRequest, "/amza/changes/streamingTake");
         long t2 = System.currentTimeMillis();
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??

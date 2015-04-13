@@ -27,8 +27,25 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.EOFException;
 import java.io.IOException;
+import java.util.Arrays;
 
 public class BinaryRowReader implements WALReader {
+
+    public static void main(String[] args) throws Exception {
+        String rowFile = "/jive/peek/332267939997237250.kvt";
+        WALFiler walFiler = new WALFiler(rowFile, "rw");
+        BinaryRowReader reader = new BinaryRowReader(walFiler, new IoStats(), 10);
+        System.out.println("rowFP\trowTxId\trowType\trow.length\trowBytes");
+
+        reader.scan(0, false, new RowStream() {
+
+            @Override
+            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
+                System.out.println(rowFP + "\t" + rowTxId + "\t" + rowType + "\t" + row.length + "\t" + Arrays.toString(row));
+                return true;
+            }
+        });
+    }
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final WALFiler parent; // TODO use mem-mapping and bb.dupliate to remove all the hard locks
@@ -122,7 +139,9 @@ public class BinaryRowReader implements WALReader {
                         rowType = (byte) filer.read();
                         rowTxId = UIO.readLong(filer, "txId");
                         row = new byte[length - (1 + 8)];
-                        filer.read(row);
+                        if (row.length > 0) {
+                            filer.read(row);
+                        }
                         rowFP = nextBoundaryFp + seekTo;
                         read += (filer.getFilePointer() - seekTo);
 
@@ -176,19 +195,20 @@ public class BinaryRowReader implements WALReader {
                                 filer.seek(offset);
                                 synchronized (parent.lock()) {
                                     LOG.warn("Truncated corrupt WAL. " + parent);
+                                    parent.seek(offset);
                                     parent.eof();
+                                    return;
                                 }
                             } else {
                                 String msg = "Scan terminated prematurely due a corruption at fp:" + offset + ". " + parent;
                                 LOG.error(msg);
                                 throw new EOFException(msg);
                             }
-                            break;
                         }
                         rowType = (byte) filer.read();
                         rowTxId = UIO.readLong(filer, "txId");
                         row = new byte[length - (1 + 8)];
-                        if (length > 1) {
+                        if (row.length > 0) {
                             filer.read(row);
                         }
                         UIO.readInt(filer, "length");
@@ -210,7 +230,7 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public byte[] read(long position) throws IOException {
-        long fileLength;
+        long fileLength = -1;
         int length = -1;
         try {
 
@@ -243,7 +263,7 @@ public class BinaryRowReader implements WALReader {
             }
             return row;
         } catch (NegativeArraySizeException x) {
-            LOG.error("FAILED to read length:" + length + " bytes at position:" + position + " in file of length:" + length + " " + parent);
+            LOG.error("FAILED to read length:" + length + " bytes at position:" + position + " in file of length:" + fileLength + " " + parent);
             throw x;
         }
     }

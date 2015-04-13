@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -94,7 +95,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
                     }
                 }
                 if (input.action.equals("start")) {
-                    ExecutorService executor = Executors.newFixedThreadPool(input.numRegions * input.numThreadsPerRegion);
+                    ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 10);
                     Stress stress = new Stress(System.currentTimeMillis(), executor, new AtomicLong(0), input);
                     Stress existing = STRESS_MAP.putIfAbsent(input.name, stress);
                     log.info("Added {}", input.name);
@@ -138,12 +139,14 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
     }
 
     private class Stress {
+
         final long startTimeMillis;
         final ExecutorService executor;
         final AtomicLong added;
         final AmzaStressPluginRegionInput input;
         final AtomicInteger completed = new AtomicInteger(0);
         final AtomicLong endTimeMillis = new AtomicLong(-1);
+        final AtomicBoolean forcedStop = new AtomicBoolean(false);
 
         public Stress(long startTimeMillis, ExecutorService executor, AtomicLong added, AmzaStressPluginRegionInput input) {
             this.startTimeMillis = startTimeMillis;
@@ -155,22 +158,36 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         private void start() throws Exception {
 
             for (int i = 0; i < input.numRegions; i++) {
-                final String regionName = input.regionPrefix + i;
-
+                String regionName = input.regionPrefix + i;
                 for (int j = 0; j < input.numThreadsPerRegion; j++) {
-                    final int threadIndex = j;
-                    executor.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                feed(regionName, threadIndex);
-                            } catch (Exception x) {
-                                x.printStackTrace();
-                            } finally {
-                                completed();
-                            }
-                        }
-                    });
+                    executor.submit(new Feeder(regionName, j));
+                }
+            }
+        }
+
+        private class Feeder implements Runnable {
+
+            AtomicInteger batch = new AtomicInteger();
+            private final String regionName;
+            private final int threadIndex;
+
+            public Feeder(String regionName, int threadIndex) {
+                this.regionName = regionName;
+                this.threadIndex = threadIndex;
+            }
+
+            @Override
+            public void run() {
+                try {
+                    int b = batch.incrementAndGet();
+                    if (b <= input.numBatches && !forcedStop.get()) {
+                        feed(regionName, b, threadIndex);
+                        executor.submit(this);
+                    } else {
+                        completed();
+                    }
+                } catch (Exception x) {
+                    x.printStackTrace();
                 }
             }
         }
@@ -183,34 +200,34 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         }
 
         private boolean stop(long timeout, TimeUnit unit) throws InterruptedException {
+            forcedStop.set(true);
             executor.shutdownNow();
             return executor.awaitTermination(timeout, unit);
         }
 
-        private void feed(String regionName, int threadIndex) throws Exception {
+        private void feed(String regionName, int batch, int threadIndex) throws Exception {
             AmzaRegion amzaRegion = createRegionIfAbsent(regionName);
 
-            for (int batch = 0; batch < input.numBatches; batch++) {
-                Map<String, String> values = new LinkedHashMap<>();
-                int bStart = threadIndex * input.batchSize;
-                int bEnd = bStart + input.batchSize;
-                for (int b = bStart; b < bEnd; b++) {
-                    values.put(b + "k" + batch, b + "v" + batch);
-                }
-
-                try {
-                    amzaRegion.set(Iterables.transform(values.entrySet(), new Function<Map.Entry<String, String>, Map.Entry<WALKey, byte[]>>() {
-                        @Override
-                        public Map.Entry<WALKey, byte[]> apply(Map.Entry<String, String> input) {
-                            return new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()), input.getValue().getBytes());
-                        }
-                    }));
-                } catch (Exception x) {
-                    log.warn("Failed to set region:" + regionName + " values:" + values, x);
-                }
-
-                added.addAndGet(input.batchSize);
+            Map<String, String> values = new LinkedHashMap<>();
+            int bStart = threadIndex * input.batchSize;
+            int bEnd = bStart + input.batchSize;
+            for (int b = bStart; b < bEnd; b++) {
+                values.put(b + "k" + batch, b + "v" + batch);
             }
+
+            try {
+                amzaRegion.set(Iterables.transform(values.entrySet(), new Function<Map.Entry<String, String>, Map.Entry<WALKey, byte[]>>() {
+                    @Override
+                    public Map.Entry<WALKey, byte[]> apply(Map.Entry<String, String> input) {
+                        return new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()), input.getValue().getBytes());
+                    }
+                }));
+            } catch (Exception x) {
+                log.warn("Failed to set region:" + regionName + " values:" + values, x);
+            }
+
+            added.addAndGet(input.batchSize);
+
         }
     }
 

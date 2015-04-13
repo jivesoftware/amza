@@ -54,6 +54,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class AmzaServiceInitializer {
 
@@ -127,7 +128,7 @@ public class AmzaServiceInitializer {
                 }
             });
 
-        final int deltaStorageStripes = 3;
+        final int deltaStorageStripes = 4;
         long maxUpdatesBeforeCompaction = 400_000;
         long compactAfterNUpdates = maxUpdatesBeforeCompaction / deltaStorageStripes;
 
@@ -160,9 +161,6 @@ public class AmzaServiceInitializer {
             regionIndex,
             allRowChanges);
 
-        final ScheduledExecutorService compactDeltasThreadPool = Executors.newScheduledThreadPool(config.numberOfCompactorThreads,
-            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
-
         ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(regionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
         List<Future> futures = new ArrayList<>();
@@ -172,7 +170,7 @@ public class AmzaServiceInitializer {
                 @Override
                 public void run() {
                     try {
-                        regionStripe.load(compactDeltasThreadPool);
+                        regionStripe.load();
                     } catch (Exception x) {
                         LOG.error("Failed while loading " + regionStripe, x);
                         throw new RuntimeException(x);
@@ -185,9 +183,24 @@ public class AmzaServiceInitializer {
         }
         stripeLoaderThreadPool.shutdown();
 
+        ScheduledExecutorService compactDeltasThreadPool = Executors.newScheduledThreadPool(config.numberOfCompactorThreads,
+            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
+        for (final RegionStripe regionStripe : regionStripes) {
+            compactDeltasThreadPool.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        regionStripe.compact();
+                    } catch (Throwable x) {
+                        LOG.error("Compactor failed.", x);
+                    }
+                }
+            }, 1, 1, TimeUnit.MINUTES); // TODO expose to config
+        }
+
         AmzaHostRing amzaRing = new AmzaHostRing(amzaReadHostRing, systemRegionStripe, replicator, orderIdProvider);
 
-        RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, systemRegionStripe, replicator, 1000);
+        RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, systemRegionStripe, replicator);
 
         WALs replicatedWALs = new WALs(config.workingDirectories, "amza/WAL/replicated", replicaWALStorageProvider);
         replicatedWALs.load();

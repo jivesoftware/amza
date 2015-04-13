@@ -63,8 +63,9 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         this.rowMarshaller = rowMarshaller;
         this.deltaWALFactory = deltaWALFactory;
         this.compactAfterNUpdates = compactAfterNUpdates;
-        this.compactionThreads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(),
-            new ThreadFactoryBuilder().setNameFormat("compact-deltas-" + index + "-%d").build()); // TODO pass in
+        int numberOfCompactorThreads = 1; // TODO expose to config;
+        this.compactionThreads = Executors.newFixedThreadPool(numberOfCompactorThreads,
+            new ThreadFactoryBuilder().setNameFormat("compact-deltas-" + index + "-%d").build());
     }
 
     @Override

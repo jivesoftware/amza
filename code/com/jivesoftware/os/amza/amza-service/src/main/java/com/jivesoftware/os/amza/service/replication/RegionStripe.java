@@ -21,8 +21,6 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -136,20 +134,16 @@ public class RegionStripe {
         }
     }
 
-    public void load(ScheduledExecutorService compactDeltaWALThread) throws Exception {
+    public void load() throws Exception {
         storage.load(regionIndex);
+    }
 
-        compactDeltaWALThread.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    storage.compact(regionIndex);
-                } catch (Throwable x) {
-                    LOG.error("Compactor failed.", x);
-                }
-            }
-        }, 1, 1, TimeUnit.MINUTES); // TODO expose to config
-
+    public void compact() {
+        try {
+            storage.compact(regionIndex);
+        } catch (Throwable x) {
+            LOG.error("Compactor failed.", x);
+        }
     }
 
 }

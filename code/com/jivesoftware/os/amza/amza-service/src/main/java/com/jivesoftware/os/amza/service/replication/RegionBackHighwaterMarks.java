@@ -26,18 +26,15 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
     private final OrderIdProvider orderIdProvider;
     private final RegionStripe systemRegionStripe;
     private final WALReplicator replicator;
-    private final int flushHighwatermarkAfterNUpdates;
     private final ConcurrentHashMap<RingHost, ConcurrentHashMap<RegionName, HighwaterMark>> hostHighwaterMarks = new ConcurrentHashMap<>();
 
     public RegionBackHighwaterMarks(OrderIdProvider orderIdProvider,
         RingHost rootHost,
         RegionStripe systemRegionStripe,
-        WALReplicator replicator,
-        int flushHighwatermarkAfterNUpdates) {
+        WALReplicator replicator) {
         this.orderIdProvider = orderIdProvider;
         this.systemRegionStripe = systemRegionStripe;
         this.replicator = replicator;
-        this.flushHighwatermarkAfterNUpdates = flushHighwatermarkAfterNUpdates;
     }
 
     WALKey walKey(RingHost ringHost, RegionName regionName) throws IOException {

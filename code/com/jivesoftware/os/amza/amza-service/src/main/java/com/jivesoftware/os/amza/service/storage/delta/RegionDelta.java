@@ -195,8 +195,8 @@ class RegionDelta {
     void compact(RegionIndex regionIndex) throws Exception {
         final RegionDelta compact = compacting.get();
         if (compact != null) {
-            LOG.info("Merging (" + compact.orderedIndex.size() + ") deltas for " + compact.regionName);
             if (!compact.txIdWAL.isEmpty()) {
+                LOG.info("Merging (" + compact.orderedIndex.size() + ") deltas for " + compact.regionName);
                 long largestTxId = compact.txIdWAL.lastKey();
                 RegionStore regionStore = regionIndex.get(compact.regionName);
                 regionStore.directCommit(largestTxId,
@@ -216,9 +216,8 @@ class RegionDelta {
                             }
                         }
                     });
+                LOG.info("Merged deltas for " + compact.regionName);
             }
-            LOG.info("Merged deltas for " + compact.regionName);
-
         }
         compacting.set(null);
     }

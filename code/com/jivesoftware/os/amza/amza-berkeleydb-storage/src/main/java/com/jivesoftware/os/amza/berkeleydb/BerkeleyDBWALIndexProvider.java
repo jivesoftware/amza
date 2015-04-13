@@ -28,6 +28,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
             EnvironmentConfig envConfig = new EnvironmentConfig()
                 .setAllowCreate(true)
                 .setSharedCache(true);
+            envConfig.setCachePercentVoid(30);
             this.environments[i] = new Environment(active, envConfig);
         }
     }

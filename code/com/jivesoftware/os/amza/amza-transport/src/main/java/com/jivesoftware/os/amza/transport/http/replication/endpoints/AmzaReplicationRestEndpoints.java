@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.RowUpdates;
+import com.jivesoftware.os.amza.transport.http.replication.TakeRequest;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -146,7 +147,7 @@ public class AmzaReplicationRestEndpoints {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/changes/streamingTake")
-    public Response streamingTake(final RowUpdates rowUpdates) {
+    public Response streamingTake(final TakeRequest takeRequest) {
         try {
 
             final long t1 = System.currentTimeMillis();
@@ -161,7 +162,7 @@ public class AmzaReplicationRestEndpoints {
                     long t4 = -1, t5 = -1;
                     final MutableLong bytes = new MutableLong(0);
                     try {
-                        RegionName regionName = rowUpdates.getRegionName();
+                        RegionName regionName = takeRequest.getRegionName();
                         HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
                         for (RingHost ringHost : hostRing.getAboveRing()) {
                             Long highwatermark = highwaterMarks.get(ringHost, regionName);
@@ -178,7 +179,7 @@ public class AmzaReplicationRestEndpoints {
                         t4 = System.currentTimeMillis();
                         bytes.increment();
 
-                        amzaInstance.takeRowUpdates(regionName, rowUpdates.getHighestTransactionId(), new RowStream() {
+                        amzaInstance.takeRowUpdates(regionName, takeRequest.getHighestTransactionId(), new RowStream() {
                             @Override
                             public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
                                 dos.writeByte(1);
@@ -199,9 +200,9 @@ public class AmzaReplicationRestEndpoints {
                     } finally {
                         dos.flush();
                         long t6 = System.currentTimeMillis();
-                        if (!rowUpdates.getRegionName().isSystemRegion()) {
+                        if (!takeRequest.getRegionName().isSystemRegion()) {
                             LOG.debug("Give {}: OutputStream={}ms FirstFlush={}ms HighWater={}ms RowUpdates={}ms FinalFlush={}ms TotalTime={}ms TotalBytes={}",
-                                rowUpdates.getRegionName().getRegionName(), (t2 - t1), (t3 - t2), (t4 - t3), (t5 - t4), (t6 - t5), (t6 - t1),
+                                takeRequest.getRegionName().getRegionName(), (t2 - t1), (t3 - t2), (t4 - t3), (t5 - t4), (t6 - t5), (t6 - t1),
                                 bytes.longValue());
                         }
                     }
@@ -209,8 +210,8 @@ public class AmzaReplicationRestEndpoints {
             };
             return Response.ok(stream).build();
         } catch (Exception x) {
-            LOG.warn("Failed to apply changeset: " + rowUpdates, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to changeset " + rowUpdates, x);
+            LOG.warn("Failed to apply changeset: " + takeRequest, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to changeset " + takeRequest, x);
         }
     }
 

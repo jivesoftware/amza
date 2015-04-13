@@ -27,7 +27,7 @@ public class TakeRequest {
     @JsonCreator
     public TakeRequest(
         @JsonProperty("highestTransactionId") long highestTransactionId,
-        @JsonProperty("tableName") RegionName regionName) {
+        @JsonProperty("regionName") RegionName regionName) {
         this.highestTransactionId = highestTransactionId;
         this.regionName = regionName;
     }

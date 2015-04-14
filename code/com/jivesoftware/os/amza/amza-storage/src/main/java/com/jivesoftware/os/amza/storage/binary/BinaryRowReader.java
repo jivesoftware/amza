@@ -230,17 +230,8 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public byte[] read(long position) throws IOException {
-        long fileLength = -1;
         int length = -1;
         try {
-
-            synchronized (parent.lock()) {
-                fileLength = parent.length();
-            }
-            if (fileLength == 0) {
-                return null;
-            }
-
             IReadable filer = parent.fileChannelMemMapFiler(position + 4);
             if (filer == null) {
                 filer = parent.fileChannelFiler();
@@ -263,7 +254,7 @@ public class BinaryRowReader implements WALReader {
             }
             return row;
         } catch (NegativeArraySizeException x) {
-            LOG.error("FAILED to read length:" + length + " bytes at position:" + position + " in file of length:" + fileLength + " " + parent);
+            LOG.error("FAILED to read length:" + length + " bytes at position:" + position + " in file:" + parent);
             throw x;
         }
     }

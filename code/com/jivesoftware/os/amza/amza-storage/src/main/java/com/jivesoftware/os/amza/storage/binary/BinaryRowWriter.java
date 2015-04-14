@@ -55,7 +55,7 @@ public class BinaryRowWriter implements WALWriter {
             startFp = filer.length();
             filer.seek(startFp); // seek to end of file.
             filer.write(bytes);
-            filer.flush(true);
+            filer.flush(false); // TODO expose to config
         }
         List<byte[]> rowPointers = new ArrayList<>();
         for (Long offest : offests) {

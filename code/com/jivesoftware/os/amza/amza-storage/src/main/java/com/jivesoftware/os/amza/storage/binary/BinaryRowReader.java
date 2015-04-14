@@ -90,10 +90,7 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public void reverseScan(RowStream stream) throws Exception {
-        long boundaryFp;
-        synchronized (parent.lock()) {
-            boundaryFp = parent.length();
-        }
+        long boundaryFp = parent.length();
         IReadable parentFiler = parent.fileChannelMemMapFiler(boundaryFp);
         if (parentFiler == null) {
             parentFiler = parent.fileChannelFiler();
@@ -171,9 +168,7 @@ public class BinaryRowReader implements WALReader {
         long read = 0;
         try {
             while (fileLength < parent.length()) {
-                synchronized (parent.lock()) {
-                    fileLength = parent.length();
-                }
+                fileLength = parent.length();
                 IReadable filer = parent.fileChannelMemMapFiler(fileLength);
                 if (filer == null) {
                     filer = parent.fileChannelFiler();

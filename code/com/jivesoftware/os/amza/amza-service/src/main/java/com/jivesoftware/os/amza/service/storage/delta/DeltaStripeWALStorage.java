@@ -410,6 +410,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             d = iterator.next();
                         } else {
                             iterator.eos();
+                            break;
                         }
                     }
                     return scan.row(-1, key, value);
@@ -459,6 +460,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             d = iterator.next();
                         } else {
                             iterator.eos();
+                            break;
                         }
                     }
                     return scan.row(-1, key, value);

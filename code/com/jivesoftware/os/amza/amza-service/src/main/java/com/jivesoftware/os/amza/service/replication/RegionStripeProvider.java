@@ -5,7 +5,6 @@ import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
 
 /**
- *
  * @author jonathan.colt
  */
 public class RegionStripeProvider {
@@ -34,5 +33,5 @@ public class RegionStripeProvider {
             return Optional.absent();
         }
     }
-    
+
 }

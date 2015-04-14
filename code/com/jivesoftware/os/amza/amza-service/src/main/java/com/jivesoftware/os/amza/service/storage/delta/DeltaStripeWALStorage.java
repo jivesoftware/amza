@@ -401,8 +401,12 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                     if (d == null && iterator.hasNext()) {
                         d = iterator.next();
                     }
+                    boolean needsKey = true;
                     while (d != null && d.getKey().compareTo(key) <= 0) {
                         WALValue got = wal.hydrate(regionName, d.getValue());
+                        if (d.getKey().equals(key)) {
+                            needsKey = false;
+                        }
                         if (!scan.row(-1, d.getKey(), got)) {
                             return false;
                         }
@@ -413,7 +417,11 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             break;
                         }
                     }
-                    return scan.row(-1, key, value);
+                    if (needsKey) {
+                        return scan.row(-1, key, value);
+                    } else {
+                        return true;
+                    }
                 }
             });
 
@@ -451,8 +459,12 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                     if (d == null && iterator.hasNext()) {
                         d = iterator.next();
                     }
+                    boolean needsKey = true;
                     while (d != null && d.getKey().compareTo(key) <= 0) {
                         WALValue got = wal.hydrate(regionName, d.getValue());
+                        if (d.getKey().equals(key)) {
+                            needsKey = false;
+                        }
                         if (!scan.row(-1, d.getKey(), got)) {
                             return false;
                         }
@@ -463,7 +475,11 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             break;
                         }
                     }
-                    return scan.row(-1, key, value);
+                    if (needsKey) {
+                        return scan.row(-1, key, value);
+                    } else {
+                        return true;
+                    }
                 }
             });
 

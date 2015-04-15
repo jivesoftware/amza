@@ -1,13 +1,18 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
-import java.util.HashSet;
+import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.filer.UIO;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.NavigableSet;
 import java.util.Random;
-import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -23,9 +28,15 @@ public class DeltaPeekableElmoIteratorNGTest {
         for (int r = 0; r < 10; r++) {
             NavigableMap<WALKey, WALPointer> wal = new ConcurrentSkipListMap<>();
             NavigableMap<WALKey, WALPointer> other = new ConcurrentSkipListMap<>();
+            WALValueHydrator hydrator = new WALValueHydrator() {
+                @Override
+                public WALValue hydrate(WALPointer rowPointer) throws Exception {
+                    return new WALValue(UIO.longBytes(rowPointer.getFp()), rowPointer.getTimestampId(), rowPointer.getTombstoned());
+                }
+            };
             Random rand = new Random();
-            Set<Byte> expected = new HashSet<>();
-            Set<Byte> expectedBoth = new HashSet<>();
+            NavigableSet<Byte> expected = new TreeSet<>();
+            NavigableSet<Byte> expectedBoth = new TreeSet<>();
             for (int i = 0; i < 128; i++) {
                 if (rand.nextBoolean()) {
                     wal.put(new WALKey(new byte[]{(byte) i}), new WALPointer((long) i, rand.nextInt(128), false));
@@ -38,10 +49,13 @@ public class DeltaPeekableElmoIteratorNGTest {
                 }
             }
 
-            DeltaPeekableElmoIterator deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(wal.entrySet().iterator(),
-                Iterators.<Map.Entry<WALKey, WALPointer>>emptyIterator());
+            DeltaPeekableElmoIterator deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(
+                wal.entrySet().iterator(),
+                Iterators.<Map.Entry<WALKey, WALPointer>>emptyIterator(),
+                hydrator,
+                hydrator);
 
-            Set<Byte> had = new HashSet<>();
+            List<Byte> had = new ArrayList<>();
             long lastV = -1;
             while (deltaPeekableElmoIterator.hasNext()) {
                 byte v = deltaPeekableElmoIterator.next().getKey().getKey()[0];
@@ -49,12 +63,15 @@ public class DeltaPeekableElmoIteratorNGTest {
                 Assert.assertTrue(lastV < v);
                 lastV = v;
             }
-            Assert.assertEquals(had.size(), expected.size());
+            Assert.assertEquals(had, Lists.newArrayList(expected));
 
-            deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(wal.entrySet().iterator(),
-                other.entrySet().iterator());
+            deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(
+                wal.entrySet().iterator(),
+                other.entrySet().iterator(),
+                hydrator,
+                hydrator);
 
-            had = new HashSet<>();
+            had = new ArrayList<>();
             lastV = -1;
             while (deltaPeekableElmoIterator.hasNext()) {
                 byte v = deltaPeekableElmoIterator.next().getKey().getKey()[0];
@@ -62,7 +79,7 @@ public class DeltaPeekableElmoIteratorNGTest {
                 Assert.assertTrue(lastV < v);
                 lastV = v;
             }
-            Assert.assertEquals(had.size(), expectedBoth.size());
+            Assert.assertEquals(had, Lists.newArrayList(expectedBoth));
         }
     }
 

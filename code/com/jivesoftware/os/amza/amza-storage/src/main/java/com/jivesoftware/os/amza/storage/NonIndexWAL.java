@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
+import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
@@ -103,7 +104,7 @@ public class NonIndexWAL implements WALStorage {
         });
 
         if (apply.isEmpty()) {
-            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALPointer>(), new TreeMap<WALKey, WALPointer>());
+            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALTimestampId>(), new TreeMap<WALKey, WALTimestampId>());
         } else {
             wal.write(new WALTx.WALWrite<Void>() {
                 @Override
@@ -125,7 +126,7 @@ public class NonIndexWAL implements WALStorage {
                 }
             });
             updateCount.addAndGet(apply.size());
-            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALPointer>(), new TreeMap<WALKey, WALPointer>());
+            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALTimestampId>(), new TreeMap<WALKey, WALTimestampId>());
         }
 
     }

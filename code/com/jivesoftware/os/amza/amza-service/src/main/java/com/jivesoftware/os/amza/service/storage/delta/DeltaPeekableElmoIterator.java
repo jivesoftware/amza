@@ -2,6 +2,8 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
+import com.jivesoftware.os.amza.shared.WALValue;
+import java.util.AbstractMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -10,23 +12,31 @@ import java.util.NoSuchElementException;
  *
  * @author jonathan.colt
  */
-final class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALPointer>> {
+class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALValue>> {
+
     private final Iterator<Map.Entry<WALKey, WALPointer>> iterator;
     private final Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator;
-    private Map.Entry<WALKey, WALPointer> last;
+    private final WALValueHydrator hydrator;
+    private final WALValueHydrator compactingHydrator;
+    private Map.Entry<WALKey, WALValue> last;
     private Map.Entry<WALKey, WALPointer> iNext;
     private Map.Entry<WALKey, WALPointer> cNext;
 
-    public DeltaPeekableElmoIterator(Iterator<Map.Entry<WALKey, WALPointer>> iterator, Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator) {
-        this.iterator = iterator;
-        this.compactingIterator = compactingIterator;
+    public DeltaPeekableElmoIterator(Iterator<Map.Entry<WALKey, WALPointer>> iterator,
+        Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator,
+        WALValueHydrator hydrator,
+        WALValueHydrator compactingHydrator) {
+        this.iterator = new OverConsumingEntryIterator<>(iterator);
+        this.compactingIterator = new OverConsumingEntryIterator<>(compactingIterator);
+        this.hydrator = hydrator;
+        this.compactingHydrator = compactingHydrator;
     }
 
     public void eos() {
         last = null;
     }
 
-    public Map.Entry<WALKey, WALPointer> last() {
+    public Map.Entry<WALKey, WALValue> last() {
         return last;
     }
 
@@ -36,7 +46,7 @@ final class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALP
     }
 
     @Override
-    public Map.Entry<WALKey, WALPointer> next() {
+    public Map.Entry<WALKey, WALValue> next() {
         if (iNext == null && iterator.hasNext()) {
             iNext = iterator.next();
         }
@@ -47,29 +57,37 @@ final class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALP
             int compare = iNext.getKey().compareTo(cNext.getKey());
             if (compare == 0) {
                 if (iNext.getValue().getTimestampId() > cNext.getValue().getTimestampId()) {
-                    last = iNext;
+                    last = hydrate(iNext, hydrator);
                 } else {
-                    last = cNext;
+                    last = hydrate(cNext, compactingHydrator);
                 }
                 iNext = null;
                 cNext = null;
             } else if (compare < 0) {
-                last = iNext;
+                last = hydrate(iNext, hydrator);
                 iNext = null;
             } else {
-                last = cNext;
+                last = hydrate(cNext, compactingHydrator);
                 cNext = null;
             }
         } else if (iNext != null) {
-            last = iNext;
+            last = hydrate(iNext, hydrator);
             iNext = null;
         } else if (cNext != null) {
-            last = cNext;
+            last = hydrate(cNext, compactingHydrator);
             cNext = null;
         } else {
             throw new NoSuchElementException();
         }
         return last;
+    }
+
+    private Map.Entry<WALKey, WALValue> hydrate(Map.Entry<WALKey, WALPointer> entry, WALValueHydrator valueHydrator) {
+        try {
+            return new AbstractMap.SimpleEntry<>(entry.getKey(), valueHydrator.hydrate(entry.getValue()));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to hydrate while iterating delta", e);
+        }
     }
 
     @Override

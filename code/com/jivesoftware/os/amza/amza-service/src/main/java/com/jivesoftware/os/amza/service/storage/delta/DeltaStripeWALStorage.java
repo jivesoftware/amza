@@ -376,7 +376,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             WALTimestampId[] timestamps = deltas.result;
             WALPointer[] got = storage.getPointers(consumableKeys, values);
             for (int i = 0; i < timestamps.length; i++) {
-                if (timestamps[i] == null) {
+                if (timestamps[i] == null && got[i] != null) {
                     timestamps[i] = new WALTimestampId(got[i].getTimestampId(), got[i].getTombstoned());
                 }
             }

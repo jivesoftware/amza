@@ -132,8 +132,11 @@ public class AmzaService implements AmzaInstance {
     }
 
     @Override
-    public long getTimestamp(long timestampId, long wallClockMillis) throws Exception {
-        return orderIdProvider.getApproximateId(timestampId, wallClockMillis);
+    public long getTimestamp(long timestampId, long deltaMillis) throws Exception {
+        if (timestampId <= 0) {
+            return 0;
+        }
+        return orderIdProvider.getApproximateId(timestampId, deltaMillis);
     }
 
     public AmzaRegion createRegionIfAbsent(RegionName regionName, RegionProperties regionProperties) throws Exception {

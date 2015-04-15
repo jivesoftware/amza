@@ -34,14 +34,17 @@ public class RegionStore implements RangeScannable<WALValue> {
     private final AmzaStats amzaStats;
     private final RegionName regionName;
     private final WALStorage walStorage;
+    private final boolean hardFlush;
 
     public RegionStore(AmzaStats amzaStats,
         RegionName regionName,
-        WALStorage walStorage) {
+        WALStorage walStorage,
+        boolean hardFlush) {
 
         this.amzaStats = amzaStats;
         this.regionName = regionName;
         this.walStorage = walStorage;
+        this.hardFlush = hardFlush;
     }
 
     public WALStorage getWalStorage() {
@@ -82,17 +85,9 @@ public class RegionStore implements RangeScannable<WALValue> {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-
-//    public RowsChanged commit(WALStorageUpdateMode updateMode, Scannable<WALValue> rowUpdates) throws Exception {
-//        return walStorage.update(updateMode, rowUpdates);
-//        if (rowChanges != null && !updateMap.isEmpty()) {
-//            rowChanges.changes(updateMap);
-//        }
-//        return updateMap;
-//    }
     public RowsChanged directCommit(Long txId, WALReplicator replicator, WALStorageUpdateMode mode, Scannable<WALValue> updates) throws Exception {
         RowsChanged changes = walStorage.update(txId, replicator, mode, updates);
-        walStorage.flush(true); // TODO expose to config
+        walStorage.flush(hardFlush);
         return changes;
     }
 

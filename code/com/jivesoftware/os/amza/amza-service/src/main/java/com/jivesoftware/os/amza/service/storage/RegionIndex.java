@@ -43,14 +43,16 @@ public class RegionIndex implements RowChanges {
     private final String domain;
     private final WALStorageProvider walStorageProvider;
     private final RegionPropertyMarshaller regionPropertyMarshaller;
+    private final boolean hardFlush;
 
     public RegionIndex(AmzaStats amzaStats, String[] workingDirectories, String domain, WALStorageProvider walStorageProvider,
-        RegionPropertyMarshaller regionPropertyMarshaller) {
+        RegionPropertyMarshaller regionPropertyMarshaller, boolean hardFlush) {
         this.amzaStats = amzaStats;
         this.workingDirectories = workingDirectories;
         this.domain = domain;
         this.walStorageProvider = walStorageProvider;
         this.regionPropertyMarshaller = regionPropertyMarshaller;
+        this.hardFlush = hardFlush;
     }
 
     public void open() throws Exception {
@@ -136,7 +138,7 @@ public class RegionIndex implements RowChanges {
 
             File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
             WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, regionName, properties.walStorageDescriptor);
-            regionStore = new RegionStore(amzaStats, regionName, walStorage);
+            regionStore = new RegionStore(amzaStats, regionName, walStorage, hardFlush);
             regionStore.load();
 
             regionStores.put(regionName, regionStore);

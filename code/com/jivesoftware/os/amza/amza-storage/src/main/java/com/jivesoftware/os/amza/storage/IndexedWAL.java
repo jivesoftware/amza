@@ -30,6 +30,7 @@ import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
+import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
@@ -249,8 +250,8 @@ public class IndexedWAL implements WALStorage {
         Scannable<WALValue> updates) throws Exception {
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final Map<WALKey, WALValue> apply = new ConcurrentHashMap<>();
-        final Map<WALKey, WALPointer> removes = new HashMap<>();
-        final Map<WALKey, WALPointer> clobbers = new HashMap<>();
+        final Map<WALKey, WALTimestampId> removes = new HashMap<>();
+        final Map<WALKey, WALTimestampId> clobbers = new HashMap<>();
 
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
@@ -286,9 +287,10 @@ public class IndexedWAL implements WALStorage {
                         oldestAppliedTimestamp.set(update.getTimestampId());
                     }
                     //TODO do we REALLY need the old value? WALValue value = hydrateRowIndexValue(currentPointer);
-                    clobbers.put(key, currentPointer);
+                    WALTimestampId currentTimestampId = new WALTimestampId(currentPointer.getTimestampId(), currentPointer.getTombstoned());
+                    clobbers.put(key, currentTimestampId);
                     if (update.getTombstoned() && !currentPointer.getTombstoned()) {
-                        removes.put(key, currentPointer);
+                        removes.put(key, currentTimestampId);
                     }
                 }
             }

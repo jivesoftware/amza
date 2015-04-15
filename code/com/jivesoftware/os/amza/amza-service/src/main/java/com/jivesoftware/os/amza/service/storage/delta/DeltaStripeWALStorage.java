@@ -16,6 +16,7 @@ import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
+import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
@@ -112,7 +113,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                                     WALKey key = new WALKey(keyBytes);
                                     WALValue regionValue = regionStore.get(key);
                                     if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
-                                        WALPointer got = delta.getPointer(key);
+                                        WALTimestampId got = delta.getTimestampId(key);
                                         if (got == null || got.getTimestampId() < value.getTimestampId()) {
                                             delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
                                         }
@@ -238,8 +239,8 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final Map<WALKey, WALValue> apply = new ConcurrentHashMap<>();
-        final Map<WALKey, WALPointer> removes = new HashMap<>();
-        final Map<WALKey, WALPointer> clobbers = new HashMap<>();
+        final Map<WALKey, WALTimestampId> removes = new HashMap<>();
+        final Map<WALKey, WALTimestampId> clobbers = new HashMap<>();
 
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
@@ -258,24 +259,24 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             RowsChanged rowsChanged;
 
             // only grabbing pointers means our removes and clobbers don't include the old values, but for now this is more efficient.
-            WALPointer[] currentPointers = getPointers(regionName, storage, keys, values);
+            WALTimestampId[] currentTimestamps = getTimestamps(regionName, storage, keys, values);
             for (int i = 0; i < keys.size(); i++) {
                 WALKey key = keys.get(i);
-                WALPointer currentPointer = currentPointers[i];
+                WALTimestampId currentTimestamp = currentTimestamps[i];
                 WALValue update = values.get(i);
-                if (currentPointer == null) {
+                if (currentTimestamp == null) {
                     apply.put(key, update);
                     if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
                         oldestAppliedTimestamp.set(update.getTimestampId());
                     }
-                } else if (currentPointer.getTimestampId() < update.getTimestampId()) {
+                } else if (currentTimestamp.getTimestampId() < update.getTimestampId()) {
                     apply.put(key, update);
                     if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
                         oldestAppliedTimestamp.set(update.getTimestampId());
                     }
-                    clobbers.put(key, currentPointer);
-                    if (update.getTombstoned() && !currentPointer.getTombstoned()) {
-                        removes.put(key, currentPointer);
+                    clobbers.put(key, currentTimestamp);
+                    if (update.getTombstoned() && !currentTimestamp.getTombstoned()) {
+                        removes.put(key, currentTimestamp);
                     }
                 }
             }
@@ -299,7 +300,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                         long pointer = UIO.bytesLong(updateApplied.keyToRowPointer.get(key));
                         WALPointer rowPointer = new WALPointer(pointer, value.getTimestampId(), value.getTombstoned());
 
-                        WALPointer got = delta.getPointer(key);
+                        WALTimestampId got = delta.getTimestampId(key);
                         if (got == null || got.getTimestampId() < value.getTimestampId()) {
                             delta.put(key, rowPointer);
                         } else {
@@ -368,18 +369,18 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         return contains || storage.containsKey(key);
     }
 
-    private WALPointer[] getPointers(RegionName regionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws Exception {
+    private WALTimestampId[] getTimestamps(RegionName regionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws Exception {
         WALKey[] consumableKeys = keys.toArray(new WALKey[keys.size()]);
-        DeltaResult<WALPointer[]> deltas = getRegionDeltas(regionName).getPointers(consumableKeys);
+        DeltaResult<WALTimestampId[]> deltas = getRegionDeltas(regionName).getTimestampIds(consumableKeys);
         if (deltas.missed) {
-            WALPointer[] pointers = deltas.result;
+            WALTimestampId[] timestamps = deltas.result;
             WALPointer[] got = storage.getPointers(consumableKeys, values);
-            for (int i = 0; i < pointers.length; i++) {
-                if (pointers[i] == null) {
-                    pointers[i] = got[i];
+            for (int i = 0; i < timestamps.length; i++) {
+                if (timestamps[i] == null) {
+                    timestamps[i] = new WALTimestampId(got[i].getTimestampId(), got[i].getTombstoned());
                 }
             }
-            return pointers;
+            return timestamps;
         } else {
             return deltas.result;
         }
@@ -390,11 +391,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         throws Exception {
         tickleMeElmophore.acquire();
         try {
-            final DeltaWAL wal = deltaWAL.get();
             RegionDelta delta = getRegionDeltas(regionName);
             final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
             rangeScannable.rangeScan(from, to, new Scan<WALValue>() {
-                Map.Entry<WALKey, WALPointer> d;
+                Map.Entry<WALKey, WALValue> d;
 
                 @Override
                 public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
@@ -403,7 +403,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                     }
                     boolean needsKey = true;
                     while (d != null && d.getKey().compareTo(key) <= 0) {
-                        WALValue got = wal.hydrate(regionName, d.getValue());
+                        WALValue got = d.getValue();
                         if (d.getKey().equals(key)) {
                             needsKey = false;
                         }
@@ -414,6 +414,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             d = iterator.next();
                         } else {
                             iterator.eos();
+                            d = null;
                             break;
                         }
                     }
@@ -425,15 +426,15 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 }
             });
 
-            Map.Entry<WALKey, WALPointer> d = iterator.last();
+            Map.Entry<WALKey, WALValue> d = iterator.last();
             if (d != null || iterator.hasNext()) {
                 if (d != null) {
-                    WALValue got = wal.hydrate(regionName, d.getValue());
+                    WALValue got = d.getValue();
                     scan.row(-1, d.getKey(), got);
                 }
                 while (iterator.hasNext()) {
                     d = iterator.next();
-                    WALValue got = wal.hydrate(regionName, d.getValue());
+                    WALValue got = d.getValue();
                     if (!scan.row(-1, d.getKey(), got)) {
                         return;
                     }
@@ -448,11 +449,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     public void rowScan(final RegionName regionName, Scannable<WALValue> scanable, final Scan<WALValue> scan) throws Exception {
         tickleMeElmophore.acquire();
         try {
-            final DeltaWAL wal = deltaWAL.get();
             RegionDelta delta = getRegionDeltas(regionName);
             final DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
             scanable.rowScan(new Scan<WALValue>() {
-                Map.Entry<WALKey, WALPointer> d;
+                Map.Entry<WALKey, WALValue> d;
 
                 @Override
                 public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
@@ -461,7 +461,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                     }
                     boolean needsKey = true;
                     while (d != null && d.getKey().compareTo(key) <= 0) {
-                        WALValue got = wal.hydrate(regionName, d.getValue());
+                        WALValue got = d.getValue();
                         if (d.getKey().equals(key)) {
                             needsKey = false;
                         }
@@ -472,6 +472,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             d = iterator.next();
                         } else {
                             iterator.eos();
+                            d = null;
                             break;
                         }
                     }
@@ -483,15 +484,15 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 }
             });
 
-            Map.Entry<WALKey, WALPointer> d = iterator.last();
+            Map.Entry<WALKey, WALValue> d = iterator.last();
             if (d != null || iterator.hasNext()) {
                 if (d != null) {
-                    WALValue got = wal.hydrate(regionName, d.getValue());
+                    WALValue got = d.getValue();
                     scan.row(-1, d.getKey(), got);
                 }
                 while (iterator.hasNext()) {
                     d = iterator.next();
-                    WALValue got = wal.hydrate(regionName, d.getValue());
+                    WALValue got = d.getValue();
                     if (!scan.row(-1, d.getKey(), got)) {
                         return;
                     }

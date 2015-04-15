@@ -27,7 +27,7 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class DeltaWAL implements Comparable<DeltaWAL> {
+public class DeltaWAL implements WALValueHydrator, Comparable<DeltaWAL> {
 
     private final long id;
     private final OrderIdProvider orderIdProvider;
@@ -136,7 +136,8 @@ public class DeltaWAL implements Comparable<DeltaWAL> {
 
     }
 
-    WALValue hydrate(RegionName regionName, final WALPointer rowPointer) throws Exception {
+    @Override
+    public WALValue hydrate(final WALPointer rowPointer) throws Exception {
         try {
             byte[] row = wal.read(new WALTx.WALRead<byte[]>() {
                 @Override

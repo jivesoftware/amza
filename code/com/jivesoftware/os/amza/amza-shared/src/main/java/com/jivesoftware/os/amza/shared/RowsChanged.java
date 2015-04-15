@@ -22,14 +22,14 @@ public class RowsChanged implements Scannable<WALValue> {
     private final RegionName regionName;
     private final long oldestApply;
     private final Map<WALKey, WALValue> apply;
-    private final Map<WALKey, WALPointer> remove;
-    private final Map<WALKey, WALPointer> clobber;
+    private final Map<WALKey, WALTimestampId> remove;
+    private final Map<WALKey, WALTimestampId> clobber;
 
     public RowsChanged(RegionName regionName,
         long oldestApply,
         Map<WALKey, WALValue> apply,
-        Map<WALKey, WALPointer> remove,
-        Map<WALKey, WALPointer> clobber) {
+        Map<WALKey, WALTimestampId> remove,
+        Map<WALKey, WALTimestampId> clobber) {
         this.regionName = regionName;
         this.oldestApply = oldestApply;
         this.apply = apply;
@@ -49,11 +49,11 @@ public class RowsChanged implements Scannable<WALValue> {
         return apply;
     }
 
-    public Map<WALKey, WALPointer> getRemove() {
+    public Map<WALKey, WALTimestampId> getRemove() {
         return remove;
     }
 
-    public Map<WALKey, WALPointer> getClobbered() {
+    public Map<WALKey, WALTimestampId> getClobbered() {
         return clobber;
     }
 

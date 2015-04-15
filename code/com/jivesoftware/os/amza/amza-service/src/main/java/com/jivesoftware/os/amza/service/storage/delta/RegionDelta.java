@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
+import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -56,28 +57,28 @@ class RegionDelta {
             }
             return null;
         }
-        return deltaWAL.hydrate(regionName, got);
+        return deltaWAL.hydrate(got);
     }
 
-    WALPointer getPointer(WALKey key) throws Exception {
+    WALTimestampId getTimestampId(WALKey key) throws Exception {
         WALPointer got = pointerIndex.get(key);
         if (got != null) {
-            return got;
+            return new WALTimestampId(got.getTimestampId(), got.getTombstoned());
         }
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
-            return regionDelta.getPointer(key);
+            return regionDelta.getTimestampId(key);
         }
         return null;
     }
 
-    DeltaResult<WALPointer[]> getPointers(WALKey[] consumableKeys) throws Exception {
+    DeltaResult<WALTimestampId[]> getTimestampIds(WALKey[] consumableKeys) throws Exception {
         boolean missed = false;
-        WALPointer[] result = new WALPointer[consumableKeys.length];
+        WALTimestampId[] result = new WALTimestampId[consumableKeys.length];
         for (int i = 0; i < consumableKeys.length; i++) {
             WALKey key = consumableKeys[i];
             if (key != null) {
-                WALPointer got = getPointer(key);
+                WALTimestampId got = getTimestampId(key);
                 if (got != null) {
                     result[i] = got;
                     consumableKeys[i] = null;
@@ -143,21 +144,25 @@ class RegionDelta {
     DeltaPeekableElmoIterator rangeScanIterator(WALKey from, WALKey to) {
         Iterator<Map.Entry<WALKey, WALPointer>> iterator = orderedIndex.subMap(from, to).entrySet().iterator();
         Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
-        RegionDelta regionDelta = compacting.get();
-        if (regionDelta != null) {
-            compactingIterator = regionDelta.orderedIndex.subMap(from, to).entrySet().iterator();
+        RegionDelta compactingRegionDelta = compacting.get();
+        DeltaWAL compactingDeltaWAL = null;
+        if (compactingRegionDelta != null) {
+            compactingIterator = compactingRegionDelta.orderedIndex.subMap(from, to).entrySet().iterator();
+            compactingDeltaWAL = compactingRegionDelta.deltaWAL;
         }
-        return new DeltaPeekableElmoIterator(iterator, compactingIterator);
+        return new DeltaPeekableElmoIterator(iterator, compactingIterator, deltaWAL, compactingDeltaWAL);
     }
 
     DeltaPeekableElmoIterator rowScanIterator() {
         Iterator<Map.Entry<WALKey, WALPointer>> iterator = orderedIndex.entrySet().iterator();
         Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
-        RegionDelta regionDelta = compacting.get();
-        if (regionDelta != null) {
-            compactingIterator = regionDelta.orderedIndex.entrySet().iterator();
+        RegionDelta compactingRegionDelta = compacting.get();
+        DeltaWAL compactingDeltaWAL = null;
+        if (compactingRegionDelta != null) {
+            compactingIterator = compactingRegionDelta.orderedIndex.entrySet().iterator();
+            compactingDeltaWAL = compactingRegionDelta.deltaWAL;
         }
-        return new DeltaPeekableElmoIterator(iterator, compactingIterator);
+        return new DeltaPeekableElmoIterator(iterator, compactingIterator, deltaWAL, compactingDeltaWAL);
     }
 
     void appendTxFps(long rowTxId, long rowFP) {
@@ -207,7 +212,7 @@ class RegionDelta {
                         public void rowScan(Scan<WALValue> scan) {
                             for (Map.Entry<WALKey, WALPointer> e : compact.orderedIndex.entrySet()) {
                                 try {
-                                    if (!scan.row(-1, e.getKey(), compact.deltaWAL.hydrate(compact.regionName, e.getValue()))) {
+                                    if (!scan.row(-1, e.getKey(), compact.deltaWAL.hydrate(e.getValue()))) {
                                         break;
                                     }
                                 } catch (Throwable ex) {

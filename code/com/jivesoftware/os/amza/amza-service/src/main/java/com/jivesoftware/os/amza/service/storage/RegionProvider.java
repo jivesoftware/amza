@@ -39,18 +39,21 @@ public class RegionProvider {
     private final AmzaRegionChangeReplicator replicator;
     private final RegionIndex regionIndex;
     private final RowChanges rowChanges;
+    private final boolean hardFlush;
 
     public RegionProvider(OrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
         AmzaRegionChangeReplicator replicator,
         RegionIndex regionIndex,
-        RowChanges rowChanges) {
+        RowChanges rowChanges,
+        boolean hardFlush) {
 
         this.orderIdProvider = orderIdProvider;
         this.regionPropertyMarshaller = regionPropertyMarshaller;
         this.replicator = replicator;
         this.regionIndex = regionIndex;
         this.rowChanges = rowChanges;
+        this.hardFlush = hardFlush;
     }
 
     public RegionStore createRegionStoreIfAbsent(RegionName regionName, RegionProperties properties) throws Exception {
@@ -72,7 +75,7 @@ public class RegionProvider {
                         scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
                     }
                 });
-                regionIndexStore.flush(true);
+                regionIndexStore.flush(hardFlush);
                 if (!changed.isEmpty()) {
                     rowChanges.changes(changed);
                 }
@@ -91,7 +94,7 @@ public class RegionProvider {
                 scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(regionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
             }
         });
-        regionPropertiesStore.flush(true);
+        regionPropertiesStore.flush(hardFlush);
         if (!changed.isEmpty()) {
             rowChanges.changes(changed);
         }

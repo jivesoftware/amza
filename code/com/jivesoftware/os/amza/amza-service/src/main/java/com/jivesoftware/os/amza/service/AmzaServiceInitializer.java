@@ -62,7 +62,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = new String[]{"./var/data/"};
 
         public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
@@ -82,6 +82,8 @@ public class AmzaServiceInitializer {
         public int numberOfDeltaStripes = 4;
         public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
         public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
+
+        public boolean hardFsync = false;
 
     }
 
@@ -104,7 +106,8 @@ public class AmzaServiceInitializer {
 
         RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor);
 
-        RegionIndex regionIndex = new RegionIndex(amzaStats, config.workingDirectories, "amza/stores", regionsWALStorageProvider, regionPropertyMarshaller);
+        RegionIndex regionIndex = new RegionIndex(amzaStats, config.workingDirectories, "amza/stores",
+            regionsWALStorageProvider, regionPropertyMarshaller, config.hardFsync);
         regionIndex.open();
 
         AmzaRingReader amzaReadHostRing = new AmzaRingReader(ringHost, regionIndex);
@@ -162,7 +165,8 @@ public class AmzaServiceInitializer {
             regionPropertyMarshaller,
             replicator,
             regionIndex,
-            allRowChanges);
+            allRowChanges,
+            config.hardFsync);
 
         ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(regionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
@@ -226,7 +230,8 @@ public class AmzaServiceInitializer {
             updatesTaker,
             takeFailureListener,
             config.takeFromNeighborsIntervalInMillis,
-            config.numberOfTakerThreads);
+            config.numberOfTakerThreads,
+            config.hardFsync);
 
         AmzaRegionCompactor regionCompactor = new AmzaRegionCompactor(amzaStats,
             regionIndex,

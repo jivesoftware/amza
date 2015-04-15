@@ -60,6 +60,7 @@ public class AmzaRegionChangeTaker {
     private final Optional<TakeFailureListener> takeFailureListener;
     private final long takeFromNeighborsIntervalInMillis;
     private final int numberOfTakerThreads;
+    private final boolean hardFlush;
 
     public AmzaRegionChangeTaker(AmzaStats amzaStats,
         AmzaRingReader amzaRing,
@@ -70,7 +71,8 @@ public class AmzaRegionChangeTaker {
         UpdatesTaker updatesTaker,
         Optional<TakeFailureListener> takeFailureListener,
         long takeFromNeighborsIntervalInMillis,
-        int numberOfTakerThreads) {
+        int numberOfTakerThreads,
+        boolean hardFlush) {
 
         this.amzaStats = amzaStats;
         this.amzaRing = amzaRing;
@@ -82,6 +84,7 @@ public class AmzaRegionChangeTaker {
         this.takeFailureListener = takeFailureListener;
         this.takeFromNeighborsIntervalInMillis = takeFromNeighborsIntervalInMillis;
         this.numberOfTakerThreads = numberOfTakerThreads;
+        this.hardFlush = hardFlush;
     }
 
     synchronized public void start() throws Exception {
@@ -163,7 +166,7 @@ public class AmzaRegionChangeTaker {
             if (tookFrom.isEmpty()) {
                 break;
             }
-            stripe.flush(true);
+            stripe.flush(hardFlush);
             highwaterMarks.flush(tookFrom);
         }
     }

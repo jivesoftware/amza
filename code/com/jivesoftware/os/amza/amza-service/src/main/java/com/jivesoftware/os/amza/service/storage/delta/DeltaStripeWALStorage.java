@@ -79,20 +79,28 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-" + index + "-%d").build());
     }
 
-    private void acquire(int num) throws InterruptedException {
+    private void acquireOne() throws InterruptedException {
         int enters = reentrant.get();
-        if (enters > 0) {
-            LOG.error("Coding is hard! You are interacting with DeltaStripeWALStorage in such a way as to create a potential deadlock.",
-                new RuntimeException("Reentrancy issues with tickleMeElmophore=" + enters));
+        if (enters == 0) {
+            tickleMeElmophore.acquire();
         }
         reentrant.set(enters + 1);
-        tickleMeElmophore.acquire(num);
     }
 
-    private void release(int num) {
+    private void releaseOne() {
         int enters = reentrant.get();
+        if (enters - 1 == 0) {
+            tickleMeElmophore.release();
+        }
         reentrant.set(enters - 1);
-        tickleMeElmophore.release(num);
+    }
+
+    private void acquireAll() throws InterruptedException {
+        tickleMeElmophore.acquire(numTickleMeElmaphore);
+    }
+
+    private void releaseAll() {
+        tickleMeElmophore.release(numTickleMeElmaphore);
     }
 
     @Override
@@ -133,7 +141,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             if (regionStore == null) {
                                 LOG.error("Should be impossible must fix! Your it :) regionName:" + regionName);
                             } else {
-                                acquire(1);
+                                acquireOne();
                                 try {
                                     RegionDelta delta = getRegionDeltas(regionName);
                                     WALKey key = new WALKey(keyBytes);
@@ -147,7 +155,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                                     //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
                                     delta.appendTxFps(rowTxId, rowFP);
                                 } finally {
-                                    release(1);
+                                    releaseOne();
                                 }
                             }
                             updateSinceLastCompaction.incrementAndGet();
@@ -212,7 +220,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
     private void compactDelta(final RegionIndex regionIndex, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
         final List<Future<Boolean>> futures = new ArrayList<>();
-        acquire(numTickleMeElmaphore);
+        acquireAll();
         try {
             for (Map.Entry<RegionName, RegionDelta> e : regionDeltas.entrySet()) {
                 if (e.getValue().compacting.get() != null) {
@@ -241,7 +249,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 }));
             }
         } finally {
-            release(numTickleMeElmaphore);
+            releaseAll();
         }
         boolean failed = false;
         for (Future<Boolean> f : futures) {
@@ -250,7 +258,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 failed = true;
             }
         }
-        acquire(numTickleMeElmaphore);
+        acquireAll();
         try {
             if (!failed) {
                 wal.destroy();
@@ -259,7 +267,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 LOG.warn("Compaction of delta region FAILED.");
             }
         } finally {
-            release(numTickleMeElmaphore);
+            releaseAll();
         }
     }
 
@@ -286,7 +294,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             }
         });
 
-        acquire(1);
+        acquireOne();
         try {
             DeltaWAL wal = deltaWAL.get();
             RowsChanged rowsChanged;
@@ -355,19 +363,19 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             updateSinceLastCompaction.addAndGet(apply.size());
             return rowsChanged;
         } finally {
-            release(1);
+            releaseOne();
         }
     }
 
     @Override
     public void takeRowUpdatesSince(RegionName regionName, WALStorage storage, long transactionId, final RowStream rowStream) throws Exception {
         boolean done;
-        acquire(1);
+        acquireOne();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
             done = delta.takeRowUpdatesSince(transactionId, rowStream);
         } finally {
-            release(1);
+            releaseOne();
         }
         if (!done) {
             storage.takeRowUpdatesSince(transactionId, rowStream);
@@ -377,11 +385,11 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     @Override
     public WALValue get(RegionName regionName, WALStorage storage, WALKey key) throws Exception {
         WALValue got;
-        acquire(1);
+        acquireOne();
         try {
             got = getRegionDeltas(regionName).get(key);
         } finally {
-            release(1);
+            releaseOne();
         }
         if (got == null) {
             got = storage.get(key);
@@ -393,11 +401,11 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     @Override
     public boolean containsKey(RegionName regionName, WALStorage storage, WALKey key) throws Exception {
         boolean contains;
-        acquire(1);
+        acquireOne();
         try {
             contains = getRegionDeltas(regionName).containsKey(key);
         } finally {
-            release(1);
+            releaseOne();
         }
         return contains || storage.containsKey(key);
     }
@@ -422,7 +430,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     @Override
     public void rangeScan(final RegionName regionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to, final Scan<WALValue> scan)
         throws Exception {
-        acquire(1);
+        acquireOne();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
             final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
@@ -474,13 +482,13 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 }
             }
         } finally {
-            release(1);
+            releaseOne();
         }
     }
 
     @Override
     public void rowScan(final RegionName regionName, Scannable<WALValue> scanable, final Scan<WALValue> scan) throws Exception {
-        acquire(1);
+        acquireOne();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
             final DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
@@ -532,7 +540,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 }
             }
         } finally {
-            release(1);
+            releaseOne();
         }
     }
 
@@ -547,13 +555,13 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     @Override
     public long count(RegionName regionName, WALStorage storage) throws Exception {
         int count = 0;
-        acquire(1);
+        acquireOne();
         try {
             ArrayList<WALKey> keys = new ArrayList<>(getRegionDeltas(regionName).keySet());
             List<Boolean> containsKey = storage.containsKey(keys);
             count = Iterables.frequency(containsKey, Boolean.FALSE);
         } finally {
-            release(1);
+            releaseOne();
         }
         return count + storage.count();
     }

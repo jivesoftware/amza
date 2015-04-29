@@ -37,7 +37,7 @@ public class SystemStripeWALStorage implements StripeWALStorage {
         WALStorageUpdateMode mode,
         Scannable<WALValue> updates) throws Exception {
 
-        return storage.update(null, replicator, mode, updates);
+        return storage.update(false, replicator, mode, updates);
     }
 
     @Override
@@ -53,6 +53,11 @@ public class SystemStripeWALStorage implements StripeWALStorage {
     @Override
     public void takeRowUpdatesSince(RegionName regionName, WALStorage storage, long transactionId, RowStream rowUpdates) throws Exception {
         storage.takeRowUpdatesSince(transactionId, rowUpdates);
+    }
+
+    @Override
+    public boolean takeFromTransactionId(RegionName regionName, WALStorage storage, long transactionId, Scan<WALValue> scan) throws Exception {
+        return storage.takeFromTransactionId(transactionId, scan);
     }
 
     @Override

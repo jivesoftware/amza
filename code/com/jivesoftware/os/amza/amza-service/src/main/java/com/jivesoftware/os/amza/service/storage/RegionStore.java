@@ -85,8 +85,8 @@ public class RegionStore implements RangeScannable<WALValue> {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged directCommit(Long txId, WALReplicator replicator, WALStorageUpdateMode mode, Scannable<WALValue> updates) throws Exception {
-        RowsChanged changes = walStorage.update(txId, replicator, mode, updates);
+    public RowsChanged directCommit(boolean useUpdateTxId, WALReplicator replicator, WALStorageUpdateMode mode, Scannable<WALValue> updates) throws Exception {
+        RowsChanged changes = walStorage.update(useUpdateTxId, replicator, mode, updates);
         walStorage.flush(hardFlush);
         return changes;
     }

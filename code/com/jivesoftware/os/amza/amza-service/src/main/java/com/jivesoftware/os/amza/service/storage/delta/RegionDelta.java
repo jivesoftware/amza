@@ -13,7 +13,8 @@ import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -37,14 +38,17 @@ class RegionDelta {
 
     private final RegionName regionName;
     private final DeltaWAL deltaWAL;
-    private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>();
-    private final ConcurrentNavigableMap<WALKey, WALPointer> orderedIndex = new ConcurrentSkipListMap<>();
-    private final ConcurrentSkipListMap<Long, List<byte[]>> txIdWAL = new ConcurrentSkipListMap<>();
+    private final RowMarshaller<byte[]> rowMarshaller;
     final AtomicReference<RegionDelta> compacting;
 
-    RegionDelta(RegionName regionName, DeltaWAL deltaWAL, RegionDelta compacting) {
+    private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>();
+    private final ConcurrentNavigableMap<WALKey, WALPointer> orderedIndex = new ConcurrentSkipListMap<>();
+    private final ConcurrentSkipListMap<Long, List<Long>> txIdWAL = new ConcurrentSkipListMap<>();
+
+    RegionDelta(RegionName regionName, DeltaWAL deltaWAL, RowMarshaller<byte[]> rowMarshaller, RegionDelta compacting) {
         this.regionName = regionName;
         this.deltaWAL = deltaWAL;
+        this.rowMarshaller = rowMarshaller;
         this.compacting = new AtomicReference<>(compacting);
     }
 
@@ -57,7 +61,7 @@ class RegionDelta {
             }
             return null;
         }
-        return deltaWAL.hydrate(got);
+        return deltaWAL.hydrate(got.getFp()).getValue();
     }
 
     WALTimestampId getTimestampId(WALKey key) throws Exception {
@@ -166,16 +170,16 @@ class RegionDelta {
     }
 
     void appendTxFps(long rowTxId, long rowFP) {
-        List<byte[]> fps = txIdWAL.get(rowTxId);
+        List<Long> fps = txIdWAL.get(rowTxId);
         if (fps == null) {
             fps = new ArrayList<>();
             txIdWAL.put(rowTxId, fps);
         }
-        fps.add(UIO.longBytes(rowFP));
+        fps.add(rowFP);
     }
 
-    void appendTxFps(long rowTxId, Collection<byte[]> rowFPs) {
-        List<byte[]> fps = txIdWAL.get(rowTxId);
+    void appendTxFps(long rowTxId, Collection<Long> rowFPs) {
+        List<Long> fps = txIdWAL.get(rowTxId);
         if (fps != null) {
             throw new IllegalStateException("Already appended this txId: " + rowTxId);
         }
@@ -183,7 +187,7 @@ class RegionDelta {
     }
 
     boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        ConcurrentNavigableMap<Long, List<byte[]>> tailMap = txIdWAL.tailMap(transactionId, false);
+        ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
         deltaWAL.takeRows(tailMap, rowStream);
         if (!txIdWAL.isEmpty() && txIdWAL.firstEntry().getKey() <= transactionId) {
             return true;
@@ -197,27 +201,60 @@ class RegionDelta {
         return false;
     }
 
+    public boolean takeFromTransactionId(final long transactionId, final Scan<WALValue> scan) throws Exception {
+        RegionDelta regionDelta = compacting.get();
+        if (regionDelta != null) {
+            if (!regionDelta.takeFromTransactionId(transactionId, scan)) {
+                return false;
+            }
+        }
+
+        if (txIdWAL.isEmpty() || txIdWAL.lastEntry().getKey() < transactionId) {
+            return true;
+        }
+
+        ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
+        return deltaWAL.takeRows(tailMap, new RowStream() {
+            @Override
+            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
+                if (rowType > 0) {
+                    WALRow walRow = rowMarshaller.fromRow(row);
+                    return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
+                }
+                return true;
+            }
+        });
+    }
+
     void compact(RegionIndex regionIndex) throws Exception {
         final RegionDelta compact = compacting.get();
         if (compact != null) {
             if (!compact.txIdWAL.isEmpty()) {
                 LOG.info("Merging (" + compact.orderedIndex.size() + ") deltas for " + compact.regionName);
-                long largestTxId = compact.txIdWAL.lastKey();
                 RegionStore regionStore = regionIndex.get(compact.regionName);
-                regionStore.directCommit(largestTxId,
+                regionStore.directCommit(true,
                     null,
                     WALStorageUpdateMode.noReplication,
                     new Scannable<WALValue>() {
                         @Override
                         public void rowScan(Scan<WALValue> scan) {
-                            for (Map.Entry<WALKey, WALPointer> e : compact.orderedIndex.entrySet()) {
-                                try {
-                                    if (!scan.row(-1, e.getKey(), compact.deltaWAL.hydrate(e.getValue()))) {
-                                        break;
+                            try {
+                                eos:
+                                for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.entrySet()) {
+                                    long txId = e.getKey();
+                                    for (long fp : e.getValue()) {
+                                        WALRow walRow = compact.deltaWAL.hydrate(fp);
+                                        WALKey key = walRow.getKey();
+                                        WALValue value = walRow.getValue();
+                                        if (compact.orderedIndex.get(key).getFp() == fp) {
+                                            if (!scan.row(txId, key, value)) {
+                                                break eos;
+                                            }
+                                        }
                                     }
-                                } catch (Throwable ex) {
-                                    throw new RuntimeException("Error while streaming entry set.", ex);
                                 }
+                            } catch (Throwable ex) {
+                                throw new RuntimeException("Error while streaming entry set.", ex);
                             }
                         }
                     });

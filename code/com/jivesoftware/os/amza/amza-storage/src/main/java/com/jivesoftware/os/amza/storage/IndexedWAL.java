@@ -17,6 +17,8 @@ package com.jivesoftware.os.amza.storage;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Table;
+import com.google.common.collect.TreeBasedTable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -34,21 +36,21 @@ import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.filer.io.FilerIO;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.mlogger.core.ValueType;
+import java.nio.ByteBuffer;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -165,10 +167,17 @@ public class IndexedWAL implements WALStorage {
                         @Override
                         public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
                             if (rowType == WALWriter.SYSTEM_VERSION_1) {
-                                long[] keyNewCountClobberCount = FilerIO.bytesLongs(row);
-                                if (keyNewCountClobberCount[0] == WALWriter.COMPACTION_HINTS_KEY) {
-                                    newCount.set(keyNewCountClobberCount[1]);
-                                    clobberCount.set(keyNewCountClobberCount[2]);
+                                ByteBuffer buf = ByteBuffer.wrap(row);
+                                byte[] keyBytes = new byte[8];
+                                buf.get(keyBytes);
+                                long key = FilerIO.bytesLong(keyBytes);
+                                if (key == WALWriter.COMPACTION_HINTS_KEY) {
+                                    byte[] newCountBytes = new byte[8];
+                                    byte[] clobberCountBytes = new byte[8];
+                                    buf.get(newCountBytes);
+                                    buf.get(clobberCountBytes);
+                                    newCount.set(FilerIO.bytesLong(newCountBytes));
+                                    clobberCount.set(FilerIO.bytesLong(clobberCountBytes));
                                     return false;
                                 }
                             }
@@ -206,58 +215,56 @@ public class IndexedWAL implements WALStorage {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
-            rowWriter.write(
-                Collections.nCopies(1, transactionId),
-                Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-                Collections.singletonList(FilerIO.longsBytes(new long[]{
-                    WALWriter.COMPACTION_HINTS_KEY,
-                    newCount.get(),
-                    clobberCount.get()
-                })));
+            rowWriter.writeSystem(FilerIO.longsBytes(new long[] {
+                WALWriter.COMPACTION_HINTS_KEY,
+                newCount.get(),
+                clobberCount.get()
+            }));
             updateCount.set(0);
         }
     }
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
-            rowWriter.write(
-                Collections.nCopies(1, transactionId),
-                Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
-                Collections.singletonList(FilerIO.longsBytes(new long[]{
-                    WALWriter.COMMIT_MARKER,
-                    indexCommitedUpToTxId})));
+            rowWriter.writeSystem(FilerIO.longsBytes(new long[] {
+                WALWriter.COMMIT_KEY,
+                indexCommitedUpToTxId }));
         }
     }
 
-    private void writeStripedTimestamp(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
+    /*TODO if we care, persist stripedKeyHighwaterTimestamps periodically as a cold start optimization for getLargestTimestampForKeyStripe()
+    private void writeStripedTimestamp(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            long transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
             rowWriter.write(
-                Collections.nCopies(1, transactionId),
-                Collections.nCopies(1, WALWriter.SYSTEM_VERSION_1),
+                Collections.singletonList(-1L),
+                Collections.singletonList(WALWriter.SYSTEM_VERSION_1),
                 Collections.singletonList(FilerIO.longsBytes(new long[]{
-                    WALWriter.COMMIT_MARKER,
-                    indexCommitedUpToTxId})));
+                    WALWriter.STRIPE_TIME_MARKER,
+                    stripedKeyHighwaterTimestamps})));
         }
     }
+    */
 
     @Override
-    public RowsChanged update(final Long overrideTxId,
+    public RowsChanged update(final boolean useUpdateTxId,
         WALReplicator walReplicator,
         WALStorageUpdateMode updateMode,
         Scannable<WALValue> updates) throws Exception {
+
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
-        final Map<WALKey, WALValue> apply = new ConcurrentHashMap<>();
+        final Table<Long, WALKey, WALValue> apply = TreeBasedTable.create();
         final Map<WALKey, WALTimestampId> removes = new HashMap<>();
         final Map<WALKey, WALTimestampId> clobbers = new HashMap<>();
 
+        final List<Long> transactionIds = useUpdateTxId ? new ArrayList<Long>() : null;
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
         updates.rowScan(new Scan<WALValue>() {
             @Override
             public boolean row(long transactionId, WALKey key, WALValue update) throws Exception {
+                if (useUpdateTxId) {
+                    transactionIds.add(transactionId);
+                }
                 keys.add(key);
                 values.add(update);
                 return true;
@@ -277,12 +284,12 @@ public class IndexedWAL implements WALStorage {
                 WALPointer currentPointer = currentPointers[i];
                 WALValue update = values.get(i);
                 if (currentPointer == null) {
-                    apply.put(key, update);
+                    apply.put(useUpdateTxId ? transactionIds.get(i) : -1, key, update);
                     if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
                         oldestAppliedTimestamp.set(update.getTimestampId());
                     }
                 } else if (currentPointer.getTimestampId() < update.getTimestampId()) {
-                    apply.put(key, update);
+                    apply.put(useUpdateTxId ? transactionIds.get(i) : -1, key, update);
                     if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
                         oldestAppliedTimestamp.set(update.getTimestampId());
                     }
@@ -301,7 +308,7 @@ public class IndexedWAL implements WALStorage {
                 futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
             }
 
-            final NavigableMap<WALKey, byte[]> keyToRowPointer = new TreeMap<>();
+            final NavigableMap<WALKey, Long> keyToRowPointer = new TreeMap<>();
 
             if (apply.isEmpty()) {
                 rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
@@ -310,26 +317,35 @@ public class IndexedWAL implements WALStorage {
                     @Override
                     public Void write(WALWriter rowWriter) throws Exception {
 
+                        List<Long> transactionIds = useUpdateTxId ? new ArrayList<Long>() : null;
                         List<WALKey> keys = new ArrayList<>();
                         List<byte[]> rawRows = new ArrayList<>();
-                        for (Map.Entry<WALKey, WALValue> e : apply.entrySet()) {
-                            WALKey key = e.getKey();
-                            WALValue value = e.getValue();
+                        for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {
+                            if (useUpdateTxId) {
+                                transactionIds.add(cell.getRowKey());
+                            }
+                            WALKey key = cell.getColumnKey();
+                            WALValue value = cell.getValue();
                             keys.add(key);
                             rawRows.add(rowMarshaller.toRow(key, value));
                         }
-                        List<byte[]> rowPointers;
+                        long[] rowPointers;
                         synchronized (oneTransactionAtATimeLock) {
-                            long transactionId = (overrideTxId != null) ? overrideTxId : orderIdProvider.nextId();
-                            indexCommitedUpToTxId.setValue(transactionId);
+                            if (useUpdateTxId) {
+                                indexCommitedUpToTxId.setValue(transactionIds.get(transactionIds.size() - 1));
+                            } else {
+                                long transactionId = orderIdProvider.nextId();
+                                transactionIds = Collections.nCopies(rawRows.size(), transactionId);
+                                indexCommitedUpToTxId.setValue(transactionId);
+                            }
                             rowPointers = rowWriter.write(
-                                Collections.nCopies(rawRows.size(), transactionId),
+                                transactionIds,
                                 Collections.nCopies(rawRows.size(), WALWriter.VERSION_1),
                                 rawRows);
                         }
 
-                        for (int i = 0; i < rowPointers.size(); i++) {
-                            keyToRowPointer.put(keys.get(i), rowPointers.get(i));
+                        for (int i = 0; i < rowPointers.length; i++) {
+                            keyToRowPointer.put(keys.get(i), rowPointers[i]);
                         }
 
                         if (updateCount.addAndGet(keys.size()) > maxUpdatesBetweenCompactionHintMarker.get()) {
@@ -339,11 +355,13 @@ public class IndexedWAL implements WALStorage {
                     }
                 });
                 synchronized (oneWriterAtATimeLock) {
-                    for (Map.Entry<WALKey, WALValue> entry : apply.entrySet()) {
-                        WALKey key = entry.getKey();
-                        WALValue value = entry.getValue();
-                        byte[] rowPointer = keyToRowPointer.get(key);
-                        WALPointer pointer = new WALPointer(UIO.bytesLong(rowPointer), value.getTimestampId(), value.getTombstoned());
+                    Iterator<Table.Cell<Long, WALKey, WALValue>> iter = apply.cellSet().iterator();
+                    while (iter.hasNext()) {
+                        Table.Cell<Long, WALKey, WALValue> cell = iter.next();
+                        WALKey key = cell.getColumnKey();
+                        WALValue value = cell.getValue();
+                        long rowPointer = keyToRowPointer.get(key);
+                        WALPointer pointer = new WALPointer(rowPointer, value.getTimestampId(), value.getTombstoned());
                         WALPointer got = wali.getPointer(key);
                         if (got == null) {
                             wali.put(Collections.singletonList(new SimpleEntry<>(key, pointer)));
@@ -352,7 +370,7 @@ public class IndexedWAL implements WALStorage {
                             wali.put(Collections.singletonList(new SimpleEntry<>(key, pointer)));
                             clobberCount.incrementAndGet();
                         } else {
-                            apply.remove(key);
+                            iter.remove();
                         }
 
                         int highwaterTimestampIndex = Math.abs(key.hashCode()) % stripedKeyHighwaterTimestamps.length;
@@ -519,10 +537,10 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public void takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
+    public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
         tickleMeElmophore.acquire();
         try {
-            walTx.read(new WALTx.WALRead<Void>() {
+            /*walTx.read(new WALTx.WALRead<Void>() {
 
                 @Override
                 public Void read(WALReader rowReader) throws Exception {
@@ -538,10 +556,50 @@ public class IndexedWAL implements WALStorage {
                     return null;
                 }
             });
+            return true;*/
+            return walTx.readFromTransactionId(sinceTransactionId, new WALTx.WALReadWithOffset<Boolean>() {
+
+                @Override
+                public Boolean read(long offset, WALReader rowReader) throws Exception {
+                    return rowReader.scan(offset, false, new RowStream() {
+                        @Override
+                        public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
+                            if (rowType > 0 && rowTxId > sinceTransactionId) {
+                                return rowStream.row(rowPointer, rowTxId, rowType, row);
+                            }
+                            return true;
+                        }
+                    });
+                }
+            });
         } finally {
             tickleMeElmophore.release();
         }
+    }
 
+    @Override
+    public boolean takeFromTransactionId(final long sinceTransactionId, final Scan<WALValue> scan) throws Exception {
+        tickleMeElmophore.acquire();
+        try {
+            return walTx.readFromTransactionId(sinceTransactionId, new WALTx.WALReadWithOffset<Boolean>() {
+
+                @Override
+                public Boolean read(long offset, WALReader rowReader) throws Exception {
+                    return rowReader.scan(offset, false, new RowStream() {
+                        @Override
+                        public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
+                            if (rowType > 0 && rowTxId > sinceTransactionId) {
+                                WALRow walRow = rowMarshaller.fromRow(row);
+                                return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
+                            }
+                            return rowTxId > sinceTransactionId;
+                        }
+                    });
+                }
+            });
+        } finally {
+            tickleMeElmophore.release();
+        }
     }
 
     @Override

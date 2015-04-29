@@ -90,7 +90,7 @@ public class AmzaRegionChangeReceiver {
         RowsChanged changed = receivedWAL.execute(receivedRegionName, new WALs.Tx<RowsChanged>() {
             @Override
             public RowsChanged execute(WALStorage storage) throws Exception {
-                return storage.update(null, null, WALStorageUpdateMode.noReplication, receivedScannable);
+                return storage.update(false, null, WALStorageUpdateMode.noReplication, receivedScannable);
             }
         });
 

@@ -36,6 +36,8 @@ public interface StripeWALStorage {
 
     void takeRowUpdatesSince(RegionName regionName, WALStorage storage, final long transactionId, RowStream rowUpdates) throws Exception;
 
+    boolean takeFromTransactionId(RegionName regionName, WALStorage walStorage, long transactionId, Scan<WALValue> scan) throws Exception;
+
     void rangeScan(RegionName regionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to, Scan<WALValue> scan) throws Exception;
 
     void rowScan(RegionName regionName, Scannable<WALValue> scanable, Scan<WALValue> scan) throws Exception;

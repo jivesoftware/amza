@@ -183,16 +183,20 @@ public class RegionIndex implements RowChanges {
 
     // TODO this is never called
     @Override
-    public void changes(RowsChanged changes) throws Exception {
+    public void changes(final RowsChanged changes) throws Exception {
         if (changes.getRegionName().equals(REGION_PROPERTIES)) {
-            for (WALKey key : changes.getApply().keySet()) {
-                removeProperties(RegionName.fromBytes(key.getKey()));
-                RegionStore store = get(changes.getRegionName());
-                if (store != null) {
-                    RegionProperties properties = getProperties(changes.getRegionName());
-                    store.updatedStorageDescriptor(properties.walStorageDescriptor);
+            changes.rowScan(new Scan<WALValue>() {
+                @Override
+                public boolean row(long rowTxId, WALKey key, WALValue scanned) throws Exception {
+                    removeProperties(RegionName.fromBytes(key.getKey()));
+                    RegionStore store = get(changes.getRegionName());
+                    if (store != null) {
+                        RegionProperties properties = getProperties(changes.getRegionName());
+                        store.updatedStorageDescriptor(properties.walStorageDescriptor);
+                    }
+                    return true;
                 }
-            }
+            });
         }
     }
 }

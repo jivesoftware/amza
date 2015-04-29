@@ -24,10 +24,5 @@ public interface RowMarshaller<R> {
 
     WALRow fromRow(R row) throws Exception;
 
-    public interface WALRow {
-        WALKey getKey();
-        WALValue getValue();
-    }
-
     byte[] valueFromRow(R row) throws Exception;
 }

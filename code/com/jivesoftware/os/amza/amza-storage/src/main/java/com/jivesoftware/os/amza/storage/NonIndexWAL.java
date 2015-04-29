@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.storage;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.Table;
+import com.google.common.collect.TreeBasedTable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
@@ -23,8 +25,6 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -84,18 +84,18 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public RowsChanged update(final Long overrideTxId,
+    public RowsChanged update(final boolean useUpdateTxId,
         WALReplicator walReplicator,
         WALStorageUpdateMode updateMode,
         Scannable<WALValue> updates) throws Exception {
 
         final AtomicLong oldestApplied = new AtomicLong(Long.MAX_VALUE);
-        final NavigableMap<WALKey, WALValue> apply = new TreeMap<>();
+        final Table<Long, WALKey, WALValue> apply = TreeBasedTable.create();
 
         updates.rowScan(new Scan<WALValue>() {
             @Override
             public boolean row(long transactionId, WALKey key, WALValue update) throws Exception {
-                apply.put(key, update);
+                apply.put(transactionId, key, update);
                 if (oldestApplied.get() > update.getTimestampId()) {
                     oldestApplied.set(update.getTimestampId());
                 }
@@ -110,16 +110,23 @@ public class NonIndexWAL implements WALStorage {
                 @Override
                 public Void write(WALWriter rowWriter) throws Exception {
 
+                    List<Long> transactionIds = useUpdateTxId ? new ArrayList<Long>() : null;
                     List<byte[]> rawRows = new ArrayList<>();
-                    for (Map.Entry<WALKey, WALValue> e : apply.entrySet()) {
-                        WALKey key = e.getKey();
-                        WALValue value = e.getValue();
+                    for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {
+                        if (useUpdateTxId) {
+                            transactionIds.add(cell.getRowKey());
+                        }
+                        WALKey key = cell.getColumnKey();
+                        WALValue value = cell.getValue();
                         rawRows.add(rowMarshaller.toRow(key, value));
                     }
                     synchronized (oneTransactionAtATimeLock) {
-                        long transactionId = (overrideTxId != null) ? overrideTxId : orderIdProvider.nextId();
-                        rowWriter.write(Collections.nCopies(rawRows.size(), transactionId),
-                            Collections.nCopies(rawRows.size(), (byte) WALWriter.VERSION_1),
+                        if (!useUpdateTxId) {
+                            long transactionId = orderIdProvider.nextId();
+                            transactionIds = Collections.nCopies(rawRows.size(), transactionId);
+                        }
+                        rowWriter.write(transactionIds,
+                            Collections.nCopies(rawRows.size(), WALWriter.VERSION_1),
                             rawRows);
                     }
                     return null;
@@ -142,7 +149,7 @@ public class NonIndexWAL implements WALStorage {
                     @Override
                     public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawWRow) throws Exception {
                         if (rowType > 0) {
-                            RowMarshaller.WALRow row = rowMarshaller.fromRow(rawWRow);
+                            WALRow row = rowMarshaller.fromRow(rawWRow);
                             return scan.row(rowTxId, row.getKey(), row.getValue());
                         }
                         return true;
@@ -164,7 +171,7 @@ public class NonIndexWAL implements WALStorage {
                     @Override
                     public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] rawWRow) throws Exception {
                         if (rowType > 0) {
-                            RowMarshaller.WALRow row = rowMarshaller.fromRow(rawWRow);
+                            WALRow row = rowMarshaller.fromRow(rawWRow);
                             if (row.getKey().compareTo(to) < 0) {
                                 if (from.compareTo(row.getKey()) <= 0) {
                                     scan.row(rowTxId, row.getKey(), row.getValue());
@@ -214,8 +221,8 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public void takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
-        wal.read(new WALTx.WALRead<Void>() {
+    public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
+        /*wal.read(new WALTx.WALRead<Void>() {
 
             @Override
             public Void read(WALReader rowReader) throws Exception {
@@ -225,13 +232,48 @@ public class NonIndexWAL implements WALStorage {
                         if (rowType > 0 && rowTxId > sinceTransactionId) {
                             return rowStream.row(rowPointer, rowTxId, rowType, row);
                         }
-                        return true;
+                        return rowTxId > sinceTransactionId;
                     }
                 });
                 return null;
             }
         });
+        return true;*/
+        return wal.readFromTransactionId(sinceTransactionId, new WALTx.WALReadWithOffset<Boolean>() {
 
+            @Override
+            public Boolean read(long offset, WALReader rowReader) throws Exception {
+                return rowReader.scan(offset, false, new RowStream() {
+                    @Override
+                    public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
+                        if (rowType > 0 && rowTxId > sinceTransactionId) {
+                            return rowStream.row(rowPointer, rowTxId, rowType, row);
+                        }
+                        return true;
+                    }
+                });
+            }
+        });
+    }
+
+    @Override
+    public boolean takeFromTransactionId(final long sinceTransactionId, final Scan<WALValue> scan) throws Exception {
+        return wal.readFromTransactionId(sinceTransactionId, new WALTx.WALReadWithOffset<Boolean>() {
+
+            @Override
+            public Boolean read(long offset, WALReader rowReader) throws Exception {
+                return rowReader.scan(offset, false, new RowStream() {
+                    @Override
+                    public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
+                        if (rowType > 0 && rowTxId > sinceTransactionId) {
+                            WALRow walRow = rowMarshaller.fromRow(row);
+                            return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
+                        }
+                        return true;
+                    }
+                });
+            }
+        });
     }
 
     @Override

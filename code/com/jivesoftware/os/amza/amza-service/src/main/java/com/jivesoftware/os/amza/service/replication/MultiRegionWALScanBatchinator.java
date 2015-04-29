@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.WALRow;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -50,7 +51,7 @@ class MultiRegionWALScanBatchinator implements RowStream {
 
     @Override
     public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawRow) throws Exception {
-        RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
+        WALRow row = rowMarshaller.fromRow(rawRow);
         ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
         byte[] regionNameBytes = new byte[bb.getShort()];
         bb.get(regionNameBytes);

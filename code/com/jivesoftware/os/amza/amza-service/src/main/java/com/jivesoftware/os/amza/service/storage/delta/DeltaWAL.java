@@ -1,16 +1,16 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Table;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowWriter;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
@@ -27,7 +27,7 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class DeltaWAL implements WALValueHydrator, Comparable<DeltaWAL> {
+public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
 
     private final long id;
     private final OrderIdProvider orderIdProvider;
@@ -71,8 +71,8 @@ public class DeltaWAL implements WALValueHydrator, Comparable<DeltaWAL> {
         return new WALKey(bb.array());
     }
 
-    public DeltaWALApplied update(final RegionName regionName, final Map<WALKey, WALValue> apply) throws Exception {
-        final Map<WALKey, byte[]> keyToRowPointer = new HashMap<>();
+    public DeltaWALApplied update(final RegionName regionName, final Table<Long, WALKey, WALValue> apply) throws Exception {
+        final Map<WALKey, Long> keyToRowPointer = new HashMap<>();
 
         final MutableLong txId = new MutableLong();
         wal.write(new WALTx.WALWrite<Void>() {
@@ -80,24 +80,24 @@ public class DeltaWAL implements WALValueHydrator, Comparable<DeltaWAL> {
             public Void write(WALWriter rowWriter) throws Exception {
                 List<WALKey> keys = new ArrayList<>();
                 List<byte[]> rawRows = new ArrayList<>();
-                for (Map.Entry<WALKey, WALValue> e : apply.entrySet()) {
-                    WALKey key = e.getKey();
-                    WALValue value = e.getValue();
+                for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {
+                    WALKey key = cell.getColumnKey();
+                    WALValue value = cell.getValue();
                     keys.add(key);
                     key = regionPrefixedKey(regionName, key);
                     rawRows.add(rowMarshaller.toRow(key, value));
                 }
                 long transactionId;
-                List<byte[]> rowPointers;
+                long[] rowPointers;
                 synchronized (oneTxAtATimeLock) {
                     transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
                     rowPointers = rowWriter.write(Collections.nCopies(rawRows.size(), transactionId),
-                        Collections.nCopies(rawRows.size(), (byte) WALWriter.VERSION_1),
+                        Collections.nCopies(rawRows.size(), WALWriter.VERSION_1),
                         rawRows);
                 }
                 txId.setValue(transactionId);
-                for (int i = 0; i < rowPointers.size(); i++) {
-                    keyToRowPointer.put(keys.get(i), rowPointers.get(i));
+                for (int i = 0; i < rowPointers.length; i++) {
+                    keyToRowPointer.put(keys.get(i), rowPointers[i]);
                 }
                 return null;
             }
@@ -107,50 +107,47 @@ public class DeltaWAL implements WALValueHydrator, Comparable<DeltaWAL> {
 
     }
 
-    void takeRows(final NavigableMap<Long, List<byte[]>> tailMap, final RowStream rowStream) throws Exception {
-        wal.read(new WALTx.WALRead<Void>() {
+    boolean takeRows(final NavigableMap<Long, List<Long>> tailMap, final RowStream rowStream) throws Exception {
+        return wal.read(new WALTx.WALRead<Boolean>() {
 
             @Override
-            public Void read(WALReader reader) throws Exception {
+            public Boolean read(WALReader reader) throws Exception {
                 // reverse everything so highest FP is first, helps minimize mmap extensions
                 for (Long key : tailMap.descendingKeySet()) {
-                    List<byte[]> rowFPs = Lists.reverse(tailMap.get(key));
-                    for (byte[] fp : rowFPs) {
-                        byte[] rawRow = reader.read(UIO.bytesLong(fp));
-                        RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
+                    List<Long> rowFPs = Lists.reverse(tailMap.get(key));
+                    for (long fp : rowFPs) {
+                        byte[] rawRow = reader.read(fp);
+                        WALRow row = rowMarshaller.fromRow(rawRow);
                         ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
                         byte[] regionNameBytes = new byte[bb.getShort()];
                         bb.get(regionNameBytes);
                         byte[] keyBytes = new byte[bb.getInt()];
                         bb.get(keyBytes);
 
-                        if (!rowStream.row(UIO.bytesLong(fp), key, BinaryRowWriter.VERSION_1,
+                        if (!rowStream.row(fp, key, BinaryRowWriter.VERSION_1,
                             rowMarshaller.toRow(new WALKey(keyBytes), row.getValue()))) { // TODO Ah were to get rowType
-                            return null;
+                            return false;
                         }
                     }
                 }
-                return null;
+                return true;
             }
         });
 
     }
 
     @Override
-    public WALValue hydrate(final WALPointer rowPointer) throws Exception {
+    public WALRow hydrate(final long fp) throws Exception {
         try {
             byte[] row = wal.read(new WALTx.WALRead<byte[]>() {
                 @Override
                 public byte[] read(WALReader rowReader) throws Exception {
-                    return rowReader.read(rowPointer.getFp());
+                    return rowReader.read(fp);
                 }
             });
-            byte[] value = rowMarshaller.valueFromRow(row);
-            return new WALValue(value,
-                rowPointer.getTimestampId(),
-                rowPointer.getTombstoned());
+            return rowMarshaller.fromRow(row);
         } catch (Exception x) {
-            throw new RuntimeException("Failed to hydrtate " + rowPointer, x);
+            throw new RuntimeException("Failed to hydrate " + fp, x);
         }
     }
 
@@ -167,10 +164,10 @@ public class DeltaWAL implements WALValueHydrator, Comparable<DeltaWAL> {
 
     public static class DeltaWALApplied {
 
-        public final Map<WALKey, byte[]> keyToRowPointer;
+        public final Map<WALKey, Long> keyToRowPointer;
         public final long txId;
 
-        public DeltaWALApplied(Map<WALKey, byte[]> keyToRowPointer, long txId) {
+        public DeltaWALApplied(Map<WALKey, Long> keyToRowPointer, long txId) {
             this.keyToRowPointer = keyToRowPointer;
             this.txId = txId;
         }

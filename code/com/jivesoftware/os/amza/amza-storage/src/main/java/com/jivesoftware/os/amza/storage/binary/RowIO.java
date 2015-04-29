@@ -10,6 +10,8 @@ import java.io.File;
  */
 public interface RowIO extends WALReader, WALWriter {
 
+    long getInclusiveStartOfRow(long transactionId) throws Exception;
+
     void move(File destinationDir) throws Exception;
 
     long sizeInBytes() throws Exception;
@@ -19,6 +21,8 @@ public interface RowIO extends WALReader, WALWriter {
     void close() throws Exception;
 
     void delete() throws Exception;
+
+    void initLeaps() throws Exception;
 
     boolean validate() throws Exception;
 }

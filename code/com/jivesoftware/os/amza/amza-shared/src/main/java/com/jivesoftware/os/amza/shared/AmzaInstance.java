@@ -23,6 +23,8 @@ public interface AmzaInstance {
 
     void takeRowUpdates(RegionName regionName, long rowTxId, RowStream rowStream) throws Exception;
 
+    void takeFromTransactionId(RegionName regionName, long transactionId, Scan<WALValue> scan) throws Exception;
+
     List<RegionName> getRegionNames();
 
     void destroyRegion(RegionName regionName) throws Exception;

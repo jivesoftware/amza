@@ -15,19 +15,20 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import com.google.common.collect.Table;
 import java.util.Map;
 
 public class RowsChanged implements Scannable<WALValue> {
 
     private final RegionName regionName;
     private final long oldestApply;
-    private final Map<WALKey, WALValue> apply;
+    private final Table<Long, WALKey, WALValue> apply;
     private final Map<WALKey, WALTimestampId> remove;
     private final Map<WALKey, WALTimestampId> clobber;
 
     public RowsChanged(RegionName regionName,
         long oldestApply,
-        Map<WALKey, WALValue> apply,
+        Table<Long, WALKey, WALValue> apply,
         Map<WALKey, WALTimestampId> remove,
         Map<WALKey, WALTimestampId> clobber) {
         this.regionName = regionName;
@@ -45,7 +46,7 @@ public class RowsChanged implements Scannable<WALValue> {
         return oldestApply;
     }
 
-    public Map<WALKey, WALValue> getApply() {
+    public Table<Long, WALKey, WALValue> getApply() {
         return apply;
     }
 
@@ -69,9 +70,9 @@ public class RowsChanged implements Scannable<WALValue> {
 
     @Override
     public void rowScan(Scan<WALValue> scan) {
-        for (Map.Entry<WALKey, WALValue> e : apply.entrySet()) {
+        for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {
             try {
-                if (!scan.row(-1, e.getKey(), e.getValue())) {
+                if (!scan.row(cell.getRowKey(), cell.getColumnKey(), cell.getValue())) {
                     break;
                 }
             } catch (Throwable ex) {
@@ -79,7 +80,6 @@ public class RowsChanged implements Scannable<WALValue> {
             }
         }
     }
-
 
     @Override
     public String toString() {

@@ -25,7 +25,7 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     boolean delete(boolean ifEmpty) throws Exception;
 
-    RowsChanged update(Long overrideTxId, WALReplicator walReplicator, WALStorageUpdateMode upateMode, Scannable<WALValue> rowUpdates) throws Exception;
+    RowsChanged update(boolean useUpdateTxId, WALReplicator walReplicator, WALStorageUpdateMode upateMode, Scannable<WALValue> rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
 
@@ -37,7 +37,25 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     List<Boolean> containsKey(List<WALKey> keys) throws Exception;
 
-    void takeRowUpdatesSince(final long transactionId, RowStream rowUpdates) throws Exception;
+    /**
+     * Takes from the WAL starting no later than the requested transactionId.
+     *
+     * @param transactionId the desired starting transactionId
+     * @param rowUpdates the callback stream
+     * @return true if the end of the WAL was reached, otherwise false
+     * @throws Exception if an error occurred
+     */
+    boolean takeRowUpdatesSince(final long transactionId, RowStream rowUpdates) throws Exception;
+
+    /**
+     * Takes from the WAL starting no later than the requested transactionId.
+     *
+     * @param transactionId the desired starting transactionId
+     * @param scan the callback scan
+     * @return true if the end of the WAL was reached, otherwise false
+     * @throws Exception if an error occurred
+     */
+    boolean takeFromTransactionId(long transactionId, Scan<WALValue> scan) throws Exception;
 
     long compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 

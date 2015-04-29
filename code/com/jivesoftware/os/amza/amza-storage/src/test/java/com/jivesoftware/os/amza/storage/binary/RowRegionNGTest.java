@@ -114,7 +114,7 @@ public class RowRegionNGTest {
             WALKey key = new WALKey(FilerIO.intBytes(r.nextInt(range)));
             updates.put(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false));
         }
-        indexedWAL.update(null, new WALReplicator() {
+        indexedWAL.update(false, new WALReplicator() {
 
             @Override
             public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
@@ -206,7 +206,7 @@ public class RowRegionNGTest {
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
-        indexedWAL.update(null, new WALReplicator() {
+        indexedWAL.update(false, new WALReplicator() {
 
             @Override
             public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {

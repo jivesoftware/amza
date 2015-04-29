@@ -68,7 +68,7 @@ public class RegionProvider {
                 final byte[] rawRegionName = regionName.toBytes();
                 final WALKey regionKey = new WALKey(rawRegionName);
                 RegionStore regionIndexStore = regionName.equals(REGION_INDEX) ? regionStore : regionIndex.get(REGION_INDEX);
-                RowsChanged changed = regionIndexStore.directCommit(null, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
+                RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
 
                     @Override
                     public void rowScan(Scan<WALValue> scan) throws Exception {
@@ -87,7 +87,7 @@ public class RegionProvider {
     public void setRegionProperties(final RegionName regionName, final RegionProperties properties) throws Exception {
         regionIndex.putProperties(regionName, properties);
         RegionStore regionPropertiesStore = regionIndex.get(REGION_PROPERTIES);
-        RowsChanged changed = regionPropertiesStore.directCommit(null, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
+        RowsChanged changed = regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
 
             @Override
             public void rowScan(Scan<WALValue> scan) throws Exception {

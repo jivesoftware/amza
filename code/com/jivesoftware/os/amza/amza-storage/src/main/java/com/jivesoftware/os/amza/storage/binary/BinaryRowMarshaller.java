@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.WALRow;
 
 public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
 

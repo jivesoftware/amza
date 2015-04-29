@@ -12,6 +12,8 @@ public interface WALTx {
 
     <R> R read(WALRead<R> read) throws Exception;
 
+    <R> R readFromTransactionId(long sinceTransactionId, WALReadWithOffset<R> readWithOffset) throws Exception;
+
     WALIndex load(RegionName regionName) throws Exception;
 
     void flush(boolean fsync) throws Exception;
@@ -30,6 +32,11 @@ public interface WALTx {
     interface WALRead<R> {
 
         R read(WALReader reader) throws Exception;
+    }
+
+    interface WALReadWithOffset<R> {
+
+        R read(long offset, WALReader reader) throws Exception;
     }
 
     interface Compacted {

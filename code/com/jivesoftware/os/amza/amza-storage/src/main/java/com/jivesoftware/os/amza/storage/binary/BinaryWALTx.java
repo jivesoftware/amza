@@ -16,6 +16,7 @@ import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
@@ -97,6 +98,17 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
+    public <R> R readFromTransactionId(long sinceTransactionId, WALReadWithOffset<R> readWithOffset) throws Exception {
+        compactionLock.acquire();
+        try {
+            long offset = io.getInclusiveStartOfRow(sinceTransactionId);
+            return readWithOffset.read(offset, io);
+        } finally {
+            compactionLock.release();
+        }
+    }
+
+    @Override
     public void flush(boolean fsync) throws Exception {
         io.flush(fsync);
     }
@@ -116,13 +128,13 @@ public class BinaryWALTx implements WALTx {
             if (walIndex.isEmpty()) {
                 LOG.info(
                     "Rebuilding " + walIndex.getClass().getSimpleName()
-                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
+                        + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
                 final MutableLong rebuilt = new MutableLong();
                 io.scan(0, true, new RowStream() {
                     @Override
                     public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
                         if (rowType > 0) {
-                            RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+                            WALRow walr = rowMarshaller.fromRow(row);
                             WALKey key = walr.getKey();
                             WALValue value = walr.getValue();
                             WALPointer current = walIndex.getPointer(key);
@@ -151,7 +163,7 @@ public class BinaryWALTx implements WALTx {
                     @Override
                     public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
                         if (rowType > 0) {
-                            RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+                            WALRow walr = rowMarshaller.fromRow(row);
                             WALKey key = walr.getKey();
                             WALValue value = walr.getValue();
                             walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
@@ -160,7 +172,7 @@ public class BinaryWALTx implements WALTx {
                         }
                         if (rowType == WALWriter.SYSTEM_VERSION_1 && commitedUpToTxId == Long.MIN_VALUE) {
                             long[] key_CommitedUpToTxId = UIO.bytesLongs(row);
-                            if (key_CommitedUpToTxId[0] == WALWriter.COMMIT_MARKER) {
+                            if (key_CommitedUpToTxId[0] == WALWriter.COMMIT_KEY) {
                                 commitedUpToTxId = key_CommitedUpToTxId[1];
                             }
                             return true;
@@ -173,6 +185,7 @@ public class BinaryWALTx implements WALTx {
                     + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
                 walIndex.commit();
             }
+            io.initLeaps();
             return walIndex;
         } finally {
             compactionLock.release(NUM_PERMITS);
@@ -187,7 +200,7 @@ public class BinaryWALTx implements WALTx {
                 try {
                     io.close();
                 } catch (Exception x) {
-                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[]{dir.getAbsolutePath()}, x);
+                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[] { dir.getAbsolutePath() }, x);
                 }
                 io.delete();
                 return true;
@@ -320,7 +333,7 @@ public class BinaryWALTx implements WALTx {
                     return true;
                 }
 
-                RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+                WALRow walr = rowMarshaller.fromRow(row);
                 WALKey key = walr.getKey();
                 WALValue value = walr.getValue();
 
@@ -366,12 +379,12 @@ public class BinaryWALTx implements WALTx {
         List<WALValue> rowValues,
         AtomicLong batchSizeInBytes) throws Exception {
 
-        List<byte[]> rowPointers = compactionIO.write(rowTxIds, rawRowTypes, rawRows);
+        long[] rowPointers = compactionIO.write(rowTxIds, rawRowTypes, rawRows);
         Collection<Map.Entry<WALKey, WALPointer>> entries = new ArrayList<>(rowKeys.size());
         for (int i = 0; i < rowKeys.size(); i++) {
             WALValue rowValue = rowValues.get(i);
             entries.add(new AbstractMap.SimpleEntry<>(rowKeys.get(i),
-                new WALPointer(UIO.bytesLong(rowPointers.get(i)), rowValue.getTimestampId(), rowValue.getTombstoned())));
+                new WALPointer(rowPointers[i], rowValue.getTimestampId(), rowValue.getTombstoned())));
         }
         if (compactionWALIndex != null) {
             compactionWALIndex.put(entries);

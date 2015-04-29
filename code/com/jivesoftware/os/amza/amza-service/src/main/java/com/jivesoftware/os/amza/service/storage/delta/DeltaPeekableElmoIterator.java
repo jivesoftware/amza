@@ -16,16 +16,16 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALValue>>
 
     private final Iterator<Map.Entry<WALKey, WALPointer>> iterator;
     private final Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator;
-    private final WALValueHydrator hydrator;
-    private final WALValueHydrator compactingHydrator;
+    private final WALRowHydrator hydrator;
+    private final WALRowHydrator compactingHydrator;
     private Map.Entry<WALKey, WALValue> last;
     private Map.Entry<WALKey, WALPointer> iNext;
     private Map.Entry<WALKey, WALPointer> cNext;
 
     public DeltaPeekableElmoIterator(Iterator<Map.Entry<WALKey, WALPointer>> iterator,
         Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator,
-        WALValueHydrator hydrator,
-        WALValueHydrator compactingHydrator) {
+        WALRowHydrator hydrator,
+        WALRowHydrator compactingHydrator) {
         this.iterator = new OverConsumingEntryIterator<>(iterator);
         this.compactingIterator = new OverConsumingEntryIterator<>(compactingIterator);
         this.hydrator = hydrator;
@@ -82,9 +82,9 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALValue>>
         return last;
     }
 
-    private Map.Entry<WALKey, WALValue> hydrate(Map.Entry<WALKey, WALPointer> entry, WALValueHydrator valueHydrator) {
+    private Map.Entry<WALKey, WALValue> hydrate(Map.Entry<WALKey, WALPointer> entry, WALRowHydrator valueHydrator) {
         try {
-            return new AbstractMap.SimpleEntry<>(entry.getKey(), valueHydrator.hydrate(entry.getValue()));
+            return new AbstractMap.SimpleEntry<>(entry.getKey(), valueHydrator.hydrate(entry.getValue().getFp()).getValue());
         } catch (Exception e) {
             throw new RuntimeException("Failed to hydrate while iterating delta", e);
         }

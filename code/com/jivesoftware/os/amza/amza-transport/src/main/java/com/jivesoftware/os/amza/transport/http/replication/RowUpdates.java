@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.WALRow;
 import java.util.List;
 
 public class RowUpdates {
@@ -60,7 +61,7 @@ public class RowUpdates {
 
     public void stream(RowMarshaller<byte[]> marshaller, Scan<WALValue> scan) throws Exception {
         for (int i = 0; i < rowTxIds.size(); i++) {
-            RowMarshaller.WALRow row = marshaller.fromRow(rows.get(i));
+            WALRow row = marshaller.fromRow(rows.get(i));
             if (!scan.row(rowTxIds.get(i), row.getKey(), row.getValue())) {
                 break;
             }

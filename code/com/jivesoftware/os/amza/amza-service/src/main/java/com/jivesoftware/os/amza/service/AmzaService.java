@@ -193,7 +193,7 @@ public class AmzaService implements AmzaInstance {
     @Override
     public void destroyRegion(final RegionName regionName) throws Exception {
         RegionStore regionIndexStore = regionIndex.get(RegionProvider.REGION_INDEX);
-        regionIndexStore.directCommit(null, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
+        regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
 
             @Override
             public void rowScan(Scan<WALValue> scan) throws Exception {
@@ -233,4 +233,13 @@ public class AmzaService implements AmzaInstance {
             region.takeRowUpdatesSince(transactionId, rowStream);
         }
     }
+
+    @Override
+    public void takeFromTransactionId(RegionName regionName, long transactionId, Scan<WALValue> scan) throws Exception {
+        AmzaRegion region = getRegion(regionName);
+        if (region != null) {
+            region.takeFromTransactionId(transactionId, scan);
+        }
+    }
+
 }

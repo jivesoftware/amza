@@ -131,37 +131,39 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
                         @Override
                         public boolean row(long rowFP, final long rowTxId, byte rowType, byte[] rawRow) throws Exception {
-                            WALRow row = rowMarshaller.fromRow(rawRow);
-                            WALValue value = row.getValue();
-                            ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
-                            byte[] regionNameBytes = new byte[bb.getShort()];
-                            bb.get(regionNameBytes);
-                            final byte[] keyBytes = new byte[bb.getInt()];
-                            bb.get(keyBytes);
+                            if (rowType > 0) {
+                                WALRow row = rowMarshaller.fromRow(rawRow);
+                                WALValue value = row.getValue();
+                                ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
+                                byte[] regionNameBytes = new byte[bb.getShort()];
+                                bb.get(regionNameBytes);
+                                final byte[] keyBytes = new byte[bb.getInt()];
+                                bb.get(keyBytes);
 
-                            RegionName regionName = RegionName.fromBytes(regionNameBytes);
-                            RegionStore regionStore = regionIndex.get(regionName);
-                            if (regionStore == null) {
-                                LOG.error("Should be impossible must fix! Your it :) regionName:" + regionName);
-                            } else {
-                                acquireOne();
-                                try {
-                                    RegionDelta delta = getRegionDeltas(regionName);
-                                    WALKey key = new WALKey(keyBytes);
-                                    WALValue regionValue = regionStore.get(key);
-                                    if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
-                                        WALTimestampId got = delta.getTimestampId(key);
-                                        if (got == null || got.getTimestampId() < value.getTimestampId()) {
-                                            delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
+                                RegionName regionName = RegionName.fromBytes(regionNameBytes);
+                                RegionStore regionStore = regionIndex.get(regionName);
+                                if (regionStore == null) {
+                                    LOG.error("Should be impossible must fix! Your it :) regionName:" + regionName);
+                                } else {
+                                    acquireOne();
+                                    try {
+                                        RegionDelta delta = getRegionDeltas(regionName);
+                                        WALKey key = new WALKey(keyBytes);
+                                        WALValue regionValue = regionStore.get(key);
+                                        if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
+                                            WALTimestampId got = delta.getTimestampId(key);
+                                            if (got == null || got.getTimestampId() < value.getTimestampId()) {
+                                                delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
+                                            }
                                         }
+                                        //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
+                                        delta.appendTxFps(rowTxId, rowFP);
+                                    } finally {
+                                        releaseOne();
                                     }
-                                    //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
-                                    delta.appendTxFps(rowTxId, rowFP);
-                                } finally {
-                                    releaseOne();
                                 }
+                                updateSinceLastCompaction.incrementAndGet();
                             }
-                            updateSinceLastCompaction.incrementAndGet();
                             return true;
                         }
                     });

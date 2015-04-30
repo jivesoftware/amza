@@ -146,7 +146,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                                 resendWAL.execute(regionName, new WALs.Tx<Void>() {
                                     @Override
                                     public Void execute(WALStorage resend) throws Exception {
-                                        resend.update(null, null, WALStorageUpdateMode.noReplication, updates);
+                                        resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
                                         return null;
                                     }
                                 });
@@ -165,7 +165,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                         resendWAL.execute(regionName, new WALs.Tx<Void>() {
                             @Override
                             public Void execute(WALStorage resend) throws Exception {
-                                resend.update(null, null, WALStorageUpdateMode.noReplication, updates);
+                                resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
                                 return null;
                             }
                         });
@@ -207,7 +207,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                     resendWAL.execute(regionName, new WALs.Tx<Void>() {
                         @Override
                         public Void execute(WALStorage resend) throws Exception {
-                            resend.update(null, null, WALStorageUpdateMode.noReplication, updates);
+                            resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
                             return null;
                         }
                     });

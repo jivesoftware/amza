@@ -23,7 +23,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 
 /**
- *
  * @author jonathan.colt
  */
 public class RegionStripe {
@@ -41,8 +40,7 @@ public class RegionStripe {
         RegionIndex regionIndex,
         StripeWALStorage storage,
         RowChanges allRowChanges,
-        Predicate<RegionName> stripingPredicate
-    ) {
+        Predicate<RegionName> stripingPredicate) {
         this.amzaStats = amzaStats;
         this.idProvider = idProvider;
         this.regionIndex = regionIndex;
@@ -62,7 +60,7 @@ public class RegionStripe {
 
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
-            throw new IllegalStateException("No region defined for" + regionName);
+            throw new IllegalStateException("No region defined for " + regionName);
         } else {
             RowsChanged changes = storage.update(regionName, regionStore.getWalStorage(), replicator, walStorageUpdateMode, updates);
             if (allRowChanges != null && !changes.isEmpty()) {
@@ -83,7 +81,7 @@ public class RegionStripe {
     public WALValue get(RegionName regionName, WALKey key) throws Exception {
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
-            throw new IllegalStateException("No region defined for" + regionName);
+            throw new IllegalStateException("No region defined for " + regionName);
         } else {
             return storage.get(regionName, regionStore.getWalStorage(), key);
         }
@@ -92,7 +90,7 @@ public class RegionStripe {
     public void rowScan(RegionName regionName, Scan<WALValue> scan) throws Exception {
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
-            throw new IllegalStateException("No region defined for" + regionName);
+            throw new IllegalStateException("No region defined for " + regionName);
         } else {
             storage.rowScan(regionName, regionStore, scan);
         }
@@ -101,7 +99,7 @@ public class RegionStripe {
     public void rangeScan(RegionName regionName, WALKey from, WALKey to, Scan<WALValue> stream) throws Exception {
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
-            throw new IllegalStateException("No region defined for" + regionName);
+            throw new IllegalStateException("No region defined for " + regionName);
         } else {
             storage.rangeScan(regionName, regionStore, from, to, stream);
         }
@@ -110,16 +108,25 @@ public class RegionStripe {
     public void takeRowUpdatesSince(RegionName regionName, long transactionId, RowStream rowStream) throws Exception {
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
-            throw new IllegalStateException("No region defined for" + regionName);
+            throw new IllegalStateException("No region defined for " + regionName);
         } else {
             storage.takeRowUpdatesSince(regionName, regionStore.getWalStorage(), transactionId, rowStream);
+        }
+    }
+
+    public boolean takeFromTransactionId(RegionName regionName, long transactionId, Scan<WALValue> scan) throws Exception {
+        RegionStore regionStore = regionIndex.get(regionName);
+        if (regionStore == null) {
+            throw new IllegalStateException("No region defined for " + regionName);
+        } else {
+            return storage.takeFromTransactionId(regionName, regionStore.getWalStorage(), transactionId, scan);
         }
     }
 
     public long count(RegionName regionName) throws Exception {
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
-            throw new IllegalStateException("No region defined for" + regionName);
+            throw new IllegalStateException("No region defined for " + regionName);
         } else {
             return storage.count(regionName, regionStore.getWalStorage());
         }
@@ -128,7 +135,7 @@ public class RegionStripe {
     public boolean containsKey(RegionName regionName, WALKey key) throws Exception {
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
-            throw new IllegalStateException("No region defined for" + regionName);
+            throw new IllegalStateException("No region defined for " + regionName);
         } else {
             return storage.containsKey(regionName, regionStore.getWalStorage(), key);
         }

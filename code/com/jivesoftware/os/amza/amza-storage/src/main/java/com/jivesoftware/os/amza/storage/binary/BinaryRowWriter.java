@@ -20,7 +20,7 @@ import com.jivesoftware.os.amza.shared.filer.IFiler;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class BinaryRowWriter implements WALWriter {
@@ -34,12 +34,12 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
-    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows) throws Exception {
-        List<Long> offests = new ArrayList<>();
+    public long[] write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows) throws Exception {
+        long[] offsets = new long[rows.size()];
         MemoryFiler memoryFiler = new MemoryFiler();
         int i = 0;
         for (byte[] row : rows) {
-            offests.add(memoryFiler.getFilePointer());
+            offsets[i] = memoryFiler.getFilePointer();
             int length = (1 + 8) + row.length;
             UIO.writeInt(memoryFiler, length, "length");
             UIO.writeByte(memoryFiler, rowType.get(i), "rowType");
@@ -57,11 +57,19 @@ public class BinaryRowWriter implements WALWriter {
             filer.write(bytes);
             filer.flush(false); // TODO expose to config
         }
-        List<byte[]> rowPointers = new ArrayList<>();
-        for (Long offest : offests) {
-            rowPointers.add(UIO.longBytes(startFp + offest));
+        long[] rowPointers = new long[offsets.length];
+        for (int j = 0; j < offsets.length; j++) {
+            rowPointers[j] = startFp + offsets[j];
         }
         return rowPointers;
+    }
+
+    @Override
+    public long writeSystem(byte[] row) throws Exception {
+        long[] rowPointers = write(Collections.singletonList(-1L),
+            Collections.singletonList(WALWriter.SYSTEM_VERSION_1),
+            Collections.singletonList(row));
+        return rowPointers[0];
     }
 
     @Override

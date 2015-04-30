@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class RegionBackHighwaterMarks implements HighwaterMarks {
 
     private final OrderIdProvider orderIdProvider;
+    private final RingHost rootHost;
     private final RegionStripe systemRegionStripe;
     private final WALReplicator replicator;
     private final ConcurrentHashMap<RingHost, ConcurrentHashMap<RegionName, HighwaterMark>> hostHighwaterMarks = new ConcurrentHashMap<>();
@@ -33,15 +34,18 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
         RegionStripe systemRegionStripe,
         WALReplicator replicator) {
         this.orderIdProvider = orderIdProvider;
+        this.rootHost = rootHost;
         this.systemRegionStripe = systemRegionStripe;
         this.replicator = replicator;
     }
 
     WALKey walKey(RingHost ringHost, RegionName regionName) throws IOException {
+        byte[] rootHostBytes = rootHost.toBytes();
         byte[] ringHostBytes = ringHost.toBytes();
         byte[] regionBytes = regionName.toBytes();
         MemoryFiler filer = new MemoryFiler();
         UIO.writeByte(filer, 0, "version");
+        UIO.writeByteArray(filer, rootHostBytes, "rootHost");
         UIO.writeByteArray(filer, ringHostBytes, "host");
         UIO.writeByteArray(filer, regionBytes, "region");
         return new WALKey(filer.getBytes());

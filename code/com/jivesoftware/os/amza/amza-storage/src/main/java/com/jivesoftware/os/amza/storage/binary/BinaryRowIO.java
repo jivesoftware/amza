@@ -5,27 +5,65 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.IFiler;
+import com.jivesoftware.os.filer.io.FilerIO;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
- *
  * @author jonathan.colt
  */
 public class BinaryRowIO implements RowIO, WALReader, WALWriter {
+
+    private static final int MAX_LEAPS = 64; //TODO config?
+    public static final int UPDATES_BETWEEN_LEAPS = 4_096; //TODO config?
 
     private final File file;
     private final IFiler filer;
     private final BinaryRowReader rowReader;
     private final BinaryRowWriter rowWriter;
 
-    public BinaryRowIO(File file, IFiler filer, BinaryRowReader rowReader, BinaryRowWriter rowWriter) {
+    private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
+    private final AtomicLong updatesSinceLeap = new AtomicLong(0);
+
+    public BinaryRowIO(File file, IFiler filer, BinaryRowReader rowReader, BinaryRowWriter rowWriter) throws Exception {
         this.file = file;
         this.filer = filer;
         this.rowReader = rowReader;
         this.rowWriter = rowWriter;
+    }
+
+    @Override
+    public void initLeaps() throws Exception {
+        final MutableLong updates = new MutableLong(0);
+
+        reverseScan(new RowStream() {
+
+            @Override
+            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
+                if (rowType == WALWriter.SYSTEM_VERSION_1) {
+                    ByteBuffer buf = ByteBuffer.wrap(row);
+                    byte[] keyBytes = new byte[8];
+                    buf.get(keyBytes);
+                    long key = FilerIO.bytesLong(keyBytes);
+                    if (key == WALWriter.LEAP_KEY) {
+                        buf.rewind();
+                        latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
+                        return false;
+                    }
+                } else if (rowType > 0) {
+                    updates.increment();
+                }
+                return true;
+            }
+        });
+
+        updatesSinceLeap.addAndGet(updates.longValue());
     }
 
     @Override
@@ -34,8 +72,30 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public void scan(long offset, boolean allowRepairs, RowStream rowStream) throws Exception {
-        rowReader.scan(offset, allowRepairs, rowStream);
+    public boolean scan(long offsetFp, boolean allowRepairs, RowStream rowStream) throws Exception {
+        return rowReader.scan(offsetFp, allowRepairs, rowStream);
+    }
+
+    @Override
+    public long getInclusiveStartOfRow(long transactionId) throws Exception {
+        LeapFrog leapFrog = latestLeapFrog.get();
+        Leaps leaps = (leapFrog != null) ? leapFrog.leaps : null;
+
+        long closestFP = 0;
+        while (leaps != null) {
+            Leaps next = null;
+            for (int i = 0; i < leaps.transactionIds.length; i++) {
+                if (leaps.transactionIds[i] < transactionId) {
+                    closestFP = Math.max(closestFP, leaps.fpIndex[i]);
+                } else {
+                    //TODO the leaps are basically fixed, so it would make sense to cache the fp -> leaps
+                    next = Leaps.fromBytes(read(leaps.fpIndex[i]));
+                    break;
+                }
+            }
+            leaps = next;
+        }
+        return closestFP;
     }
 
     @Override
@@ -49,8 +109,24 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public List<byte[]> write(List<Long> rowTxIds, List<Byte> rowTypes, List<byte[]> rows) throws Exception {
-        return rowWriter.write(rowTxIds, rowTypes, rows);
+    public long[] write(List<Long> rowTxIds, List<Byte> rowTypes, List<byte[]> rows) throws Exception {
+        long[] fps = rowWriter.write(rowTxIds, rowTypes, rows);
+        if (updatesSinceLeap.addAndGet(rows.size()) >= UPDATES_BETWEEN_LEAPS) {
+            LeapFrog latest = latestLeapFrog.get();
+
+            long lastTxId = rowTxIds.get(rowTxIds.size() - 1);
+            BinaryRowIO.Leaps leaps = computeNextLeaps(lastTxId, latest);
+            long leapFp = rowWriter.writeSystem(leaps.toBytes());
+
+            latestLeapFrog.set(new LeapFrog(leapFp, leaps));
+            updatesSinceLeap.set(0);
+        }
+        return fps;
+    }
+
+    @Override
+    public long writeSystem(byte[] row) throws Exception {
+        return rowWriter.writeSystem(row);
     }
 
     @Override
@@ -82,6 +158,162 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     @Override
     public void delete() throws Exception {
         FileUtils.deleteQuietly(file);
+    }
+
+    static private Leaps computeNextLeaps(long lastTransactionId, BinaryRowIO.LeapFrog latest) {
+        long[] fpIndex;
+        long[] transactionIds;
+        if (latest == null) {
+            fpIndex = new long[0];
+            transactionIds = new long[0];
+        } else if (latest.leaps.fpIndex.length < MAX_LEAPS) {
+            int numLeaps = latest.leaps.fpIndex.length + 1;
+            fpIndex = new long[numLeaps];
+            transactionIds = new long[numLeaps];
+            System.arraycopy(latest.leaps.fpIndex, 0, fpIndex, 0, latest.leaps.fpIndex.length);
+            System.arraycopy(latest.leaps.transactionIds, 0, transactionIds, 0, latest.leaps.transactionIds.length);
+            fpIndex[numLeaps - 1] = latest.fp;
+            transactionIds[numLeaps - 1] = latest.leaps.lastTransactionId;
+        } else {
+            fpIndex = null;
+            transactionIds = new long[MAX_LEAPS];
+
+            long[] idealFpIndex = new long[MAX_LEAPS];
+            // b^n = fp
+            // b^32 = 123_456
+            // ln b^32 = ln 123_456
+            // 32 ln b = ln 123_456
+            // ln b = ln 123_456 / 32
+            // b = e^(ln 123_456 / 32)
+            double base = Math.exp(Math.log(latest.fp) / MAX_LEAPS);
+            for (int i = 0; i < idealFpIndex.length; i++) {
+                idealFpIndex[i] = latest.fp - (long) Math.pow(base, (MAX_LEAPS - i - 1));
+            }
+
+            double smallestDistance = Double.MAX_VALUE;
+
+            for (int i = 0; i < latest.leaps.fpIndex.length; i++) {
+                long[] testFpIndex = new long[MAX_LEAPS];
+
+                System.arraycopy(latest.leaps.fpIndex, 0, testFpIndex, 0, i);
+                System.arraycopy(latest.leaps.fpIndex, i + 1, testFpIndex, i, MAX_LEAPS - 1 - i);
+                testFpIndex[MAX_LEAPS - 1] = latest.fp;
+
+                double distance = euclidean(testFpIndex, idealFpIndex);
+                if (distance < smallestDistance) {
+                    fpIndex = testFpIndex;
+                    System.arraycopy(latest.leaps.transactionIds, 0, transactionIds, 0, i);
+                    System.arraycopy(latest.leaps.transactionIds, i + 1, transactionIds, i, MAX_LEAPS - 1 - i);
+                    transactionIds[MAX_LEAPS - 1] = latest.leaps.lastTransactionId;
+                    smallestDistance = distance;
+                }
+            }
+
+            //System.out.println("@" + latest.fp + " base:  " + base);
+            //System.out.println("@" + latest.fp + " ideal: " + Arrays.toString(idealFpIndex));
+            //System.out.println("@" + latest.fp + " next:  " + Arrays.toString(fpIndex));
+        }
+
+        return new Leaps(lastTransactionId, fpIndex, transactionIds);
+    }
+
+    static private double dumb(long[] a, long[] b) {
+        double d = 0;
+        for (int i = 0; i < a.length; i++) {
+            d += Math.abs(a[i] - b[i]);
+        }
+        return d;
+    }
+
+    static private double euclidean(long[] a, long[] b) {
+        double v = 0;
+        for (int i = 0; i < a.length; i++) {
+            long d = a[i] - b[i];
+            v += d * d;
+        }
+        return Math.sqrt(v);
+    }
+
+    static private double acos(long[] a1, long[] b1) {
+        double[] a = new double[a1.length];
+        double[] b = new double[b1.length];
+        for (int i = 0; i < a1.length; i++) {
+            a[i] = (double) a1[i] / (double) a1[a1.length - 1];
+            b[i] = (double) b1[i] / (double) b1[b1.length - 1];
+        }
+        double la = length(a);
+        double lb = length(b);
+        return Math.acos(dotProduct(a, b) / (la * lb));
+    }
+
+    static private double length(double... vs) {
+        double v = 0;
+        for (double a : vs) {
+            v += a;
+        }
+        return Math.sqrt(v);
+    }
+
+    static public double dotProduct(double[] a, double[] b) {
+        double dp = 0;
+        for (int i = 0; i < a.length; i++) {
+            dp += a[i] * b[i];
+        }
+        return dp;
+    }
+
+    private static class LeapFrog {
+
+        private final long fp;
+        private final Leaps leaps;
+
+        public LeapFrog(long fp, Leaps leaps) {
+            this.fp = fp;
+            this.leaps = leaps;
+        }
+    }
+
+    private static class Leaps {
+
+        private final long lastTransactionId;
+        private final long[] fpIndex;
+        private final long[] transactionIds;
+
+        public Leaps(long lastTransactionId, long[] fpIndex, long[] transactionIds) {
+            this.lastTransactionId = lastTransactionId;
+            this.fpIndex = fpIndex;
+            this.transactionIds = transactionIds;
+        }
+
+        private byte[] toBytes() {
+            ByteBuffer buf = ByteBuffer.wrap(new byte[8 + 8 + 4 + fpIndex.length * 16]);
+            buf.put(FilerIO.longBytes(WALWriter.LEAP_KEY));
+            buf.putLong(lastTransactionId);
+            buf.putInt(fpIndex.length);
+            for (int i = 0; i < fpIndex.length; i++) {
+                buf.putLong(fpIndex[i]);
+                buf.putLong(transactionIds[i]);
+            }
+            return buf.array();
+        }
+
+        private static Leaps fromBytes(byte[] bytes) {
+            ByteBuffer buf = ByteBuffer.wrap(bytes);
+            return fromByteBuffer(buf);
+        }
+
+        private static Leaps fromByteBuffer(ByteBuffer buf) {
+            long key = buf.getLong(); // just read over 8 bytes
+            long lastTransactionId = buf.getLong();
+            int length = buf.getInt();
+            long[] fpIndex = new long[length];
+            long[] transactionIds = new long[length];
+            for (int i = 0; i < length; i++) {
+                fpIndex[i] = buf.getLong();
+                transactionIds[i] = buf.getLong();
+            }
+            return new Leaps(lastTransactionId, fpIndex, transactionIds);
+        }
     }
 
 }

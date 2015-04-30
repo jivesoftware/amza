@@ -60,6 +60,15 @@ public class RingHost implements Comparable<RingHost> {
         return port;
     }
 
+    public String toCanonicalString() {
+        return host + ":" + port;
+    }
+
+    public static RingHost fromCanonicalString(String canonical) {
+        int index = canonical.lastIndexOf(':');
+        return new RingHost(canonical.substring(0, index), Integer.parseInt(canonical.substring(index + 1)));
+    }
+
     @Override
     public String toString() {
         return "RingHost{" + "host=" + host + ", port=" + port + '}';

@@ -35,6 +35,7 @@ import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
+import com.jivesoftware.os.amza.shared.TakeCursors;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -46,6 +47,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * Amza pronounced (AH m z ah )
@@ -193,7 +195,7 @@ public class AmzaService implements AmzaInstance {
     @Override
     public void destroyRegion(final RegionName regionName) throws Exception {
         RegionStore regionIndexStore = regionIndex.get(RegionProvider.REGION_INDEX);
-        regionIndexStore.directCommit(null, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
+        regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
 
             @Override
             public void rowScan(Scan<WALValue> scan) throws Exception {
@@ -233,4 +235,38 @@ public class AmzaService implements AmzaInstance {
             region.takeRowUpdatesSince(transactionId, rowStream);
         }
     }
+
+    public TakeCursors takeFromTransactionId(AmzaRegion region, long transactionId, final Scan<WALValue> scan) throws Exception {
+        if (region == null) {
+            return null;
+        }
+        RegionName regionName = region.getRegionName();
+        List<TakeCursors.RingHostCursor> cursors = Lists.newArrayList();
+        for (RingHost ringHost : amzaRing.getRing(regionName.getRingName())) {
+            if (!ringHost.equals(amzaRing.getRingHost())) {
+                Long highwaterTxId = highwaterMarks.get(ringHost, regionName);
+                if (highwaterTxId != null) {
+                    cursors.add(new TakeCursors.RingHostCursor(ringHost, highwaterTxId));
+                }
+            }
+        }
+
+        final MutableLong lastTxId = new MutableLong(-1);
+        boolean tookToEnd = region.takeFromTransactionId(transactionId, new Scan<WALValue>() {
+            @Override
+            public boolean row(long rowTxId, WALKey key, WALValue scanned) throws Exception {
+                if (rowTxId > lastTxId.longValue()) {
+                    lastTxId.setValue(rowTxId);
+                }
+                return scan.row(rowTxId, key, scanned);
+            }
+        });
+        if (!tookToEnd) {
+            cursors.clear();
+        }
+        cursors.add(new TakeCursors.RingHostCursor(amzaRing.getRingHost(), lastTxId.longValue()));
+
+        return new TakeCursors(cursors);
+    }
+
 }

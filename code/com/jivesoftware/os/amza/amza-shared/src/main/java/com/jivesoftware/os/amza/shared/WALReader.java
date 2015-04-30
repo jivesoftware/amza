@@ -17,8 +17,16 @@ package com.jivesoftware.os.amza.shared;
 
 public interface WALReader {
 
-
-    void scan(long offset, boolean allowRepairs, RowStream rowStream) throws Exception;
+    /**
+     * Scans from the given fp offset (must be the start of a row) to the end of the WAL.
+     *
+     * @param offsetFp the fp offset
+     * @param allowRepairs whether to allow repairs/truncation if WAL corruption is detected (otherwise an exception is thrown)
+     * @param rowStream the callback stream
+     * @return true if the scan reaches the end of the WAL, otherwise false
+     * @throws Exception if an error occurred
+     */
+    boolean scan(long offsetFp, boolean allowRepairs, RowStream rowStream) throws Exception;
 
     void reverseScan(RowStream rowStream) throws Exception;
 

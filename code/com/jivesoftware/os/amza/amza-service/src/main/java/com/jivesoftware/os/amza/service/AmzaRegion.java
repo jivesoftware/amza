@@ -140,6 +140,10 @@ public class AmzaRegion {
         regionStripe.takeRowUpdatesSince(regionName, transactionId, rowStream);
     }
 
+    public boolean takeFromTransactionId(long transactionId, Scan<WALValue> scan) throws Exception {
+        return regionStripe.takeFromTransactionId(regionName, transactionId, scan);
+    }
+
     //  Use for testing
     public boolean compare(final AmzaRegion amzaRegion) throws Exception {
         final MutableInt compared = new MutableInt(0);

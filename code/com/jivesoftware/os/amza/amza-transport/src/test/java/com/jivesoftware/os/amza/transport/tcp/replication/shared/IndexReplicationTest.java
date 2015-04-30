@@ -9,6 +9,8 @@ import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
@@ -44,6 +46,7 @@ public class IndexReplicationTest {
     private AtomicReference<Scannable<WALValue>> receivedPut = new AtomicReference<>();
     private AtomicReference<RowUpdatesPayload> toTake = new AtomicReference<>();
     private IndexReplicationProtocol applicationProtocol;
+    private RowMarshaller<byte[]> rowMarshaller = new BinaryRowMarshaller();
 
     @BeforeTest
     public void setup() throws InterruptedException, IOException {

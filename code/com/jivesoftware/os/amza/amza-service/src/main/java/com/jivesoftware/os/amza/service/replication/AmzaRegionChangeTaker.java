@@ -20,7 +20,7 @@ import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -262,7 +262,7 @@ public class AmzaRegionChangeTaker {
 
         @Override
         public boolean row(long rowFP, long txId, byte rowType, byte[] row) throws Exception {
-            RowMarshaller.WALRow walr = rowMarshaller.fromRow(row);
+            WALRow walr = rowMarshaller.fromRow(row);
             flushed.incrementAndGet();
             if (highWaterMark.longValue() < txId) {
                 highWaterMark.setValue(txId);

@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.WALRow;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.commons.lang.mutable.MutableBoolean;
@@ -49,7 +50,7 @@ class ReplicateBatchinator implements RowStream {
     @Override
     public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawRow) throws Exception {
         flushed.setValue(true);
-        RowMarshaller.WALRow row = rowMarshaller.fromRow(rawRow);
+        WALRow row = rowMarshaller.fromRow(rawRow);
         WALKey key = row.getKey();
         WALValue value = row.getValue();
         WALValue got = batch.get(key);

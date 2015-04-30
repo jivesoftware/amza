@@ -163,7 +163,7 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public void scan(long offset, boolean allowRepairs, RowStream stream) throws Exception {
+    public boolean scan(long offsetFp, boolean allowRepairs, RowStream stream) throws Exception {
         long fileLength = 0;
         long read = 0;
         try {
@@ -178,24 +178,24 @@ public class BinaryRowReader implements WALReader {
                     long rowTxId;
                     byte rowType;
                     byte[] row;
-                    filer.seek(offset);
-                    if (offset < fileLength) {
-                        rowFP = offset;
+                    filer.seek(offsetFp);
+                    if (offsetFp < fileLength) {
+                        rowFP = offsetFp;
                         int length = UIO.readInt(filer, "length");
-                        if (offset + length + 8 > fileLength) {
+                        if (offsetFp + length + 8 > fileLength) {
                             if (allowRepairs) {
                                 // Corruption encoutered.
                                 // There is a huge assumption here that this is only called once at startup.
                                 // If this is encountred some time other than startup there will be data loss and WALIndex corruption.
-                                filer.seek(offset);
+                                filer.seek(offsetFp);
                                 synchronized (parent.lock()) {
                                     LOG.warn("Truncated corrupt WAL. " + parent);
-                                    parent.seek(offset);
+                                    parent.seek(offsetFp);
                                     parent.eof();
-                                    return;
+                                    return false;
                                 }
                             } else {
-                                String msg = "Scan terminated prematurely due a corruption at fp:" + offset + ". " + parent;
+                                String msg = "Scan terminated prematurely due a corruption at fp:" + offsetFp + ". " + parent;
                                 LOG.error(msg);
                                 throw new EOFException(msg);
                             }
@@ -208,16 +208,17 @@ public class BinaryRowReader implements WALReader {
                         }
                         UIO.readInt(filer, "length");
                         long fp = filer.getFilePointer();
-                        read += (fp - offset);
-                        offset = fp;
+                        read += (fp - offsetFp);
+                        offsetFp = fp;
                     } else {
                         break;
                     }
                     if (!stream.row(rowFP, rowTxId, rowType, row)) {
-                        return;
+                        return false;
                     }
                 }
             }
+            return true;
         } finally {
             ioStats.read.addAndGet(read);
         }

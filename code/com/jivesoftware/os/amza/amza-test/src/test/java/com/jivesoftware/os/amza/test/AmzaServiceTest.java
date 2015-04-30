@@ -125,7 +125,7 @@ public class AmzaServiceTest {
         int falseCount = -1;
         while (falseCount != 0) {
             falseCount = 0;
-            System.out.println("---- checking for inconsistencies ----");
+            System.out.println("---- fchecking for inconsistencies ----");
             List<AmzaNode> nodes = new ArrayList<>(cluster.getAllNodes());
             DONE:
             for (int i = 0; i < nodes.size(); i++) {

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
@@ -39,7 +40,10 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
 
     @Override
     public void initLeaps() throws Exception {
+        final MutableLong updates = new MutableLong(0);
+
         reverseScan(new RowStream() {
+
             @Override
             public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
                 if (rowType == WALWriter.SYSTEM_VERSION_1) {
@@ -52,10 +56,14 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
                         latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
                         return false;
                     }
+                } else if (rowType > 0) {
+                    updates.increment();
                 }
                 return true;
             }
         });
+
+        updatesSinceLeap.addAndGet(updates.longValue());
     }
 
     @Override

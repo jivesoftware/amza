@@ -140,8 +140,8 @@ public class AmzaRegion {
         regionStripe.takeRowUpdatesSince(regionName, transactionId, rowStream);
     }
 
-    public void takeFromTransactionId(long transactionId, Scan<WALValue> scan) throws Exception {
-        regionStripe.takeFromTransactionId(regionName, transactionId, scan);
+    public boolean takeFromTransactionId(long transactionId, Scan<WALValue> scan) throws Exception {
+        return regionStripe.takeFromTransactionId(regionName, transactionId, scan);
     }
 
     //  Use for testing

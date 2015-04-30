@@ -114,12 +114,12 @@ public class RegionStripe {
         }
     }
 
-    public void takeFromTransactionId(RegionName regionName, long transactionId, Scan<WALValue> scan) throws Exception {
+    public boolean takeFromTransactionId(RegionName regionName, long transactionId, Scan<WALValue> scan) throws Exception {
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
             throw new IllegalStateException("No region defined for " + regionName);
         } else {
-            storage.takeFromTransactionId(regionName, regionStore.getWalStorage(), transactionId, scan);
+            return storage.takeFromTransactionId(regionName, regionStore.getWalStorage(), transactionId, scan);
         }
     }
 

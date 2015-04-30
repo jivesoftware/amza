@@ -186,19 +186,20 @@ class RegionDelta {
         txIdWAL.put(rowTxId, ImmutableList.copyOf(rowFPs));
     }
 
-    boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
-        deltaWAL.takeRows(tailMap, rowStream);
-        if (!txIdWAL.isEmpty() && txIdWAL.firstEntry().getKey() <= transactionId) {
-            return true;
-        }
+    boolean takeRowUpdatesSince(long transactionId, final RowStream rowStream) throws Exception {
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
-            if (regionDelta.takeRowUpdatesSince(transactionId, rowStream)) {
-                return true;
+            if (!regionDelta.takeRowUpdatesSince(transactionId, rowStream)) {
+                return false;
             }
         }
-        return false;
+
+        if (txIdWAL.isEmpty() || txIdWAL.lastEntry().getKey() < transactionId) {
+            return true;
+        }
+
+        ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
+        return deltaWAL.takeRows(tailMap, rowStream);
     }
 
     public boolean takeFromTransactionId(final long transactionId, final Scan<WALValue> scan) throws Exception {

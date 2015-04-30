@@ -10,7 +10,6 @@ import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.RowMarshaller;
-import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
 import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
@@ -175,17 +174,6 @@ public class IndexReplicationTest {
             public void takeRowUpdates(RegionName tableName, long transationId, RowStream rowStream)
                 throws Exception {
                 take.get().rowScan(rowStream);
-            }
-
-            @Override
-            public void takeFromTransactionId(RegionName regionName, long transactionId, final Scan<WALValue> scan) throws Exception {
-                take.get().rowScan(new RowStream() {
-                    @Override
-                    public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
-                        WALRow walRow = rowMarshaller.fromRow(row);
-                        return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
-                    }
-                });
             }
 
             @Override

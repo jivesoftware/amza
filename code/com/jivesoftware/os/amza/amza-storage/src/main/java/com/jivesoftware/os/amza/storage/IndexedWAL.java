@@ -540,23 +540,6 @@ public class IndexedWAL implements WALStorage {
     public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
         tickleMeElmophore.acquire();
         try {
-            /*walTx.read(new WALTx.WALRead<Void>() {
-
-                @Override
-                public Void read(WALReader rowReader) throws Exception {
-                    rowReader.reverseScan(new RowStream() {
-                        @Override
-                        public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
-                            if (rowType > 0 && rowTxId > sinceTransactionId) {
-                                return rowStream.row(rowPointer, rowTxId, rowType, row);
-                            }
-                            return rowTxId > sinceTransactionId;
-                        }
-                    });
-                    return null;
-                }
-            });
-            return true;*/
             return walTx.readFromTransactionId(sinceTransactionId, new WALTx.WALReadWithOffset<Boolean>() {
 
                 @Override
@@ -592,7 +575,7 @@ public class IndexedWAL implements WALStorage {
                                 WALRow walRow = rowMarshaller.fromRow(row);
                                 return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
                             }
-                            return rowTxId > sinceTransactionId;
+                            return true;
                         }
                     });
                 }

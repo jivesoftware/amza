@@ -374,16 +374,16 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
     @Override
     public void takeRowUpdatesSince(RegionName regionName, WALStorage storage, long transactionId, final RowStream rowStream) throws Exception {
-        boolean done;
+        if (!storage.takeRowUpdatesSince(transactionId, rowStream)) {
+            return;
+        }
+
         acquireOne();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
-            done = delta.takeRowUpdatesSince(transactionId, rowStream);
+            delta.takeRowUpdatesSince(transactionId, rowStream);
         } finally {
             releaseOne();
-        }
-        if (!done) {
-            storage.takeRowUpdatesSince(transactionId, rowStream);
         }
     }
 

@@ -14,7 +14,11 @@ public interface WALTx {
 
     <R> R readFromTransactionId(long sinceTransactionId, WALReadWithOffset<R> readWithOffset) throws Exception;
 
+    void validateAndRepair() throws Exception;
+
     WALIndex load(RegionName regionName) throws Exception;
+
+    long length() throws Exception;
 
     void flush(boolean fsync) throws Exception;
 

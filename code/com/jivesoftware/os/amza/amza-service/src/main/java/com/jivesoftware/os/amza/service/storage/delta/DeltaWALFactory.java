@@ -39,6 +39,7 @@ public class DeltaWALFactory {
 
     private DeltaWAL createOrOpen(long id) throws Exception {
         WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, rowMarshaller, new NoOpWALIndexProvider());
+        deltaWALRowsTx.validateAndRepair();
         LOG.info("Created:" + walDir + "/" + id);
         return new DeltaWAL(id, idProvider, rowMarshaller, deltaWALRowsTx);
     }

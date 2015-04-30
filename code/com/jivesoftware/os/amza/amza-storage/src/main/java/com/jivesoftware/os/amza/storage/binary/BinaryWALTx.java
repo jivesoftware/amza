@@ -109,8 +109,34 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
+    public long length() throws Exception {
+        return io.sizeInBytes();
+    }
+
+    @Override
     public void flush(boolean fsync) throws Exception {
         io.flush(fsync);
+    }
+
+    @Override
+    public void validateAndRepair() throws Exception {
+        compactionLock.acquire(NUM_PERMITS);
+        try {
+            if (!io.validate()) {
+                LOG.info("Recovering for WAL {}", name);
+                final MutableLong count = new MutableLong(0);
+                io.scan(0, true, new RowStream() {
+                    @Override
+                    public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
+                        count.increment();
+                        return true;
+                    }
+                });
+                LOG.info("Recovered for WAL {}: {} rows", name, count.longValue());
+            }
+        } finally {
+            compactionLock.release(NUM_PERMITS);
+        }
     }
 
     @Override

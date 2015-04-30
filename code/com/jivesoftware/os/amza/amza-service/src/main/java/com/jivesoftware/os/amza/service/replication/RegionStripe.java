@@ -28,6 +28,8 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 public class RegionStripe {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
+    private final String name;
     private final AmzaStats amzaStats;
     private final OrderIdProvider idProvider;
     private final RegionIndex regionIndex;
@@ -35,12 +37,14 @@ public class RegionStripe {
     private final RowChanges allRowChanges;
     private final Predicate<RegionName> predicate;
 
-    public RegionStripe(AmzaStats amzaStats,
+    public RegionStripe(String name,
+        AmzaStats amzaStats,
         OrderIdProvider idProvider,
         RegionIndex regionIndex,
         StripeWALStorage storage,
         RowChanges allRowChanges,
         Predicate<RegionName> stripingPredicate) {
+        this.name = name;
         this.amzaStats = amzaStats;
         this.idProvider = idProvider;
         this.regionIndex = regionIndex;
@@ -153,4 +157,10 @@ public class RegionStripe {
         }
     }
 
+    @Override
+    public String toString() {
+        return "RegionStripe{" +
+            "name='" + name + '\'' +
+            '}';
+    }
 }

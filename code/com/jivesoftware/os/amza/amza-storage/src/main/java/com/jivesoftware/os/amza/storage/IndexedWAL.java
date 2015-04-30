@@ -41,6 +41,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.mlogger.core.ValueType;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
@@ -532,7 +533,21 @@ public class IndexedWAL implements WALStorage {
                 indexFP.getTimestampId(),
                 indexFP.getTombstoned());
         } catch (Exception x) {
-            throw new RuntimeException("Failed to hydrtate " + indexFP, x);
+            String base64;
+            try {
+                base64 = regionName.toBase64();
+            } catch (IOException e) {
+                base64 = e.getMessage();
+            }
+
+            long length;
+            try {
+                length = walTx.length();
+            } catch (Exception e) {
+                length = -1;
+            }
+
+            throw new RuntimeException("Failed to hydrate for " + regionName + " base64=" + base64 + " size=" + length + " fp=" + indexFP , x);
         }
     }
 

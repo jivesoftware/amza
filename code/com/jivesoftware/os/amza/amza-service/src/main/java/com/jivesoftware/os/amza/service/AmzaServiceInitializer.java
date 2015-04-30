@@ -126,7 +126,7 @@ public class AmzaServiceInitializer {
             config.resendReplicasIntervalInMillis,
             config.numberOfResendThreads);
 
-        RegionStripe systemRegionStripe = new RegionStripe(amzaStats, orderIdProvider, regionIndex, new SystemStripeWALStorage(), amzaRegionWatcher,
+        RegionStripe systemRegionStripe = new RegionStripe("system", amzaStats, orderIdProvider, regionIndex, new SystemStripeWALStorage(), amzaRegionWatcher,
             new Predicate<RegionName>() {
 
                 @Override
@@ -144,7 +144,7 @@ public class AmzaServiceInitializer {
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, rowMarshaller);
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(i, rowMarshaller, deltaWALFactory, maxUpdatesBeforeCompaction);
             final int stripeId = i;
-            regionStripes[i] = new RegionStripe(amzaStats, orderIdProvider, regionIndex, deltaWALStorage, amzaRegionWatcher,
+            regionStripes[i] = new RegionStripe("stripe-" + i, amzaStats, orderIdProvider, regionIndex, deltaWALStorage, amzaRegionWatcher,
                 new Predicate<RegionName>() {
 
                     @Override

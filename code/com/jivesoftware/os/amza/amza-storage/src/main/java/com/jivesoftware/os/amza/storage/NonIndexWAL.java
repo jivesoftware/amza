@@ -207,12 +207,12 @@ public class NonIndexWAL implements WALStorage {
 
     @Override
     public boolean containsKey(WALKey key) throws Exception {
-        return containsKey(Collections.singletonList(key)).get(0);
+        throw new UnsupportedOperationException("NonIndexWAL doesn't support containsKey.");
     }
 
     @Override
     public List<Boolean> containsKey(List<WALKey> keys) throws Exception {
-        throw new UnsupportedOperationException("NonIndexWAL doesn't support gets.");
+        throw new UnsupportedOperationException("NonIndexWAL doesn't support containsKey.");
     }
 
     @Override
@@ -221,24 +221,12 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
-        /*wal.read(new WALTx.WALRead<Void>() {
+    public long highestTxId() {
+        throw new UnsupportedOperationException("NonIndexWAL doesn't support highestTxId.");
+    }
 
-            @Override
-            public Void read(WALReader rowReader) throws Exception {
-                rowReader.reverseScan(new RowStream() {
-                    @Override
-                    public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
-                        if (rowType > 0 && rowTxId > sinceTransactionId) {
-                            return rowStream.row(rowPointer, rowTxId, rowType, row);
-                        }
-                        return rowTxId > sinceTransactionId;
-                    }
-                });
-                return null;
-            }
-        });
-        return true;*/
+    @Override
+    public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
         return wal.readFromTransactionId(sinceTransactionId, new WALTx.WALReadWithOffset<Boolean>() {
 
             @Override

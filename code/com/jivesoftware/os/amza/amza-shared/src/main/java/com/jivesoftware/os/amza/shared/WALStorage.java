@@ -62,4 +62,6 @@ public interface WALStorage extends RangeScannable<WALValue> {
     void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception;
 
     long count() throws Exception;
+
+    long highestTxId();
 }

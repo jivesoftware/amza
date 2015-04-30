@@ -110,18 +110,47 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
 
     @Override
     public long[] write(List<Long> rowTxIds, List<Byte> rowTypes, List<byte[]> rows) throws Exception {
-        long[] fps = rowWriter.write(rowTxIds, rowTypes, rows);
-        if (updatesSinceLeap.addAndGet(rows.size()) >= UPDATES_BETWEEN_LEAPS) {
+        long lastTxId = Long.MIN_VALUE;
+        long[] fps = new long[rows.size()];
+        int lastWriteIndex = 0;
+        for (int i = 0; i < rowTxIds.size(); i++) {
+            long currentTxId = rowTxIds.get(i);
+            if (lastTxId != Long.MIN_VALUE && lastTxId != currentTxId) {
+                writeToWAL(rowTxIds, rowTypes, rows, fps, lastWriteIndex, i, currentTxId);
+                lastWriteIndex = i;
+            }
+            lastTxId = currentTxId;
+        }
+        writeToWAL(rowTxIds, rowTypes, rows, fps, lastWriteIndex, rowTxIds.size(), lastTxId);
+        return fps;
+    }
+
+    private void writeToWAL(List<Long> rowTxIds,
+        List<Byte> rowTypes,
+        List<byte[]> rows,
+        long[] fps,
+        int fromIndex,
+        int toIndex,
+        long currentTxId) throws Exception {
+
+        if (toIndex == fromIndex) {
+            return;
+        }
+
+        long[] currentFps = rowWriter.write(rowTxIds.subList(fromIndex, toIndex),
+            rowTypes.subList(fromIndex, toIndex),
+            rows.subList(fromIndex, toIndex));
+        System.arraycopy(currentFps, 0, fps, fromIndex, currentFps.length);
+
+        if (updatesSinceLeap.addAndGet(currentFps.length) >= UPDATES_BETWEEN_LEAPS) {
             LeapFrog latest = latestLeapFrog.get();
 
-            long lastTxId = rowTxIds.get(rowTxIds.size() - 1);
-            BinaryRowIO.Leaps leaps = computeNextLeaps(lastTxId, latest);
+            Leaps leaps = computeNextLeaps(currentTxId, latest);
             long leapFp = rowWriter.writeSystem(leaps.toBytes());
 
             latestLeapFrog.set(new LeapFrog(leapFp, leaps));
             updatesSinceLeap.set(0);
         }
-        return fps;
     }
 
     @Override

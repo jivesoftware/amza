@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.storage.binary;
 
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -7,15 +8,70 @@ import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.WALFiler;
 import java.io.File;
 import java.util.Collections;
+import java.util.List;
+import java.util.Random;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import static com.jivesoftware.os.amza.storage.binary.BinaryRowIO.UPDATES_BETWEEN_LEAPS;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 /**
  *
  */
 public class BinaryRowIONGTest {
+
+    @Test
+    public void testWrite() throws Exception {
+        File file = File.createTempFile("BinaryRowIO", "dat");
+        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw");
+        IoStats ioStats = new IoStats();
+        BinaryRowIO rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
+        int numRows = 10_000;
+
+        List<Long> rowTxIds = Lists.newArrayList();
+        List<byte[]> rows = Lists.newArrayList();
+        long nextTxId = 1;
+        Random r = new Random();
+        for (long i = 0; i < numRows; i++) {
+            if (r.nextInt(10) == 0) {
+                nextTxId++;
+            }
+            rowTxIds.add(nextTxId);
+            rows.add(UIO.longBytes(i));
+        }
+
+        rowIO.write(rowTxIds, Collections.nCopies(numRows, WALWriter.VERSION_1), rows);
+
+        rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
+
+        rowIO.scan(0, false, new RowStream() {
+
+            private long lastTxId = -1;
+            private long expectedValue = 0;
+            private boolean lastWasLeap = false;
+
+            @Override
+            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
+                if (rowType > 0) {
+                    if (lastWasLeap) {
+                        assertTrue(rowTxId > lastTxId);
+                        lastWasLeap = false;
+                    }
+
+                    assertTrue(rowTxId >= lastTxId);
+                    lastTxId = rowTxId;
+
+                    assertEquals(UIO.bytesLong(row), expectedValue);
+                    expectedValue++;
+                } else {
+                    lastWasLeap = true;
+                }
+                return false;
+            }
+        });
+    }
 
     @Test
     public void testLeap() throws Exception {

@@ -98,14 +98,16 @@ public class EmbeddedAmzaServiceInitializer {
 
                 final File directory = new File(workingDirectory, domain);
                 directory.mkdirs();
+                BinaryWALTx rowsTx = new BinaryWALTx(directory,
+                    regionName.toBase64(),
+                    rowIOProvider,
+                    rowMarshaller,
+                    new NoOpWALIndexProvider());
+                rowsTx.validateAndRepair();
                 return new NonIndexWAL(regionName,
                     orderIdProvider,
                     rowMarshaller,
-                    new BinaryWALTx(directory,
-                        regionName.toBase64(),
-                        rowIOProvider,
-                        rowMarshaller,
-                        new NoOpWALIndexProvider()));
+                    rowsTx);
             }
 
             @Override

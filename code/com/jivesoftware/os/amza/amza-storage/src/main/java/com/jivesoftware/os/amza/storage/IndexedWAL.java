@@ -81,6 +81,7 @@ public class IndexedWAL implements WALStorage {
     private final AtomicLong newCount = new AtomicLong(0);
     private final AtomicLong clobberCount = new AtomicLong(0);
     private final AtomicLong indexUpdates = new AtomicLong(0);
+    private final AtomicLong highestTxId = new AtomicLong(0);
 
     public IndexedWAL(RegionName regionName,
         OrderIdProvider orderIdProvider,
@@ -159,6 +160,7 @@ public class IndexedWAL implements WALStorage {
 
             walIndex.compareAndSet(null, walTx.load(regionName));
 
+            final MutableLong lastTxId = new MutableLong(0);
             final AtomicLong rowsVisited = new AtomicLong(maxUpdatesBetweenCompactionHintMarker.get());
             walTx.read(new WALTx.WALRead<Void>() {
 
@@ -167,6 +169,9 @@ public class IndexedWAL implements WALStorage {
                     rowReader.reverseScan(new RowStream() {
                         @Override
                         public boolean row(long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
+                            if (rowTxId > lastTxId.longValue()) {
+                                lastTxId.setValue(rowTxId);
+                            }
                             if (rowType == WALWriter.SYSTEM_VERSION_1) {
                                 ByteBuffer buf = ByteBuffer.wrap(row);
                                 byte[] keyBytes = new byte[8];
@@ -188,6 +193,7 @@ public class IndexedWAL implements WALStorage {
                     return null;
                 }
             });
+            highestTxId.set(lastTxId.longValue());
 
             walTx.write(new WALTx.WALWrite<Void>() {
 
@@ -343,6 +349,8 @@ public class IndexedWAL implements WALStorage {
                                 transactionIds,
                                 Collections.nCopies(rawRows.size(), WALWriter.VERSION_1),
                                 rawRows);
+
+                            highestTxId.set(indexCommitedUpToTxId.longValue());
                         }
 
                         for (int i = 0; i < rowPointers.length; i++) {
@@ -547,7 +555,7 @@ public class IndexedWAL implements WALStorage {
                 length = -1;
             }
 
-            throw new RuntimeException("Failed to hydrate for " + regionName + " base64=" + base64 + " size=" + length + " fp=" + indexFP , x);
+            throw new RuntimeException("Failed to hydrate for " + regionName + " base64=" + base64 + " size=" + length + " fp=" + indexFP, x);
         }
     }
 
@@ -622,5 +630,10 @@ public class IndexedWAL implements WALStorage {
         } finally {
             tickleMeElmophore.release();
         }
+    }
+
+    @Override
+    public long highestTxId() {
+        return highestTxId.get();
     }
 }

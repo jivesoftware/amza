@@ -145,16 +145,14 @@ public class BinaryWALTx implements WALTx {
         try {
 
             if (!io.validate()) {
-                LOG.warn("Encountered a corrupt WAL. Removing wal index for " + regionName + " ...");
+                LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", regionName);
                 walIndexProvider.deleteIndex(regionName);
-                LOG.warn("Removed wal index for " + regionName + ".");
+                LOG.warn("Removed wal index for {}.", regionName);
             }
 
             final WALIndex walIndex = walIndexProvider.createIndex(regionName);
             if (walIndex.isEmpty()) {
-                LOG.info(
-                    "Rebuilding " + walIndex.getClass().getSimpleName()
-                        + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + "...");
+                LOG.info("Rebuilding {} for {}-{}...", walIndex.getClass().getSimpleName(), regionName.getRegionName(), regionName.getRingName());
                 final MutableLong rebuilt = new MutableLong();
                 io.scan(0, true, new RowStream() {
                     @Override
@@ -176,12 +174,11 @@ public class BinaryWALTx implements WALTx {
                         return true;
                     }
                 });
-                LOG.info("Rebuilt (" + rebuilt.longValue() + ")" + walIndex.getClass().getSimpleName()
-                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                LOG.info("Rebuilt ({}) {} for {}-{}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), regionName.getRegionName(),
+                    regionName.getRingName());
                 walIndex.commit();
             } else {
-                LOG.info("Checking " + walIndex.getClass().getSimpleName()
-                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                LOG.info("Checking {} for {}-{}.", walIndex.getClass().getSimpleName(), regionName.getRegionName(), regionName.getRingName());
                 final MutableLong repair = new MutableLong();
                 io.reverseScan(new RowStream() {
                     long commitedUpToTxId = Long.MIN_VALUE;
@@ -207,8 +204,8 @@ public class BinaryWALTx implements WALTx {
                         }
                     }
                 });
-                LOG.info("Checked (" + repair.longValue() + ")" + walIndex.getClass().getSimpleName()
-                    + " for " + regionName.getRegionName() + "-" + regionName.getRingName() + ".");
+                LOG.info("Checked ({}) {} for {}-{}.", repair.longValue(), walIndex.getClass().getSimpleName(), regionName.getRegionName(),
+                    regionName.getRingName());
                 walIndex.commit();
             }
             io.initLeaps();

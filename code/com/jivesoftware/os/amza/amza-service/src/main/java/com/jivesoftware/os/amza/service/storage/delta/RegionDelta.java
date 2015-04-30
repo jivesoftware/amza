@@ -231,8 +231,9 @@ class RegionDelta {
         final RegionDelta compact = compacting.get();
         if (compact != null) {
             if (!compact.txIdWAL.isEmpty()) {
-                LOG.info("Merging (" + compact.orderedIndex.size() + ") deltas for " + compact.regionName);
-                RegionStore regionStore = regionIndex.get(compact.regionName);
+                final RegionStore regionStore = regionIndex.get(compact.regionName);
+                final long highestTxId = regionStore.highestTxId();
+                LOG.info("Merging ({}) deltas for region: {} from tx: {}", compact.orderedIndex.size(), compact.regionName, highestTxId);
                 regionStore.directCommit(true,
                     null,
                     WALStorageUpdateMode.noReplication,
@@ -241,7 +242,7 @@ class RegionDelta {
                         public void rowScan(Scan<WALValue> scan) {
                             try {
                                 eos:
-                                for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.entrySet()) {
+                                for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
                                     long txId = e.getKey();
                                     for (long fp : e.getValue()) {
                                         WALRow walRow = compact.deltaWAL.hydrate(fp);

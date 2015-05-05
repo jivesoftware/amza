@@ -51,7 +51,6 @@ import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * Amza pronounced (AH m z ah )
- * <p/>
  * Sanskrit word meaning partition / share.
  */
 public class AmzaService implements AmzaInstance {

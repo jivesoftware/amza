@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 /**
  *
  * @author jonathan.colt
- * @param <R>
+ * @param <R> Result
  */
 public class DeltaResult<R> {
 

@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.61</version>
+        <version>0.62</version>
         <relativePath>../global-version-management/pom.xml</relativePath>
     </parent>
 
@@ -115,7 +115,10 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>2.9</version>
+                    <version>2.10.3</version>
+                    <configuration>
+                        <additionalparam>-Xdoclint:none</additionalparam>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -205,7 +208,7 @@
     </build>
 
     <!-- Global profile definitions. Make sure NOT to include any custom maven plugins as the maven plugins project also inherits
-         these profiles. Custom plugins can be merged into these defaults at a child build-management configuration level. -->
+    these profiles. Custom plugins can be merged into these defaults at a child build-management configuration level. -->
     <profiles>
         <profile>
             <id>all-tests</id>

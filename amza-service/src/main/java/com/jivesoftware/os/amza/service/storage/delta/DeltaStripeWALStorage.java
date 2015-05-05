@@ -548,10 +548,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     /**
      * Stupid expensive!!!!
      *
-     * @param regionName
-     * @param storage
-     * @return
-     * @throws Exception
+     * @param regionName RegionName
+     * @param storage Storage
+     * @return long
+     * @throws Exception .
      */
     @Override
     public long count(RegionName regionName, WALStorage storage) throws Exception {

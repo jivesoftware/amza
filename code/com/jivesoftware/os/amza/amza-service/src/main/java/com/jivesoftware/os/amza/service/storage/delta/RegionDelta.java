@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -234,6 +235,7 @@ class RegionDelta {
                 final RegionStore regionStore = regionIndex.get(compact.regionName);
                 final long highestTxId = regionStore.highestTxId();
                 LOG.info("Merging ({}) deltas for region: {} from tx: {}", compact.orderedIndex.size(), compact.regionName, highestTxId);
+                LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
                 regionStore.directCommit(true,
                     null,
                     WALStorageUpdateMode.noReplication,
@@ -246,9 +248,19 @@ class RegionDelta {
                                     long txId = e.getKey();
                                     for (long fp : e.getValue()) {
                                         WALRow walRow = compact.deltaWAL.hydrate(fp);
-                                        WALKey key = walRow.getKey();
+                                        ByteBuffer bb = ByteBuffer.wrap(walRow.getKey().getKey());
+                                        byte[] regionNameBytes = new byte[bb.getShort()];
+                                        bb.get(regionNameBytes);
+                                        final byte[] keyBytes = new byte[bb.getInt()];
+                                        bb.get(keyBytes);
+
+                                        WALKey key = new WALKey(keyBytes);
                                         WALValue value = walRow.getValue();
-                                        if (compact.orderedIndex.get(key).getFp() == fp) {
+                                        WALPointer pointer = compact.orderedIndex.get(key);
+                                        if (pointer == null) {
+                                            throw new RuntimeException("Delta WAL missing key: " + key);
+                                        }
+                                        if (pointer.getFp() == fp) {
                                             if (!scan.row(txId, key, value)) {
                                                 break eos;
                                             }

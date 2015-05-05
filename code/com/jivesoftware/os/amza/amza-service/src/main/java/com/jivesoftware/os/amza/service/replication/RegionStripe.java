@@ -159,8 +159,8 @@ public class RegionStripe {
 
     @Override
     public String toString() {
-        return "RegionStripe{" +
-            "name='" + name + '\'' +
-            '}';
+        return "RegionStripe{"
+            + "name='" + name + '\''
+            + '}';
     }
 }

@@ -67,32 +67,20 @@ public class AmzaRegionChangeReceiver {
     public void receiveChanges(RegionName regionName, final Scannable<WALValue> changes) throws Exception {
 
         final byte[] regionNameBytes = regionName.toBytes();
-        final Scannable<WALValue> receivedScannable = new Scannable<WALValue>() {
-
-            @Override
-            public void rowScan(final Scan<WALValue> walScan) throws Exception {
-                changes.rowScan(new Scan<WALValue>() {
-
-                    @Override
-                    public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                        ByteBuffer bb = ByteBuffer.allocate(2 + regionNameBytes.length + 4 + key.getKey().length);
-                        bb.putShort((short) regionNameBytes.length);
-                        bb.put(regionNameBytes);
-                        bb.putInt(key.getKey().length);
-                        bb.put(key.getKey());
-                        return walScan.row(rowTxId, new WALKey(bb.array()), value);
-                    }
-                });
-            }
+        final Scannable<WALValue> receivedScannable = (final Scan<WALValue> walScan) -> {
+            changes.rowScan((long rowTxId, WALKey key, WALValue value) -> {
+                ByteBuffer bb = ByteBuffer.allocate(2 + regionNameBytes.length + 4 + key.getKey().length);
+                bb.putShort((short) regionNameBytes.length);
+                bb.put(regionNameBytes);
+                bb.putInt(key.getKey().length);
+                bb.put(key.getKey());
+                return walScan.row(rowTxId, new WALKey(bb.array()), value);
+            });
         };
 
         RegionName receivedRegionName = regionIndex.exists(regionName) ? RECEIVED : regionName;
-        RowsChanged changed = receivedWAL.execute(receivedRegionName, new WALs.Tx<RowsChanged>() {
-            @Override
-            public RowsChanged execute(WALStorage storage) throws Exception {
-                return storage.update(false, null, WALStorageUpdateMode.noReplication, receivedScannable);
-            }
-        });
+        RowsChanged changed = receivedWAL.execute(receivedRegionName, (WALStorage storage) -> storage.update(false, null, WALStorageUpdateMode.noReplication,
+            receivedScannable));
 
         amzaStats.received(regionName, changed.getApply().size(), changed.getOldestRowTxId());
 
@@ -108,29 +96,22 @@ public class AmzaRegionChangeReceiver {
                 .build());
             //for (int i = 0; i < numberOfApplierThreads; i++) {
             //    final int stripe = i;
-            applyThreadPool.scheduleWithFixedDelay(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        applyReceivedChanges(0);
-                    } catch (Throwable x) {
-                        LOG.warn("Shouldn't have gotten here. Implementors please catch your exceptions.", x);
-                    }
+            applyThreadPool.scheduleWithFixedDelay(() -> {
+                try {
+                    applyReceivedChanges(0);
+                } catch (Throwable x) {
+                    LOG.warn("Shouldn't have gotten here. Implementors please catch your exceptions.", x);
                 }
             }, applyReplicasIntervalInMillis, applyReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
             //}
         }
         if (compactThreadPool == null) {
             compactThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder().setNameFormat("compactReceivedChanges-%d").build());
-            compactThreadPool.scheduleWithFixedDelay(new Runnable() {
-
-                @Override
-                public void run() {
-                    try {
-                        compactReceivedChanges();
-                    } catch (Throwable x) {
-                        LOG.error("Failing to compact.", x);
-                    }
+            compactThreadPool.scheduleWithFixedDelay(() -> {
+                try {
+                    compactReceivedChanges();
+                } catch (Throwable x) {
+                    LOG.error("Failing to compact.", x);
                 }
             }, 1, 1, TimeUnit.MINUTES);
         }
@@ -155,19 +136,16 @@ public class AmzaRegionChangeReceiver {
             try {
                 for (final RegionName regionName : receivedWAL.getAllRegions()) {
                     try {
-                        receivedWAL.execute(regionName, new WALs.Tx<Void>() {
-                            @Override
-                            public Void execute(WALStorage received) throws Exception {
-                                Long highWatermark = highwaterMarks.get(regionName);
-                                HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, received);
-                                MultiRegionWALScanBatchinator batchinator = new MultiRegionWALScanBatchinator(amzaStats, rowMarshaller, regionStripeProvider);
-                                highwaterInterceptor.rowScan(batchinator);
-                                if (batchinator.flush()) {
-                                    highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
-                                    appliedChanges.setValue(true);
-                                }
-                                return null;
+                        receivedWAL.execute(regionName, (WALStorage received) -> {
+                            Long highWatermark = highwaterMarks.get(regionName);
+                            HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, received);
+                            MultiRegionWALScanBatchinator batchinator = new MultiRegionWALScanBatchinator(amzaStats, rowMarshaller, regionStripeProvider);
+                            highwaterInterceptor.rowScan(batchinator);
+                            if (batchinator.flush()) {
+                                highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
+                                appliedChanges.setValue(true);
                             }
+                            return null;
                         });
                     } catch (Exception x) {
                         LOG.warn("Apply receive changes failed for {}", new Object[]{regionName}, x);
@@ -190,16 +168,13 @@ public class AmzaRegionChangeReceiver {
         for (final RegionName regionName : receivedWAL.getAllRegions()) {
             final Long highWatermark = highwaterMarks.get(regionName);
             if (highWatermark != null) {
-                boolean compactedToEmpty = receivedWAL.execute(regionName, new WALs.Tx<Boolean>() {
-                    @Override
-                    public Boolean execute(WALStorage regionWAL) throws Exception {
-                        amzaStats.beginCompaction("Compacting Received:" + regionName);
-                        try {
-                            long sizeInBytes = regionWAL.compactTombstone(highWatermark, highWatermark);
-                            return sizeInBytes == 0;
-                        } finally {
-                            amzaStats.endCompaction("Compacting Received:" + regionName);
-                        }
+                boolean compactedToEmpty = receivedWAL.execute(regionName, (WALStorage regionWAL) -> {
+                    amzaStats.beginCompaction("Compacting Received:" + regionName);
+                    try {
+                        long sizeInBytes = regionWAL.compactTombstone(highWatermark, highWatermark);
+                        return sizeInBytes == 0;
+                    } finally {
+                        amzaStats.endCompaction("Compacting Received:" + regionName);
                     }
                 });
                 if (compactedToEmpty && !regionName.equals(RECEIVED)) {

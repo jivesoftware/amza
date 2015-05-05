@@ -38,8 +38,8 @@ public class HttpClientSSLConfig implements HttpClientConfiguration {
     @Override
     public String toString() {
         return "HttpClientConfig{"
-                + ", customSSLSocketFactory=" + customSSLSocketFactory
-                + '}';
+            + ", customSSLSocketFactory=" + customSSLSocketFactory
+            + '}';
     }
 
     public static Builder newBuilder() {

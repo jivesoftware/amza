@@ -81,7 +81,7 @@ public class BerkeleyDBWALIndexTest {
     }
 
     private BerkeleyDBWALIndex getIndex(File dir0, RegionName regionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider(new String[] { dir0.getAbsolutePath() }, 1).createIndex(regionName);
+        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(regionName);
     }
 
 }

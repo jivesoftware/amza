@@ -32,14 +32,12 @@ import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
-import com.jivesoftware.os.jive.utils.health.api.HealthCheckConfigBinder;
 import com.jivesoftware.os.jive.utils.health.api.HealthCheckRegistry;
 import com.jivesoftware.os.jive.utils.health.api.HealthChecker;
 import com.jivesoftware.os.jive.utils.health.api.HealthFactory;
@@ -52,7 +50,6 @@ import com.jivesoftware.os.server.http.jetty.jersey.endpoints.base.HasUI;
 import com.jivesoftware.os.upena.main.Deployable;
 import com.jivesoftware.os.upena.main.InstanceConfig;
 import java.util.Arrays;
-import org.merlin.config.Config;
 
 public class AmzaMain {
 
@@ -64,13 +61,7 @@ public class AmzaMain {
         ServiceStartupHealthCheck serviceStartupHealthCheck = new ServiceStartupHealthCheck();
         try {
             final Deployable deployable = new Deployable(args);
-            HealthFactory.initialize(new HealthCheckConfigBinder() {
-
-                @Override
-                public <C extends Config> C bindConfig(Class<C> configurationInterfaceClass) {
-                    return deployable.config(configurationInterfaceClass);
-                }
-            }, new HealthCheckRegistry() {
+            HealthFactory.initialize(deployable::config, new HealthCheckRegistry() {
 
                 @Override
                 public void register(HealthChecker healthChecker) {
@@ -147,11 +138,7 @@ public class AmzaMain {
                 changeSetSender,
                 taker,
                 Optional.<SendFailureListener>absent(),
-                Optional.<TakeFailureListener>absent(),
-                new RowChanges() {
-                    @Override
-                    public void changes(RowsChanged changes) throws Exception {
-                    }
+                Optional.<TakeFailureListener>absent(), (RowsChanged changes) -> {
                 });
 
             System.out.println("-----------------------------------------------------------------------");

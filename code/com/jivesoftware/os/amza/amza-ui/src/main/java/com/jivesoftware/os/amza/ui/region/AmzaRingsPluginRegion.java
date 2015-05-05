@@ -65,24 +65,20 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
                 }
 
                 final List<Map<String, String>> rows = new ArrayList<>();
-                amzaRing.allRings(new AmzaRing.RingStream() {
+                amzaRing.allRings((String ringName, String status, RingHost ringHost) -> {
+                    if ((input.ringName.isEmpty() || status.contains(input.ringName))
+                        && (input.status.isEmpty() || status.contains(input.status))
+                        && (input.host.isEmpty() || status.contains(input.host))
+                        && (input.port.isEmpty() || status.contains(input.port))) {
 
-                    @Override
-                    public boolean stream(String ringName, String status, RingHost ringHost) {
-                        if ((input.ringName.isEmpty() || status.contains(input.ringName))
-                            && (input.status.isEmpty() || status.contains(input.status))
-                            && (input.host.isEmpty() || status.contains(input.host))
-                            && (input.port.isEmpty() || status.contains(input.port))) {
-
-                            Map<String, String> row = new HashMap<>();
-                            row.put("ringName", ringName);
-                            row.put("status", status);
-                            row.put("host", ringHost.getHost());
-                            row.put("port", String.valueOf(ringHost.getPort()));
-                            rows.add(row);
-                        }
-                        return true;
+                        Map<String, String> row = new HashMap<>();
+                        row.put("ringName", ringName);
+                        row.put("status", status);
+                        row.put("host", ringHost.getHost());
+                        row.put("port", String.valueOf(ringHost.getPort()));
+                        rows.add(row);
                     }
+                    return true;
                 });
                 data.put("rings", rows);
             }

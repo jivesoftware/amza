@@ -4,19 +4,19 @@
  */
 
 .arc {
-  fill-opacity: .2;
+    fill-opacity: .2;
 }
 
 .axis .fill {
-  stroke: #aaa;
-  stroke-width: 8px;
-  stroke-linecap: square;
+    stroke: #aaa;
+    stroke-width: 8px;
+    stroke-linecap: square;
 }
 
 .axis .stroke {
-  stroke: #fff;
-  stroke-width: 12px;
-  stroke-linecap: square;
+    stroke: #fff;
+    stroke-width: 12px;
+    stroke-linecap: square;
 }
 
 
@@ -36,14 +36,14 @@ div.pad {
 }
 
 #fig {
-  width: 880px;
-  height: 400px;
+    width: 880px;
+    height: 400px;
 }
 
 .chord path {
-  fill-opacity: .67;
-  stroke: #000;
-  stroke-width: .5px;
+    fill-opacity: .67;
+    stroke: #000;
+    stroke-width: .5px;
 }
 
 /* Used by event stream and view inspection to allow for links in JSON dumps */

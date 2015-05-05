@@ -40,7 +40,6 @@ public class MessageFramer {
         writeBuffer.putInt(frame.getOpCode());
         writeBuffer.put(frame.isLastInSequence() ? (byte) 1 : 0);
 
-
         if (frame.getPayload() != null) {
             //set placeholder size;
             writeBuffer.mark();

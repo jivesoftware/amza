@@ -64,7 +64,7 @@ public class WALs {
             try {
                 getStorage(regionName);
             } catch (Exception x) {
-                LOG.warn("Failed to load storage for region {}", new Object[] { regionName }, x);
+                LOG.warn("Failed to load storage for region {}", new Object[]{regionName}, x);
             }
         }
     }

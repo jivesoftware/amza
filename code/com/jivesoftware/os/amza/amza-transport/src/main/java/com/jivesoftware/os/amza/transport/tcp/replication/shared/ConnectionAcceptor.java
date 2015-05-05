@@ -56,7 +56,6 @@ public class ConnectionAcceptor extends Thread {
             channel = ServerSocketChannel.open();
 
             //TODO channel options?
-
             channel.configureBlocking(false);
             channel.socket().bind(new InetSocketAddress(localHost.getHost(), localHost.getPort()));
             channel.register(selector, SelectionKey.OP_ACCEPT);
@@ -105,7 +104,6 @@ public class ConnectionAcceptor extends Thread {
         SocketChannel channel = ((ServerSocketChannel) key.channel()).accept();
 
         //todo channel options ??
-
         channel.configureBlocking(false);
         channel.socket().setTcpNoDelay(true);
         worker.addConnection(channel);

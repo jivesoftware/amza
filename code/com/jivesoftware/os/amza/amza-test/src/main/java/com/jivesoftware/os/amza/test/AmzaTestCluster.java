@@ -32,7 +32,6 @@ import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scannable;
@@ -99,33 +98,23 @@ public class AmzaTestCluster {
         config.takeFromNeighborsIntervalInMillis = 1000;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
 
-        UpdatesSender changeSetSender = new UpdatesSender() {
-            @Override
-            public void sendUpdates(RingHost ringHost, RegionName mapName, Scannable<WALValue> changes) throws Exception {
-                AmzaNode service = cluster.get(ringHost);
-                if (service == null) {
-                    throw new IllegalStateException("Service doesn't exists for " + ringHost);
-                } else {
-                    service.addToReplicatedWAL(mapName, changes);
-                }
+        UpdatesSender changeSetSender = (RingHost ringHost, RegionName mapName, Scannable<WALValue> changes) -> {
+            AmzaNode service1 = cluster.get(ringHost);
+            if (service1 == null) {
+                throw new IllegalStateException("Service doesn't exists for " + ringHost);
+            } else {
+                service1.addToReplicatedWAL(mapName, changes);
             }
         };
 
-        UpdatesTaker taker = new UpdatesTaker() {
-
-            @Override
-            public Map<RingHost, Long> streamingTakeUpdates(RingHost ringHost,
-                RegionName regionName,
-                long transactionId,
-                RowStream tookRowUpdates) throws Exception {
-                AmzaNode service = cluster.get(ringHost);
-                if (service == null) {
-                    throw new IllegalStateException("Service doesn't exists for " + ringHost);
-                } else {
-                    service.takeRegion(regionName, transactionId, tookRowUpdates);
-                }
-                return new HashMap<>();
+        UpdatesTaker taker = (RingHost ringHost, RegionName regionName, long transactionId, RowStream tookRowUpdates) -> {
+            AmzaNode service1 = cluster.get(ringHost);
+            if (service1 == null) {
+                throw new IllegalStateException("Service doesn't exists for " + ringHost);
+            } else {
+                service1.takeRegion(regionName, transactionId, tookRowUpdates);
             }
+            return new HashMap<>();
         };
 
         // TODO need to get writer id from somewhere other than port.
@@ -158,26 +147,18 @@ public class AmzaTestCluster {
             changeSetSender,
             taker,
             Optional.<SendFailureListener>absent(),
-            Optional.<TakeFailureListener>absent(),
-            new RowChanges() {
-
-                @Override
-                public void changes(RowsChanged changes) throws Exception {
-                }
+            Optional.<TakeFailureListener>absent(), (RowsChanged changes) -> {
             });
 
         amzaService.start();
 
         //if (serviceHost.getPort() % 2 == 0) {
         final RegionName regionName = new RegionName(false, "test", "region1");
-        amzaService.watch(regionName, new RowChanges() {
-            @Override
-            public void changes(RowsChanged changes) throws Exception {
-                if (changes.getApply().size() > 0) {
-                    System.out.println("Service:" + serviceHost
-                        + " Region:" + regionName.getRegionName()
-                        + " Changed:" + changes.getApply().size());
-                }
+        amzaService.watch(regionName, (RowsChanged changes) -> {
+            if (changes.getApply().size() > 0) {
+                System.out.println("Service:" + serviceHost
+                    + " Region:" + regionName.getRegionName()
+                    + " Changed:" + changes.getApply().size());
             }
         });
         //}

@@ -62,7 +62,6 @@ public class RoundTripTest {
         payloadRegistry.put(requestOpcode, String.class);
         payloadRegistry.put(responseOpcode, String.class);
 
-
         ApplicationProtocol applicationProtocol = new ApplicationProtocol() {
             private final AtomicLong ids = new AtomicLong();
 
@@ -114,14 +113,13 @@ public class RoundTripTest {
         server = initializer.initialize(localHost, numWorkers, bufferProvider, framer, applicationProtocol);
         server.start();
 
-
         //setup client
         bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 1000);
         int connectionsPerHost = 2;
         int connectTimeoutMillis = 5000;
         int socketTimeoutMillis = 2000;
         tcpClientProvider = new TcpClientProvider(
-                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
+            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
         idProvider = new OrderIdProvider() {
             private final AtomicLong id = new AtomicLong();
@@ -147,17 +145,13 @@ public class RoundTripTest {
 
         final AtomicBoolean requestReceived = new AtomicBoolean();
 
-        requestResponseMethod.set(new RequestResponse() {
-            @Override
-            public Message respondTo(Message request) {
-                String value = request.getPayload();
-                requestReceived.set(value.equals(sendText));
-                return new Message(request.getInteractionId(), responseOpcode, true, returnText);
-            }
+        requestResponseMethod.set((RequestResponse) (Message request) -> {
+            String value = request.getPayload();
+            requestReceived.set(value.equals(sendText));
+            return new Message(request.getInteractionId(), responseOpcode, true, returnText);
         });
 
         TcpClient client = tcpClientProvider.getClientForHost(localHost);
-
 
         try {
             long interactionId = idProvider.nextId();

@@ -42,7 +42,6 @@ public class MessageFramerTest {
             framer.writeFrame(request, buffer);
 
             //mimic write/read to/from channel
-
             buffer.limit(buffer.capacity());
             buffer.position(buffer.limit());
 

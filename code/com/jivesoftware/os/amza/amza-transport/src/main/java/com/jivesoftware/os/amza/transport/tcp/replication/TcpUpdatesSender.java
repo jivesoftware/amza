@@ -17,7 +17,6 @@ package com.jivesoftware.os.amza.transport.tcp.replication;
 
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -53,24 +52,21 @@ public class TcpUpdatesSender implements UpdatesSender {
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
         final MutableLong highestId = new MutableLong(-1);
-        changes.rowScan(new Scan<WALValue>() {
-            @Override
-            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
-                keys.add(key);
-                // We make this copy because we don't know how the value is being stored. By calling value.getValue()
-                // we ensure that the value from the tableIndex is real vs a pointer.
-                WALValue copy = new WALValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
-                values.add(copy);
-                if (highestId.longValue() < orderId) {
-                    highestId.setValue(orderId);
-                }
-                if (keys.size() > batchSize) {
-                    sendBatch(ringHost, new RowUpdatesPayload(tableName, highestId.longValue(), keys, values));
-                    keys.clear();
-                    values.clear();
-                }
-                return true;
+        changes.rowScan((long orderId, WALKey key, WALValue value) -> {
+            keys.add(key);
+            // We make this copy because we don't know how the value is being stored. By calling value.getValue()
+            // we ensure that the value from the tableIndex is real vs a pointer.
+            WALValue copy = new WALValue(value.getValue(), value.getTimestampId(), value.getTombstoned());
+            values.add(copy);
+            if (highestId.longValue() < orderId) {
+                highestId.setValue(orderId);
             }
+            if (keys.size() > batchSize) {
+                sendBatch(ringHost, new RowUpdatesPayload(tableName, highestId.longValue(), keys, values));
+                keys.clear();
+                values.clear();
+            }
+            return true;
         });
 
         if (!keys.isEmpty()) {

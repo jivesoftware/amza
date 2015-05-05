@@ -32,7 +32,6 @@ public class HostRingBuilderNGTest {
         Assert.assertTrue(Arrays.equals(new RingHost[]{new RingHost("a", 2), new RingHost("a", 3)}, hostRing.getBelowRing()),
             "Below3a:" + Arrays.toString(hostRing.getBelowRing()));
 
-
         hostRing = builder.build(new RingHost("a", 2), Arrays.asList(new RingHost("a", 1), new RingHost("a", 2), new RingHost("a", 3)));
         Assert.assertTrue(Arrays.equals(new RingHost[]{new RingHost("a", 1), new RingHost("a", 3)}, hostRing.getAboveRing()),
             "Above3b:" + Arrays.toString(hostRing.getAboveRing()));
@@ -44,7 +43,6 @@ public class HostRingBuilderNGTest {
             "Above4b:" + Arrays.toString(hostRing.getAboveRing()));
         Assert.assertTrue(Arrays.equals(new RingHost[]{new RingHost("a", 1), new RingHost("a", 2)}, hostRing.getBelowRing()),
             "Below4b:" + Arrays.toString(hostRing.getBelowRing()));
-
 
     }
 }

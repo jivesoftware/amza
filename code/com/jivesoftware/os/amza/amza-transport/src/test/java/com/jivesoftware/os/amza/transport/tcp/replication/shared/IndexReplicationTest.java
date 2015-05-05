@@ -5,7 +5,6 @@ import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -112,13 +111,9 @@ public class IndexReplicationTest {
         Scannable<WALValue> received = receivedPut.get();
         Assert.assertNotNull(received);
         final NavigableMap<WALKey, WALValue> receivedApply = new ConcurrentSkipListMap<>();
-        received.rowScan(new Scan<WALValue>() {
-
-            @Override
-            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
-                receivedApply.put(key, value);
-                return true;
-            }
+        received.rowScan((long orderId, WALKey key, WALValue value) -> {
+            receivedApply.put(key, value);
+            return true;
         });
         Assert.assertNotNull(receivedApply);
         Assert.assertEquals(receivedApply.size(), changes.size());

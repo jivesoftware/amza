@@ -17,7 +17,6 @@ package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 
-
 /**
  * Uses 42bits for time, 19bits for writerId, 2bits for orderId and 1 bit for add vs removed.
  */
@@ -50,7 +49,7 @@ public class AmzaChangeIdPacker implements IdPacker {
     public long[] unpack(long packedId) {
         long packed = packedId;
         long time = (packed & (0x1FFFFFFFFFFL << bitsPrecisionOfWriterId() + bitsPrecisionOfOrderId() + 1))
-                >>> bitsPrecisionOfWriterId() + bitsPrecisionOfOrderId() + 1;
+            >>> bitsPrecisionOfWriterId() + bitsPrecisionOfOrderId() + 1;
         int writer = (int) ((packed & (0x1FF << bitsPrecisionOfOrderId() + 1)) >>> bitsPrecisionOfOrderId() + 1);
         int order = (int) ((packed & (0xFFF << 1)) >>> 1);
         return new long[]{time, writer, order};

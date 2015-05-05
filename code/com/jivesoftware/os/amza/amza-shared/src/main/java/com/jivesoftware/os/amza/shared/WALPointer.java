@@ -49,11 +49,11 @@ public class WALPointer implements Serializable {
 
     @Override
     public String toString() {
-        return "WALPointer{" +
-            "timestamp=" + timestamp +
-            ", tombstoned=" + tombstoned +
-            ", fp=" + fp +
-            '}';
+        return "WALPointer{"
+            + "timestamp=" + timestamp
+            + ", tombstoned=" + tombstoned
+            + ", fp=" + fp
+            + '}';
     }
 
     @Override

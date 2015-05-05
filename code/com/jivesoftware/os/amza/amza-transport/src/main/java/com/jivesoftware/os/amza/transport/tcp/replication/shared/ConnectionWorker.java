@@ -44,10 +44,10 @@ public class ConnectionWorker extends Thread {
     private static final AtomicInteger instanceCount = new AtomicInteger();
 
     public ConnectionWorker(
-            ApplicationProtocol applicationProtocol,
-            BufferProvider bufferProvider,
-            MessageFramer messageFramer,
-            ServerContext serverContext) throws IOException {
+        ApplicationProtocol applicationProtocol,
+        BufferProvider bufferProvider,
+        MessageFramer messageFramer,
+        ServerContext serverContext) throws IOException {
         setName("TcpConnectionWorker-" + instanceCount.incrementAndGet());
 
         this.applicationProtocol = applicationProtocol;
@@ -196,16 +196,13 @@ public class ConnectionWorker extends Thread {
     }
 
     private ResponseWriter writerOverChannel(final SocketChannel channel) {
-        return new ResponseWriter() {
-            @Override
-            public void writeMessage(Message message) throws IOException {
-                ByteBuffer writeBuffer = bufferProvider.acquire();
-                try {
-                    messageFramer.writeFrame(message, writeBuffer);
-                    channel.write(writeBuffer);
-                } finally {
-                    bufferProvider.release(writeBuffer);
-                }
+        return (Message message) -> {
+            ByteBuffer writeBuffer = bufferProvider.acquire();
+            try {
+                messageFramer.writeFrame(message, writeBuffer);
+                channel.write(writeBuffer);
+            } finally {
+                bufferProvider.release(writeBuffer);
             }
         };
     }

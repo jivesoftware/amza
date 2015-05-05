@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -40,7 +39,6 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -135,11 +133,8 @@ public class AmzaReplicationRestEndpoints {
     private Scannable<WALValue> changeSetToScanable(final RowUpdates changeSet) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-        return new Scannable<WALValue>() {
-            @Override
-            public void rowScan(Scan<WALValue> scan) throws Exception {
-                changeSet.stream(rowMarshaller, scan);
-            }
+        return (Scan<WALValue> scan) -> {
+            changeSet.stream(rowMarshaller, scan);
         };
     }
 
@@ -151,60 +146,54 @@ public class AmzaReplicationRestEndpoints {
         try {
 
             final long t1 = System.currentTimeMillis();
-            StreamingOutput stream = new StreamingOutput() {
-                @Override
-                public void write(OutputStream os) throws IOException, WebApplicationException {
-                    long t2 = System.currentTimeMillis();
-                    os.flush();
-                    long t3 = System.currentTimeMillis();
-                    BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
-                    final DataOutputStream dos = new DataOutputStream(bos);
-                    long t4 = -1, t5 = -1;
-                    final MutableLong bytes = new MutableLong(0);
-                    try {
-                        RegionName regionName = takeRequest.getRegionName();
-                        HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
-                        for (RingHost ringHost : hostRing.getAboveRing()) {
-                            Long highwatermark = highwaterMarks.get(ringHost, regionName);
-                            if (highwatermark != null) {
-                                byte[] ringHostBytes = ringHost.toBytes();
-                                dos.writeByte(1);
-                                dos.writeInt(ringHostBytes.length);
-                                dos.write(ringHostBytes);
-                                dos.writeLong(highwatermark);
-                                bytes.add(1 + 4 + ringHostBytes.length + 8);
-                            }
+            StreamingOutput stream = (OutputStream os) -> {
+                long t2 = System.currentTimeMillis();
+                os.flush();
+                long t3 = System.currentTimeMillis();
+                BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
+                final DataOutputStream dos = new DataOutputStream(bos);
+                long t4 = -1, t5 = -1;
+                final MutableLong bytes = new MutableLong(0);
+                try {
+                    RegionName regionName = takeRequest.getRegionName();
+                    HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
+                    for (RingHost ringHost : hostRing.getAboveRing()) {
+                        Long highwatermark = highwaterMarks.get(ringHost, regionName);
+                        if (highwatermark != null) {
+                            byte[] ringHostBytes = ringHost.toBytes();
+                            dos.writeByte(1);
+                            dos.writeInt(ringHostBytes.length);
+                            dos.write(ringHostBytes);
+                            dos.writeLong(highwatermark);
+                            bytes.add(1 + 4 + ringHostBytes.length + 8);
                         }
-                        dos.writeByte(0); // last entry marker
-                        t4 = System.currentTimeMillis();
-                        bytes.increment();
-
-                        amzaInstance.takeRowUpdates(regionName, takeRequest.getHighestTransactionId(), new RowStream() {
-                            @Override
-                            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
-                                dos.writeByte(1);
-                                dos.writeLong(rowTxId);
-                                dos.writeByte(rowType);
-                                dos.writeInt(row.length);
-                                dos.write(row);
-                                bytes.add(1 + 8 + 1 + 4 + row.length);
-                                return true;
-                            }
+                    }
+                    dos.writeByte(0); // last entry marker
+                    t4 = System.currentTimeMillis();
+                    bytes.increment();
+                    amzaInstance.takeRowUpdates(regionName, takeRequest.getHighestTransactionId(),
+                        (long rowFP, long rowTxId, byte rowType, byte[] row) -> {
+                            dos.writeByte(1);
+                            dos.writeLong(rowTxId);
+                            dos.writeByte(rowType);
+                            dos.writeInt(row.length);
+                            dos.write(row);
+                            bytes.add(1 + 8 + 1 + 4 + row.length);
+                            return true;
                         });
-                        t5 = System.currentTimeMillis();
-                        dos.writeByte(0); // last entry marker
-                        bytes.increment();
-                    } catch (Exception x) {
-                        LOG.error("Failed to stream takes.", x);
-                        throw new IOException("Failed to stream takes.", x);
-                    } finally {
-                        dos.flush();
-                        long t6 = System.currentTimeMillis();
-                        if (!takeRequest.getRegionName().isSystemRegion()) {
-                            LOG.debug("Give {}: OutputStream={}ms FirstFlush={}ms HighWater={}ms RowUpdates={}ms FinalFlush={}ms TotalTime={}ms TotalBytes={}",
-                                takeRequest.getRegionName().getRegionName(), (t2 - t1), (t3 - t2), (t4 - t3), (t5 - t4), (t6 - t5), (t6 - t1),
-                                bytes.longValue());
-                        }
+                    t5 = System.currentTimeMillis();
+                    dos.writeByte(0); // last entry marker
+                    bytes.increment();
+                } catch (Exception x) {
+                    LOG.error("Failed to stream takes.", x);
+                    throw new IOException("Failed to stream takes.", x);
+                } finally {
+                    dos.flush();
+                    long t6 = System.currentTimeMillis();
+                    if (!takeRequest.getRegionName().isSystemRegion()) {
+                        LOG.debug("Give {}: OutputStream={}ms FirstFlush={}ms HighWater={}ms RowUpdates={}ms FinalFlush={}ms TotalTime={}ms TotalBytes={}",
+                            takeRequest.getRegionName().getRegionName(), (t2 - t1), (t3 - t2), (t4 - t3), (t5 - t4), (t6 - t5), (t6 - t1),
+                            bytes.longValue());
                     }
                 }
             };

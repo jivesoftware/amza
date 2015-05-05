@@ -70,8 +70,8 @@ public class SoyDataUtils {
             return obj;
         }
         if (Primitives.isWrapperType(obj.getClass())
-                || obj.getClass().isPrimitive()
-                || obj instanceof String) {
+            || obj.getClass().isPrimitive()
+            || obj instanceof String) {
             return obj;
         }
         if (obj instanceof Map) {

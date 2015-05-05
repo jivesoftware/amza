@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.storage.RowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -80,15 +79,11 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 new ThreadFactoryBuilder().setNameFormat("resendLocalChanges-%d").build());
             for (int i = 0; i < numberOfResendThreads; i++) {
                 final int stripe = i;
-                resendThreadPool.scheduleWithFixedDelay(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        try {
-                            resendLocalChanges(stripe);
-                        } catch (Throwable x) {
-                            LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
-                        }
+                resendThreadPool.scheduleWithFixedDelay(() -> {
+                    try {
+                        resendLocalChanges(stripe);
+                    } catch (Throwable x) {
+                        LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                     }
                 }, resendReplicasIntervalInMillis, resendReplicasIntervalInMillis, TimeUnit.MILLISECONDS);
             }
@@ -96,15 +91,11 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
 
         if (compactThreadPool == null) {
             compactThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactoryBuilder().setNameFormat("compactResendChanges-%d").build());
-            compactThreadPool.scheduleWithFixedDelay(new Runnable() {
-
-                @Override
-                public void run() {
-                    try {
-                        compactResendChanges();
-                    } catch (Throwable x) {
-                        LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
-                    }
+            compactThreadPool.scheduleWithFixedDelay(() -> {
+                try {
+                    compactResendChanges();
+                } catch (Throwable x) {
+                    LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                 }
             }, 1, 1, TimeUnit.MINUTES);
 
@@ -134,44 +125,37 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         final boolean enqueueForResendOnFailure) throws Exception {
 
         final RegionProperties regionProperties = regionIndex.getProperties(regionName);
-        return sendExecutor.submit(new Callable<Boolean>() {
-            @Override
-            public Boolean call() throws Exception {
-                if (regionProperties != null) {
-                    if (!regionProperties.disabled && regionProperties.replicationFactor > 0) {
-                        HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
-                        RingHost[] ringHosts = hostRing.getBelowRing();
-                        if (ringHosts == null || ringHosts.length == 0) {
-                            if (enqueueForResendOnFailure) {
-                                resendWAL.execute(regionName, new WALs.Tx<Void>() {
-                                    @Override
-                                    public Void execute(WALStorage resend) throws Exception {
-                                        resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
-                                        return null;
-                                    }
+        return sendExecutor.submit(() -> {
+            if (regionProperties != null) {
+                if (!regionProperties.disabled && regionProperties.replicationFactor > 0) {
+                    HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
+                    RingHost[] ringHosts = hostRing.getBelowRing();
+                    if (ringHosts == null || ringHosts.length == 0) {
+                        if (enqueueForResendOnFailure) {
+                            resendWAL.execute(regionName,
+                                (WALStorage resend) -> {
+                                    resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
+                                    return null;
                                 });
-                            }
-                            return false;
-                        } else {
-                            int numReplicated = replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts,
-                                regionProperties.replicationFactor);
-                            return numReplicated >= regionProperties.replicationFactor;
                         }
+                        return false;
                     } else {
-                        return true;
+                        int numReplicated = replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts,
+                            regionProperties.replicationFactor);
+                        return numReplicated >= regionProperties.replicationFactor;
                     }
                 } else {
-                    if (enqueueForResendOnFailure) {
-                        resendWAL.execute(regionName, new WALs.Tx<Void>() {
-                            @Override
-                            public Void execute(WALStorage resend) throws Exception {
-                                resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
-                                return null;
-                            }
-                        });
-                    }
-                    return false;
+                    return true;
                 }
+            } else {
+                if (enqueueForResendOnFailure) {
+                    resendWAL.execute(regionName,
+                        (WALStorage resend) -> {
+                            resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
+                            return null;
+                        });
+                }
+                return false;
             }
         });
     }
@@ -200,16 +184,13 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 ringWalker.failed();
                 if (amzaStats.replicateErrors.count(ringHost) == 0) {
                     LOG.warn("Can't replicate to host:{}", ringHost);
-                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[] { ringHost, regionName, replicationFactor }, x);
+                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[]{ringHost, regionName, replicationFactor}, x);
                 }
                 amzaStats.replicateErrors.add(ringHost);
                 if (enqueueForResendOnFailure) {
-                    resendWAL.execute(regionName, new WALs.Tx<Void>() {
-                        @Override
-                        public Void execute(WALStorage resend) throws Exception {
-                            resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
-                            return null;
-                        }
+                    resendWAL.execute(regionName, (WALStorage resend) -> {
+                        resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
+                        return null;
                     });
                     enqueueForResendOnFailure = false;
                 }
@@ -225,18 +206,15 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                 HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
                 RingHost[] ring = hostRing.getBelowRing();
                 if (ring.length > 0) {
-                    resendWAL.execute(regionName, new WALs.Tx<Void>() {
-                        @Override
-                        public Void execute(WALStorage resend) throws Exception {
-                            Long highWatermark = highwaterMarks.get(regionName);
-                            HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, resend);
-                            ReplicateBatchinator batchinator = new ReplicateBatchinator(rowMarshaller, regionName, AmzaRegionChangeReplicator.this);
-                            highwaterInterceptor.rowScan(batchinator);
-                            if (batchinator.flush()) {
-                                highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
-                            }
-                            return null;
+                    resendWAL.execute(regionName, (WALStorage resend) -> {
+                        Long highWatermark = highwaterMarks.get(regionName);
+                        HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, resend);
+                        ReplicateBatchinator batchinator = new ReplicateBatchinator(rowMarshaller, regionName, AmzaRegionChangeReplicator.this);
+                        highwaterInterceptor.rowScan(batchinator);
+                        if (batchinator.flush()) {
+                            highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
                         }
+                        return null;
                     });
                 } else {
                     LOG.warn("Trying to resend to an empty ring. regionName:" + regionName);
@@ -249,19 +227,16 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
         for (final RegionName regionName : regionIndex.getActiveRegions()) {
             final Long highWatermark = highwaterMarks.get(regionName);
             if (highWatermark != null) {
-                boolean compactedToEmpty = resendWAL.execute(regionName, new WALs.Tx<Boolean>() {
-                    @Override
-                    public Boolean execute(WALStorage regionWAL) throws Exception {
-                        amzaStats.beginCompaction("Compacting Resend:" + regionName);
-                        try {
-                            long sizeInBytes = regionWAL.compactTombstone(highWatermark, highWatermark);
-                            return sizeInBytes == 0;
-                        } catch (Exception x) {
-                            LOG.warn("Failing to compact:" + regionName, x);
-                            return false;
-                        } finally {
-                            amzaStats.endCompaction("Compacting Resend:" + regionName);
-                        }
+                boolean compactedToEmpty = resendWAL.execute(regionName, (WALStorage regionWAL) -> {
+                    amzaStats.beginCompaction("Compacting Resend:" + regionName);
+                    try {
+                        long sizeInBytes = regionWAL.compactTombstone(highWatermark, highWatermark);
+                        return sizeInBytes == 0;
+                    } catch (Exception x) {
+                        LOG.warn("Failing to compact:" + regionName, x);
+                        return false;
+                    } finally {
+                        amzaStats.endCompaction("Compacting Resend:" + regionName);
                     }
                 });
                 if (compactedToEmpty) {

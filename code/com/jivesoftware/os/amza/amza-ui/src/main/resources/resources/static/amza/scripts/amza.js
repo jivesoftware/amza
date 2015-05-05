@@ -6,10 +6,10 @@ window.amza = {};
 amza.stats = {
     input: {},
     requireFocus: true,
-    html: null, 
+    html: null,
     init: function () {
         $stats = $('#stats');
-        
+
 //        if (amza.stats.requireFocus) {
 //            amza.onWindowFocus.push(function () {
 //                if (amza.stats.html) {
@@ -243,10 +243,10 @@ amza.chord = {
 amza.overview = {
     input: {},
     requireFocus: true,
-    html: null, 
+    html: null,
     init: function () {
         $overview = $('#overview');
-        
+
 //        if (amza.stats.requireFocus) {
 //            amza.onWindowFocus.push(function () {
 //                if (amza.stats.html) {

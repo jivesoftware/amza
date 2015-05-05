@@ -54,13 +54,10 @@ public class ExampleMain {
         BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 1000);
 
         TcpClientProvider clientChannelProvider = new TcpClientProvider(
-                connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
-
-
+            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
 
         TcpUpdatesSender sender = new TcpUpdatesSender(clientChannelProvider, protocol);
         TcpUpdatesTaker taker = new TcpUpdatesTaker(clientChannelProvider, protocol);
-
 
         //send send send, take take take
     }

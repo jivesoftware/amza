@@ -36,7 +36,7 @@ public class DeltaPeekableElmoIteratorNGTest {
             for (int i = 0; i < 128; i++) {
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
-                    WALKey key = new WALKey(new byte[] { (byte) i });
+                    WALKey key = new WALKey(new byte[]{(byte) i});
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     wal.put(key, pointer);
@@ -46,7 +46,7 @@ public class DeltaPeekableElmoIteratorNGTest {
                 }
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
-                    WALKey key = new WALKey(new byte[] { (byte) i });
+                    WALKey key = new WALKey(new byte[]{(byte) i});
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     other.put(key, pointer);
@@ -55,13 +55,7 @@ public class DeltaPeekableElmoIteratorNGTest {
                 }
             }
 
-            WALRowHydrator hydrator = new WALRowHydrator() {
-
-                @Override
-                public WALRow hydrate(long fp) throws Exception {
-                    return fpRows.get(fp);
-                }
-            };
+            WALRowHydrator hydrator = fpRows::get;
             DeltaPeekableElmoIterator deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(
                 wal.entrySet().iterator(),
                 Iterators.<Map.Entry<WALKey, WALPointer>>emptyIterator(),

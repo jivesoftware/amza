@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.shared.RingHost;
 
 class RingWalker {
+
     private final RingHost[] ringHosts;
     private final int replicationFactor;
     int replicated = 0;

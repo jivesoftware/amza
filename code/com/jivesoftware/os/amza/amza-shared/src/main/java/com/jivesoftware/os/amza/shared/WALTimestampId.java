@@ -41,10 +41,10 @@ public class WALTimestampId implements Serializable {
 
     @Override
     public String toString() {
-        return "WALPointer{" +
-            "timestamp=" + timestamp +
-            ", tombstoned=" + tombstoned +
-            '}';
+        return "WALPointer{"
+            + "timestamp=" + timestamp
+            + ", tombstoned=" + tombstoned
+            + '}';
     }
 
     @Override

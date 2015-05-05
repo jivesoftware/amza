@@ -37,13 +37,9 @@ public class BinaryRowReader implements WALReader {
         BinaryRowReader reader = new BinaryRowReader(walFiler, new IoStats(), 10);
         System.out.println("rowFP\trowTxId\trowType\trow.length\trowBytes");
 
-        reader.scan(0, false, new RowStream() {
-
-            @Override
-            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
-                System.out.println(rowFP + "\t" + rowTxId + "\t" + rowType + "\t" + row.length + "\t" + Arrays.toString(row));
-                return true;
-            }
+        reader.scan(0, false, (long rowFP, long rowTxId, byte rowType, byte[] row) -> {
+            System.out.println(rowFP + "\t" + rowTxId + "\t" + rowType + "\t" + row.length + "\t" + Arrays.toString(row));
+            return true;
         });
     }
 

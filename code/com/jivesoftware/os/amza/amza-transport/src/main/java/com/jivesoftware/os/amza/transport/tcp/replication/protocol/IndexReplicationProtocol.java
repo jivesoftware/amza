@@ -97,7 +97,6 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
         }
     }
 
-
     private Response handleChangeSetRequest(Message request) {
 
         LOG.trace("Received change set request {}", request);
@@ -108,7 +107,7 @@ public class IndexReplicationProtocol implements ApplicationProtocol {
     }
 
     private void streamChangeSet(final ResponseWriter responseWriter, final long interactionId,
-            final RegionName mapName, final long highestTransactionId) throws IOException {
+        final RegionName mapName, final long highestTransactionId) throws IOException {
         try {
             final int batchSize = 10; // TODO expose to config;
             final List<WALKey> keys = new ArrayList<>();

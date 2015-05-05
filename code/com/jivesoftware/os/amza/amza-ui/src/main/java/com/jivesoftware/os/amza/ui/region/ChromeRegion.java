@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.region;
 
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -31,12 +30,8 @@ public class ChromeRegion<I, R extends PageRegion<I>> implements Region<I> {
 
     @Override
     public String render(I input) {
-        List<Map<String, String>> p = Lists.transform(plugins, new Function<ManagePlugin, Map<String, String>>() {
-            @Override
-            public Map<String, String> apply(ManagePlugin input) {
-                return ImmutableMap.of("name", input.name, "path", input.path, "glyphicon", input.glyphicon);
-            }
-        });
+        List<Map<String, String>> p = Lists.transform(plugins, (ManagePlugin input1) -> ImmutableMap.of("name", input1.name, "path", input1.path, "glyphicon",
+            input1.glyphicon));
         Map<String, Object> headerData = new HashMap<>();
         headerData.put("plugins", p);
 

@@ -8,7 +8,6 @@ import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -221,15 +220,12 @@ class RegionDelta {
         }
 
         ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
-        return deltaWAL.takeRows(tailMap, new RowStream() {
-            @Override
-            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
-                if (rowType > 0) {
-                    WALRow walRow = rowMarshaller.fromRow(row);
-                    return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
-                }
-                return true;
+        return deltaWAL.takeRows(tailMap, (long rowFP, long rowTxId, byte rowType, byte[] row) -> {
+            if (rowType > 0) {
+                WALRow walRow = rowMarshaller.fromRow(row);
+                return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
             }
+            return true;
         });
     }
 
@@ -243,38 +239,34 @@ class RegionDelta {
                 LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
                 regionStore.directCommit(true,
                     null,
-                    WALStorageUpdateMode.noReplication,
-                    new Scannable<WALValue>() {
-                        @Override
-                        public void rowScan(Scan<WALValue> scan) {
-                            try {
-                                eos:
-                                for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
-                                    long txId = e.getKey();
-                                    for (long fp : e.getValue()) {
-                                        WALRow walRow = compact.deltaWAL.hydrate(fp);
-                                        ByteBuffer bb = ByteBuffer.wrap(walRow.getKey().getKey());
-                                        byte[] regionNameBytes = new byte[bb.getShort()];
-                                        bb.get(regionNameBytes);
-                                        final byte[] keyBytes = new byte[bb.getInt()];
-                                        bb.get(keyBytes);
+                    WALStorageUpdateMode.noReplication, (Scan<WALValue> scan) -> {
+                        try {
+                            eos:
+                            for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
+                                long txId = e.getKey();
+                                for (long fp : e.getValue()) {
+                                    WALRow walRow = compact.deltaWAL.hydrate(fp);
+                                    ByteBuffer bb = ByteBuffer.wrap(walRow.getKey().getKey());
+                                    byte[] regionNameBytes = new byte[bb.getShort()];
+                                    bb.get(regionNameBytes);
+                                    final byte[] keyBytes = new byte[bb.getInt()];
+                                    bb.get(keyBytes);
 
-                                        WALKey key = new WALKey(keyBytes);
-                                        WALValue value = walRow.getValue();
-                                        WALPointer pointer = compact.orderedIndex.get(key);
-                                        if (pointer == null) {
-                                            throw new RuntimeException("Delta WAL missing key: " + key);
-                                        }
-                                        if (pointer.getFp() == fp) {
-                                            if (!scan.row(txId, key, value)) {
-                                                break eos;
-                                            }
+                                    WALKey key = new WALKey(keyBytes);
+                                    WALValue value = walRow.getValue();
+                                    WALPointer pointer = compact.orderedIndex.get(key);
+                                    if (pointer == null) {
+                                        throw new RuntimeException("Delta WAL missing key: " + key);
+                                    }
+                                    if (pointer.getFp() == fp) {
+                                        if (!scan.row(txId, key, value)) {
+                                            break eos;
                                         }
                                     }
                                 }
-                            } catch (Throwable ex) {
-                                throw new RuntimeException("Error while streaming entry set.", ex);
                             }
+                        } catch (Throwable ex) {
+                            throw new RuntimeException("Error while streaming entry set.", ex);
                         }
                     });
                 LOG.info("Merged deltas for " + compact.regionName);

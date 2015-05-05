@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.region;
 
-import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
@@ -216,12 +215,9 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             }
 
             try {
-                amzaRegion.set(Iterables.transform(values.entrySet(), new Function<Map.Entry<String, String>, Map.Entry<WALKey, byte[]>>() {
-                    @Override
-                    public Map.Entry<WALKey, byte[]> apply(Map.Entry<String, String> input) {
-                        return new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()), input.getValue().getBytes());
-                    }
-                }));
+                amzaRegion.set(Iterables.transform(values.entrySet(), (Map.Entry<String, String> input1) -> new AbstractMap.SimpleEntry<>(new WALKey(input1
+                    .getKey()
+                    .getBytes()), input1.getValue().getBytes())));
             } catch (Exception x) {
                 log.warn("Failed to set region:" + regionName + " values:" + values, x);
             }

@@ -86,34 +86,33 @@ public class BinaryRowIONGTest {
                 Collections.singletonList(WALWriter.VERSION_1),
                 Collections.singletonList(UIO.longBytes(i)));
             /*if (i % 10_000 == 0) {
-                System.out.println("Wrote " + i);
-            }*/
+             System.out.println("Wrote " + i);
+             }*/
         }
 
         rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
 
         /*long[][] histos = new long[32][];
-        for (int i = 0; i < histos.length; i++) {
-            histos[i] = new long[16];
-        }
+         for (int i = 0; i < histos.length; i++) {
+         histos[i] = new long[16];
+         }
 
-        long start = System.currentTimeMillis();
-        for (long i = 0; i < numRows; i++) {
-            long[] result = rowIO.getInclusive(i);
-            long[] histo = histos[(int) Math.log(i + 1)];
-            histo[Math.min((int) result[1], histo.length - 1)]++;
-            if (i % 10_000 == 0) {
-                System.out.println("Got " + i + " in " + (System.currentTimeMillis() - start));
-                start = System.currentTimeMillis();
-            }
-        }
-        for (int i = 0; i < histos.length; i++) {
-            System.out.println("----------------------------- " + i + " -----------------------------");
-            for (int j = 0; j < histos[i].length; j++) {
-                System.out.println("[" + j + "] " + histos[i][j]);
-            }
-        }*/
-
+         long start = System.currentTimeMillis();
+         for (long i = 0; i < numRows; i++) {
+         long[] result = rowIO.getInclusive(i);
+         long[] histo = histos[(int) Math.log(i + 1)];
+         histo[Math.min((int) result[1], histo.length - 1)]++;
+         if (i % 10_000 == 0) {
+         System.out.println("Got " + i + " in " + (System.currentTimeMillis() - start));
+         start = System.currentTimeMillis();
+         }
+         }
+         for (int i = 0; i < histos.length; i++) {
+         System.out.println("----------------------------- " + i + " -----------------------------");
+         for (int j = 0; j < histos[i].length; j++) {
+         System.out.println("[" + j + "] " + histos[i][j]);
+         }
+         }*/
         final int[] histo = new int[UPDATES_BETWEEN_LEAPS];
         for (long i = 0; i < numRows; i += (UPDATES_BETWEEN_LEAPS / 10)) {
             final long txId = i;
@@ -145,7 +144,7 @@ public class BinaryRowIONGTest {
         }
 
         /*for (int i = 0; i < histo.length; i++) {
-            System.out.println("[" + i + "] " + histo[i]);
-        }*/
+         System.out.println("[" + i + "] " + histo[i]);
+         }*/
     }
 }

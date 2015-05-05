@@ -260,28 +260,25 @@ public class AmzaUIEndpoints {
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/download")
     public StreamingOutput pull() throws Exception {
-        return new StreamingOutput() {
-            @Override
-            public void write(OutputStream os) throws IOException, WebApplicationException {
-                try {
-                    File f = new File(System.getProperty("user.dir"), "amza.jar");
+        return (OutputStream os) -> {
+            try {
+                File f = new File(System.getProperty("user.dir"), "amza.jar");
 
-                    try {
-                        byte[] buf = new byte[8192];
-                        InputStream is = new FileInputStream(f);
-                        int c = 0;
-                        while ((c = is.read(buf, 0, buf.length)) > 0) {
-                            os.write(buf, 0, c);
-                            os.flush();
-                        }
-                        os.close();
-                        is.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                try {
+                    byte[] buf = new byte[8192];
+                    InputStream is = new FileInputStream(f);
+                    int c = 0;
+                    while ((c = is.read(buf, 0, buf.length)) > 0) {
+                        os.write(buf, 0, c);
+                        os.flush();
                     }
-                } catch (Exception e) {
-                    throw new WebApplicationException(e);
+                    os.close();
+                    is.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
+            } catch (Exception e) {
+                throw new WebApplicationException(e);
             }
         };
     }

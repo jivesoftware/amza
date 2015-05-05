@@ -33,7 +33,6 @@ import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
@@ -108,7 +107,6 @@ public class Main {
             .split(",");
         amzaServiceConfig.workingDirectories = workingDirs;
 
-
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
         indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(workingDirs));
         indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
@@ -145,7 +143,6 @@ public class Main {
             }
         };
 
-
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             ringHost,
@@ -155,11 +152,7 @@ public class Main {
             changeSetSender,
             taker,
             Optional.<SendFailureListener>absent(),
-            Optional.<TakeFailureListener>absent(),
-            new RowChanges() {
-                @Override
-                public void changes(RowsChanged changes) throws Exception {
-                }
+            Optional.<TakeFailureListener>absent(), (RowsChanged changes) -> {
             });
 
         IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);

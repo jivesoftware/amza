@@ -20,6 +20,7 @@ import java.util.Set;
  * @author jonathan.colt
  */
 class TemporaryWALStorageProvider implements WALStorageProvider {
+
     private final RowIOProvider rowIOProvider;
     private final BinaryRowMarshaller rowMarshaller;
     private final TimestampedOrderIdProvider orderIdProvider;

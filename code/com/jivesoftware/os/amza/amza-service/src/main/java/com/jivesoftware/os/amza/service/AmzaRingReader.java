@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
@@ -65,12 +64,9 @@ public class AmzaRingReader {
 
         final Set<RingHost> ringHosts = new HashSet<>();
         WALKey from = key(ringName, null);
-        ringIndex.rangeScan(from, from.prefixUpperExclusive(), new Scan<WALValue>() {
-            @Override
-            public boolean row(long orderId, WALKey key, WALValue value) throws Exception {
-                ringHosts.add(keyToRingHost(key));
-                return true;
-            }
+        ringIndex.rangeScan(from, from.prefixUpperExclusive(), (long orderId, WALKey key, WALValue value) -> {
+            ringHosts.add(keyToRingHost(key));
+            return true;
         });
         if (ringHosts.isEmpty()) {
             return new ArrayList<>();

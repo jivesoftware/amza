@@ -54,15 +54,12 @@ public class TcpUpdatesTaker implements UpdatesTaker {
 
             client.sendMessage(message);
 
-            CallbackStream<RowUpdatesPayload> messageStream = new CallbackStream<RowUpdatesPayload>() {
-                @Override
-                public RowUpdatesPayload callback(RowUpdatesPayload changeSetPayload) throws Exception {
-                    if (changeSetPayload != null) {
-                        changeSetPayload.rowScan(tookStream);
-                        return changeSetPayload;
-                    } else {
-                        return null;
-                    }
+            CallbackStream<RowUpdatesPayload> messageStream = (RowUpdatesPayload changeSetPayload) -> {
+                if (changeSetPayload != null) {
+                    changeSetPayload.rowScan(tookStream);
+                    return changeSetPayload;
+                } else {
+                    return null;
                 }
             };
 

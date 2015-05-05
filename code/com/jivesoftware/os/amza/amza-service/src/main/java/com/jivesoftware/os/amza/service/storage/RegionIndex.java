@@ -5,7 +5,6 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
@@ -62,30 +61,23 @@ public class RegionIndex implements RowChanges {
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);
-        regionIndexStore.rowScan(new Scan<WALValue>() {
-
-            @Override
-            public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                final RegionName regionName = RegionName.fromBytes(key.getKey());
-                try {
-                    total.incrementAndGet();
-                    openExecutor.submit(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                get(regionName);
-                                numOpened.incrementAndGet();
-                            } catch (Throwable t) {
-                                LOG.warn("Encountered the following opening region:" + regionName, t);
-                                numFailed.incrementAndGet();
-                            }
-                        }
-                    });
-                } catch (Exception x) {
-                    LOG.warn("Encountered the following getting properties for region:" + regionName, x);
-                }
-                return true;
+        regionIndexStore.rowScan((long rowTxId, WALKey key, WALValue value) -> {
+            final RegionName regionName = RegionName.fromBytes(key.getKey());
+            try {
+                total.incrementAndGet();
+                openExecutor.submit(() -> {
+                    try {
+                        get(regionName);
+                        numOpened.incrementAndGet();
+                    } catch (Throwable t) {
+                        LOG.warn("Encountered the following opening region:" + regionName, t);
+                        numFailed.incrementAndGet();
+                    }
+                });
+            } catch (Exception x) {
+                LOG.warn("Encountered the following getting properties for region:" + regionName, x);
             }
+            return true;
         });
         openExecutor.shutdown();
         while (!openExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
@@ -185,17 +177,14 @@ public class RegionIndex implements RowChanges {
     @Override
     public void changes(final RowsChanged changes) throws Exception {
         if (changes.getRegionName().equals(REGION_PROPERTIES)) {
-            changes.rowScan(new Scan<WALValue>() {
-                @Override
-                public boolean row(long rowTxId, WALKey key, WALValue scanned) throws Exception {
-                    removeProperties(RegionName.fromBytes(key.getKey()));
-                    RegionStore store = get(changes.getRegionName());
-                    if (store != null) {
-                        RegionProperties properties = getProperties(changes.getRegionName());
-                        store.updatedStorageDescriptor(properties.walStorageDescriptor);
-                    }
-                    return true;
+            changes.rowScan((long rowTxId, WALKey key, WALValue scanned) -> {
+                removeProperties(RegionName.fromBytes(key.getKey()));
+                RegionStore store = get(changes.getRegionName());
+                if (store != null) {
+                    RegionProperties properties = getProperties(changes.getRegionName());
+                    store.updatedStorageDescriptor(properties.walStorageDescriptor);
                 }
+                return true;
             });
         }
     }

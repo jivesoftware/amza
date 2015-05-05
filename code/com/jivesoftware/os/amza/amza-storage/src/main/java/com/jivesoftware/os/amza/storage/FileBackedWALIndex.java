@@ -381,22 +381,17 @@ public class FileBackedWALIndex implements WALIndex {
         try {
             SkipListMapContext slmc = ensureCapacity(0);
             if (slmc != null) {
-                SkipListMapStore.INSTANCE.streamKeys(filer, slmc, slmc, null, new MapStore.KeyStream() {
-
-                    @Override
-                    public boolean stream(byte[] key) throws IOException {
-                        byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key);
-                        if (got != null) {
-                            WALPointer value = der(got);
-                            try {
-                                return scan.row(-1, new WALKey(key), value);
-                            } catch (Exception e) {
-                                throw new RuntimeException("Error in rowScan.", e);
-                            }
+                SkipListMapStore.INSTANCE.streamKeys(filer, slmc, slmc, null, (byte[] key) -> {
+                    byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key);
+                    if (got != null) {
+                        WALPointer value = der(got);
+                        try {
+                            return scan.row(-1, new WALKey(key), value);
+                        } catch (Exception e) {
+                            throw new RuntimeException("Error in rowScan.", e);
                         }
-                        return true;
                     }
-
+                    return true;
                 });
             }
         } catch (Exception x) {
@@ -410,22 +405,17 @@ public class FileBackedWALIndex implements WALIndex {
             List<KeyRange> ranges = Collections.singletonList(new KeyRange(from.getKey(), to.getKey()));
             SkipListMapContext slmc = ensureCapacity(0);
             if (slmc != null) {
-                SkipListMapStore.INSTANCE.streamKeys(filer, sls, sls, ranges, new MapStore.KeyStream() {
-
-                    @Override
-                    public boolean stream(byte[] key) throws IOException {
-                        byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key);
-                        if (got != null) {
-                            WALPointer value = der(got);
-                            try {
-                                return scan.row(-1, new WALKey(key), value);
-                            } catch (Exception e) {
-                                throw new RuntimeException("Error in rangeScan.", e);
-                            }
+                SkipListMapStore.INSTANCE.streamKeys(filer, sls, sls, ranges, (byte[] key) -> {
+                    byte[] got = SkipListMapStore.INSTANCE.getExistingPayload(filer, sls, key);
+                    if (got != null) {
+                        WALPointer value = der(got);
+                        try {
+                            return scan.row(-1, new WALKey(key), value);
+                        } catch (Exception e) {
+                            throw new RuntimeException("Error in rangeScan.", e);
                         }
-                        return true;
                     }
-
+                    return true;
                 });
             }
         } catch (Exception x) {

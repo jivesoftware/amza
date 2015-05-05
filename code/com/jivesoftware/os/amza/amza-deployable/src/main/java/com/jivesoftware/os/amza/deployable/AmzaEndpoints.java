@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.deployable;
 
-import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.AmzaRegion;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -83,13 +82,8 @@ public class AmzaEndpoints {
     public Response multiSet(@PathParam("region") String region, Map<String, String> values) {
         try {
             AmzaRegion amzaRegion = createRegionIfAbsent(region);
-            amzaRegion.set(Iterables.transform(values.entrySet(), new Function<Entry<String, String>, Entry<WALKey, byte[]>>() {
-
-                @Override
-                public Entry<WALKey, byte[]> apply(Entry<String, String> input) {
-                    return new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()), input.getValue().getBytes());
-                }
-            }));
+            amzaRegion.set(Iterables.transform(values.entrySet(), (Entry<String, String> input) -> new AbstractMap.SimpleEntry<>(new WALKey(input.getKey()
+                .getBytes()), input.getValue().getBytes())));
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set region:" + region + " values:" + values, x);

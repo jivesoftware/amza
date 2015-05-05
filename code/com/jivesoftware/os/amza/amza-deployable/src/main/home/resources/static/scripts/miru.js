@@ -8,7 +8,6 @@ miru.resetButton = function ($button, value) {
 };
 
 miru.activitywal = {
-
     repair: function (ele) {
         var $button = $(ele);
         $button.attr('disabled', 'disabled');
@@ -32,7 +31,6 @@ miru.activitywal = {
             }
         });
     },
-
     sanitize: function (ele, tenantId, partitionId) {
         var $button = $(ele);
         $button.attr('disabled', 'disabled');

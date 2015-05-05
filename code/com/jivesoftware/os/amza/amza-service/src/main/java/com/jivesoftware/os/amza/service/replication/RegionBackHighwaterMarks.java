@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.shared.HighwaterMarks;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -73,14 +72,9 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
     public void clear(final RingHost ringHost, final RegionName regionName) throws Exception {
         ConcurrentHashMap<RegionName, HighwaterMark> regionHighwaterMarks = hostHighwaterMarks.get(ringHost);
         if (regionHighwaterMarks != null) {
-            systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate,
-                new Scannable<WALValue>() {
-
-                    @Override
-                    public void rowScan(Scan<WALValue> scan) throws Exception {
-                        scan.row(-1, walKey(ringHost, regionName), new WALValue(null, orderIdProvider.nextId(), true));
-                    }
-                });
+            systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+                scan.row(-1, walKey(ringHost, regionName), new WALValue(null, orderIdProvider.nextId(), true));
+            });
             regionHighwaterMarks.remove(regionName);
         }
     }
@@ -116,17 +110,12 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
     public void clearRing(final RingHost ringHost) throws Exception {
         final ConcurrentHashMap<RegionName, HighwaterMark> regions = hostHighwaterMarks.get(ringHost);
         if (regions != null && !regions.isEmpty()) {
-            systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate,
-                new Scannable<WALValue>() {
-
-                    @Override
-                    public void rowScan(Scan<WALValue> scan) throws Exception {
-                        long timestamp = orderIdProvider.nextId();
-                        for (RegionName regionName : regions.keySet()) {
-                            scan.row(-1, walKey(ringHost, regionName), new WALValue(null, timestamp, true));
-                        }
-                    }
-                });
+            systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+                long timestamp = orderIdProvider.nextId();
+                for (RegionName regionName : regions.keySet()) {
+                    scan.row(-1, walKey(ringHost, regionName), new WALValue(null, timestamp, true));
+                }
+            });
 
         }
         hostHighwaterMarks.remove(ringHost);
@@ -135,29 +124,23 @@ public class RegionBackHighwaterMarks implements HighwaterMarks {
     @Override
     public void flush(final ListMultimap<RingHost, RegionName> flush) throws Exception {
 
-        systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate,
-            new Scannable<WALValue>() {
-
-                @Override
-                public void rowScan(Scan<WALValue> scan) throws Exception {
-                    long timestamp = orderIdProvider.nextId();
-                    for (Entry<RingHost, Collection<RegionName>> e : flush.asMap().entrySet()) {
-                        final ConcurrentHashMap<RegionName, HighwaterMark> highwaterMarks = hostHighwaterMarks.get(e.getKey());
-                        if (highwaterMarks != null) {
-                            for (RegionName regionName : e.getValue()) {
-                                HighwaterMark highwaterMark = highwaterMarks.get(regionName);
-                                if (highwaterMark != null && highwaterMark.updates.get() > 0) {
-                                    long txId = highwaterMark.getTxId();
-                                    int total = highwaterMark.updates.get();
-                                    scan.row(-1, walKey(e.getKey(), regionName), new WALValue(UIO.longBytes(txId), timestamp, false));
-                                    highwaterMark.update(txId, -total);
-                                }
-                            }
+        systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+            long timestamp = orderIdProvider.nextId();
+            for (Entry<RingHost, Collection<RegionName>> e : flush.asMap().entrySet()) {
+                final ConcurrentHashMap<RegionName, HighwaterMark> highwaterMarks = hostHighwaterMarks.get(e.getKey());
+                if (highwaterMarks != null) {
+                    for (RegionName regionName : e.getValue()) {
+                        HighwaterMark highwaterMark = highwaterMarks.get(regionName);
+                        if (highwaterMark != null && highwaterMark.updates.get() > 0) {
+                            long txId = highwaterMark.getTxId();
+                            int total = highwaterMark.updates.get();
+                            scan.row(-1, walKey(e.getKey(), regionName), new WALValue(UIO.longBytes(txId), timestamp, false));
+                            highwaterMark.update(txId, -total);
                         }
                     }
                 }
             }
-        );
+        });
     }
 
     static class HighwaterMark {

@@ -16,7 +16,6 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Predicate;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReceiver;
 import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
@@ -127,13 +126,7 @@ public class AmzaServiceInitializer {
             config.numberOfResendThreads);
 
         RegionStripe systemRegionStripe = new RegionStripe("system", amzaStats, orderIdProvider, regionIndex, new SystemStripeWALStorage(), amzaRegionWatcher,
-            new Predicate<RegionName>() {
-
-                @Override
-                public boolean apply(RegionName input) {
-                    return input.isSystemRegion();
-                }
-            });
+            RegionName::isSystemRegion);
 
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
@@ -145,16 +138,12 @@ public class AmzaServiceInitializer {
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(i, rowMarshaller, deltaWALFactory, maxUpdatesBeforeCompaction);
             final int stripeId = i;
             regionStripes[i] = new RegionStripe("stripe-" + i, amzaStats, orderIdProvider, regionIndex, deltaWALStorage, amzaRegionWatcher,
-                new Predicate<RegionName>() {
+                (RegionName input) -> {
+                    if (!input.isSystemRegion()) {
 
-                    @Override
-                    public boolean apply(RegionName input) {
-                        if (!input.isSystemRegion()) {
-
-                            return Math.abs(input.hashCode()) % deltaStorageStripes == stripeId;
-                        }
-                        return false;
+                        return Math.abs(input.hashCode()) % deltaStorageStripes == stripeId;
                     }
+                    return false;
                 });
         }
 
@@ -172,16 +161,12 @@ public class AmzaServiceInitializer {
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
         List<Future> futures = new ArrayList<>();
         for (final RegionStripe regionStripe : regionStripes) {
-            futures.add(stripeLoaderThreadPool.submit(new Runnable() {
-
-                @Override
-                public void run() {
-                    try {
-                        regionStripe.load();
-                    } catch (Exception x) {
-                        LOG.error("Failed while loading " + regionStripe, x);
-                        throw new RuntimeException(x);
-                    }
+            futures.add(stripeLoaderThreadPool.submit(() -> {
+                try {
+                    regionStripe.load();
+                } catch (Exception x) {
+                    LOG.error("Failed while loading " + regionStripe, x);
+                    throw new RuntimeException(x);
                 }
             }));
         }
@@ -193,14 +178,11 @@ public class AmzaServiceInitializer {
         ScheduledExecutorService compactDeltasThreadPool = Executors.newScheduledThreadPool(config.numberOfCompactorThreads,
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
         for (final RegionStripe regionStripe : regionStripes) {
-            compactDeltasThreadPool.scheduleAtFixedRate(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        regionStripe.compact();
-                    } catch (Throwable x) {
-                        LOG.error("Compactor failed.", x);
-                    }
+            compactDeltasThreadPool.scheduleAtFixedRate(() -> {
+                try {
+                    regionStripe.compact();
+                } catch (Throwable x) {
+                    LOG.error("Compactor failed.", x);
                 }
             }, config.deltaStripeCompactionIntervalInMillis, config.deltaStripeCompactionIntervalInMillis, TimeUnit.MILLISECONDS);
         }

@@ -7,6 +7,7 @@ import java.util.Map;
  * @author jonathan.colt
  */
 public class SecondaryIndexDescriptor {
+
     public String className;
     public Map<String, String> properties;
 

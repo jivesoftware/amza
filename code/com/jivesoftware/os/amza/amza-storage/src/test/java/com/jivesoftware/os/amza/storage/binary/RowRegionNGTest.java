@@ -10,7 +10,6 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
@@ -23,7 +22,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.testng.Assert;
@@ -55,34 +53,26 @@ public class RowRegionNGTest {
         final Random r = new Random();
 
         ScheduledExecutorService compact = Executors.newScheduledThreadPool(1);
-        compact.scheduleAtFixedRate(new Runnable() {
-
-            @Override
-            public void run() {
-                try {
-                    indexedWAL.compactTombstone(0, Long.MAX_VALUE);
-                } catch (Exception x) {
-                    x.printStackTrace();
-                }
+        compact.scheduleAtFixedRate(() -> {
+            try {
+                indexedWAL.compactTombstone(0, Long.MAX_VALUE);
+            } catch (Exception x) {
+                x.printStackTrace();
             }
         }, 1, 1, TimeUnit.SECONDS);
 
         int numThreads = 1;
         ExecutorService writers = Executors.newFixedThreadPool(numThreads);
         for (int i = 0; i < numThreads; i++) {
-            writers.submit(new Runnable() {
-
-                @Override
-                public void run() {
-                    for (int i = 1; i < 1_000; i++) {
-                        try {
-                            addBatch(r, idProvider, indexedWAL, i, 0, 10);
-                            if (i % 1000 == 0) {
-                                System.out.println(Thread.currentThread() + " batch:" + i);
-                            }
-                        } catch (Throwable x) {
-                            x.printStackTrace();
+            writers.submit(() -> {
+                for (int i1 = 1; i1 < 1_000; i1++) {
+                    try {
+                        addBatch(r, idProvider, indexedWAL, i1, 0, 10);
+                        if (i1 % 1000 == 0) {
+                            System.out.println(Thread.currentThread() + " batch:" + i1);
                         }
+                    } catch (Throwable x) {
+                        x.printStackTrace();
                     }
                 }
             });
@@ -114,13 +104,8 @@ public class RowRegionNGTest {
             WALKey key = new WALKey(FilerIO.intBytes(r.nextInt(range)));
             updates.put(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false));
         }
-        indexedWAL.update(false, new WALReplicator() {
-
-            @Override
-            public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
-                return Futures.immediateFuture(true);
-            }
-        }, WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(updates));
+        indexedWAL.update(false, (RowsChanged rowsChanged) -> Futures.immediateFuture(true), WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(
+            updates));
     }
 
     @Test
@@ -206,12 +191,7 @@ public class RowRegionNGTest {
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
-        indexedWAL.update(false, new WALReplicator() {
-
-            @Override
-            public Future<Boolean> replicate(RowsChanged rowsChanged) throws Exception {
-                return Futures.immediateFuture(true);
-            }
-        }, WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(updates));
+        indexedWAL.update(false, (RowsChanged rowsChanged) -> Futures.immediateFuture(true), WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(
+            updates));
     }
 }

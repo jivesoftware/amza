@@ -95,28 +95,20 @@ public class AmzaRegionChangeTaker {
                 "masterTakeChanges-%d").build());
             for (int i = 0; i < stripes.length; i++) {
                 final int stripe = i;
-                masterTakerThreadPool.scheduleWithFixedDelay(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        try {
-                            takeChanges(stripes[stripe]);
-                        } catch (Throwable x) {
-                            LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
-                        }
+                masterTakerThreadPool.scheduleWithFixedDelay(() -> {
+                    try {
+                        takeChanges(stripes[stripe]);
+                    } catch (Throwable x) {
+                        LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                     }
                 }, takeFromNeighborsIntervalInMillis, takeFromNeighborsIntervalInMillis, TimeUnit.MILLISECONDS);
             }
 
-            masterTakerThreadPool.scheduleWithFixedDelay(new Runnable() {
-
-                @Override
-                public void run() {
-                    try {
-                        takeChanges(regionStripeProvider.getSystemRegionStripe());
-                    } catch (Throwable x) {
-                        LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
-                    }
+            masterTakerThreadPool.scheduleWithFixedDelay(() -> {
+                try {
+                    takeChanges(regionStripeProvider.getSystemRegionStripe());
+                } catch (Throwable x) {
+                    LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                 }
             }, takeFromNeighborsIntervalInMillis, takeFromNeighborsIntervalInMillis, TimeUnit.MILLISECONDS);
         }
@@ -140,17 +132,13 @@ public class AmzaRegionChangeTaker {
                 final RegionProperties regionProperties = regionIndex.getProperties(regionName);
                 if (regionProperties != null && regionProperties.takeFromFactor > 0) {
 
-                    futures.add(slaveTakerThreadPool.submit(new Runnable() {
-
-                        @Override
-                        public void run() {
-                            try {
-                                for (RingHost tookFromHost : takeChanges(hostRing.getAboveRing(), regionName, regionProperties.takeFromFactor)) {
-                                    tookFrom.put(tookFromHost, regionName);
-                                }
-                            } catch (Exception x) {
-                                LOG.warn("Failed to take from " + regionName, x);
+                    futures.add(slaveTakerThreadPool.submit(() -> {
+                        try {
+                            for (RingHost tookFromHost : takeChanges(hostRing.getAboveRing(), regionName, regionProperties.takeFromFactor)) {
+                                tookFrom.put(tookFromHost, regionName);
                             }
+                        } catch (Exception x) {
+                            LOG.warn("Failed to take from " + regionName, x);
                         }
                     }));
                 }

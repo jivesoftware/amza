@@ -62,7 +62,6 @@ public class ExampleServerMain {
             server.start();
 
             ///..... serve serve serve
-
             server.stop();
 
         } catch (InterruptedException | IOException ex) {

@@ -6,6 +6,7 @@ import java.util.Map;
  * @author jonathan.colt
  */
 public class PrimaryIndexDescriptor {
+
     public String className;
     public long ttlInMillis = 0;
     public boolean forceCompactionOnStartup = false;

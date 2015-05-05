@@ -24,7 +24,7 @@ public class FileBackedRowIndexNGTest {
         File dir2 = Files.createTempDir();
         RegionName regionName = new RegionName(false, "r1", "t1");
 
-        FileBackedWALIndex index = new FileBackedWALIndex(regionName, 4, false, 0, new File[] { dir0, dir1, dir2 });
+        FileBackedWALIndex index = new FileBackedWALIndex(regionName, 4, false, 0, new File[]{dir0, dir1, dir2});
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(1)), new WALPointer(1L, System.currentTimeMillis(), false))));
 
@@ -32,7 +32,7 @@ public class FileBackedRowIndexNGTest {
         Assert.assertEquals(got.getFp(), 1L);
 
         // reopen
-        index = new FileBackedWALIndex(regionName, 4, false, 0, new File[] { dir0, dir1, dir2 });
+        index = new FileBackedWALIndex(regionName, 4, false, 0, new File[]{dir0, dir1, dir2});
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(FilerIO.intBytes(2)), new WALPointer(2L, System.currentTimeMillis(), false))));
         got = index.getPointer(new WALKey(FilerIO.intBytes(2)));
@@ -56,7 +56,7 @@ public class FileBackedRowIndexNGTest {
         File dir1 = Files.createTempDir();
         File dir2 = Files.createTempDir();
         RegionName regionName = new RegionName(false, "r1", "t1");
-        FileBackedWALIndex index = new FileBackedWALIndex(regionName, 4, false, 0, new File[] { dir0, dir1, dir2 });
+        FileBackedWALIndex index = new FileBackedWALIndex(regionName, 4, false, 0, new File[]{dir0, dir1, dir2});
 
         for (int i = 0; i < 50; i++) {
             index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(

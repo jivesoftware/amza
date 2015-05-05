@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -68,12 +67,8 @@ public class RegionProvider {
                 final byte[] rawRegionName = regionName.toBytes();
                 final WALKey regionKey = new WALKey(rawRegionName);
                 RegionStore regionIndexStore = regionName.equals(REGION_INDEX) ? regionStore : regionIndex.get(REGION_INDEX);
-                RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
-
-                    @Override
-                    public void rowScan(Scan<WALValue> scan) throws Exception {
-                        scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
-                    }
+                RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+                    scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
                 });
                 regionIndexStore.flush(hardFlush);
                 if (!changed.isEmpty()) {
@@ -87,12 +82,8 @@ public class RegionProvider {
     public void setRegionProperties(final RegionName regionName, final RegionProperties properties) throws Exception {
         regionIndex.putProperties(regionName, properties);
         RegionStore regionPropertiesStore = regionIndex.get(REGION_PROPERTIES);
-        RowsChanged changed = regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
-
-            @Override
-            public void rowScan(Scan<WALValue> scan) throws Exception {
-                scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(regionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
-            }
+        RowsChanged changed = regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+            scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(regionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
         });
         regionPropertiesStore.flush(hardFlush);
         if (!changed.isEmpty()) {

@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.region;
 
-import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
@@ -102,21 +101,13 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
 
             List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();
             data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
-                new Function<Map.Entry<String, Long>, Map<String, String>>() {
-                    @Override
-                    public Map<String, String> apply(Map.Entry<String, Long> input) {
-                        return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
-                    }
-                }));
+                (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
+                    input1.getKey(), "elapse", String.valueOf(input1.getValue()))));
 
             List<Map.Entry<String, Long>> recentCompaction = amzaStats.recentCompaction();
             data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
-                new Function<Map.Entry<String, Long>, Map<String, String>>() {
-                    @Override
-                    public Map<String, String> apply(Map.Entry<String, Long> input) {
-                        return ImmutableMap.of("name", input.getKey(), "elapse", String.valueOf(input.getValue()));
-                    }
-                }));
+                (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
+                    input1.getKey(), "elapse", String.valueOf(input1.getValue()))));
             data.put("totalCompactions", String.valueOf(amzaStats.getTotalCompactions()));
 
         } catch (Exception e) {

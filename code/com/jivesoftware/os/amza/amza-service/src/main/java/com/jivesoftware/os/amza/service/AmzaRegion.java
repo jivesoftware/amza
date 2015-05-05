@@ -148,60 +148,56 @@ public class AmzaRegion {
     public boolean compare(final AmzaRegion amzaRegion) throws Exception {
         final MutableInt compared = new MutableInt(0);
         final MutableBoolean passed = new MutableBoolean(true);
-        amzaRegion.scan(new Scan<WALValue>() {
+        amzaRegion.scan((long txid, WALKey key, WALValue value) -> {
+            try {
+                compared.increment();
 
-            @Override
-            public boolean row(long txid, WALKey key, WALValue value) {
-                try {
-                    compared.increment();
+                WALValue timestampedValue = regionStripe.get(regionName, key);
+                String comparing = regionName.getRingName() + ":" + regionName.getRegionName()
+                    + " to " + amzaRegion.regionName.getRingName() + ":" + amzaRegion.regionName.getRegionName() + "\n";
 
-                    WALValue timestampedValue = regionStripe.get(regionName, key);
-                    String comparing = regionName.getRingName() + ":" + regionName.getRegionName()
-                        + " to " + amzaRegion.regionName.getRingName() + ":" + amzaRegion.regionName.getRegionName() + "\n";
-
-                    if (timestampedValue == null) {
-                        System.out.println("INCONSISTENCY: " + comparing + " key:null"
-                            + " != " + value.getTimestampId()
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    if (value.getTimestampId() != timestampedValue.getTimestampId()) {
-                        System.out.println("INCONSISTENCY: " + comparing + " timstamp:'" + timestampedValue.getTimestampId()
-                            + "' != '" + value.getTimestampId()
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        System.out.println("----------------------------------");
-
-                        return false;
-                    }
-                    if (value.getTombstoned() != timestampedValue.getTombstoned()) {
-                        System.out.println("INCONSISTENCY: " + comparing + " tombstone:" + timestampedValue.getTombstoned()
-                            + " != '" + value.getTombstoned()
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    if (value.getValue() == null && timestampedValue.getValue() != null) {
-                        System.out.println("INCONSISTENCY: " + comparing + " null values:" + timestampedValue.getTombstoned()
-                            + " != '" + value.getTombstoned()
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    if (value.getValue() != null && !Arrays.equals(value.getValue(), timestampedValue.getValue())) {
-                        System.out.println("INCONSISTENCY: " + comparing + " value:'" + timestampedValue.getValue()
-                            + "' != '" + value.getValue()
-                            + "' aClass:" + timestampedValue.getValue().getClass()
-                            + "' bClass:" + value.getValue().getClass()
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    return true;
-                } catch (Exception x) {
-                    throw new RuntimeException("Failed while comparing", x);
+                if (timestampedValue == null) {
+                    System.out.println("INCONSISTENCY: " + comparing + " key:null"
+                        + " != " + value.getTimestampId()
+                        + "' \n" + timestampedValue + " vs " + value);
+                    passed.setValue(false);
+                    return false;
                 }
+                if (value.getTimestampId() != timestampedValue.getTimestampId()) {
+                    System.out.println("INCONSISTENCY: " + comparing + " timstamp:'" + timestampedValue.getTimestampId()
+                        + "' != '" + value.getTimestampId()
+                        + "' \n" + timestampedValue + " vs " + value);
+                    passed.setValue(false);
+                    System.out.println("----------------------------------");
+
+                    return false;
+                }
+                if (value.getTombstoned() != timestampedValue.getTombstoned()) {
+                    System.out.println("INCONSISTENCY: " + comparing + " tombstone:" + timestampedValue.getTombstoned()
+                        + " != '" + value.getTombstoned()
+                        + "' \n" + timestampedValue + " vs " + value);
+                    passed.setValue(false);
+                    return false;
+                }
+                if (value.getValue() == null && timestampedValue.getValue() != null) {
+                    System.out.println("INCONSISTENCY: " + comparing + " null values:" + timestampedValue.getTombstoned()
+                        + " != '" + value.getTombstoned()
+                        + "' \n" + timestampedValue + " vs " + value);
+                    passed.setValue(false);
+                    return false;
+                }
+                if (value.getValue() != null && !Arrays.equals(value.getValue(), timestampedValue.getValue())) {
+                    System.out.println("INCONSISTENCY: " + comparing + " value:'" + timestampedValue.getValue()
+                        + "' != '" + value.getValue()
+                        + "' aClass:" + timestampedValue.getValue().getClass()
+                        + "' bClass:" + value.getValue().getClass()
+                        + "' \n" + timestampedValue + " vs " + value);
+                    passed.setValue(false);
+                    return false;
+                }
+                return true;
+            } catch (Exception x) {
+                throw new RuntimeException("Failed while comparing", x);
             }
         });
 

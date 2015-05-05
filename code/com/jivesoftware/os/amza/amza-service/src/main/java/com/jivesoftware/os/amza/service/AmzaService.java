@@ -195,12 +195,8 @@ public class AmzaService implements AmzaInstance {
     @Override
     public void destroyRegion(final RegionName regionName) throws Exception {
         RegionStore regionIndexStore = regionIndex.get(RegionProvider.REGION_INDEX);
-        regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, new Scannable<WALValue>() {
-
-            @Override
-            public void rowScan(Scan<WALValue> scan) throws Exception {
-                scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
-            }
+        regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+            scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         });
     }
 
@@ -252,14 +248,11 @@ public class AmzaService implements AmzaInstance {
         }
 
         final MutableLong lastTxId = new MutableLong(-1);
-        boolean tookToEnd = region.takeFromTransactionId(transactionId, new Scan<WALValue>() {
-            @Override
-            public boolean row(long rowTxId, WALKey key, WALValue scanned) throws Exception {
-                if (rowTxId > lastTxId.longValue()) {
-                    lastTxId.setValue(rowTxId);
-                }
-                return scan.row(rowTxId, key, scanned);
+        boolean tookToEnd = region.takeFromTransactionId(transactionId, (long rowTxId, WALKey key, WALValue scanned) -> {
+            if (rowTxId > lastTxId.longValue()) {
+                lastTxId.setValue(rowTxId);
             }
+            return scan.row(rowTxId, key, scanned);
         });
         if (!tookToEnd) {
             cursors.clear();

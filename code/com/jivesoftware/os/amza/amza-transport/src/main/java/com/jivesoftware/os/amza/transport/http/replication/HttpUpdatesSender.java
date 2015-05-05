@@ -18,7 +18,6 @@ package com.jivesoftware.os.amza.transport.http.replication;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -58,18 +57,15 @@ public class HttpUpdatesSender implements UpdatesSender {
         final MutableLong smallestTx = new MutableLong(Long.MAX_VALUE);
         final MutableLong wrote = new MutableLong();
 
-        changes.rowScan(new Scan<WALValue>() {
-            @Override
-            public boolean row(long txId, WALKey key, WALValue value) throws Exception {
-                if (txId < smallestTx.longValue()) {
-                    smallestTx.setValue(txId);
-                }
-                rowTxIds.add(txId);
-                byte[] rowBytes = rowMarshaller.toRow(key, value);
-                wrote.add(rowBytes.length);
-                rows.add(rowBytes);
-                return true;
+        changes.rowScan((long txId, WALKey key, WALValue value) -> {
+            if (txId < smallestTx.longValue()) {
+                smallestTx.setValue(txId);
             }
+            rowTxIds.add(txId);
+            byte[] rowBytes = rowMarshaller.toRow(key, value);
+            wrote.add(rowBytes.length);
+            rows.add(rowBytes);
+            return true;
         });
         if (!rows.isEmpty()) {
             LOG.debug("Pushing " + rows.size() + " changes to " + ringHost);

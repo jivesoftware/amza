@@ -119,54 +119,44 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 for (int i = 0; i < deltaWALs.size(); i++) {
                     final DeltaWAL wal = deltaWALs.get(i);
                     if (i > 0) {
-                        compactDelta(regionIndex, deltaWAL.get(), new Callable<DeltaWAL>() {
-
-                            @Override
-                            public DeltaWAL call() throws Exception {
-                                return wal;
-                            }
-                        });
+                        compactDelta(regionIndex, deltaWAL.get(), () -> wal);
                     }
                     deltaWAL.set(wal);
-                    wal.load(new RowStream() {
+                    wal.load((long rowFP, final long rowTxId, byte rowType, byte[] rawRow) -> {
+                        if (rowType > 0) {
+                            WALRow row = rowMarshaller.fromRow(rawRow);
+                            WALValue value = row.getValue();
+                            ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
+                            byte[] regionNameBytes = new byte[bb.getShort()];
+                            bb.get(regionNameBytes);
+                            final byte[] keyBytes = new byte[bb.getInt()];
+                            bb.get(keyBytes);
 
-                        @Override
-                        public boolean row(long rowFP, final long rowTxId, byte rowType, byte[] rawRow) throws Exception {
-                            if (rowType > 0) {
-                                WALRow row = rowMarshaller.fromRow(rawRow);
-                                WALValue value = row.getValue();
-                                ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
-                                byte[] regionNameBytes = new byte[bb.getShort()];
-                                bb.get(regionNameBytes);
-                                final byte[] keyBytes = new byte[bb.getInt()];
-                                bb.get(keyBytes);
-
-                                RegionName regionName = RegionName.fromBytes(regionNameBytes);
-                                RegionStore regionStore = regionIndex.get(regionName);
-                                if (regionStore == null) {
-                                    LOG.error("Should be impossible must fix! Your it :) regionName:" + regionName);
-                                } else {
-                                    acquireOne();
-                                    try {
-                                        RegionDelta delta = getRegionDeltas(regionName);
-                                        WALKey key = new WALKey(keyBytes);
-                                        WALValue regionValue = regionStore.get(key);
-                                        if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
-                                            WALTimestampId got = delta.getTimestampId(key);
-                                            if (got == null || got.getTimestampId() < value.getTimestampId()) {
-                                                delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
-                                                //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
-                                                delta.appendTxFps(rowTxId, rowFP);
-                                            }
+                            RegionName regionName = RegionName.fromBytes(regionNameBytes);
+                            RegionStore regionStore = regionIndex.get(regionName);
+                            if (regionStore == null) {
+                                LOG.error("Should be impossible must fix! Your it :) regionName:" + regionName);
+                            } else {
+                                acquireOne();
+                                try {
+                                    RegionDelta delta = getRegionDeltas(regionName);
+                                    WALKey key = new WALKey(keyBytes);
+                                    WALValue regionValue = regionStore.get(key);
+                                    if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
+                                        WALTimestampId got = delta.getTimestampId(key);
+                                        if (got == null || got.getTimestampId() < value.getTimestampId()) {
+                                            delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
+                                            //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
+                                            delta.appendTxFps(rowTxId, rowFP);
                                         }
-                                    } finally {
-                                        releaseOne();
                                     }
+                                } finally {
+                                    releaseOne();
                                 }
-                                updateSinceLastCompaction.incrementAndGet();
                             }
-                            return true;
+                            updateSinceLastCompaction.incrementAndGet();
                         }
+                        return true;
                     });
 
                 }
@@ -212,13 +202,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
         try {
             updateSinceLastCompaction.set(0);
-            compactDelta(regionIndex, deltaWAL.get(), new Callable<DeltaWAL>() {
-
-                @Override
-                public DeltaWAL call() throws Exception {
-                    return deltaWALFactory.create();
-                }
-            });
+            compactDelta(regionIndex, deltaWAL.get(), deltaWALFactory::create);
         } finally {
             compacting.set(false);
         }
@@ -240,17 +224,13 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             for (Map.Entry<RegionName, RegionDelta> e : regionDeltas.entrySet()) {
                 final RegionDelta regionDelta = new RegionDelta(e.getKey(), newDeltaWAL, rowMarshaller, e.getValue());
                 regionDeltas.put(e.getKey(), regionDelta);
-                futures.add(compactionThreads.submit(new Callable<Boolean>() {
-
-                    @Override
-                    public Boolean call() throws Exception {
-                        try {
-                            regionDelta.compact(regionIndex);
-                            return true;
-                        } catch (Exception x) {
-                            LOG.error("Failed to compact:" + regionDelta, x);
-                            return false;
-                        }
+                futures.add(compactionThreads.submit(() -> {
+                    try {
+                        regionDelta.compact(regionIndex);
+                        return true;
+                    } catch (Exception x) {
+                        LOG.error("Failed to compact:" + regionDelta, x);
+                        return false;
                     }
                 }));
             }
@@ -291,13 +271,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
-        updates.rowScan(new Scan<WALValue>() {
-            @Override
-            public boolean row(long transactionId, WALKey key, WALValue update) throws Exception {
-                keys.add(key);
-                values.add(update);
-                return true;
-            }
+        updates.rowScan((long transactionId, WALKey key, WALValue update) -> {
+            keys.add(key);
+            values.add(update);
+            return true;
         });
 
         acquireOne();

@@ -128,12 +128,9 @@ public class BinaryWALTx implements WALTx {
             if (!io.validate()) {
                 LOG.info("Recovering for WAL {}", name);
                 final MutableLong count = new MutableLong(0);
-                io.scan(0, true, new RowStream() {
-                    @Override
-                    public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
-                        count.increment();
-                        return true;
-                    }
+                io.scan(0, true, (final long rowPointer, long rowTxId, byte rowType, byte[] row) -> {
+                    count.increment();
+                    return true;
                 });
                 LOG.info("Recovered for WAL {}: {} rows", name, count.longValue());
             }
@@ -157,25 +154,22 @@ public class BinaryWALTx implements WALTx {
             if (walIndex.isEmpty()) {
                 LOG.info("Rebuilding {} for {}-{}...", walIndex.getClass().getSimpleName(), regionName.getRegionName(), regionName.getRingName());
                 final MutableLong rebuilt = new MutableLong();
-                io.scan(0, true, new RowStream() {
-                    @Override
-                    public boolean row(final long rowPointer, long rowTxId, byte rowType, byte[] row) throws Exception {
-                        if (rowType > 0) {
-                            WALRow walr = rowMarshaller.fromRow(row);
-                            WALKey key = walr.getKey();
-                            WALValue value = walr.getValue();
-                            WALPointer current = walIndex.getPointer(key);
-                            if (current == null) {
-                                walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                                    key, new WALPointer(rowPointer, value.getTimestampId(), value.getTombstoned()))));
-                            } else if (current.getTimestampId() < value.getTimestampId()) {
-                                walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                                    key, new WALPointer(rowPointer, value.getTimestampId(), value.getTombstoned()))));
-                            }
-                            rebuilt.add(1);
+                io.scan(0, true, (final long rowPointer, long rowTxId, byte rowType, byte[] row) -> {
+                    if (rowType > 0) {
+                        WALRow walr = rowMarshaller.fromRow(row);
+                        WALKey key = walr.getKey();
+                        WALValue value = walr.getValue();
+                        WALPointer current = walIndex.getPointer(key);
+                        if (current == null) {
+                            walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                                key, new WALPointer(rowPointer, value.getTimestampId(), value.getTombstoned()))));
+                        } else if (current.getTimestampId() < value.getTimestampId()) {
+                            walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
+                                key, new WALPointer(rowPointer, value.getTimestampId(), value.getTombstoned()))));
                         }
-                        return true;
+                        rebuilt.add(1);
                     }
+                    return true;
                 });
                 LOG.info("Rebuilt ({}) {} for {}-{}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), regionName.getRegionName(),
                     regionName.getRingName());
@@ -247,7 +241,7 @@ public class BinaryWALTx implements WALTx {
             lastEndOfLastRow.set(endOfLastRow);
             return Optional.absent();
         }
-        if (compactAfterGrowthFactor > -1 &&  endOfLastRow < lastEndOfLastRow.get() * compactAfterGrowthFactor) {
+        if (compactAfterGrowthFactor > -1 && endOfLastRow < lastEndOfLastRow.get() * compactAfterGrowthFactor) {
             return Optional.absent();
         }
         lastEndOfLastRow.set(endOfLastRow);
@@ -275,55 +269,44 @@ public class BinaryWALTx implements WALTx {
             removeTombstonedOlderThanTimestampId,
             ttlTimestampId);
 
-        return Optional.<Compacted>of(new Compacted() {
-
-            @Override
-            public CommittedCompacted commit() throws Exception {
-
-                compactionLock.acquire(NUM_PERMITS);
-                try {
-                    long startCatchup = System.currentTimeMillis();
-                    AtomicLong catchupKeys = new AtomicLong();
-                    AtomicLong catchupRemoves = new AtomicLong();
-                    AtomicLong catchupTombstones = new AtomicLong();
-                    AtomicLong catchupTTL = new AtomicLong();
-                    compact(endOfLastRow, Long.MAX_VALUE, rowIndex, compactionRowIndex, compactionIO,
-                        catchupKeys, catchupRemoves, catchupTombstones, catchupTTL,
-                        removeTombstonedOlderThanTimestampId,
-                        ttlTimestampId);
-                    compactionIO.flush(true);
-                    long sizeAfterCompaction = compactionIO.sizeInBytes();
-                    compactionIO.close();
-
-                    File backup = new File(dir, "bkp");
-                    backup.delete();
-                    backup.mkdirs();
-
-                    long sizeBeforeCompaction = io.sizeInBytes();
-                    io.close();
-
-                    io.move(backup);
-                    dir.mkdirs();
-                    compactionIO.move(dir);
-
-                    // Reopen the world
-                    io = ioProvider.create(dir, name);
-
-                    LOG.info("Compacted region " + dir.getAbsolutePath() + "/" + name
-                        + " was:" + sizeBeforeCompaction + "bytes "
-                        + " isNow:" + sizeAfterCompaction + "bytes.");
-                    if (compactionRowIndex != null) {
-                        compactionRowIndex.commit();
-                    }
-
-                    long endOfLastRow = io.getEndOfLastRow();
-                    lastEndOfLastRow.set(endOfLastRow);
-                    return new CommittedCompacted(rowIndex, sizeBeforeCompaction, sizeAfterCompaction, keyCount.longValue(), removeCount.longValue(),
-                        tombstoneCount.longValue(), ttlCount.longValue(), System.currentTimeMillis() - start, catchupKeys.longValue(),
-                        catchupRemoves.longValue(), catchupTombstones.longValue(), catchupTTL.longValue(), System.currentTimeMillis() - startCatchup);
-                } finally {
-                    compactionLock.release(NUM_PERMITS);
+        return Optional.<Compacted>of((Compacted) () -> {
+            compactionLock.acquire(NUM_PERMITS);
+            try {
+                long startCatchup = System.currentTimeMillis();
+                AtomicLong catchupKeys = new AtomicLong();
+                AtomicLong catchupRemoves = new AtomicLong();
+                AtomicLong catchupTombstones = new AtomicLong();
+                AtomicLong catchupTTL = new AtomicLong();
+                compact(endOfLastRow, Long.MAX_VALUE, rowIndex, compactionRowIndex, compactionIO,
+                    catchupKeys, catchupRemoves, catchupTombstones, catchupTTL,
+                    removeTombstonedOlderThanTimestampId,
+                    ttlTimestampId);
+                compactionIO.flush(true);
+                long sizeAfterCompaction = compactionIO.sizeInBytes();
+                compactionIO.close();
+                File backup = new File(dir, "bkp");
+                backup.delete();
+                backup.mkdirs();
+                long sizeBeforeCompaction = io.sizeInBytes();
+                io.close();
+                io.move(backup);
+                dir.mkdirs();
+                compactionIO.move(dir);
+                // Reopen the world
+                io = ioProvider.create(dir, name);
+                LOG.info("Compacted region " + dir.getAbsolutePath() + "/" + name
+                    + " was:" + sizeBeforeCompaction + "bytes "
+                    + " isNow:" + sizeAfterCompaction + "bytes.");
+                if (compactionRowIndex != null) {
+                    compactionRowIndex.commit();
                 }
+                long endOfLastRow1 = io.getEndOfLastRow();
+                lastEndOfLastRow.set(endOfLastRow1);
+                return new CommittedCompacted(rowIndex, sizeBeforeCompaction, sizeAfterCompaction, keyCount.longValue(), removeCount.longValue(),
+                    tombstoneCount.longValue(), ttlCount.longValue(), System.currentTimeMillis() - start, catchupKeys.longValue(),
+                    catchupRemoves.longValue(), catchupTombstones.longValue(), catchupTTL.longValue(), System.currentTimeMillis() - startCatchup);
+            } finally {
+                compactionLock.release(NUM_PERMITS);
             }
         });
 
@@ -349,47 +332,43 @@ public class BinaryWALTx implements WALTx {
         final List<byte[]> rawRows = new ArrayList<>();
         final AtomicLong batchSizeInBytes = new AtomicLong();
 
-        io.scan(startAtRow, false, new RowStream() {
-            @Override
-            public boolean row(final long rowFP, long rowTxId, byte rowType, final byte[] row) throws Exception {
-                if (rowFP >= endOfLastRow) {
-                    return false;
-                }
-                if (rowType < 0) { // TODO expose to caller which rowtypes they want to preserve. For now we discard all system rowtypes and keep all others.
-                    return true;
-                }
-
-                WALRow walr = rowMarshaller.fromRow(row);
-                WALKey key = walr.getKey();
-                WALValue value = walr.getValue();
-
-                WALPointer got = (rowIndex == null) ? null : rowIndex.getPointer(key);
-                if (got == null || value.getTimestampId() >= got.getTimestampId()) {
-                    if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
-                        tombstoneCount.incrementAndGet();
-                    } else {
-                        if (value.getTimestampId() > ttlTimestampId) {
-                            rowKeys.add(key);
-                            rowValues.add(value);
-                            rowTxIds.add(rowTxId);
-                            rawRowTypes.add(rowType);
-                            rawRows.add(row);
-                            batchSizeInBytes.addAndGet(row.length);
-                            keyCount.incrementAndGet();
-                        } else {
-                            ttlCount.incrementAndGet();
-                        }
-                    }
-                } else {
-                    removeCount.incrementAndGet();
-                }
-                long batchingSize = 1024 * 1024 * 10; // TODO expose to config
-                if (batchSizeInBytes.get() > batchingSize) {
-                    flush(compactionWALIndex, compactionIO, rowTxIds, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
-                }
+        io.scan(startAtRow, false, (final long rowFP, long rowTxId, byte rowType, final byte[] row) -> {
+            if (rowFP >= endOfLastRow) {
+                return false;
+            }
+            if (rowType < 0) { // TODO expose to caller which rowtypes they want to preserve. For now we discard all system rowtypes and keep all others.
                 return true;
             }
 
+            WALRow walr = rowMarshaller.fromRow(row);
+            WALKey key = walr.getKey();
+            WALValue value = walr.getValue();
+
+            WALPointer got = (rowIndex == null) ? null : rowIndex.getPointer(key);
+            if (got == null || value.getTimestampId() >= got.getTimestampId()) {
+                if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
+                    tombstoneCount.incrementAndGet();
+                } else {
+                    if (value.getTimestampId() > ttlTimestampId) {
+                        rowKeys.add(key);
+                        rowValues.add(value);
+                        rowTxIds.add(rowTxId);
+                        rawRowTypes.add(rowType);
+                        rawRows.add(row);
+                        batchSizeInBytes.addAndGet(row.length);
+                        keyCount.incrementAndGet();
+                    } else {
+                        ttlCount.incrementAndGet();
+                    }
+                }
+            } else {
+                removeCount.incrementAndGet();
+            }
+            long batchingSize = 1024 * 1024 * 10; // TODO expose to config
+            if (batchSizeInBytes.get() > batchingSize) {
+                flush(compactionWALIndex, compactionIO, rowTxIds, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
+            }
+            return true;
         });
         if (!rawRows.isEmpty()) {
             flush(compactionWALIndex, compactionIO, rowTxIds, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);

@@ -26,7 +26,7 @@ public class HttpClientProxyConfig implements HttpClientConfiguration {
     private final String proxyPassword;
 
     private HttpClientProxyConfig(
-            String proxyHost, int proxyPort, String proxyUsername, String proxyPassword) {
+        String proxyHost, int proxyPort, String proxyUsername, String proxyPassword) {
         this.proxyHost = proxyHost;
         this.proxyPort = proxyPort;
         this.proxyUsername = proxyUsername;
@@ -52,11 +52,11 @@ public class HttpClientProxyConfig implements HttpClientConfiguration {
     @Override
     public String toString() {
         return "HttpClientConfig{"
-                + ", proxyHost=" + proxyHost
-                + ", proxyPort=" + proxyPort
-                + ", proxyUsername=" + proxyUsername
-                + ", proxyPassword=" + "*******" // dont expose password in logs
-                + '}';
+            + ", proxyHost=" + proxyHost
+            + ", proxyPort=" + proxyPort
+            + ", proxyUsername=" + proxyUsername
+            + ", proxyPassword=" + "*******" // dont expose password in logs
+            + '}';
     }
 
     public static Builder newBuilder() {

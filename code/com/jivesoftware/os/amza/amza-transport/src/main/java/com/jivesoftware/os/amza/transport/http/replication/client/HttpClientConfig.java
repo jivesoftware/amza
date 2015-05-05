@@ -52,9 +52,9 @@ final public class HttpClientConfig implements HttpClientConfiguration {
 
     @Override
     public String toString() {
-        return "HttpClientConfig{" + "socketTimeoutInMillis=" + socketTimeoutInMillis + ", maxConnections=" +
-            maxConnections + ", maxConnectionsPerHost=" + maxConnectionsPerHost + ", headersForEveryRequest=" +
-            headersForEveryRequest + '}';
+        return "HttpClientConfig{" + "socketTimeoutInMillis=" + socketTimeoutInMillis + ", maxConnections="
+            + maxConnections + ", maxConnectionsPerHost=" + maxConnectionsPerHost + ", headersForEveryRequest="
+            + headersForEveryRequest + '}';
     }
 
     public static Builder newBuilder() {

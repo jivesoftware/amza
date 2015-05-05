@@ -42,25 +42,21 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     public void initLeaps() throws Exception {
         final MutableLong updates = new MutableLong(0);
 
-        reverseScan(new RowStream() {
-
-            @Override
-            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
-                if (rowType == WALWriter.SYSTEM_VERSION_1) {
-                    ByteBuffer buf = ByteBuffer.wrap(row);
-                    byte[] keyBytes = new byte[8];
-                    buf.get(keyBytes);
-                    long key = FilerIO.bytesLong(keyBytes);
-                    if (key == WALWriter.LEAP_KEY) {
-                        buf.rewind();
-                        latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
-                        return false;
-                    }
-                } else if (rowType > 0) {
-                    updates.increment();
+        reverseScan((long rowFP, long rowTxId, byte rowType, byte[] row) -> {
+            if (rowType == WALWriter.SYSTEM_VERSION_1) {
+                ByteBuffer buf = ByteBuffer.wrap(row);
+                byte[] keyBytes = new byte[8];
+                buf.get(keyBytes);
+                long key = FilerIO.bytesLong(keyBytes);
+                if (key == WALWriter.LEAP_KEY) {
+                    buf.rewind();
+                    latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
+                    return false;
                 }
-                return true;
+            } else if (rowType > 0) {
+                updates.increment();
             }
+            return true;
         });
 
         updatesSinceLeap.addAndGet(updates.longValue());

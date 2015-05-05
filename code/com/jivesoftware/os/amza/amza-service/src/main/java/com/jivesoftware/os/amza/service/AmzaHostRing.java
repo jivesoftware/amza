@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -113,14 +112,9 @@ public class AmzaHostRing implements AmzaRing {
         final WALKey key = ringReader.key(ringName, ringHost);
         WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX, key);
         if (had == null) {
-            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate,
-                new Scannable<WALValue>() {
-
-                    @Override
-                    public void rowScan(Scan<WALValue> scan) throws Exception {
-                        scan.row(-1, key, new WALValue(new byte[Status.online.b], orderIdProvider.nextId(), false));
-                    }
-                });
+            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+                scan.row(-1, key, new WALValue(new byte[Status.online.b], orderIdProvider.nextId(), false));
+            });
         }
 
     }
@@ -136,28 +130,19 @@ public class AmzaHostRing implements AmzaRing {
         final WALKey key = ringReader.key(ringName, ringHost);
         WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX, key);
         if (had != null) {
-            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate,
-                new Scannable<WALValue>() {
-                    @Override
-                    public void rowScan(Scan<WALValue> scan) throws Exception {
-                        scan.row(-1, key, new WALValue(null, orderIdProvider.nextId(), true));
-                    }
-                });
+            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+                scan.row(-1, key, new WALValue(null, orderIdProvider.nextId(), true));
+            });
         }
     }
 
     @Override
     public void allRings(final RingStream ringStream) throws Exception {
-        systemRegionStripe.rowScan(RegionProvider.RING_INDEX,
-            new Scan<WALValue>() {
-
-                @Override
-                public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                    MemoryFiler filer = new MemoryFiler(key.getKey());
-                    String ringName = UIO.readString(filer, "ringName");
-                    UIO.readByte(filer, "seperator");
-                    return ringStream.stream(ringName, Status.fromBytes(value.getValue()).name(), RingHost.fromBytes(UIO.readByteArray(filer, "ringHost")));
-                }
-            });
+        systemRegionStripe.rowScan(RegionProvider.RING_INDEX, (long rowTxId, WALKey key, WALValue value) -> {
+            MemoryFiler filer = new MemoryFiler(key.getKey());
+            String ringName = UIO.readString(filer, "ringName");
+            UIO.readByte(filer, "seperator");
+            return ringStream.stream(ringName, Status.fromBytes(value.getValue()).name(), RingHost.fromBytes(UIO.readByteArray(filer, "ringHost")));
+        });
     }
 }

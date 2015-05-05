@@ -5,7 +5,6 @@ import com.google.common.collect.TreeBasedTable;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -56,22 +55,18 @@ public class DeltaWALNGTest {
             System.out.println("update2 k=" + new String(e.getKey().getKey()) + " fp=" + e.getValue());
         }
 
-        deltaWAL.load(new RowStream() {
+        deltaWAL.load((long rowFP, long rowTxId, byte rowType, byte[] rawRow) -> {
+            WALRow row = marshaller.fromRow(rawRow);
+            ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
+            byte[] regionNameBytes = new byte[bb.getShort()];
+            bb.get(regionNameBytes);
+            byte[] keyBytes = new byte[bb.getInt()];
+            bb.get(keyBytes);
 
-            @Override
-            public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawRow) throws Exception {
-                WALRow row = marshaller.fromRow(rawRow);
-                ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
-                byte[] regionNameBytes = new byte[bb.getShort()];
-                bb.get(regionNameBytes);
-                byte[] keyBytes = new byte[bb.getInt()];
-                bb.get(keyBytes);
-
-                System.out.println("rfp=" + rowFP + " rid" + rowTxId + " rt=" + rowType
-                    + " key=" + new String(keyBytes) + " value=" + new String(row.getValue().getValue())
-                    + " ts=" + row.getValue().getTimestampId() + " tombstone=" + row.getValue().getTombstoned());
-                return true;
-            }
+            System.out.println("rfp=" + rowFP + " rid" + rowTxId + " rt=" + rowType
+                + " key=" + new String(keyBytes) + " value=" + new String(row.getValue().getValue())
+                + " ts=" + row.getValue().getTimestampId() + " tombstone=" + row.getValue().getTombstoned());
+            return true;
         });
 
         for (Entry<WALKey, Long> e : update1.keyToRowPointer.entrySet()) {

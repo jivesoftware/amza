@@ -154,10 +154,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                                             WALTimestampId got = delta.getTimestampId(key);
                                             if (got == null || got.getTimestampId() < value.getTimestampId()) {
                                                 delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
+                                                delta.appendTxFps(rowTxId, rowFP);
                                             }
                                         }
                                         //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
-                                        delta.appendTxFps(rowTxId, rowFP);
                                     } finally {
                                         releaseOne();
                                     }

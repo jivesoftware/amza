@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>executable-build-management</artifactId>
-        <version>0.58</version>
+        <version>0.59</version>
         <relativePath>../inheritance-poms/executable-build-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -49,17 +49,17 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-service</artifactId>
-            <version>0.58</version>
+            <version>0.59</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-ui</artifactId>
-            <version>0.58</version>
+            <version>0.59</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
-            <version>0.58</version>
+            <version>0.59</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -96,19 +96,19 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-transport</artifactId>
-            <version>0.58</version>
+            <version>0.59</version>
             <type>jar</type>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-mapdb-storage</artifactId>
-            <version>0.58</version>
+            <version>0.59</version>
             <type>jar</type>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-berkeleydb-storage</artifactId>
-            <version>0.58</version>
+            <version>0.59</version>
             <type>jar</type>
         </dependency>
         <!--        <dependency>

@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
@@ -53,7 +54,7 @@ class RegionDelta {
         this.compacting = new AtomicReference<>(compacting);
     }
 
-    WALValue get(WALKey key) throws Exception {
+    Optional<WALValue> get(WALKey key) throws Exception {
         WALPointer got = pointerIndex.get(key);
         if (got == null) {
             RegionDelta regionDelta = compacting.get();
@@ -62,7 +63,7 @@ class RegionDelta {
             }
             return null;
         }
-        return deltaWAL.hydrate(got.getFp()).getValue();
+        return Optional.fromNullable(got.getTombstoned() ? null : deltaWAL.hydrate(got.getFp()).getValue());
     }
 
     WALTimestampId getTimestampId(WALKey key) throws Exception {
@@ -99,23 +100,27 @@ class RegionDelta {
         boolean missed = false;
         List<WALValue> result = new ArrayList<>(keys.size());
         for (WALKey key : keys) {
-            WALValue got = get(key);
-            missed |= (got == null);
-            result.add(got);
+            Optional<WALValue> got = get(key);
+            if (got == null) {
+                missed |= (got == null);
+                result.add(null);
+            } else {
+                result.add(got.orNull());
+            }
         }
         return new DeltaResult<>(missed, result);
     }
 
-    boolean containsKey(WALKey key) {
+    Boolean containsKey(WALKey key) {
         WALPointer got = pointerIndex.get(key);
         if (got != null) {
-            return true;
+            return !got.getTombstoned();
         }
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
             return regionDelta.containsKey(key);
         }
-        return false;
+        return null;
 
     }
 

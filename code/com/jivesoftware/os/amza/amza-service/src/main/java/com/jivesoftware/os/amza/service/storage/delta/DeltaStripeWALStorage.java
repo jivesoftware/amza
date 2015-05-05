@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Table;
@@ -406,30 +407,31 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
     @Override
     public WALValue get(RegionName regionName, WALStorage storage, WALKey key) throws Exception {
-        WALValue got;
         acquireOne();
         try {
-            got = getRegionDeltas(regionName).get(key);
+            Optional<WALValue> deltaGot = getRegionDeltas(regionName).get(key);
+            if (deltaGot != null) {
+                return deltaGot.orNull();
+            }
         } finally {
             releaseOne();
         }
-        if (got == null) {
-            got = storage.get(key);
-        }
-        return got;
+        return storage.get(key);
 
     }
 
     @Override
     public boolean containsKey(RegionName regionName, WALStorage storage, WALKey key) throws Exception {
-        boolean contains;
         acquireOne();
         try {
-            contains = getRegionDeltas(regionName).containsKey(key);
+            Boolean contained = getRegionDeltas(regionName).containsKey(key);
+            if (contained != null) {
+                return contained;
+            }
         } finally {
             releaseOne();
         }
-        return contains || storage.containsKey(key);
+        return storage.containsKey(key);
     }
 
     private WALTimestampId[] getTimestamps(RegionName regionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws Exception {

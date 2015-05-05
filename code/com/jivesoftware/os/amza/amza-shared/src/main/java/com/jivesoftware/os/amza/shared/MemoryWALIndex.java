@@ -86,7 +86,8 @@ public class MemoryWALIndex implements WALIndex {
     public List<Boolean> containsKey(List<WALKey> keys) {
         List<Boolean> contains = new ArrayList<>(keys.size());
         for (WALKey key : keys) {
-            contains.add(index.containsKey(key));
+            WALPointer got = index.get(key);
+            contains.add(got == null ? false : !got.getTombstoned());
         }
         return contains;
     }

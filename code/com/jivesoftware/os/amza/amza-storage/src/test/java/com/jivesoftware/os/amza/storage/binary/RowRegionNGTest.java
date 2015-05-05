@@ -46,10 +46,10 @@ public class RowRegionNGTest {
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         RegionName regionName = new RegionName(false, "ring", "booya");
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, -1);
 
         final OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, 1000, 1000);
+        final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, 1000, 1000, 2);
         indexedWAL.load();
 
         final Random r = new Random();
@@ -135,10 +135,10 @@ public class RowRegionNGTest {
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         RegionName regionName = new RegionName(false, "ring", "booya");
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, 1000, 1000);
+        IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, 1000, 1000, 2);
         indexedWAL.load();
         WALValue value = indexedWAL.get(rk(1));
         Assert.assertNull(value);

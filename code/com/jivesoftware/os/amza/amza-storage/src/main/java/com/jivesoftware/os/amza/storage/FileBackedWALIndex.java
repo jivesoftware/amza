@@ -323,7 +323,8 @@ public class FileBackedWALIndex implements WALIndex {
                 contains.addAll(Collections.<Boolean>nCopies(keys.size(), Boolean.FALSE));
             } else {
                 for (WALKey key : keys) {
-                    contains.add(MapStore.INSTANCE.contains(filer, sls.mapContext, key.getKey()));
+                    WALPointer pointer = getPointer(key);
+                    contains.add(pointer == null ? false : !pointer.getTombstoned());
                 }
             }
             return contains;

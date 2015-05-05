@@ -147,15 +147,15 @@ public class RegionIndex implements RowChanges {
         }
     }
 
-    void putProperties(RegionName regionName, RegionProperties properties) {
+    public void putProperties(RegionName regionName, RegionProperties properties) {
         regionProperties.put(regionName, properties);
     }
 
-    void put(RegionName regionName, RegionStore regionStore) {
+    public void put(RegionName regionName, RegionStore regionStore) {
         regionStores.put(regionName, regionStore);
     }
 
-    void removeProperties(RegionName regionName) {
+    public void removeProperties(RegionName regionName) {
         regionProperties.remove(regionName);
     }
 

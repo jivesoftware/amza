@@ -82,13 +82,15 @@ public class IndexedWAL implements WALStorage {
     private final AtomicLong clobberCount = new AtomicLong(0);
     private final AtomicLong indexUpdates = new AtomicLong(0);
     private final AtomicLong highestTxId = new AtomicLong(0);
+    private final int tombstoneCompactionFactor;
 
     public IndexedWAL(RegionName regionName,
         OrderIdProvider orderIdProvider,
         RowMarshaller<byte[]> rowMarshaller,
         WALTx walTx,
         int maxUpdatesBetweenCompactionHintMarker,
-        int maxUpdatesBetweenIndexCommitMarker) {
+        int maxUpdatesBetweenIndexCommitMarker,
+        int tombstoneCompactionFactor) {
 
         this.regionName = regionName;
         this.orderIdProvider = orderIdProvider;
@@ -96,6 +98,7 @@ public class IndexedWAL implements WALStorage {
         this.walTx = walTx;
         this.maxUpdatesBetweenCompactionHintMarker = new AtomicInteger(maxUpdatesBetweenCompactionHintMarker);
         this.maxUpdatesBetweenIndexCommitMarker = new AtomicInteger(maxUpdatesBetweenIndexCommitMarker);
+        this.tombstoneCompactionFactor = tombstoneCompactionFactor;
 
         int numKeyHighwaterStripes = 1024; // TODO expose to config
         this.stripedKeyHighwaterTimestamps = new MutableLong[numKeyHighwaterStripes];
@@ -111,7 +114,7 @@ public class IndexedWAL implements WALStorage {
     @Override
     public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
 
-        if ((clobberCount.get() + 1) / (newCount.get() + 1) > 2) { // TODO expose to config
+        if ((clobberCount.get() + 1) / (newCount.get() + 1) > tombstoneCompactionFactor) {
             return compact(removeTombstonedOlderThanTimestampId, ttlTimestampId);
         }
         return -1;
@@ -222,7 +225,7 @@ public class IndexedWAL implements WALStorage {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(FilerIO.longsBytes(new long[] {
+            rowWriter.writeSystem(FilerIO.longsBytes(new long[]{
                 WALWriter.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
@@ -233,25 +236,24 @@ public class IndexedWAL implements WALStorage {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(FilerIO.longsBytes(new long[] {
+            rowWriter.writeSystem(FilerIO.longsBytes(new long[]{
                 WALWriter.COMMIT_KEY,
-                indexCommitedUpToTxId }));
+                indexCommitedUpToTxId}));
         }
     }
 
     /*TODO if we care, persist stripedKeyHighwaterTimestamps periodically as a cold start optimization for getLargestTimestampForKeyStripe()
-    private void writeStripedTimestamp(WALWriter rowWriter) throws Exception {
-        synchronized (oneTransactionAtATimeLock) {
-            rowWriter.write(
-                Collections.singletonList(-1L),
-                Collections.singletonList(WALWriter.SYSTEM_VERSION_1),
-                Collections.singletonList(FilerIO.longsBytes(new long[]{
-                    WALWriter.STRIPE_TIME_MARKER,
-                    stripedKeyHighwaterTimestamps})));
-        }
-    }
-    */
-
+     private void writeStripedTimestamp(WALWriter rowWriter) throws Exception {
+     synchronized (oneTransactionAtATimeLock) {
+     rowWriter.write(
+     Collections.singletonList(-1L),
+     Collections.singletonList(WALWriter.SYSTEM_VERSION_1),
+     Collections.singletonList(FilerIO.longsBytes(new long[]{
+     WALWriter.STRIPE_TIME_MARKER,
+     stripedKeyHighwaterTimestamps})));
+     }
+     }
+     */
     @Override
     public RowsChanged update(final boolean useUpdateTxId,
         WALReplicator walReplicator,
@@ -462,7 +464,7 @@ public class IndexedWAL implements WALStorage {
         try {
             WALPointer got = walIndex.get().getPointer(key);
             if (got != null) {
-                return hydrateRowIndexValue(got);
+                return got.getTombstoned() ? null : hydrateRowIndexValue(got);
             }
             return null;
         } finally {
@@ -478,7 +480,7 @@ public class IndexedWAL implements WALStorage {
             WALValue[] values = new WALValue[gots.length];
             for (int i = 0; i < values.length; i++) {
                 if (gots[i] != null) {
-                    values[i] = hydrateRowIndexValue(gots[i]);
+                    values[i] = gots[i].getTombstoned() ? null : hydrateRowIndexValue(gots[i]);
                 }
             }
             return values;

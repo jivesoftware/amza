@@ -25,12 +25,15 @@ public class DeltaWALFactory {
     private final File walDir;
     private final RowIOProvider ioProvider;
     private final RowMarshaller<byte[]> rowMarshaller;
+    private final int compactAfterGrowthFactor;
 
-    public DeltaWALFactory(OrderIdProvider idProvider, File walDir, RowIOProvider ioProvider, RowMarshaller<byte[]> rowMarshaller) {
+    public DeltaWALFactory(OrderIdProvider idProvider, File walDir, RowIOProvider ioProvider, RowMarshaller<byte[]> rowMarshaller,
+        int compactAfterGrowthFactor) {
         this.idProvider = idProvider;
         this.walDir = walDir;
         this.ioProvider = ioProvider;
         this.rowMarshaller = rowMarshaller;
+        this.compactAfterGrowthFactor = compactAfterGrowthFactor;
     }
 
     public DeltaWAL create() throws Exception {
@@ -38,7 +41,7 @@ public class DeltaWALFactory {
     }
 
     private DeltaWAL createOrOpen(long id) throws Exception {
-        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, rowMarshaller, new NoOpWALIndexProvider());
+        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, rowMarshaller, new NoOpWALIndexProvider(), compactAfterGrowthFactor);
         deltaWALRowsTx.validateAndRepair();
         LOG.info("Created:" + walDir + "/" + id);
         return new DeltaWAL(id, idProvider, rowMarshaller, deltaWALRowsTx);

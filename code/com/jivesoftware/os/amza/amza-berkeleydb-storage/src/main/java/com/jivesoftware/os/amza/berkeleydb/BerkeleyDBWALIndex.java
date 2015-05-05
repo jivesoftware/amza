@@ -130,14 +130,9 @@ public class BerkeleyDBWALIndex implements WALIndex {
         lock.acquire();
         try {
             List<Boolean> contains = new ArrayList<>(keys.size());
-            DatabaseEntry value = new DatabaseEntry();
-            for (WALKey key : keys) {
-                OperationStatus status = database.get(null, new DatabaseEntry(key.getKey()), value, LockMode.READ_UNCOMMITTED);
-                if (status == OperationStatus.SUCCESS) {
-                    contains.add(true);
-                } else {
-                    contains.add(false);
-                }
+            for (WALKey key : keys) { // TODO: Batch contains call?
+                WALPointer pointer = getPointer(key);
+                contains.add(pointer == null ? Boolean.FALSE : !pointer.getTombstoned());
             }
             return contains;
         } finally {

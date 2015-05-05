@@ -46,6 +46,7 @@ public class BinaryWALTx implements WALTx {
     private final String name;
     private final RowMarshaller<byte[]> rowMarshaller;
     private final WALIndexProvider walIndexProvider;
+    private final int compactAfterGrowthFactor;
     private final AtomicLong lastEndOfLastRow = new AtomicLong(-1);
 
     private final RowIOProvider ioProvider;
@@ -55,12 +56,14 @@ public class BinaryWALTx implements WALTx {
         String prefix,
         RowIOProvider ioProvider,
         RowMarshaller<byte[]> rowMarshaller,
-        WALIndexProvider walIndexProvider) throws Exception {
+        WALIndexProvider walIndexProvider,
+        int compactAfterGrowthFactor) throws Exception {
         this.dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
         this.name = prefix + SUFFIX;
         this.ioProvider = ioProvider;
         this.rowMarshaller = rowMarshaller;
         this.walIndexProvider = walIndexProvider;
+        this.compactAfterGrowthFactor = compactAfterGrowthFactor;
         this.io = ioProvider.create(dir, name);
     }
 
@@ -223,7 +226,7 @@ public class BinaryWALTx implements WALTx {
                 try {
                     io.close();
                 } catch (Exception x) {
-                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[] { dir.getAbsolutePath() }, x);
+                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[]{dir.getAbsolutePath()}, x);
                 }
                 io.delete();
                 return true;
@@ -244,7 +247,7 @@ public class BinaryWALTx implements WALTx {
             lastEndOfLastRow.set(endOfLastRow);
             return Optional.absent();
         }
-        if (endOfLastRow < lastEndOfLastRow.get() * 2) {
+        if (compactAfterGrowthFactor > -1 &&  endOfLastRow < lastEndOfLastRow.get() * compactAfterGrowthFactor) {
             return Optional.absent();
         }
         lastEndOfLastRow.set(endOfLastRow);

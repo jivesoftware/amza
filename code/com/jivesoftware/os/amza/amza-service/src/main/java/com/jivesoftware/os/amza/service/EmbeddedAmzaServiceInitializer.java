@@ -1,32 +1,20 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
-import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.storage.IndexedWAL;
-import com.jivesoftware.os.amza.storage.NonIndexWAL;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
-import java.io.File;
-import java.io.IOException;
-import java.util.Set;
 
 /**
  *
@@ -48,83 +36,11 @@ public class EmbeddedAmzaServiceInitializer {
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         final RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor);
 
-        WALStorageProvider walStorageProvider = new WALStorageProvider() {
-            @Override
-            public WALStorage create(File workingDirectory,
-                String domain,
-                RegionName regionName,
-                WALStorageDescriptor storageDescriptor) throws Exception {
-
-                WALIndexProvider walIndexProvider = indexProviderRegistry.getWALIndexProvider(storageDescriptor);
-
-                final File directory = new File(workingDirectory, domain);
-                directory.mkdirs();
-
-                BinaryWALTx binaryWALTx = new BinaryWALTx(directory,
-                    regionName.toBase64(),
-                    rowIOProvider,
-                    rowMarshaller,
-                    walIndexProvider);
-
-                return new IndexedWAL(regionName,
-                    orderIdProvider,
-                    rowMarshaller, binaryWALTx,
-                    storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
-                    storageDescriptor.maxUpdatesBetweenIndexCommitMarker);
-            }
-
-            @Override
-            public Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException {
-                Set<RegionName> regionNames = Sets.newHashSet();
-                for (String workingDirectory : workingDirectories) {
-                    File directory = new File(workingDirectory, domain);
-                    if (directory.exists() && directory.isDirectory()) {
-                        Set<String> regions = BinaryWALTx.listExisting(directory, rowIOProvider);
-                        for (String region : regions) {
-                            regionNames.add(RegionName.fromBase64(region));
-                        }
-                    }
-                }
-                return regionNames;
-            }
-        };
-
-        WALStorageProvider tmpWALStorageProvider = new WALStorageProvider() {
-            @Override
-            public WALStorage create(File workingDirectory,
-                String domain,
-                RegionName regionName,
-                WALStorageDescriptor storageDescriptor) throws Exception {
-
-                final File directory = new File(workingDirectory, domain);
-                directory.mkdirs();
-                BinaryWALTx rowsTx = new BinaryWALTx(directory,
-                    regionName.toBase64(),
-                    rowIOProvider,
-                    rowMarshaller,
-                    new NoOpWALIndexProvider());
-                rowsTx.validateAndRepair();
-                return new NonIndexWAL(regionName,
-                    orderIdProvider,
-                    rowMarshaller,
-                    rowsTx);
-            }
-
-            @Override
-            public Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException {
-                Set<RegionName> regionNames = Sets.newHashSet();
-                for (String workingDirectory : workingDirectories) {
-                    File directory = new File(workingDirectory, domain);
-                    if (directory.exists() && directory.isDirectory()) {
-                        Set<String> regions = BinaryWALTx.listExisting(directory, rowIOProvider);
-                        for (String region : regions) {
-                            regionNames.add(RegionName.fromBase64(region));
-                        }
-                    }
-                }
-                return regionNames;
-            }
-        };
+        int tombstoneCompactionFactor = 2; // TODO expose to config;
+        int compactAfterGrowthFactor = 2; // TODO expose to config;
+        WALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
+            rowIOProvider, rowMarshaller, orderIdProvider, tombstoneCompactionFactor, compactAfterGrowthFactor);
+        WALStorageProvider tmpWALStorageProvider = new TemporaryWALStorageProvider(rowIOProvider, rowMarshaller, orderIdProvider);
 
         return new AmzaServiceInitializer().initialize(config,
             amzaStats,
@@ -142,4 +58,5 @@ public class EmbeddedAmzaServiceInitializer {
             allRowChanges);
 
     }
+
 }

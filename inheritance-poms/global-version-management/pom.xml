@@ -11,9 +11,9 @@
     <artifactId>global-version-management</artifactId>
     <packaging>pom</packaging>
     <properties>
-        <jive.utils.version>0.83</jive.utils.version>
-        <mlogger.version>0.8</mlogger.version>
-        <filer.version>0.70</filer.version>
+        <jive.utils.version>0.88</jive.utils.version>
+        <mlogger.version>0.9</mlogger.version>
+        <filer.version>0.72</filer.version>
         <upena-version>0.78</upena-version>
         <commons.io.version>2.4</commons.io.version>
     </properties>

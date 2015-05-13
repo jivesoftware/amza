@@ -37,10 +37,6 @@
             <artifactId>je</artifactId>
             <version>6.2.31</version>
         </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.filer</groupId>
-            <artifactId>io</artifactId>
-        </dependency>
     </dependencies>
     <name>amza-berkeleydb-storage</name>
 </project>

@@ -51,7 +51,10 @@ public class WALValue implements Serializable {
 
     @Override
     public String toString() {
-        return "WALValue{" + "timestamp=" + timestamp + ", tombstoned=" + tombstoned + ", value=" + new String(value, StandardCharsets.US_ASCII) + '}';
+        return "WALValue{" +
+            "timestamp=" + timestamp +
+            ", tombstoned=" + tombstoned +
+            ", value=" + (value != null ? new String(value, StandardCharsets.US_ASCII) : "null") + '}';
     }
 
     @Override

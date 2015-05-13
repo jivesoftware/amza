@@ -188,6 +188,7 @@ public class AmzaServiceInitializer {
         }
 
         AmzaHostRing amzaRing = new AmzaHostRing(amzaReadHostRing, systemRegionStripe, replicator, orderIdProvider);
+        amzaRegionWatcher.watch(RegionProvider.RING_INDEX, amzaRing);
 
         RegionBackHighwaterMarks highwaterMarks = new RegionBackHighwaterMarks(orderIdProvider, ringHost, systemRegionStripe, replicator);
 

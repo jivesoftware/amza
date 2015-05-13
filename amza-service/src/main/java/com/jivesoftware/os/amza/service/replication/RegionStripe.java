@@ -78,8 +78,8 @@ public class RegionStripe {
         storage.flush(fsync);
     }
 
-    public RowStoreUpdates startTransaction(RegionName regionName, long nextId) {
-        return new RowStoreUpdates(amzaStats, regionName, this, new RowsStorageUpdates(regionName, this, idProvider.nextId()));
+    public RowStoreUpdates startTransaction(RegionName regionName) {
+        return new RowStoreUpdates(amzaStats, regionName, this, new RowsStorageUpdates(regionName, this));
     }
 
     public WALValue get(RegionName regionName, WALKey key) throws Exception {

@@ -15,11 +15,14 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
@@ -33,8 +36,9 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ConcurrentMap;
 
-public class AmzaHostRing implements AmzaRing {
+public class AmzaHostRing implements AmzaRing, RowChanges {
 
     public static enum Status {
 
@@ -47,7 +51,7 @@ public class AmzaHostRing implements AmzaRing {
         }
 
         public byte[] toBytes() {
-            return new byte[]{b};
+            return new byte[] { b };
         }
 
         static Status fromBytes(byte[] b) {
@@ -65,6 +69,7 @@ public class AmzaHostRing implements AmzaRing {
     private final RegionStripe systemRegionStripe;
     private final WALReplicator replicator;
     private final TimestampedOrderIdProvider orderIdProvider;
+    private final ConcurrentMap<String, Integer> ringSizes = Maps.newConcurrentMap();
 
     public AmzaHostRing(AmzaRingReader ringReader,
         RegionStripe systemRegionStripe,
@@ -74,6 +79,15 @@ public class AmzaHostRing implements AmzaRing {
         this.systemRegionStripe = systemRegionStripe;
         this.replicator = replicator;
         this.orderIdProvider = orderIdProvider;
+    }
+
+    @Override
+    public void changes(RowsChanged changes) throws Exception {
+        if (RegionProvider.RING_INDEX.equals(changes.getRegionName())) {
+            for (WALKey key : changes.getApply().columnKeySet()) {
+                ringSizes.remove(ringReader.keyToRingName(key));
+            }
+        }
     }
 
     public RingHost getRingHost() {
@@ -90,14 +104,43 @@ public class AmzaHostRing implements AmzaRing {
         return ringReader.getRing(ringName);
     }
 
+    @Override
+    public int getRingSize(String ringName) throws Exception {
+        return ringSizes.computeIfAbsent(ringName, key -> {
+            try {
+                return ringReader.getRing(key).size();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    public void ensureMaximalSubRing(String ringName) throws Exception {
+        ensureSubRing(ringName, getRingSize("system"));
+    }
+
+    public void ensureSubRing(String ringName, int desiredRingSize) throws Exception {
+        if (ringName == null) {
+            throw new IllegalArgumentException("ringName cannot be null.");
+        }
+        int ringSize = getRingSize(ringName);
+        if (ringSize < desiredRingSize) {
+            LOG.info("Ring {} will grow, has {} desires {}", ringName, ringSize, desiredRingSize);
+            buildRandomSubRing(ringName, desiredRingSize);
+        }
+    }
+
     public void buildRandomSubRing(String ringName, int desiredRingSize) throws Exception {
+        if (ringName == null) {
+            throw new IllegalArgumentException("ringName cannot be null.");
+        }
         List<RingHost> ring = ringReader.getRing("system");
         if (ring.size() < desiredRingSize) {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
         Collections.shuffle(ring, new Random(ringName.hashCode()));
         for (int i = 0; i < desiredRingSize; i++) {
-            addRingHost(ringName, ring.get(i));
+            addInternal(ringName, ring.get(i));
         }
     }
 
@@ -109,6 +152,10 @@ public class AmzaHostRing implements AmzaRing {
         if (ringHost == null) {
             throw new IllegalArgumentException("ringHost cannot be null.");
         }
+        addInternal(ringName, ringHost);
+    }
+
+    private void addInternal(String ringName, RingHost ringHost) throws Exception {
         final WALKey key = ringReader.key(ringName, ringHost);
         WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX, key);
         if (had == null) {
@@ -116,7 +163,6 @@ public class AmzaHostRing implements AmzaRing {
                 scan.row(-1, key, new WALValue(new byte[Status.online.b], orderIdProvider.nextId(), false));
             });
         }
-
     }
 
     @Override

@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
-import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
@@ -128,9 +127,10 @@ public class AmzaEndpoints {
 
     AmzaRegion createRegionIfAbsent(String regionName) throws Exception {
 
-        List<RingHost> ring = amzaService.getAmzaRing().getRing("default");
-        if (ring.isEmpty()) {
-            amzaService.getAmzaRing().buildRandomSubRing("default", amzaService.getAmzaRing().getRing("system").size());
+        int ringSize = amzaService.getAmzaRing().getRingSize("default");
+        int systemRingSize = amzaService.getAmzaRing().getRingSize("system");
+        if (ringSize < systemRingSize) {
+            amzaService.getAmzaRing().buildRandomSubRing("default", systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),

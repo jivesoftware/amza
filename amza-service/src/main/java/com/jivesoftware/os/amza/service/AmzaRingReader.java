@@ -47,6 +47,11 @@ public class AmzaRingReader {
         return RingHost.fromBytes(UIO.readByteArray(filer, "ringHost"));
     }
 
+    String keyToRingName(WALKey key) throws IOException {
+        MemoryFiler filer = new MemoryFiler(key.getKey());
+        return UIO.readString(filer, "ringName");
+    }
+
     public RingHost getRingHost() {
         return ringHost;
     }

@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
+import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 
 public class RowStoreUpdates {
@@ -38,25 +39,11 @@ public class RowStoreUpdates {
         this.rowsStorageChangeSet = rowsStorageChangeSet;
     }
 
-    public WALKey add(WALKey key, byte[] value) throws Exception {
+    public WALKey put(WALKey key, WALValue value) throws Exception {
         if (rowsStorageChangeSet.put(key, value)) {
             changedCount++;
         }
         return key;
-    }
-
-    public boolean remove(WALKey key) throws Exception {
-        if (rowsStorageChangeSet.containsKey(key)) {
-            byte[] got = rowsStorageChangeSet.getValue(key);
-            if (got != null) {
-                if (rowsStorageChangeSet.remove(key)) {
-                    changedCount++;
-                }
-            }
-            return true;
-        } else {
-            return false;
-        }
     }
 
     public void commit(WALReplicator replicator) throws Exception {

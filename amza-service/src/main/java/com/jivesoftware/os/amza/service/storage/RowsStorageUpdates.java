@@ -32,19 +32,18 @@ public class RowsStorageUpdates implements RangeScannable<WALValue> {
     private final RegionName regionName;
     private final RegionStripe regionStripe;
     private final ConcurrentSkipListMap<WALKey, WALValue> changes;
-    private final long timestamp;
 
-    public RowsStorageUpdates(RegionName regionName, RegionStripe regionStripe, long timestamp) {
+    public RowsStorageUpdates(RegionName regionName, RegionStripe regionStripe) {
         this.regionName = regionName;
         this.regionStripe = regionStripe;
-        this.timestamp = timestamp;
         this.changes = new ConcurrentSkipListMap<>();
     }
 
     @Override
     public void rowScan(Scan<WALValue> scan) throws Exception {
         for (Entry<WALKey, WALValue> e : changes.entrySet()) {
-            if (!scan.row(timestamp, e.getKey(), e.getValue())) {
+            WALValue value = e.getValue();
+            if (!scan.row(value.getTimestampId(), e.getKey(), value)) {
                 return;
             }
         }
@@ -53,17 +52,11 @@ public class RowsStorageUpdates implements RangeScannable<WALValue> {
     @Override
     public void rangeScan(WALKey from, WALKey to, Scan<WALValue> scan) throws Exception {
         for (Entry<WALKey, WALValue> e : changes.subMap(from, to).entrySet()) {
-            if (!scan.row(timestamp, e.getKey(), e.getValue())) {
+            WALValue value = e.getValue();
+            if (!scan.row(value.getTimestampId(), e.getKey(), value)) {
                 return;
             }
         }
-    }
-
-    public boolean containsKey(WALKey key) throws Exception {
-        if (key == null) {
-            throw new IllegalArgumentException("key cannot be null.");
-        }
-        return regionStripe.containsKey(regionName, key);
     }
 
     public byte[] getValue(WALKey key) throws Exception {
@@ -77,34 +70,18 @@ public class RowsStorageUpdates implements RangeScannable<WALValue> {
         return got.getValue();
     }
 
-    public WALValue getTimestampedValue(WALKey key) throws Exception {
-        if (key == null) {
-            return null;
-        }
-        return regionStripe.get(regionName, key);
-    }
-
-    public boolean put(WALKey key, byte[] value) throws Exception {
+    public boolean put(WALKey key, WALValue update) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        WALValue update = new WALValue(value, timestamp, false);
-        changes.put(key, update);
+        changes.merge(key, update, (existing, provided) -> {
+            if (provided.getTimestampId() >= existing.getTimestampId()) {
+                return provided;
+            } else {
+                return existing;
+            }
+        });
         return true;
-    }
-
-    public boolean remove(WALKey key) throws Exception {
-        if (key == null) {
-            return false;
-        }
-        WALValue current = regionStripe.get(regionName, key);
-        byte[] value = (current != null) ? current.getValue() : null;
-        WALValue update = new WALValue(value, timestamp, true);
-        if (current == null || current.getTimestampId() < update.getTimestampId()) {
-            changes.put(key, update);
-            return true;
-        }
-        return false;
     }
 
 }

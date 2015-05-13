@@ -212,14 +212,15 @@ public class AmzaService implements AmzaInstance {
         return regionWatcher.unwatch(regionName);
     }
 
-    public boolean replicate(RegionName regionName, Scannable<WALValue> rowUpdates, int replicateToNHosts, int requireNReplicas) throws Exception {
+    public boolean replicate(RegionName regionName, Scannable<WALValue> rowUpdates, int requireNReplicas) throws Exception {
         List<RingHost> ringHosts = ringReader.getRing(regionName.getRingName());
         //TODO consider spinning until we reach quorum, or force election to the sub-ring
+        RegionProperties regionProperties = getRegionProperties(regionName);
         int numReplicated = changeReplicator.replicateUpdatesToRingHosts(regionName,
             rowUpdates,
             false,
             ringHosts.toArray(new RingHost[ringHosts.size()]),
-            replicateToNHosts);
+            regionProperties.replicationFactor);
         return numReplicated >= requireNReplicas;
     }
 

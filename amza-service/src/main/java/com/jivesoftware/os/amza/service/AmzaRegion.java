@@ -63,22 +63,45 @@ public class AmzaRegion {
             throw new IllegalStateException("Value cannot be null.");
         }
         long timestamp = orderIdProvider.nextId();
-        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe, timestamp));
-        tx.add(key, value);
+        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
+        tx.put(key, new WALValue(value, timestamp, false));
+        tx.commit(replicator);
+        return key;
+    }
+
+    public WALKey setValue(WALKey key, WALValue value) throws Exception {
+        if (value == null) {
+            throw new IllegalStateException("Value cannot be null.");
+        }
+        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
+        tx.put(key, value);
         tx.commit(replicator);
         return key;
     }
 
     public void set(Iterable<Entry<WALKey, byte[]>> entries) throws Exception {
         long timestamp = orderIdProvider.nextId();
-        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe, timestamp));
+        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
         for (Entry<WALKey, byte[]> e : entries) {
             WALKey k = e.getKey();
             byte[] v = e.getValue();
             if (v == null) {
                 throw new IllegalStateException("Value cannot be null.");
             }
-            tx.add(k, v);
+            tx.put(k, new WALValue(v, timestamp, false));
+        }
+        tx.commit(replicator);
+    }
+
+    public void setValues(Iterable<Entry<WALKey, WALValue>> entries) throws Exception {
+        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
+        for (Entry<WALKey, WALValue> e : entries) {
+            WALKey k = e.getKey();
+            WALValue v = e.getValue();
+            if (v == null) {
+                throw new IllegalStateException("Value cannot be null.");
+            }
+            tx.put(k, v);
         }
         tx.commit(replicator);
     }
@@ -92,6 +115,10 @@ public class AmzaRegion {
             return null;
         }
         return got.getValue();
+    }
+
+    public WALValue getValue(WALKey key) throws Exception {
+        return regionStripe.get(regionName, key);
     }
 
     public List<byte[]> get(List<WALKey> keys) throws Exception {
@@ -122,16 +149,17 @@ public class AmzaRegion {
     }
 
     public boolean remove(WALKey key) throws Exception {
-        RowStoreUpdates tx = regionStripe.startTransaction(regionName, orderIdProvider.nextId());
-        tx.remove(key);
+        RowStoreUpdates tx = regionStripe.startTransaction(regionName);
+        tx.put(key, new WALValue(null, orderIdProvider.nextId(), true));
         tx.commit(replicator);
         return true;
     }
 
     public void remove(Iterable<WALKey> keys) throws Exception {
-        RowStoreUpdates tx = regionStripe.startTransaction(regionName, orderIdProvider.nextId());
+        long timestamp = orderIdProvider.nextId();
+        RowStoreUpdates tx = regionStripe.startTransaction(regionName);
         for (WALKey key : keys) {
-            tx.remove(key);
+            tx.put(key, new WALValue(null, timestamp, true));
         }
         tx.commit(replicator);
     }

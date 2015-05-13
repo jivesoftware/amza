@@ -16,6 +16,8 @@ public interface AmzaRing {
 
     List<RingHost> getRing(String ringName) throws Exception;
 
+    int getRingSize(String ringName) throws Exception;
+
     void allRings(RingStream ringStream) throws Exception;
 
     interface RingStream {

@@ -131,7 +131,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
             byte[] row = wal.read((WALReader rowReader) -> rowReader.read(fp));
             return rowMarshaller.fromRow(row);
         } catch (Exception x) {
-            throw new RuntimeException("Failed to hydrate " + fp, x);
+            throw new RuntimeException("Failed to hydrate fp:" + fp + " length:" + wal.length(), x);
         }
     }
 

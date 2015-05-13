@@ -688,7 +688,7 @@ public class UIO {
         }
         boolean[] array = new boolean[len];
         byte[] bytes = new byte[len];
-        _filer.read(bytes);
+        readFully(_filer, bytes, len);
         for (int i = 0; i < len; i++) {
             array[i] = (bytes[i] != 0);
         }
@@ -702,7 +702,7 @@ public class UIO {
      * @throws IOException
      */
     public static void read(IReadable _filer, byte[] array) throws IOException {
-        _filer.read(array);
+        readFully(_filer, array, array.length);
     }
 
     /**
@@ -721,7 +721,7 @@ public class UIO {
             return new byte[0];
         }
         byte[] array = new byte[len];
-        _filer.read(array);
+        readFully(_filer, array, len);
         return array;
     }
 
@@ -742,7 +742,7 @@ public class UIO {
         }
         char[] array = new char[len];
         byte[] bytes = new byte[2 * len];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 2 * len);
         for (int i = 0; i < len; i++) {
             int j = i * 2;
             char v = 0;
@@ -772,7 +772,7 @@ public class UIO {
         }
         short[] array = new short[len];
         byte[] bytes = new byte[2 * len];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 2 * len);
         for (int i = 0; i < len; i++) {
             int j = i * 2;
             short v = 0;
@@ -801,7 +801,7 @@ public class UIO {
         }
         int[] array = new int[len];
         byte[] bytes = new byte[4 * len];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 4 * len);
         for (int i = 0; i < len; i++) {
             int j = i * 4;
             int v = 0;
@@ -857,7 +857,7 @@ public class UIO {
         }
         long[] array = new long[len];
         byte[] bytes = new byte[8 * len];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 8 * len);
         for (int i = 0; i < len; i++) {
             int j = i * 8;
             long v = 0;
@@ -899,7 +899,7 @@ public class UIO {
         }
         float[] array = new float[len];
         byte[] bytes = new byte[4 * len];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 4 * len);
         for (int i = 0; i < len; i++) {
             int j = i * 4;
             int v = 0;
@@ -933,7 +933,7 @@ public class UIO {
         }
         double[] array = new double[len];
         byte[] bytes = new byte[8 * len];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 8 * len);
         for (int i = 0; i < len; i++) {
             int j = i * 8;
             long v = 0;
@@ -1003,7 +1003,11 @@ public class UIO {
      * @throws IOException
      */
     public static byte readByte(IReadable _filer, String fieldName) throws IOException {
-        return (byte) _filer.read();
+        int v = _filer.read();
+        if (v < 0) {
+            throw new EOFException();
+        }
+        return (byte)v;
     }
 
     /**
@@ -1014,7 +1018,11 @@ public class UIO {
      * @throws IOException
      */
     public static int readUnsignedByte(IReadable _filer, String fieldName) throws IOException {
-        return _filer.read();
+        int v = _filer.read();
+        if (v < 0) {
+            throw new EOFException();
+        }
+        return v;
     }
 
     /**
@@ -1026,7 +1034,7 @@ public class UIO {
      */
     public static short readShort(IReadable _filer, String fieldName) throws IOException {
         byte[] bytes = new byte[2];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 2);
         short v = 0;
         v |= (bytes[0] & 0xFF);
         v <<= 8;
@@ -1043,7 +1051,7 @@ public class UIO {
      */
     public static int readUnsignedShort(IReadable _filer, String fieldName) throws IOException {
         byte[] bytes = new byte[2];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 2);
         int v = 0;
         v |= (bytes[0] & 0xFF);
         v <<= 8;
@@ -1060,7 +1068,7 @@ public class UIO {
      */
     public static char readChar(IReadable _filer, String fieldName) throws IOException {
         byte[] bytes = new byte[2];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 2);
         char v = 0;
         v |= (bytes[0] & 0xFF);
         v <<= 8;
@@ -1090,7 +1098,7 @@ public class UIO {
      */
     public static int readInt(IReadable _filer, String fieldName) throws IOException {
         byte[] bytes = new byte[4];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 4);
         int v = 0;
         v |= (bytes[0] & 0xFF);
         v <<= 8;
@@ -1111,7 +1119,7 @@ public class UIO {
      */
     public static long readLong(IReadable _filer, String fieldName) throws IOException {
         byte[] bytes = new byte[8];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 8);
         long v = 0;
         v |= (bytes[0] & 0xFF);
         v <<= 8;
@@ -1128,7 +1136,6 @@ public class UIO {
         v |= (bytes[6] & 0xFF);
         v <<= 8;
         v |= (bytes[7] & 0xFF);
-
         return v;
     }
 
@@ -1141,7 +1148,7 @@ public class UIO {
      */
     public static float readFloat(IReadable _filer, String fieldName) throws Exception {
         byte[] bytes = new byte[4];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 4);
         int v = 0;
         v |= (bytes[0] & 0xFF);
         v <<= 8;
@@ -1194,7 +1201,7 @@ public class UIO {
      */
     public static double readDouble(IReadable _filer, String fieldName) throws Exception {
         byte[] bytes = new byte[8];
-        _filer.read(bytes);
+        readFully(_filer, bytes, 8);
         long v = 0;
         v |= (bytes[0] & 0xFF);
         v <<= 8;
@@ -1708,5 +1715,12 @@ public class UIO {
 
     public static void bytes(byte[] value, byte[] destination, int offset) {
         System.arraycopy(value, 0, destination, offset, value.length);
+    }
+
+    private static void readFully(IReadable readable, byte[] into, int length) throws IOException {
+        int read = readable.read(into);
+        if (read != length) {
+            throw new IOException("Failed to fully read length:" + length);
+        }
     }
 }

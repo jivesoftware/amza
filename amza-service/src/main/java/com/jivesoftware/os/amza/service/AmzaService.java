@@ -47,7 +47,6 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * Amza pronounced (AH m z ah )
@@ -247,17 +246,11 @@ public class AmzaService implements AmzaInstance {
             }
         }
 
-        final MutableLong lastTxId = new MutableLong(-1);
-        boolean tookToEnd = region.takeFromTransactionId(transactionId, (long rowTxId, WALKey key, WALValue scanned) -> {
-            if (rowTxId > lastTxId.longValue()) {
-                lastTxId.setValue(rowTxId);
-            }
-            return scan.row(rowTxId, key, scanned);
-        });
-        if (!tookToEnd) {
+        AmzaRegion.TakeResult takeResult = region.takeFromTransactionId(transactionId, scan);
+        if (!takeResult.tookToEnd) {
             cursors.clear();
         }
-        cursors.add(new TakeCursors.RingHostCursor(amzaRing.getRingHost(), lastTxId.longValue()));
+        cursors.add(new TakeCursors.RingHostCursor(amzaRing.getRingHost(), takeResult.lastTxId));
 
         return new TakeCursors(cursors);
     }

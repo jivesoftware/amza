@@ -36,7 +36,7 @@ import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
-import com.jivesoftware.os.filer.io.FilerIO;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -174,14 +174,14 @@ public class IndexedWAL implements WALStorage {
                         ByteBuffer buf = ByteBuffer.wrap(row);
                         byte[] keyBytes = new byte[8];
                         buf.get(keyBytes);
-                        long key = FilerIO.bytesLong(keyBytes);
+                        long key = UIO.bytesLong(keyBytes);
                         if (key == WALWriter.COMPACTION_HINTS_KEY) {
                             byte[] newCountBytes = new byte[8];
                             byte[] clobberCountBytes = new byte[8];
                             buf.get(newCountBytes);
                             buf.get(clobberCountBytes);
-                            newCount.set(FilerIO.bytesLong(newCountBytes));
-                            clobberCount.set(FilerIO.bytesLong(clobberCountBytes));
+                            newCount.set(UIO.bytesLong(newCountBytes));
+                            clobberCount.set(UIO.bytesLong(clobberCountBytes));
                             return false;
                         }
                     }
@@ -213,7 +213,7 @@ public class IndexedWAL implements WALStorage {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(FilerIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[]{
                 WALWriter.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
@@ -224,7 +224,7 @@ public class IndexedWAL implements WALStorage {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(FilerIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[]{
                 WALWriter.COMMIT_KEY,
                 indexCommitedUpToTxId}));
         }
@@ -236,7 +236,7 @@ public class IndexedWAL implements WALStorage {
      rowWriter.write(
      Collections.singletonList(-1L),
      Collections.singletonList(WALWriter.SYSTEM_VERSION_1),
-     Collections.singletonList(FilerIO.longsBytes(new long[]{
+     Collections.singletonList(UIO.longsBytes(new long[]{
      WALWriter.STRIPE_TIME_MARKER,
      stripedKeyHighwaterTimestamps})));
      }

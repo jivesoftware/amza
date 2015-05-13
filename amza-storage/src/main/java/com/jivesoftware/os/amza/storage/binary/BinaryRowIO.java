@@ -5,7 +5,7 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.IFiler;
-import com.jivesoftware.os.filer.io.FilerIO;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -47,7 +47,7 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
                 ByteBuffer buf = ByteBuffer.wrap(row);
                 byte[] keyBytes = new byte[8];
                 buf.get(keyBytes);
-                long key = FilerIO.bytesLong(keyBytes);
+                long key = UIO.bytesLong(keyBytes);
                 if (key == WALWriter.LEAP_KEY) {
                     buf.rewind();
                     latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
@@ -312,7 +312,7 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
 
         private byte[] toBytes() {
             ByteBuffer buf = ByteBuffer.wrap(new byte[8 + 8 + 4 + fpIndex.length * 16]);
-            buf.put(FilerIO.longBytes(WALWriter.LEAP_KEY));
+            buf.put(UIO.longBytes(WALWriter.LEAP_KEY));
             buf.putLong(lastTransactionId);
             buf.putInt(fpIndex.length);
             for (int i = 0; i < fpIndex.length; i++) {

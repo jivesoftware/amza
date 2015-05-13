@@ -12,9 +12,9 @@ import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
-import com.jivesoftware.os.filer.io.FilerIO;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
@@ -92,7 +92,7 @@ public class RowRegionNGTest {
 //
 //            @Override
 //            public boolean row(long transactionId, RowIndexKey key, RowIndexValue value) throws Exception {
-//                System.out.println(FilerIO.bytesInt(key.getKey()));
+//                System.out.println(UIO.bytesInt(key.getKey()));
 //                return true;
 //            }
 //        });
@@ -101,8 +101,8 @@ public class RowRegionNGTest {
     private void addBatch(Random r, OrderIdProviderImpl idProvider, IndexedWAL indexedWAL, int range, int start, int length) throws Exception {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         for (int i = start; i < start + length; i++) {
-            WALKey key = new WALKey(FilerIO.intBytes(r.nextInt(range)));
-            updates.put(key, new WALValue(FilerIO.intBytes(i), idProvider.nextId(), false));
+            WALKey key = new WALKey(UIO.intBytes(r.nextInt(range)));
+            updates.put(key, new WALValue(UIO.intBytes(i), idProvider.nextId(), false));
         }
         indexedWAL.update(false, (RowsChanged rowsChanged) -> Futures.immediateFuture(true), WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(
             updates));
@@ -181,7 +181,7 @@ public class RowRegionNGTest {
     }
 
     public byte[] k(int key) {
-        return FilerIO.intBytes(key);
+        return UIO.intBytes(key);
     }
 
     public byte[] v(String value) {

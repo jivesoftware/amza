@@ -180,7 +180,7 @@ public class BinaryRowReader implements WALReader {
                         int length = -1;
                         try {
                             length = UIO.readInt(filer, "length");
-                        } catch(IOException x) {
+                        } catch (IOException x) {
                             if (!allowRepairs) {
                                 throw x;
                             }

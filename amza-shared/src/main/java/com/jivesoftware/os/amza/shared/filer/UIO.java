@@ -1720,7 +1720,7 @@ public class UIO {
     private static void readFully(IReadable readable, byte[] into, int length) throws IOException {
         int read = readable.read(into);
         if (read != length) {
-            throw new IOException("Failed to fully read length:" + length);
+            throw new IOException("Failed to fully. Only had " + read + " needed " + length);
         }
     }
 }

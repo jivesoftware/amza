@@ -34,7 +34,7 @@ public class EmbeddedAmzaServiceInitializer {
         final RowChanges allRowChanges) throws Exception {
 
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-        final RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor);
+        final RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
         int tombstoneCompactionFactor = 2; // TODO expose to config;
         int compactAfterGrowthFactor = 2; // TODO expose to config;

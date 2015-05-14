@@ -33,7 +33,7 @@ public class BinaryRowReader implements WALReader {
 
     public static void main(String[] args) throws Exception {
         String rowFile = "/jive/peek/332267939997237250.kvt";
-        WALFiler walFiler = new WALFiler(rowFile, "rw");
+        WALFiler walFiler = new WALFiler(rowFile, "rw", false);
         BinaryRowReader reader = new BinaryRowReader(walFiler, new IoStats(), 10);
         System.out.println("rowFP\trowTxId\trowType\trow.length\trowBytes");
 
@@ -198,7 +198,7 @@ public class BinaryRowReader implements WALReader {
                         int trailingLength = -1;
                         try {
 
-                            rowType = (byte)filer.read();
+                            rowType = (byte) filer.read();
                             rowTxId = UIO.readLong(filer, "txId");
                             row = new byte[length - lengthOfTypeAndTxId];
                             if (row.length > 0) {

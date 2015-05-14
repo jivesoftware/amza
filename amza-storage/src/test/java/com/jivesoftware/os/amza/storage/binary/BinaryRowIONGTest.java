@@ -25,7 +25,7 @@ public class BinaryRowIONGTest {
     @Test
     public void testWrite() throws Exception {
         File file = File.createTempFile("BinaryRowIO", "dat");
-        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw");
+        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw", false);
         IoStats ioStats = new IoStats();
         BinaryRowIO rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
         int numRows = 10_000;
@@ -76,7 +76,7 @@ public class BinaryRowIONGTest {
     @Test
     public void testLeap() throws Exception {
         File file = File.createTempFile("BinaryRowIO", "dat");
-        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw");
+        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw", false);
         IoStats ioStats = new IoStats();
         BinaryRowIO rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
         int numRows = 10_000;

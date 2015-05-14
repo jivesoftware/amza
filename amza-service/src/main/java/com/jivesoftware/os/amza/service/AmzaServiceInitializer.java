@@ -84,6 +84,7 @@ public class AmzaServiceInitializer {
 
         public boolean hardFsync = false;
 
+        public boolean useMemMap = false;
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
@@ -103,7 +104,7 @@ public class AmzaServiceInitializer {
 
         AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(allRowChanges);
 
-        RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor);
+        RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
         RegionIndex regionIndex = new RegionIndex(amzaStats, config.workingDirectories, "amza/stores",
             regionsWALStorageProvider, regionPropertyMarshaller, config.hardFsync);

@@ -40,7 +40,7 @@ public class DeltaStripeWALStorageNGTest {
     @Test
     public void test() throws Exception {
 
-        RowIOProvider rowIOProvider = new BinaryRowIOProvider(new IoStats(), 100);
+        RowIOProvider rowIOProvider = new BinaryRowIOProvider(new IoStats(), 100, false);
         BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         ObjectMapper mapper = new ObjectMapper();

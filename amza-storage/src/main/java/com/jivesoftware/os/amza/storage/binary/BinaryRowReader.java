@@ -177,8 +177,15 @@ public class BinaryRowReader implements WALReader {
                     filer.seek(offsetFp);
                     if (offsetFp < fileLength) {
                         rowFP = offsetFp;
-                        int length = UIO.readInt(filer, "length");
-                        if (offsetFp + length + 8 > fileLength) {
+                        int length = -1;
+                        try {
+                            length = UIO.readInt(filer, "length");
+                        } catch(IOException x) {
+                            if (!allowRepairs) {
+                                throw x;
+                            }
+                        }
+                        if (length < 0 || offsetFp + length + 8 > fileLength) {
                             if (allowRepairs) {
                                 // Corruption encoutered.
                                 // There is a huge assumption here that this is only called once at startup.

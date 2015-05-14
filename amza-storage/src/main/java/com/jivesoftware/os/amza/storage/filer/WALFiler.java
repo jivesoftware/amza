@@ -37,14 +37,16 @@ public class WALFiler extends RandomAccessFile implements IFiler {
     public long writeByteCount;
 
     private final String fileName;
+    private final boolean useMemMap;
     private final AtomicLong size;
 
     private final AtomicReference<ByteBufferBackedFiler> memMapFiler = new AtomicReference<>();
     private final AtomicLong memMapFilerLength = new AtomicLong(-1);
 
-    public WALFiler(String name, String mode) throws IOException {
+    public WALFiler(String name, String mode, boolean useMemMap) throws IOException {
         super(name, mode);
         this.fileName = name;
+        this.useMemMap = useMemMap;
         this.size = new AtomicLong(super.length());
     }
 
@@ -54,6 +56,9 @@ public class WALFiler extends RandomAccessFile implements IFiler {
     }
 
     public IFiler fileChannelMemMapFiler(long size) throws IOException {
+        if (!useMemMap) {
+            return null;
+        }
         if (size <= memMapFilerLength.get()) {
             return memMapFiler.get().duplicate();
         }

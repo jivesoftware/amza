@@ -15,17 +15,19 @@ public class BinaryRowIOProvider implements RowIOProvider {
 
     private final IoStats ioStats;
     private final int corruptionParanoiaFactor;
+    private final boolean useMemMap;
 
-    public BinaryRowIOProvider(IoStats ioStats, int corruptionParanoiaFactor) {
+    public BinaryRowIOProvider(IoStats ioStats, int corruptionParanoiaFactor, boolean useMemMap) {
         this.ioStats = ioStats;
         this.corruptionParanoiaFactor = corruptionParanoiaFactor;
+        this.useMemMap = useMemMap;
     }
 
     @Override
     public RowIO create(File dir, String name) throws Exception {
         dir.mkdirs();
         File file = new File(dir, name);
-        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw");
+        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw", useMemMap);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
         return new BinaryRowIO(file, filer, rowReader, rowWriter);

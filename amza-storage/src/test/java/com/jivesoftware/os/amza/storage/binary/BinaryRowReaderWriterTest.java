@@ -39,7 +39,7 @@ public class BinaryRowReaderWriterTest {
 
         File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
-        WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw");
+        WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false);
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 3);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
@@ -65,7 +65,7 @@ public class BinaryRowReaderWriterTest {
     public void testRead() throws Exception {
         File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
-        WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw");
+        WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false);
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
@@ -104,7 +104,7 @@ public class BinaryRowReaderWriterTest {
     public void testReverseReadPerformance() throws Exception {
         File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
-        WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw");
+        WALFiler filer = new WALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false);
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
@@ -141,7 +141,7 @@ public class BinaryRowReaderWriterTest {
         IoStats ioStats = new IoStats();
         Random rand = new Random();
         for (int i = 0; i < 1000; i++) {
-            WALFiler filer = new WALFiler(new File(dir, "foo").getAbsolutePath(), "rw");
+            WALFiler filer = new WALFiler(new File(dir, "foo").getAbsolutePath(), "rw", false);
             BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
             BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 

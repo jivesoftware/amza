@@ -38,7 +38,7 @@ public class RowRegionNGTest {
         File walDir = Files.createTempDir();
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1);
+        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
@@ -114,7 +114,7 @@ public class RowRegionNGTest {
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
 
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1);
+        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
         final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();

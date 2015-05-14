@@ -185,7 +185,8 @@ public class BinaryRowReader implements WALReader {
                                 throw x;
                             }
                         }
-                        if (length < 0 || offsetFp + length + 8 > fileLength) {
+                        int lengthOfTypeAndTxId = 1 + 8;
+                        if (length < lengthOfTypeAndTxId || offsetFp + length + 8 > fileLength) {
                             if (allowRepairs) {
                                 // Corruption encoutered.
                                 // There is a huge assumption here that this is only called once at startup.
@@ -205,7 +206,7 @@ public class BinaryRowReader implements WALReader {
                         }
                         rowType = (byte) filer.read();
                         rowTxId = UIO.readLong(filer, "txId");
-                        row = new byte[length - (1 + 8)];
+                        row = new byte[length - lengthOfTypeAndTxId];
                         if (row.length > 0) {
                             filer.read(row);
                         }

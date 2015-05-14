@@ -171,9 +171,9 @@ public class BinaryRowReader implements WALReader {
                 }
                 while (true) {
                     long rowFP;
-                    long rowTxId;
-                    byte rowType;
-                    byte[] row;
+                    long rowTxId = -1;
+                    byte rowType = -1;
+                    byte[] row = null;
                     filer.seek(offsetFp);
                     if (offsetFp < fileLength) {
                         rowFP = offsetFp;
@@ -188,29 +188,35 @@ public class BinaryRowReader implements WALReader {
                         int lengthOfTypeAndTxId = 1 + 8;
                         if (length < lengthOfTypeAndTxId || offsetFp + length + 8 > fileLength) {
                             if (allowRepairs) {
-                                // Corruption encoutered.
-                                // There is a huge assumption here that this is only called once at startup.
-                                // If this is encountred some time other than startup there will be data loss and WALIndex corruption.
-                                filer.seek(offsetFp);
-                                synchronized (parent.lock()) {
-                                    LOG.warn("Truncated corrupt WAL. " + parent);
-                                    parent.seek(offsetFp);
-                                    parent.eof();
-                                    return false;
-                                }
+                                return truncate(filer, offsetFp);
                             } else {
                                 String msg = "Scan terminated prematurely due a corruption at fp:" + offsetFp + ". " + parent;
                                 LOG.error(msg);
                                 throw new EOFException(msg);
                             }
                         }
-                        rowType = (byte) filer.read();
-                        rowTxId = UIO.readLong(filer, "txId");
-                        row = new byte[length - lengthOfTypeAndTxId];
-                        if (row.length > 0) {
-                            filer.read(row);
+                        int trailingLength = -1;
+                        try {
+
+                            rowType = (byte)filer.read();
+                            rowTxId = UIO.readLong(filer, "txId");
+                            row = new byte[length - lengthOfTypeAndTxId];
+                            if (row.length > 0) {
+                                filer.read(row);
+                            }
+                            trailingLength = UIO.readInt(filer, "length");
+                        } catch (IOException x) {
+                            if (!allowRepairs) {
+                                throw x;
+                            }
                         }
-                        UIO.readInt(filer, "length");
+                        if (trailingLength < 0 || trailingLength != length) {
+                            if (allowRepairs) {
+                                return truncate(filer, offsetFp);
+                            } else {
+                                throw new IOException("The lead length of " + length + " didn't equal trailing length of " + trailingLength);
+                            }
+                        }
                         long fp = filer.getFilePointer();
                         read += (fp - offsetFp);
                         offsetFp = fp;
@@ -225,6 +231,19 @@ public class BinaryRowReader implements WALReader {
             return true;
         } finally {
             ioStats.read.addAndGet(read);
+        }
+    }
+
+    private boolean truncate(IReadable filer, long offsetFp) throws IOException {
+        // Corruption encoutered.
+        // There is a huge assumption here that this is only called once at startup.
+        // If this is encountred some time other than startup there will be data loss and WALIndex corruption.
+        filer.seek(offsetFp);
+        synchronized (parent.lock()) {
+            LOG.warn("Truncated corrupt WAL. " + parent);
+            parent.seek(offsetFp);
+            parent.eof();
+            return false;
         }
     }
 

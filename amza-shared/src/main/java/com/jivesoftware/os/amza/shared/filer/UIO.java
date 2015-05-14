@@ -1007,7 +1007,7 @@ public class UIO {
         if (v < 0) {
             throw new EOFException();
         }
-        return (byte)v;
+        return (byte) v;
     }
 
     /**

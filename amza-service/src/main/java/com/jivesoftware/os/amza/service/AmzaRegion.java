@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map.Entry;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
+import org.apache.commons.lang.mutable.MutableLong;
 
 public class AmzaRegion {
 
@@ -141,11 +142,11 @@ public class AmzaRegion {
     }
 
     public void scan(Scan<WALValue> stream) throws Exception {
-        regionStripe.rowScan(regionName, stream);
+        regionStripe.rowScan(regionName, (rowTxId, key, value) -> value.getTombstoned() || stream.row(rowTxId, key, value));
     }
 
     public void rangeScan(WALKey from, WALKey to, Scan<WALValue> stream) throws Exception {
-        regionStripe.rangeScan(regionName, from, to, stream);
+        regionStripe.rangeScan(regionName, from, to, (rowTxId, key, value) -> value.getTombstoned() || stream.row(rowTxId, key, value));
     }
 
     public boolean remove(WALKey key) throws Exception {
@@ -168,8 +169,28 @@ public class AmzaRegion {
         regionStripe.takeRowUpdatesSince(regionName, transactionId, rowStream);
     }
 
-    public boolean takeFromTransactionId(long transactionId, Scan<WALValue> scan) throws Exception {
-        return regionStripe.takeFromTransactionId(regionName, transactionId, scan);
+    public TakeResult takeFromTransactionId(long transactionId, Scan<WALValue> scan) throws Exception {
+        final MutableLong lastTxId = new MutableLong(-1);
+        boolean tookToEnd = regionStripe.takeFromTransactionId(regionName, transactionId, (rowTxId, key, value) -> {
+            if (value.getTombstoned() || scan.row(rowTxId, key, value)) {
+                if (rowTxId > lastTxId.longValue()) {
+                    lastTxId.setValue(rowTxId);
+                }
+                return true;
+            }
+            return false;
+        });
+        return new TakeResult(lastTxId.longValue(), tookToEnd);
+    }
+
+    public static class TakeResult {
+        public final long lastTxId;
+        public final boolean tookToEnd;
+
+        public TakeResult(long lastTxId, boolean tookToEnd) {
+            this.lastTxId = lastTxId;
+            this.tookToEnd = tookToEnd;
+        }
     }
 
     //  Use for testing

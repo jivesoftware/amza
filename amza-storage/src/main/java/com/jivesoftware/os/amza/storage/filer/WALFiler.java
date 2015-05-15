@@ -64,7 +64,7 @@ public class WALFiler extends RandomAccessFile implements IFiler {
         }
         synchronized (memMapFiler) {
             if (size <= memMapFilerLength.get()) {
-                return memMapFiler.get();
+                return memMapFiler.get().duplicate();
             }
             final FileChannel channel = getChannel();
             long newLength = length();

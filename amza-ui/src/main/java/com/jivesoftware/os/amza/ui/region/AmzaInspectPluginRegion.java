@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -89,8 +90,10 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         if (batch.decrementAndGet() >= 0) {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
-                            row.put("key", bytesToHex(key.getKey()));
-                            row.put("value", bytesToHex(value.getValue()));
+                            row.put("keyAsHex", bytesToHex(key.getKey()));
+                            row.put("keyAsString", new String(key.getKey(), StandardCharsets.US_ASCII));
+                            row.put("valueAsHex", bytesToHex(value.getValue()));
+                            row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
                             row.put("timestamp", String.valueOf(value.getTimestampId()));
                             row.put("tombstone", String.valueOf(value.getTombstoned()));
                             rows.add(row);
@@ -110,8 +113,10 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         amzaRegion.get(walKeys, (long rowTxId, WALKey key, WALValue value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
-                            row.put("key", bytesToHex(key.getKey()));
-                            row.put("value", bytesToHex(value.getValue()));
+                            row.put("keyAsHex", bytesToHex(key.getKey()));
+                            row.put("keyAsString", new String(key.getKey(), StandardCharsets.US_ASCII));
+                            row.put("valueAsHex", bytesToHex(value.getValue()));
+                            row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
                             row.put("timestamp", String.valueOf(value.getTimestampId()));
                             row.put("tombstone", String.valueOf(value.getTombstoned()));
                             rows.add(row);
@@ -130,8 +135,10 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         amzaRegion.get(walKeys, (long rowTxId, WALKey key, WALValue value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
-                            row.put("key", bytesToHex(key.getKey()));
-                            row.put("value", bytesToHex(value.getValue()));
+                            row.put("keyAsHex", bytesToHex(key.getKey()));
+                            row.put("keyAsString", new String(key.getKey(), StandardCharsets.US_ASCII));
+                            row.put("valueAsHex", bytesToHex(value.getValue()));
+                            row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
                             row.put("timestamp", String.valueOf(value.getTimestampId()));
                             row.put("tombstone", String.valueOf(value.getTombstoned()));
                             rows.add(row);
@@ -139,9 +146,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         });
                     }
                 }
-
             }
-
             data.put("rows", rows);
 
         } catch (Exception e) {

@@ -90,14 +90,14 @@
                         </tr>
                     </thead>
                     <tbody>
-                    {if $rows}
-                        {foreach $r in $rows}
-                            <td>{$rowTxId?:''}</td>
-                            <td>{$key?:''}</td>
-                            <td>{$value?:''}</td>
-                            <td>{$timestamp?:''}</td>
-                            <td>{$tombstone?:''}</td>
-                        {/foreach}
+                        {if $rows}
+                            {foreach $r in $rows}
+                                <td>{$r.rowTxId?:''}</td>
+                                <td>{$r.key?:''}</td>
+                                <td>{$r.value?:''}</td>
+                                <td>{$r.timestamp?:''}</td>
+                                <td>{$r.tombstone?:''}</td>
+                            {/foreach}
                         {/if}
                     </tbody>
                 </table> 

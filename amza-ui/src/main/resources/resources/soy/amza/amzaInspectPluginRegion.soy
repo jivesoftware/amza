@@ -1,0 +1,107 @@
+{namespace soy.page}
+
+/**
+ * Amza Inspect plugin page
+ *
+ * @param? systemRegion
+ * @param? ringName
+ * @param? regionName
+ * @param? key
+ * @param? offset
+ * @param? batchSize
+ * @param? action
+ *
+ * @param? msg
+ * @param? rows
+ */
+{template .amzaInspectPluginRegion}
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-search"></span>{sp}Inspect</div>
+            <div class="panel-body">
+                {if $msg}
+                    <div class="well">
+                        {foreach $m in $msg}
+                            <p>{$m}</p>
+                        {/foreach}
+                    </div>
+                {/if}
+                
+                <table class="table table-condensed">
+                    <thead>
+                        <tr>
+                            <th>System</th>
+                            <th>Ring Name</th>
+                            <th>Region Name</th>
+                            <th>Key/s</th>
+                            <th>Offset</th>
+                            <th>Batch</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <form id="inspect" class="j-form" data-active-class="btn-default"
+                            method="post" name="inspect">
+                            <tr style="background-color:#ddd;">
+                                <td>
+                                    <input class="form-control" type="checkbox" name="systemRegion" value="true" {if $systemRegion}checked="checked"{/if}>
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                        class="form-control" placeholder="Ring Name" value="{$ringName?:''}"
+                                        name="ringName" data-original-title="" title="">
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                        class="form-control" placeholder="Region Name" value="{$regionName?:''}"
+                                        name="regionName" data-original-title="" title="">
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                        class="form-control" placeholder="Key/s" value="{$key?:''}"
+                                        name="key" data-original-title="" title="">
+                                </td>
+                                <td>
+                                    <input type="number" name="offset" min="0" max="1000000" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                        class="form-control" placeholder="offset" value="{$offset?:'0'}"
+                                        data-original-title="" title="">
+                                </td>
+                                <td>
+                                    <input type="number" name="batchSize" min="1" max="10000" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                        class="form-control" placeholder="batchSize" value="{$batchSize?:'100'}"
+                                        data-original-title="" title="">
+                                </td>
+                                <td>
+                                    <button title="Scan" type="submit" name="action" value="scan" class="btn btn-default">Scan</button>
+                                    <button title="Get" type="submit" name="action" value="get" class="btn btn-default">Get</button>
+                                    <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default">Remove</button>
+                                </td>
+                            </tr>
+                        </form>
+                    </tbody>
+                </table>
+                <table class="table table-condensed">
+                    <thead>
+                        <tr>
+                            <th>rowTxId</th>
+                            <th>key</th>
+                            <th>value</th>
+                            <th>timestamp</th>
+                            <th>tombstone</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {if $rows}
+                        {foreach $r in $rows}
+                            <td>{$rowTxId?:''}</td>
+                            <td>{$key?:''}</td>
+                            <td>{$value?:''}</td>
+                            <td>{$timestamp?:''}</td>
+                            <td>{$tombstone?:''}</td>
+                        {/foreach}
+                        {/if}
+                    </tbody>
+                </table> 
+            </div>
+        </div>
+    </div>
+{/template}

@@ -240,7 +240,7 @@ public class BinaryRowReader implements WALReader {
         // If this is encountred some time other than startup there will be data loss and WALIndex corruption.
         filer.seek(offsetFp);
         synchronized (parent.lock()) {
-            LOG.warn("Truncated corrupt WAL. " + parent);
+            LOG.warn("Truncated corrupt WAL at " + offsetFp + " in " + parent);
             parent.seek(offsetFp);
             parent.eof();
             return false;

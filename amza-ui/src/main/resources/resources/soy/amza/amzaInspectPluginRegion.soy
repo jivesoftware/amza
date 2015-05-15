@@ -91,11 +91,19 @@
                     <tbody>
                         {if $rows}
                             {foreach $r in $rows}
-                                <td>{$r.rowTxId?:''}</td>
-                                <td>{$r.key?:''}</td>
-                                <td>{$r.value?:''}</td>
-                                <td>{$r.timestamp?:''}</td>
-                                <td>{$r.tombstone?:''}</td>
+                                <tr>
+                                    <td>{$r.rowTxId?:''}</td>
+                                    <td>
+                                        <p>{$r.keyAsHex?:''}</p>
+                                        <p>{$r.keyAsString?:''}</p>
+                                    </td>
+                                    <td>
+                                        <p>{$r.valueAsHex?:''}</p>
+                                        <p>{$r.valueAsString?:''}</p>
+                                    </td>
+                                    <td>{$r.timestamp?:''}</td>
+                                    <td>{$r.tombstone?:''}</td>
+                                </tr>
                             {/foreach}
                         {/if}
                     </tbody>

@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaClusterPluginEndpoints;
+import com.jivesoftware.os.amza.ui.endpoints.AmzaInspectPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaRegionsPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaRingsPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaStressPluginEndpoints;
@@ -15,6 +16,7 @@ import com.jivesoftware.os.amza.ui.endpoints.AmzaUIEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaUIEndpoints.AmzaClusterName;
 import com.jivesoftware.os.amza.ui.endpoints.HealthPluginEndpoints;
 import com.jivesoftware.os.amza.ui.region.AmzaClusterPluginRegion;
+import com.jivesoftware.os.amza.ui.region.AmzaInspectPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaRegionsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaRingsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaStressPluginRegion;
@@ -52,6 +54,7 @@ public class AmzaUIInitializer {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStats.soy"), "amzaStats.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStressPluginRegion.soy"), "amzaStress.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaInspectPluginRegion.soy"), "amzaInspect.soy");
 
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();
@@ -74,7 +77,10 @@ public class AmzaUIInitializer {
                 new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaRing())),
             new ManagePlugin("scale", "Stress", "/amza/ui/stress",
                 AmzaStressPluginEndpoints.class,
-                new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService)));
+                new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService)),
+            new ManagePlugin("search", "Inspect", "/amza/ui/inspect",
+                AmzaInspectPluginEndpoints.class,
+                new AmzaInspectPluginRegion("soy.page.amzaInspectPluginRegion", renderer, amzaService)));
 
         injectionCallback.addInjectable(SoyService.class, soyService);
 

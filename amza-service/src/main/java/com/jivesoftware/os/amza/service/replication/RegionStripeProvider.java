@@ -34,4 +34,7 @@ public class RegionStripeProvider {
         }
     }
 
+    public boolean hasRegionStripe(RegionName regionName) throws Exception {
+        return regionName.isSystemRegion() || regionIndex.exists(regionName);
+    }
 }

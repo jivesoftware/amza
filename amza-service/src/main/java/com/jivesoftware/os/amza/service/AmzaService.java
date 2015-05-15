@@ -164,8 +164,24 @@ public class AmzaService implements AmzaInstance {
                     }
                 }
             }
+            return null;
         }
-        return null;
+    }
+
+    public boolean hasRegion(RegionName regionName) throws Exception {
+        if (regionName.isSystemRegion()) {
+            return true;
+        } else {
+            RegionStore store = regionIndex.get(RegionProvider.REGION_INDEX);
+            if (store != null) {
+                byte[] rawRegionName = regionName.toBytes();
+                WALValue timestampedKeyValueStoreName = store.get(new WALKey(rawRegionName));
+                if (timestampedKeyValueStoreName != null && !timestampedKeyValueStoreName.getTombstoned()) {
+                    return regionStripeProvider.hasRegionStripe(regionName);
+                }
+            }
+            return false;
+        }
     }
 
     @Override

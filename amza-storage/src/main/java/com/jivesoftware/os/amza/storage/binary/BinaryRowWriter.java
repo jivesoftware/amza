@@ -16,19 +16,20 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.WALWriter;
-import com.jivesoftware.os.amza.shared.filer.IFiler;
+import com.jivesoftware.os.amza.shared.filer.IWriteable;
 import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
 public class BinaryRowWriter implements WALWriter {
 
-    private final IFiler filer;
+    private final IWriteable filer;
     private final IoStats ioStats;
 
-    public BinaryRowWriter(IFiler filer, IoStats ioStats) {
+    public BinaryRowWriter(IWriteable filer, IoStats ioStats) {
         this.filer = filer;
         this.ioStats = ioStats;
     }
@@ -77,6 +78,18 @@ public class BinaryRowWriter implements WALWriter {
         synchronized (filer.lock()) {
             return filer.length();
         }
+    }
+
+    public long length() throws IOException {
+        return filer.length();
+    }
+
+    public void flush(boolean fsync) throws IOException {
+        filer.flush(fsync);
+    }
+
+    public void close() throws IOException {
+        filer.close();
     }
 
 }

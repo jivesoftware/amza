@@ -5,7 +5,7 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
-import com.jivesoftware.os.amza.storage.filer.WALFiler;
+import com.jivesoftware.os.amza.storage.filer.DiskBackedWALFiler;
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
@@ -25,9 +25,9 @@ public class BinaryRowIONGTest {
     @Test
     public void testWrite() throws Exception {
         File file = File.createTempFile("BinaryRowIO", "dat");
-        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw", false);
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false);
         IoStats ioStats = new IoStats();
-        BinaryRowIO rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
+        BinaryRowIO rowIO = new BinaryRowIO(new ManageFileRowIO(), file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
         int numRows = 10_000;
 
         List<Long> rowTxIds = Lists.newArrayList();
@@ -44,7 +44,7 @@ public class BinaryRowIONGTest {
 
         rowIO.write(rowTxIds, Collections.nCopies(numRows, WALWriter.VERSION_1), rows);
 
-        rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
+        rowIO = new BinaryRowIO(new ManageFileRowIO(), file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
 
         rowIO.scan(0, false, new RowStream() {
 
@@ -76,9 +76,9 @@ public class BinaryRowIONGTest {
     @Test
     public void testLeap() throws Exception {
         File file = File.createTempFile("BinaryRowIO", "dat");
-        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw", false);
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false);
         IoStats ioStats = new IoStats();
-        BinaryRowIO rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
+        BinaryRowIO rowIO = new BinaryRowIO(new ManageFileRowIO(), file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
         int numRows = 10_000;
 
         for (long i = 0; i < numRows; i++) {
@@ -90,7 +90,7 @@ public class BinaryRowIONGTest {
              }*/
         }
 
-        rowIO = new BinaryRowIO(file, filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
+        rowIO = new BinaryRowIO(new ManageFileRowIO(), file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
 
         /*long[][] histos = new long[32][];
          for (int i = 0; i < histos.length; i++) {

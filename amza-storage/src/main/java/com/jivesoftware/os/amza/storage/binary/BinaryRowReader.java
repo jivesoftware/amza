@@ -22,26 +22,12 @@ import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.WALFiler;
-import com.jivesoftware.os.amza.storage.filer.WALFilerChannelReader;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.EOFException;
 import java.io.IOException;
-import java.util.Arrays;
 
 public class BinaryRowReader implements WALReader {
-
-    public static void main(String[] args) throws Exception {
-        String rowFile = "/jive/peek/332267939997237250.kvt";
-        WALFiler walFiler = new WALFiler(rowFile, "rw", false);
-        BinaryRowReader reader = new BinaryRowReader(walFiler, new IoStats(), 10);
-        System.out.println("rowFP\trowTxId\trowType\trow.length\trowBytes");
-
-        reader.scan(0, false, (long rowFP, long rowTxId, byte rowType, byte[] row) -> {
-            System.out.println(rowFP + "\t" + rowTxId + "\t" + rowType + "\t" + row.length + "\t" + Arrays.toString(row));
-            return true;
-        });
-    }
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final WALFiler parent; // TODO use mem-mapping and bb.dupliate to remove all the hard locks
@@ -56,7 +42,7 @@ public class BinaryRowReader implements WALReader {
 
     boolean validate() throws IOException {
         synchronized (parent.lock()) {
-            WALFilerChannelReader filer = parent.fileChannelFiler();
+            IReadable filer = parent.fileChannelFiler();
             boolean valid = true;
             long seekTo = filer.length();
             for (int i = 0; i < corruptionParanoiaFactor; i++) {

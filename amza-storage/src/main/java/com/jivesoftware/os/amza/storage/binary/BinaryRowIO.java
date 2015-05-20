@@ -1,39 +1,38 @@
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALWriter;
-import com.jivesoftware.os.amza.shared.filer.IFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
  */
-public class BinaryRowIO implements RowIO, WALReader, WALWriter {
+public class BinaryRowIO<K> implements RowIO<K>, WALReader, WALWriter {
 
     private static final int MAX_LEAPS = 64; //TODO config?
     public static final int UPDATES_BETWEEN_LEAPS = 4_096; //TODO config?
 
-    private final File file;
-    private final IFiler filer;
+    private final ManageRowIO<K> manageRowIO;
+    private final K filerKey;
     private final BinaryRowReader rowReader;
     private final BinaryRowWriter rowWriter;
 
     private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
 
-    public BinaryRowIO(File file, IFiler filer, BinaryRowReader rowReader, BinaryRowWriter rowWriter) throws Exception {
-        this.file = file;
-        this.filer = filer;
+    public BinaryRowIO(ManageRowIO<K> manageRowIO, K filerKey,
+        BinaryRowReader rowReader,
+        BinaryRowWriter rowWriter) throws Exception {
+
+        this.manageRowIO = manageRowIO;
+        this.filerKey = filerKey;
         this.rowReader = rowReader;
         this.rowWriter = rowWriter;
     }
@@ -160,29 +159,29 @@ public class BinaryRowIO implements RowIO, WALReader, WALWriter {
     }
 
     @Override
-    public void move(File destinationDir) throws Exception {
-        File destinationFile = new File(destinationDir, file.getName());
-        Files.move(file, destinationFile);
+    public void move(K destination) throws Exception {
+        manageRowIO.move(filerKey, destination);
     }
+
 
     @Override
     public long sizeInBytes() throws Exception {
-        return filer.length();
+        return rowWriter.length();
     }
 
     @Override
     public void flush(boolean fsync) throws Exception {
-        filer.flush(fsync);
+        rowWriter.flush(fsync);
     }
 
     @Override
     public void close() throws IOException {
-        filer.close();
+        rowWriter.close();
     }
 
     @Override
     public void delete() throws Exception {
-        FileUtils.deleteQuietly(file);
+        manageRowIO.delete(filerKey);
     }
 
     static private Leaps computeNextLeaps(long lastTransactionId, BinaryRowIO.LeapFrog latest) {

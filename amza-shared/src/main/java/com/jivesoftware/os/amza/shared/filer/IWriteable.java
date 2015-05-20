@@ -45,4 +45,10 @@ public interface IWriteable extends ICloseable, ISeekable {
      * @throws IOException
      */
     public void write(byte b[], int _offset, int _len) throws IOException;
+
+    /**
+     *
+     * @throws IOException
+     */
+    public void flush(boolean fsync) throws IOException;
 }

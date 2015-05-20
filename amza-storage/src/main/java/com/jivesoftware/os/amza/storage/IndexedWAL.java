@@ -253,7 +253,7 @@ public class IndexedWAL implements WALStorage {
         final Map<WALKey, WALTimestampId> removes = new HashMap<>();
         final Map<WALKey, WALTimestampId> clobbers = new HashMap<>();
 
-        final List<Long> transactionIds = useUpdateTxId ? new ArrayList<Long>() : null;
+        final List<Long> transactionIds = useUpdateTxId ? new ArrayList<>() : null;
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
         updates.rowScan((long transactionId, WALKey key, WALValue update) -> {
@@ -308,7 +308,7 @@ public class IndexedWAL implements WALStorage {
                 rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
                 walTx.write((WALWriter rowWriter) -> {
-                    List<Long> transactionIds1 = useUpdateTxId ? new ArrayList<Long>() : null;
+                    List<Long> transactionIds1 = useUpdateTxId ? new ArrayList<>() : null;
                     List<WALKey> keys1 = new ArrayList<>();
                     List<byte[]> rawRows = new ArrayList<>();
                     for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {

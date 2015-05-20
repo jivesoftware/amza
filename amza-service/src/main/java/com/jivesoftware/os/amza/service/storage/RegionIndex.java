@@ -130,7 +130,7 @@ public class RegionIndex implements RowChanges {
 
             File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
             WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, regionName, properties.walStorageDescriptor);
-            regionStore = new RegionStore(amzaStats, regionName, walStorage, hardFlush);
+            regionStore = new RegionStore(walStorage, hardFlush);
             regionStore.load();
 
             regionStores.put(regionName, regionStore);

@@ -29,7 +29,7 @@ import org.apache.commons.lang.mutable.MutableBoolean;
 public class AmzaRegionChangeReceiver {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private static RegionName RECEIVED = new RegionName(true, "received", "received");
+    private static final RegionName RECEIVED = new RegionName(true, "received", "received");
 
     private ScheduledExecutorService applyThreadPool;
     private ScheduledExecutorService compactThreadPool;

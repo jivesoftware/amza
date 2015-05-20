@@ -236,8 +236,8 @@ public class AmzaRegion {
                     return false;
                 }
                 if (value.getValue() != null && !Arrays.equals(value.getValue(), timestampedValue.getValue())) {
-                    System.out.println("INCONSISTENCY: " + comparing + " value:'" + timestampedValue.getValue()
-                        + "' != '" + value.getValue()
+                    System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(timestampedValue.getValue())
+                        + "' != '" + Arrays.toString(value.getValue())
                         + "' aClass:" + timestampedValue.getValue().getClass()
                         + "' bClass:" + value.getValue().getClass()
                         + "' \n" + timestampedValue + " vs " + value);

@@ -17,7 +17,7 @@ public class WALIndexProviderRegistry {
     public WALIndexProviderRegistry() {
         register("memory", new MemoryWALIndexProvider());
         register("noop", new NoOpWALIndexProvider());
-        
+
     }
 
     public WALIndexProvider<?> getWALIndexProvider(WALStorageDescriptor storageDescriptor) throws Exception {

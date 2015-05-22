@@ -7,7 +7,8 @@ import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.amza.storage.NonIndexWAL;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -22,12 +23,17 @@ import java.util.Set;
 class TemporaryWALStorageProvider implements WALStorageProvider {
 
     private final RowIOProvider rowIOProvider;
-    private final BinaryRowMarshaller rowMarshaller;
+    private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
+    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller;
     private final TimestampedOrderIdProvider orderIdProvider;
 
-    public TemporaryWALStorageProvider(RowIOProvider rowIOProvider, BinaryRowMarshaller rowMarshaller, TimestampedOrderIdProvider orderIdProvider) {
+    public TemporaryWALStorageProvider(RowIOProvider rowIOProvider,
+        BinaryPrimaryRowMarshaller rowMarshaller,
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller,
+        TimestampedOrderIdProvider orderIdProvider) {
         this.rowIOProvider = rowIOProvider;
-        this.rowMarshaller = rowMarshaller;
+        this.primaryRowMarshaller = rowMarshaller;
+        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.orderIdProvider = orderIdProvider;
     }
 
@@ -35,9 +41,9 @@ class TemporaryWALStorageProvider implements WALStorageProvider {
     public WALStorage create(File workingDirectory, String domain, RegionName regionName, WALStorageDescriptor storageDescriptor) throws Exception {
         final File directory = new File(workingDirectory, domain);
         directory.mkdirs();
-        BinaryWALTx rowsTx = new BinaryWALTx(directory, regionName.toBase64(), rowIOProvider, rowMarshaller, new NoOpWALIndexProvider(), -1);
+        BinaryWALTx rowsTx = new BinaryWALTx(directory, regionName.toBase64(), rowIOProvider, primaryRowMarshaller, new NoOpWALIndexProvider(), -1);
         rowsTx.validateAndRepair();
-        return new NonIndexWAL(regionName, orderIdProvider, rowMarshaller, rowsTx);
+        return new NonIndexWAL(regionName, orderIdProvider, primaryRowMarshaller, highwaterRowMarshaller, rowsTx);
     }
 
     @Override

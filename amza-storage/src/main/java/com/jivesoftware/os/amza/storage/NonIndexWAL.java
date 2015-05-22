@@ -3,11 +3,14 @@ package com.jivesoftware.os.amza.storage;
 import com.google.common.base.Optional;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
+import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALReader;
@@ -15,7 +18,6 @@ import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
-import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.WALWriter;
@@ -37,18 +39,21 @@ public class NonIndexWAL implements WALStorage {
 
     private final RegionName regionName;
     private final OrderIdProvider orderIdProvider;
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> rowMarshaller;
+    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final WALTx wal;
     private final Object oneTransactionAtATimeLock = new Object();
     private final AtomicLong updateCount = new AtomicLong();
 
     public NonIndexWAL(RegionName regionName,
         OrderIdProvider orderIdProvider,
-        RowMarshaller<byte[]> rowMarshaller,
+        PrimaryRowMarshaller<byte[]> rowMarshaller,
+        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         WALTx rowsTx) {
         this.regionName = regionName;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
+        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.wal = rowsTx;
     }
 
@@ -87,12 +92,12 @@ public class NonIndexWAL implements WALStorage {
     public RowsChanged update(final boolean useUpdateTxId,
         WALReplicator walReplicator,
         WALStorageUpdateMode updateMode,
-        Scannable<WALValue> updates) throws Exception {
+        Commitable<WALValue> updates) throws Exception {
 
         final AtomicLong oldestApplied = new AtomicLong(Long.MAX_VALUE);
         final Table<Long, WALKey, WALValue> apply = TreeBasedTable.create();
 
-        updates.rowScan((long transactionId, WALKey key, WALValue update) -> {
+        updates.commitable(null, (long transactionId, WALKey key, WALValue update) -> {
             apply.put(transactionId, key, update);
             if (oldestApplied.get() > update.getTimestampId()) {
                 oldestApplied.set(update.getTimestampId());
@@ -101,10 +106,10 @@ public class NonIndexWAL implements WALStorage {
         });
 
         if (apply.isEmpty()) {
-            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALTimestampId>(), new TreeMap<WALKey, WALTimestampId>());
+            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<>(), new TreeMap<>());
         } else {
             wal.write((WALWriter rowWriter) -> {
-                List<Long> transactionIds = useUpdateTxId ? new ArrayList<Long>() : null;
+                List<Long> transactionIds = useUpdateTxId ? new ArrayList<>() : null;
                 List<byte[]> rawRows = new ArrayList<>();
                 for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {
                     if (useUpdateTxId) {
@@ -119,14 +124,12 @@ public class NonIndexWAL implements WALStorage {
                         long transactionId = orderIdProvider.nextId();
                         transactionIds = Collections.nCopies(rawRows.size(), transactionId);
                     }
-                    rowWriter.write(transactionIds,
-                        Collections.nCopies(rawRows.size(), WALWriter.VERSION_1),
-                        rawRows);
+                    rowWriter.writePrimary(transactionIds, rawRows);
                 }
                 return null;
             });
             updateCount.addAndGet(apply.size());
-            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<WALKey, WALTimestampId>(), new TreeMap<WALKey, WALTimestampId>());
+            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<>(), new TreeMap<>());
         }
 
     }
@@ -135,10 +138,10 @@ public class NonIndexWAL implements WALStorage {
     public void rowScan(final Scan<WALValue> scan) throws Exception {
         wal.read((WALReader reader) -> {
             reader.scan(0, false,
-                (long rowFP, long rowTxId, byte rowType, byte[] rawWRow) -> {
-                    if (rowType > 0) {
+                (long rowFP, long rowTxId, RowType rowType, byte[] rawWRow) -> {
+                    if (rowType == RowType.primary) {
                         WALRow row = rowMarshaller.fromRow(rawWRow);
-                        return scan.row(rowTxId, row.getKey(), row.getValue());
+                        return scan.row(rowTxId, row.key, row.value);
                     }
                     return true;
                 });
@@ -150,12 +153,12 @@ public class NonIndexWAL implements WALStorage {
     public void rangeScan(final WALKey from, final WALKey to, final Scan<WALValue> scan) throws Exception {
         wal.read((WALReader reader) -> {
             reader.scan(0, false,
-                (long rowPointer, long rowTxId, byte rowType, byte[] rawWRow) -> {
-                    if (rowType > 0) {
-                        WALRow row = rowMarshaller.fromRow(rawWRow);
-                        if (row.getKey().compareTo(to) < 0) {
-                            if (from.compareTo(row.getKey()) <= 0) {
-                                scan.row(rowTxId, row.getKey(), row.getValue());
+                (long rowPointer, long rowTxId, RowType rowType, byte[] rawRow) -> {
+                    if (rowType == RowType.primary) {
+                        WALRow row = rowMarshaller.fromRow(rawRow);
+                        if (row.key.compareTo(to) < 0) {
+                            if (from.compareTo(row.key) <= 0) {
+                                scan.row(rowTxId, row.key, row.value);
                             }
                             return true;
                         } else {
@@ -207,8 +210,8 @@ public class NonIndexWAL implements WALStorage {
     @Override
     public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
         return wal.readFromTransactionId(sinceTransactionId, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
-            (long rowPointer, long rowTxId, byte rowType, byte[] row) -> {
-                if (rowType > 0 && rowTxId > sinceTransactionId) {
+            (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
+                if (rowType != RowType.system && rowTxId > sinceTransactionId) {
                     return rowStream.row(rowPointer, rowTxId, rowType, row);
                 }
                 return true;
@@ -216,12 +219,15 @@ public class NonIndexWAL implements WALStorage {
     }
 
     @Override
-    public boolean takeFromTransactionId(final long sinceTransactionId, final Scan<WALValue> scan) throws Exception {
+    public boolean takeFromTransactionId(final long sinceTransactionId, Highwaters highwaters, final Scan<WALValue> scan) throws Exception {
         return wal.readFromTransactionId(sinceTransactionId, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
-            (long rowPointer, long rowTxId, byte rowType, byte[] row) -> {
-                if (rowType > 0 && rowTxId > sinceTransactionId) {
+            (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
+                if (rowType == RowType.highwater && highwaters != null) {
+                    WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
+                    highwaters.highwater(highwater);
+                } else if (rowType == RowType.primary && rowTxId > sinceTransactionId) {
                     WALRow walRow = rowMarshaller.fromRow(row);
-                    return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
+                    return scan.row(rowTxId, walRow.key, walRow.value);
                 }
                 return true;
             }));

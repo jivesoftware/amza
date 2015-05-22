@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.WALReader;
-import com.jivesoftware.os.amza.shared.WALWriter;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -14,7 +14,7 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class BinaryRowIO<K> implements RowIO<K>, WALReader, WALWriter {
+public class BinaryRowIO<K> implements RowIO<K> {
 
     private static final int MAX_LEAPS = 64; //TODO config?
     public static final int UPDATES_BETWEEN_LEAPS = 4_096; //TODO config?
@@ -41,18 +41,18 @@ public class BinaryRowIO<K> implements RowIO<K>, WALReader, WALWriter {
     public void initLeaps() throws Exception {
         final MutableLong updates = new MutableLong(0);
 
-        reverseScan((long rowFP, long rowTxId, byte rowType, byte[] row) -> {
-            if (rowType == WALWriter.SYSTEM_VERSION_1) {
+        reverseScan((long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+            if (rowType == RowType.system) {
                 ByteBuffer buf = ByteBuffer.wrap(row);
                 byte[] keyBytes = new byte[8];
                 buf.get(keyBytes);
                 long key = UIO.bytesLong(keyBytes);
-                if (key == WALWriter.LEAP_KEY) {
+                if (key == RowType.LEAP_KEY) {
                     buf.rewind();
                     latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
                     return false;
                 }
-            } else if (rowType > 0) {
+            } else if (rowType == RowType.primary) {
                 updates.increment();
             }
             return true;
@@ -104,7 +104,22 @@ public class BinaryRowIO<K> implements RowIO<K>, WALReader, WALWriter {
     }
 
     @Override
-    public long[] write(List<Long> rowTxIds, List<Byte> rowTypes, List<byte[]> rows) throws Exception {
+    public long writeHighwater(byte[] row) throws Exception {
+        return rowWriter.writeHighwater(row);
+    }
+
+    @Override
+    public long writeSystem(byte[] row) throws Exception {
+        return rowWriter.writeSystem(row);
+    }
+
+    @Override
+    public long[] writePrimary(List<Long> txId, List<byte[]> rows) throws Exception {
+        return write(txId, Collections.nCopies(txId.size(), RowType.primary), rows);
+    }
+
+    @Override
+    public long[] write(List<Long> rowTxIds, List<RowType> rowTypes, List<byte[]> rows) throws Exception {
         long lastTxId = Long.MIN_VALUE;
         long[] fps = new long[rows.size()];
         int lastWriteIndex = 0;
@@ -121,7 +136,7 @@ public class BinaryRowIO<K> implements RowIO<K>, WALReader, WALWriter {
     }
 
     private void writeToWAL(List<Long> rowTxIds,
-        List<Byte> rowTypes,
+        List<RowType> rowTypes,
         List<byte[]> rows,
         long[] fps,
         int fromIndex,
@@ -149,11 +164,6 @@ public class BinaryRowIO<K> implements RowIO<K>, WALReader, WALWriter {
     }
 
     @Override
-    public long writeSystem(byte[] row) throws Exception {
-        return rowWriter.writeSystem(row);
-    }
-
-    @Override
     public long getEndOfLastRow() throws Exception {
         return rowWriter.getEndOfLastRow();
     }
@@ -162,7 +172,6 @@ public class BinaryRowIO<K> implements RowIO<K>, WALReader, WALWriter {
     public void move(K destination) throws Exception {
         manageRowIO.move(filerKey, destination);
     }
-
 
     @Override
     public long sizeInBytes() throws Exception {
@@ -311,7 +320,7 @@ public class BinaryRowIO<K> implements RowIO<K>, WALReader, WALWriter {
 
         private byte[] toBytes() {
             ByteBuffer buf = ByteBuffer.wrap(new byte[8 + 8 + 4 + fpIndex.length * 16]);
-            buf.put(UIO.longBytes(WALWriter.LEAP_KEY));
+            buf.put(UIO.longBytes(RowType.LEAP_KEY));
             buf.putLong(lastTransactionId);
             buf.putInt(fpIndex.length);
             for (int i = 0; i < fpIndex.length; i++) {

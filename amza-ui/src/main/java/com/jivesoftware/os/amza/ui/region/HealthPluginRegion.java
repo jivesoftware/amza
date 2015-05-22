@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
@@ -27,6 +28,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NavigableMap;
 import java.util.concurrent.TimeUnit;
 import javax.management.Attribute;
 import javax.management.AttributeList;
@@ -143,10 +146,12 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         if (name != null) {
             map.put("name", name.getRegionName());
             map.put("ringName", name.getRingName());
-            List<RingHost> ring = amzaRing.getRing(name.getRingName());
+            NavigableMap<RingMember, RingHost> ring = amzaRing.getRing(name.getRingName());
             List<Map<String, String>> ringMaps = new ArrayList<>();
-            for (RingHost r : ring) {
-                ringMaps.add(ImmutableMap.of("host", r.getHost(), "port", String.valueOf(r.getPort())));
+            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
+                ringMaps.add(ImmutableMap.of("member", r.getKey().getMember(),
+                    "host", r.getValue().getHost(),
+                    "port", String.valueOf(r.getValue().getPort())));
             }
             map.put("ring", ringMaps);
 

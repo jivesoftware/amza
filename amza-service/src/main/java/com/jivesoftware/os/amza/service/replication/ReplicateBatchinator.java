@@ -18,9 +18,10 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.WALRow;
 import java.util.HashMap;
 import java.util.Map;
@@ -33,14 +34,14 @@ import org.apache.commons.lang.mutable.MutableLong;
  */
 class ReplicateBatchinator implements RowStream {
 
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> rowMarshaller;
     private final RegionName regionName;
     private final AmzaRegionChangeReplicator replicator;
     private final Map<WALKey, WALValue> batch = new HashMap<>();
     private final MutableLong lastTxId;
     private final MutableBoolean flushed = new MutableBoolean(false);
 
-    public ReplicateBatchinator(RowMarshaller<byte[]> rowMarshaller, RegionName regionName, AmzaRegionChangeReplicator replicator) {
+    public ReplicateBatchinator(PrimaryRowMarshaller<byte[]> rowMarshaller, RegionName regionName, AmzaRegionChangeReplicator replicator) {
         this.rowMarshaller = rowMarshaller;
         this.regionName = regionName;
         this.replicator = replicator;
@@ -48,31 +49,33 @@ class ReplicateBatchinator implements RowStream {
     }
 
     @Override
-    public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawRow) throws Exception {
-        flushed.setValue(true);
-        WALRow row = rowMarshaller.fromRow(rawRow);
-        WALKey key = row.getKey();
-        WALValue value = row.getValue();
-        WALValue got = batch.get(key);
-        if (got == null) {
-            batch.put(key, value);
-        } else {
-            if (got.getTimestampId() < value.getTimestampId()) {
+    public boolean row(long rowFP, long rowTxId, RowType rowType, byte[] rawRow) throws Exception {
+        if (rowType == RowType.primary) {
+            flushed.setValue(true);
+            WALRow row = rowMarshaller.fromRow(rawRow);
+            WALKey key = row.key;
+            WALValue value = row.value;
+            WALValue got = batch.get(key);
+            if (got == null) {
                 batch.put(key, value);
+            } else {
+                if (got.getTimestampId() < value.getTimestampId()) {
+                    batch.put(key, value);
+                }
             }
-        }
-        if (lastTxId.longValue() == Long.MIN_VALUE) {
-            lastTxId.setValue(rowTxId);
-        } else if (lastTxId.longValue() != rowTxId) {
-            lastTxId.setValue(rowTxId);
-            flush();
+            if (lastTxId.longValue() == Long.MIN_VALUE) {
+                lastTxId.setValue(rowTxId);
+            } else if (lastTxId.longValue() != rowTxId) {
+                lastTxId.setValue(rowTxId);
+                flush();
+            }
         }
         return true;
     }
 
     public boolean flush() throws Exception {
         if (!batch.isEmpty()) {
-            if (replicator.replicateLocalUpdates(regionName, new MemoryWALUpdates(batch), false).get()) {
+            if (replicator.replicateLocalUpdates(regionName, new MemoryWALUpdates(batch, null), false).get()) {
                 batch.clear();
             }
         }

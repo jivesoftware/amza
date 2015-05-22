@@ -16,6 +16,8 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
+import java.util.Map.Entry;
 
 /**
  *
@@ -23,7 +25,7 @@ import com.jivesoftware.os.amza.shared.RingHost;
  */
 public interface TakeFailureListener {
 
-    void failedToTake(RingHost ringHost, Throwable reason);
+    void failedToTake(Entry<RingMember, RingHost> node, Throwable reason);
 
-    void tookFrom(RingHost ringHost);
+    void tookFrom(Entry<RingMember, RingHost> node);
 }

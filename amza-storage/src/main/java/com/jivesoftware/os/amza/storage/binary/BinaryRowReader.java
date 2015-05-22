@@ -16,9 +16,10 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.WALReader;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.IReadable;
-import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.WALFiler;
@@ -95,12 +96,12 @@ public class BinaryRowReader implements WALReader {
                 parentFiler.seek(nextBoundaryFp);
                 parentFiler.read(page);
 
-                MemoryFiler filer = new MemoryFiler(page);
+                HeapFiler filer = new HeapFiler(page);
                 long seekTo = filer.length() - 4;
                 if (seekTo >= 0) {
                     while (true) {
                         long rowFP;
-                        byte rowType;
+                        RowType rowType;
                         long rowTxId;
                         byte[] row;
                         filer.seek(seekTo);
@@ -115,7 +116,7 @@ public class BinaryRowReader implements WALReader {
                         filer.seek(seekTo);
 
                         int length = UIO.readInt(filer, "length");
-                        rowType = (byte) filer.read();
+                        rowType = RowType.fromByte((byte) filer.read());
                         rowTxId = UIO.readLong(filer, "txId");
                         row = new byte[length - (1 + 8)];
                         if (row.length > 0) {
@@ -123,9 +124,10 @@ public class BinaryRowReader implements WALReader {
                         }
                         rowFP = nextBoundaryFp + seekTo;
                         read += (filer.getFilePointer() - seekTo);
-
-                        if (!stream.row(rowFP, rowTxId, rowType, row)) {
-                            return;
+                        if (rowType != null) {
+                            if (!stream.row(rowFP, rowTxId, rowType, row)) {
+                                return;
+                            }
                         }
 
                         if (seekTo >= 4) {
@@ -158,7 +160,7 @@ public class BinaryRowReader implements WALReader {
                 while (true) {
                     long rowFP;
                     long rowTxId = -1;
-                    byte rowType = -1;
+                    RowType rowType = null;
                     byte[] row = null;
                     filer.seek(offsetFp);
                     if (offsetFp < fileLength) {
@@ -184,7 +186,7 @@ public class BinaryRowReader implements WALReader {
                         int trailingLength = -1;
                         try {
 
-                            rowType = (byte) filer.read();
+                            rowType = RowType.fromByte((byte) filer.read());
                             rowTxId = UIO.readLong(filer, "txId");
                             row = new byte[length - lengthOfTypeAndTxId];
                             if (row.length > 0) {
@@ -209,8 +211,10 @@ public class BinaryRowReader implements WALReader {
                     } else {
                         break;
                     }
-                    if (!stream.row(rowFP, rowTxId, rowType, row)) {
-                        return false;
+                    if (rowType != null) {
+                        if (!stream.row(rowFP, rowTxId, rowType, row)) {
+                            return false;
+                        }
                     }
                 }
             }

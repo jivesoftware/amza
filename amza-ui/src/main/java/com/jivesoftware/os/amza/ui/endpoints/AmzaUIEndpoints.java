@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
@@ -30,10 +31,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NavigableMap;
 import javax.inject.Singleton;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -93,42 +95,41 @@ public class AmzaUIEndpoints {
     @Path("/chord")
     public Response chord() {
         try {
-            List<RingHost> ring = amzaRing.getRing("system");
-            Collections.sort(ring);
+            NavigableMap<RingMember, RingHost> ring = amzaRing.getRing("system");
             List<List<Integer>> matrix = new ArrayList<>();
-            for (RingHost r : ring) {
+            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
                 List<Integer> weights = new ArrayList();
-                for (RingHost r2 : ring) {
+                for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
                     if (host.equals(r)) {
                         if (!host.equals(r2)) {
-                            weights.add((int) (amzaStats.getTotalTakes(r2)));
+                            weights.add((int) (amzaStats.getTotalTakes(r2.getKey())));
                         } else {
                             weights.add(0);
                         }
                     } else if (host.equals(r2)) {
-                        weights.add((int) (amzaStats.getTotalTakes(r)));
+                        weights.add((int) (amzaStats.getTotalTakes(r.getKey())));
                     } else {
                         weights.add(0);
                     }
                 }
-                for (RingHost r2 : ring) {
+                for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
                     weights.add(0);
                 }
                 matrix.add(weights);
 
                 weights = new ArrayList();
-                for (RingHost r2 : ring) {
+                for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
                     weights.add(0);
                 }
-                for (RingHost r2 : ring) {
+                for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
                     if (host.equals(r)) {
                         if (!host.equals(r2)) {
-                            weights.add((int) (amzaStats.getTotalOffered(r2)));
+                            weights.add((int) (amzaStats.getTotalOffered(r2.getKey())));
                         } else {
                             weights.add(0);
                         }
                     } else if (host.equals(r2)) {
-                        weights.add((int) (amzaStats.getTotalOffered(r)));
+                        weights.add((int) (amzaStats.getTotalOffered(r.getKey())));
                     } else {
                         weights.add(0);
                     }
@@ -147,16 +148,15 @@ public class AmzaUIEndpoints {
     @Path("/arc")
     public Response arc() {
         try {
-            List<RingHost> ring = amzaRing.getRing("system");
-            Collections.sort(ring);
+            NavigableMap<RingMember, RingHost> ring = amzaRing.getRing("system");
 
             Map<String, Integer> index = new HashMap<>();
             Map<String, Object> arcData = new HashMap<>();
             int i = 0;
             int g = 1;
             List<Map<String, Object>> nodes = new ArrayList();
-            for (RingHost r : ring) {
-                String name = r.getHost() + ":" + r.getPort();
+            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
+                String name = r.getValue().getHost() + ":" + r.getValue().getPort();
                 addNode(nodes, index, name + "-received", i, g);
                 i++;
                 addNode(nodes, index, name + "-take", i, g);
@@ -184,14 +184,14 @@ public class AmzaUIEndpoints {
             long[] takes = new long[ring.size()];
 
             i = 0;
-            for (RingHost r : ring) {
-                long totalOffered = amzaStats.getTotalOffered(r);
+            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
+                long totalOffered = amzaStats.getTotalOffered(r.getKey());
                 offered[i] = totalOffered;
                 if (totalOffered > 0) {
                     range.value(totalOffered);
                 }
 
-                long totalTakes = amzaStats.getTotalTakes(r);
+                long totalTakes = amzaStats.getTotalTakes(r.getKey());
                 takes[i] = totalTakes;
                 if (totalTakes > 0) {
                     range.value(totalOffered);
@@ -206,13 +206,13 @@ public class AmzaUIEndpoints {
             List<Map<String, Integer>> links = new ArrayList();
             Integer root = index.get(sourceName);
             i = 0;
-            for (RingHost r : ring) {
+            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
                 long totalOffered = offered[i];
                 long totalTakes = takes[i];
                 long total = totalOffered + totalTakes; // TODO use applied from replicated vs took
                 if (totalOffered > 0) {
                     Integer source = index.get(sourceName + "-replicate");
-                    Integer target = index.get(hostAsString(r) + "-received");
+                    Integer target = index.get(hostAsString(r.getValue()) + "-received");
                     addLink(source, target, range, totalOffered, links);
                     addLink(root, target, range, total, links);
 
@@ -220,7 +220,7 @@ public class AmzaUIEndpoints {
 
                 if (totalTakes > 0) {
                     Integer source = index.get(sourceName + "-take");
-                    Integer target = index.get(hostAsString(r) + "-took");
+                    Integer target = index.get(hostAsString(r.getValue()) + "-took");
                     addLink(source, target, range, totalTakes, links);
                     addLink(root, target, range, total, links);
                 }

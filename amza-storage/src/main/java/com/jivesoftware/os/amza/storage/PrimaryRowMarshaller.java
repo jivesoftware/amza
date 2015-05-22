@@ -13,23 +13,16 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.storage;
 
-public class HostRing {
+import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.WALValue;
 
-    private final RingHost[] aboveRing;
-    private final RingHost[] belowRing;
+public interface PrimaryRowMarshaller<R> {
 
-    public HostRing(RingHost[] aboveRing, RingHost[] belowRing) {
-        this.aboveRing = aboveRing;
-        this.belowRing = belowRing;
-    }
+    R toRow(WALKey key, WALValue value) throws Exception;
 
-    public RingHost[] getAboveRing() {
-        return aboveRing;
-    }
+    WALRow fromRow(R row) throws Exception;
 
-    public RingHost[] getBelowRing() {
-        return belowRing;
-    }
+    byte[] valueFromRow(R row) throws Exception;
 }

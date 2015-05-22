@@ -16,26 +16,42 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.collect.ListMultimap;
-import com.jivesoftware.os.amza.shared.HighwaterMarks;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.WALHighwater;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class MemoryBackedHighWaterMarks implements HighwaterMarks {
 
-    private final ConcurrentHashMap<RingHost, ConcurrentHashMap<RegionName, Long>> lastTransactionIds = new ConcurrentHashMap<>();
+public class MemoryBackedHighwaterStorage implements HighwaterStorage {
+
+    private final ConcurrentHashMap<RingMember, ConcurrentHashMap<RegionName, Long>> lastTransactionIds = new ConcurrentHashMap<>();
 
     @Override
-    public void clearRing(RingHost ringHost) {
-        lastTransactionIds.remove(ringHost);
+    public void clearRing(RingMember member) {
+        lastTransactionIds.remove(member);
     }
 
     @Override
-    public void setIfLarger(RingHost ringHost, RegionName regionName, int update, long highWatermark) {
-        ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringHost);
+    public WALHighwater getRegionHighwater(RegionName regionName) throws Exception {
+        List<WALHighwater.RingMemberHighwater> highwaters = new ArrayList<>();
+        for (RingMember ringMember : lastTransactionIds.keySet()) {
+            Long highwaterTxId = lastTransactionIds.get(ringMember).get(regionName);
+            if (highwaterTxId != null) {
+                highwaters.add(new WALHighwater.RingMemberHighwater(ringMember, highwaterTxId));
+            }
+        }
+        return new WALHighwater(highwaters);
+    }
+
+    @Override
+    public void setIfLarger(RingMember ringMember, RegionName regionName, int update, long highWatermark) {
+        ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringMember);
         if (lastRegionTransactionIds == null) {
             lastRegionTransactionIds = new ConcurrentHashMap<>();
-            lastTransactionIds.put(ringHost, lastRegionTransactionIds);
+            lastTransactionIds.put(ringMember, lastRegionTransactionIds);
         }
         Long got = lastRegionTransactionIds.get(regionName);
         if (got == null) {
@@ -51,16 +67,16 @@ public class MemoryBackedHighWaterMarks implements HighwaterMarks {
     }
 
     @Override
-    public void clear(RingHost ringHost, RegionName regionName) {
-        ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringHost);
+    public void clear(RingMember member, RegionName regionName) {
+        ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(member);
         if (lastRegionTransactionIds != null) {
             lastRegionTransactionIds.remove(regionName);
         }
     }
 
     @Override
-    public Long get(RingHost ringHost, RegionName regionName) {
-        ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringHost);
+    public Long get(RingMember member, RegionName regionName) {
+        ConcurrentHashMap<RegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(member);
         if (lastRegionTransactionIds == null) {
             return -1L;
         }
@@ -73,11 +89,11 @@ public class MemoryBackedHighWaterMarks implements HighwaterMarks {
 
     @Override
     public String toString() {
-        return "MemoryBackedHighWaterMarks{" + "lastTransactionIds=" + lastTransactionIds + '}';
+        return "MemoryBackedHighwaterStorage{" + "lastTransactionIds=" + lastTransactionIds + '}';
     }
 
     @Override
-    public void flush(ListMultimap<RingHost, RegionName> flush) throws Exception {
+    public void flush(ListMultimap<RingMember, RegionName> flush) throws Exception {
     }
 
 }

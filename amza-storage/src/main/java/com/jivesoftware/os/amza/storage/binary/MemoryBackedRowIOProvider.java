@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.MemoryBackedWALFiler;
 import java.io.File;
@@ -16,7 +16,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
 
     private final IoStats ioStats;
     private final int corruptionParanoiaFactor;
-    
+
     public MemoryBackedRowIOProvider(IoStats ioStats, int corruptionParanoiaFactor) {
         this.ioStats = ioStats;
         this.corruptionParanoiaFactor = corruptionParanoiaFactor;
@@ -24,7 +24,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
 
     @Override
     public RowIO<MemoryBackedWALFiler> create(File key, String name) throws Exception {
-        MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new MemoryFiler());
+        MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new HeapFiler());
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
         return new BinaryRowIO<MemoryBackedWALFiler>(new ManageMemoryRowIO(), filer, rowReader, rowWriter);

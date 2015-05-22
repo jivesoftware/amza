@@ -7,7 +7,8 @@ import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -23,20 +24,23 @@ public class IndexedWALStorageProvider implements WALStorageProvider {
 
     private final WALIndexProviderRegistry indexProviderRegistry;
     private final RowIOProvider rowIOProvider;
-    private final BinaryRowMarshaller rowMarshaller;
+    private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
+    private final BinaryHighwaterRowMarshaller highwaterRowMarshaller;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final int tombstoneCompactionFactor;
     private final int compactAfterGrowthFactor;
 
     public IndexedWALStorageProvider(WALIndexProviderRegistry indexProviderRegistry,
         RowIOProvider rowIOProvider,
-        BinaryRowMarshaller rowMarshaller,
+        BinaryPrimaryRowMarshaller primaryRowMarshaller,
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         TimestampedOrderIdProvider orderIdProvider,
         int tombstoneCompactionFactor,
         int compactAfterGrowthFactor) {
         this.indexProviderRegistry = indexProviderRegistry;
         this.rowIOProvider = rowIOProvider;
-        this.rowMarshaller = rowMarshaller;
+        this.primaryRowMarshaller = primaryRowMarshaller;
+        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.orderIdProvider = orderIdProvider;
         this.tombstoneCompactionFactor = tombstoneCompactionFactor;
         this.compactAfterGrowthFactor = compactAfterGrowthFactor;
@@ -50,9 +54,16 @@ public class IndexedWALStorageProvider implements WALStorageProvider {
         WALIndexProvider walIndexProvider = indexProviderRegistry.getWALIndexProvider(storageDescriptor);
         final File directory = new File(workingDirectory, domain);
         directory.mkdirs();
-        BinaryWALTx binaryWALTx = new BinaryWALTx(directory, regionName.toBase64(), rowIOProvider, rowMarshaller, walIndexProvider, compactAfterGrowthFactor);
-        return new IndexedWAL(regionName, orderIdProvider, rowMarshaller, binaryWALTx, storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
-            storageDescriptor.maxUpdatesBetweenIndexCommitMarker, tombstoneCompactionFactor);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(directory, regionName.toBase64(), rowIOProvider, primaryRowMarshaller, walIndexProvider,
+            compactAfterGrowthFactor);
+        return new IndexedWAL(regionName,
+            orderIdProvider,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            binaryWALTx,
+            storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
+            storageDescriptor.maxUpdatesBetweenIndexCommitMarker,
+            tombstoneCompactionFactor);
     }
 
     @Override

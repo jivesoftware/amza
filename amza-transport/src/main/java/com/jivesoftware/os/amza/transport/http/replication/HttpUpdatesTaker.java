@@ -18,7 +18,9 @@ package com.jivesoftware.os.amza.transport.http.replication;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
@@ -35,6 +37,7 @@ import java.io.DataInputStream;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -50,7 +53,7 @@ public class HttpUpdatesTaker implements UpdatesTaker {
     }
 
     @Override
-    public Map<RingHost, Long> streamingTakeUpdates(RingHost ringHost,
+    public Map<RingMember, Long> streamingTakeUpdates(Entry<RingMember, RingHost> node,
         RegionName regionName,
         long transactionId,
         RowStream tookRowUpdates) throws Exception {
@@ -58,7 +61,7 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         TakeRequest takeRequest = new TakeRequest(transactionId, regionName);
 
         long t1 = System.currentTimeMillis();
-        HttpStreamResponse httpStreamResponse = getRequestHelper(ringHost).executeStreamingPostRequest(takeRequest, "/amza/changes/streamingTake");
+        HttpStreamResponse httpStreamResponse = getRequestHelper(node.getValue()).executeStreamingPostRequest(takeRequest, "/amza/changes/streamingTake");
         long t2 = System.currentTimeMillis();
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
@@ -66,26 +69,28 @@ public class HttpUpdatesTaker implements UpdatesTaker {
             long t4 = -1;
             long updates = 0;
             final MutableLong read = new MutableLong();
-            Map<RingHost, Long> neighborsHighwaterMarks = new HashMap<>();
+            Map<RingMember, Long> neighborsHighwaterMarks = new HashMap<>();
             try (DataInputStream dis = new DataInputStream(bis)) {
                 byte eosMarks;
                 while ((eosMarks = dis.readByte()) == 1) {
                     if (t4 < 0) {
                         t4 = System.currentTimeMillis();
                     }
-                    byte[] ringHostBytes = new byte[dis.readInt()];
-                    dis.readFully(ringHostBytes);
+                    byte[] ringMemberBytes = new byte[dis.readInt()];
+                    dis.readFully(ringMemberBytes);
                     long highwaterMark = dis.readLong();
-                    neighborsHighwaterMarks.put(RingHost.fromBytes(ringHostBytes), highwaterMark);
-                    read.add(1 + 4 + ringHostBytes.length + 8);
+                    neighborsHighwaterMarks.put(RingMember.fromBytes(ringMemberBytes), highwaterMark);
+                    read.add(1 + 4 + ringMemberBytes.length + 8);
                 }
                 while ((eosMarks = dis.readByte()) == 1) {
                     long rowTxId = dis.readLong();
-                    long rowType = dis.readByte();
+                    RowType rowType = RowType.fromByte(dis.readByte());
                     byte[] rowBytes = new byte[dis.readInt()];
                     dis.readFully(rowBytes);
                     read.add(1 + 8 + 1 + 4 + rowBytes.length);
-                    tookRowUpdates.row(rowType, rowTxId, eosMarks, rowBytes);
+                    if (rowType != null) {
+                        tookRowUpdates.row(-1, rowTxId, rowType, rowBytes);
+                    }
                     updates++;
                 }
             }

@@ -15,11 +15,11 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
@@ -69,6 +69,10 @@ public class RegionStore implements RangeScannable<WALValue> {
         return walStorage.get(key);
     }
 
+    public WALValue[] get(WALKey[] keys) throws Exception {
+        return walStorage.get(keys);
+    }
+
     public boolean containsKey(WALKey key) throws Exception {
         return walStorage.containsKey(key);
     }
@@ -77,7 +81,7 @@ public class RegionStore implements RangeScannable<WALValue> {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged directCommit(boolean useUpdateTxId, WALReplicator replicator, WALStorageUpdateMode mode, Scannable<WALValue> updates) throws Exception {
+    public RowsChanged directCommit(boolean useUpdateTxId, WALReplicator replicator, WALStorageUpdateMode mode, Commitable<WALValue> updates) throws Exception {
         RowsChanged changes = walStorage.update(useUpdateTxId, replicator, mode, updates);
         walStorage.flush(hardFlush);
         return changes;

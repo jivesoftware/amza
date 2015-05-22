@@ -19,16 +19,13 @@ import java.util.List;
 
 public interface WALWriter {
 
-    public static final byte SYSTEM_VERSION_1 = -1;
-    public static final byte VERSION_1 = 1;
+    long[] write(List<Long> txId, List<RowType> rowType, List<byte[]> rows) throws Exception;
 
-    public static final long COMPACTION_HINTS_KEY = 0;
-    public static final long COMMIT_KEY = 1;
-    public static final long LEAP_KEY = 2;
-
-    long[] write(List<Long> txId, List<Byte> rowType, List<byte[]> rows) throws Exception;
+    long[] writePrimary(List<Long> txId, List<byte[]> rows) throws Exception;
 
     long writeSystem(byte[] row) throws Exception;
+
+    long writeHighwater(byte[] row) throws Exception;
 
     long getEndOfLastRow() throws Exception;
 }

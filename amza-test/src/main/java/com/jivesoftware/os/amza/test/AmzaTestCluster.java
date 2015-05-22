@@ -23,18 +23,20 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
-import com.jivesoftware.os.amza.service.replication.MemoryBackedHighWaterMarks;
+import com.jivesoftware.os.amza.service.replication.MemoryBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -47,19 +49,22 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 public class AmzaTestCluster {
 
+    private static final TimestampedOrderIdProvider ORDER_ID_PROVIDER = new OrderIdProviderImpl(new ConstantWriterIdProvider(1),
+        new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
+
     private final File workingDirctory;
-    private final ConcurrentSkipListMap<RingHost, AmzaNode> cluster = new ConcurrentSkipListMap<>();
+    private final ConcurrentSkipListMap<RingMember, AmzaNode> cluster = new ConcurrentSkipListMap<>();
     private int oddsOfAConnectionFailureWhenAdding = 0; // 0 never - 100 always
     private int oddsOfAConnectionFailureWhenTaking = 0; // 0 never - 100 always
     private AmzaService lastAmzaService = null;
@@ -76,41 +81,41 @@ public class AmzaTestCluster {
         return cluster.values();
     }
 
-    public AmzaNode get(RingHost host) {
-        return cluster.get(host);
+    public AmzaNode get(RingMember ringMember) {
+        return cluster.get(ringMember);
     }
 
-    public void remove(RingHost host) {
-        cluster.remove(host);
+    public void remove(RingMember ringMember) {
+        cluster.remove(ringMember);
     }
 
-    public AmzaNode newNode(final RingHost serviceHost) throws Exception {
+    public AmzaNode newNode(final RingMember ringMember, final RingHost ringHost) throws Exception {
 
-        AmzaNode service = cluster.get(serviceHost);
+        AmzaNode service = cluster.get(ringMember);
         if (service != null) {
             return service;
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + serviceHost.getHost() + "-" + serviceHost.getPort()};
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + ringHost.getHost() + "-" + ringHost.getPort()};
         config.resendReplicasIntervalInMillis = 100;
         config.applyReplicasIntervalInMillis = 100;
         config.takeFromNeighborsIntervalInMillis = 1000;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
 
-        UpdatesSender changeSetSender = (RingHost ringHost, RegionName mapName, Scannable<WALValue> changes) -> {
-            AmzaNode service1 = cluster.get(ringHost);
+        UpdatesSender changeSetSender = (Entry<RingMember, RingHost> node, RegionName mapName, Commitable<WALValue> changes) -> {
+            AmzaNode service1 = cluster.get(node.getKey());
             if (service1 == null) {
-                throw new IllegalStateException("Service doesn't exists for " + ringHost);
+                throw new IllegalStateException("Service doesn't exists for " + node.getValue());
             } else {
                 service1.addToReplicatedWAL(mapName, changes);
             }
         };
 
-        UpdatesTaker taker = (RingHost ringHost, RegionName regionName, long transactionId, RowStream tookRowUpdates) -> {
-            AmzaNode service1 = cluster.get(ringHost);
+        UpdatesTaker taker = (Entry<RingMember, RingHost> node, RegionName regionName, long transactionId, RowStream tookRowUpdates) -> {
+            AmzaNode service1 = cluster.get(node.getKey());
             if (service1 == null) {
-                throw new IllegalStateException("Service doesn't exists for " + ringHost);
+                throw new IllegalStateException("Service doesn't exists for " + node.getValue());
             } else {
                 service1.takeRegion(regionName, transactionId, tookRowUpdates);
             }
@@ -118,8 +123,7 @@ public class AmzaTestCluster {
         };
 
         // TODO need to get writer id from somewhere other than port.
-        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(serviceHost.getPort()),
-            new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
+        final TimestampedOrderIdProvider orderIdProvider = ORDER_ID_PROVIDER;
 
         final ObjectMapper mapper = new ObjectMapper();
         RegionPropertyMarshaller regionPropertyMarshaller = new RegionPropertyMarshaller() {
@@ -136,11 +140,12 @@ public class AmzaTestCluster {
         };
 
         AmzaStats amzaStats = new AmzaStats();
-        MemoryBackedHighWaterMarks highWaterMarks = new MemoryBackedHighWaterMarks();
+        HighwaterStorage highWaterMarks = new MemoryBackedHighwaterStorage();
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
             amzaStats,
-            serviceHost,
+            ringMember,
+            ringHost,
             orderIdProvider,
             regionPropertyMarshaller,
             new WALIndexProviderRegistry(),
@@ -152,26 +157,26 @@ public class AmzaTestCluster {
 
         amzaService.start();
 
-        //if (serviceHost.getPort() % 2 == 0) {
         final RegionName regionName = new RegionName(false, "test", "region1");
         amzaService.watch(regionName, (RowsChanged changes) -> {
             if (changes.getApply().size() > 0) {
-                System.out.println("Service:" + serviceHost
+                System.out.println("Service:" + ringMember
                     + " Region:" + regionName.getRegionName()
                     + " Changed:" + changes.getApply().size());
             }
         });
-        //}
 
         try {
-            amzaService.getAmzaRing().addRingHost("system", serviceHost); // ?? Hacky
-            amzaService.getAmzaRing().addRingHost("test", serviceHost); // ?? Hacky
+            amzaService.getAmzaRing().addRingMember("system", ringMember); // ?? Hacky
+            amzaService.getAmzaRing().addRingMember("test", ringMember); // ?? Hacky
             if (lastAmzaService != null) {
-                amzaService.getAmzaRing().addRingHost("system", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
-                amzaService.getAmzaRing().addRingHost("test", lastAmzaService.getAmzaRing().getRingHost()); // ?? Hacky
+                amzaService.getAmzaRing().register(lastAmzaService.getAmzaRing().getRingMember(), lastAmzaService.getAmzaRing().getRingHost());
+                amzaService.getAmzaRing().addRingMember("system", lastAmzaService.getAmzaRing().getRingMember()); // ?? Hacky
+                amzaService.getAmzaRing().addRingMember("test", lastAmzaService.getAmzaRing().getRingMember()); // ?? Hacky
 
-                lastAmzaService.getAmzaRing().addRingHost("system", serviceHost); // ?? Hacky
-                lastAmzaService.getAmzaRing().addRingHost("test", serviceHost); // ?? Hacky
+                lastAmzaService.getAmzaRing().register(ringMember, ringHost);
+                lastAmzaService.getAmzaRing().addRingMember("system", ringMember); // ?? Hacky
+                lastAmzaService.getAmzaRing().addRingMember("test", ringMember); // ?? Hacky
             }
             lastAmzaService = amzaService;
         } catch (Exception x) {
@@ -180,9 +185,9 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(serviceHost, amzaService, highWaterMarks);
-        cluster.put(serviceHost, service);
-        System.out.println("Added serviceHost:" + serviceHost + " to the cluster.");
+        service = new AmzaNode(ringHost, amzaService, highWaterMarks);
+        cluster.put(ringMember, service);
+        System.out.println("Added serviceHost:" + ringMember + " to the cluster.");
         return service;
     }
 
@@ -191,11 +196,11 @@ public class AmzaTestCluster {
         private final Random random = new Random();
         private final RingHost serviceHost;
         private final AmzaService amzaService;
-        private final MemoryBackedHighWaterMarks highWaterMarks;
+        private final HighwaterStorage highWaterMarks;
         private boolean off = false;
         private int flapped = 0;
 
-        public AmzaNode(RingHost serviceHost, AmzaService amzaService, MemoryBackedHighWaterMarks highWaterMarks) {
+        public AmzaNode(RingHost serviceHost, AmzaService amzaService, HighwaterStorage highWaterMarks) {
             this.serviceHost = serviceHost;
             this.amzaService = amzaService;
             this.highWaterMarks = highWaterMarks;
@@ -225,7 +230,7 @@ public class AmzaTestCluster {
             amzaService.createRegionIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
         }
 
-        void addToReplicatedWAL(RegionName mapName, Scannable<WALValue> changes) throws Exception {
+        void addToReplicatedWAL(RegionName mapName, Commitable<WALValue> changes) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }
@@ -275,7 +280,6 @@ public class AmzaTestCluster {
         public void printService() throws Exception {
             if (off) {
                 System.out.println(serviceHost.getHost() + ":" + serviceHost.getPort() + " is OFF flapped:" + flapped);
-                return;
             }
         }
 
@@ -297,10 +301,8 @@ public class AmzaTestCluster {
             regionNames.addAll(allARegions);
             regionNames.addAll(allBRegions);
 
-            List<RingHost> aRing = amzaService.getAmzaRingReader().getRing("system");
-            List<RingHost> bRing = service.amzaService.getAmzaRingReader().getRing("system");
-            Collections.sort(aRing);
-            Collections.sort(bRing);
+            NavigableMap<RingMember, RingHost> aRing = amzaService.getAmzaRingReader().getRing("system");
+            NavigableMap<RingMember, RingHost> bRing = service.amzaService.getAmzaRingReader().getRing("system");
 
             if (!aRing.equals(bRing)) {
                 System.out.println(aRing + "-vs-" + bRing);
@@ -315,8 +317,8 @@ public class AmzaTestCluster {
                 AmzaRegion a = amzaService.getRegion(regionName);
                 AmzaRegion b = service.amzaService.getRegion(regionName);
                 if (a == null || b == null) {
-                    System.out.println(regionName + " " + amzaService.getAmzaRing().getRingHost() + " " + a + " -- vs --"
-                        + service.amzaService.getAmzaRing().getRingHost() + " " + b);
+                    System.out.println(regionName + " " + amzaService.getAmzaRing().getRingMember() + " " + a + " -- vs --"
+                        + service.amzaService.getAmzaRing().getRingMember() + " " + b);
                     return false;
                 }
                 if (!a.compare(b)) {

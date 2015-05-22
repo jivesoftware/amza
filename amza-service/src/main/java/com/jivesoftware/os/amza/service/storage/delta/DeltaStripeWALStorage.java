@@ -8,12 +8,17 @@ import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
+import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALReplicator;
@@ -21,7 +26,8 @@ import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -49,8 +55,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
+    private final HighwaterStorage highwaterStorage;
     private final int index;
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
+    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
     private final long compactAfterNUpdates;
@@ -69,13 +77,17 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     };
 
-    public DeltaStripeWALStorage(int index,
-        RowMarshaller<byte[]> rowMarshaller,
+    public DeltaStripeWALStorage(HighwaterStorage highwaterStorage,
+        int index,
+        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
+        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         DeltaWALFactory deltaWALFactory,
         long compactAfterNUpdates) {
 
+        this.highwaterStorage = highwaterStorage;
         this.index = index;
-        this.rowMarshaller = rowMarshaller;
+        this.primaryRowMarshaller = primaryRowMarshaller;
+        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.deltaWALFactory = deltaWALFactory;
         this.compactAfterNUpdates = compactAfterNUpdates;
         int numberOfCompactorThreads = 1; // TODO expose to config;
@@ -122,11 +134,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                         compactDelta(regionIndex, deltaWAL.get(), () -> wal);
                     }
                     deltaWAL.set(wal);
-                    wal.load((long rowFP, final long rowTxId, byte rowType, byte[] rawRow) -> {
-                        if (rowType > 0) {
-                            WALRow row = rowMarshaller.fromRow(rawRow);
-                            WALValue value = row.getValue();
-                            ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
+                    wal.load((long rowFP, final long rowTxId, RowType rowType, byte[] rawRow) -> {
+                        if (rowType == RowType.primary) {
+                            WALRow row = primaryRowMarshaller.fromRow(rawRow);
+                            ByteBuffer bb = ByteBuffer.wrap(row.key.getKey());
                             byte[] regionNameBytes = new byte[bb.getShort()];
                             bb.get(regionNameBytes);
                             final byte[] keyBytes = new byte[bb.getInt()];
@@ -142,10 +153,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                                     RegionDelta delta = getRegionDeltas(regionName);
                                     WALKey key = new WALKey(keyBytes);
                                     WALValue regionValue = regionStore.get(key);
-                                    if (regionValue == null || regionValue.getTimestampId() < value.getTimestampId()) {
+                                    if (regionValue == null || regionValue.getTimestampId() < row.value.getTimestampId()) {
                                         WALTimestampId got = delta.getTimestampId(key);
-                                        if (got == null || got.getTimestampId() < value.getTimestampId()) {
-                                            delta.put(key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()));
+                                        if (got == null || got.getTimestampId() < row.value.getTimestampId()) {
+                                            delta.put(key, new WALPointer(rowFP, row.value.getTimestampId(), row.value.getTombstoned()));
                                             //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
                                             delta.appendTxFps(rowTxId, rowFP);
                                         }
@@ -181,7 +192,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             if (wal == null) {
                 throw new IllegalStateException("Delta WAL is currently unavailable.");
             }
-            regionDelta = new RegionDelta(regionName, wal, rowMarshaller, null);
+            regionDelta = new RegionDelta(regionName, wal, primaryRowMarshaller, highwaterRowMarshaller, null);
             RegionDelta had = regionDeltas.putIfAbsent(regionName, regionDelta);
             if (had != null) {
                 regionDelta = had;
@@ -222,7 +233,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             DeltaWAL newDeltaWAL = newWAL.call();
             deltaWAL.set(newDeltaWAL);
             for (Map.Entry<RegionName, RegionDelta> e : regionDeltas.entrySet()) {
-                final RegionDelta regionDelta = new RegionDelta(e.getKey(), newDeltaWAL, rowMarshaller, e.getValue());
+                final RegionDelta regionDelta = new RegionDelta(e.getKey(), newDeltaWAL, primaryRowMarshaller, highwaterRowMarshaller, e.getValue());
                 regionDeltas.put(e.getKey(), regionDelta);
                 futures.add(compactionThreads.submit(() -> {
                     try {
@@ -262,7 +273,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         WALStorage storage,
         WALReplicator replicator,
         WALStorageUpdateMode mode,
-        Scannable<WALValue> updates) throws Exception {
+        Commitable<WALValue> updates) throws Exception {
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final Table<Long, WALKey, WALValue> apply = TreeBasedTable.create();
@@ -271,7 +282,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
         final List<WALKey> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
-        updates.rowScan((long transactionId, WALKey key, WALValue update) -> {
+        updates.commitable(null, (long transactionId, WALKey key, WALValue update) -> {
             keys.add(key);
             values.add(update);
             return true;
@@ -313,10 +324,16 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             if (apply.isEmpty()) {
                 rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
-
                 RegionDelta delta = getRegionDeltas(regionName);
+                WALHighwater regionHighwater = null;
+                if (delta.shouldWriteHighwater()) {
+                    regionHighwater = highwaterStorage.getRegionHighwater(regionName);
+                    LOG.inc("highwaterHint", 1);
+                    LOG.inc("highwaterHint", 1, regionName.getRegionName());
+                }
+
                 synchronized (oneWriterAtATimeLock) {
-                    DeltaWAL.DeltaWALApplied updateApplied = wal.update(regionName, apply);
+                    DeltaWAL.DeltaWALApplied updateApplied = wal.update(regionName, apply, regionHighwater);
 
                     Iterator<Table.Cell<Long, WALKey, WALValue>> iter = apply.cellSet().iterator();
                     while (iter.hasNext()) {
@@ -353,7 +370,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void takeRowUpdatesSince(RegionName regionName, WALStorage storage, long transactionId, final RowStream rowStream) throws Exception {
+    public void takeRowUpdatesSince(RegionName regionName, WALStorage storage, long transactionId, RowStream rowStream) throws Exception {
         if (!storage.takeRowUpdatesSince(transactionId, rowStream)) {
             return;
         }
@@ -368,15 +385,17 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public boolean takeFromTransactionId(RegionName regionName, WALStorage storage, long transactionId, Scan<WALValue> scan) throws Exception {
-        if (!storage.takeFromTransactionId(transactionId, scan)) {
+    public boolean takeFromTransactionId(RegionName regionName, WALStorage storage, long transactionId, Highwaters highwaters, Scan<WALValue> scan)
+        throws Exception {
+
+        if (!storage.takeFromTransactionId(transactionId, highwaters, scan)) {
             return false;
         }
 
         acquireOne();
         try {
             RegionDelta delta = getRegionDeltas(regionName);
-            return delta.takeFromTransactionId(transactionId, scan);
+            return delta.takeFromTransactionId(transactionId, highwaters, scan);
         } finally {
             releaseOne();
         }

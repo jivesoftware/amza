@@ -84,7 +84,7 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<WALKey, WALValue>>
 
     private Map.Entry<WALKey, WALValue> hydrate(Map.Entry<WALKey, WALPointer> entry, WALRowHydrator valueHydrator) {
         try {
-            return new AbstractMap.SimpleEntry<>(entry.getKey(), valueHydrator.hydrate(entry.getValue().getFp()).getValue());
+            return new AbstractMap.SimpleEntry<>(entry.getKey(), valueHydrator.hydrate(entry.getValue().getFp()).value);
         } catch (Exception e) {
             throw new RuntimeException("Failed to hydrate while iterating delta", e);
         }

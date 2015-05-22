@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
@@ -20,6 +21,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -229,7 +231,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
     private AmzaRegion createRegionIfAbsent(String regionName) throws Exception {
 
-        List<RingHost> ring = amzaService.getAmzaRing().getRing("default");
+        NavigableMap<RingMember, RingHost> ring = amzaService.getAmzaRing().getRing("default");
         if (ring.isEmpty()) {
             amzaService.getAmzaRing().buildRandomSubRing("default", amzaService.getAmzaRing().getRing("system").size());
         }

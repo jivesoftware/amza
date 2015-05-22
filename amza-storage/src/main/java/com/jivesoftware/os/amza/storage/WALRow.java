@@ -6,9 +6,14 @@ import com.jivesoftware.os.amza.shared.WALValue;
 /**
  *
  */
-public interface WALRow {
+public class WALRow {
 
-    WALKey getKey();
+    public final WALKey key;
+    public final WALValue value;
 
-    WALValue getValue();
+    public WALRow(WALKey key, WALValue value) {
+        this.key = key;
+        this.value = value;
+    }
+
 }

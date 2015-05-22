@@ -17,15 +17,19 @@ package com.jivesoftware.os.amza.shared;
 
 import com.google.common.collect.ListMultimap;
 
-public interface HighwaterMarks {
+public interface HighwaterStorage {
 
-    void clearRing(RingHost ringHost) throws Exception;
+    void clearRing(RingMember ringMember) throws Exception;
 
-    void setIfLarger(RingHost ringHost, RegionName regionName, int updates, long highWatermark) throws Exception;
+    void setIfLarger(RingMember ringMember, RegionName regionName, int updates, long highWatermark) throws Exception;
 
-    void clear(RingHost ringHost, RegionName regionName) throws Exception;
+    void clear(RingMember ringMember, RegionName regionName) throws Exception;
 
-    Long get(RingHost ringHost, RegionName regionName) throws Exception;
+    Long get(RingMember ringMember, RegionName regionName) throws Exception;
 
-    void flush(ListMultimap<RingHost, RegionName> flush) throws Exception;
+    WALHighwater getRegionHighwater(RegionName regionName) throws Exception;
+
+    void flush(ListMultimap<RingMember, RegionName> flush) throws Exception;
+
+
 }

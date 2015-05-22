@@ -15,9 +15,10 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.WALWriter;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.IWriteable;
-import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import java.io.IOException;
@@ -35,15 +36,15 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
-    public long[] write(List<Long> rowTxIds, List<Byte> rowType, List<byte[]> rows) throws Exception {
+    public long[] write(List<Long> rowTxIds, List<RowType> rowType, List<byte[]> rows) throws Exception {
         long[] offsets = new long[rows.size()];
-        MemoryFiler memoryFiler = new MemoryFiler();
+        HeapFiler memoryFiler = new HeapFiler();
         int i = 0;
         for (byte[] row : rows) {
             offsets[i] = memoryFiler.getFilePointer();
             int length = (1 + 8) + row.length;
             UIO.writeInt(memoryFiler, length, "length");
-            UIO.writeByte(memoryFiler, rowType.get(i), "rowType");
+            UIO.writeByte(memoryFiler, rowType.get(i).toByte(), "rowType");
             UIO.writeLong(memoryFiler, rowTxIds.get(i), "txId");
             memoryFiler.write(row);
             UIO.writeInt(memoryFiler, length, "length");
@@ -66,9 +67,25 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
+    public long[] writePrimary(List<Long> txId, List<byte[]> rows) throws Exception {
+        long[] rowPointers = write(txId,
+            Collections.nCopies(txId.size(), RowType.primary),
+            rows);
+        return rowPointers;
+    }
+
+    @Override
+    public long writeHighwater(byte[] row) throws Exception {
+        long[] rowPointers = write(Collections.singletonList(-1L),
+            Collections.singletonList(RowType.highwater),
+            Collections.singletonList(row));
+        return rowPointers[0];
+    }
+
+    @Override
     public long writeSystem(byte[] row) throws Exception {
         long[] rowPointers = write(Collections.singletonList(-1L),
-            Collections.singletonList(WALWriter.SYSTEM_VERSION_1),
+            Collections.singletonList(RowType.system),
             Collections.singletonList(row));
         return rowPointers[0];
     }

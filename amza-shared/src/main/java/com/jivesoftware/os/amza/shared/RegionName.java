@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.shared;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
-import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
 import java.util.Objects;
@@ -31,7 +31,7 @@ public class RegionName implements Comparable<RegionName> {
     private transient int hash = 0;
 
     public byte[] toBytes() throws IOException {
-        MemoryFiler memoryFiler = new MemoryFiler();
+        HeapFiler memoryFiler = new HeapFiler();
         UIO.writeByte(memoryFiler, 0, "version");
         UIO.writeBoolean(memoryFiler, systemRegion, "systemRegion");
         UIO.writeString(memoryFiler, ringName, "ringName");
@@ -40,7 +40,7 @@ public class RegionName implements Comparable<RegionName> {
     }
 
     public static RegionName fromBytes(byte[] bytes) throws IOException {
-        MemoryFiler memoryFiler = new MemoryFiler(bytes);
+        HeapFiler memoryFiler = new HeapFiler(bytes);
         if (UIO.readByte(memoryFiler, "version") == 0) {
             return new RegionName(
                 UIO.readBoolean(memoryFiler, "systemRegion"),

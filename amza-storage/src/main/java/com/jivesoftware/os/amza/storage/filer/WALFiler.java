@@ -1,21 +1,16 @@
 package com.jivesoftware.os.amza.storage.filer;
 
 import com.jivesoftware.os.amza.shared.filer.IReadable;
+import com.jivesoftware.os.amza.shared.filer.IWriteable;
 import java.io.IOException;
 
 /**
  *
  * @author jonathan.colt
  */
-public interface WALFiler {
-
-    Object lock();
-
-    void seek(long offsetFp) throws IOException;
+public interface WALFiler extends IWriteable, IReadable {
 
     void eof() throws IOException;
-
-    long length() throws IOException;
 
     IReadable fileChannelFiler() throws IOException;
 

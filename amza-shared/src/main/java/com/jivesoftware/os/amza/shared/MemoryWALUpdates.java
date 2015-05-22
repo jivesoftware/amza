@@ -18,22 +18,27 @@ package com.jivesoftware.os.amza.shared;
 import java.util.Map;
 import java.util.Map.Entry;
 
-public class MemoryWALUpdates implements Scannable<WALValue> {
+public class MemoryWALUpdates implements Commitable<WALValue> {
 
     private final Map<WALKey, WALValue> updates;
+    private final WALHighwater walHighwater;
 
-    public MemoryWALUpdates(Map<WALKey, WALValue> updates) {
+    public MemoryWALUpdates(Map<WALKey, WALValue> updates, WALHighwater walHighwater) {
         this.updates = updates;
+        this.walHighwater = walHighwater;
     }
 
     @Override
-    public void rowScan(Scan<WALValue> scan) throws Exception {
+    public void commitable(Highwaters highwaters, Scan<WALValue> scan) throws Exception {
         for (Entry<WALKey, WALValue> e : updates.entrySet()) {
             WALKey key = e.getKey();
             WALValue value = e.getValue();
             if (!scan.row(-1, key, value)) {
-                break;
+                return;
             }
+        }
+        if (highwaters != null && walHighwater != null) {
+            highwaters.highwater(walHighwater);
         }
     }
 }

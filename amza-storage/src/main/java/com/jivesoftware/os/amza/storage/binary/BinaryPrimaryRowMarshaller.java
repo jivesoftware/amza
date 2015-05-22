@@ -17,16 +17,16 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.WALRow;
 
-public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
+public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> {
 
     @Override
     public byte[] toRow(WALKey k, WALValue v) throws Exception {
-        MemoryFiler filer = new MemoryFiler();
+        HeapFiler filer = new HeapFiler();
         UIO.writeByteArray(filer, v.getValue(), "value");
         UIO.writeLong(filer, v.getTimestampId(), "timestamp");
         UIO.writeBoolean(filer, v.getTombstoned(), "tombstone");
@@ -37,28 +37,17 @@ public class BinaryRowMarshaller implements RowMarshaller<byte[]> {
 
     @Override
     public WALRow fromRow(byte[] row) throws Exception {
-        MemoryFiler filer = new MemoryFiler(row);
+        HeapFiler filer = new HeapFiler(row);
         final byte[] value = UIO.readByteArray(filer, "value");
         final long timestamp = UIO.readLong(filer, "timestamp");
         final boolean tombstone = UIO.readBoolean(filer, "tombstone");
         final byte[] key = UIO.readByteArray(filer, "key");
-        return new WALRow() {
-
-            @Override
-            public WALKey getKey() {
-                return new WALKey(key);
-            }
-
-            @Override
-            public WALValue getValue() {
-                return new WALValue(value, timestamp, tombstone);
-            }
-        };
+        return new WALRow(new WALKey(key), new WALValue(value, timestamp, tombstone));
     }
 
     @Override
     public byte[] valueFromRow(byte[] row) throws Exception {
-        MemoryFiler filer = new MemoryFiler(row);
+        HeapFiler filer = new HeapFiler(row);
         return UIO.readByteArray(filer, "value");
     }
 }

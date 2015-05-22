@@ -16,6 +16,8 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
+import java.util.Map;
 
 /**
  *
@@ -23,7 +25,7 @@ import com.jivesoftware.os.amza.shared.RingHost;
  */
 public interface SendFailureListener {
 
-    void failedToSend(RingHost ringHost, Throwable reason);
+    void failedToSend(Map.Entry<RingMember, RingHost> node, Throwable reason);
 
-    void sent(RingHost ringHost);
+    void sent(Map.Entry<RingMember, RingHost> node);
 }

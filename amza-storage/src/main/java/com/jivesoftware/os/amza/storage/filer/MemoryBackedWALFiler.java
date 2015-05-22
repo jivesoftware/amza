@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.storage.filer;
 
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.IReadable;
 import com.jivesoftware.os.amza.shared.filer.IWriteable;
-import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
 import java.io.IOException;
 
 /**
@@ -11,20 +11,20 @@ import java.io.IOException;
  */
 public class MemoryBackedWALFiler implements WALFiler, IReadable, IWriteable {
 
-    private final MemoryFiler filer;
+    private final HeapFiler filer;
 
-    public MemoryBackedWALFiler(MemoryFiler filer) {
+    public MemoryBackedWALFiler(HeapFiler filer) {
         this.filer = filer;
     }
 
     @Override
     public IReadable fileChannelFiler() throws IOException {
-        return new MemoryFiler(filer.leakBytes());
+        return filer.createReadOnlyClone();
     }
 
     @Override
     public IReadable fileChannelMemMapFiler(long boundaryFp) throws IOException {
-        return new MemoryFiler(filer.leakBytes());
+        return filer.createReadOnlyClone();
     }
 
     @Override

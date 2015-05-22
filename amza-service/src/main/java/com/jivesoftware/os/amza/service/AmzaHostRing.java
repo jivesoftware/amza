@@ -15,26 +15,32 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.shared.AmzaRing;
-import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.RingNeighbors;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.shared.filer.MemoryFiler;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NavigableMap;
 import java.util.Random;
 import java.util.concurrent.ConcurrentMap;
 
@@ -44,19 +50,19 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
 
         online((byte) 2), joining((byte) 1), off((byte) 0), leaving((byte) -1), offline((byte) -2);
 
-        public final byte b;
+        public final byte serializedByte;
 
         Status(byte b) {
-            this.b = b;
+            this.serializedByte = b;
         }
 
         public byte[] toBytes() {
-            return new byte[] { b };
+            return new byte[]{serializedByte};
         }
 
         static Status fromBytes(byte[] b) {
             for (Status v : values()) {
-                if (v.b == b[0]) {
+                if (v.serializedByte == b[0]) {
                     return v;
                 }
             }
@@ -90,17 +96,44 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         }
     }
 
-    public RingHost getRingHost() {
-        return ringReader.getRingHost();
+    @Override
+    public void register(RingMember ringMember, RingHost ringHost) throws Exception {
+        WALValue registeredHost = systemRegionStripe.get(RegionProvider.NODE_INDEX, new WALKey(ringMember.toBytes()));
+        if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
+            return;
+        }
+        systemRegionStripe.commit(RegionProvider.NODE_INDEX, replicator, WALStorageUpdateMode.noReplication, (highwater, scan) -> {
+            scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(ringHost.toBytes(), orderIdProvider.nextId(), false));
+        });
     }
 
     @Override
-    public HostRing getHostRing(String ringName) throws Exception {
-        return ringReader.getHostRing(ringName);
+    public void deregister(RingMember ringMember) throws Exception {
+        systemRegionStripe.commit(RegionProvider.NODE_INDEX, replicator, WALStorageUpdateMode.noReplication, (highwater, scan) -> {
+            scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
+        });
+    }
+
+    public RingMember getRingMember() {
+        return ringReader.getRingMember();
+    }
+
+    public RingHost getRingHost() throws Exception {
+        WALValue registeredHost = systemRegionStripe.get(RegionProvider.NODE_INDEX, new WALKey(getRingMember().toBytes()));
+        if (registeredHost != null) {
+            return RingHost.fromBytes(registeredHost.getValue());
+        } else {
+            return RingHost.UNKNOWN_RING_HOST;
+        }
     }
 
     @Override
-    public List<RingHost> getRing(String ringName) throws Exception {
+    public RingNeighbors getRingNeighbors(String ringName) throws Exception {
+        return ringReader.getRingNeighbors(ringName);
+    }
+
+    @Override
+    public NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception {
         return ringReader.getRing(ringName);
     }
 
@@ -134,61 +167,71 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }
-        List<RingHost> ring = ringReader.getRing("system");
+        NavigableMap<RingMember, RingHost> ring = ringReader.getRing("system");
         if (ring.size() < desiredRingSize) {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
-        Collections.shuffle(ring, new Random(ringName.hashCode()));
+        List<Entry<RingMember, RingHost>> ringAsList = new ArrayList<>(ring.entrySet());
+        Collections.shuffle(ringAsList, new Random(ringName.hashCode()));
         for (int i = 0; i < desiredRingSize; i++) {
-            addInternal(ringName, ring.get(i));
+            addInternal(ringName, ringAsList.get(i).getKey());
         }
     }
 
     @Override
-    public void addRingHost(String ringName, RingHost ringHost) throws Exception {
-        if (ringName == null) {
-            throw new IllegalArgumentException("ringName cannot be null.");
-        }
-        if (ringHost == null) {
-            throw new IllegalArgumentException("ringHost cannot be null.");
-        }
-        addInternal(ringName, ringHost);
+    public void addRingMember(String ringName, RingMember ringMember) throws Exception {
+        Preconditions.checkNotNull(ringName, "ringName cannot be null.");
+        Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
+        addInternal(ringName, ringMember);
     }
 
-    private void addInternal(String ringName, RingHost ringHost) throws Exception {
-        final WALKey key = ringReader.key(ringName, ringHost);
+    private void addInternal(String ringName, RingMember member) throws Exception {
+        final WALKey key = ringReader.key(ringName, member);
         WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX, key);
         if (had == null) {
-            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
-                scan.row(-1, key, new WALValue(new byte[Status.online.b], orderIdProvider.nextId(), false));
+            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
+                scan.row(-1, key, new WALValue(new byte[0], orderIdProvider.nextId(), false));
             });
         }
     }
 
     @Override
-    public void removeRingHost(String ringName, RingHost ringHost) throws Exception {
-        if (ringName == null) {
-            throw new IllegalArgumentException("ringName cannot be null.");
-        }
-        if (ringHost == null) {
-            throw new IllegalArgumentException("ringHost cannot be null.");
-        }
-        final WALKey key = ringReader.key(ringName, ringHost);
+    public void removeRingMember(String ringName, RingMember ringMember) throws Exception {
+        Preconditions.checkNotNull(ringName, "ringName cannot be null.");
+        Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
+        final WALKey key = ringReader.key(ringName, ringMember);
         WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX, key);
         if (had != null) {
-            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
                 scan.row(-1, key, new WALValue(null, orderIdProvider.nextId(), true));
             });
         }
     }
 
+    /**
+     @param ringStream
+     @throws Exception
+     */
     @Override
     public void allRings(final RingStream ringStream) throws Exception {
+        Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
+        systemRegionStripe.rowScan(RegionProvider.NODE_INDEX, (long rowTxId, WALKey key, WALValue rawRingHost) -> {
+            RingMember ringMember = RingMember.fromBytes(key.getKey());
+            RingHost ringHost = RingHost.fromBytes(rawRingHost.getValue());
+            ringMemberToRingHost.put(ringMember, ringHost);
+            return true;
+        });
+
         systemRegionStripe.rowScan(RegionProvider.RING_INDEX, (long rowTxId, WALKey key, WALValue value) -> {
-            MemoryFiler filer = new MemoryFiler(key.getKey());
+            HeapFiler filer = new HeapFiler(key.getKey());
             String ringName = UIO.readString(filer, "ringName");
             UIO.readByte(filer, "seperator");
-            return ringStream.stream(ringName, Status.fromBytes(value.getValue()).name(), RingHost.fromBytes(UIO.readByteArray(filer, "ringHost")));
+            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
+            RingHost ringHost = ringMemberToRingHost.get(ringMember);
+            if (ringHost == null) {
+                ringHost = RingHost.UNKNOWN_RING_HOST;
+            }
+            return ringStream.stream(ringName, ringMember, ringHost);
         });
     }
 }

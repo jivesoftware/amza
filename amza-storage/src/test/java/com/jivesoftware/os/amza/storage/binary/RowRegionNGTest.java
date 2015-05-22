@@ -33,21 +33,23 @@ import org.testng.annotations.Test;
  */
 public class RowRegionNGTest {
 
+    final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
+    final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
+
     @Test(enabled = false)
     public void concurrencyTest() throws Exception {
         File walDir = Files.createTempDir();
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
-        final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         RegionName regionName = new RegionName(false, "ring", "booya");
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, -1);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         final OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, 1000, 1000, 2);
+        final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
         indexedWAL.load();
 
         final Random r = new Random();
@@ -105,25 +107,44 @@ public class RowRegionNGTest {
             updates.put(key, new WALValue(UIO.intBytes(i), idProvider.nextId(), false));
         }
         indexedWAL.update(false, (RowsChanged rowsChanged) -> Futures.immediateFuture(true), WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(
-            updates));
+            updates, null));
     }
 
     @Test
-    public void eventualConsitencyTest() throws Exception {
+    public void diskBackedEventualConsitencyTest() throws Exception {
         File walDir = Files.createTempDir();
-        //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
 
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
-        final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
 
-        final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
+        WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         RegionName regionName = new RegionName(false, "ring", "booya");
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, rowMarshaller, indexProvider, -1);
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, rowMarshaller, binaryWALTx, 1000, 1000, 2);
+        testEventualConsitency(regionName, idProvider, binaryWALTx);
+    }
+
+    @Test
+    public void memoryBackedEventualConsitencyTest() throws Exception {
+        File walDir = Files.createTempDir();
+        IoStats ioStats = new IoStats();
+
+        RowIOProvider binaryRowIOProvider = new MemoryBackedRowIOProvider(ioStats, 1);
+
+        WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
+        RegionName regionName = new RegionName(false, "ring", "booya");
+
+        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
+
+        OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
+        testEventualConsitency(regionName, idProvider, binaryWALTx);
+    }
+
+    private void testEventualConsitency(RegionName regionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
+        throws Exception {
+        IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
         indexedWAL.load();
         WALValue value = indexedWAL.get(rk(1));
         Assert.assertNull(value);
@@ -192,6 +213,6 @@ public class RowRegionNGTest {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
         indexedWAL.update(false, (RowsChanged rowsChanged) -> Futures.immediateFuture(true), WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(
-            updates));
+            updates, null));
     }
 }

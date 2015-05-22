@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared.filer;
 
+import com.google.common.math.IntMath;
 import java.io.IOException;
 
 /**
@@ -22,19 +23,25 @@ import java.io.IOException;
  * All of the methods are intentionally left unsynchronized. Up to caller to do the right thing using the Object returned by lock()
  *
  */
-public class MemoryFiler implements IFiler {
+public class HeapFiler implements IFiler {
 
     private byte[] bytes = new byte[0];
     private long fp = 0;
+    private long maxLength = 0;
 
-    public MemoryFiler() {
+    public HeapFiler() {
     }
 
-    public MemoryFiler(byte[] _bytes) {
-        if (_bytes == null) {
-            throw new IllegalArgumentException("MemoryFiler _bytes cannot be null.");
-        }
+    public HeapFiler(byte[] _bytes) {
         bytes = _bytes;
+        maxLength = _bytes.length;
+    }
+
+    public HeapFiler createReadOnlyClone() {
+        HeapFiler heapFiler = new HeapFiler();
+        heapFiler.bytes = bytes;
+        heapFiler.maxLength = maxLength;
+        return heapFiler;
     }
 
     public byte[] getBytes() {
@@ -57,7 +64,7 @@ public class MemoryFiler implements IFiler {
 
     @Override
     public int read() throws IOException {
-        if (fp >= bytes.length) {
+        if (fp + 1 > maxLength) {
             return -1;
         }
         int b = bytes[(int) fp] & 0xFF;
@@ -67,35 +74,17 @@ public class MemoryFiler implements IFiler {
 
     @Override
     public int read(byte[] b) throws IOException {
-        if (b == null) {
-            return 0;
-        }
-        if (fp > bytes.length) {
-            return -1;
-        }
-        int len = b.length;
-        if (bytes.length - (int) fp < len) {
-            len = bytes.length - (int) fp;
-        }
-        if (len == 0) {
-            return -1;
-        }
-        System.arraycopy(bytes, (int) fp, b, 0, len);
-        fp += len;
-        return len;
+        return read(b, 0, b.length);
     }
 
     @Override
     public int read(byte b[], int _offset, int _len) throws IOException {
-        if (b == null) {
-            return 0;
-        }
-        if (fp > bytes.length) {
+        if (fp > maxLength) {
             return -1;
         }
         int len = _len;
-        if (fp + len > bytes.length) {
-            len = (int) (bytes.length - fp);
+        if (fp + len > maxLength) {
+            len = (int) (maxLength - fp);
         }
         System.arraycopy(bytes, (int) fp, b, _offset, len);
         fp += len;
@@ -105,23 +94,16 @@ public class MemoryFiler implements IFiler {
     @Override
     public void write(int b) throws IOException {
         if (fp + 1 > bytes.length) {
-            bytes = grow(bytes, 1 + (bytes.length * 2));
+            bytes = grow(bytes, Math.max(1, bytes.length));
         }
         bytes[(int) fp] = (byte) b;
         fp++;
+        maxLength = Math.max(maxLength, fp);
     }
 
     @Override
     public void write(byte _b[]) throws IOException {
-        if (_b == null) {
-            return;
-        }
-        int len = _b.length;
-        if (fp + len > bytes.length) {
-            bytes = grow(bytes, len + (bytes.length * 2));
-        }
-        System.arraycopy(_b, 0, bytes, (int) fp, len);
-        fp += len;
+        write(_b, 0, _b.length);
     }
 
     @Override
@@ -131,10 +113,11 @@ public class MemoryFiler implements IFiler {
         }
         int len = _len;
         if (fp + len > bytes.length) {
-            bytes = grow(bytes, len + (bytes.length * 2));
+            bytes = grow(bytes, Math.max(len, bytes.length));
         }
         System.arraycopy(_b, _offset, bytes, (int) fp, len);
         fp += len;
+        maxLength = Math.max(maxLength, fp);
     }
 
     @Override
@@ -145,11 +128,13 @@ public class MemoryFiler implements IFiler {
     @Override
     public void seek(long _position) throws IOException {
         fp = _position;
+        maxLength = Math.max(maxLength, fp);
     }
 
     @Override
     public long skip(long _position) throws IOException {
         fp += _position;
+        maxLength = Math.max(maxLength, fp);
         return fp;
     }
 
@@ -162,16 +147,18 @@ public class MemoryFiler implements IFiler {
         System.arraycopy(bytes, 0, newBytes, 0, Math.min(bytes.length, newBytes.length));
         fp = (int) len;
         bytes = newBytes;
+        maxLength = len;
     }
 
     @Override
     public long length() throws IOException {
-        return bytes.length;
+        return maxLength;
     }
 
     @Override
     public void eof() throws IOException {
         bytes = trim(bytes, (int) fp);
+        maxLength = fp;
     }
 
     @Override
@@ -189,10 +176,13 @@ public class MemoryFiler implements IFiler {
     }
 
     static final public byte[] grow(byte[] src, int amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("amount must be greater than zero");
+        }
         if (src == null) {
             return new byte[amount];
         }
-        byte[] newSrc = new byte[src.length + amount];
+        byte[] newSrc = new byte[IntMath.checkedAdd(src.length, amount)];
         System.arraycopy(src, 0, newSrc, 0, src.length);
         return newSrc;
     }

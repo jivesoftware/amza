@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -28,6 +27,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 
 public class RegionProvider {
 
+    public static final RegionName NODE_INDEX = new RegionName(true, "system", "NODE_INDEX");
     public static final RegionName RING_INDEX = new RegionName(true, "system", "RING_INDEX");
     public static final RegionName REGION_INDEX = new RegionName(true, "system", "REGION_INDEX");
     public static final RegionName REGION_PROPERTIES = new RegionName(true, "system", "REGION_PROPERTIES");
@@ -67,7 +67,7 @@ public class RegionProvider {
                 final byte[] rawRegionName = regionName.toBytes();
                 final WALKey regionKey = new WALKey(rawRegionName);
                 RegionStore regionIndexStore = regionName.equals(REGION_INDEX) ? regionStore : regionIndex.get(REGION_INDEX);
-                RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+                RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
                     scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
                 });
                 regionIndexStore.flush(hardFlush);
@@ -82,7 +82,7 @@ public class RegionProvider {
     public void setRegionProperties(final RegionName regionName, final RegionProperties properties) throws Exception {
         regionIndex.putProperties(regionName, properties);
         RegionStore regionPropertiesStore = regionIndex.get(REGION_PROPERTIES);
-        RowsChanged changed = regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+        RowsChanged changed = regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
             scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(regionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
         });
         regionPropertiesStore.flush(hardFlush);

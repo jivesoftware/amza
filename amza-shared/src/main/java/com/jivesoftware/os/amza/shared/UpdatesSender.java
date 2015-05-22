@@ -15,7 +15,9 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import java.util.Map.Entry;
+
 public interface UpdatesSender {
 
-    void sendUpdates(RingHost ringHost, RegionName regionName, Scannable<WALValue> rowUpdates) throws Exception;
+    void sendUpdates(Entry<RingMember, RingHost> node, RegionName regionName, Commitable<WALValue> rowUpdates) throws Exception;
 }

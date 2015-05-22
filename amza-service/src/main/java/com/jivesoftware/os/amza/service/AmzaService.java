@@ -27,15 +27,19 @@ import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.HighwaterMarks;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.TakeCursors;
+import com.jivesoftware.os.amza.shared.TakeCursors.RingMemberCursor;
+import com.jivesoftware.os.amza.shared.WALHighwater;
+import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -44,9 +48,13 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NavigableMap;
+import java.util.function.BiFunction;
 
 /**
  * Amza pronounced (AH m z ah )
@@ -60,7 +68,7 @@ public class AmzaService implements AmzaInstance {
     private final AmzaStats amzaStats;
     private final AmzaRingReader ringReader;
     private final AmzaHostRing amzaRing;
-    private final HighwaterMarks highwaterMarks;
+    private final HighwaterStorage highwaterMarks;
     private final AmzaRegionChangeReceiver changeReceiver;
     private final AmzaRegionChangeTaker changeTaker;
     private final AmzaRegionChangeReplicator changeReplicator;
@@ -75,7 +83,7 @@ public class AmzaService implements AmzaInstance {
         AmzaStats amzaStats,
         AmzaRingReader ringReader,
         AmzaHostRing amzaRing,
-        HighwaterMarks highwaterMarks,
+        HighwaterStorage highwaterMarks,
         AmzaRegionChangeReceiver changeReceiver,
         AmzaRegionChangeTaker changeTaker,
         AmzaRegionChangeReplicator changeReplicator,
@@ -109,7 +117,7 @@ public class AmzaService implements AmzaInstance {
         return amzaRing;
     }
 
-    public HighwaterMarks getHighwaterMarks() {
+    public HighwaterStorage getHighwaterMarks() {
         return highwaterMarks;
     }
 
@@ -209,13 +217,13 @@ public class AmzaService implements AmzaInstance {
     @Override
     public void destroyRegion(final RegionName regionName) throws Exception {
         RegionStore regionIndexStore = regionIndex.get(RegionProvider.REGION_INDEX);
-        regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (Scan<WALValue> scan) -> {
+        regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwaters, scan) -> {
             scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         });
     }
 
     @Override
-    public void updates(RegionName regionName, Scannable<WALValue> rowUpdates) throws Exception {
+    public void updates(RegionName regionName, Commitable<WALValue> rowUpdates) throws Exception {
         changeReceiver.receiveChanges(regionName, rowUpdates);
     }
 
@@ -227,14 +235,14 @@ public class AmzaService implements AmzaInstance {
         return regionWatcher.unwatch(regionName);
     }
 
-    public boolean replicate(RegionName regionName, Scannable<WALValue> rowUpdates, int requireNReplicas) throws Exception {
-        List<RingHost> ringHosts = ringReader.getRing(regionName.getRingName());
+    public boolean replicate(RegionName regionName, Commitable<WALValue> rowUpdates, int requireNReplicas) throws Exception {
+        NavigableMap<RingMember, RingHost> nodes = ringReader.getRing(regionName.getRingName());
         //TODO consider spinning until we reach quorum, or force election to the sub-ring
         RegionProperties regionProperties = getRegionProperties(regionName);
         int numReplicated = changeReplicator.replicateUpdatesToRingHosts(regionName,
             rowUpdates,
             false,
-            ringHosts.toArray(new RingHost[ringHosts.size()]),
+            (Entry<RingMember, RingHost>[]) nodes.entrySet().toArray(new Entry[nodes.size()]),
             regionProperties.replicationFactor);
         return numReplicated >= requireNReplicas;
     }
@@ -247,27 +255,35 @@ public class AmzaService implements AmzaInstance {
         }
     }
 
-    public TakeCursors takeFromTransactionId(AmzaRegion region, long transactionId, final Scan<WALValue> scan) throws Exception {
+    private static final BiFunction<Long, Long, Long> maxMerge = (Long t, Long u) -> {
+        return Math.max(t, u);
+    };
+
+    public TakeCursors takeFromTransactionId(AmzaRegion region, long transactionId, final Scan<WALValue> scan)
+        throws Exception {
         if (region == null) {
             return null;
         }
-        RegionName regionName = region.getRegionName();
-        List<TakeCursors.RingHostCursor> cursors = Lists.newArrayList();
-        for (RingHost ringHost : amzaRing.getRing(regionName.getRingName())) {
-            if (!ringHost.equals(amzaRing.getRingHost())) {
-                Long highwaterTxId = highwaterMarks.get(ringHost, regionName);
-                if (highwaterTxId != null) {
-                    cursors.add(new TakeCursors.RingHostCursor(ringHost, highwaterTxId));
-                }
+        WALHighwater regionHighwater = highwaterMarks.getRegionHighwater(region.getRegionName());
+
+        Map<RingMember, Long> ringMemberToMaxTxId = new HashMap<>();
+        AmzaRegion.TakeResult takeResult = region.takeFromTransactionId(transactionId, (highwater) -> {
+            for (RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
+                ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, maxMerge);
+            }
+        }, scan);
+        if (takeResult.tookToEnd) {
+            for (RingMemberHighwater highwater : regionHighwater.ringMemberHighwater) {
+                ringMemberToMaxTxId.merge(highwater.ringMember, highwater.transactionId, maxMerge);
             }
         }
+        ringMemberToMaxTxId.merge(amzaRing.getRingMember(), takeResult.lastTxId, maxMerge);
 
-        AmzaRegion.TakeResult takeResult = region.takeFromTransactionId(transactionId, scan);
-        if (!takeResult.tookToEnd) {
-            cursors.clear();
+        List<RingMemberCursor> cursors = new ArrayList<>();
+        for (Entry<RingMember, Long> entry : ringMemberToMaxTxId.entrySet()) {
+            cursors.add(new RingMemberCursor(entry.getKey(), entry.getValue()));
         }
-        cursors.add(new TakeCursors.RingHostCursor(amzaRing.getRingHost(), takeResult.lastTxId));
-
+        cursors.add(new TakeCursors.RingMemberCursor(amzaRing.getRingMember(), takeResult.lastTxId));
         return new TakeCursors(cursors);
     }
 

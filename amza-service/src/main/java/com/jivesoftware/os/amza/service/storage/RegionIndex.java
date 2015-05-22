@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.jivesoftware.os.amza.service.storage.RegionProvider.HIGHWATER_MARK_INDEX;
 import static com.jivesoftware.os.amza.service.storage.RegionProvider.REGION_PROPERTIES;
-import static com.jivesoftware.os.amza.service.storage.RegionProvider.RING_INDEX;
 
 /**
  *
@@ -84,9 +83,10 @@ public class RegionIndex implements RowChanges {
             LOG.info("Still opening regions: opened={} failed={} total={}", numOpened.get(), numFailed.get(), total.get());
         }
 
-        get(RING_INDEX);
-        get(HIGHWATER_MARK_INDEX);
-        get(REGION_PROPERTIES);
+        get(RegionProvider.RING_INDEX);
+        get(RegionProvider.NODE_INDEX);
+        get(RegionProvider.HIGHWATER_MARK_INDEX);
+        get(RegionProvider.REGION_PROPERTIES);
     }
 
     public RegionProperties getProperties(RegionName regionName) {
@@ -177,7 +177,7 @@ public class RegionIndex implements RowChanges {
     @Override
     public void changes(final RowsChanged changes) throws Exception {
         if (changes.getRegionName().equals(REGION_PROPERTIES)) {
-            changes.rowScan((long rowTxId, WALKey key, WALValue scanned) -> {
+            changes.commitable(null, (long rowTxId, WALKey key, WALValue scanned) -> {
                 removeProperties(RegionName.fromBytes(key.getKey()));
                 RegionStore store = get(changes.getRegionName());
                 if (store != null) {

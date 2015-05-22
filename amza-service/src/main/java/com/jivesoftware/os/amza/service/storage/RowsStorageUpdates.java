@@ -16,7 +16,8 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.service.replication.RegionStripe;
-import com.jivesoftware.os.amza.shared.RangeScannable;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -27,7 +28,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 /**
  * Not thread safe. Each Thread should get their own ReadThroughChangeSet.
  */
-public class RowsStorageUpdates implements RangeScannable<WALValue> {
+public class RowsStorageUpdates implements Commitable<WALValue> {
 
     private final RegionName regionName;
     private final RegionStripe regionStripe;
@@ -40,18 +41,8 @@ public class RowsStorageUpdates implements RangeScannable<WALValue> {
     }
 
     @Override
-    public void rowScan(Scan<WALValue> scan) throws Exception {
+    public void commitable(Highwaters highwaters, Scan<WALValue> scan) throws Exception {
         for (Entry<WALKey, WALValue> e : changes.entrySet()) {
-            WALValue value = e.getValue();
-            if (!scan.row(value.getTimestampId(), e.getKey(), value)) {
-                return;
-            }
-        }
-    }
-
-    @Override
-    public void rangeScan(WALKey from, WALKey to, Scan<WALValue> scan) throws Exception {
-        for (Entry<WALKey, WALValue> e : changes.subMap(from, to).entrySet()) {
             WALValue value = e.getValue();
             if (!scan.row(value.getTimestampId(), e.getKey(), value)) {
                 return;

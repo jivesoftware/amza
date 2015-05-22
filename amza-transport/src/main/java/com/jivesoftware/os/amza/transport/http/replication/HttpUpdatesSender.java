@@ -16,14 +16,15 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.Scannable;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfig;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfiguration;
@@ -35,6 +36,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -49,15 +51,15 @@ public class HttpUpdatesSender implements UpdatesSender {
     }
 
     @Override
-    public void sendUpdates(final RingHost ringHost, final RegionName regionName, Scannable<WALValue> changes) throws Exception {
+    public void sendUpdates(final Entry<RingMember, RingHost> node, final RegionName regionName, Commitable<WALValue> changes) throws Exception {
 
-        final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+        final BinaryPrimaryRowMarshaller rowMarshaller = new BinaryPrimaryRowMarshaller();
         final List<Long> rowTxIds = new ArrayList<>();
         final List<byte[]> rows = new ArrayList<>();
         final MutableLong smallestTx = new MutableLong(Long.MAX_VALUE);
         final MutableLong wrote = new MutableLong();
 
-        changes.rowScan((long txId, WALKey key, WALValue value) -> {
+        changes.commitable(null, (long txId, WALKey key, WALValue value) -> {
             if (txId < smallestTx.longValue()) {
                 smallestTx.setValue(txId);
             }
@@ -68,13 +70,13 @@ public class HttpUpdatesSender implements UpdatesSender {
             return true;
         });
         if (!rows.isEmpty()) {
-            LOG.debug("Pushing " + rows.size() + " changes to " + ringHost);
+            LOG.debug("Pushing " + rows.size() + " changes to " + node);
             RowUpdates changeSet = new RowUpdates(-1, regionName, rowTxIds, rows);
-            getRequestHelper(ringHost).executeRequest(changeSet, "/amza/changes/add", Boolean.class, false);
-            amzaStats.replicated(ringHost, regionName, rows.size(), smallestTx.longValue());
+            getRequestHelper(node.getValue()).executeRequest(changeSet, "/amza/changes/add", Boolean.class, false);
+            amzaStats.replicated(node.getKey(), regionName, rows.size(), smallestTx.longValue());
             amzaStats.netStats.wrote.addAndGet(wrote.longValue());
         } else {
-            amzaStats.replicated(ringHost, regionName, 0, Long.MAX_VALUE);
+            amzaStats.replicated(node.getKey(), regionName, 0, Long.MAX_VALUE);
         }
     }
 

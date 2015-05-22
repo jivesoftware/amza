@@ -13,16 +13,25 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.storage;
+package com.jivesoftware.os.amza.shared;
 
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALValue;
+import java.util.Map.Entry;
 
-public interface RowMarshaller<R> {
+public class RingNeighbors {
 
-    R toRow(WALKey key, WALValue value) throws Exception;
+    private final Entry<RingMember, RingHost>[] aboveRing;
+    private final Entry<RingMember, RingHost>[] belowRing;
 
-    WALRow fromRow(R row) throws Exception;
+    public RingNeighbors(Entry<RingMember, RingHost>[] aboveRing, Entry<RingMember, RingHost>[] belowRing) {
+        this.aboveRing = aboveRing;
+        this.belowRing = belowRing;
+    }
 
-    byte[] valueFromRow(R row) throws Exception;
+    public Entry<RingMember, RingHost>[] getAboveRing() {
+        return aboveRing;
+    }
+
+    public Entry<RingMember, RingHost>[] getBelowRing() {
+        return belowRing;
+    }
 }

@@ -30,9 +30,10 @@ import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.HighwaterMarks;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
@@ -40,17 +41,6 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
-import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesSender;
-import com.jivesoftware.os.amza.transport.tcp.replication.TcpUpdatesTaker;
-import com.jivesoftware.os.amza.transport.tcp.replication.protocol.IndexReplicationProtocol;
-import com.jivesoftware.os.amza.transport.tcp.replication.serialization.FstMarshaller;
-import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayload;
-import com.jivesoftware.os.amza.transport.tcp.replication.serialization.MessagePayloadSerializer;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.BufferProvider;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.MessageFramer;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpClientProvider;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServer;
-import com.jivesoftware.os.amza.transport.tcp.replication.shared.TcpServerInitializer;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -59,7 +49,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
 import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
 import java.util.Random;
-import org.nustaq.serialization.FSTConfiguration;
 
 public class Main {
 
@@ -74,23 +63,10 @@ public class Main {
         String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
         int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1223"));
         String clusterName = (args.length > 1 ? args[1] : null);
-        String transport = System.getProperty("amza.transport", "http");
+        String logicalName = System.getProperty("amza.logicalName", hostname + ":" + port);
 
-        //TODO pull from properties
-        int connectionsPerHost = Integer.parseInt(System.getProperty("amza.tcp.client.connectionsPerHost", "8"));
-        int connectTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.connectTimeoutMillis", "6000000"));
-        int socketTimeoutMillis = Integer.parseInt(System.getProperty("amza.tcp.client.socketTimeoutMillis", "6000000"));
-        int bufferSize = Integer.parseInt(System.getProperty("amza.tcp.bufferSize", "" + (1024 * 1024 * 10)));
-        int numServerThreads = Integer.parseInt(System.getProperty("amza.tcp.server.numThreads", "8"));
-        int numBuffers = numServerThreads * 10;
-        int tcpPort = Integer.parseInt(System.getProperty("amza.tcp.port", "1177"));
-
-        RingHost ringHost;
-        if (transport.equals("http")) {
-            ringHost = new RingHost(hostname, port);
-        } else {
-            ringHost = new RingHost(hostname, tcpPort);
-        }
+        RingMember ringMember = new RingMember(logicalName);
+        RingHost ringHost = new RingHost(hostname, port);
 
         // todo need a better way to create writter id.
         int writerId = Integer.parseInt(System.getProperty("amza.id", String.valueOf(new Random().nextInt(512))));
@@ -111,24 +87,8 @@ public class Main {
         indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(workingDirs));
         indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
 
-        FstMarshaller marshaller = new FstMarshaller(FSTConfiguration.getDefaultConfiguration());
-        marshaller.registerSerializer(MessagePayload.class, new MessagePayloadSerializer());
-
-        IndexReplicationProtocol clientProtocol = new IndexReplicationProtocol(null, orderIdProvider);
-
-        MessageFramer framer = new MessageFramer(marshaller, clientProtocol);
-        BufferProvider bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
-
-        TcpClientProvider tcpClientProvider = new TcpClientProvider(
-            connectionsPerHost, connectTimeoutMillis, socketTimeoutMillis, bufferSize, bufferSize, bufferProvider, framer);
-
-        UpdatesSender changeSetSender = new TcpUpdatesSender(tcpClientProvider, clientProtocol);
-        UpdatesTaker taker = new TcpUpdatesTaker(tcpClientProvider, clientProtocol);
-
-        if (transport.equals("http")) {
-            changeSetSender = new HttpUpdatesSender(amzaStats);
-            taker = new HttpUpdatesTaker(amzaStats);
-        }
+        UpdatesSender changeSetSender = new HttpUpdatesSender(amzaStats);
+        UpdatesTaker taker = new HttpUpdatesTaker(amzaStats);
 
         RegionPropertyMarshaller regionPropertyMarshaller = new RegionPropertyMarshaller() {
 
@@ -145,6 +105,7 @@ public class Main {
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
+            ringMember,
             ringHost,
             orderIdProvider,
             regionPropertyMarshaller,
@@ -152,37 +113,16 @@ public class Main {
             changeSetSender,
             taker,
             Optional.<SendFailureListener>absent(),
-            Optional.<TakeFailureListener>absent(), (RowsChanged changes) -> {
+            Optional.<TakeFailureListener>absent(),
+            (RowsChanged changes) -> {
             });
-
-        IndexReplicationProtocol serverProtocol = new IndexReplicationProtocol(amzaService, orderIdProvider);
-        bufferProvider = new BufferProvider(bufferSize, numBuffers, true, 5);
-        TcpServerInitializer initializer = new TcpServerInitializer();
-        final TcpServer server = initializer.initialize(new RingHost(hostname, tcpPort), numServerThreads, bufferProvider, framer, serverProtocol);
-        server.start();
-
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                try {
-                    server.stop();
-                } catch (InterruptedException ex) {
-                    System.out.println("Failed to stop Tcp Replication Service");
-                    ex.printStackTrace(System.out);
-                }
-            }
-        });
-
-        System.out.println("-----------------------------------------------------------------------");
-        System.out.println("|      Tcp Replication Service Online");
-        System.out.println("-----------------------------------------------------------------------");
 
         final JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
             .addEndpoint(AmzaEndpoints.class)
             .addInjectable(AmzaService.class, amzaService)
             .addEndpoint(AmzaReplicationRestEndpoints.class)
             .addInjectable(AmzaInstance.class, amzaService)
-            .addInjectable(HighwaterMarks.class, amzaService.getHighwaterMarks());
+            .addInjectable(HighwaterStorage.class, amzaService.getHighwaterMarks());
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, amzaStats, new AmzaUIInitializer.InjectionCallback() {
 
@@ -216,7 +156,7 @@ public class Main {
         System.out.println("-----------------------------------------------------------------------");
 
         if (clusterName != null) {
-            AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getAmzaRing(), ringHost, clusterName, multicastGroup, multicastPort);
+            AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getAmzaRing(), clusterName, multicastGroup, multicastPort);
             amzaDiscovery.start();
             System.out.println("-----------------------------------------------------------------------");
             System.out.println("|      Amza Service Discovery Online");

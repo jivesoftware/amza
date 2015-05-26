@@ -25,7 +25,7 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     boolean delete(boolean ifEmpty) throws Exception;
 
-    RowsChanged update(boolean useUpdateTxId, WALReplicator walReplicator, WALStorageUpdateMode upateMode, Scannable<WALValue> rowUpdates) throws Exception;
+    RowsChanged update(boolean useUpdateTxId, WALReplicator walReplicator, WALStorageUpdateMode upateMode, Commitable<WALValue> rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
 
@@ -55,7 +55,7 @@ public interface WALStorage extends RangeScannable<WALValue> {
      * @return true if the end of the WAL was reached, otherwise false
      * @throws Exception if an error occurred
      */
-    boolean takeFromTransactionId(long transactionId, Scan<WALValue> scan) throws Exception;
+    boolean takeFromTransactionId(long transactionId, Highwaters watermarks, Scan<WALValue> scan) throws Exception;
 
     long compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 

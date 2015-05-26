@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 
 /**
  *
@@ -80,12 +82,13 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
                     row.put("name", regionName.getRegionName());
                     row.put("ringName", regionName.getRingName());
 
-                    List<RingHost> ring = amzaRing.getRing(regionName.getRingName());
+                    NavigableMap<RingMember, RingHost> ring = amzaRing.getRing(regionName.getRingName());
                     List<Map<String, Object>> ringHosts = new ArrayList<>();
-                    for (RingHost r : ring) {
+                    for (Map.Entry<RingMember, RingHost> r : ring.entrySet()) {
                         Map<String, Object> ringHost = new HashMap<>();
-                        ringHost.put("host", r.getHost());
-                        ringHost.put("port", String.valueOf(r.getPort()));
+                        ringHost.put("member", r.getKey().getMember());
+                        ringHost.put("host", r.getValue().getHost());
+                        ringHost.put("port", String.valueOf(r.getValue().getPort()));
                         ringHosts.add(ringHost);
                     }
                     row.put("ring", ringHosts);

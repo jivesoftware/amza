@@ -6,6 +6,6 @@ package com.jivesoftware.os.amza.shared;
  */
 public interface RowStream {
 
-    boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception;
+    boolean row(long rowFP, long rowTxId, RowType rowType, byte[] row) throws Exception;
 
 }

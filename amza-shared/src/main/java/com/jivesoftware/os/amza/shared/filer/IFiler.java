@@ -61,9 +61,4 @@ public interface IFiler extends IReadable, IWriteable {
      */
     public void eof() throws IOException;
 
-    /**
-     *
-     * @throws IOException
-     */
-    public void flush(boolean fsync) throws IOException;
 }

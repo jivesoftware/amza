@@ -16,31 +16,33 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
+import java.util.Map;
 
 class RingWalker {
 
-    private final RingHost[] ringHosts;
+    private final Map.Entry<RingMember, RingHost>[] ringNodes;
     private final int replicationFactor;
     int replicated = 0;
     int loops = 0;
     int failed = 0;
 
-    public RingWalker(RingHost[] ringHosts, int replicationFactor) {
-        this.ringHosts = ringHosts;
+    public RingWalker(Map.Entry<RingMember, RingHost>[] ringNodes, int replicationFactor) {
+        this.ringNodes = ringNodes;
         this.replicationFactor = replicationFactor;
     }
 
-    public RingHost host() {
+    public Map.Entry<RingMember, RingHost> node() {
         int i = failed + (loops * 2);
-        if (i >= ringHosts.length) {
+        if (i >= ringNodes.length) {
             return null;
         }
         if (replicated >= replicationFactor) {
             return null;
         }
-        RingHost ringHost = ringHosts[i];
-        ringHosts[i] = null;
-        return ringHost;
+        Map.Entry<RingMember, RingHost> node = ringNodes[i];
+        ringNodes[i] = null;
+        return node;
     }
 
     public void success() {

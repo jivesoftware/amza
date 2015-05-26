@@ -15,34 +15,26 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.RangeScannable;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 
 public class RegionStore implements RangeScannable<WALValue> {
 
-    private final AmzaStats amzaStats;
-    private final RegionName regionName;
     private final WALStorage walStorage;
     private final boolean hardFlush;
 
-    public RegionStore(AmzaStats amzaStats,
-        RegionName regionName,
-        WALStorage walStorage,
+    public RegionStore(WALStorage walStorage,
         boolean hardFlush) {
 
-        this.amzaStats = amzaStats;
-        this.regionName = regionName;
         this.walStorage = walStorage;
         this.hardFlush = hardFlush;
     }
@@ -77,6 +69,10 @@ public class RegionStore implements RangeScannable<WALValue> {
         return walStorage.get(key);
     }
 
+    public WALValue[] get(WALKey[] keys) throws Exception {
+        return walStorage.get(keys);
+    }
+
     public boolean containsKey(WALKey key) throws Exception {
         return walStorage.containsKey(key);
     }
@@ -85,7 +81,7 @@ public class RegionStore implements RangeScannable<WALValue> {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged directCommit(boolean useUpdateTxId, WALReplicator replicator, WALStorageUpdateMode mode, Scannable<WALValue> updates) throws Exception {
+    public RowsChanged directCommit(boolean useUpdateTxId, WALReplicator replicator, WALStorageUpdateMode mode, Commitable<WALValue> updates) throws Exception {
         RowsChanged changes = walStorage.update(useUpdateTxId, replicator, mode, updates);
         walStorage.flush(hardFlush);
         return changes;

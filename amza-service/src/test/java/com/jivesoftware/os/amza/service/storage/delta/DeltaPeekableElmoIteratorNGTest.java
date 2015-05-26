@@ -40,7 +40,7 @@ public class DeltaPeekableElmoIteratorNGTest {
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     wal.put(key, pointer);
-                    fpRows.put((long) i, new SimpleRow(key, value));
+                    fpRows.put((long) i, new WALRow(key, value));
                     expected.add((byte) i);
                     expectedBoth.add((byte) i);
                 }
@@ -50,7 +50,7 @@ public class DeltaPeekableElmoIteratorNGTest {
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     other.put(key, pointer);
-                    fpRows.put((long) i, new SimpleRow(key, value));
+                    fpRows.put((long) i, new WALRow(key, value));
                     expectedBoth.add((byte) i);
                 }
             }
@@ -90,24 +90,4 @@ public class DeltaPeekableElmoIteratorNGTest {
         }
     }
 
-    private static class SimpleRow implements WALRow {
-
-        private final WALKey key;
-        private final WALValue value;
-
-        public SimpleRow(WALKey key, WALValue value) {
-            this.key = key;
-            this.value = value;
-        }
-
-        @Override
-        public WALKey getKey() {
-            return key;
-        }
-
-        @Override
-        public WALValue getValue() {
-            return value;
-        }
-    }
 }

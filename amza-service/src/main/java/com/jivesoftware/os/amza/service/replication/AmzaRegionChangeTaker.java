@@ -7,21 +7,26 @@ import com.google.common.collect.Multimaps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingReader;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.shared.HighwaterMarks;
-import com.jivesoftware.os.amza.shared.HostRing;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.RingNeighbors;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.WALHighwater;
+import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.WALRow;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -38,6 +43,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -56,7 +62,7 @@ public class AmzaRegionChangeTaker {
     private final RegionStripeProvider regionStripeProvider;
     private final RegionStripe[] stripes;
     private final UpdatesTaker updatesTaker;
-    private final HighwaterMarks highwaterMarks;
+    private final HighwaterStorage highwaterMarks;
     private final Optional<TakeFailureListener> takeFailureListener;
     private final long takeFromNeighborsIntervalInMillis;
     private final int numberOfTakerThreads;
@@ -67,7 +73,7 @@ public class AmzaRegionChangeTaker {
         RegionIndex regionIndex,
         RegionStripeProvider regionStripeProvider,
         RegionStripe[] stripes,
-        HighwaterMarks highwaterMarks,
+        HighwaterStorage highwaterMarks,
         UpdatesTaker updatesTaker,
         Optional<TakeFailureListener> takeFailureListener,
         long takeFromNeighborsIntervalInMillis,
@@ -125,17 +131,17 @@ public class AmzaRegionChangeTaker {
 
     public void takeChanges(RegionStripe stripe) throws Exception {
         while (true) {
-            final ListMultimap<RingHost, RegionName> tookFrom = Multimaps.synchronizedListMultimap(ArrayListMultimap.<RingHost, RegionName>create());
+            final ListMultimap<RingMember, RegionName> tookFrom = Multimaps.synchronizedListMultimap(ArrayListMultimap.<RingMember, RegionName>create());
             List<Future<?>> futures = new ArrayList<>();
             for (final RegionName regionName : stripe.getActiveRegions()) {
-                final HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
+                final RingNeighbors hostRing = amzaRing.getRingNeighbors(regionName.getRingName());
                 final RegionProperties regionProperties = regionIndex.getProperties(regionName);
                 if (regionProperties != null && regionProperties.takeFromFactor > 0) {
 
                     futures.add(slaveTakerThreadPool.submit(() -> {
                         try {
-                            for (RingHost tookFromHost : takeChanges(hostRing.getAboveRing(), regionName, regionProperties.takeFromFactor)) {
-                                tookFrom.put(tookFromHost, regionName);
+                            for (RingMember tookFromMember : takeChanges(hostRing.getAboveRing(), regionName, regionProperties.takeFromFactor)) {
+                                tookFrom.put(tookFromMember, regionName);
                             }
                         } catch (Exception x) {
                             LOG.warn("Failed to take from " + regionName, x);
@@ -159,42 +165,53 @@ public class AmzaRegionChangeTaker {
         }
     }
 
-    private Set<RingHost> takeChanges(RingHost[] ringHosts, RegionName regionName, int takeFromFactor) throws Exception {
+    private Set<RingMember> takeChanges(Entry<RingMember, RingHost>[] ring, RegionName regionName, int takeFromFactor) throws Exception {
         final MutableInt taken = new MutableInt(0);
         int i = 0;
         final MutableInt leaps = new MutableInt(0);
         Optional<RegionStripe> regionStripe = regionStripeProvider.getRegionStripe(regionName);
-        Set<RingHost> tookFrom = new HashSet<>();
+        Set<RingMember> tookFrom = new HashSet<>();
         if (regionStripe.isPresent()) {
             DONE:
-            while (i < ringHosts.length) {
+            while (i < ring.length) {
                 i = (leaps.intValue() * 2);
-                for (; i < ringHosts.length; i++) {
-                    RingHost ringHost = ringHosts[i];
-                    if (ringHost == null) {
+                for (; i < ring.length; i++) {
+                    Entry<RingMember, RingHost> node = ring[i];
+                    if (node == null) {
                         continue;
                     }
-                    ringHosts[i] = null;
+                    ring[i] = null;
+                    RingMember ringMember = node.getKey();
                     try {
-                        Long highwaterMark = highwaterMarks.get(ringHost, regionName);
+                        Long highwaterMark = highwaterMarks.get(ringMember, regionName);
                         if (highwaterMark == null) {
                             highwaterMark = -1L;
                         }
-                        TakeRowStream takeRowStream = new TakeRowStream(amzaStats, regionName, regionStripe.get(), ringHost, highwaterMark);
-                        Map<RingHost, Long> otherHighwaterMarks = updatesTaker.streamingTakeUpdates(ringHost, regionName, highwaterMark, takeRowStream);
-                        int updates = takeRowStream.flush();
-                        for (Entry<RingHost, Long> otherHighwaterMark : otherHighwaterMarks.entrySet()) {
-                            highwaterMarks.setIfLarger(otherHighwaterMark.getKey(), regionName, updates, otherHighwaterMark.getValue());
+                        TakeRowStream takeRowStream = new TakeRowStream(amzaStats, regionName, regionStripe.get(), ringMember, highwaterMark);
+                        int updates = 0;
+                        try {
+                            Map<RingMember, Long> otherHighwaterMarks = updatesTaker.streamingTakeUpdates(node, regionName, highwaterMark, takeRowStream);
+                            updates = takeRowStream.flush();
+                            if (updates > 0) {
+                                tookFrom.add(ringMember);
+                            }
+                            for (Entry<RingMember, Long> otherHighwaterMark : otherHighwaterMarks.entrySet()) {
+                                takeRowStream.flushedHighwatermarks.merge(otherHighwaterMark.getKey(), otherHighwaterMark.getValue(), (a, b) -> {
+                                    return Math.max(a, b);
+                                });
+                            }
+                        } catch (Exception x) {
+                            LOG.warn("Failure while streaming takes.", x);
                         }
 
-                        if (updates > 0) {
-                            highwaterMarks.setIfLarger(ringHost, regionName, updates, takeRowStream.highWaterMark.longValue());
-                            tookFrom.add(ringHost);
+                        for (Entry<RingMember, Long> entry : takeRowStream.flushedHighwatermarks.entrySet()) {
+                            highwaterMarks.setIfLarger(entry.getKey(), regionName, updates, entry.getValue());
                         }
-                        amzaStats.took(ringHost);
-                        amzaStats.takeErrors.setCount(ringHost, 0);
+
+                        amzaStats.took(ringMember);
+                        amzaStats.takeErrors.setCount(ringMember, 0);
                         if (takeFailureListener.isPresent()) {
-                            takeFailureListener.get().tookFrom(ringHost);
+                            takeFailureListener.get().tookFrom(node);
                         }
                         taken.increment();
                         if (taken.intValue() >= takeFromFactor) {
@@ -205,13 +222,13 @@ public class AmzaRegionChangeTaker {
 
                     } catch (Exception x) {
                         if (takeFailureListener.isPresent()) {
-                            takeFailureListener.get().failedToTake(ringHost, x);
+                            takeFailureListener.get().failedToTake(node, x);
                         }
-                        if (amzaStats.takeErrors.count(ringHost) == 0) {
-                            LOG.warn("Can't take from host:{}", ringHost);
-                            LOG.trace("Can't take from host:{} region:{} takeFromFactor:{}", new Object[]{ringHost, regionName, takeFromFactor}, x);
+                        if (amzaStats.takeErrors.count(node) == 0) {
+                            LOG.warn("Can't take from host:{}", node);
+                            LOG.trace("Can't take from host:{} region:{} takeFromFactor:{}", new Object[]{node, regionName, takeFromFactor}, x);
                         }
-                        amzaStats.takeErrors.add(ringHost);
+                        amzaStats.takeErrors.add(ringMember);
                     }
                 }
             }
@@ -227,65 +244,87 @@ public class AmzaRegionChangeTaker {
         private final AmzaStats amzaStats;
         private final RegionName regionName;
         private final RegionStripe regionStripe;
-        private final RingHost ringHost;
+        private final RingMember ringMember;
         private final MutableLong highWaterMark;
         private final Map<WALKey, WALValue> batch = new HashMap<>();
         private final MutableLong oldestTxId = new MutableLong(Long.MAX_VALUE);
         private final MutableLong lastTxId;
         private final AtomicInteger flushed = new AtomicInteger(0);
-        private final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
+        private final AtomicReference<WALHighwater> highwater = new AtomicReference<>();
+        private final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // TODO ah pass this in??
+        private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller = new BinaryHighwaterRowMarshaller(); // TODO ah pass this in??
+        private final Map<RingMember, Long> flushedHighwatermarks = new HashMap<>();
 
         public TakeRowStream(AmzaStats amzaStats,
             RegionName regionName,
             RegionStripe regionStripe,
-            RingHost ringHost,
+            RingMember ringMember,
             long lastHighwaterMark) {
             this.amzaStats = amzaStats;
             this.regionName = regionName;
             this.regionStripe = regionStripe;
-            this.ringHost = ringHost;
+            this.ringMember = ringMember;
             this.highWaterMark = new MutableLong(lastHighwaterMark);
             this.lastTxId = new MutableLong(Long.MIN_VALUE);
         }
 
         @Override
-        public boolean row(long rowFP, long txId, byte rowType, byte[] row) throws Exception {
-            WALRow walr = rowMarshaller.fromRow(row);
-            flushed.incrementAndGet();
-            if (highWaterMark.longValue() < txId) {
-                highWaterMark.setValue(txId);
-            }
-            if (oldestTxId.longValue() > txId) {
-                oldestTxId.setValue(txId);
-            }
-            WALValue got = batch.get(walr.getKey());
-            if (got == null) {
-                batch.put(walr.getKey(), walr.getValue());
-            } else {
-                if (got.getTimestampId() < walr.getValue().getTimestampId()) {
-                    batch.put(walr.getKey(), walr.getValue());
+        public boolean row(long rowFP, long txId, RowType rowType, byte[] row) throws Exception {
+            if (rowType == RowType.primary) {
+                if (lastTxId.longValue() == Long.MIN_VALUE) {
+                    lastTxId.setValue(txId);
+                } else if (lastTxId.longValue() != txId) {
+                    lastTxId.setValue(txId);
+                    flush();
+                    batch.clear();
+                    oldestTxId.setValue(Long.MAX_VALUE);
                 }
-            }
-            if (lastTxId.longValue() == Long.MIN_VALUE) {
-                lastTxId.setValue(txId);
-            } else if (lastTxId.longValue() != txId) {
-                lastTxId.setValue(txId);
-                flush();
-                batch.clear();
-                oldestTxId.setValue(Long.MAX_VALUE);
+
+                WALRow walr = primaryRowMarshaller.fromRow(row);
+                flushed.incrementAndGet();
+                if (highWaterMark.longValue() < txId) {
+                    highWaterMark.setValue(txId);
+                }
+                if (oldestTxId.longValue() > txId) {
+                    oldestTxId.setValue(txId);
+                }
+                WALValue got = batch.get(walr.key);
+                if (got == null) {
+                    batch.put(walr.key, walr.value);
+                } else {
+                    if (got.getTimestampId() < walr.value.getTimestampId()) {
+                        batch.put(walr.key, walr.value);
+                    }
+                }
+
+            } else if (rowType == RowType.highwater) {
+                highwater.set(binaryHighwaterRowMarshaller.fromBytes(row));
             }
             return true;
         }
 
         public int flush() throws Exception {
             if (!batch.isEmpty()) {
-                amzaStats.took(ringHost, regionName, batch.size(), oldestTxId.longValue());
-                RowsChanged changes = regionStripe.commit(regionName, null, WALStorageUpdateMode.noReplication, new MemoryWALUpdates(batch));
-                amzaStats.tookApplied(ringHost, regionName, changes.getApply().size(), changes.getOldestRowTxId());
+                amzaStats.took(ringMember, regionName, batch.size(), oldestTxId.longValue());
+                WALHighwater walh = highwater.get();
+                MemoryWALUpdates updates = new MemoryWALUpdates(batch, walh);
+                RowsChanged changes = regionStripe.commit(regionName, null, WALStorageUpdateMode.noReplication, updates);
+                amzaStats.tookApplied(ringMember, regionName, changes.getApply().size(), changes.getOldestRowTxId());
+                if (walh != null) {
+                    for (RingMemberHighwater memberHighwater : walh.ringMemberHighwater) {
+                        flushedHighwatermarks.merge(memberHighwater.ringMember, memberHighwater.transactionId, (a, b) -> {
+                            return Math.max(a, b);
+                        });
+                    }
+                }
+                flushedHighwatermarks.merge(ringMember, highWaterMark.longValue(), (a, b) -> {
+                    return Math.max(a, b);
+                });
             }
+            highwater.set(null);
             if (flushed.get() > 0) {
-                amzaStats.took(ringHost, regionName, 0, Long.MAX_VALUE); // We are as up to date taking as is possible.
-                amzaStats.tookApplied(ringHost, regionName, 0, Long.MAX_VALUE); // We are as up to date taking as is possible.
+                amzaStats.took(ringMember, regionName, 0, Long.MAX_VALUE); // We are as up to date taking as is possible.
+                amzaStats.tookApplied(ringMember, regionName, 0, Long.MAX_VALUE); // We are as up to date taking as is possible.
             }
             return flushed.get();
         }

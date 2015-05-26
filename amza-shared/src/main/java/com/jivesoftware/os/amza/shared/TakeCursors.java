@@ -7,19 +7,19 @@ import java.util.List;
  */
 public class TakeCursors {
 
-    public final List<RingHostCursor> ringHostCursors;
+    public final List<RingMemberCursor> ringMemberCursors;
 
-    public TakeCursors(List<RingHostCursor> ringHostCursors) {
-        this.ringHostCursors = ringHostCursors;
+    public TakeCursors(List<RingMemberCursor> ringMemberCursors) {
+        this.ringMemberCursors = ringMemberCursors;
     }
 
-    public static class RingHostCursor {
+    public static class RingMemberCursor {
 
-        public final RingHost ringHost;
+        public final RingMember ringMember;
         public final long transactionId;
 
-        public RingHostCursor(RingHost ringHost, long transactionId) {
-            this.ringHost = ringHost;
+        public RingMemberCursor(RingMember ringMember, long transactionId) {
+            this.ringMember = ringMember;
             this.transactionId = transactionId;
         }
     }

@@ -4,6 +4,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -36,15 +37,13 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
 
         final String ringName;
         final String status;
-        final String host;
-        final String port;
+        final String member;
         final String action;
 
-        public AmzaRingsPluginRegionInput(String ringName, String status, String host, String port, String action) {
+        public AmzaRingsPluginRegionInput(String ringName, String status, String member, String action) {
             this.ringName = ringName;
             this.status = status;
-            this.host = host;
-            this.port = port;
+            this.member = member;
             this.action = action;
         }
 
@@ -59,21 +58,21 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
                 final AmzaRingsPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
-                    amzaRing.addRingHost(input.ringName, new RingHost(input.host, Integer.parseInt(input.port)));
+                    amzaRing.addRingMember(input.ringName, new RingMember(input.member));
                 } else if (input.action.equals("remove")) {
-                    amzaRing.removeRingHost(input.ringName, new RingHost(input.host, Integer.parseInt(input.port)));
+                    amzaRing.removeRingMember(input.ringName, new RingMember(input.member));
                 }
 
                 final List<Map<String, String>> rows = new ArrayList<>();
-                amzaRing.allRings((String ringName, String status, RingHost ringHost) -> {
-                    if ((input.ringName.isEmpty() || status.contains(input.ringName))
-                        && (input.status.isEmpty() || status.contains(input.status))
-                        && (input.host.isEmpty() || status.contains(input.host))
-                        && (input.port.isEmpty() || status.contains(input.port))) {
+                amzaRing.allRings((String ringName, RingMember ringMember, RingHost ringHost) -> {
+                    if ((input.ringName.isEmpty() || ringName.contains(input.ringName))
+                        && (input.member.isEmpty() || "".contains(input.member))
+                        && (input.status.isEmpty() || "".contains(input.status))) {
 
                         Map<String, String> row = new HashMap<>();
                         row.put("ringName", ringName);
-                        row.put("status", status);
+                        row.put("status", "online");
+                        row.put("member", ringMember.getMember());
                         row.put("host", ringHost.getHost());
                         row.put("port", String.valueOf(ringHost.getPort()));
                         rows.add(row);
@@ -91,7 +90,7 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
 
     @Override
     public String getTitle() {
-        return "Amza Ring";
+        return "Amza Rings";
     }
 
 }

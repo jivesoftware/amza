@@ -19,12 +19,13 @@ import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.WALRow;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -39,36 +40,38 @@ import org.apache.commons.lang.mutable.MutableLong;
 class MultiRegionWALScanBatchinator implements RowStream {
 
     private final AmzaStats amzaStats;
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> rowMarshaller;
     private final RegionStripeProvider regionStripeProvider;
     private final Map<RegionName, RegionBatch> regionBatches = new HashMap<>();
 
-    public MultiRegionWALScanBatchinator(AmzaStats amzaStats, RowMarshaller<byte[]> rowMarshaller, RegionStripeProvider regionStripeProvider) {
+    public MultiRegionWALScanBatchinator(AmzaStats amzaStats, PrimaryRowMarshaller<byte[]> rowMarshaller, RegionStripeProvider regionStripeProvider) {
         this.amzaStats = amzaStats;
         this.rowMarshaller = rowMarshaller;
         this.regionStripeProvider = regionStripeProvider;
     }
 
     @Override
-    public boolean row(long rowFP, long rowTxId, byte rowType, byte[] rawRow) throws Exception {
-        WALRow row = rowMarshaller.fromRow(rawRow);
-        ByteBuffer bb = ByteBuffer.wrap(row.getKey().getKey());
-        byte[] regionNameBytes = new byte[bb.getShort()];
-        bb.get(regionNameBytes);
-        byte[] keyBytes = new byte[bb.getInt()];
-        bb.get(keyBytes);
+    public boolean row(long rowFP, long rowTxId, RowType rowType, byte[] rawRow) throws Exception {
+        if (rowType == RowType.primary) {
+            WALRow row = rowMarshaller.fromRow(rawRow);
+            ByteBuffer bb = ByteBuffer.wrap(row.key.getKey());
+            byte[] regionNameBytes = new byte[bb.getShort()];
+            bb.get(regionNameBytes);
+            byte[] keyBytes = new byte[bb.getInt()];
+            bb.get(keyBytes);
 
-        RegionName regionName = RegionName.fromBytes(regionNameBytes);
-        RegionBatch regionBatch = regionBatches.get(regionName);
-        if (regionBatch == null) {
-            Optional<RegionStripe> regionStripe = regionStripeProvider.getRegionStripe(regionName);
-            if (!regionStripe.isPresent()) {
-                throw new RuntimeException("Encountered an undefined region." + regionName);
+            RegionName regionName = RegionName.fromBytes(regionNameBytes);
+            RegionBatch regionBatch = regionBatches.get(regionName);
+            if (regionBatch == null) {
+                Optional<RegionStripe> regionStripe = regionStripeProvider.getRegionStripe(regionName);
+                if (!regionStripe.isPresent()) {
+                    throw new RuntimeException("Encountered an undefined region." + regionName);
+                }
+                regionBatch = new RegionBatch(amzaStats, regionName, regionStripe.get());
+                regionBatches.put(regionName, regionBatch);
             }
-            regionBatch = new RegionBatch(amzaStats, regionName, regionStripe.get());
-            regionBatches.put(regionName, regionBatch);
+            regionBatch.add(rowTxId, new WALKey(keyBytes), row.value);
         }
-        regionBatch.add(rowTxId, new WALKey(keyBytes), row.getValue());
         return true;
     }
 
@@ -118,7 +121,7 @@ class MultiRegionWALScanBatchinator implements RowStream {
 
         public boolean flush() throws Exception {
             if (!batch.isEmpty()) {
-                RowsChanged changes = regionStripe.commit(regionName, null, WALStorageUpdateMode.noReplication, new MemoryWALUpdates(batch));
+                RowsChanged changes = regionStripe.commit(regionName, null, WALStorageUpdateMode.noReplication, new MemoryWALUpdates(batch, null));
                 amzaStats.receivedApplied(regionName, changes.getApply().size(), changes.getOldestRowTxId());
                 batch.clear();
             }

@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
+import com.google.common.base.Strings;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
@@ -29,9 +30,10 @@ import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.HighwaterMarks;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
@@ -129,8 +131,12 @@ public class AmzaMain {
             RingHost ringHost = new RingHost(instanceConfig.getHost(), instanceConfig.getMainPort());
             final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(instanceConfig.getInstanceName()));
 
+            RingMember ringMember = new RingMember(
+                Strings.padStart(String.valueOf(instanceConfig.getInstanceName()), 5, '0') + "_" + instanceConfig.getInstanceKey());
+
             AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
                 amzaStats,
+                ringMember,
                 ringHost,
                 orderIdProvider,
                 regionPropertyMarshaller,
@@ -149,7 +155,7 @@ public class AmzaMain {
             deployable.addInjectables(AmzaService.class, amzaService);
             deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
             deployable.addInjectables(AmzaInstance.class, amzaService);
-            deployable.addInjectables(HighwaterMarks.class, amzaService.getHighwaterMarks());
+            deployable.addInjectables(HighwaterStorage.class, amzaService.getHighwaterMarks());
 
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, amzaStats, new AmzaUIInitializer.InjectionCallback() {
 
@@ -170,7 +176,6 @@ public class AmzaMain {
 
             if (amzaConfig.getAutoDiscoveryEnabled()) {
                 AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getAmzaRing(),
-                    new RingHost(instanceConfig.getHost(), instanceConfig.getManagePort()),
                     instanceConfig.getClusterName(),
                     amzaConfig.getDiscoveryMulticastGroup(),
                     amzaConfig.getDiscoveryMulticastPort());

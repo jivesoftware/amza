@@ -5,15 +5,19 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
+import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -28,6 +32,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -39,17 +44,24 @@ class RegionDelta {
 
     private final RegionName regionName;
     private final DeltaWAL deltaWAL;
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
+    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     final AtomicReference<RegionDelta> compacting;
 
     private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>();
     private final ConcurrentNavigableMap<WALKey, WALPointer> orderedIndex = new ConcurrentSkipListMap<>();
     private final ConcurrentSkipListMap<Long, List<Long>> txIdWAL = new ConcurrentSkipListMap<>();
+    private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
 
-    RegionDelta(RegionName regionName, DeltaWAL deltaWAL, RowMarshaller<byte[]> rowMarshaller, RegionDelta compacting) {
+    RegionDelta(RegionName regionName,
+        DeltaWAL deltaWAL,
+        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
+        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
+        RegionDelta compacting) {
         this.regionName = regionName;
         this.deltaWAL = deltaWAL;
-        this.rowMarshaller = rowMarshaller;
+        this.primaryRowMarshaller = primaryRowMarshaller;
+        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.compacting = new AtomicReference<>(compacting);
     }
 
@@ -62,7 +74,7 @@ class RegionDelta {
             }
             return null;
         }
-        return Optional.fromNullable(got.getTombstoned() ? null : deltaWAL.hydrate(got.getFp()).getValue());
+        return Optional.fromNullable(got.getTombstoned() ? null : deltaWAL.hydrate(got.getFp()).value);
     }
 
     WALTimestampId getTimestampId(WALKey key) throws Exception {
@@ -139,6 +151,18 @@ class RegionDelta {
         orderedIndex.put(key, rowPointer);
     }
 
+    boolean shouldWriteHighwater() {
+        long got = updatesSinceLastHighwaterFlush.get();
+        boolean should = false;
+        if (got == 0) {
+            should = true;
+        }
+        if (got > 1000) { // TODO expose to region config
+            updatesSinceLastHighwaterFlush.set(0);
+        }
+        return should;
+    }
+
     Set<WALKey> keySet() {
         Set<WALKey> keySet = pointerIndex.keySet();
         RegionDelta regionDelta = compacting.get();
@@ -189,6 +213,7 @@ class RegionDelta {
             throw new IllegalStateException("Already appended this txId: " + rowTxId);
         }
         txIdWAL.put(rowTxId, ImmutableList.copyOf(rowFPs));
+        updatesSinceLastHighwaterFlush.addAndGet(rowFPs.size());
     }
 
     boolean takeRowUpdatesSince(long transactionId, final RowStream rowStream) throws Exception {
@@ -207,10 +232,10 @@ class RegionDelta {
         return deltaWAL.takeRows(tailMap, rowStream);
     }
 
-    public boolean takeFromTransactionId(final long transactionId, final Scan<WALValue> scan) throws Exception {
+    public boolean takeFromTransactionId(final long transactionId, Highwaters highwaters, final Scan<WALValue> scan) throws Exception {
         RegionDelta regionDelta = compacting.get();
         if (regionDelta != null) {
-            if (!regionDelta.takeFromTransactionId(transactionId, scan)) {
+            if (!regionDelta.takeFromTransactionId(transactionId, highwaters, scan)) {
                 return false;
             }
         }
@@ -220,10 +245,12 @@ class RegionDelta {
         }
 
         ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
-        return deltaWAL.takeRows(tailMap, (long rowFP, long rowTxId, byte rowType, byte[] row) -> {
-            if (rowType > 0) {
-                WALRow walRow = rowMarshaller.fromRow(row);
-                return scan.row(rowTxId, walRow.getKey(), walRow.getValue());
+        return deltaWAL.takeRows(tailMap, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+            if (rowType == RowType.primary) {
+                WALRow walRow = primaryRowMarshaller.fromRow(row);
+                return scan.row(rowTxId, walRow.key, walRow.value);
+            } else if (rowType == RowType.highwater) {
+                highwaters.highwater(highwaterRowMarshaller.fromBytes(row));
             }
             return true;
         });
@@ -239,28 +266,31 @@ class RegionDelta {
                 LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
                 regionStore.directCommit(true,
                     null,
-                    WALStorageUpdateMode.noReplication, (Scan<WALValue> scan) -> {
+                    WALStorageUpdateMode.noReplication, (highwater, scan) -> {
                         try {
                             eos:
                             for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
                                 long txId = e.getKey();
                                 for (long fp : e.getValue()) {
-                                    WALRow walRow = compact.deltaWAL.hydrate(fp);
-                                    ByteBuffer bb = ByteBuffer.wrap(walRow.getKey().getKey());
+                                    KeyValueHighwater kvh = compact.deltaWAL.hydrateKeyValueHighwater(fp);
+
+                                    ByteBuffer bb = ByteBuffer.wrap(kvh.key.getKey());
                                     byte[] regionNameBytes = new byte[bb.getShort()];
                                     bb.get(regionNameBytes);
                                     final byte[] keyBytes = new byte[bb.getInt()];
                                     bb.get(keyBytes);
 
                                     WALKey key = new WALKey(keyBytes);
-                                    WALValue value = walRow.getValue();
                                     WALPointer pointer = compact.orderedIndex.get(key);
                                     if (pointer == null) {
                                         throw new RuntimeException("Delta WAL missing key: " + key);
                                     }
                                     if (pointer.getFp() == fp) {
-                                        if (!scan.row(txId, key, value)) {
+                                        if (!scan.row(txId, key, kvh.value)) {
                                             break eos;
+                                        }
+                                        if (kvh.highwater != null) {
+                                            highwater.highwater(kvh.highwater);
                                         }
                                     }
                                 }

@@ -15,9 +15,12 @@
  */
 package com.jivesoftware.os.amza.service.discovery;
 
+import com.google.common.base.Splitter;
+import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaHostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
@@ -25,8 +28,8 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.UnknownHostException;
-import java.util.Arrays;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -46,7 +49,6 @@ public class AmzaDiscovery {
     private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2, new ThreadFactoryBuilder().setNameFormat("discovery-%d").build());
 
     public AmzaDiscovery(AmzaHostRing amzaRing,
-        RingHost ringHost,
         String clusterName,
         String multicastGroup,
         int multicastPort) throws UnknownHostException {
@@ -74,16 +76,19 @@ public class AmzaDiscovery {
                             DatagramPacket packet = new DatagramPacket(buf, buf.length);
                             socket.receive(packet);
                             String received = new String(packet.getData(), 0, packet.getLength());
-                            String[] clusterHostPort = received.split(":");
-                            if (clusterHostPort.length == 3 && clusterHostPort[0] != null && clusterHostPort[0].equals(clusterName)) {
-                                LOG.debug("recieved:" + Arrays.toString(clusterHostPort));
-                                String host = clusterHostPort[1];
-                                int port = Integer.parseInt(clusterHostPort[2].trim());
+                            List<String> clusterMemberHostPort = Lists.newArrayList(Splitter.on('|').split(received));
+                            if (clusterMemberHostPort.size() == 4 && clusterMemberHostPort.get(0) != null && clusterMemberHostPort.get(0).equals(clusterName)) {
+                                LOG.debug("received:" + clusterMemberHostPort);
+                                String member = clusterMemberHostPort.get(1).trim();
+                                String host = clusterMemberHostPort.get(2).trim();
+                                int port = Integer.parseInt(clusterMemberHostPort.get(3).trim());
+                                RingMember ringMember = new RingMember(member);
                                 RingHost anotherRingHost = new RingHost(host, port);
-                                List<RingHost> ring = amzaRing.getRing("system");
-                                if (!ring.contains(anotherRingHost)) {
+                                NavigableMap<RingMember, RingHost> ring = amzaRing.getRing("system");
+                                if (!ring.containsKey(ringMember)) {
                                     LOG.info("Adding host to the cluster: " + anotherRingHost);
-                                    amzaRing.addRingHost("system", anotherRingHost);
+                                    amzaRing.register(ringMember, anotherRingHost);
+                                    amzaRing.addRingMember("system", ringMember);
                                 }
                             }
                         }
@@ -103,16 +108,20 @@ public class AmzaDiscovery {
 
         @Override
         public void run() {
-            RingHost ringHost = amzaRing.getRingHost();
-            String message = (clusterName + ":" + ringHost.getHost() + ":" + ringHost.getPort());
+            String message = "";
             try (MulticastSocket socket = new MulticastSocket()) {
-                byte[] buf = new byte[512];
-                byte[] rawMessage = message.getBytes();
-                System.arraycopy(rawMessage, 0, buf, 0, rawMessage.length);
-                DatagramPacket packet = new DatagramPacket(buf, buf.length, multicastGroup, multicastPort);
-                socket.send(packet);
-                LOG.debug("Sent:" + message);
-            } catch (IOException e) {
+                RingMember ringMember = amzaRing.getRingMember();
+                RingHost ringHost = amzaRing.getRingHost();
+                if (ringHost != RingHost.UNKNOWN_RING_HOST) {
+                    message = (clusterName + "|" + ringMember.getMember() + "|" + ringHost.getHost() + "|" + ringHost.getPort());
+                    byte[] buf = new byte[512];
+                    byte[] rawMessage = message.getBytes();
+                    System.arraycopy(rawMessage, 0, buf, 0, rawMessage.length);
+                    DatagramPacket packet = new DatagramPacket(buf, buf.length, multicastGroup, multicastPort);
+                    socket.send(packet);
+                    LOG.debug("Sent:" + message);
+                }
+            } catch (Exception e) {
                 LOG.error("Failed to receive broadcast. message:" + message + " to  group:" + multicastGroup + " port:" + multicastPort, e);
             }
         }

@@ -22,7 +22,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
-public class RingHost implements Comparable<RingHost> {
+public class RingHost {
+
+    public static final RingHost UNKNOWN_RING_HOST = new RingHost("unknownRingHost", 0);
 
     private final String host;
     private final int port;
@@ -42,7 +44,7 @@ public class RingHost implements Comparable<RingHost> {
             String host = new String(bytes, 1 + 4, bytes.length - (1 + 4));
             return new RingHost(host, port);
         }
-        throw new IOException("Invalid version:" + bytes[0]);
+        return null; // Sorry caller
     }
 
     @JsonCreator
@@ -100,12 +102,4 @@ public class RingHost implements Comparable<RingHost> {
         return true;
     }
 
-    @Override
-    public int compareTo(RingHost o) {
-        int i = host.compareTo(o.host);
-        if (i != 0) {
-            return i;
-        }
-        return Integer.compare(port, o.port);
-    }
 }

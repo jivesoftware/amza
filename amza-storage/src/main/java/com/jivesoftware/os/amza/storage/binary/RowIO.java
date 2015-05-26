@@ -2,17 +2,16 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.WALReader;
 import com.jivesoftware.os.amza.shared.WALWriter;
-import java.io.File;
 
 /**
  *
  * @author jonathan.colt
  */
-public interface RowIO extends WALReader, WALWriter {
+public interface RowIO<K> extends WALReader, WALWriter {
 
     long getInclusiveStartOfRow(long transactionId) throws Exception;
 
-    void move(File destinationDir) throws Exception;
+    void move(K destination) throws Exception;
 
     long sizeInBytes() throws Exception;
 

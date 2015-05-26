@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.service.storage.delta.StripeWALStorage;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -35,7 +37,7 @@ public class SystemStripeWALStorage implements StripeWALStorage {
         WALStorage storage,
         WALReplicator replicator,
         WALStorageUpdateMode mode,
-        Scannable<WALValue> updates) throws Exception {
+        Commitable<WALValue> updates) throws Exception {
 
         return storage.update(false, replicator, mode, updates);
     }
@@ -51,13 +53,15 @@ public class SystemStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void takeRowUpdatesSince(RegionName regionName, WALStorage storage, long transactionId, RowStream rowUpdates) throws Exception {
+    public void takeRowUpdatesSince(RegionName regionName, WALStorage storage, long transactionId, RowStream rowUpdates)
+        throws Exception {
         storage.takeRowUpdatesSince(transactionId, rowUpdates);
     }
 
     @Override
-    public boolean takeFromTransactionId(RegionName regionName, WALStorage storage, long transactionId, Scan<WALValue> scan) throws Exception {
-        return storage.takeFromTransactionId(transactionId, scan);
+    public boolean takeFromTransactionId(RegionName regionName, WALStorage storage, long transactionId, Highwaters highwaters, Scan<WALValue> scan)
+        throws Exception {
+        return storage.takeFromTransactionId(transactionId, highwaters, scan);
     }
 
     @Override

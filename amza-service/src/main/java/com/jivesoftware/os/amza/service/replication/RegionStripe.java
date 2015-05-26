@@ -7,18 +7,18 @@ import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.service.storage.RowsStorageUpdates;
 import com.jivesoftware.os.amza.service.storage.delta.StripeWALStorage;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 
@@ -31,7 +31,6 @@ public class RegionStripe {
 
     private final String name;
     private final AmzaStats amzaStats;
-    private final OrderIdProvider idProvider;
     private final RegionIndex regionIndex;
     private final StripeWALStorage storage;
     private final RowChanges allRowChanges;
@@ -39,14 +38,12 @@ public class RegionStripe {
 
     public RegionStripe(String name,
         AmzaStats amzaStats,
-        OrderIdProvider idProvider,
         RegionIndex regionIndex,
         StripeWALStorage storage,
         RowChanges allRowChanges,
         Predicate<RegionName> stripingPredicate) {
         this.name = name;
         this.amzaStats = amzaStats;
-        this.idProvider = idProvider;
         this.regionIndex = regionIndex;
         this.storage = storage;
         this.allRowChanges = allRowChanges;
@@ -60,7 +57,7 @@ public class RegionStripe {
     public RowsChanged commit(RegionName regionName,
         WALReplicator replicator,
         WALStorageUpdateMode walStorageUpdateMode,
-        Scannable<WALValue> updates) throws Exception {
+        Commitable<WALValue> updates) throws Exception {
 
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
@@ -118,12 +115,12 @@ public class RegionStripe {
         }
     }
 
-    public boolean takeFromTransactionId(RegionName regionName, long transactionId, Scan<WALValue> scan) throws Exception {
+    public boolean takeFromTransactionId(RegionName regionName, long transactionId, Highwaters highwaters, Scan<WALValue> scan) throws Exception {
         RegionStore regionStore = regionIndex.get(regionName);
         if (regionStore == null) {
             throw new IllegalStateException("No region defined for " + regionName);
         } else {
-            return storage.takeFromTransactionId(regionName, regionStore.getWalStorage(), transactionId, scan);
+            return storage.takeFromTransactionId(regionName, regionStore.getWalStorage(), transactionId, highwaters, scan);
         }
     }
 

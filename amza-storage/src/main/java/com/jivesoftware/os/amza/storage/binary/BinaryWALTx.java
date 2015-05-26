@@ -6,6 +6,7 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndex.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
@@ -13,9 +14,8 @@ import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.shared.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -44,7 +44,7 @@ public class BinaryWALTx implements WALTx {
     private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
     private final File dir;
     private final String name;
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final WALIndexProvider walIndexProvider;
     private final int compactAfterGrowthFactor;
     private final AtomicLong lastEndOfLastRow = new AtomicLong(-1);
@@ -55,13 +55,13 @@ public class BinaryWALTx implements WALTx {
     public BinaryWALTx(File baseDir,
         String prefix,
         RowIOProvider ioProvider,
-        RowMarshaller<byte[]> rowMarshaller,
+        PrimaryRowMarshaller<byte[]> rowMarshaller,
         WALIndexProvider walIndexProvider,
         int compactAfterGrowthFactor) throws Exception {
         this.dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
         this.name = prefix + SUFFIX;
         this.ioProvider = ioProvider;
-        this.rowMarshaller = rowMarshaller;
+        this.primaryRowMarshaller = rowMarshaller;
         this.walIndexProvider = walIndexProvider;
         this.compactAfterGrowthFactor = compactAfterGrowthFactor;
         this.io = ioProvider.create(dir, name);
@@ -128,7 +128,7 @@ public class BinaryWALTx implements WALTx {
             if (!io.validate()) {
                 LOG.info("Recovering for WAL {}", name);
                 final MutableLong count = new MutableLong(0);
-                io.scan(0, true, (final long rowPointer, long rowTxId, byte rowType, byte[] row) -> {
+                io.scan(0, true, (final long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
                     count.increment();
                     return true;
                 });
@@ -154,11 +154,11 @@ public class BinaryWALTx implements WALTx {
             if (walIndex.isEmpty()) {
                 LOG.info("Rebuilding {} for {}-{}...", walIndex.getClass().getSimpleName(), regionName.getRegionName(), regionName.getRingName());
                 final MutableLong rebuilt = new MutableLong();
-                io.scan(0, true, (final long rowPointer, long rowTxId, byte rowType, byte[] row) -> {
-                    if (rowType > 0) {
-                        WALRow walr = rowMarshaller.fromRow(row);
-                        WALKey key = walr.getKey();
-                        WALValue value = walr.getValue();
+                io.scan(0, true, (final long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
+                    if (rowType == RowType.primary) {
+                        WALRow walr = primaryRowMarshaller.fromRow(row);
+                        WALKey key = walr.key;
+                        WALValue value = walr.value;
                         WALPointer current = walIndex.getPointer(key);
                         if (current == null) {
                             walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
@@ -181,18 +181,18 @@ public class BinaryWALTx implements WALTx {
                     long commitedUpToTxId = Long.MIN_VALUE;
 
                     @Override
-                    public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
-                        if (rowType > 0) {
-                            WALRow walr = rowMarshaller.fromRow(row);
-                            WALKey key = walr.getKey();
-                            WALValue value = walr.getValue();
+                    public boolean row(long rowFP, long rowTxId, RowType rowType, byte[] row) throws Exception {
+                        if (rowType == RowType.primary) {
+                            WALRow walr = primaryRowMarshaller.fromRow(row);
+                            WALKey key = walr.key;
+                            WALValue value = walr.value;
                             walIndex.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
                                 key, new WALPointer(rowFP, value.getTimestampId(), value.getTombstoned()))));
                             repair.add(1);
                         }
-                        if (rowType == WALWriter.SYSTEM_VERSION_1 && commitedUpToTxId == Long.MIN_VALUE) {
+                        if (rowType == RowType.system && commitedUpToTxId == Long.MIN_VALUE) {
                             long[] key_CommitedUpToTxId = UIO.bytesLongs(row);
-                            if (key_CommitedUpToTxId[0] == WALWriter.COMMIT_KEY) {
+                            if (key_CommitedUpToTxId[0] == RowType.COMMIT_KEY) {
                                 commitedUpToTxId = key_CommitedUpToTxId[1];
                             }
                             return true;
@@ -328,45 +328,51 @@ public class BinaryWALTx implements WALTx {
         final List<WALKey> rowKeys = new ArrayList<>();
         final List<WALValue> rowValues = new ArrayList<>();
         final List<Long> rowTxIds = new ArrayList<>();
-        final List<Byte> rawRowTypes = new ArrayList<>();
+        final List<RowType> rawRowTypes = new ArrayList<>();
         final List<byte[]> rawRows = new ArrayList<>();
         final AtomicLong batchSizeInBytes = new AtomicLong();
 
-        io.scan(startAtRow, false, (final long rowFP, long rowTxId, byte rowType, final byte[] row) -> {
+        io.scan(startAtRow, false, (final long rowFP, long rowTxId, RowType rowType, final byte[] row) -> {
             if (rowFP >= endOfLastRow) {
                 return false;
             }
-            if (rowType < 0) { // TODO expose to caller which rowtypes they want to preserve. For now we discard all system rowtypes and keep all others.
+            if (rowType.isDiscardedDuringCompactions()) {
                 return true;
             }
 
-            WALRow walr = rowMarshaller.fromRow(row);
-            WALKey key = walr.getKey();
-            WALValue value = walr.getValue();
+            if (rowType == RowType.primary) {
+                WALRow walr = primaryRowMarshaller.fromRow(row);
+                WALKey key = walr.key;
+                WALValue value = walr.value;
 
-            WALPointer got = (rowIndex == null) ? null : rowIndex.getPointer(key);
-            if (got == null || value.getTimestampId() >= got.getTimestampId()) {
-                if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
-                    tombstoneCount.incrementAndGet();
-                } else {
-                    if (value.getTimestampId() > ttlTimestampId) {
-                        rowKeys.add(key);
-                        rowValues.add(value);
-                        rowTxIds.add(rowTxId);
-                        rawRowTypes.add(rowType);
-                        rawRows.add(row);
-                        batchSizeInBytes.addAndGet(row.length);
-                        keyCount.incrementAndGet();
+                WALPointer got = (rowIndex == null) ? null : rowIndex.getPointer(key);
+                if (got == null || value.getTimestampId() >= got.getTimestampId()) {
+                    if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
+                        tombstoneCount.incrementAndGet();
                     } else {
-                        ttlCount.incrementAndGet();
+                        if (value.getTimestampId() > ttlTimestampId) {
+                            rowKeys.add(key);
+                            rowValues.add(value);
+                            rowTxIds.add(rowTxId);
+                            rawRowTypes.add(rowType);
+                            rawRows.add(row);
+                            batchSizeInBytes.addAndGet(row.length);
+                            keyCount.incrementAndGet();
+                        } else {
+                            ttlCount.incrementAndGet();
+                        }
                     }
+                } else {
+                    removeCount.incrementAndGet();
                 }
-            } else {
-                removeCount.incrementAndGet();
-            }
-            long batchingSize = 1024 * 1024 * 10; // TODO expose to config
-            if (batchSizeInBytes.get() > batchingSize) {
+            } else if (rowType == RowType.highwater) {
                 flush(compactionWALIndex, compactionIO, rowTxIds, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
+                compactionIO.writeHighwater(row);
+            } else {
+                long batchingSize = 1024 * 1024 * 10; // TODO expose to config
+                if (batchSizeInBytes.get() > batchingSize) {
+                    flush(compactionWALIndex, compactionIO, rowTxIds, rawRowTypes, rawRows, rowKeys, rowValues, batchSizeInBytes);
+                }
             }
             return true;
         });
@@ -378,7 +384,7 @@ public class BinaryWALTx implements WALTx {
     private void flush(CompactionWALIndex compactionWALIndex,
         RowIO compactionIO,
         List<Long> rowTxIds,
-        List<Byte> rawRowTypes,
+        List<RowType> rawRowTypes,
         List<byte[]> rawRows,
         List<WALKey> rowKeys,
         List<WALValue> rowValues,

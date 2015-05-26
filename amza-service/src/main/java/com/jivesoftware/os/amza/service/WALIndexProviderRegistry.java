@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.amza.shared.MemoryWALIndexProvider;
+import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,6 +16,8 @@ public class WALIndexProviderRegistry {
 
     public WALIndexProviderRegistry() {
         register("memory", new MemoryWALIndexProvider());
+        register("noop", new NoOpWALIndexProvider());
+
     }
 
     public WALIndexProvider<?> getWALIndexProvider(WALStorageDescriptor storageDescriptor) throws Exception {

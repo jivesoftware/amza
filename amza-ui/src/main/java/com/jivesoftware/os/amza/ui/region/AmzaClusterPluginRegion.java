@@ -4,6 +4,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  *
@@ -34,11 +36,13 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
 
     public static class AmzaClusterPluginRegionInput {
 
+        final String member;
         final String host;
-        final String port;
+        final int port;
         final String action;
 
-        public AmzaClusterPluginRegionInput(String host, String port, String action) {
+        public AmzaClusterPluginRegionInput(String member, String host, int port, String action) {
+            this.member = member;
             this.host = host;
             this.port = port;
             this.action = action;
@@ -55,17 +59,20 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
                 AmzaClusterPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
-                    amzaRing.addRingHost("system", new RingHost(input.host, Integer.parseInt(input.port)));
+                    amzaRing.register(new RingMember(input.member), new RingHost(input.host, input.port));
+                    amzaRing.addRingMember("system", new RingMember(input.member));
                 } else if (input.action.equals("remove")) {
-                    amzaRing.removeRingHost("system", new RingHost(input.host, Integer.parseInt(input.port)));
+                    amzaRing.removeRingMember("system", new RingMember(input.member));
+                    amzaRing.deregister(new RingMember(input.member));
                 }
 
                 List<Map<String, String>> rows = new ArrayList<>();
-                for (RingHost host : amzaRing.getRing("system")) {
+                for (Entry<RingMember, RingHost> node : amzaRing.getRing("system").entrySet()) {
 
                     Map<String, String> row = new HashMap<>();
-                    row.put("host", host.getHost());
-                    row.put("port", String.valueOf(host.getPort()));
+                    row.put("member", node.getKey().getMember());
+                    row.put("host", node.getValue().getHost());
+                    row.put("port", String.valueOf(node.getValue().getPort()));
                     rows.add(row);
                 }
 

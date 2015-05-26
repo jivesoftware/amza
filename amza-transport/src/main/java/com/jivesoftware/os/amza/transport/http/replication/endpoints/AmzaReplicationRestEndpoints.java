@@ -17,14 +17,15 @@ package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
-import com.jivesoftware.os.amza.shared.HighwaterMarks;
-import com.jivesoftware.os.amza.shared.HostRing;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
+import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.RingNeighbors;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowMarshaller;
+import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.RowUpdates;
 import com.jivesoftware.os.amza.transport.http.replication.TakeRequest;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
@@ -35,9 +36,12 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.NavigableMap;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -51,11 +55,11 @@ public class AmzaReplicationRestEndpoints {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRing amzaRing;
     private final AmzaInstance amzaInstance;
-    private final HighwaterMarks highwaterMarks;
+    private final HighwaterStorage highwaterMarks;
 
     public AmzaReplicationRestEndpoints(@Context AmzaRing amzaRing,
         @Context AmzaInstance amzaInstance,
-        @Context HighwaterMarks highwaterMarks) {
+        @Context HighwaterStorage highwaterMarks) {
         this.amzaRing = amzaRing;
         this.amzaInstance = amzaInstance;
         this.highwaterMarks = highwaterMarks;
@@ -63,29 +67,33 @@ public class AmzaReplicationRestEndpoints {
 
     @POST
     @Consumes("application/json")
-    @Path("/ring/add")
-    public Response addHost(final RingHost ringHost) {
+    @Path("/ring/add/{logicalName}/{host}/{port}")
+    public Response addMember(@PathParam("logicalName") String logicalName,
+        @PathParam("host") String host,
+        @PathParam("port") int port) {
         try {
-            LOG.info("Attempting to add RingHost: " + ringHost);
-            amzaRing.addRingHost("system", ringHost);
+            LOG.info("Attempting to add {}/{}/{} ", logicalName, host, port);
+            RingMember ringMember = new RingMember(logicalName);
+            amzaRing.register(ringMember, new RingHost(host, port));
+            amzaRing.addRingMember("system", ringMember);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
-            LOG.warn("Failed to add RingHost: " + ringHost, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to add RingHost: " + ringHost, x);
+            LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to add system member: " + logicalName, x);
         }
     }
 
     @POST
     @Consumes("application/json")
-    @Path("/ring/remove")
-    public Response removeHost(final RingHost ringHost) {
+    @Path("/ring/remove/{logicalName}")
+    public Response removeMember(@PathParam("logicalName") String logicalName) {
         try {
-            LOG.info("Attempting to remove RingHost: " + ringHost);
-            amzaRing.removeRingHost("system", ringHost);
+            LOG.info("Attempting to remove RingHost: " + logicalName);
+            amzaRing.removeRingMember("system", new RingMember(logicalName));
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
-            LOG.warn("Failed to add RingHost: " + ringHost, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to remove RingHost: " + ringHost, x);
+            LOG.warn("Failed to add RingHost: " + logicalName, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to remove RingHost: " + logicalName, x);
         }
     }
 
@@ -95,7 +103,7 @@ public class AmzaReplicationRestEndpoints {
     public Response getRing() {
         try {
             LOG.info("Attempting to get amza ring.");
-            List<RingHost> ring = amzaRing.getRing("system");
+            NavigableMap<RingMember, RingHost> ring = amzaRing.getRing("system");
             return ResponseHelper.INSTANCE.jsonResponse(ring);
         } catch (Exception x) {
             LOG.warn("Failed to get amza ring.", x);
@@ -130,10 +138,10 @@ public class AmzaReplicationRestEndpoints {
         }
     }
 
-    private Scannable<WALValue> changeSetToScanable(final RowUpdates changeSet) throws Exception {
+    private Commitable<WALValue> changeSetToScanable(final RowUpdates changeSet) throws Exception {
 
-        final BinaryRowMarshaller rowMarshaller = new BinaryRowMarshaller();
-        return (Scan<WALValue> scan) -> {
+        final BinaryPrimaryRowMarshaller rowMarshaller = new BinaryPrimaryRowMarshaller(); // TODO ah injest
+        return (highwaterMarks, scan) -> {
             changeSet.stream(rowMarshaller, scan);
         };
     }
@@ -156,26 +164,26 @@ public class AmzaReplicationRestEndpoints {
                 final MutableLong bytes = new MutableLong(0);
                 try {
                     RegionName regionName = takeRequest.getRegionName();
-                    HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
-                    for (RingHost ringHost : hostRing.getAboveRing()) {
-                        Long highwatermark = highwaterMarks.get(ringHost, regionName);
+                    RingNeighbors hostRing = amzaRing.getRingNeighbors(regionName.getRingName());
+                    for (Entry<RingMember, RingHost> node : hostRing.getAboveRing()) {
+                        Long highwatermark = highwaterMarks.get(node.getKey(), regionName);
                         if (highwatermark != null) {
-                            byte[] ringHostBytes = ringHost.toBytes();
+                            byte[] ringMemberBytes = node.getKey().toBytes();
                             dos.writeByte(1);
-                            dos.writeInt(ringHostBytes.length);
-                            dos.write(ringHostBytes);
+                            dos.writeInt(ringMemberBytes.length);
+                            dos.write(ringMemberBytes);
                             dos.writeLong(highwatermark);
-                            bytes.add(1 + 4 + ringHostBytes.length + 8);
+                            bytes.add(1 + 4 + ringMemberBytes.length + 8);
                         }
                     }
                     dos.writeByte(0); // last entry marker
                     t4 = System.currentTimeMillis();
                     bytes.increment();
                     amzaInstance.takeRowUpdates(regionName, takeRequest.getHighestTransactionId(),
-                        (long rowFP, long rowTxId, byte rowType, byte[] row) -> {
+                        (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
                             dos.writeByte(1);
                             dos.writeLong(rowTxId);
-                            dos.writeByte(rowType);
+                            dos.writeByte(rowType.toByte());
                             dos.writeInt(row.length);
                             dos.write(row);
                             bytes.add(1 + 8 + 1 + 4 + row.length);

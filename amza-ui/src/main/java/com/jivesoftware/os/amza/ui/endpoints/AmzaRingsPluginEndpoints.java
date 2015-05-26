@@ -36,7 +36,7 @@ public class AmzaRingsPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaRingsPluginRegionInput("", "", "", "", "")));
+            Optional.of(new AmzaRingsPluginRegionInput("", "", "", "")));
         return Response.ok(rendered).build();
     }
 
@@ -46,11 +46,10 @@ public class AmzaRingsPluginEndpoints {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response action(@FormParam("ringName") @DefaultValue("default") String ringName,
         @FormParam("status") @DefaultValue("off") String status,
-        @FormParam("host") @DefaultValue("") String host,
-        @FormParam("port") @DefaultValue("") String port,
+        @FormParam("member") @DefaultValue("") String member,
         @FormParam("action") @DefaultValue("") String action) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaRingsPluginRegionInput(ringName, status, host, port, action)));
+            Optional.of(new AmzaRingsPluginRegionInput(ringName, status, member, action)));
         return Response.ok(rendered).build();
     }
 }

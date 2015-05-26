@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.shared;
 import com.google.common.collect.Table;
 import java.util.Map;
 
-public class RowsChanged implements Scannable<WALValue> {
+public class RowsChanged implements Commitable<WALValue> {
 
     private final RegionName regionName;
     private final long oldestApply;
@@ -69,7 +69,7 @@ public class RowsChanged implements Scannable<WALValue> {
     }
 
     @Override
-    public void rowScan(Scan<WALValue> scan) {
+    public void commitable(Highwaters highwaters, Scan<WALValue> scan) {
         for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {
             try {
                 if (!scan.row(cell.getRowKey(), cell.getColumnKey(), cell.getValue())) {

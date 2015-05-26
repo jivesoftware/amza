@@ -15,37 +15,39 @@
  */
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.HostRing;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.RingNeighbors;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.Map.Entry;
+import java.util.NavigableMap;
 
 public class HostRingBuilder {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    public HostRing build(RingHost serviceHost, Collection<RingHost> ringHosts) {
-        ArrayList<RingHost> ring = new ArrayList<>(ringHosts);
-        Collections.sort(ring);
+    public RingNeighbors build(RingMember localMember, NavigableMap<RingMember, RingHost> nodes) {
+        ArrayList<Entry<RingMember, RingHost>> ring = new ArrayList<>(nodes.entrySet());
         int rootIndex = -1;
         int index = 0;
-        for (RingHost host : ring) {
-            if (host.equals(serviceHost)) {
+        for (Entry<RingMember, RingHost> node : ring) {
+            if (node.getKey().equals(localMember)) {
                 rootIndex = index;
                 break;
             }
             index++;
         }
         if (rootIndex == -1) {
-            LOG.warn("serviceHost: " + serviceHost + " is not a member of the ring.");
-            return new HostRing(new RingHost[0], new RingHost[0]);
+            LOG.warn("serviceHost: " + localMember + " is not a member of the ring.");
+            return new RingNeighbors((Entry<RingMember, RingHost>[]) new AbstractMap.SimpleEntry[0],
+                (Entry<RingMember, RingHost>[]) new AbstractMap.SimpleEntry[0]);
         }
 
-        ArrayList<RingHost> above = new ArrayList<>();
-        ArrayList<RingHost> below = new ArrayList<>();
+        ArrayList<Entry<RingMember, RingHost>> above = new ArrayList<>();
+        ArrayList<Entry<RingMember, RingHost>> below = new ArrayList<>();
         int aboveI = rootIndex - 1;
         int belowI = rootIndex + 1;
         for (int i = 1; i < ring.size(); i++) {
@@ -60,6 +62,9 @@ public class HostRingBuilder {
             aboveI--;
             belowI++;
         }
-        return new HostRing(above.toArray(new RingHost[above.size()]), below.toArray(new RingHost[below.size()]));
+        return new RingNeighbors(
+            (Entry<RingMember, RingHost>[]) above.toArray(new Entry[above.size()]),
+            (Entry<RingMember, RingHost>[]) below.toArray(new Entry[below.size()]));
+
     }
 }

@@ -5,22 +5,24 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingReader;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.WALs;
-import com.jivesoftware.os.amza.shared.HostRing;
+import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.RingNeighbors;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -38,7 +40,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     private ScheduledExecutorService resendThreadPool;
     private ScheduledExecutorService compactThreadPool;
     private final AmzaStats amzaStats;
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> rowMarshaller;
     private final AmzaRingReader amzaRing;
     private final RegionIndex regionIndex;
     private final WALs resendWAL;
@@ -50,7 +52,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     private final int numberOfResendThreads;
 
     public AmzaRegionChangeReplicator(AmzaStats amzaStats,
-        RowMarshaller<byte[]> rowMarshaller,
+        PrimaryRowMarshaller<byte[]> rowMarshaller,
         AmzaRingReader amzaRing,
         RegionIndex regionIndex,
         WALs resendWAL,
@@ -121,16 +123,16 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
 
     public Future<Boolean> replicateLocalUpdates(
         final RegionName regionName,
-        final Scannable<WALValue> updates,
+        final Commitable<WALValue> updates,
         final boolean enqueueForResendOnFailure) throws Exception {
 
         final RegionProperties regionProperties = regionIndex.getProperties(regionName);
         return sendExecutor.submit(() -> {
             if (regionProperties != null) {
                 if (!regionProperties.disabled && regionProperties.replicationFactor > 0) {
-                    HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
-                    RingHost[] ringHosts = hostRing.getBelowRing();
-                    if (ringHosts == null || ringHosts.length == 0) {
+                    RingNeighbors ringNeighbors = amzaRing.getRingNeighbors(regionName.getRingName());
+                    Entry<RingMember, RingHost>[] below = ringNeighbors.getBelowRing();
+                    if (below == null || below.length == 0) {
                         if (enqueueForResendOnFailure) {
                             resendWAL.execute(regionName,
                                 (WALStorage resend) -> {
@@ -140,7 +142,7 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
                         }
                         return false;
                     } else {
-                        int numReplicated = replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, ringHosts,
+                        int numReplicated = replicateUpdatesToRingHosts(regionName, updates, enqueueForResendOnFailure, below,
                             regionProperties.replicationFactor);
                         return numReplicated >= regionProperties.replicationFactor;
                     }
@@ -161,32 +163,32 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
     }
 
     public int replicateUpdatesToRingHosts(RegionName regionName,
-        final Scannable<WALValue> updates,
+        final Commitable<WALValue> updates,
         boolean enqueueForResendOnFailure,
-        RingHost[] ringHosts,
+        Entry<RingMember, RingHost>[] ringNode,
         int replicationFactor) throws Exception {
 
-        RingWalker ringWalker = new RingWalker(ringHosts, replicationFactor);
-        RingHost ringHost;
-        while ((ringHost = ringWalker.host()) != null) {
+        RingWalker ringWalker = new RingWalker(ringNode, replicationFactor);
+        Entry<RingMember, RingHost> node;
+        while ((node = ringWalker.node()) != null) {
             try {
-                updatesSender.sendUpdates(ringHost, regionName, updates);
-                amzaStats.offered(ringHost);
-                amzaStats.replicateErrors.setCount(ringHost, 0);
+                updatesSender.sendUpdates(node, regionName, updates);
+                amzaStats.offered(node);
+                amzaStats.replicateErrors.setCount(node.getKey(), 0);
                 if (sendFailureListener.isPresent()) {
-                    sendFailureListener.get().sent(ringHost);
+                    sendFailureListener.get().sent(node);
                 }
                 ringWalker.success();
             } catch (Exception x) {
                 if (sendFailureListener.isPresent()) {
-                    sendFailureListener.get().failedToSend(ringHost, x);
+                    sendFailureListener.get().failedToSend(node, x);
                 }
                 ringWalker.failed();
-                if (amzaStats.replicateErrors.count(ringHost) == 0) {
-                    LOG.warn("Can't replicate to host:{}", ringHost);
-                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[]{ringHost, regionName, replicationFactor}, x);
+                if (amzaStats.replicateErrors.count(node) == 0) {
+                    LOG.warn("Can't replicate to host:{}", node);
+                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[]{node, regionName, replicationFactor}, x);
                 }
-                amzaStats.replicateErrors.add(ringHost);
+                amzaStats.replicateErrors.add(node.getKey());
                 if (enqueueForResendOnFailure) {
                     resendWAL.execute(regionName, (WALStorage resend) -> {
                         resend.update(false, null, WALStorageUpdateMode.noReplication, updates);
@@ -203,9 +205,9 @@ public class AmzaRegionChangeReplicator implements WALReplicator {
 
         for (final RegionName regionName : regionIndex.getActiveRegions()) {
             if (Math.abs(regionName.hashCode()) % numberOfResendThreads == stripe) {
-                HostRing hostRing = amzaRing.getHostRing(regionName.getRingName());
-                RingHost[] ring = hostRing.getBelowRing();
-                if (ring.length > 0) {
+                RingNeighbors hostRing = amzaRing.getRingNeighbors(regionName.getRingName());
+                Entry<RingMember, RingHost>[] belowRing = hostRing.getBelowRing();
+                if (belowRing.length > 0) {
                     resendWAL.execute(regionName, (WALStorage resend) -> {
                         Long highWatermark = highwaterMarks.get(regionName);
                         HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, resend);

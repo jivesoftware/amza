@@ -2,7 +2,8 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALTx;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -24,15 +25,19 @@ public class DeltaWALFactory {
     private final OrderIdProvider idProvider;
     private final File walDir;
     private final RowIOProvider ioProvider;
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
+    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final int compactAfterGrowthFactor;
 
-    public DeltaWALFactory(OrderIdProvider idProvider, File walDir, RowIOProvider ioProvider, RowMarshaller<byte[]> rowMarshaller,
+    public DeltaWALFactory(OrderIdProvider idProvider, File walDir, RowIOProvider ioProvider,
+        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
+        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         int compactAfterGrowthFactor) {
         this.idProvider = idProvider;
         this.walDir = walDir;
         this.ioProvider = ioProvider;
-        this.rowMarshaller = rowMarshaller;
+        this.primaryRowMarshaller = primaryRowMarshaller;
+        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.compactAfterGrowthFactor = compactAfterGrowthFactor;
     }
 
@@ -41,10 +46,11 @@ public class DeltaWALFactory {
     }
 
     private DeltaWAL createOrOpen(long id) throws Exception {
-        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, rowMarshaller, new NoOpWALIndexProvider(), compactAfterGrowthFactor);
+        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller, new NoOpWALIndexProvider(),
+            compactAfterGrowthFactor);
         deltaWALRowsTx.validateAndRepair();
         LOG.info("Created:" + walDir + "/" + id);
-        return new DeltaWAL(id, idProvider, rowMarshaller, deltaWALRowsTx);
+        return new DeltaWAL(id, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
     }
 
     public List<DeltaWAL> list() throws Exception {

@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
+import com.jivesoftware.os.amza.shared.Commitable;
+import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RangeScannable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
@@ -28,7 +30,7 @@ public interface StripeWALStorage {
         WALStorage storage,
         WALReplicator replicator,
         WALStorageUpdateMode mode,
-        Scannable<WALValue> updates) throws Exception;
+        Commitable<WALValue> updates) throws Exception;
 
     WALValue get(RegionName regionName, WALStorage storage, WALKey key) throws Exception;
 
@@ -36,7 +38,8 @@ public interface StripeWALStorage {
 
     void takeRowUpdatesSince(RegionName regionName, WALStorage storage, final long transactionId, RowStream rowUpdates) throws Exception;
 
-    boolean takeFromTransactionId(RegionName regionName, WALStorage walStorage, long transactionId, Scan<WALValue> scan) throws Exception;
+    boolean takeFromTransactionId(RegionName regionName, WALStorage walStorage, long transactionId, Highwaters highwaters,
+        Scan<WALValue> scan) throws Exception;
 
     void rangeScan(RegionName regionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to, Scan<WALValue> scan) throws Exception;
 

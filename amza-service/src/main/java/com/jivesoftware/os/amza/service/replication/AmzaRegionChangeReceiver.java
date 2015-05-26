@@ -3,16 +3,15 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.WALs;
+import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.ByteBuffer;
@@ -29,13 +28,13 @@ import org.apache.commons.lang.mutable.MutableBoolean;
 public class AmzaRegionChangeReceiver {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private static RegionName RECEIVED = new RegionName(true, "received", "received");
+    private static final RegionName RECEIVED = new RegionName(true, "received", "received");
 
     private ScheduledExecutorService applyThreadPool;
     private ScheduledExecutorService compactThreadPool;
 
     private final AmzaStats amzaStats;
-    private final RowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> rowMarshaller;
     private final RegionIndex regionIndex;
     private final RegionStripeProvider regionStripeProvider;
     private final WALs receivedWAL;
@@ -45,7 +44,7 @@ public class AmzaRegionChangeReceiver {
     private final Map<RegionName, Long> highwaterMarks = new ConcurrentHashMap<>();
 
     public AmzaRegionChangeReceiver(AmzaStats amzaStats,
-        RowMarshaller<byte[]> rowMarshaller,
+        PrimaryRowMarshaller<byte[]> rowMarshaller,
         RegionIndex regionIndex,
         RegionStripeProvider regionStripeProvider,
         WALs receivedUpdatesWAL,
@@ -64,11 +63,11 @@ public class AmzaRegionChangeReceiver {
         }
     }
 
-    public void receiveChanges(RegionName regionName, final Scannable<WALValue> changes) throws Exception {
+    public void receiveChanges(RegionName regionName, final Commitable<WALValue> changes) throws Exception {
 
         final byte[] regionNameBytes = regionName.toBytes();
-        final Scannable<WALValue> receivedScannable = (final Scan<WALValue> walScan) -> {
-            changes.rowScan((long rowTxId, WALKey key, WALValue value) -> {
+        final Commitable<WALValue> receivedScannable = (highwaters, walScan) -> {
+            changes.commitable(highwaters, (long rowTxId, WALKey key, WALValue value) -> {
                 ByteBuffer bb = ByteBuffer.allocate(2 + regionNameBytes.length + 4 + key.getKey().length);
                 bb.putShort((short) regionNameBytes.length);
                 bb.put(regionNameBytes);

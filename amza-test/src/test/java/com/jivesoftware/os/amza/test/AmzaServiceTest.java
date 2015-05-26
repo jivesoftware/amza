@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.test;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
+import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
@@ -46,7 +47,7 @@ public class AmzaServiceTest {
         final AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
 
         for (int i = 0; i < maxNumberOfServices; i++) {
-            cluster.newNode(new RingHost("localhost", i));
+            cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i));
         }
         final RegionName regionName = new RegionName(false, "test", "region1");
         final CountDownLatch latch = new CountDownLatch(1);
@@ -59,7 +60,7 @@ public class AmzaServiceTest {
             public void run() {
                 for (int i = 0; i < maxUpdates; i++) {
                     try {
-                        AmzaNode node = cluster.get(new RingHost("localhost", random.nextInt(maxNumberOfServices)));
+                        AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                         if (node != null) {
                             node.create(regionName);
                             boolean tombstone = random.nextBoolean();
@@ -75,7 +76,7 @@ public class AmzaServiceTest {
 
                     try {
                         if (removeService > 0) {
-                            RingHost key = new RingHost("localhost", random.nextInt(maxNumberOfServices));
+                            RingMember key = new RingMember("localhost-" + random.nextInt(maxNumberOfServices));
                             AmzaNode node = cluster.get(key);
                             if (node != null) {
                                 System.out.println("Removing node:" + key);
@@ -91,10 +92,10 @@ public class AmzaServiceTest {
                     try {
                         if (addService > 0) {
                             int port = maxNumberOfServices + random.nextInt(maxAddService);
-                            RingHost key = new RingHost("localhost", port);
+                            RingMember key = new RingMember("localhost-" + port);
                             AmzaNode node = cluster.get(key);
                             if (node == null) {
-                                cluster.newNode(new RingHost("localhost", port));
+                                cluster.newNode(new RingMember("localhost-" + port), new RingHost("localhost", port));
                                 addService--;
                             }
                         }
@@ -104,7 +105,7 @@ public class AmzaServiceTest {
 
                     try {
                         if (offService > 0) {
-                            RingHost key = new RingHost("localhost", random.nextInt(maxNumberOfServices));
+                            RingMember key = new RingMember("localhost-" + random.nextInt(maxNumberOfServices));
                             AmzaNode node = cluster.get(key);
                             if (node != null) {
                                 node.setOff(!node.isOff());

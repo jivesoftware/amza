@@ -9,7 +9,7 @@ import java.util.List;
  */
 public interface RowIOProvider {
 
-    RowIO create(File dir, String name) throws Exception;
+    <K> RowIO<K> create(File dir, String name) throws Exception;
 
     List<File> listExisting(File dir);
 }

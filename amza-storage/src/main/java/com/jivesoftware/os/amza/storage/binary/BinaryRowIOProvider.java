@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.jivesoftware.os.amza.shared.stats.IoStats;
-import com.jivesoftware.os.amza.storage.filer.WALFiler;
+import com.jivesoftware.os.amza.storage.filer.DiskBackedWALFiler;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
@@ -24,13 +24,13 @@ public class BinaryRowIOProvider implements RowIOProvider {
     }
 
     @Override
-    public RowIO create(File dir, String name) throws Exception {
+    public RowIO<File> create(File dir, String name) throws Exception {
         dir.mkdirs();
         File file = new File(dir, name);
-        WALFiler filer = new WALFiler(file.getAbsolutePath(), "rw", useMemMap);
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO(file, filer, rowReader, rowWriter);
+        return new BinaryRowIO<>(new ManageFileRowIO(), file, rowReader, rowWriter);
     }
 
     @Override

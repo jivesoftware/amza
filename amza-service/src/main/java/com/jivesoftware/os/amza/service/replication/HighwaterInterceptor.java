@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.shared.RowStream;
+import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -36,22 +37,25 @@ public class HighwaterInterceptor {
         }
 
         @Override
-        public boolean row(long rowFP, long rowTxId, byte rowType, byte[] row) throws Exception {
+        public boolean row(long rowFP, long rowTxId, RowType rowType, byte[] row) throws Exception {
 
-            if (rowTxId <= initialHighwaterMark) {
-                return true;
-            }
-
-            if (rowStream.row(rowFP, rowTxId, rowType, row)) {
-                long got = highaterMark.get();
-                while (got < rowTxId) {
-                    highaterMark.compareAndSet(got, rowTxId);
-                    got = highaterMark.get();
+            if (rowType == RowType.primary) {
+                if (rowTxId <= initialHighwaterMark) {
+                    return true;
                 }
-                return true;
-            } else {
-                return false;
+
+                if (rowStream.row(rowFP, rowTxId, rowType, row)) {
+                    long got = highaterMark.get();
+                    while (got < rowTxId) {
+                        highaterMark.compareAndSet(got, rowTxId);
+                        got = highaterMark.get();
+                    }
+                    return true;
+                } else {
+                    return false;
+                }
             }
+            return true;
         }
 
     }

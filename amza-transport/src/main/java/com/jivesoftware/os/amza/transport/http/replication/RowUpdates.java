@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.storage.RowMarshaller;
+import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.WALRow;
 import java.util.List;
 
@@ -59,10 +59,10 @@ public class RowUpdates {
         return rows;
     }
 
-    public void stream(RowMarshaller<byte[]> marshaller, Scan<WALValue> scan) throws Exception {
+    public void stream(PrimaryRowMarshaller<byte[]> marshaller, Scan<WALValue> scan) throws Exception {
         for (int i = 0; i < rowTxIds.size(); i++) {
             WALRow row = marshaller.fromRow(rows.get(i));
-            if (!scan.row(rowTxIds.get(i), row.getKey(), row.getValue())) {
+            if (!scan.row(rowTxIds.get(i), row.key, row.value)) {
                 break;
             }
         }

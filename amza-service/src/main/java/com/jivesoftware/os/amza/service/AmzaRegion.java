@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.service;
 import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.service.storage.RowsStorageUpdates;
+import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
@@ -169,9 +170,9 @@ public class AmzaRegion {
         regionStripe.takeRowUpdatesSince(regionName, transactionId, rowStream);
     }
 
-    public TakeResult takeFromTransactionId(long transactionId, Scan<WALValue> scan) throws Exception {
+    public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<WALValue> scan) throws Exception {
         final MutableLong lastTxId = new MutableLong(-1);
-        boolean tookToEnd = regionStripe.takeFromTransactionId(regionName, transactionId, (rowTxId, key, value) -> {
+        boolean tookToEnd = regionStripe.takeFromTransactionId(regionName, transactionId, highwaters, (rowTxId, key, value) -> {
             if (value.getTombstoned() || scan.row(rowTxId, key, value)) {
                 if (rowTxId > lastTxId.longValue()) {
                     lastTxId.setValue(rowTxId);
@@ -184,6 +185,7 @@ public class AmzaRegion {
     }
 
     public static class TakeResult {
+
         public final long lastTxId;
         public final boolean tookToEnd;
 
@@ -236,8 +238,8 @@ public class AmzaRegion {
                     return false;
                 }
                 if (value.getValue() != null && !Arrays.equals(value.getValue(), timestampedValue.getValue())) {
-                    System.out.println("INCONSISTENCY: " + comparing + " value:'" + timestampedValue.getValue()
-                        + "' != '" + value.getValue()
+                    System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(timestampedValue.getValue())
+                        + "' != '" + Arrays.toString(value.getValue())
                         + "' aClass:" + timestampedValue.getValue().getClass()
                         + "' bClass:" + value.getValue().getClass()
                         + "' \n" + timestampedValue + " vs " + value);

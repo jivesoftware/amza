@@ -72,7 +72,7 @@ public class AmzaRingReader {
         RegionStore nodeIndex = regionIndex.get(RegionProvider.NODE_INDEX);
         WALKey[] memberKeys = new WALKey[ring.size()];
         for (int i = 0; i < memberKeys.length; i++) {
-            memberKeys[i] = new WALKey(ring.get(0).toBytes());
+            memberKeys[i] = new WALKey(ring.get(i).toBytes());
         }
         WALValue[] rawRingHosts = nodeIndex.get(memberKeys);
         NavigableMap<RingMember, RingHost> orderedRing = new TreeMap<>();

@@ -202,6 +202,7 @@ public class AmzaRegionChangeTaker {
                             }
                         } catch (Exception x) {
                             LOG.warn("Failure while streaming takes.", x);
+                            continue;
                         }
 
                         for (Entry<RingMember, Long> entry : takeRowStream.flushedHighwatermarks.entrySet()) {

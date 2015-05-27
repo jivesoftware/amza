@@ -85,10 +85,14 @@ public class AmzaDiscovery {
                                 RingMember ringMember = new RingMember(member);
                                 RingHost anotherRingHost = new RingHost(host, port);
                                 NavigableMap<RingMember, RingHost> ring = amzaRing.getRing("system");
-                                if (!ring.containsKey(ringMember)) {
-                                    LOG.info("Adding host to the cluster: " + anotherRingHost);
+                                RingHost ringHost = ring.get(ringMember);
+                                if (ringHost == null) {
+                                    LOG.info("Adding ringMember:" + ringMember + " on host:" + anotherRingHost + " to cluster: " + clusterName);
                                     amzaRing.register(ringMember, anotherRingHost);
                                     amzaRing.addRingMember("system", ringMember);
+                                } else if (!ringHost.equals(anotherRingHost)) {
+                                    LOG.info("Updating ringMember:" + ringMember + " on host:" + anotherRingHost + " for cluster:" + clusterName);
+                                    amzaRing.register(ringMember, anotherRingHost);
                                 }
                             }
                         }

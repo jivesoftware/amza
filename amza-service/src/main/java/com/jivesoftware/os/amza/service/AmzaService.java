@@ -165,10 +165,10 @@ public class AmzaService implements AmzaInstance {
     }
 
     public AmzaRegion createRegionIfAbsent(RegionName regionName, RegionProperties regionProperties) throws Exception {
-        if (amzaRing.isMemberOfRing(regionName.getRegionName())) {
+        if (amzaRing.isMemberOfRing(regionName.getRingName())) {
             return regionStatusStorage.tx(regionName, (versionedRegionName, regionStatus) -> {
                 if (regionStatus == null) {
-                    regionStatusStorage.markAsKetchup(regionName);
+                    versionedRegionName = regionStatusStorage.markAsKetchup(regionName);
                 }
 
                 regionProvider.createRegionStoreIfAbsent(versionedRegionName, regionProperties);

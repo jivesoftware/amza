@@ -111,6 +111,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
             (highwater, scan) -> {
                 scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(ringHost.toBytes(), orderIdProvider.nextId(), false));
             });
+        LOG.info("register ringMember:{} as ringHost:{}", ringMember, ringHost);
     }
 
     @Override
@@ -122,6 +123,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
             (highwater, scan) -> {
                 scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
             });
+        LOG.info("deregister ringMember:{}");
     }
 
     public RingMember getRingMember() {
@@ -224,6 +226,8 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
                     scan.row(-1, ringReader.key(ringName, member), new WALValue(new byte[0], timestamp, false));
                 }
             });
+
+        LOG.info("Ring update:{} -> {}", ringName, members);
     }
 
     @Override

@@ -16,6 +16,8 @@ import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
@@ -26,6 +28,8 @@ import java.util.Map.Entry;
  * @author jonathan.colt
  */
 public class RegionStatusStorage implements TxRegionStatus {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
@@ -57,6 +61,10 @@ public class RegionStatusStorage implements TxRegionStatus {
 
     @Override
     public <R> R tx(RegionName regionName, RegionTx<R> tx) throws Exception {
+        if (regionName.isSystemRegion()) {
+            return tx.tx(new VersionedRegionName(regionName, 0), Status.ONLINE);
+        }
+
         WALValue rawStatus = systemRegionStripe.get(RegionProvider.REGION_ONLINE_INDEX.getRegionName(), walKey(rootRingMember, regionName));
         if (rawStatus == null) {
             return tx.tx(null, null);
@@ -81,16 +89,27 @@ public class RegionStatusStorage implements TxRegionStatus {
                 return;
             }
         }
+        LOG.info("Resolving cold start stalemate. " + rootRingMember);
         markAsOnline(versionedRegionName, rootRingMember);
     }
 
-    public void markAsKetchup(RegionName regionName) throws Exception {
+    public VersionedRegionName markAsKetchup(RegionName regionName) throws Exception {
+        if (regionName.isSystemRegion()) {
+            return new VersionedRegionName(regionName, 0);
+        }
         long regionVersion = orderIdProvider.nextId();
-        set(rootRingMember, regionName, new VersionedStatus(Status.ONLINE, regionVersion));
+        VersionedStatus versionedStatus = set(rootRingMember, regionName, new VersionedStatus(Status.KETCHUP, regionVersion));
+        LOG.info(rootRingMember + ":markAsKetchup " + rootRingMember + " regionName:" + regionName + " was updated to " + versionedStatus + ".");
+        return new VersionedRegionName(regionName, versionedStatus.version);
     }
 
     public void markAsOnline(VersionedRegionName versionedRegionName, RingMember ringMember) throws Exception {
-        set(ringMember, versionedRegionName.getRegionName(), new VersionedStatus(Status.ONLINE, versionedRegionName.getRegionVersion()));
+        if (versionedRegionName.getRegionName().isSystemRegion()) {
+            return;
+        }
+        VersionedStatus versionedStatus = set(ringMember, versionedRegionName.getRegionName(),
+            new VersionedStatus(Status.ONLINE, versionedRegionName.getRegionVersion()));
+        LOG.info(rootRingMember + ":markAsOnline " + ringMember + " versionedRegionName:" + versionedRegionName + " was updated to " + versionedStatus + ".");
     }
 
     public void markAsOnline(ListMultimap<RingMember, VersionedRegionName> markOnline) throws Exception {
@@ -100,7 +119,12 @@ public class RegionStatusStorage implements TxRegionStatus {
     }
 
     public void markForDisposal(VersionedRegionName versionedRegionName, RingMember ringMember) throws Exception {
-        set(ringMember, versionedRegionName.getRegionName(), new VersionedStatus(Status.DISPOSE, versionedRegionName.getRegionVersion()));
+        if (versionedRegionName.getRegionName().isSystemRegion()) {
+            return;
+        }
+        VersionedStatus versionedStatus = set(ringMember, versionedRegionName.getRegionName(), new VersionedStatus(Status.DISPOSE, versionedRegionName
+            .getRegionVersion()));
+        LOG.info(rootRingMember + ":markForDisposal " + ringMember + " regionName:" + versionedRegionName + " was updated to " + versionedStatus + ".");
     }
 
     public void streamLocalState(RegionMemberStatusStream stream) throws Exception {

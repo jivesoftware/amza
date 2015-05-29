@@ -18,13 +18,8 @@ package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
 import com.jivesoftware.os.amza.shared.Commitable;
-import com.jivesoftware.os.amza.shared.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RingNeighbors;
-import com.jivesoftware.os.amza.shared.RowType;
-import com.jivesoftware.os.amza.shared.TxRegionStatus;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.transport.http.replication.RowUpdates;
@@ -36,7 +31,6 @@ import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -47,7 +41,6 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
-import org.apache.commons.lang.mutable.MutableLong;
 
 @Path("/amza")
 public class AmzaReplicationRestEndpoints {
@@ -55,17 +48,11 @@ public class AmzaReplicationRestEndpoints {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRing amzaRing;
     private final AmzaInstance amzaInstance;
-    private final TxRegionStatus txRegionStatus;
-    private final HighwaterStorage highwaterStorage;
 
     public AmzaReplicationRestEndpoints(@Context AmzaRing amzaRing,
-        @Context AmzaInstance amzaInstance,
-        @Context TxRegionStatus txRegionStatus,
-        @Context HighwaterStorage highwaterMarks) {
+        @Context AmzaInstance amzaInstance) {
         this.amzaRing = amzaRing;
         this.amzaInstance = amzaInstance;
-        this.txRegionStatus = txRegionStatus;
-        this.highwaterStorage = highwaterMarks;
     }
 
     @POST
@@ -81,7 +68,7 @@ public class AmzaReplicationRestEndpoints {
             amzaRing.addRingMember("system", ringMember);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
-            LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
+            LOG.warn("Failed to add {}/{}/{} ", new Object[] { logicalName, host, port }, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to add system member: " + logicalName, x);
         }
     }
@@ -142,54 +129,12 @@ public class AmzaReplicationRestEndpoints {
     public Response streamingTake(final TakeRequest takeRequest) {
         try {
 
-            final long t1 = System.currentTimeMillis();
             StreamingOutput stream = (OutputStream os) -> {
                 os.flush();
                 BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
                 final DataOutputStream dos = new DataOutputStream(bos);
-                final MutableLong bytes = new MutableLong(0);
                 try {
-                    RegionName regionName = takeRequest.getRegionName();
-
-                    txRegionStatus.tx(regionName, (versionedRegionName, regionStatus) -> {
-                        if (regionStatus == TxRegionStatus.Status.ONLINE) {
-                            dos.writeByte(1); // fully online
-                            RingNeighbors hostRing = amzaRing.getRingNeighbors(regionName.getRingName());
-                            for (Entry<RingMember, RingHost> node : hostRing.getAboveRing()) {
-                                Long highwatermark = highwaterStorage.get(node.getKey(), versionedRegionName);
-                                if (highwatermark != null) {
-                                    byte[] ringMemberBytes = node.getKey().toBytes();
-                                    dos.writeByte(1);
-                                    dos.writeInt(ringMemberBytes.length);
-                                    dos.write(ringMemberBytes);
-                                    dos.writeLong(highwatermark);
-                                    bytes.add(1 + 4 + ringMemberBytes.length + 8);
-                                }
-                            }
-
-                            dos.writeByte(0); // last entry marker
-                            bytes.increment();
-                            amzaInstance.takeRowUpdates(regionName, takeRequest.getHighestTransactionId(),
-                                (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
-                                    dos.writeByte(1);
-                                    dos.writeLong(rowTxId);
-                                    dos.writeByte(rowType.toByte());
-                                    dos.writeInt(row.length);
-                                    dos.write(row);
-                                    bytes.add(1 + 8 + 1 + 4 + row.length);
-                                    return true;
-                                });
-                            dos.writeByte(0); // last entry marker
-                            bytes.increment();
-                        } else {
-                            dos.writeByte(0); // not online
-                            dos.writeByte(0); // last entry marker
-                            dos.writeByte(0); // last entry marker
-                            bytes.add(3);
-                        }
-                        return null;
-                    });
-
+                    amzaInstance.streamingTakeFromRegion(dos, takeRequest.getRegionName(), takeRequest.getHighestTransactionId());
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);

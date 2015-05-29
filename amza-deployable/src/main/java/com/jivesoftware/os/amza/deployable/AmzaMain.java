@@ -175,7 +175,7 @@ public class AmzaMain {
             serviceStartupHealthCheck.success();
 
             if (amzaConfig.getAutoDiscoveryEnabled()) {
-                AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getAmzaRing(),
+                AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getAmzaHostRing(),
                     instanceConfig.getClusterName(),
                     amzaConfig.getDiscoveryMulticastGroup(),
                     amzaConfig.getDiscoveryMulticastPort());

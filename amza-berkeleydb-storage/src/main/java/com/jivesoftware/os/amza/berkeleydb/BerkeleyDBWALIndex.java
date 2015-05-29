@@ -297,11 +297,11 @@ public class BerkeleyDBWALIndex implements WALIndex {
         synchronized (compactingTo) {
             WALIndex got = compactingTo.get();
             if (got != null) {
-                throw new IllegalStateException("Try to compact while another compaction is already underway." + name);
+                throw new IllegalStateException("Try to compact while another compaction is already underway: " + name);
             }
 
             if (database == null) {
-                throw new IllegalStateException("Try to compact a index that has been disposed." + name);
+                throw new IllegalStateException("Try to compact a index that has been expunged: " + name);
             }
 
             removeDatabase(Prefix.compacting);

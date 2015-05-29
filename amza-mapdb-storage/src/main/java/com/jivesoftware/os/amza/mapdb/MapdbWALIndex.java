@@ -261,6 +261,6 @@ public class MapdbWALIndex implements WALIndex {
 
     @Override
     public boolean delete() throws Exception {
-        throw new UnsupportedOperationException("Not supported yet."); 
+        throw new UnsupportedOperationException("Not supported yet.");
     }
 }

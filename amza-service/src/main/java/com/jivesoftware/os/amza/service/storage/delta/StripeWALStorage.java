@@ -64,6 +64,6 @@ public interface StripeWALStorage {
     long count(VersionedRegionName versionedRegionName,
         WALStorage storage) throws Exception;
 
-    boolean remove(VersionedRegionName versionedRegionName,
+    boolean expunge(VersionedRegionName versionedRegionName,
         WALStorage walStorage) throws Exception;
 }

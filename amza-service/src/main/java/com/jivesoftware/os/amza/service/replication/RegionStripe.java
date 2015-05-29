@@ -60,10 +60,10 @@ public class RegionStripe {
         this.predicate = stripingPredicate;
     }
 
-    boolean removeRegion(VersionedRegionName versionedRegionName) throws Exception {
+    boolean expungeRegion(VersionedRegionName versionedRegionName) throws Exception {
         RegionStore regionStore = regionIndex.get(versionedRegionName);
         if (regionStore != null) {
-            return storage.remove(versionedRegionName, regionStore.getWalStorage());
+            return storage.expunge(versionedRegionName, regionStore.getWalStorage());
         }
         return false;
     }

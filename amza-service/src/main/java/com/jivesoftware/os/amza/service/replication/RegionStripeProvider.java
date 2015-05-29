@@ -33,7 +33,7 @@ public class RegionStripeProvider {
 
     public void removeRegion(VersionedRegionName versionedRegionName) throws Exception {
         if (!versionedRegionName.getRegionName().isSystemRegion()) {
-            deltaStripes[Math.abs(versionedRegionName.getRegionName().hashCode()) % deltaStripes.length].removeRegion(versionedRegionName);
+            deltaStripes[Math.abs(versionedRegionName.getRegionName().hashCode()) % deltaStripes.length].expungeRegion(versionedRegionName);
         }
     }
 }

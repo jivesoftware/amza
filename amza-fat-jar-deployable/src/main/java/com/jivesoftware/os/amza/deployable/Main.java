@@ -156,7 +156,7 @@ public class Main {
         System.out.println("-----------------------------------------------------------------------");
 
         if (clusterName != null) {
-            AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getAmzaRing(), clusterName, multicastGroup, multicastPort);
+            AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getAmzaHostRing(), clusterName, multicastGroup, multicastPort);
             amzaDiscovery.start();
             System.out.println("-----------------------------------------------------------------------");
             System.out.println("|      Amza Service Discovery Online");

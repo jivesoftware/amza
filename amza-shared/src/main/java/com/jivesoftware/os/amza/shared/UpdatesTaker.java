@@ -20,8 +20,22 @@ import java.util.Map.Entry;
 
 public interface UpdatesTaker {
 
-    Map<RingMember, Long> streamingTakeUpdates(Entry<RingMember, RingHost> node,
+    StreamingTakeResult streamingTakeUpdates(Entry<RingMember, RingHost> node,
         RegionName partitionName,
         long transactionId,
-        RowStream tookRowUpdates) throws Exception;
+        RowStream tookRowUpdates);
+
+    class StreamingTakeResult {
+        public final Throwable unreachable;
+        public final Throwable error;
+        public final Map<RingMember, Long> otherHighwaterMarks;
+
+        public StreamingTakeResult(Exception unreachable,
+            Exception error,
+            Map<RingMember, Long> otherHighwaterMarks) {
+            this.unreachable = unreachable;
+            this.error = error;
+            this.otherHighwaterMarks = otherHighwaterMarks;
+        }
+    }
 }

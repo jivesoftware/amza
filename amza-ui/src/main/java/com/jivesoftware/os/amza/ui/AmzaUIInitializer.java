@@ -65,16 +65,16 @@ public class AmzaUIInitializer {
         List<ManagePlugin> plugins = Lists.newArrayList(
             new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
                 HealthPluginEndpoints.class,
-                new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats", renderer, amzaService.getAmzaRing(), amzaService, amzaStats)),
+                new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats", renderer, amzaService.getAmzaHostRing(), amzaService, amzaStats)),
             new ManagePlugin("repeat", "Rings", "/amza/ui/rings",
                 AmzaRingsPluginEndpoints.class,
-                new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getAmzaRing())),
+                new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getAmzaHostRing())),
             new ManagePlugin("map-marker", "Regions", "/amza/ui/regions",
                 AmzaRegionsPluginEndpoints.class,
-                new AmzaRegionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaRing(), amzaService)),
+                new AmzaRegionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaHostRing(), amzaService)),
             new ManagePlugin("leaf", "Cluster", "/amza/ui/cluster",
                 AmzaClusterPluginEndpoints.class,
-                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaRing())),
+                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaHostRing())),
             new ManagePlugin("scale", "Stress", "/amza/ui/stress",
                 AmzaStressPluginEndpoints.class,
                 new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService)),
@@ -92,7 +92,7 @@ public class AmzaUIInitializer {
 
         injectionCallback.addEndpoint(AmzaUIEndpoints.class);
         injectionCallback.addInjectable(AmzaClusterName.class, new AmzaClusterName((clusterName == null) ? "manual" : clusterName));
-        injectionCallback.addInjectable(AmzaRing.class, amzaService.getAmzaRing());
+        injectionCallback.addInjectable(AmzaRing.class, amzaService.getAmzaHostRing());
         injectionCallback.addInjectable(AmzaStats.class, amzaStats);
         injectionCallback.addInjectable(RingHost.class, host);
     }

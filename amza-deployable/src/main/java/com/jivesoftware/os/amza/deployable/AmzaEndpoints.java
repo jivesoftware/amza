@@ -127,10 +127,10 @@ public class AmzaEndpoints {
 
     AmzaRegion createRegionIfAbsent(String regionName) throws Exception {
 
-        int ringSize = amzaService.getAmzaRing().getRingSize("default");
-        int systemRingSize = amzaService.getAmzaRing().getRingSize("system");
+        int ringSize = amzaService.getAmzaHostRing().getRingSize("default");
+        int systemRingSize = amzaService.getAmzaHostRing().getRingSize("system");
         if (ringSize < systemRingSize) {
-            amzaService.getAmzaRing().buildRandomSubRing("default", systemRingSize);
+            amzaService.getAmzaHostRing().buildRandomSubRing("default", systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),

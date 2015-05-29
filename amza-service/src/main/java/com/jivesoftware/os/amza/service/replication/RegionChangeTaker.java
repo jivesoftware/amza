@@ -2,9 +2,11 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimaps;
+import com.google.common.collect.SetMultimap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingReader;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
@@ -19,6 +21,7 @@ import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.TxRegionStatus;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.UpdatesTaker.StreamingTakeResult;
 import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
@@ -50,7 +53,6 @@ import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
- *
  * @author jonathan.colt
  */
 public class RegionChangeTaker {
@@ -138,9 +140,10 @@ public class RegionChangeTaker {
         while (true) {
             ListMultimap<RingMember, VersionedRegionName> flushMap = Multimaps.synchronizedListMultimap(
                 ArrayListMultimap.<RingMember, VersionedRegionName>create());
-            ListMultimap<RingMember, VersionedRegionName> onlineMap = Multimaps.synchronizedListMultimap(
-                ArrayListMultimap.<RingMember, VersionedRegionName>create());
+            Set<VersionedRegionName> onlineSet = Collections.newSetFromMap(Maps.newConcurrentMap());
             Set<VersionedRegionName> ketchupSet = Collections.newSetFromMap(Maps.newConcurrentMap());
+            SetMultimap<VersionedRegionName, RingMember> membersUnreachable = Multimaps.synchronizedSetMultimap(
+                HashMultimap.<VersionedRegionName, RingMember>create());
 
             List<Future<?>> futures = new ArrayList<>();
             stripe.txAllRegions((versionedRegionName, regionStatus) -> {
@@ -153,19 +156,26 @@ public class RegionChangeTaker {
                             try {
                                 List<TookResult> took = takeChanges(hostRing.getAboveRing(), stripe, versionedRegionName, regionProperties.takeFromFactor);
                                 boolean allInKetchup = true;
+                                boolean oneTookFully = false;
                                 for (TookResult t : took) {
                                     if (t.tookFully || t.tookError) {
                                         allInKetchup = false;
                                     }
                                     if (t.tookFully) {
-                                        onlineMap.put(t.versionedRingMember, versionedRegionName);
+                                        oneTookFully = true;
                                     }
-                                    if (t.tookAny) {
+                                    if (t.flushedAny) {
                                         flushMap.put(t.versionedRingMember, versionedRegionName);
+                                    }
+                                    if (t.tookUnreachable) {
+                                        membersUnreachable.put(versionedRegionName, t.versionedRingMember);
                                     }
                                 }
                                 if (allInKetchup) {
                                     ketchupSet.add(versionedRegionName);
+                                }
+                                if (oneTookFully) {
+                                    onlineSet.add(versionedRegionName);
                                 }
                             } catch (Exception x) {
                                 LOG.warn("Failed to take from " + versionedRegionName, x);
@@ -184,11 +194,13 @@ public class RegionChangeTaker {
                 }
             }
 
-            regionStatusStorage.markAsOnline(onlineMap);
-            if (!ketchupSet.isEmpty()) {
-                for (VersionedRegionName versionedRegionName : ketchupSet) {
-                    regionStatusStorage.elect(amzaRingReader.getRing(versionedRegionName.getRegionName().getRingName()).keySet(), versionedRegionName);
-                }
+            for (VersionedRegionName versionedRegionName : onlineSet) {
+                regionStatusStorage.markAsOnline(versionedRegionName);
+            }
+            for (VersionedRegionName versionedRegionName : ketchupSet) {
+                regionStatusStorage.elect(amzaRingReader.getRing(versionedRegionName.getRegionName().getRingName()).keySet(),
+                    membersUnreachable.get(versionedRegionName),
+                    versionedRegionName);
             }
             if (flushMap.isEmpty()) {
                 break;
@@ -202,15 +214,17 @@ public class RegionChangeTaker {
     static class TookResult {
 
         public final RingMember versionedRingMember;
-        public final boolean tookAny;
+        public final boolean flushedAny;
         public final boolean tookFully;
         public final boolean tookError;
+        public final boolean tookUnreachable;
 
-        public TookResult(RingMember ringMember, boolean tookAny, boolean fullyTook, boolean tookError) {
+        public TookResult(RingMember ringMember, boolean flushedAny, boolean tookFully, boolean tookError, boolean tookUnreachable) {
             this.versionedRingMember = ringMember;
-            this.tookAny = tookAny;
-            this.tookFully = fullyTook;
+            this.flushedAny = flushedAny;
+            this.tookFully = tookFully;
             this.tookError = tookError;
+            this.tookUnreachable = tookUnreachable;
         }
 
     }
@@ -221,13 +235,10 @@ public class RegionChangeTaker {
         int takeFromFactor) throws Exception {
 
         final MutableInt taken = new MutableInt(0);
-        int i = 0;
-        final MutableInt leaps = new MutableInt(0);
         List<TookResult> tookFrom = new ArrayList<>();
         DONE:
-        while (i < ring.length) {
-            i = (leaps.intValue() * 2);
-            for (; i < ring.length; i++) {
+        for (int offset = 0, loops = 0; offset < ring.length; offset = (int) Math.pow(2, loops), loops++) {
+            for (int i = offset; i < ring.length; i++) {
                 if (ring[i] == null) {
                     continue;
                 }
@@ -237,6 +248,8 @@ public class RegionChangeTaker {
                 RingMember ringMember = node.getKey();
                 Long highwaterMark = highwaterStorage.get(ringMember, versionedRegionName);
                 if (highwaterMark == null) {
+                    // TODO it would be nice to ask this node to recommend an initial highwater based on
+                    // TODO all of our highwaters vs. its highwater history and its start of ingress.
                     highwaterMark = -1L;
                 }
                 TakeRowStream takeRowStream = new TakeRowStream(amzaStats,
@@ -245,47 +258,54 @@ public class RegionChangeTaker {
                     ringMember,
                     highwaterMark);
 
-                boolean tookAny = false;
-                boolean fullyTook = false;
-                boolean tookError = false;
                 int updates = 0;
-                try {
-                    Map<RingMember, Long> otherHighwaterMarks = updatesTaker.streamingTakeUpdates(node,
-                        versionedRegionName.getRegionName(),
-                        highwaterMark,
-                        takeRowStream);
 
-                    updates = takeRowStream.flush();
-                    tookAny = updates > 0;
-                    if (otherHighwaterMarks != null) {
-                        for (Entry<RingMember, Long> otherHighwaterMark : otherHighwaterMarks.entrySet()) {
-                            takeRowStream.flushedHighwatermarks.merge(otherHighwaterMark.getKey(), otherHighwaterMark.getValue(), (a, b) -> {
-                                return Math.max(a, b);
-                            });
-                        }
-                        fullyTook = true;
-                    }
-                } catch (Exception x) {
-                    tookError = true;
+                StreamingTakeResult streamingTakeResult = updatesTaker.streamingTakeUpdates(node,
+                    versionedRegionName.getRegionName(),
+                    highwaterMark,
+                    takeRowStream);
+                boolean tookFully = (streamingTakeResult.otherHighwaterMarks != null);
+
+                if (streamingTakeResult.error != null) {
                     if (takeFailureListener.isPresent()) {
-                        takeFailureListener.get().failedToTake(node, x);
+                        takeFailureListener.get().failedToTake(node, streamingTakeResult.error);
                     }
                     if (amzaStats.takeErrors.count(node) == 0) {
-                        LOG.warn("Can't take from host:{}", node);
-                        LOG.trace("Can't take from host:{} region:{} takeFromFactor:{}", new Object[]{node, versionedRegionName, takeFromFactor}, x);
+                        LOG.warn("Error while taking from host:{}", node);
+                        LOG.trace("Error while taking from host:{} region:{} takeFromFactor:{}",
+                            new Object[] { node, versionedRegionName, takeFromFactor }, streamingTakeResult.error);
                     }
                     amzaStats.takeErrors.add(ringMember);
+                } else if (streamingTakeResult.unreachable != null) {
+                    if (takeFailureListener.isPresent()) {
+                        takeFailureListener.get().failedToTake(node, streamingTakeResult.unreachable);
+                    }
+                    if (amzaStats.takeErrors.count(node) == 0) {
+                        LOG.debug("Unreachable while taking from host:{}", node);
+                        LOG.trace("Unreachable while taking from host:{} region:{} takeFromFactor:{}",
+                            new Object[] { node, versionedRegionName, takeFromFactor }, streamingTakeResult.unreachable);
+                    }
+                    amzaStats.takeErrors.add(ringMember);
+                } else {
+                    updates = takeRowStream.flush();
+                    if (tookFully) {
+                        for (Entry<RingMember, Long> otherHighwaterMark : streamingTakeResult.otherHighwaterMarks.entrySet()) {
+                            takeRowStream.flushedHighwatermarks.merge(otherHighwaterMark.getKey(), otherHighwaterMark.getValue(), Math::max);
+                        }
+                    }
                 }
 
-                if (takeRowStream.haveFlushed()) {
-                    tookFrom.add(new TookResult(ringMember, tookAny, fullyTook, tookError));
-                }
+                tookFrom.add(new TookResult(ringMember,
+                    updates > 0,
+                    tookFully,
+                    streamingTakeResult.error != null,
+                    streamingTakeResult.unreachable != null));
 
                 for (Entry<RingMember, Long> entry : takeRowStream.flushedHighwatermarks.entrySet()) {
                     highwaterStorage.setIfLarger(entry.getKey(), versionedRegionName, updates, entry.getValue());
                 }
 
-                if (fullyTook) {
+                if (tookFully) {
                     amzaStats.took(ringMember);
                     amzaStats.takeErrors.setCount(ringMember, 0);
                     if (takeFailureListener.isPresent()) {
@@ -295,9 +315,8 @@ public class RegionChangeTaker {
                     if (taken.intValue() >= takeFromFactor) {
                         break DONE;
                     }
+                    break;
                 }
-                leaps.increment();
-                break;
             }
         }
         return tookFrom;
@@ -374,6 +393,8 @@ public class RegionChangeTaker {
         }
 
         public int flush() throws Exception {
+            int numFlushed = 0;
+            int batchSize = batch.size();
             if (!batch.isEmpty()) {
                 amzaStats.took(ringMember, versionedRegionName.getRegionName(), batch.size(), oldestTxId.longValue());
                 WALHighwater walh = highwater.get();
@@ -395,14 +416,17 @@ public class RegionChangeTaker {
                         return Math.max(a, b);
                     });
                     flushed.set(streamed.get());
+                    numFlushed = changes.getApply().size();
                 }
             }
             highwater.set(null);
-            if (streamed.get() > 0) {
-                amzaStats.took(ringMember, versionedRegionName.getRegionName(), 0, Long.MAX_VALUE); // We are as up to date taking as is possible.
-                amzaStats.tookApplied(ringMember, versionedRegionName.getRegionName(), 0, Long.MAX_VALUE); // We are as up to date taking as is possible.
+            if (batchSize > 0) {
+                amzaStats.took(ringMember, versionedRegionName.getRegionName(), batchSize, Long.MAX_VALUE);
             }
-            return streamed.get();
+            if (numFlushed > 0) {
+                amzaStats.tookApplied(ringMember, versionedRegionName.getRegionName(), numFlushed, Long.MAX_VALUE);
+            }
+            return flushed.get();
         }
     }
 

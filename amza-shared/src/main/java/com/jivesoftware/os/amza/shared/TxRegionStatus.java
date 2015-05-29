@@ -10,7 +10,7 @@ public interface TxRegionStatus {
 
     public static enum Status {
 
-        DISPOSE(new byte[]{2}), ONLINE(new byte[]{1}), KETCHUP(new byte[]{0});
+        EXPUNGE(new byte[]{2}), ONLINE(new byte[]{1}), KETCHUP(new byte[]{0});
         private final byte[] serializedForm;
 
         private Status(byte[] serializedForm) {

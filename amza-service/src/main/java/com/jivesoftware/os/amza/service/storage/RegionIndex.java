@@ -28,7 +28,6 @@ import static com.jivesoftware.os.amza.service.storage.RegionProvider.HIGHWATER_
 import static com.jivesoftware.os.amza.service.storage.RegionProvider.REGION_PROPERTIES;
 
 /**
- *
  * @author jonathan.colt
  */
 public class RegionIndex implements RowChanges {
@@ -37,7 +36,7 @@ public class RegionIndex implements RowChanges {
 
     private final ConcurrentHashMap<RegionName, ConcurrentHashMap<Long, RegionStore>> regionStores = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RegionName, RegionProperties> regionProperties = new ConcurrentHashMap<>();
-    private final StripingLocksProvider locksProvider = new StripingLocksProvider(1024); // TODO expose to config
+    private final StripingLocksProvider<VersionedRegionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
 
     private final AmzaStats amzaStats;
     private final String[] workingDirectories;
@@ -112,7 +111,8 @@ public class RegionIndex implements RowChanges {
     }
 
     public RegionStore get(VersionedRegionName versionedRegionName) throws Exception {
-        ConcurrentHashMap<Long, RegionStore> versionedStores = regionStores.get(versionedRegionName.getRegionName());
+        RegionName regionName = versionedRegionName.getRegionName();
+        ConcurrentHashMap<Long, RegionStore> versionedStores = regionStores.get(regionName);
         if (versionedStores != null) {
             RegionStore regionStore = versionedStores.get(versionedRegionName.getRegionVersion());
             if (regionStore != null) {
@@ -120,25 +120,23 @@ public class RegionIndex implements RowChanges {
             }
         }
 
-        RegionProperties properties = getProperties(versionedRegionName.getRegionName());
+        RegionProperties properties = getProperties(regionName);
         if (properties == null) {
-            ConcurrentHashMap<Long, RegionStore> versionedRegionPropertiesStores = regionStores.get(RegionProvider.REGION_PROPERTIES);
+            ConcurrentHashMap<Long, RegionStore> versionedRegionPropertiesStores = regionStores.get(RegionProvider.REGION_PROPERTIES.getRegionName());
             RegionStore store = versionedRegionPropertiesStores == null ? null : versionedRegionPropertiesStores.get(0L);
             if (store != null) {
-                WALValue rawRegionProperties = store.get(new WALKey(versionedRegionName.toBytes()));
+                WALValue rawRegionProperties = store.get(new WALKey(regionName.toBytes()));
                 if (rawRegionProperties == null || rawRegionProperties.getTombstoned()) {
                     return null;
                 }
                 properties = regionPropertyMarshaller.fromBytes(rawRegionProperties.getValue());
-                regionProperties.put(versionedRegionName.getRegionName(), properties);
+                regionProperties.put(regionName, properties);
             } else {
                 return null;
             }
         }
         return open(versionedRegionName, properties);
     }
-
-
 
     public RegionStore remove(VersionedRegionName versionedRegionName) {
         ConcurrentHashMap<Long, RegionStore> versionedStores = regionStores.get(versionedRegionName.getRegionName());
@@ -194,7 +192,7 @@ public class RegionIndex implements RowChanges {
             });
         }));
     }
-   
+
     private RegionProperties coldstartSystemRegionProperties(RegionName regionName) {
         RegionProperties properties;
         if (regionName.equals(HIGHWATER_MARK_INDEX.getRegionName())) {

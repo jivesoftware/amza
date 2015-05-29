@@ -39,7 +39,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
- *
  * @author jonathan.colt
  */
 public class DeltaStripeWALStorageNGTest {
@@ -60,12 +59,12 @@ public class DeltaStripeWALStorageNGTest {
             rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, ids, -1, -1);
         RegionIndex regionIndex = new RegionIndex(
             new AmzaStats(),
-            new String[]{regionTmpDir.getAbsolutePath()},
+            new String[] { regionTmpDir.getAbsolutePath() },
             "domain",
             indexedWALStorageProvider,
             regionPropertyMarshaller,
             false);
-        
+
         regionIndex.open(new TxRegionStatus() {
 
             @Override

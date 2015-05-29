@@ -37,8 +37,10 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.UpdatesTaker.StreamingTakeResult;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -47,6 +49,9 @@ import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.util.Collection;
 import java.util.HashMap;
@@ -112,13 +117,13 @@ public class AmzaTestCluster {
         };
 
         UpdatesTaker taker = (Entry<RingMember, RingHost> node, RegionName regionName, long transactionId, RowStream tookRowUpdates) -> {
-            AmzaNode service1 = cluster.get(node.getKey());
-            if (service1 == null) {
+            AmzaNode amzaNode = cluster.get(node.getKey());
+            if (amzaNode == null) {
                 throw new IllegalStateException("Service doesn't exists for " + node.getValue());
             } else {
-                service1.takeRegion(regionName, transactionId, tookRowUpdates);
+                boolean isOnline = amzaNode.takeRegion(regionName, transactionId, tookRowUpdates);
+                return new StreamingTakeResult(null, null, isOnline ? new HashMap<>() : null);
             }
-            return new HashMap<>();
         };
 
         // TODO need to get writer id from somewhere other than port.
@@ -166,16 +171,16 @@ public class AmzaTestCluster {
         });
 
         try {
-            amzaService.getAmzaRing().addRingMember("system", ringMember); // ?? Hacky
-            amzaService.getAmzaRing().addRingMember("test", ringMember); // ?? Hacky
+            amzaService.getAmzaHostRing().addRingMember("system", ringMember); // ?? Hacky
+            amzaService.getAmzaHostRing().addRingMember("test", ringMember); // ?? Hacky
             if (lastAmzaService != null) {
-                amzaService.getAmzaRing().register(lastAmzaService.getAmzaRing().getRingMember(), lastAmzaService.getAmzaRing().getRingHost());
-                amzaService.getAmzaRing().addRingMember("system", lastAmzaService.getAmzaRing().getRingMember()); // ?? Hacky
-                amzaService.getAmzaRing().addRingMember("test", lastAmzaService.getAmzaRing().getRingMember()); // ?? Hacky
+                amzaService.getAmzaHostRing().register(lastAmzaService.getAmzaHostRing().getRingMember(), lastAmzaService.getAmzaHostRing().getRingHost());
+                amzaService.getAmzaHostRing().addRingMember("system", lastAmzaService.getAmzaHostRing().getRingMember()); // ?? Hacky
+                amzaService.getAmzaHostRing().addRingMember("test", lastAmzaService.getAmzaHostRing().getRingMember()); // ?? Hacky
 
-                lastAmzaService.getAmzaRing().register(ringMember, ringHost);
-                lastAmzaService.getAmzaRing().addRingMember("system", ringMember); // ?? Hacky
-                lastAmzaService.getAmzaRing().addRingMember("test", ringMember); // ?? Hacky
+                lastAmzaService.getAmzaHostRing().register(ringMember, ringHost);
+                lastAmzaService.getAmzaHostRing().addRingMember("system", ringMember); // ?? Hacky
+                lastAmzaService.getAmzaHostRing().addRingMember("test", ringMember); // ?? Hacky
             }
             lastAmzaService = amzaService;
         } catch (Exception x) {
@@ -261,18 +266,24 @@ public class AmzaTestCluster {
             return amzaRegion.get(key);
         }
 
-        public void takeRegion(RegionName regionName, long transationId, RowStream rowStream) throws Exception {
+        public boolean takeRegion(RegionName regionName, long transactionId, RowStream rowStream) {
             if (off) {
                 throw new RuntimeException("Service is off:" + serviceHost);
             }
             if (random.nextInt(100) > (100 - oddsOfAConnectionFailureWhenTaking)) {
                 throw new RuntimeException("Random take failure:" + serviceHost);
             }
-            AmzaRegion got = amzaService.getRegion(regionName);
-            if (got != null) {
-                got.takeRowUpdatesSince(transationId, rowStream);
-            } else {
-                throw new RuntimeException("Failed to take because region:" + regionName + " is missing");
+
+            try {
+                ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
+                amzaService.streamingTakeFromRegion(new DataOutputStream(bytesOut), regionName, transactionId);
+
+                StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
+                StreamingTakesConsumer.StreamingTakeConsumed consumed = streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()),
+                    rowStream);
+                return consumed.isOnline;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
 
@@ -308,15 +319,15 @@ public class AmzaTestCluster {
             }
 
             for (RegionName regionName : regionNames) {
-                if (regionName.equals(RegionProvider.HIGHWATER_MARK_INDEX)) {
+                if (regionName.equals(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName())) {
                     continue;
                 }
 
                 AmzaRegion a = amzaService.getRegion(regionName);
                 AmzaRegion b = service.amzaService.getRegion(regionName);
                 if (a == null || b == null) {
-                    System.out.println(regionName + " " + amzaService.getAmzaRing().getRingMember() + " " + a + " -- vs --"
-                        + service.amzaService.getAmzaRing().getRingMember() + " " + b);
+                    System.out.println(regionName + " " + amzaService.getAmzaHostRing().getRingMember() + " " + a + " -- vs --"
+                        + service.amzaService.getAmzaHostRing().getRingMember() + " " + b);
                     return false;
                 }
                 if (!a.compare(b)) {

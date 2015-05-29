@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionTx;
@@ -21,10 +21,10 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map.Entry;
+import java.util.Map;
+import java.util.Set;
 
 /**
- *
  * @author jonathan.colt
  */
 public class RegionStatusStorage implements TxRegionStatus {
@@ -74,15 +74,19 @@ public class RegionStatusStorage implements TxRegionStatus {
         }
     }
 
-    public void elect(Collection<RingMember> ringMembers, VersionedRegionName versionedRegionName) throws Exception {
-        if (ringMembers.isEmpty()) {
+    public void elect(Collection<RingMember> ringMembers, Set<RingMember> membersUnreachable, VersionedRegionName versionedRegionName) throws Exception {
+        if (versionedRegionName.getRegionName().isSystemRegion() || ringMembers.isEmpty()) {
             return;
         }
         for (RingMember ringMember : ringMembers) {
             WALKey key = walKey(ringMember, versionedRegionName.getRegionName());
             WALValue rawStatus = systemRegionStripe.get(RegionProvider.REGION_ONLINE_INDEX.getRegionName(), key);
             if (rawStatus == null || rawStatus.getTombstoned()) {
-                return;
+                if (membersUnreachable.contains(ringMember)) {
+                    continue;
+                } else {
+                    return;
+                }
             }
             VersionedStatus versionedStatus = VersionedStatus.fromBytes(rawStatus.getValue());
             if (versionedStatus.status == Status.ONLINE) {
@@ -90,7 +94,7 @@ public class RegionStatusStorage implements TxRegionStatus {
             }
         }
         LOG.info("Resolving cold start stalemate. " + rootRingMember);
-        markAsOnline(versionedRegionName, rootRingMember);
+        markAsOnline(versionedRegionName);
     }
 
     public VersionedRegionName markAsKetchup(RegionName regionName) throws Exception {
@@ -99,32 +103,21 @@ public class RegionStatusStorage implements TxRegionStatus {
         }
         long regionVersion = orderIdProvider.nextId();
         VersionedStatus versionedStatus = set(rootRingMember, regionName, new VersionedStatus(Status.KETCHUP, regionVersion));
-        LOG.info(rootRingMember + ":markAsKetchup " + rootRingMember + " regionName:" + regionName + " was updated to " + versionedStatus + ".");
         return new VersionedRegionName(regionName, versionedStatus.version);
     }
 
-    public void markAsOnline(VersionedRegionName versionedRegionName, RingMember ringMember) throws Exception {
+    public void markAsOnline(VersionedRegionName versionedRegionName) throws Exception {
         if (versionedRegionName.getRegionName().isSystemRegion()) {
             return;
         }
-        VersionedStatus versionedStatus = set(ringMember, versionedRegionName.getRegionName(),
-            new VersionedStatus(Status.ONLINE, versionedRegionName.getRegionVersion()));
-        LOG.info(rootRingMember + ":markAsOnline " + ringMember + " versionedRegionName:" + versionedRegionName + " was updated to " + versionedStatus + ".");
-    }
-
-    public void markAsOnline(ListMultimap<RingMember, VersionedRegionName> markOnline) throws Exception {
-        for (Entry<RingMember, VersionedRegionName> e : markOnline.entries()) {
-            markAsOnline(e.getValue(), e.getKey());
-        }
+        set(rootRingMember, versionedRegionName.getRegionName(), new VersionedStatus(Status.ONLINE, versionedRegionName.getRegionVersion()));
     }
 
     public void markForDisposal(VersionedRegionName versionedRegionName, RingMember ringMember) throws Exception {
         if (versionedRegionName.getRegionName().isSystemRegion()) {
             return;
         }
-        VersionedStatus versionedStatus = set(ringMember, versionedRegionName.getRegionName(), new VersionedStatus(Status.DISPOSE, versionedRegionName
-            .getRegionVersion()));
-        LOG.info(rootRingMember + ":markForDisposal " + ringMember + " regionName:" + versionedRegionName + " was updated to " + versionedStatus + ".");
+        set(ringMember, versionedRegionName.getRegionName(), new VersionedStatus(Status.EXPUNGE, versionedRegionName.getRegionVersion()));
     }
 
     public void streamLocalState(RegionMemberStatusStream stream) throws Exception {
@@ -140,15 +133,20 @@ public class RegionStatusStorage implements TxRegionStatus {
 
             return transactor.doWithOne(new VersionedRegionName(regionName, versionStatus.version),
                 versionStatus.status,
-                (versionedRegionName, regionStatus) -> {
-                    return stream.stream(regionName, ringMember, versionStatus);
-                });
-
+                (versionedRegionName, regionStatus) -> stream.stream(regionName, ringMember, versionStatus));
         });
     }
 
+    private final Map<VersionedRegionName, VersionedStatus> statusCache = Maps.newConcurrentMap();
+
     private VersionedStatus set(RingMember ringMember, RegionName regionName, VersionedStatus versionedStatus) throws Exception {
-        return transactor.doWithAll(new VersionedRegionName(regionName, versionedStatus.version), versionedStatus.status, (versionedRegionName, status) -> {
+        VersionedRegionName versionedRegionName = new VersionedRegionName(regionName, versionedStatus.version);
+        VersionedStatus cachedStatus = statusCache.get(versionedRegionName);
+        if (cachedStatus != null && cachedStatus.equals(versionedStatus)) {
+            return versionedStatus;
+        }
+
+        return transactor.doWithAll(versionedRegionName, versionedStatus.status, (currentVersionedRegionName, status) -> {
 
             WALValue rawStatus = systemRegionStripe.get(RegionProvider.REGION_ONLINE_INDEX.getRegionName(), walKey(rootRingMember, regionName));
             VersionedStatus commitableVersionStatus = null;
@@ -180,6 +178,8 @@ public class RegionStatusStorage implements TxRegionStatus {
                             walKey(ringMember, regionName),
                             new WALValue(versionedStatusBytes, orderIdProvider.nextId(), false));
                     });
+                LOG.info("{}: {} versionedRegionName:{} was updated to {}", rootRingMember, ringMember, versionedRegionName, commitableVersionStatus);
+                statusCache.put(currentVersionedRegionName, commitableVersionStatus);
             }
             return returnableStatus;
         });
@@ -188,12 +188,12 @@ public class RegionStatusStorage implements TxRegionStatus {
 
     private static boolean isValidTransition(VersionedStatus currentVersionedStatus, VersionedStatus versionedStatus) {
         return (currentVersionedStatus.status == Status.KETCHUP && versionedStatus.status == Status.ONLINE)
-            || (currentVersionedStatus.status == Status.ONLINE && versionedStatus.status == Status.DISPOSE);
+            || (currentVersionedStatus.status == Status.ONLINE && versionedStatus.status == Status.EXPUNGE);
     }
 
-    public void disposed(List<VersionedRegionName> composted) throws Exception {
+    public void expunged(List<VersionedRegionName> composted) throws Exception {
         for (VersionedRegionName compost : composted) {
-            transactor.doWithAll(compost, Status.DISPOSE, (versionedRegionName, regionStatus) -> {
+            transactor.doWithAll(compost, Status.EXPUNGE, (versionedRegionName, regionStatus) -> {
                 systemRegionStripe.commit(RegionProvider.REGION_ONLINE_INDEX.getRegionName(),
                     Optional.absent(),
                     replicator,
@@ -203,6 +203,7 @@ public class RegionStatusStorage implements TxRegionStatus {
                             walKey(rootRingMember, compost.getRegionName()),
                             new WALValue(null, orderIdProvider.nextId(), true));
                     });
+                statusCache.remove(compost);
                 return null;
             });
         }

@@ -120,7 +120,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public boolean remove(VersionedRegionName versionedRegionName, WALStorage walStorage) throws Exception {
+    public boolean expunge(VersionedRegionName versionedRegionName, WALStorage walStorage) throws Exception {
         acquireAll();
         boolean expunged = true;
         try {

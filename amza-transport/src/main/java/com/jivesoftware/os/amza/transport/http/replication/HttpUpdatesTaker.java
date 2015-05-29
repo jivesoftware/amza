@@ -20,7 +20,8 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.RowType;
+import com.jivesoftware.os.amza.shared.StreamingTakesConsumer;
+import com.jivesoftware.os.amza.shared.StreamingTakesConsumer.StreamingTakeConsumed;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
@@ -33,13 +34,9 @@ import com.jivesoftware.os.amza.transport.http.replication.client.HttpStreamResp
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.BufferedInputStream;
-import java.io.DataInputStream;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.commons.lang.mutable.MutableLong;
 
 public class HttpUpdatesTaker implements UpdatesTaker {
 
@@ -47,72 +44,41 @@ public class HttpUpdatesTaker implements UpdatesTaker {
 
     private final AmzaStats amzaStats;
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
+    private final StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
 
     public HttpUpdatesTaker(AmzaStats amzaStats) {
         this.amzaStats = amzaStats;
     }
 
     /**
-
-    @param node
-    @param regionName
-    @param transactionId
-    @param tookRowUpdates
-    @return Will return null if the other node was reachable but the region on that node was NOT online.
-    @throws Exception
-    */
+     * @param node
+     * @param regionName
+     * @param transactionId
+     * @param tookRowUpdates
+     * @return Will return null if the other node was reachable but the region on that node was NOT online.
+     * @throws Exception
+     */
     @Override
-    public Map<RingMember, Long> streamingTakeUpdates(Entry<RingMember, RingHost> node,
+    public StreamingTakeResult streamingTakeUpdates(Entry<RingMember, RingHost> node,
         RegionName regionName,
         long transactionId,
-        RowStream tookRowUpdates) throws Exception {
+        RowStream tookRowUpdates) {
 
         TakeRequest takeRequest = new TakeRequest(transactionId, regionName);
 
-        long t1 = System.currentTimeMillis();
-        HttpStreamResponse httpStreamResponse = getRequestHelper(node.getValue()).executeStreamingPostRequest(takeRequest, "/amza/changes/streamingTake");
-        long t2 = System.currentTimeMillis();
+        HttpStreamResponse httpStreamResponse;
+        try {
+            httpStreamResponse = getRequestHelper(node.getValue()).executeStreamingPostRequest(takeRequest, "/amza/changes/streamingTake");
+        } catch (Exception e) {
+            return new StreamingTakeResult(e, null, null);
+        }
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
-            long t3 = System.currentTimeMillis();
-            long t4 = -1;
-            long updates = 0;
-            final MutableLong read = new MutableLong();
-            Map<RingMember, Long> neighborsHighwaterMarks = new HashMap<>();
-            boolean isOnline;
-            try (DataInputStream dis = new DataInputStream(bis)) {
-                isOnline = dis.readByte() == 1;
-
-                byte eosMarks;
-                while ((eosMarks = dis.readByte()) == 1) {
-                    if (t4 < 0) {
-                        t4 = System.currentTimeMillis();
-                    }
-                    byte[] ringMemberBytes = new byte[dis.readInt()];
-                    dis.readFully(ringMemberBytes);
-                    long highwaterMark = dis.readLong();
-                    neighborsHighwaterMarks.put(RingMember.fromBytes(ringMemberBytes), highwaterMark);
-                    read.add(1 + 4 + ringMemberBytes.length + 8);
-                }
-                while ((eosMarks = dis.readByte()) == 1) {
-                    long rowTxId = dis.readLong();
-                    RowType rowType = RowType.fromByte(dis.readByte());
-                    byte[] rowBytes = new byte[dis.readInt()];
-                    dis.readFully(rowBytes);
-                    read.add(1 + 8 + 1 + 4 + rowBytes.length);
-                    if (rowType != null) {
-                        tookRowUpdates.row(-1, rowTxId, rowType, rowBytes);
-                    }
-                    updates++;
-                }
-            }
-            amzaStats.netStats.read.addAndGet(read.longValue());
-            long t5 = System.currentTimeMillis();
-            if (!regionName.isSystemRegion()) {
-                LOG.debug("Take {}: Execute={}ms GetInputStream={}ms FirstByte={}ms ReadFully={}ms TotalTime={}ms TotalUpdates={} TotalBytes={}",
-                    regionName.getRegionName(), (t2 - t1), (t3 - t2), (t4 - t3), (t5 - t4), (t5 - t1), updates, read.longValue());
-            }
-            return isOnline ? neighborsHighwaterMarks : null;
+            StreamingTakeConsumed consumed = streamingTakesConsumer.consume(bis, tookRowUpdates);
+            amzaStats.netStats.read.addAndGet(consumed.bytes);
+            return new StreamingTakeResult(null, null, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
+        } catch (Exception e) {
+            return new StreamingTakeResult(null, e, null);
         } finally {
             httpStreamResponse.close();
         }
@@ -138,4 +104,5 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         HttpRequestHelper requestHelper = new HttpRequestHelper(httpClient, new ObjectMapper());
         return requestHelper;
     }
+
 }

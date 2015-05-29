@@ -68,7 +68,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[]{"./var/data/"};
+        public String[] workingDirectories = new String[] { "./var/data/" };
 
         public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
@@ -118,14 +118,14 @@ public class AmzaServiceInitializer {
         RegionIndex regionIndex = new RegionIndex(amzaStats, config.workingDirectories, "amza/stores",
             regionsWALStorageProvider, regionPropertyMarshaller, config.hardFsync);
 
-        AmzaRingReader amzaReadHostRing = new AmzaRingReader(ringMember, regionIndex);
+        AmzaRingReader amzaRingReader = new AmzaRingReader(ringMember, regionIndex);
 
         WALs resendWALs = new WALs(config.workingDirectories, "amza/WAL/resend", resendWALStorageProvider);
         resendWALs.load();
 
         RegionChangeReplicator replicator = new RegionChangeReplicator(amzaStats,
             primaryRowMarshaller,
-            amzaReadHostRing,
+            amzaRingReader,
             regionIndex,
             resendWALs,
             updatesSender,
@@ -160,7 +160,11 @@ public class AmzaServiceInitializer {
         for (int i = 0; i < deltaStorageStripes; i++) {
             File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
-            DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(highwaterStorage, i, primaryRowMarshaller, highwaterRowMarshaller, deltaWALFactory,
+            DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(highwaterStorage,
+                i,
+                primaryRowMarshaller,
+                highwaterRowMarshaller,
+                deltaWALFactory,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
             regionStripes[i] = new RegionStripe("stripe-" + i, amzaStats, regionIndex, deltaWALStorage, regionStatusStorage, amzaRegionWatcher,
@@ -213,9 +217,9 @@ public class AmzaServiceInitializer {
             }, config.deltaStripeCompactionIntervalInMillis, config.deltaStripeCompactionIntervalInMillis, TimeUnit.MILLISECONDS);
         }
 
-        AmzaHostRing amzaRing = new AmzaHostRing(amzaReadHostRing, systemRegionStripe, replicator, orderIdProvider);
-        amzaRegionWatcher.watch(RegionProvider.RING_INDEX.getRegionName(), amzaRing);
-        amzaRing.register(ringMember, ringHost);
+        AmzaHostRing amzaHostRing = new AmzaHostRing(amzaRingReader, systemRegionStripe, replicator, orderIdProvider);
+        amzaRegionWatcher.watch(RegionProvider.RING_INDEX.getRegionName(), amzaHostRing);
+        amzaHostRing.register(ringMember, ringHost);
 
         WALs replicatedWALs = new WALs(config.workingDirectories, "amza/WAL/replicated", replicaWALStorageProvider);
         replicatedWALs.load();
@@ -230,7 +234,7 @@ public class AmzaServiceInitializer {
         );
 
         RegionChangeTaker changeTaker = new RegionChangeTaker(amzaStats,
-            amzaReadHostRing,
+            amzaRingReader,
             regionIndex,
             regionStripeProvider,
             regionStripes,
@@ -249,12 +253,12 @@ public class AmzaServiceInitializer {
             config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
-        RegionComposter regionComposter = new RegionComposter(regionIndex, regionStatusStorage, regionStripeProvider);
+        RegionComposter regionComposter = new RegionComposter(regionIndex, regionProvider, amzaRingReader, regionStatusStorage, regionStripeProvider);
 
         return new AmzaService(orderIdProvider,
             amzaStats,
-            amzaReadHostRing,
-            amzaRing,
+            amzaRingReader,
+            amzaHostRing,
             highwaterStorage,
             regionStatusStorage,
             changeReceiver,

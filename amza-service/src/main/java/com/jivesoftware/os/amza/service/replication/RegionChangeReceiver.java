@@ -68,7 +68,7 @@ public class RegionChangeReceiver {
 
         txRegionState.tx(regionName, (versionedRegionName, regionStatus) -> {
 
-            if (regionStatus == null || regionStatus == TxRegionStatus.Status.DISPOSE) {
+            if (regionStatus == null || regionStatus == TxRegionStatus.Status.EXPUNGE) {
                 throw new IllegalStateException("regionName:" + regionName + " doesn't exist.");
             }
 

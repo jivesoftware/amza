@@ -144,7 +144,7 @@ public class RegionChangeReplicator implements WALReplicator {
                         return false;
                     } else {
                         int numReplicated = replicateUpdatesToRingHosts(regionName,
-                            updates, 
+                            updates,
                             enqueueForResendOnFailure,
                             below,
                             regionProperties.replicationFactor);
@@ -190,7 +190,7 @@ public class RegionChangeReplicator implements WALReplicator {
                 ringWalker.failed();
                 if (amzaStats.replicateErrors.count(node) == 0) {
                     LOG.warn("Can't replicate to host:{}", node);
-                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[]{node, regionName, replicationFactor}, x);
+                    LOG.trace("Can't replicate to host:{} region:{} takeFromFactor:{}", new Object[] { node, regionName, replicationFactor }, x);
                 }
                 amzaStats.replicateErrors.add(node.getKey());
                 if (enqueueForResendOnFailure) {
@@ -218,7 +218,7 @@ public class RegionChangeReplicator implements WALReplicator {
                         ReplicateBatchinator batchinator = new ReplicateBatchinator(rowMarshaller,
                             versionedRegionName,
                             RegionChangeReplicator.this);
-                        
+
                         highwaterInterceptor.rowScan(batchinator);
                         if (batchinator.flush()) {
                             highwaterMarks.put(versionedRegionName, highwaterInterceptor.getHighwater());

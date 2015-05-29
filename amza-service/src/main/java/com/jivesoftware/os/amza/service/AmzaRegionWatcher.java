@@ -32,7 +32,7 @@ public class AmzaRegionWatcher implements RowChanges {
     @Override
     public void changes(RowsChanged changes) throws Exception {
         rowChanges.changes(changes);
-        RowChanges watcher = watchers.get(changes.getRegionName());
+        RowChanges watcher = watchers.get(changes.getVersionedRegionName());
         if (watcher != null) {
             watcher.changes(changes);
         }

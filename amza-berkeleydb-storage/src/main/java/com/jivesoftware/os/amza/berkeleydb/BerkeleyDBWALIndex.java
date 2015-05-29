@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author jonathan.colt
@@ -45,6 +46,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     private final Semaphore lock = new Semaphore(numPermits, true);
     private final AtomicLong count = new AtomicLong(-1);
     private final AtomicInteger commits = new AtomicInteger(0);
+    private final AtomicReference<WALIndex> compactingTo = new AtomicReference<>();
 
     public BerkeleyDBWALIndex(Environment environment, BerkeleyDBWALIndexName name) throws Exception {
         this.environment = environment;
@@ -74,6 +76,27 @@ public class BerkeleyDBWALIndex implements WALIndex {
         long timestamp = UIO.bytesLong(entryBytes, valueBytes.length);
         boolean tombstoned = (entryBytes[valueBytes.length + 8] == (byte) 1);
         return new WALPointer(UIO.bytesLong(valueBytes), timestamp, tombstoned);
+    }
+
+    @Override
+    public boolean delete() throws Exception {
+        close();
+        lock.acquire(numPermits);
+        try {
+            synchronized (compactingTo) {
+                WALIndex wali = compactingTo.get();
+                if (wali != null) {
+                    wali.close();
+                }
+                removeDatabase(Prefix.active);
+                removeDatabase(Prefix.backup);
+                removeDatabase(Prefix.compacted);
+                removeDatabase(Prefix.compacting);
+                return true;
+            }
+        } finally {
+            lock.release(numPermits);
+        }
     }
 
     @Override
@@ -270,52 +293,71 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
     @Override
     public CompactionWALIndex startCompaction() throws Exception {
-        removeDatabase(Prefix.compacting);
-        removeDatabase(Prefix.compacted);
-        removeDatabase(Prefix.backup);
 
-        final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(environment, name.prefixName(BerkeleyDBWALIndexName.Prefix.compacting));
-
-        return new CompactionWALIndex() {
-
-            @Override
-            public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) throws Exception {
-                compactingWALIndex.put(entries);
+        synchronized (compactingTo) {
+            WALIndex got = compactingTo.get();
+            if (got != null) {
+                throw new IllegalStateException("Try to compact while another compaction is already underway." + name);
             }
 
-            @Override
-            public void abort() throws Exception {
-                try {
-                    compactingWALIndex.close();
-                } catch (IOException ex) {
-                    throw new RuntimeException();
+            if (database == null) {
+                throw new IllegalStateException("Try to compact a index that has been disposed." + name);
+            }
+
+            removeDatabase(Prefix.compacting);
+            removeDatabase(Prefix.compacted);
+            removeDatabase(Prefix.backup);
+
+            final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(environment, name.prefixName(BerkeleyDBWALIndexName.Prefix.compacting));
+            compactingTo.set(compactingWALIndex);
+
+            return new CompactionWALIndex() {
+
+                @Override
+                public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) throws Exception {
+                    compactingWALIndex.put(entries);
                 }
-            }
 
-            @Override
-            public void commit() throws Exception {
-                lock.acquire(numPermits);
-                try {
-                    LOG.info("Committing before swap: {}", name.getName());
-
-                    compactingWALIndex.close();
-                    renameDatabase(Prefix.compacting, Prefix.compacted);
-
-                    database.close();
-                    database = null;
-                    renameDatabase(Prefix.active, Prefix.backup);
-
-                    renameDatabase(Prefix.compacted, Prefix.active);
-                    removeDatabase(Prefix.backup);
-
-                    database = environment.openDatabase(null, name.getName(), dbConfig);
-
-                    LOG.info("Committing after swap: {}", name.getName());
-                } finally {
-                    lock.release(numPermits);
+                @Override
+                public void abort() throws Exception {
+                    try {
+                        compactingTo.set(null);
+                        compactingWALIndex.close();
+                    } catch (IOException ex) {
+                        throw new RuntimeException();
+                    }
                 }
-            }
-        };
+
+                @Override
+                public void commit() throws Exception {
+                    lock.acquire(numPermits);
+                    try {
+                        compactingTo.set(null);
+                        if (database == null) {
+                            LOG.warn("Was not commited because index has been closed.");
+                        } else {
+                            LOG.info("Committing before swap: {}", name.getName());
+
+                            compactingWALIndex.close();
+                            renameDatabase(Prefix.compacting, Prefix.compacted);
+
+                            database.close();
+                            database = null;
+                            renameDatabase(Prefix.active, Prefix.backup);
+
+                            renameDatabase(Prefix.compacted, Prefix.active);
+                            removeDatabase(Prefix.backup);
+
+                            database = environment.openDatabase(null, name.getName(), dbConfig);
+
+                            LOG.info("Committing after swap: {}", name.getName());
+                        }
+                    } finally {
+                        lock.release(numPermits);
+                    }
+                }
+            };
+        }
     }
 
     private void renameDatabase(Prefix fromPrefix, Prefix toPrefix) {
@@ -333,4 +375,5 @@ public class BerkeleyDBWALIndex implements WALIndex {
     @Override
     public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
     }
+
 }

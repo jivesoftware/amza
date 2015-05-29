@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+import java.util.Set;
 
 public interface AmzaInstance {
 
@@ -23,7 +23,7 @@ public interface AmzaInstance {
 
     void takeRowUpdates(RegionName regionName, long rowTxId, RowStream rowStream) throws Exception;
 
-    List<RegionName> getRegionNames();
+    Set<RegionName> getRegionNames();
 
     void destroyRegion(RegionName regionName) throws Exception;
 

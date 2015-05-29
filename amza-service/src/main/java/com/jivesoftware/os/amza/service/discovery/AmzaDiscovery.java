@@ -28,8 +28,10 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.UnknownHostException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -68,13 +70,22 @@ public class AmzaDiscovery {
         @Override
         public void run() {
             try {
+                Set<RingMember> allMemberSeen = new HashSet<>();
+                long timeout = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
                 try (MulticastSocket socket = new MulticastSocket(multicastPort)) {
+                    socket.setSoTimeout((int) timeout);
                     socket.joinGroup(multicastGroup);
                     try {
                         byte[] buf = new byte[512];
+                        long startTime = System.currentTimeMillis();
                         while (true) {
                             DatagramPacket packet = new DatagramPacket(buf, buf.length);
-                            socket.receive(packet);
+                            try {
+                                socket.receive(packet);
+                            } catch (Exception x) {
+                                LOG.warn("No data.");
+                                continue;
+                            }
                             String received = new String(packet.getData(), 0, packet.getLength());
                             List<String> clusterMemberHostPort = Lists.newArrayList(Splitter.on('|').split(received));
                             if (clusterMemberHostPort.size() == 4 && clusterMemberHostPort.get(0) != null && clusterMemberHostPort.get(0).equals(clusterName)) {
@@ -90,10 +101,18 @@ public class AmzaDiscovery {
                                     LOG.info("Adding ringMember:" + ringMember + " on host:" + anotherRingHost + " to cluster: " + clusterName);
                                     amzaRing.register(ringMember, anotherRingHost);
                                     amzaRing.addRingMember("system", ringMember);
+                                    allMemberSeen.add(ringMember);
                                 } else if (!ringHost.equals(anotherRingHost)) {
                                     LOG.info("Updating ringMember:" + ringMember + " on host:" + anotherRingHost + " for cluster:" + clusterName);
                                     amzaRing.register(ringMember, anotherRingHost);
                                 }
+                            }
+                            long elapse = System.currentTimeMillis() - startTime;
+                            if (elapse > timeout && allMemberSeen.size() <= 1) {
+                                if (!allMemberSeen.contains(amzaRing.getRingMember())) {
+                                    LOG.error("We have not seen our own multicast.");
+                                }
+                                LOG.error("It has been " + elapse + " and we have not discovery any other members.");
                             }
                         }
                     } catch (Exception x) {

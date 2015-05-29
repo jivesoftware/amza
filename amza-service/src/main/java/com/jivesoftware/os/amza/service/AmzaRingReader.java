@@ -60,6 +60,11 @@ public class AmzaRingReader {
         return new HostRingBuilder().build(ringMember, getRing(ringName));
     }
 
+    public boolean isMemberOfRing(String ringName) throws Exception {
+        RegionStore ringIndex = regionIndex.get(RegionProvider.RING_INDEX);
+        return ringIndex.containsKey(key(ringName, ringMember));
+    }
+
     public NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception {
         RegionStore ringIndex = regionIndex.get(RegionProvider.RING_INDEX);
         WALKey from = key(ringName, null);

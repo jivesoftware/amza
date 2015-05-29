@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Set;
 
 /**
  *
@@ -74,7 +75,7 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
                 }
 
                 List<Map<String, Object>> rows = new ArrayList<>();
-                List<RegionName> regionNames = amzaService.getRegionNames();
+                Set<RegionName> regionNames = amzaService.getRegionNames();
                 for (RegionName regionName : regionNames) {
 
                     Map<String, Object> row = new HashMap<>();

@@ -17,11 +17,13 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReceiver;
-import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
-import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeTaker;
-import com.jivesoftware.os.amza.service.replication.AmzaRegionCompactor;
 import com.jivesoftware.os.amza.service.replication.RegionBackedHighwaterStorage;
+import com.jivesoftware.os.amza.service.replication.RegionChangeReceiver;
+import com.jivesoftware.os.amza.service.replication.RegionChangeReplicator;
+import com.jivesoftware.os.amza.service.replication.RegionChangeTaker;
+import com.jivesoftware.os.amza.service.replication.RegionCompactor;
+import com.jivesoftware.os.amza.service.replication.RegionComposter;
+import com.jivesoftware.os.amza.service.replication.RegionStatusStorage;
 import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.service.replication.RegionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
@@ -34,11 +36,14 @@ import com.jivesoftware.os.amza.service.storage.WALs;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.RegionTx;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowChanges;
+import com.jivesoftware.os.amza.shared.TxRegionStatus;
 import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
@@ -112,14 +117,13 @@ public class AmzaServiceInitializer {
 
         RegionIndex regionIndex = new RegionIndex(amzaStats, config.workingDirectories, "amza/stores",
             regionsWALStorageProvider, regionPropertyMarshaller, config.hardFsync);
-        regionIndex.open();
 
         AmzaRingReader amzaReadHostRing = new AmzaRingReader(ringMember, regionIndex);
 
         WALs resendWALs = new WALs(config.workingDirectories, "amza/WAL/resend", resendWALStorageProvider);
         resendWALs.load();
 
-        AmzaRegionChangeReplicator replicator = new AmzaRegionChangeReplicator(amzaStats,
+        RegionChangeReplicator replicator = new RegionChangeReplicator(amzaStats,
             primaryRowMarshaller,
             amzaReadHostRing,
             regionIndex,
@@ -130,24 +134,38 @@ public class AmzaServiceInitializer {
             config.resendReplicasIntervalInMillis,
             config.numberOfResendThreads);
 
-        RegionStripe systemRegionStripe = new RegionStripe("system", amzaStats, regionIndex, new SystemStripeWALStorage(), amzaRegionWatcher,
-            RegionName::isSystemRegion);
+        RegionStripe systemRegionStripe = new RegionStripe("system",
+            amzaStats,
+            regionIndex,
+            new SystemStripeWALStorage(),
+            new TxRegionStatus() {
+
+                @Override
+                public <R> R tx(RegionName regionName, RegionTx<R> tx) throws Exception {
+                    return tx.tx(new VersionedRegionName(regionName, 0), TxRegionStatus.Status.ONLINE);
+                }
+            },
+            amzaRegionWatcher,
+            (VersionedRegionName input) -> input.getRegionName().isSystemRegion());
+
+        RegionStatusStorage regionStatusStorage = new RegionStatusStorage(orderIdProvider, ringMember, systemRegionStripe, replicator);
+        regionIndex.open(regionStatusStorage);
 
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
-        RegionBackedHighwaterStorage highwaterMarks = new RegionBackedHighwaterStorage(orderIdProvider, ringMember, systemRegionStripe, replicator);
+        RegionBackedHighwaterStorage highwaterStorage = new RegionBackedHighwaterStorage(orderIdProvider, ringMember, systemRegionStripe, replicator);
 
         RegionStripe[] regionStripes = new RegionStripe[deltaStorageStripes];
         for (int i = 0; i < deltaStorageStripes; i++) {
             File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
-            DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(highwaterMarks, i, primaryRowMarshaller, highwaterRowMarshaller, deltaWALFactory,
+            DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(highwaterStorage, i, primaryRowMarshaller, highwaterRowMarshaller, deltaWALFactory,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
-            regionStripes[i] = new RegionStripe("stripe-" + i, amzaStats, regionIndex, deltaWALStorage, amzaRegionWatcher,
-                (RegionName input) -> {
-                    if (!input.isSystemRegion()) {
+            regionStripes[i] = new RegionStripe("stripe-" + i, amzaStats, regionIndex, deltaWALStorage, regionStatusStorage, amzaRegionWatcher,
+                (input) -> {
+                    if (!input.getRegionName().isSystemRegion()) {
 
                         return Math.abs(input.hashCode()) % deltaStorageStripes == stripeId;
                     }
@@ -155,7 +173,7 @@ public class AmzaServiceInitializer {
                 });
         }
 
-        RegionStripeProvider regionStripeProvider = new RegionStripeProvider(systemRegionStripe, regionIndex, regionStripes);
+        RegionStripeProvider regionStripeProvider = new RegionStripeProvider(systemRegionStripe, regionStripes);
 
         RegionProvider regionProvider = new RegionProvider(
             orderIdProvider,
@@ -196,49 +214,54 @@ public class AmzaServiceInitializer {
         }
 
         AmzaHostRing amzaRing = new AmzaHostRing(amzaReadHostRing, systemRegionStripe, replicator, orderIdProvider);
-        amzaRegionWatcher.watch(RegionProvider.RING_INDEX, amzaRing);
+        amzaRegionWatcher.watch(RegionProvider.RING_INDEX.getRegionName(), amzaRing);
         amzaRing.register(ringMember, ringHost);
 
         WALs replicatedWALs = new WALs(config.workingDirectories, "amza/WAL/replicated", replicaWALStorageProvider);
         replicatedWALs.load();
 
-        AmzaRegionChangeReceiver changeReceiver = new AmzaRegionChangeReceiver(amzaStats,
+        RegionChangeReceiver changeReceiver = new RegionChangeReceiver(amzaStats,
             primaryRowMarshaller,
-            regionIndex,
+            regionStatusStorage,
             regionStripeProvider,
             replicatedWALs,
             config.applyReplicasIntervalInMillis,
             config.numberOfApplierThreads
         );
 
-        AmzaRegionChangeTaker changeTaker = new AmzaRegionChangeTaker(amzaStats,
+        RegionChangeTaker changeTaker = new RegionChangeTaker(amzaStats,
             amzaReadHostRing,
             regionIndex,
             regionStripeProvider,
             regionStripes,
-            highwaterMarks,
+            highwaterStorage,
+            regionStatusStorage,
             updatesTaker,
             takeFailureListener,
             config.takeFromNeighborsIntervalInMillis,
             config.numberOfTakerThreads,
             config.hardFsync);
 
-        AmzaRegionCompactor regionCompactor = new AmzaRegionCompactor(amzaStats,
+        RegionCompactor regionCompactor = new RegionCompactor(amzaStats,
             regionIndex,
             orderIdProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
             config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
+        RegionComposter regionComposter = new RegionComposter(regionIndex, regionStatusStorage, regionStripeProvider);
+
         return new AmzaService(orderIdProvider,
             amzaStats,
             amzaReadHostRing,
             amzaRing,
-            highwaterMarks,
+            highwaterStorage,
+            regionStatusStorage,
             changeReceiver,
             changeTaker,
             replicator,
             regionCompactor,
+            regionComposter, // its all about being GREEN!!
             regionIndex,
             regionProvider,
             regionStripeProvider,

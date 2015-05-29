@@ -1,11 +1,12 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.WALs;
 import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.TxRegionStatus;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -25,34 +26,34 @@ import org.apache.commons.lang.mutable.MutableBoolean;
 /**
  * @author jonathan.colt
  */
-public class AmzaRegionChangeReceiver {
+public class RegionChangeReceiver {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private static final RegionName RECEIVED = new RegionName(true, "received", "received");
+    private static final VersionedRegionName RECEIVED = new VersionedRegionName(new RegionName(true, "received", "received"), 0);
 
     private ScheduledExecutorService applyThreadPool;
     private ScheduledExecutorService compactThreadPool;
 
     private final AmzaStats amzaStats;
     private final PrimaryRowMarshaller<byte[]> rowMarshaller;
-    private final RegionIndex regionIndex;
+    private final TxRegionStatus txRegionState;
     private final RegionStripeProvider regionStripeProvider;
     private final WALs receivedWAL;
     private final long applyReplicasIntervalInMillis;
     private final int numberOfApplierThreads;
     private final Object[] receivedLocks;
-    private final Map<RegionName, Long> highwaterMarks = new ConcurrentHashMap<>();
+    private final Map<VersionedRegionName, Long> highwaterMarks = new ConcurrentHashMap<>();
 
-    public AmzaRegionChangeReceiver(AmzaStats amzaStats,
+    public RegionChangeReceiver(AmzaStats amzaStats,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
-        RegionIndex regionIndex,
+        TxRegionStatus txRegionState,
         RegionStripeProvider regionStripeProvider,
         WALs receivedUpdatesWAL,
         long applyReplicasIntervalInMillis,
         int numberOfApplierThreads) {
         this.amzaStats = amzaStats;
         this.rowMarshaller = rowMarshaller;
-        this.regionIndex = regionIndex;
+        this.txRegionState = txRegionState;
         this.regionStripeProvider = regionStripeProvider;
         this.receivedWAL = receivedUpdatesWAL;
         this.applyReplicasIntervalInMillis = applyReplicasIntervalInMillis;
@@ -65,28 +66,38 @@ public class AmzaRegionChangeReceiver {
 
     public void receiveChanges(RegionName regionName, final Commitable<WALValue> changes) throws Exception {
 
-        final byte[] regionNameBytes = regionName.toBytes();
-        final Commitable<WALValue> receivedScannable = (highwaters, walScan) -> {
-            changes.commitable(highwaters, (long rowTxId, WALKey key, WALValue value) -> {
-                ByteBuffer bb = ByteBuffer.allocate(2 + regionNameBytes.length + 4 + key.getKey().length);
-                bb.putShort((short) regionNameBytes.length);
-                bb.put(regionNameBytes);
-                bb.putInt(key.getKey().length);
-                bb.put(key.getKey());
-                return walScan.row(rowTxId, new WALKey(bb.array()), value);
+        txRegionState.tx(regionName, (versionedRegionName, regionStatus) -> {
+
+            if (regionStatus == null || regionStatus == TxRegionStatus.Status.DISPOSE) {
+                throw new IllegalStateException("regionName:" + regionName + " doesn't exist.");
+            }
+
+            byte[] versionedRegionNameBytes = versionedRegionName.toBytes();
+            Commitable<WALValue> receivedScannable = (highwaters, walScan) -> {
+                changes.commitable(highwaters, (long rowTxId, WALKey key, WALValue value) -> {
+                    ByteBuffer bb = ByteBuffer.allocate(2 + versionedRegionNameBytes.length + 4 + key.getKey().length);
+                    bb.putShort((short) versionedRegionNameBytes.length);
+                    bb.put(versionedRegionNameBytes);
+                    bb.putInt(key.getKey().length);
+                    bb.put(key.getKey());
+                    return walScan.row(rowTxId, new WALKey(bb.array()), value);
+                });
+            };
+
+            VersionedRegionName sendToRegion = regionStatus == TxRegionStatus.Status.ONLINE ? RECEIVED : versionedRegionName;
+
+            RowsChanged changed = receivedWAL.execute(sendToRegion, (WALStorage storage) -> {
+                return storage.update(false, null, WALStorageUpdateMode.noReplication, receivedScannable);
             });
-        };
 
-        RegionName receivedRegionName = regionIndex.exists(regionName) ? RECEIVED : regionName;
-        RowsChanged changed = receivedWAL.execute(receivedRegionName, (WALStorage storage) -> storage.update(false, null, WALStorageUpdateMode.noReplication,
-            receivedScannable));
+            amzaStats.received(regionName, changed.getApply().size(), changed.getOldestRowTxId());
+            Object lock = receivedLocks[Math.abs(regionName.hashCode()) % numberOfApplierThreads];
+            synchronized (lock) {
+                lock.notifyAll();
+            }
+            return null;
+        });
 
-        amzaStats.received(regionName, changed.getApply().size(), changed.getOldestRowTxId());
-
-        Object lock = receivedLocks[Math.abs(regionName.hashCode()) % numberOfApplierThreads];
-        synchronized (lock) {
-            lock.notifyAll();
-        }
     }
 
     synchronized public void start() {
@@ -133,21 +144,21 @@ public class AmzaRegionChangeReceiver {
             final MutableBoolean appliedChanges = new MutableBoolean(false);
             final MutableBoolean failedChanges = new MutableBoolean(false);
             try {
-                for (final RegionName regionName : receivedWAL.getAllRegions()) {
+                for (VersionedRegionName versionedRegionName : receivedWAL.getAllRegions()) {
                     try {
-                        receivedWAL.execute(regionName, (WALStorage received) -> {
-                            Long highWatermark = highwaterMarks.get(regionName);
+                        receivedWAL.execute(versionedRegionName, (WALStorage received) -> {
+                            Long highWatermark = highwaterMarks.get(versionedRegionName);
                             HighwaterInterceptor highwaterInterceptor = new HighwaterInterceptor(highWatermark, received);
                             MultiRegionWALScanBatchinator batchinator = new MultiRegionWALScanBatchinator(amzaStats, rowMarshaller, regionStripeProvider);
                             highwaterInterceptor.rowScan(batchinator);
                             if (batchinator.flush()) {
-                                highwaterMarks.put(regionName, highwaterInterceptor.getHighwater());
+                                highwaterMarks.put(versionedRegionName, highwaterInterceptor.getHighwater());
                                 appliedChanges.setValue(true);
                             }
                             return null;
                         });
                     } catch (Exception x) {
-                        LOG.warn("Apply receive changes failed for {}", new Object[]{regionName}, x);
+                        LOG.warn("Apply receive changes failed for {}", new Object[]{versionedRegionName}, x);
                         failedChanges.setValue(true);
                     }
                 }
@@ -164,20 +175,20 @@ public class AmzaRegionChangeReceiver {
     }
 
     private void compactReceivedChanges() throws Exception {
-        for (final RegionName regionName : receivedWAL.getAllRegions()) {
-            final Long highWatermark = highwaterMarks.get(regionName);
+        for (VersionedRegionName versionedRegionName : receivedWAL.getAllRegions()) {
+            final Long highWatermark = highwaterMarks.get(versionedRegionName);
             if (highWatermark != null) {
-                boolean compactedToEmpty = receivedWAL.execute(regionName, (WALStorage regionWAL) -> {
-                    amzaStats.beginCompaction("Compacting Received:" + regionName);
+                boolean compactedToEmpty = receivedWAL.execute(versionedRegionName, (WALStorage regionWAL) -> {
+                    amzaStats.beginCompaction("Compacting Received:" + versionedRegionName);
                     try {
                         long sizeInBytes = regionWAL.compactTombstone(highWatermark, highWatermark);
                         return sizeInBytes == 0;
                     } finally {
-                        amzaStats.endCompaction("Compacting Received:" + regionName);
+                        amzaStats.endCompaction("Compacting Received:" + versionedRegionName);
                     }
                 });
-                if (compactedToEmpty && !regionName.equals(RECEIVED)) {
-                    receivedWAL.removeIfEmpty(regionName);
+                if (compactedToEmpty && !versionedRegionName.equals(RECEIVED)) {
+                    receivedWAL.removeIfEmpty(versionedRegionName);
                 }
             }
         }

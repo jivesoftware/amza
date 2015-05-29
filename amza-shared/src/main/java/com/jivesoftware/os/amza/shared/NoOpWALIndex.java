@@ -103,4 +103,9 @@ public class NoOpWALIndex implements WALIndex {
     public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
     }
 
+    @Override
+    public boolean delete() throws Exception {
+        return true;
+    }
+
 }

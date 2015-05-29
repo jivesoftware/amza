@@ -5,11 +5,11 @@ import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.Highwaters;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
@@ -37,7 +37,7 @@ public class NonIndexWAL implements WALStorage {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final RegionName regionName;
+    private final VersionedRegionName versionedRegionName;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller<byte[]> rowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
@@ -45,20 +45,25 @@ public class NonIndexWAL implements WALStorage {
     private final Object oneTransactionAtATimeLock = new Object();
     private final AtomicLong updateCount = new AtomicLong();
 
-    public NonIndexWAL(RegionName regionName,
+    public NonIndexWAL(VersionedRegionName versionedRegionName,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         WALTx rowsTx) {
-        this.regionName = regionName;
+        this.versionedRegionName = versionedRegionName;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.wal = rowsTx;
     }
 
-    public RegionName getRegionName() {
-        return regionName;
+    public VersionedRegionName getVersionedRegionName() {
+        return versionedRegionName;
+    }
+
+    @Override
+    public boolean expunge() throws Exception {
+        return wal.delete(false);
     }
 
     @Override
@@ -106,7 +111,7 @@ public class NonIndexWAL implements WALStorage {
         });
 
         if (apply.isEmpty()) {
-            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<>(), new TreeMap<>());
+            return new RowsChanged(versionedRegionName, oldestApplied.get(), apply, new TreeMap<>(), new TreeMap<>());
         } else {
             wal.write((WALWriter rowWriter) -> {
                 List<Long> transactionIds = useUpdateTxId ? new ArrayList<>() : null;
@@ -129,7 +134,7 @@ public class NonIndexWAL implements WALStorage {
                 return null;
             });
             updateCount.addAndGet(apply.size());
-            return new RowsChanged(regionName, oldestApplied.get(), apply, new TreeMap<>(), new TreeMap<>());
+            return new RowsChanged(versionedRegionName, oldestApplied.get(), apply, new TreeMap<>(), new TreeMap<>());
         }
 
     }
@@ -236,4 +241,5 @@ public class NonIndexWAL implements WALStorage {
     @Override
     public void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception {
     }
+
 }

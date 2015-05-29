@@ -98,4 +98,5 @@ public class RegionStore implements RangeScannable<WALValue> {
     public long highestTxId() {
         return walStorage.highestTxId();
     }
+
 }

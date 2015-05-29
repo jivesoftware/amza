@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowType;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
@@ -35,15 +35,15 @@ import org.apache.commons.lang.mutable.MutableLong;
 class ReplicateBatchinator implements RowStream {
 
     private final PrimaryRowMarshaller<byte[]> rowMarshaller;
-    private final RegionName regionName;
-    private final AmzaRegionChangeReplicator replicator;
+    private final VersionedRegionName versionedRegionName;
+    private final RegionChangeReplicator replicator;
     private final Map<WALKey, WALValue> batch = new HashMap<>();
     private final MutableLong lastTxId;
     private final MutableBoolean flushed = new MutableBoolean(false);
 
-    public ReplicateBatchinator(PrimaryRowMarshaller<byte[]> rowMarshaller, RegionName regionName, AmzaRegionChangeReplicator replicator) {
+    public ReplicateBatchinator(PrimaryRowMarshaller<byte[]> rowMarshaller, VersionedRegionName versionedRegionName, RegionChangeReplicator replicator) {
         this.rowMarshaller = rowMarshaller;
-        this.regionName = regionName;
+        this.versionedRegionName = versionedRegionName;
         this.replicator = replicator;
         this.lastTxId = new MutableLong(Long.MIN_VALUE);
     }
@@ -75,7 +75,7 @@ class ReplicateBatchinator implements RowStream {
 
     public boolean flush() throws Exception {
         if (!batch.isEmpty()) {
-            if (replicator.replicateLocalUpdates(regionName, new MemoryWALUpdates(batch, null), false).get()) {
+            if (replicator.replicateLocalUpdates(versionedRegionName.getRegionName(), new MemoryWALUpdates(batch, null), false).get()) {
                 batch.clear();
             }
         }

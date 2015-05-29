@@ -40,4 +40,9 @@ public class BerkeleyDBWALIndexName {
         }
         return all;
     }
+
+    @Override
+    public String toString() {
+        return "BerkeleyDBWALIndexName{" + "prefix=" + prefix + ", name=" + name + '}';
+    }
 }

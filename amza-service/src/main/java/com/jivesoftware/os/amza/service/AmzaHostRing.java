@@ -15,7 +15,9 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
@@ -39,9 +41,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
-import java.util.Random;
+import java.util.Objects;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class AmzaHostRing implements AmzaRing, RowChanges {
@@ -89,7 +91,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
 
     @Override
     public void changes(RowsChanged changes) throws Exception {
-        if (RegionProvider.RING_INDEX.equals(changes.getRegionName())) {
+        if (RegionProvider.RING_INDEX.equals(changes.getVersionedRegionName())) {
             for (WALKey key : changes.getApply().columnKeySet()) {
                 ringSizes.remove(ringReader.keyToRingName(key));
             }
@@ -98,20 +100,28 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
 
     @Override
     public void register(RingMember ringMember, RingHost ringHost) throws Exception {
-        WALValue registeredHost = systemRegionStripe.get(RegionProvider.NODE_INDEX, new WALKey(ringMember.toBytes()));
+        WALValue registeredHost = systemRegionStripe.get(RegionProvider.NODE_INDEX.getRegionName(), new WALKey(ringMember.toBytes()));
         if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
             return;
         }
-        systemRegionStripe.commit(RegionProvider.NODE_INDEX, replicator, WALStorageUpdateMode.noReplication, (highwater, scan) -> {
-            scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(ringHost.toBytes(), orderIdProvider.nextId(), false));
-        });
+        systemRegionStripe.commit(RegionProvider.NODE_INDEX.getRegionName(),
+            Optional.absent(),
+            replicator,
+            WALStorageUpdateMode.noReplication,
+            (highwater, scan) -> {
+                scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(ringHost.toBytes(), orderIdProvider.nextId(), false));
+            });
     }
 
     @Override
     public void deregister(RingMember ringMember) throws Exception {
-        systemRegionStripe.commit(RegionProvider.NODE_INDEX, replicator, WALStorageUpdateMode.noReplication, (highwater, scan) -> {
-            scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
-        });
+        systemRegionStripe.commit(RegionProvider.NODE_INDEX.getRegionName(),
+            Optional.absent(),
+            replicator,
+            WALStorageUpdateMode.noReplication,
+            (highwater, scan) -> {
+                scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
+            });
     }
 
     public RingMember getRingMember() {
@@ -119,12 +129,16 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
     }
 
     public RingHost getRingHost() throws Exception {
-        WALValue registeredHost = systemRegionStripe.get(RegionProvider.NODE_INDEX, new WALKey(getRingMember().toBytes()));
+        WALValue registeredHost = systemRegionStripe.get(RegionProvider.NODE_INDEX.getRegionName(), new WALKey(getRingMember().toBytes()));
         if (registeredHost != null) {
             return RingHost.fromBytes(registeredHost.getValue());
         } else {
             return RingHost.UNKNOWN_RING_HOST;
         }
+    }
+
+    public boolean isMemberOfRing(String ringName) throws Exception {
+        return ringReader.isMemberOfRing(ringName);
     }
 
     @Override
@@ -171,28 +185,45 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         if (ring.size() < desiredRingSize) {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
-        List<Entry<RingMember, RingHost>> ringAsList = new ArrayList<>(ring.entrySet());
-        Collections.shuffle(ringAsList, new Random(ringName.hashCode()));
-        for (int i = 0; i < desiredRingSize; i++) {
-            addInternal(ringName, ringAsList.get(i).getKey());
+        List<RingMember> ringAsList = new ArrayList<>(ring.keySet());
+        Collections.sort(ringAsList, (RingMember o1, RingMember o2) -> {
+            return Integer.compare(Objects.hash(o1, ringName), Objects.hash(o2, ringName));
+        });
+
+        NavigableMap<RingMember, RingHost> existingRing = ringReader.getRing(ringName);
+        if (existingRing == null) {
+            existingRing = new TreeMap<>();
         }
+        setInternal(ringName, Iterables.concat(existingRing.keySet(), Iterables.limit(ringAsList, desiredRingSize)));
     }
 
     @Override
     public void addRingMember(String ringName, RingMember ringMember) throws Exception {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
-        addInternal(ringName, ringMember);
+        final WALKey key = ringReader.key(ringName, ringMember);
+        WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX.getRegionName(), key);
+        if (had == null || had.getTombstoned()) {
+            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(ringName);
+            setInternal(ringName, Iterables.concat(ring.keySet(), Collections.singleton(ringMember)));
+        }
     }
 
-    private void addInternal(String ringName, RingMember member) throws Exception {
-        final WALKey key = ringReader.key(ringName, member);
-        WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX, key);
-        if (had == null) {
-            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
-                scan.row(-1, key, new WALValue(new byte[0], orderIdProvider.nextId(), false));
+    private void setInternal(String ringName, Iterable<RingMember> members) throws Exception {
+        /*
+         We deliberatly do a slab update of rings to ensure "all at once" ring visibility.
+         */
+
+        systemRegionStripe.commit(RegionProvider.RING_INDEX.getRegionName(),
+            Optional.absent(),
+            replicator,
+            WALStorageUpdateMode.replicateThenUpdate,
+            (highwater, scan) -> {
+                long timestamp = orderIdProvider.nextId();
+                for (RingMember member : members) {
+                    scan.row(-1, ringReader.key(ringName, member), new WALValue(new byte[0], timestamp, false));
+                }
             });
-        }
     }
 
     @Override
@@ -200,11 +231,15 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         final WALKey key = ringReader.key(ringName, ringMember);
-        WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX, key);
+        WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX.getRegionName(), key);
         if (had != null) {
-            systemRegionStripe.commit(RegionProvider.RING_INDEX, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
-                scan.row(-1, key, new WALValue(null, orderIdProvider.nextId(), true));
-            });
+            systemRegionStripe.commit(RegionProvider.RING_INDEX.getRegionName(),
+                Optional.absent(),
+                replicator,
+                WALStorageUpdateMode.replicateThenUpdate,
+                (highwater, scan) -> {
+                    scan.row(-1, key, new WALValue(null, orderIdProvider.nextId(), true));
+                });
         }
     }
 
@@ -215,14 +250,14 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
     @Override
     public void allRings(final RingStream ringStream) throws Exception {
         Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
-        systemRegionStripe.rowScan(RegionProvider.NODE_INDEX, (long rowTxId, WALKey key, WALValue rawRingHost) -> {
+        systemRegionStripe.rowScan(RegionProvider.NODE_INDEX.getRegionName(), (long rowTxId, WALKey key, WALValue rawRingHost) -> {
             RingMember ringMember = RingMember.fromBytes(key.getKey());
             RingHost ringHost = RingHost.fromBytes(rawRingHost.getValue());
             ringMemberToRingHost.put(ringMember, ringHost);
             return true;
         });
 
-        systemRegionStripe.rowScan(RegionProvider.RING_INDEX, (long rowTxId, WALKey key, WALValue value) -> {
+        systemRegionStripe.rowScan(RegionProvider.RING_INDEX.getRegionName(), (long rowTxId, WALKey key, WALValue value) -> {
             HeapFiler filer = new HeapFiler(key.getKey());
             String ringName = UIO.readString(filer, "ringName");
             UIO.readByte(filer, "seperator");

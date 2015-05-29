@@ -18,10 +18,12 @@ package com.jivesoftware.os.amza.service;
 import com.jivesoftware.os.amza.service.replication.RegionStripe;
 import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
 import com.jivesoftware.os.amza.service.storage.RowsStorageUpdates;
+import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -42,18 +44,21 @@ public class AmzaRegion {
     private final RegionName regionName;
     private final WALReplicator replicator;
     private final RegionStripe regionStripe;
+    private final HighwaterStorage highwaterStorage;
 
     public AmzaRegion(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
         RegionName regionName,
         WALReplicator replicator,
-        RegionStripe regionStripe) {
+        RegionStripe regionStripe,
+        HighwaterStorage highwaterStorage) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.regionName = regionName;
         this.replicator = replicator;
         this.regionStripe = regionStripe;
+        this.highwaterStorage = highwaterStorage;
     }
 
     public RegionName getRegionName() {
@@ -172,7 +177,7 @@ public class AmzaRegion {
 
     public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<WALValue> scan) throws Exception {
         final MutableLong lastTxId = new MutableLong(-1);
-        boolean tookToEnd = regionStripe.takeFromTransactionId(regionName, transactionId, highwaters, (rowTxId, key, value) -> {
+        WALHighwater tookToEnd = regionStripe.takeFromTransactionId(regionName, transactionId, highwaterStorage, highwaters, (rowTxId, key, value) -> {
             if (value.getTombstoned() || scan.row(rowTxId, key, value)) {
                 if (rowTxId > lastTxId.longValue()) {
                     lastTxId.setValue(rowTxId);
@@ -187,9 +192,9 @@ public class AmzaRegion {
     public static class TakeResult {
 
         public final long lastTxId;
-        public final boolean tookToEnd;
+        public final WALHighwater tookToEnd;
 
-        public TakeResult(long lastTxId, boolean tookToEnd) {
+        public TakeResult(long lastTxId, WALHighwater tookToEnd) {
             this.lastTxId = lastTxId;
             this.tookToEnd = tookToEnd;
         }

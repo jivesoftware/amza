@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -44,7 +45,7 @@ public class RowRegionNGTest {
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        RegionName regionName = new RegionName(false, "ring", "booya");
+        VersionedRegionName regionName = new VersionedRegionName(new RegionName(false, "ring", "booya"), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
@@ -118,12 +119,12 @@ public class RowRegionNGTest {
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        RegionName regionName = new RegionName(false, "ring", "booya");
+        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(false, "ring", "booya"), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        testEventualConsitency(regionName, idProvider, binaryWALTx);
+        testEventualConsitency(versionedRegionName, idProvider, binaryWALTx);
     }
 
     @Test
@@ -134,17 +135,17 @@ public class RowRegionNGTest {
         RowIOProvider binaryRowIOProvider = new MemoryBackedRowIOProvider(ioStats, 1);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        RegionName regionName = new RegionName(false, "ring", "booya");
+        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(false, "ring", "booya"), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        testEventualConsitency(regionName, idProvider, binaryWALTx);
+        testEventualConsitency(versionedRegionName, idProvider, binaryWALTx);
     }
 
-    private void testEventualConsitency(RegionName regionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
+    private void testEventualConsitency(VersionedRegionName versionedRegionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
         throws Exception {
-        IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
+        IndexedWAL indexedWAL = new IndexedWAL(versionedRegionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
         indexedWAL.load();
         WALValue value = indexedWAL.get(rk(1));
         Assert.assertNull(value);

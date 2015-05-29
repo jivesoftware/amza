@@ -1,21 +1,22 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 
 /**
  * @author jonathan.colt
  */
 public class RegionStripeProvider {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     private final RegionStripe systemStripe;
-    private final RegionIndex regionIndex;
     private final RegionStripe[] deltaStripes;
 
-    public RegionStripeProvider(RegionStripe systemStripe, RegionIndex regionIndex, RegionStripe[] stripes) {
+    public RegionStripeProvider(RegionStripe systemStripe, RegionStripe[] stripes) {
         this.systemStripe = systemStripe;
-        this.regionIndex = regionIndex;
         this.deltaStripes = stripes;
     }
 
@@ -23,18 +24,16 @@ public class RegionStripeProvider {
         return systemStripe;
     }
 
-    public Optional<RegionStripe> getRegionStripe(RegionName regionName) throws Exception {
+    public RegionStripe getRegionStripe(RegionName regionName) throws Exception {
         if (regionName.isSystemRegion()) {
-            return Optional.of(systemStripe);
+            return systemStripe;
         }
-        if (regionIndex.exists(regionName)) {
-            return Optional.of(deltaStripes[Math.abs(regionName.hashCode()) % deltaStripes.length]);
-        } else {
-            return Optional.absent();
-        }
+        return deltaStripes[Math.abs(regionName.hashCode()) % deltaStripes.length];
     }
 
-    public boolean hasRegionStripe(RegionName regionName) throws Exception {
-        return regionName.isSystemRegion() || regionIndex.exists(regionName);
+    public void removeRegion(VersionedRegionName versionedRegionName) throws Exception {
+        if (!versionedRegionName.getRegionName().isSystemRegion()) {
+            deltaStripes[Math.abs(versionedRegionName.getRegionName().hashCode()) % deltaStripes.length].removeRegion(versionedRegionName);
+        }
     }
 }

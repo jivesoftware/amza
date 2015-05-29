@@ -15,13 +15,15 @@
  */
 package com.jivesoftware.os.amza.service;
 
-import com.google.common.base.Optional;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReceiver;
-import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
-import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeTaker;
-import com.jivesoftware.os.amza.service.replication.AmzaRegionCompactor;
-import com.jivesoftware.os.amza.service.replication.RegionStripe;
+import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.service.replication.RegionChangeReceiver;
+import com.jivesoftware.os.amza.service.replication.RegionChangeReplicator;
+import com.jivesoftware.os.amza.service.replication.RegionChangeTaker;
+import com.jivesoftware.os.amza.service.replication.RegionCompactor;
+import com.jivesoftware.os.amza.service.replication.RegionComposter;
+import com.jivesoftware.os.amza.service.replication.RegionStatusStorage;
 import com.jivesoftware.os.amza.service.replication.RegionStripeProvider;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
@@ -38,7 +40,7 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.TakeCursors;
 import com.jivesoftware.os.amza.shared.TakeCursors.RingMemberCursor;
-import com.jivesoftware.os.amza.shared.WALHighwater;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
@@ -54,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.function.BiFunction;
 
 /**
@@ -68,11 +71,13 @@ public class AmzaService implements AmzaInstance {
     private final AmzaStats amzaStats;
     private final AmzaRingReader ringReader;
     private final AmzaHostRing amzaRing;
-    private final HighwaterStorage highwaterMarks;
-    private final AmzaRegionChangeReceiver changeReceiver;
-    private final AmzaRegionChangeTaker changeTaker;
-    private final AmzaRegionChangeReplicator changeReplicator;
-    private final AmzaRegionCompactor regionCompactor;
+    private final HighwaterStorage highwaterStorage;
+    private final RegionStatusStorage regionStatusStorage;
+    private final RegionChangeReceiver changeReceiver;
+    private final RegionChangeTaker changeTaker;
+    private final RegionChangeReplicator changeReplicator;
+    private final RegionCompactor regionCompactor;
+    private final RegionComposter regionComposter;
     private final RegionIndex regionIndex;
     private final RegionProvider regionProvider;
     private final RegionStripeProvider regionStripeProvider;
@@ -84,10 +89,12 @@ public class AmzaService implements AmzaInstance {
         AmzaRingReader ringReader,
         AmzaHostRing amzaRing,
         HighwaterStorage highwaterMarks,
-        AmzaRegionChangeReceiver changeReceiver,
-        AmzaRegionChangeTaker changeTaker,
-        AmzaRegionChangeReplicator changeReplicator,
-        AmzaRegionCompactor regionCompactor,
+        RegionStatusStorage regionStatusStorage,
+        RegionChangeReceiver changeReceiver,
+        RegionChangeTaker changeTaker,
+        RegionChangeReplicator changeReplicator,
+        RegionCompactor regionCompactor,
+        RegionComposter regionComposter,
         RegionIndex regionIndex,
         RegionProvider regionProvider,
         RegionStripeProvider regionStripeProvider,
@@ -97,11 +104,13 @@ public class AmzaService implements AmzaInstance {
         this.orderIdProvider = orderIdProvider;
         this.ringReader = ringReader;
         this.amzaRing = amzaRing;
-        this.highwaterMarks = highwaterMarks;
+        this.highwaterStorage = highwaterMarks;
+        this.regionStatusStorage = regionStatusStorage;
         this.changeReceiver = changeReceiver;
         this.changeTaker = changeTaker;
         this.changeReplicator = changeReplicator;
         this.regionCompactor = regionCompactor;
+        this.regionComposter = regionComposter;
         this.regionIndex = regionIndex;
         this.regionProvider = regionProvider;
         this.regionStripeProvider = regionStripeProvider;
@@ -118,7 +127,15 @@ public class AmzaService implements AmzaInstance {
     }
 
     public HighwaterStorage getHighwaterMarks() {
-        return highwaterMarks;
+        return highwaterStorage;
+    }
+
+    public RegionStatusStorage getRegionMemberStatusStorage() {
+        return regionStatusStorage;
+    }
+
+    public RegionComposter getRegionComposter() {
+        return regionComposter;
     }
 
     public RegionProvider getRegionProvider() {
@@ -148,32 +165,23 @@ public class AmzaService implements AmzaInstance {
     }
 
     public AmzaRegion createRegionIfAbsent(RegionName regionName, RegionProperties regionProperties) throws Exception {
-        regionProvider.createRegionStoreIfAbsent(regionName, regionProperties);
-        Optional<RegionStripe> regionStripe = regionStripeProvider.getRegionStripe(regionName);
-        if (regionStripe.isPresent()) {
-            return new AmzaRegion(amzaStats, orderIdProvider, regionName, replicator, regionStripe.get());
+        if (amzaRing.isMemberOfRing(regionName.getRegionName())) {
+            return regionStatusStorage.tx(regionName, (versionedRegionName, regionStatus) -> {
+                if (regionStatus == null) {
+                    regionStatusStorage.markAsKetchup(regionName);
+                }
+
+                regionProvider.createRegionStoreIfAbsent(versionedRegionName, regionProperties);
+                return getRegion(regionName);
+            });
         } else {
-            throw new IllegalStateException("Coding is hard. Should never get here.");
+            throw new IllegalStateException(amzaRing.getRingMember() + " is not a member for regionName:" + regionName);
         }
+
     }
 
     public AmzaRegion getRegion(RegionName regionName) throws Exception {
-        if (regionName.isSystemRegion()) {
-            return new AmzaRegion(amzaStats, orderIdProvider, regionName, replicator, regionStripeProvider.getSystemRegionStripe());
-        } else {
-            RegionStore store = regionIndex.get(RegionProvider.REGION_INDEX);
-            if (store != null) {
-                byte[] rawRegionName = regionName.toBytes();
-                WALValue timestampedKeyValueStoreName = store.get(new WALKey(rawRegionName));
-                if (timestampedKeyValueStoreName != null && !timestampedKeyValueStoreName.getTombstoned()) {
-                    Optional<RegionStripe> regionStripe = regionStripeProvider.getRegionStripe(regionName);
-                    if (regionStripe.isPresent()) {
-                        return new AmzaRegion(amzaStats, orderIdProvider, regionName, replicator, regionStripe.get());
-                    }
-                }
-            }
-            return null;
-        }
+        return new AmzaRegion(amzaStats, orderIdProvider, regionName, replicator, regionStripeProvider.getRegionStripe(regionName), highwaterStorage);
     }
 
     public boolean hasRegion(RegionName regionName) throws Exception {
@@ -185,7 +193,7 @@ public class AmzaService implements AmzaInstance {
                 byte[] rawRegionName = regionName.toBytes();
                 WALValue timestampedKeyValueStoreName = store.get(new WALKey(rawRegionName));
                 if (timestampedKeyValueStoreName != null && !timestampedKeyValueStoreName.getTombstoned()) {
-                    return regionStripeProvider.hasRegionStripe(regionName);
+                    return true;
                 }
             }
             return false;
@@ -193,25 +201,14 @@ public class AmzaService implements AmzaInstance {
     }
 
     @Override
-    public List<RegionName> getRegionNames() {
-        return Lists.newArrayList(regionIndex.getActiveRegions());
+    public Set<RegionName> getRegionNames() {
+        return Sets.newHashSet(Lists.newArrayList(Iterables.transform(regionIndex.getAllRegions(), (VersionedRegionName input) -> {
+            return input.getRegionName();
+        })));
     }
 
     public RegionProperties getRegionProperties(RegionName regionName) throws Exception {
         return regionIndex.getProperties(regionName);
-    }
-
-    public Map<RegionName, AmzaRegion> getRegions() throws Exception {
-        Map<RegionName, AmzaRegion> regions = new HashMap<>();
-        for (RegionName regionName : regionIndex.getActiveRegions()) {
-            Optional<RegionStripe> regionStripe = regionStripeProvider.getRegionStripe(regionName);
-            if (regionStripe.isPresent()) {
-                regions.put(regionName, new AmzaRegion(amzaStats, orderIdProvider, regionName, replicator, regionStripe.get()));
-            } else {
-                LOG.warn("{} is not yet available.", regionName);
-            }
-        }
-        return regions;
     }
 
     @Override
@@ -264,7 +261,6 @@ public class AmzaService implements AmzaInstance {
         if (region == null) {
             return null;
         }
-        WALHighwater regionHighwater = highwaterMarks.getRegionHighwater(region.getRegionName());
 
         Map<RingMember, Long> ringMemberToMaxTxId = new HashMap<>();
         AmzaRegion.TakeResult takeResult = region.takeFromTransactionId(transactionId, (highwater) -> {
@@ -272,8 +268,8 @@ public class AmzaService implements AmzaInstance {
                 ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, maxMerge);
             }
         }, scan);
-        if (takeResult.tookToEnd) {
-            for (RingMemberHighwater highwater : regionHighwater.ringMemberHighwater) {
+        if (takeResult.tookToEnd != null) {
+            for (RingMemberHighwater highwater : takeResult.tookToEnd.ringMemberHighwater) {
                 ringMemberToMaxTxId.merge(highwater.ringMember, highwater.transactionId, maxMerge);
             }
         }
@@ -285,6 +281,7 @@ public class AmzaService implements AmzaInstance {
         }
         cursors.add(new TakeCursors.RingMemberCursor(amzaRing.getRingMember(), takeResult.lastTxId));
         return new TakeCursors(cursors);
+
     }
 
 }

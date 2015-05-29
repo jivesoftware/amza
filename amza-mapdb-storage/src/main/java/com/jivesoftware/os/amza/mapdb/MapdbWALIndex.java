@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.mapdb;
 
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
@@ -31,14 +31,14 @@ public class MapdbWALIndex implements WALIndex {
     private static final int numPermits = 1024;
     private final Semaphore lock = new Semaphore(numPermits, true);
 
-    private final RegionName regionName;
+    private final VersionedRegionName versionedRegionName;
     private final File dir;
     private DB db;
     private ConcurrentNavigableMap<WALKey, WALPointer> index;
 
-    public MapdbWALIndex(File dir, RegionName regionName) {
+    public MapdbWALIndex(File dir, VersionedRegionName versionedRegionName) {
         this.dir = dir;
-        this.regionName = regionName;
+        this.versionedRegionName = versionedRegionName;
         File active = new File(dir, "active");
         active.mkdirs();
         File regionFile = new File(active, "region");
@@ -209,7 +209,7 @@ public class MapdbWALIndex implements WALIndex {
         FileUtils.deleteDirectory(backup);
 
         compacting.mkdirs();
-        final MapdbWALIndex compactedRowIndex = new MapdbWALIndex(compacting, regionName);
+        final MapdbWALIndex compactedRowIndex = new MapdbWALIndex(compacting, versionedRegionName);
 
         return new CompactionWALIndex() {
 
@@ -257,5 +257,10 @@ public class MapdbWALIndex implements WALIndex {
     @Override
     public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
 
+    }
+
+    @Override
+    public boolean delete() throws Exception {
+        throw new UnsupportedOperationException("Not supported yet."); 
     }
 }

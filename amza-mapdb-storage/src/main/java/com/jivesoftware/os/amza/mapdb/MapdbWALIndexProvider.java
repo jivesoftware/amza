@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.mapdb;
 
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
-import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import java.io.File;
 
@@ -22,14 +22,14 @@ public class MapdbWALIndexProvider implements WALIndexProvider<MapdbWALIndex> {
     }
 
     @Override
-    public MapdbWALIndex createIndex(RegionName regionName) throws Exception {
-        File baseDir = baseDirs[Math.abs(regionName.hashCode()) % baseDirs.length];
-        File regionDir = new File(baseDir, regionName.toBase64());
-        return new MapdbWALIndex(regionDir, regionName);
+    public MapdbWALIndex createIndex(VersionedRegionName versionedRegionName) throws Exception {
+        File baseDir = baseDirs[Math.abs(versionedRegionName.hashCode()) % baseDirs.length];
+        File regionDir = new File(baseDir, versionedRegionName.toBase64());
+        return new MapdbWALIndex(regionDir, versionedRegionName);
     }
 
     @Override
-    public void deleteIndex(RegionName regionName) throws Exception {
+    public void deleteIndex(VersionedRegionName versionedRegionName) throws Exception {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 }

@@ -51,7 +51,6 @@ import java.io.File;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Random;
@@ -287,11 +286,10 @@ public class AmzaTestCluster {
             if (off || service.off) {
                 return true;
             }
-            Map<RegionName, AmzaRegion> aRegions = amzaService.getRegions();
-            Map<RegionName, AmzaRegion> bRegions = service.amzaService.getRegions();
 
-            Set<RegionName> allARegions = aRegions.keySet();
-            Set<RegionName> allBRegions = bRegions.keySet();
+            Set<RegionName> allARegions = amzaService.getRegionNames();
+            Set<RegionName> allBRegions = service.amzaService.getRegionNames();
+
             if (allARegions.size() != allBRegions.size()) {
                 System.out.println(allARegions + " -vs- " + allBRegions);
                 return false;

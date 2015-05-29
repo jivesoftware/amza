@@ -52,6 +52,15 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         this.amzaStats = amzaStats;
     }
 
+    /**
+
+    @param node
+    @param regionName
+    @param transactionId
+    @param tookRowUpdates
+    @return Will return null if the other node was reachable but the region on that node was NOT online.
+    @throws Exception
+    */
     @Override
     public Map<RingMember, Long> streamingTakeUpdates(Entry<RingMember, RingHost> node,
         RegionName regionName,
@@ -70,7 +79,10 @@ public class HttpUpdatesTaker implements UpdatesTaker {
             long updates = 0;
             final MutableLong read = new MutableLong();
             Map<RingMember, Long> neighborsHighwaterMarks = new HashMap<>();
+            boolean isOnline;
             try (DataInputStream dis = new DataInputStream(bis)) {
+                isOnline = dis.readByte() == 1;
+
                 byte eosMarks;
                 while ((eosMarks = dis.readByte()) == 1) {
                     if (t4 < 0) {
@@ -100,7 +112,7 @@ public class HttpUpdatesTaker implements UpdatesTaker {
                 LOG.debug("Take {}: Execute={}ms GetInputStream={}ms FirstByte={}ms ReadFully={}ms TotalTime={}ms TotalUpdates={} TotalBytes={}",
                     regionName.getRegionName(), (t2 - t1), (t3 - t2), (t4 - t3), (t5 - t4), (t5 - t1), updates, read.longValue());
             }
-            return neighborsHighwaterMarks;
+            return isOnline ? neighborsHighwaterMarks : null;
         } finally {
             httpStreamResponse.close();
         }

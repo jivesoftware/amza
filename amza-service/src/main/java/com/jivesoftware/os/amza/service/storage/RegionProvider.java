@@ -15,11 +15,13 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.service.replication.AmzaRegionChangeReplicator;
+import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.service.replication.RegionChangeReplicator;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -27,22 +29,23 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 
 public class RegionProvider {
 
-    public static final RegionName NODE_INDEX = new RegionName(true, "system", "NODE_INDEX");
-    public static final RegionName RING_INDEX = new RegionName(true, "system", "RING_INDEX");
-    public static final RegionName REGION_INDEX = new RegionName(true, "system", "REGION_INDEX");
-    public static final RegionName REGION_PROPERTIES = new RegionName(true, "system", "REGION_PROPERTIES");
-    public static final RegionName HIGHWATER_MARK_INDEX = new RegionName(true, "system", "HIGHWATER_MARKS");
+    public static final VersionedRegionName NODE_INDEX = new VersionedRegionName(new RegionName(true, "system", "NODE_INDEX"), 0);
+    public static final VersionedRegionName RING_INDEX = new VersionedRegionName(new RegionName(true, "system", "RING_INDEX"), 0);
+    public static final VersionedRegionName REGION_INDEX = new VersionedRegionName(new RegionName(true, "system", "REGION_INDEX"), 0);
+    public static final VersionedRegionName REGION_PROPERTIES = new VersionedRegionName(new RegionName(true, "system", "REGION_PROPERTIES"), 0);
+    public static final VersionedRegionName HIGHWATER_MARK_INDEX = new VersionedRegionName(new RegionName(true, "system", "HIGHWATER_MARK_INDEX"), 0);
+    public static final VersionedRegionName REGION_ONLINE_INDEX = new VersionedRegionName(new RegionName(true, "system", "REGION_ONLINE_INDEX"), 0);
 
     private final OrderIdProvider orderIdProvider;
     private final RegionPropertyMarshaller regionPropertyMarshaller;
-    private final AmzaRegionChangeReplicator replicator;
+    private final RegionChangeReplicator replicator;
     private final RegionIndex regionIndex;
     private final RowChanges rowChanges;
     private final boolean hardFlush;
 
     public RegionProvider(OrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
-        AmzaRegionChangeReplicator replicator,
+        RegionChangeReplicator replicator,
         RegionIndex regionIndex,
         RowChanges rowChanges,
         boolean hardFlush) {
@@ -55,18 +58,37 @@ public class RegionProvider {
         this.hardFlush = hardFlush;
     }
 
-    public RegionStore createRegionStoreIfAbsent(RegionName regionName, RegionProperties properties) throws Exception {
+    public boolean hasRegion(RegionName regionName) throws Exception {
         if (regionName.isSystemRegion()) {
-            throw new IllegalArgumentException("You cannot create system regions.");
+            return true;
         }
-        RegionStore regionStore = regionIndex.get(regionName);
+
+        final byte[] rawRegionName = regionName.toBytes();
+        final WALKey regionKey = new WALKey(rawRegionName);
+        RegionStore regionPropertiesStore = regionIndex.get(REGION_PROPERTIES);
+        WALValue propertiesValue = regionPropertiesStore.get(regionKey);
+        if (propertiesValue != null && !propertiesValue.getTombstoned()) {
+            RegionStore regionIndexStore = regionIndex.get(REGION_INDEX);
+            WALValue indexValue = regionIndexStore.get(regionKey);
+            if (indexValue != null && !indexValue.getTombstoned()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void createRegionStoreIfAbsent(VersionedRegionName versionedRegionName, RegionProperties properties) throws Exception {
+        RegionName regionName = versionedRegionName.getRegionName();
+        Preconditions.checkArgument(!regionName.isSystemRegion(), "You cannot create a system region");
+
+        RegionStore regionStore = regionIndex.get(versionedRegionName);
         if (regionStore == null) {
-            setRegionProperties(regionName, properties);
-            regionStore = regionIndex.get(regionName);
+            updateRegionProperties(regionName, properties);
+            regionStore = regionIndex.get(versionedRegionName);
             if (regionStore != null) {
                 final byte[] rawRegionName = regionName.toBytes();
                 final WALKey regionKey = new WALKey(rawRegionName);
-                RegionStore regionIndexStore = regionName.equals(REGION_INDEX) ? regionStore : regionIndex.get(REGION_INDEX);
+                RegionStore regionIndexStore = versionedRegionName.equals(REGION_INDEX) ? regionStore : regionIndex.get(REGION_INDEX);
                 RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
                     scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
                 });
@@ -76,10 +98,9 @@ public class RegionProvider {
                 }
             }
         }
-        return regionStore;
     }
 
-    public void setRegionProperties(final RegionName regionName, final RegionProperties properties) throws Exception {
+    public void updateRegionProperties(final RegionName regionName, final RegionProperties properties) throws Exception {
         regionIndex.putProperties(regionName, properties);
         RegionStore regionPropertiesStore = regionIndex.get(REGION_PROPERTIES);
         RowsChanged changed = regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
@@ -91,4 +112,17 @@ public class RegionProvider {
         }
     }
 
+    public void destroyRegion(RegionName regionName) throws Exception {
+        Preconditions.checkArgument(!regionName.isSystemRegion(), "You cannot destroy a system region");
+
+        RegionStore regionIndexStore = regionIndex.get(RegionProvider.REGION_INDEX);
+        regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwaters, scan) -> {
+            scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
+        });
+
+        RegionStore regionPropertiesStore = regionIndex.get(RegionProvider.REGION_PROPERTIES);
+        regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwaters, scan) -> {
+            scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
+        });
+    }
 }

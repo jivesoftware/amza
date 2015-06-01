@@ -21,11 +21,11 @@ import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.Highwaters;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
@@ -69,7 +69,7 @@ public class IndexedWAL implements WALStorage {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
-    private final RegionName regionName;
+    private final VersionedRegionName versionedRegionName;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller<byte[]> rowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
@@ -89,7 +89,15 @@ public class IndexedWAL implements WALStorage {
     private final AtomicLong highestTxId = new AtomicLong(0);
     private final int tombstoneCompactionFactor;
 
-    public IndexedWAL(RegionName regionName,
+    private final ThreadLocal<Integer> reentrant = new ThreadLocal<Integer>() {
+
+        @Override
+        protected Integer initialValue() {
+            return 0;
+        }
+    };
+
+    public IndexedWAL(VersionedRegionName versionedRegionName,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
@@ -98,7 +106,7 @@ public class IndexedWAL implements WALStorage {
         int maxUpdatesBetweenIndexCommitMarker,
         int tombstoneCompactionFactor) {
 
-        this.regionName = regionName;
+        this.versionedRegionName = versionedRegionName;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
@@ -114,8 +122,48 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    public RegionName getRegionName() {
-        return regionName;
+    private void acquireOne() throws InterruptedException {
+        int enters = reentrant.get();
+        if (enters == 0) {
+            tickleMeElmophore.acquire();
+        }
+        reentrant.set(enters + 1);
+    }
+
+    private void releaseOne() {
+        int enters = reentrant.get();
+        if (enters - 1 == 0) {
+            tickleMeElmophore.release();
+        }
+        reentrant.set(enters - 1);
+    }
+
+    private void acquireAll() throws InterruptedException {
+        tickleMeElmophore.acquire(numTickleMeElmaphore);
+    }
+
+    private void releaseAll() {
+        tickleMeElmophore.release(numTickleMeElmaphore);
+    }
+
+    public VersionedRegionName getVersionedRegionName() {
+        return versionedRegionName;
+    }
+
+    @Override
+    public boolean expunge() throws Exception {
+        boolean expunged = true;
+        acquireAll();
+        try {
+            expunged &= walTx.delete(false);
+            WALIndex wali = walIndex.get();
+            if (wali != null) {
+                expunged &= wali.delete();
+            }
+        } finally {
+            releaseAll();
+        }
+        return expunged;
     }
 
     @Override
@@ -128,10 +176,10 @@ public class IndexedWAL implements WALStorage {
     }
 
     private long compact(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-        final String metricPrefix = "region>" + regionName.getRegionName() + ">ring>" + regionName.getRingName() + ">";
+        final String metricPrefix = "region>" + versionedRegionName.getRegionName() + ">ring>" + versionedRegionName.getRegionName().getRingName() + ">";
         Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
         if (compact.isPresent()) {
-            tickleMeElmophore.acquire(numTickleMeElmaphore);
+            acquireAll();
             try {
                 WALTx.CommittedCompacted compacted = compact.get().commit();
                 walIndex.set(compacted.index);
@@ -154,7 +202,7 @@ public class IndexedWAL implements WALStorage {
 
                 return compacted.sizeAfterCompaction;
             } finally {
-                tickleMeElmophore.release(numTickleMeElmaphore);
+                releaseAll();
             }
 
         } else {
@@ -165,10 +213,10 @@ public class IndexedWAL implements WALStorage {
 
     @Override
     public void load() throws Exception {
-        tickleMeElmophore.acquire(numTickleMeElmaphore);
+        acquireAll();
         try {
 
-            walIndex.compareAndSet(null, walTx.load(regionName));
+            walIndex.compareAndSet(null, walTx.load(versionedRegionName));
 
             final MutableLong lastTxId = new MutableLong(0);
             final AtomicLong rowsVisited = new AtomicLong(maxUpdatesBetweenCompactionHintMarker.get());
@@ -204,7 +252,7 @@ public class IndexedWAL implements WALStorage {
             });
 
         } finally {
-            tickleMeElmophore.release(numTickleMeElmaphore);
+            releaseAll();
         }
     }
 
@@ -286,7 +334,7 @@ public class IndexedWAL implements WALStorage {
             return true;
         });
 
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             WALIndex wali = walIndex.get();
             RowsChanged rowsChanged;
@@ -320,13 +368,13 @@ public class IndexedWAL implements WALStorage {
             List<Future<?>> futures = Lists.newArrayListWithCapacity(1);
 
             if (walReplicator != null && updateMode == WALStorageUpdateMode.replicateThenUpdate && !apply.isEmpty()) {
-                futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
+                futures.add(walReplicator.replicate(new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
             }
 
             final NavigableMap<WALKey, Long> keyToRowPointer = new TreeMap<>();
 
             if (apply.isEmpty()) {
-                rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
                 walTx.write((WALWriter rowWriter) -> {
                     List<Long> rawTransactionIds = useUpdateTxId ? new ArrayList<>() : null;
@@ -397,11 +445,11 @@ public class IndexedWAL implements WALStorage {
                             stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue(),
                             value.getTimestampId()));
                     }
-                    rowsChanged = new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                    rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
                 }
 
                 if (walReplicator != null && updateMode == WALStorageUpdateMode.updateThenReplicate && !apply.isEmpty()) {
-                    futures.add(walReplicator.replicate(new RowsChanged(regionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
+                    futures.add(walReplicator.replicate(new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
                 }
             }
 
@@ -426,7 +474,7 @@ public class IndexedWAL implements WALStorage {
             }
             return rowsChanged;
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
@@ -465,29 +513,29 @@ public class IndexedWAL implements WALStorage {
 
     @Override
     public void rowScan(final Scan<WALValue> scan) throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             WALIndex wali = walIndex.get();
             wali.rowScan((long transactionId, WALKey key, WALPointer rowPointer) -> scan.row(transactionId, key, hydrateRowIndexValue(rowPointer)));
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
     @Override
     public void rangeScan(final WALKey from, final WALKey to, final Scan<WALValue> scan) throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             WALIndex wali = walIndex.get();
             wali.rangeScan(from, to, (long transactionId, WALKey key, WALPointer rowPointer) -> scan.row(transactionId, key, hydrateRowIndexValue(rowPointer)));
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
     @Override
     public WALValue get(WALKey key) throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             WALPointer got = walIndex.get().getPointer(key);
             if (got != null) {
@@ -495,13 +543,13 @@ public class IndexedWAL implements WALStorage {
             }
             return null;
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
     @Override
     public WALValue[] get(WALKey[] keys) throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             WALPointer[] gots = walIndex.get().getPointers(keys);
             WALValue[] values = new WALValue[gots.length];
@@ -512,13 +560,13 @@ public class IndexedWAL implements WALStorage {
             }
             return values;
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
     @Override
     public WALPointer[] getPointers(WALKey[] consumableKeys, List<WALValue> values) throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             for (int i = 0; i < consumableKeys.length; i++) {
                 WALKey key = consumableKeys[i];
@@ -533,7 +581,7 @@ public class IndexedWAL implements WALStorage {
             }
             return walIndex.get().getPointers(consumableKeys);
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
@@ -544,11 +592,11 @@ public class IndexedWAL implements WALStorage {
 
     @Override
     public List<Boolean> containsKey(List<WALKey> keys) throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             return walIndex.get().containsKey(keys);
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
@@ -567,7 +615,7 @@ public class IndexedWAL implements WALStorage {
         } catch (Exception x) {
             String base64;
             try {
-                base64 = regionName.toBase64();
+                base64 = versionedRegionName.toBase64();
             } catch (IOException e) {
                 base64 = e.getMessage();
             }
@@ -579,13 +627,13 @@ public class IndexedWAL implements WALStorage {
                 length = -1;
             }
 
-            throw new RuntimeException("Failed to hydrate for " + regionName + " base64=" + base64 + " size=" + length + " fp=" + indexFP, x);
+            throw new RuntimeException("Failed to hydrate for " + versionedRegionName + " base64=" + base64 + " size=" + length + " fp=" + indexFP, x);
         }
     }
 
     @Override
     public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             return walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
                 (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
@@ -595,7 +643,7 @@ public class IndexedWAL implements WALStorage {
                     return true;
                 }));
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
@@ -609,7 +657,7 @@ public class IndexedWAL implements WALStorage {
      */
     @Override
     public boolean takeFromTransactionId(final long sinceTransactionId, Highwaters highwaters, Scan<WALValue> scan) throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             return walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
                 (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
@@ -623,7 +671,7 @@ public class IndexedWAL implements WALStorage {
                     return true;
                 }));
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
@@ -631,23 +679,23 @@ public class IndexedWAL implements WALStorage {
     public void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception {
         maxUpdatesBetweenCompactionHintMarker.set(walStorageDescriptor.maxUpdatesBetweenCompactionHintMarker);
         maxUpdatesBetweenIndexCommitMarker.set(walStorageDescriptor.maxUpdatesBetweenIndexCommitMarker);
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             WALIndex wali = walIndex.get();
             wali.updatedDescriptors(walStorageDescriptor.primaryIndexDescriptor, walStorageDescriptor.secondaryIndexDescriptors);
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 
     @Override
     public long count() throws Exception {
-        tickleMeElmophore.acquire();
+        acquireOne();
         try {
             WALIndex wali = this.walIndex.get();
             return wali.size();
         } finally {
-            tickleMeElmophore.release();
+            releaseOne();
         }
     }
 

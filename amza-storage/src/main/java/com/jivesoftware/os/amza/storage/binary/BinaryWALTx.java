@@ -4,9 +4,9 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowType;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALIndex.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
@@ -140,19 +140,20 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public WALIndex load(RegionName regionName) throws Exception {
+    public WALIndex load(VersionedRegionName versionedRegionName) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
 
             if (!io.validate()) {
-                LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", regionName);
-                walIndexProvider.deleteIndex(regionName);
-                LOG.warn("Removed wal index for {}.", regionName);
+                LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", versionedRegionName);
+                walIndexProvider.deleteIndex(versionedRegionName);
+                LOG.warn("Removed wal index for {}.", versionedRegionName);
             }
 
-            final WALIndex walIndex = walIndexProvider.createIndex(regionName);
+            final WALIndex walIndex = walIndexProvider.createIndex(versionedRegionName);
             if (walIndex.isEmpty()) {
-                LOG.info("Rebuilding {} for {}-{}...", walIndex.getClass().getSimpleName(), regionName.getRegionName(), regionName.getRingName());
+                LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedRegionName);
+
                 final MutableLong rebuilt = new MutableLong();
                 io.scan(0, true, (final long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
                     if (rowType == RowType.primary) {
@@ -171,11 +172,10 @@ public class BinaryWALTx implements WALTx {
                     }
                     return true;
                 });
-                LOG.info("Rebuilt ({}) {} for {}-{}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), regionName.getRegionName(),
-                    regionName.getRingName());
+                LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedRegionName);
                 walIndex.commit();
             } else {
-                LOG.info("Checking {} for {}-{}.", walIndex.getClass().getSimpleName(), regionName.getRegionName(), regionName.getRingName());
+                LOG.info("Checking {} for {}.", walIndex.getClass().getSimpleName(), versionedRegionName);
                 final MutableLong repair = new MutableLong();
                 io.reverseScan(new RowStream() {
                     long commitedUpToTxId = Long.MIN_VALUE;
@@ -201,8 +201,7 @@ public class BinaryWALTx implements WALTx {
                         }
                     }
                 });
-                LOG.info("Checked ({}) {} for {}-{}.", repair.longValue(), walIndex.getClass().getSimpleName(), regionName.getRegionName(),
-                    regionName.getRingName());
+                LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedRegionName);
                 walIndex.commit();
             }
             io.initLeaps();

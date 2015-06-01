@@ -520,4 +520,9 @@ public class FileBackedWALIndex implements WALIndex {
     @Override
     public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
     }
+
+    @Override
+    public boolean delete() throws Exception {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
 }

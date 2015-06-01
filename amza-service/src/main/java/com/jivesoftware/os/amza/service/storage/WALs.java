@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.collect.ImmutableSet;
-import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
@@ -35,7 +35,7 @@ public class WALs {
     private final String[] workingDirectories;
     private final String storeName;
     private final WALStorageProvider walStorageProvider;
-    private final ConcurrentHashMap<RegionName, WALStorage> walStores = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<VersionedRegionName, WALStorage> walStores = new ConcurrentHashMap<>();
     private final StripingLocksProvider locksProvider = new StripingLocksProvider(1024); // TODO expose to config
     private final Semaphore[] semaphores = new Semaphore[1024];
 
@@ -54,58 +54,58 @@ public class WALs {
         return storeName;
     }
 
-    private Semaphore getSemaphore(RegionName regionName) {
-        return semaphores[Math.abs(regionName.hashCode()) % semaphores.length];
+    private Semaphore getSemaphore(VersionedRegionName versionedRegionName) {
+        return semaphores[Math.abs(versionedRegionName.hashCode()) % semaphores.length];
     }
 
     public void load() throws Exception {
-        Set<RegionName> regionNames = walStorageProvider.listExisting(workingDirectories, storeName);
-        for (RegionName regionName : regionNames) {
+        Set<VersionedRegionName> versionedRegionNames = walStorageProvider.listExisting(workingDirectories, storeName);
+        for (VersionedRegionName versionedRegionName : versionedRegionNames) {
             try {
-                getStorage(regionName);
+                getStorage(versionedRegionName);
             } catch (Exception x) {
-                LOG.warn("Failed to load storage for region {}", new Object[]{regionName}, x);
+                LOG.warn("Failed to load storage for region {}", new Object[]{versionedRegionName}, x);
             }
         }
     }
 
-    public <R> R execute(RegionName regionName, Tx<R> tx) throws Exception {
-        Semaphore semaphore = getSemaphore(regionName);
+    public <R> R execute(VersionedRegionName versionedRegionName, Tx<R> tx) throws Exception {
+        Semaphore semaphore = getSemaphore(versionedRegionName);
         semaphore.acquire();
         try {
-            return tx.execute(getStorage(regionName));
+            return tx.execute(getStorage(versionedRegionName));
         } finally {
             semaphore.release();
         }
     }
 
-    private WALStorage getStorage(RegionName regionName) throws Exception {
-        synchronized (locksProvider.lock(regionName, 1234)) {
-            WALStorage storage = walStores.get(regionName);
+    private WALStorage getStorage(VersionedRegionName versionedRegionName) throws Exception {
+        synchronized (locksProvider.lock(versionedRegionName, 1234)) {
+            WALStorage storage = walStores.get(versionedRegionName);
             if (storage == null) {
-                File workingDirectory = new File(workingDirectories[Math.abs(regionName.hashCode()) % workingDirectories.length]);
-                storage = walStorageProvider.create(workingDirectory, storeName, regionName, null);
+                File workingDirectory = new File(workingDirectories[Math.abs(versionedRegionName.hashCode()) % workingDirectories.length]);
+                storage = walStorageProvider.create(workingDirectory, storeName, versionedRegionName, null);
                 storage.load();
-                walStores.put(regionName, storage);
+                walStores.put(versionedRegionName, storage);
             }
             return storage;
         }
     }
 
-    public void removeIfEmpty(RegionName regionName) throws Exception {
-        Semaphore semaphore = getSemaphore(regionName);
+    public void removeIfEmpty(VersionedRegionName versionedRegionName) throws Exception {
+        Semaphore semaphore = getSemaphore(versionedRegionName);
         semaphore.acquire(SEMAPHORE_PERMITS);
         try {
-            WALStorage storage = walStores.get(regionName);
+            WALStorage storage = walStores.get(versionedRegionName);
             if (storage != null && storage.delete(true)) {
-                walStores.remove(regionName);
+                walStores.remove(versionedRegionName);
             }
         } finally {
             semaphore.release(SEMAPHORE_PERMITS);
         }
     }
 
-    public Set<RegionName> getAllRegions() {
+    public Set<VersionedRegionName> getAllRegions() {
         return ImmutableSet.copyOf(walStores.keySet());
     }
 

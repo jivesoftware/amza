@@ -15,7 +15,10 @@ import com.jivesoftware.os.amza.shared.NoOpWALReplicator;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
+import com.jivesoftware.os.amza.shared.RegionTx;
 import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.TxRegionStatus;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
@@ -36,7 +39,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
- *
  * @author jonathan.colt
  */
 public class DeltaStripeWALStorageNGTest {
@@ -57,19 +59,26 @@ public class DeltaStripeWALStorageNGTest {
             rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, ids, -1, -1);
         RegionIndex regionIndex = new RegionIndex(
             new AmzaStats(),
-            new String[]{regionTmpDir.getAbsolutePath()},
+            new String[] { regionTmpDir.getAbsolutePath() },
             "domain",
             indexedWALStorageProvider,
             regionPropertyMarshaller,
             false);
-        regionIndex.open();
 
-        RegionName regionName = new RegionName(false, "ring", "regionName");
+        regionIndex.open(new TxRegionStatus() {
+
+            @Override
+            public <R> R tx(RegionName regionName, RegionTx<R> tx) throws Exception {
+                return tx.tx(new VersionedRegionName(regionName, 0), TxRegionStatus.Status.ONLINE);
+            }
+        });
+
+        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(false, "ring", "regionName"), 1);
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
             new PrimaryIndexDescriptor("memory", 0, false, null), null, 100, 100);
 
-        regionIndex.putProperties(regionName, new RegionProperties(storageDescriptor, 0, 0, false));
-        RegionStore regionStore = regionIndex.get(regionName);
+        regionIndex.putProperties(versionedRegionName.getRegionName(), new RegionProperties(storageDescriptor, 0, 0, false));
+        RegionStore regionStore = regionIndex.get(versionedRegionName);
         Assert.assertNotNull(regionStore);
 
         HighwaterStorage highwaterStorage = new MemoryBackedHighwaterStorage();
@@ -83,42 +92,42 @@ public class DeltaStripeWALStorageNGTest {
         WALReplicator replicator = new NoOpWALReplicator();
 
         WALStorage storage = regionStore.getWalStorage();
-        Assert.assertNull(deltaStripeWALStorage.get(regionName, storage, key(1)));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(regionName, storage, key(1)));
+        Assert.assertNull(deltaStripeWALStorage.get(versionedRegionName, storage, key(1)));
+        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedRegionName, storage, key(1)));
         Assert.assertEquals(0, storage.count());
         Assert.assertNull(storage.get(key(1)));
 
-        deltaStripeWALStorage.update(regionName, storage, replicator, WALStorageUpdateMode.noReplication, new IntUpdate(1, 1, false));
+        deltaStripeWALStorage.update(versionedRegionName, storage, replicator, WALStorageUpdateMode.noReplication, new IntUpdate(1, 1, false));
 
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(regionName, storage, key(1)));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(regionName, storage, key(1)));
+        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedRegionName, storage, key(1)));
+        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedRegionName, storage, key(1)));
         Assert.assertEquals(0, storage.count());
         Assert.assertNull(storage.get(key(1)));
 
         deltaStripeWALStorage.compact(regionIndex);
 
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(regionName, storage, key(1)));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(regionName, storage, key(1)));
+        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedRegionName, storage, key(1)));
+        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedRegionName, storage, key(1)));
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
         Assert.assertEquals(1, storage.count());
 
-        deltaStripeWALStorage.update(regionName, storage, replicator, WALStorageUpdateMode.noReplication, new IntUpdate(1, 0, false));
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(regionName, storage, key(1)));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(regionName, storage, key(1)));
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
-        Assert.assertEquals(1, storage.count());
-
-        deltaStripeWALStorage.compact(regionIndex);
-
-        deltaStripeWALStorage.update(regionName, storage, replicator, WALStorageUpdateMode.noReplication, new IntUpdate(1, 2, true));
-        Assert.assertNull(deltaStripeWALStorage.get(regionName, storage, key(1)));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(regionName, storage, key(1)));
+        deltaStripeWALStorage.update(versionedRegionName, storage, replicator, WALStorageUpdateMode.noReplication, new IntUpdate(1, 0, false));
+        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedRegionName, storage, key(1)));
+        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedRegionName, storage, key(1)));
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
         Assert.assertEquals(1, storage.count());
 
         deltaStripeWALStorage.compact(regionIndex);
-        Assert.assertNull(deltaStripeWALStorage.get(regionName, storage, key(1)));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(regionName, storage, key(1)));
+
+        deltaStripeWALStorage.update(versionedRegionName, storage, replicator, WALStorageUpdateMode.noReplication, new IntUpdate(1, 2, true));
+        Assert.assertNull(deltaStripeWALStorage.get(versionedRegionName, storage, key(1)));
+        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedRegionName, storage, key(1)));
+        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
+        Assert.assertEquals(1, storage.count());
+
+        deltaStripeWALStorage.compact(regionIndex);
+        Assert.assertNull(deltaStripeWALStorage.get(versionedRegionName, storage, key(1)));
+        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedRegionName, storage, key(1)));
         Assert.assertNull(storage.get(key(1)));
         Assert.assertEquals(1, storage.count());
 

@@ -21,15 +21,16 @@ public interface HighwaterStorage {
 
     void clearRing(RingMember ringMember) throws Exception;
 
-    void setIfLarger(RingMember ringMember, RegionName regionName, int updates, long highWatermark) throws Exception;
+    void setIfLarger(RingMember ringMember, VersionedRegionName versionedRegionName, int updates, long highWatermark) throws Exception;
 
-    void clear(RingMember ringMember, RegionName regionName) throws Exception;
+    void clear(RingMember ringMember, VersionedRegionName versionedRegionName) throws Exception;
 
-    Long get(RingMember ringMember, RegionName regionName) throws Exception;
+    Long get(RingMember ringMember, VersionedRegionName versionedRegionName) throws Exception;
 
-    WALHighwater getRegionHighwater(RegionName regionName) throws Exception;
+    WALHighwater getRegionHighwater(VersionedRegionName versionedRegionName) throws Exception;
 
-    void flush(ListMultimap<RingMember, RegionName> flush) throws Exception;
+    void flush(ListMultimap<RingMember, VersionedRegionName> flush) throws Exception;
 
+    boolean expunge(VersionedRegionName versionedRegionName) throws Exception;
 
 }

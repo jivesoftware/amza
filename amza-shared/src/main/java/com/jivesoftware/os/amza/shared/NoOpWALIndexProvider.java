@@ -7,12 +7,12 @@ package com.jivesoftware.os.amza.shared;
 public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
 
     @Override
-    public NoOpWALIndex createIndex(RegionName regionName) throws Exception {
+    public NoOpWALIndex createIndex(VersionedRegionName versionedRegionName) throws Exception {
         return new NoOpWALIndex();
     }
 
     @Override
-    public void deleteIndex(RegionName regionName) throws Exception {
+    public void deleteIndex(VersionedRegionName versionedRegionName) throws Exception {
     }
 
 }

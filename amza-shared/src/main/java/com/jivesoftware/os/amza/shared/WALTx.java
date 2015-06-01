@@ -16,7 +16,7 @@ public interface WALTx {
 
     void validateAndRepair() throws Exception;
 
-    WALIndex load(RegionName regionName) throws Exception;
+    WALIndex load(VersionedRegionName regionName) throws Exception;
 
     long length() throws Exception;
 

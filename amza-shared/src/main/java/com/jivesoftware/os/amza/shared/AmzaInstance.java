@@ -15,17 +15,18 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import java.util.List;
+import java.io.DataOutputStream;
+import java.util.Set;
 
 public interface AmzaInstance {
 
     void updates(RegionName regionName, Commitable<WALValue> updates) throws Exception;
 
-    void takeRowUpdates(RegionName regionName, long rowTxId, RowStream rowStream) throws Exception;
-
-    List<RegionName> getRegionNames();
+    Set<RegionName> getRegionNames();
 
     void destroyRegion(RegionName regionName) throws Exception;
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
+
+    void streamingTakeFromRegion(DataOutputStream dos, RegionName regionName, long highestTransactionId) throws Exception;
 }

@@ -2,9 +2,9 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Table;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowType;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReader;
@@ -65,8 +65,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         wal.flush(fsync);
     }
 
-    WALKey regionPrefixedKey(RegionName regionName, WALKey key) throws IOException {
-        byte[] regionNameBytes = regionName.toBytes();
+    WALKey regionPrefixedKey(VersionedRegionName versionedRegionName, WALKey key) throws IOException {
+        byte[] regionNameBytes = versionedRegionName.toBytes();
         ByteBuffer bb = ByteBuffer.allocate(2 + regionNameBytes.length + 4 + key.getKey().length);
         bb.putShort((short) regionNameBytes.length);
         bb.put(regionNameBytes);
@@ -87,7 +87,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         return new WALValue(filer.getBytes(), value.getTimestampId(), value.getTombstoned());
     }
 
-    public DeltaWALApplied update(final RegionName regionName,
+    public DeltaWALApplied update(final VersionedRegionName versionedRegionName,
         final Table<Long, WALKey, WALValue> apply,
         WALHighwater highwaterHint) throws Exception {
         final Map<WALKey, Long> keyToRowPointer = new HashMap<>();
@@ -103,7 +103,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                 WALKey key = cell.getColumnKey();
                 WALValue value = cell.getValue();
                 keys.add(key);
-                key = regionPrefixedKey(regionName, key);
+                key = regionPrefixedKey(versionedRegionName, key);
                 value = appendHighwaterHints(value, count == 0 ? highwaterHint : null);
                 rawRows.add(primaryRowMarshaller.toRow(key, value));
 

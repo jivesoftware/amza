@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
-import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
@@ -38,27 +38,28 @@ class TemporaryWALStorageProvider implements WALStorageProvider {
     }
 
     @Override
-    public WALStorage create(File workingDirectory, String domain, RegionName regionName, WALStorageDescriptor storageDescriptor) throws Exception {
+    public WALStorage create(File workingDirectory, String domain, VersionedRegionName versionedRegionName, WALStorageDescriptor storageDescriptor)
+        throws Exception {
         final File directory = new File(workingDirectory, domain);
         directory.mkdirs();
-        BinaryWALTx rowsTx = new BinaryWALTx(directory, regionName.toBase64(), rowIOProvider, primaryRowMarshaller, new NoOpWALIndexProvider(), -1);
+        BinaryWALTx rowsTx = new BinaryWALTx(directory, versionedRegionName.toBase64(), rowIOProvider, primaryRowMarshaller, new NoOpWALIndexProvider(), -1);
         rowsTx.validateAndRepair();
-        return new NonIndexWAL(regionName, orderIdProvider, primaryRowMarshaller, highwaterRowMarshaller, rowsTx);
+        return new NonIndexWAL(versionedRegionName, orderIdProvider, primaryRowMarshaller, highwaterRowMarshaller, rowsTx);
     }
 
     @Override
-    public Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException {
-        Set<RegionName> regionNames = Sets.newHashSet();
+    public Set<VersionedRegionName> listExisting(String[] workingDirectories, String domain) throws IOException {
+        Set<VersionedRegionName> versionedRegionNames = Sets.newHashSet();
         for (String workingDirectory : workingDirectories) {
             File directory = new File(workingDirectory, domain);
             if (directory.exists() && directory.isDirectory()) {
                 Set<String> regions = BinaryWALTx.listExisting(directory, rowIOProvider);
                 for (String region : regions) {
-                    regionNames.add(RegionName.fromBase64(region));
+                    versionedRegionNames.add(VersionedRegionName.fromBase64(region));
                 }
             }
         }
-        return regionNames;
+        return versionedRegionNames;
     }
 
 }

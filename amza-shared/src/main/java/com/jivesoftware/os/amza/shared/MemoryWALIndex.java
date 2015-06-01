@@ -153,4 +153,10 @@ public class MemoryWALIndex implements WALIndex {
     public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
 
     }
+
+    @Override
+    public boolean delete() throws Exception {
+        index.clear();
+        return true;
+    }
 }

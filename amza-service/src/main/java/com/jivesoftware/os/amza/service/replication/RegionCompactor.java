@@ -2,8 +2,8 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author jonathan.colt
  */
-public class AmzaRegionCompactor {
+public class RegionCompactor {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -27,7 +27,7 @@ public class AmzaRegionCompactor {
     private final long removeTombstonedOlderThanNMillis;
     private final int numberOfCompactorThreads;
 
-    public AmzaRegionCompactor(AmzaStats amzaStats,
+    public RegionCompactor(AmzaStats amzaStats,
         RegionIndex regionIndex,
         TimestampedOrderIdProvider orderIdProvider,
         long checkIfCompactionIsNeededIntervalInMillis,
@@ -80,10 +80,11 @@ public class AmzaRegionCompactor {
     }
 
     private void compactTombstone(int stripe, long removeTombstonedOlderThanTimestampId) throws Exception {
-        for (RegionName regionName : regionIndex.getActiveRegions()) {
-            if (Math.abs(regionName.hashCode()) % numberOfCompactorThreads == stripe) {
+
+        for (VersionedRegionName versionedRegionName : regionIndex.getAllRegions()) {
+            if (Math.abs(versionedRegionName.hashCode()) % numberOfCompactorThreads == stripe) {
                 long ttlTimestampId = 0;
-                RegionProperties regionProperties = regionIndex.getProperties(regionName);
+                RegionProperties regionProperties = regionIndex.getProperties(versionedRegionName.getRegionName());
                 if (regionProperties != null) {
                     long ttlInMillis = regionProperties.walStorageDescriptor.primaryIndexDescriptor.ttlInMillis;
                     if (ttlInMillis > 0) {
@@ -91,14 +92,14 @@ public class AmzaRegionCompactor {
                     }
                 }
                 try {
-                    amzaStats.beginCompaction("Compacting Tombstones:" + regionName);
+                    amzaStats.beginCompaction("Compacting Tombstones:" + versionedRegionName);
                     try {
-                        regionIndex.get(regionName).compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
+                        regionIndex.get(versionedRegionName).compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
                     } finally {
-                        amzaStats.endCompaction("Compacting Tombstones:" + regionName);
+                        amzaStats.endCompaction("Compacting Tombstones:" + versionedRegionName);
                     }
                 } catch (Exception x) {
-                    LOG.warn("Failed to compact tombstones region:" + regionName, x);
+                    LOG.warn("Failed to compact tombstones region:" + versionedRegionName, x);
                 }
             }
         }

@@ -64,4 +64,6 @@ public interface WALStorage extends RangeScannable<WALValue> {
     long count() throws Exception;
 
     long highestTxId();
+
+    boolean expunge() throws Exception;
 }

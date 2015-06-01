@@ -231,9 +231,9 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
     private AmzaRegion createRegionIfAbsent(String regionName) throws Exception {
 
-        NavigableMap<RingMember, RingHost> ring = amzaService.getAmzaRing().getRing("default");
+        NavigableMap<RingMember, RingHost> ring = amzaService.getAmzaHostRing().getRing("default");
         if (ring.isEmpty()) {
-            amzaService.getAmzaRing().buildRandomSubRing("default", amzaService.getAmzaRing().getRing("system").size());
+            amzaService.getAmzaHostRing().buildRandomSubRing("default", amzaService.getAmzaHostRing().getRing("system").size());
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),

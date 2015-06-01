@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -173,9 +174,9 @@ public class AmzaStats {
         grandTotals.replicatesLag.set((grandTotals.replicatesLag.get() + lag) / 2);
     }
 
-    public void received(RegionName regionName, int count, long smallestTxId) {
+    public void received(RegionName versionedRegionName, int count, long smallestTxId) {
         grandTotals.received.addAndGet(count);
-        Totals totals = regionTotals(regionName);
+        Totals totals = regionTotals(versionedRegionName);
         totals.received.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.receivedLag.set(lag);
@@ -191,11 +192,11 @@ public class AmzaStats {
         grandTotals.receivedAppliesLag.set((grandTotals.receivedAppliesLag.get() + lag) / 2);
     }
 
-    private Totals regionTotals(RegionName regionName) {
-        Totals got = regionTotals.get(regionName);
+    private Totals regionTotals(RegionName versionedRegionName) {
+        Totals got = regionTotals.get(versionedRegionName);
         if (got == null) {
             got = new Totals();
-            regionTotals.put(regionName, got);
+            regionTotals.put(versionedRegionName, got);
         }
         return got;
     }
@@ -206,7 +207,8 @@ public class AmzaStats {
 
     private void logChanges(String name, RowsChanged changed) {
         if (!changed.isEmpty()) {
-            RegionName regionName = changed.getRegionName();
+            VersionedRegionName versionedRegionName = changed.getVersionedRegionName();
+            RegionName regionName = versionedRegionName.getRegionName();
 
             LOG.debug("{} {} to region: {}:{} lag:{}", new Object[]{name,
                 changed.getApply().size(),

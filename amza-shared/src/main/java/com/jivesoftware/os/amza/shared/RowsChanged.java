@@ -20,26 +20,26 @@ import java.util.Map;
 
 public class RowsChanged implements Commitable<WALValue> {
 
-    private final RegionName regionName;
+    private final VersionedRegionName versionedRegionName;
     private final long oldestApply;
     private final Table<Long, WALKey, WALValue> apply;
     private final Map<WALKey, WALTimestampId> remove;
     private final Map<WALKey, WALTimestampId> clobber;
 
-    public RowsChanged(RegionName regionName,
+    public RowsChanged(VersionedRegionName versionedRegionName,
         long oldestApply,
         Table<Long, WALKey, WALValue> apply,
         Map<WALKey, WALTimestampId> remove,
         Map<WALKey, WALTimestampId> clobber) {
-        this.regionName = regionName;
+        this.versionedRegionName = versionedRegionName;
         this.oldestApply = oldestApply;
         this.apply = apply;
         this.remove = remove;
         this.clobber = clobber;
     }
 
-    public RegionName getRegionName() {
-        return regionName;
+    public VersionedRegionName getVersionedRegionName() {
+        return versionedRegionName;
     }
 
     public long getOldestRowTxId() {
@@ -84,7 +84,7 @@ public class RowsChanged implements Commitable<WALValue> {
     @Override
     public String toString() {
         return "RowsChanged{"
-            + "regionName=" + regionName
+            + "versionedRegionName=" + versionedRegionName
             + ", oldestApply=" + oldestApply
             + ", apply=" + apply
             + ", remove=" + remove

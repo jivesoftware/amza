@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.mapdb;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
@@ -20,8 +21,8 @@ public class MapdbRowIndexNGTest {
     @Test
     public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
-        RegionName regionName = new RegionName(false, "r1", "t1");
-        MapdbWALIndex index = new MapdbWALIndex(dir0, regionName);
+        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(false, "r1", "t1"), 0);
+        MapdbWALIndex index = new MapdbWALIndex(dir0, versionedRegionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(UIO.intBytes(1)), new WALPointer(1L, System.currentTimeMillis(), false))));
 
@@ -30,7 +31,7 @@ public class MapdbRowIndexNGTest {
         index.close();
 
         // reopen
-        index = new MapdbWALIndex(dir0, regionName);
+        index = new MapdbWALIndex(dir0, versionedRegionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(UIO.intBytes(2)), new WALPointer(2L, System.currentTimeMillis(), false))));
         got = index.getPointer(new WALKey(UIO.intBytes(2)));
@@ -51,8 +52,8 @@ public class MapdbRowIndexNGTest {
     public void testCompact() throws Exception {
 
         File dir0 = Files.createTempDir();
-        RegionName regionName = new RegionName(false, "r1", "t1");
-        MapdbWALIndex index = new MapdbWALIndex(dir0, regionName);
+        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(false, "r1", "t1"), 0);
+        MapdbWALIndex index = new MapdbWALIndex(dir0, versionedRegionName);
 
         for (int i = 0; i < 50; i++) {
             index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(

@@ -7,10 +7,10 @@ import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
 import com.jivesoftware.os.amza.shared.Highwaters;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.Scan;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
@@ -42,7 +42,7 @@ class RegionDelta {
 
     public static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final RegionName regionName;
+    private final VersionedRegionName versionedRegionName;
     private final DeltaWAL deltaWAL;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
@@ -53,12 +53,12 @@ class RegionDelta {
     private final ConcurrentSkipListMap<Long, List<Long>> txIdWAL = new ConcurrentSkipListMap<>();
     private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
 
-    RegionDelta(RegionName regionName,
+    RegionDelta(VersionedRegionName versionedRegionName,
         DeltaWAL deltaWAL,
         PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         RegionDelta compacting) {
-        this.regionName = regionName;
+        this.versionedRegionName = versionedRegionName;
         this.deltaWAL = deltaWAL;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
@@ -260,9 +260,9 @@ class RegionDelta {
         final RegionDelta compact = compacting.get();
         if (compact != null) {
             if (!compact.txIdWAL.isEmpty()) {
-                final RegionStore regionStore = regionIndex.get(compact.regionName);
+                final RegionStore regionStore = regionIndex.get(compact.versionedRegionName);
                 final long highestTxId = regionStore.highestTxId();
-                LOG.info("Merging ({}) deltas for region: {} from tx: {}", compact.orderedIndex.size(), compact.regionName, highestTxId);
+                LOG.info("Merging ({}) deltas for region: {} from tx: {}", compact.orderedIndex.size(), compact.versionedRegionName, highestTxId);
                 LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
                 regionStore.directCommit(true,
                     null,
@@ -299,7 +299,7 @@ class RegionDelta {
                             throw new RuntimeException("Error while streaming entry set.", ex);
                         }
                     });
-                LOG.info("Merged deltas for " + compact.regionName);
+                LOG.info("Merged deltas for " + compact.versionedRegionName);
             }
         }
         compacting.set(null);

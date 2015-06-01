@@ -17,10 +17,10 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowType;
 import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -42,7 +42,7 @@ class MultiRegionWALScanBatchinator implements RowStream {
     private final AmzaStats amzaStats;
     private final PrimaryRowMarshaller<byte[]> rowMarshaller;
     private final RegionStripeProvider regionStripeProvider;
-    private final Map<RegionName, RegionBatch> regionBatches = new HashMap<>();
+    private final Map<VersionedRegionName, RegionBatch> regionBatches = new HashMap<>();
 
     public MultiRegionWALScanBatchinator(AmzaStats amzaStats, PrimaryRowMarshaller<byte[]> rowMarshaller, RegionStripeProvider regionStripeProvider) {
         this.amzaStats = amzaStats;
@@ -60,15 +60,12 @@ class MultiRegionWALScanBatchinator implements RowStream {
             byte[] keyBytes = new byte[bb.getInt()];
             bb.get(keyBytes);
 
-            RegionName regionName = RegionName.fromBytes(regionNameBytes);
-            RegionBatch regionBatch = regionBatches.get(regionName);
+            VersionedRegionName versionedRegionName = VersionedRegionName.fromBytes(regionNameBytes);
+            RegionBatch regionBatch = regionBatches.get(versionedRegionName);
             if (regionBatch == null) {
-                Optional<RegionStripe> regionStripe = regionStripeProvider.getRegionStripe(regionName);
-                if (!regionStripe.isPresent()) {
-                    throw new RuntimeException("Encountered an undefined region." + regionName);
-                }
-                regionBatch = new RegionBatch(amzaStats, regionName, regionStripe.get());
-                regionBatches.put(regionName, regionBatch);
+                RegionStripe regionStripe = regionStripeProvider.getRegionStripe(versionedRegionName.getRegionName());
+                regionBatch = new RegionBatch(amzaStats, versionedRegionName, regionStripe);
+                regionBatches.put(versionedRegionName, regionBatch);
             }
             regionBatch.add(rowTxId, new WALKey(keyBytes), row.value);
         }
@@ -77,7 +74,7 @@ class MultiRegionWALScanBatchinator implements RowStream {
 
     public boolean flush() throws Exception {
         boolean flushed = false;
-        for (Map.Entry<RegionName, RegionBatch> entrySet : regionBatches.entrySet()) {
+        for (Map.Entry<VersionedRegionName, RegionBatch> entrySet : regionBatches.entrySet()) {
             RegionBatch regionBatch = entrySet.getValue();
             flushed |= regionBatch.flush();
 
@@ -88,15 +85,15 @@ class MultiRegionWALScanBatchinator implements RowStream {
     static class RegionBatch {
 
         private final AmzaStats amzaStats;
-        private final RegionName regionName;
+        private final VersionedRegionName versionedRegionName;
         private final RegionStripe regionStripe;
         private final Map<WALKey, WALValue> batch = new HashMap<>();
         private final MutableLong lastTxId;
         private final MutableBoolean flushed = new MutableBoolean(false);
 
-        public RegionBatch(AmzaStats amzaStats, RegionName regionName, RegionStripe regionStripe) {
+        public RegionBatch(AmzaStats amzaStats, VersionedRegionName versionedRegionName, RegionStripe regionStripe) {
             this.amzaStats = amzaStats;
-            this.regionName = regionName;
+            this.versionedRegionName = versionedRegionName;
             this.regionStripe = regionStripe;
             this.lastTxId = new MutableLong(Long.MIN_VALUE);
         }
@@ -121,13 +118,19 @@ class MultiRegionWALScanBatchinator implements RowStream {
 
         public boolean flush() throws Exception {
             if (!batch.isEmpty()) {
-                RowsChanged changes = regionStripe.commit(regionName, null, WALStorageUpdateMode.noReplication, new MemoryWALUpdates(batch, null));
-                amzaStats.receivedApplied(regionName, changes.getApply().size(), changes.getOldestRowTxId());
+                RowsChanged changes = regionStripe.commit(versionedRegionName.getRegionName(),
+                    Optional.of(versionedRegionName.getRegionVersion()),
+                    null,
+                    WALStorageUpdateMode.noReplication,
+                    new MemoryWALUpdates(batch, null));
+                if (changes != null) {
+                    amzaStats.receivedApplied(versionedRegionName.getRegionName(), changes.getApply().size(), changes.getOldestRowTxId());
+                }
                 batch.clear();
             }
             if (!flushed.booleanValue()) {
-                amzaStats.received(regionName, 0, Long.MAX_VALUE);
-                amzaStats.receivedApplied(regionName, 0, Long.MAX_VALUE);
+                amzaStats.received(versionedRegionName.getRegionName(), 0, Long.MAX_VALUE);
+                amzaStats.receivedApplied(versionedRegionName.getRegionName(), 0, Long.MAX_VALUE);
             }
             return flushed.booleanValue();
         }

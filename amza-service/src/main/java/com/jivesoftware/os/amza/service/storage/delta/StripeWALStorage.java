@@ -4,11 +4,11 @@ import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.Highwaters;
 import com.jivesoftware.os.amza.shared.RangeScannable;
-import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
@@ -26,24 +26,44 @@ public interface StripeWALStorage {
 
     void compact(RegionIndex regionIndex) throws Exception;
 
-    RowsChanged update(RegionName regionName,
+    RowsChanged update(VersionedRegionName versionedRegionName,
         WALStorage storage,
         WALReplicator replicator,
         WALStorageUpdateMode mode,
         Commitable<WALValue> updates) throws Exception;
 
-    WALValue get(RegionName regionName, WALStorage storage, WALKey key) throws Exception;
+    WALValue get(VersionedRegionName versionedRegionName,
+        WALStorage storage,
+        WALKey key) throws Exception;
 
-    boolean containsKey(RegionName regionName, WALStorage storage, WALKey key) throws Exception;
+    boolean containsKey(VersionedRegionName versionedRegionName,
+        WALStorage storage,
+        WALKey key) throws Exception;
 
-    void takeRowUpdatesSince(RegionName regionName, WALStorage storage, final long transactionId, RowStream rowUpdates) throws Exception;
+    void takeRowUpdatesSince(VersionedRegionName versionedRegionName,
+        WALStorage storage,
+        long transactionId,
+        RowStream rowUpdates) throws Exception;
 
-    boolean takeFromTransactionId(RegionName regionName, WALStorage walStorage, long transactionId, Highwaters highwaters,
+    boolean takeFromTransactionId(VersionedRegionName versionedRegionName,
+        WALStorage walStorage,
+        long transactionId,
+        Highwaters highwaters,
         Scan<WALValue> scan) throws Exception;
 
-    void rangeScan(RegionName regionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to, Scan<WALValue> scan) throws Exception;
+    void rangeScan(VersionedRegionName versionedRegionName,
+        RangeScannable<WALValue> rangeScannable,
+        WALKey from,
+        WALKey to,
+        Scan<WALValue> scan) throws Exception;
 
-    void rowScan(RegionName regionName, Scannable<WALValue> scanable, Scan<WALValue> scan) throws Exception;
+    void rowScan(VersionedRegionName versionedRegionName,
+        Scannable<WALValue> scanable,
+        Scan<WALValue> scan) throws Exception;
 
-    long count(RegionName regionName, WALStorage storage) throws Exception;
+    long count(VersionedRegionName versionedRegionName,
+        WALStorage storage) throws Exception;
+
+    boolean expunge(VersionedRegionName versionedRegionName,
+        WALStorage walStorage) throws Exception;
 }

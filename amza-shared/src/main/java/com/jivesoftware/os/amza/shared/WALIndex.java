@@ -47,6 +47,8 @@ public interface WALIndex extends RangeScannable<WALPointer> {
 
     CompactionWALIndex startCompaction() throws Exception;
 
+    boolean delete() throws Exception;
+
     interface CompactionWALIndex {
 
         void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception;

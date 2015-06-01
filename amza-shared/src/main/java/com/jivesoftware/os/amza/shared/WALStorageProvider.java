@@ -23,8 +23,8 @@ public interface WALStorageProvider {
 
     WALStorage create(File workingDirectory,
         String domain,
-        RegionName regionName,
+        VersionedRegionName regionName,
         WALStorageDescriptor storageDescriptor) throws Exception;
 
-    Set<RegionName> listExisting(String[] workingDirectories, String domain) throws IOException;
+    Set<VersionedRegionName> listExisting(String[] workingDirectories, String domain) throws IOException;
 }

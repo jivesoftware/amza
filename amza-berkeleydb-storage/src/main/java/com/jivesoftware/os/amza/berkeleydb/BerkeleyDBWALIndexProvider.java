@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
-import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
@@ -34,16 +34,16 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     }
 
     @Override
-    public BerkeleyDBWALIndex createIndex(RegionName regionName) throws Exception {
-        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, regionName.toBase64());
-        return new BerkeleyDBWALIndex(environments[Math.abs(regionName.hashCode()) % environments.length], name);
+    public BerkeleyDBWALIndex createIndex(VersionedRegionName versionedRegionName) throws Exception {
+        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, versionedRegionName.toBase64());
+        return new BerkeleyDBWALIndex(environments[Math.abs(versionedRegionName.hashCode()) % environments.length], name);
     }
 
     @Override
-    public void deleteIndex(RegionName regionName) throws Exception {
-        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, regionName.toBase64());
+    public void deleteIndex(VersionedRegionName versionedRegionName) throws Exception {
+        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, versionedRegionName.toBase64());
         for (BerkeleyDBWALIndexName n : name.all()) {
-            environments[Math.abs(regionName.hashCode()) % environments.length].removeDatabase(null, n.getName());
+            environments[Math.abs(versionedRegionName.hashCode()) % environments.length].removeDatabase(null, n.getName());
         }
     }
 

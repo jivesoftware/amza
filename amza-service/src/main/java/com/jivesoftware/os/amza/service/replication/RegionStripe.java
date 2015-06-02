@@ -81,12 +81,13 @@ public class RegionStripe {
 
     public RowsChanged commit(RegionName regionName,
         Optional<Long> specificVersion,
+        boolean requiresOnline,
         WALReplicator replicator,
         WALStorageUpdateMode walStorageUpdateMode,
         Commitable<WALValue> updates) throws Exception {
 
         return txRegionState.tx(regionName, (versionedRegionName, regionStatus) -> {
-            Preconditions.checkState(regionStatus == TxRegionStatus.Status.ONLINE, "Region:%s status:%s is not online.", regionName, regionStatus);
+            Preconditions.checkState(regionStatus == TxRegionStatus.Status.ONLINE || !requiresOnline, "Region:%s status:%s is not online.", regionName, regionStatus);
             if (specificVersion.isPresent() && versionedRegionName.getRegionVersion() != specificVersion.get()) {
                 return null;
             }

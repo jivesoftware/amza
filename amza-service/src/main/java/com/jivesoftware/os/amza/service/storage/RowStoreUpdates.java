@@ -53,7 +53,12 @@ public class RowStoreUpdates {
 
     public void commit(WALReplicator replicator, WALStorageUpdateMode mode) throws Exception {
         if (changedCount > 0) {
-            RowsChanged commit = regionStripe.commit(regionName, Optional.absent(), replicator, mode, rowsStorageChangeSet);
+            RowsChanged commit = regionStripe.commit(regionName,
+                Optional.absent(),
+                true,
+                replicator,
+                mode,
+                rowsStorageChangeSet);
             amzaStats.direct(regionName, changedCount, commit.getOldestRowTxId());
         }
     }

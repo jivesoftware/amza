@@ -106,6 +106,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         }
         systemRegionStripe.commit(RegionProvider.NODE_INDEX.getRegionName(),
             Optional.absent(),
+            false,
             replicator,
             WALStorageUpdateMode.noReplication,
             (highwater, scan) -> {
@@ -118,6 +119,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
     public void deregister(RingMember ringMember) throws Exception {
         systemRegionStripe.commit(RegionProvider.NODE_INDEX.getRegionName(),
             Optional.absent(),
+            false,
             replicator,
             WALStorageUpdateMode.noReplication,
             (highwater, scan) -> {
@@ -218,6 +220,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
 
         systemRegionStripe.commit(RegionProvider.RING_INDEX.getRegionName(),
             Optional.absent(),
+            false,
             replicator,
             WALStorageUpdateMode.replicateThenUpdate,
             (highwater, scan) -> {
@@ -239,6 +242,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         if (had != null) {
             systemRegionStripe.commit(RegionProvider.RING_INDEX.getRegionName(),
                 Optional.absent(),
+                false,
                 replicator,
                 WALStorageUpdateMode.replicateThenUpdate,
                 (highwater, scan) -> {

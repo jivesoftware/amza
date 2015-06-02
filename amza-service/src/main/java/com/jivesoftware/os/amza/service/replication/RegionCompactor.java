@@ -82,7 +82,7 @@ public class RegionCompactor {
     private void compactTombstone(int stripe, long removeTombstonedOlderThanTimestampId) throws Exception {
 
         for (VersionedRegionName versionedRegionName : regionIndex.getAllRegions()) {
-            if (Math.abs(versionedRegionName.hashCode()) % numberOfCompactorThreads == stripe) {
+            if (Math.abs(versionedRegionName.getRegionName().hashCode()) % numberOfCompactorThreads == stripe) {
                 long ttlTimestampId = 0;
                 RegionProperties regionProperties = regionIndex.getProperties(versionedRegionName.getRegionName());
                 if (regionProperties != null) {

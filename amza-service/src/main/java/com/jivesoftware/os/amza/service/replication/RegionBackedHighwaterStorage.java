@@ -54,6 +54,7 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
         systemRegionStripe.rangeScan(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(), from, to, (long rowTxId, WALKey key, WALValue value) -> {
             systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(),
                 Optional.absent(),
+                false,
                 replicator,
                 WALStorageUpdateMode.replicateThenUpdate,
                 (highwaters, scan) -> {
@@ -99,6 +100,7 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
         if (regionHighwaterUpdates != null) {
             systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(),
                 Optional.absent(),
+                false,
                 replicator,
                 WALStorageUpdateMode.replicateThenUpdate,
                 (highwater, scan) -> {
@@ -153,6 +155,7 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
         if (regions != null && !regions.isEmpty()) {
             systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(),
                 Optional.absent(),
+                false,
                 replicator,
                 WALStorageUpdateMode.replicateThenUpdate,
                 (highwater, scan) -> {
@@ -171,6 +174,7 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
 
         systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(),
             Optional.absent(),
+            false,
             replicator,
             WALStorageUpdateMode.replicateThenUpdate,
             (highwater, scan) -> {

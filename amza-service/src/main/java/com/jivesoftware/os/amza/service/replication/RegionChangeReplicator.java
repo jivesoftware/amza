@@ -208,7 +208,7 @@ public class RegionChangeReplicator implements WALReplicator {
     void resendLocalChanges(int stripe) throws Exception {
 
         for (VersionedRegionName versionedRegionName : regionIndex.getAllRegions()) {
-            if (Math.abs(versionedRegionName.hashCode()) % numberOfResendThreads == stripe) {
+            if (Math.abs(versionedRegionName.getRegionName().hashCode()) % numberOfResendThreads == stripe) {
                 RingNeighbors hostRing = amzaRing.getRingNeighbors(versionedRegionName.getRegionName().getRingName());
                 Entry<RingMember, RingHost>[] belowRing = hostRing.getBelowRing();
                 if (belowRing.length > 0) {

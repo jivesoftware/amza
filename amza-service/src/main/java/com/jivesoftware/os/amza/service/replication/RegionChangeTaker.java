@@ -401,6 +401,7 @@ public class RegionChangeTaker {
                 MemoryWALUpdates updates = new MemoryWALUpdates(batch, walh);
                 RowsChanged changes = regionStripe.commit(versionedRegionName.getRegionName(),
                     Optional.of(versionedRegionName.getRegionVersion()),
+                    false,
                     null,
                     WALStorageUpdateMode.noReplication, updates);
                 if (changes != null) {

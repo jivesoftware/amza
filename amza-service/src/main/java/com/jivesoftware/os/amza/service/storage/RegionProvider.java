@@ -84,24 +84,21 @@ public class RegionProvider {
         RegionStore regionStore = regionIndex.get(versionedRegionName);
         if (regionStore == null) {
             updateRegionProperties(regionName, properties);
-            regionStore = regionIndex.get(versionedRegionName);
-            if (regionStore != null) {
-                final byte[] rawRegionName = regionName.toBytes();
-                final WALKey regionKey = new WALKey(rawRegionName);
-                RegionStore regionIndexStore = versionedRegionName.equals(REGION_INDEX) ? regionStore : regionIndex.get(REGION_INDEX);
-                RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
-                    scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
-                });
-                regionIndexStore.flush(hardFlush);
-                if (!changed.isEmpty()) {
-                    rowChanges.changes(changed);
-                }
+
+            byte[] rawRegionName = regionName.toBytes();
+            WALKey regionKey = new WALKey(rawRegionName);
+            RegionStore regionIndexStore = regionIndex.get(REGION_INDEX);
+            RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
+                scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
+            });
+            regionIndexStore.flush(hardFlush);
+            if (!changed.isEmpty()) {
+                rowChanges.changes(changed);
             }
         }
     }
 
-    public void updateRegionProperties(final RegionName regionName, final RegionProperties properties) throws Exception {
-        regionIndex.putProperties(regionName, properties);
+    public void updateRegionProperties(RegionName regionName, RegionProperties properties) throws Exception {
         RegionStore regionPropertiesStore = regionIndex.get(REGION_PROPERTIES);
         RowsChanged changed = regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
             scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(regionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
@@ -110,6 +107,7 @@ public class RegionProvider {
         if (!changed.isEmpty()) {
             rowChanges.changes(changed);
         }
+        regionIndex.putProperties(regionName, properties);
     }
 
     public void destroyRegion(RegionName regionName) throws Exception {

@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -125,7 +126,7 @@ public class AmzaEndpoints {
         }
     }
 
-    AmzaRegion createRegionIfAbsent(String regionName) throws Exception {
+    AmzaRegion createRegionIfAbsent(String simpleRegionName) throws Exception {
 
         int ringSize = amzaService.getAmzaHostRing().getRingSize("default");
         int systemRingSize = amzaService.getAmzaHostRing().getRingSize("system");
@@ -136,8 +137,19 @@ public class AmzaEndpoints {
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
-        return amzaService.createRegionIfAbsent(new RegionName(false, "default", regionName),
-            new RegionProperties(storageDescriptor, 1, 1, false)
-        );
+        RegionName regionName = new RegionName(false, "default", simpleRegionName);
+        amzaService.setPropertiesIfAbsent(regionName, new RegionProperties(storageDescriptor, 1, 1, false));
+
+        AmzaService.AmzaRoute regionRoute = amzaService.getRegionRoute(regionName);
+        long start = System.currentTimeMillis();
+        long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
+        while (regionRoute.orderedRegionHosts.isEmpty() && (System.currentTimeMillis() - start) > maxSleep) {
+            Thread.sleep(1000); // Sorry calling thread.
+            regionRoute = amzaService.getRegionRoute(regionName);
+        }
+        if (regionRoute.orderedRegionHosts.isEmpty()) {
+            throw new RuntimeException("Region failed to come ONLINE in " + maxSleep);
+        }
+        return amzaService.getRegion(regionName);
     }
 }

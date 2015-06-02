@@ -97,6 +97,14 @@ public class RegionStatusStorage implements TxRegionStatus {
         markAsOnline(versionedRegionName);
     }
 
+    public VersionedStatus getStatus(RingMember ringMember, RegionName regionName) throws Exception {
+        WALValue rawStatus = systemRegionStripe.get(RegionProvider.REGION_ONLINE_INDEX.getRegionName(), walKey(rootRingMember, regionName));
+        if (rawStatus == null || rawStatus.getTombstoned()) {
+            return null;
+        }
+        return VersionedStatus.fromBytes(rawStatus.getValue());
+    }
+
     public VersionedRegionName markAsKetchup(RegionName regionName) throws Exception {
         if (regionName.isSystemRegion()) {
             return new VersionedRegionName(regionName, 0);

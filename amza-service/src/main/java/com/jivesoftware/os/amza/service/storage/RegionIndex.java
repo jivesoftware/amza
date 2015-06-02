@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
@@ -119,23 +120,35 @@ public class RegionIndex implements RowChanges {
                 return regionStore;
             }
         }
-
-        RegionProperties properties = getProperties(regionName);
-        if (properties == null) {
-            ConcurrentHashMap<Long, RegionStore> versionedRegionPropertiesStores = regionStores.get(RegionProvider.REGION_PROPERTIES.getRegionName());
-            RegionStore store = versionedRegionPropertiesStores == null ? null : versionedRegionPropertiesStores.get(0L);
-            if (store != null) {
-                WALValue rawRegionProperties = store.get(new WALKey(regionName.toBytes()));
-                if (rawRegionProperties == null || rawRegionProperties.getTombstoned()) {
-                    return null;
-                }
-                properties = regionPropertyMarshaller.fromBytes(rawRegionProperties.getValue());
-                regionProperties.put(regionName, properties);
-            } else {
+        
+        WALKey regionNameKey = new WALKey(regionName.toBytes());
+        if (!versionedRegionName.getRegionName().isSystemRegion()) {
+            if (!getSystemRegion(RegionProvider.REGION_INDEX).containsKey(regionNameKey)) {
                 return null;
             }
         }
+
+        RegionProperties properties = getProperties(regionName);
+        if (properties == null) {
+
+            WALValue rawRegionProperties = getSystemRegion(RegionProvider.REGION_PROPERTIES).get(regionNameKey);
+            if (rawRegionProperties == null || rawRegionProperties.getTombstoned()) {
+                return null;
+            }
+            properties = regionPropertyMarshaller.fromBytes(rawRegionProperties.getValue());
+            regionProperties.put(regionName, properties);
+        }
         return open(versionedRegionName, properties);
+    }
+
+    private RegionStore getSystemRegion(VersionedRegionName versionedRegionName) {
+        Preconditions.checkArgument(versionedRegionName.getRegionName().isSystemRegion(), "Should ony be called by system regions.");
+        ConcurrentHashMap<Long, RegionStore> versionedRegionStores = regionStores.get(versionedRegionName.getRegionName());
+        RegionStore store = versionedRegionStores == null ? null : versionedRegionStores.get(0L);
+        if (store == null) {
+            throw new IllegalStateException("There is no system region for " + versionedRegionName);
+        }
+        return store;
     }
 
     public RegionStore remove(VersionedRegionName versionedRegionName) {

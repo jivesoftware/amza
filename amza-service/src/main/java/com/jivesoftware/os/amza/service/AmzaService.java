@@ -53,6 +53,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -167,18 +168,82 @@ public class AmzaService implements AmzaInstance {
         return orderIdProvider.getApproximateId(timestampId, deltaMillis);
     }
 
-    public AmzaRegion createRegionIfAbsent(RegionName regionName, RegionProperties regionProperties) throws Exception {
+    public void setPropertiesIfAbsent(RegionName regionName, RegionProperties regionProperties) throws Exception {
+        RegionProperties properties = regionIndex.getProperties(regionName);
+        if (properties == null) {
+            regionProvider.updateRegionProperties(regionName, regionProperties);
+        }
+    }
+
+    public AmzaRoute getRegionRoute(RegionName regionName) throws Exception {
+
+        List<RingHost> orderedRegionHosts = new ArrayList<>();
+        List<RingMember> unregisteredRingMembers = new ArrayList<>();
+        List<RingMember> ketchupRingMembers = new ArrayList<>();
+        List<RingMember> expungedRingMembers = new ArrayList<>();
+        List<RingMember> missingRingMembers = new ArrayList<>();
+
+        NavigableMap<RingMember, RingHost> ring = amzaHostRing.getRing(regionName.getRingName());
+
+        RegionProperties properties = regionIndex.getProperties(regionName);
+        if (properties == null) {
+            return new AmzaRoute(new ArrayList<>(ring.values()),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList());
+        }
         if (amzaHostRing.isMemberOfRing(regionName.getRingName())) {
-            return regionStatusStorage.tx(regionName, (versionedRegionName, regionStatus) -> {
+            regionStatusStorage.tx(regionName, (versionedRegionName, regionStatus) -> {
                 if (regionStatus == null) {
                     versionedRegionName = regionStatusStorage.markAsKetchup(regionName);
                 }
 
-                regionProvider.createRegionStoreIfAbsent(versionedRegionName, regionProperties);
+                regionProvider.createRegionStoreIfAbsent(versionedRegionName, properties);
                 return getRegion(regionName);
             });
-        } else {
-            throw new IllegalStateException(amzaHostRing.getRingMember() + " is not a member for regionName:" + regionName);
+        }
+
+        for (Entry<RingMember, RingHost> e : ring.entrySet()) {
+            if (e.getValue() == RingHost.UNKNOWN_RING_HOST) {
+                unregisteredRingMembers.add(e.getKey());
+            }
+            RegionStatusStorage.VersionedStatus versionedStatus = regionStatusStorage.getStatus(e.getKey(), regionName);
+            if (versionedStatus == null) {
+                missingRingMembers.add(e.getKey());
+            } else if (versionedStatus.status == TxRegionStatus.Status.EXPUNGE) {
+                expungedRingMembers.add(e.getKey());
+            } else if (versionedStatus.status == TxRegionStatus.Status.KETCHUP) {
+                ketchupRingMembers.add(e.getKey());
+            } else {
+                orderedRegionHosts.add(e.getValue());
+            }
+        }
+        return new AmzaRoute(Collections.emptyList(), orderedRegionHosts, unregisteredRingMembers, ketchupRingMembers, expungedRingMembers, missingRingMembers);
+    }
+
+    public static class AmzaRoute {
+
+        public List<RingHost> uninitializedHosts;
+        public List<RingHost> orderedRegionHosts;
+        public List<RingMember> unregisteredRingMembers;
+        public List<RingMember> ketchupRingMembers;
+        public List<RingMember> expungedRingMembers;
+        public List<RingMember> missingRingMembers;
+
+        public AmzaRoute(List<RingHost> uninitializedHosts,
+            List<RingHost> orderedRegionHosts,
+            List<RingMember> unregisteredRingMembers,
+            List<RingMember> ketchupRingMembers,
+            List<RingMember> expungedRingMembers,
+            List<RingMember> missingRingMembers) {
+            this.uninitializedHosts = uninitializedHosts;
+            this.orderedRegionHosts = orderedRegionHosts;
+            this.unregisteredRingMembers = unregisteredRingMembers;
+            this.ketchupRingMembers = ketchupRingMembers;
+            this.expungedRingMembers = expungedRingMembers;
+            this.missingRingMembers = missingRingMembers;
         }
 
     }
@@ -338,7 +403,7 @@ public class AmzaService implements AmzaInstance {
                     regionStatusStorage.markAsKetchup(regionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for region {}", new Object[] { regionName }, x);
+                LOG.warn("Failed to mark as ketchup for region {}", new Object[]{regionName}, x);
             }
         }
     }

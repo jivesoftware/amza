@@ -49,6 +49,8 @@ import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -63,6 +65,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 public class AmzaTestCluster {
+
+    private final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private static final TimestampedOrderIdProvider ORDER_ID_PROVIDER = new OrderIdProviderImpl(new ConstantWriterIdProvider(1),
         new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
@@ -231,7 +235,15 @@ public class AmzaTestCluster {
         public void create(RegionName regionName) throws Exception {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            amzaService.createRegionIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
+
+            amzaService.setPropertiesIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
+
+            AmzaService.AmzaRoute regionRoute = amzaService.getRegionRoute(regionName);
+            while (regionRoute.orderedRegionHosts.isEmpty()) {
+                LOG.info("Wating for " + regionName + " to come online.");
+                Thread.sleep(10000);
+                regionRoute = amzaService.getRegionRoute(regionName);
+            }
         }
 
         void addToReplicatedWAL(RegionName mapName, Commitable<WALValue> changes) throws Exception {

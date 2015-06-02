@@ -220,6 +220,7 @@ public class AmzaServiceInitializer {
         AmzaHostRing amzaHostRing = new AmzaHostRing(amzaRingReader, systemRegionStripe, replicator, orderIdProvider);
         amzaRegionWatcher.watch(RegionProvider.RING_INDEX.getRegionName(), amzaHostRing);
         amzaHostRing.register(ringMember, ringHost);
+        amzaHostRing.addRingMember("system", ringMember);
 
         WALs replicatedWALs = new WALs(config.workingDirectories, "amza/WAL/replicated", replicaWALStorageProvider);
         replicatedWALs.load();

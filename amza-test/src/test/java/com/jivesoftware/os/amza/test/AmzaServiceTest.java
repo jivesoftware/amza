@@ -33,9 +33,9 @@ public class AmzaServiceTest {
 
     @Test(enabled = true)
     public void testAddToReplicatedWAL() throws Exception {
-        final int maxUpdates = 1;
+        final int maxUpdates = 100;
         final int delayBetweenUpdates = 0;
-        final int maxFields = 1;
+        final int maxFields = 10;
         final int maxOffServices = 0;
         final int maxRemovedServices = 0;
         final int maxAddService = 0;

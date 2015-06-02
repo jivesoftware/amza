@@ -141,7 +141,7 @@ public class AmzaServiceTest {
                 }
             }
             if (falseCount > 0) {
-                Thread.sleep(10000);
+                Thread.sleep(1000);
                 System.out.println("---------------------------------------------------------------------\n\n\n\n");
             }
         }

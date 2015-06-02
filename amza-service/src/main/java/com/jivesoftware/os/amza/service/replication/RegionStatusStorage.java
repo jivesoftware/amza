@@ -179,6 +179,7 @@ public class RegionStatusStorage implements TxRegionStatus {
                 byte[] versionedStatusBytes = commitableVersionStatus.toBytes();
                 systemRegionStripe.commit(RegionProvider.REGION_ONLINE_INDEX.getRegionName(),
                     Optional.absent(),
+                    false,
                     replicator,
                     WALStorageUpdateMode.replicateThenUpdate,
                     (highwaters, scan) -> {
@@ -204,6 +205,7 @@ public class RegionStatusStorage implements TxRegionStatus {
             transactor.doWithAll(compost, Status.EXPUNGE, (versionedRegionName, regionStatus) -> {
                 systemRegionStripe.commit(RegionProvider.REGION_ONLINE_INDEX.getRegionName(),
                     Optional.absent(),
+                    false,
                     replicator,
                     WALStorageUpdateMode.replicateThenUpdate,
                     (highwaters, scan) -> {

@@ -120,6 +120,7 @@ class MultiRegionWALScanBatchinator implements RowStream {
             if (!batch.isEmpty()) {
                 RowsChanged changes = regionStripe.commit(versionedRegionName.getRegionName(),
                     Optional.of(versionedRegionName.getRegionVersion()),
+                    false,
                     null,
                     WALStorageUpdateMode.noReplication,
                     new MemoryWALUpdates(batch, null));

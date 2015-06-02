@@ -168,10 +168,9 @@ public class AmzaServiceInitializer {
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
             regionStripes[i] = new RegionStripe("stripe-" + i, amzaStats, regionIndex, deltaWALStorage, regionStatusStorage, amzaRegionWatcher,
-                (input) -> {
-                    if (!input.getRegionName().isSystemRegion()) {
-
-                        return Math.abs(input.hashCode()) % deltaStorageStripes == stripeId;
+                (versionedRegionName) -> {
+                    if (!versionedRegionName.getRegionName().isSystemRegion()) {
+                        return Math.abs(versionedRegionName.getRegionName().hashCode()) % deltaStorageStripes == stripeId;
                     }
                     return false;
                 });

@@ -63,6 +63,8 @@ import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class AmzaTestCluster {
 
@@ -241,7 +243,7 @@ public class AmzaTestCluster {
             AmzaService.AmzaRoute regionRoute = amzaService.getRegionRoute(regionName);
             while (regionRoute.orderedRegionHosts.isEmpty()) {
                 LOG.info("Wating for " + regionName + " to come online.");
-                Thread.sleep(10000);
+                Thread.sleep(100);
                 regionRoute = amzaService.getRegionRoute(regionName);
             }
         }
@@ -288,8 +290,11 @@ public class AmzaTestCluster {
 
             try {
                 ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-                amzaService.streamingTakeFromRegion(new DataOutputStream(bytesOut), regionName, transactionId);
-
+                Future<Object> submit = Executors.newSingleThreadExecutor().submit(() -> {
+                    amzaService.streamingTakeFromRegion(new DataOutputStream(bytesOut), regionName, transactionId);
+                    return null;
+                });
+                submit.get();
                 StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
                 StreamingTakesConsumer.StreamingTakeConsumed consumed = streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()),
                     rowStream);

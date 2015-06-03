@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.storage;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
@@ -22,9 +22,9 @@ public class FileBackedRowIndexNGTest {
         File dir0 = Files.createTempDir();
         File dir1 = Files.createTempDir();
         File dir2 = Files.createTempDir();
-        RegionName regionName = new RegionName(false, "r1", "t1");
+        PartitionName partitionName = new PartitionName(false, "r1", "t1");
 
-        FileBackedWALIndex index = new FileBackedWALIndex(regionName, 4, false, 0, new File[]{dir0, dir1, dir2});
+        FileBackedWALIndex index = new FileBackedWALIndex(partitionName, 4, false, 0, new File[]{dir0, dir1, dir2});
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(UIO.intBytes(1)), new WALPointer(1L, System.currentTimeMillis(), false))));
 
@@ -32,7 +32,7 @@ public class FileBackedRowIndexNGTest {
         Assert.assertEquals(got.getFp(), 1L);
 
         // reopen
-        index = new FileBackedWALIndex(regionName, 4, false, 0, new File[]{dir0, dir1, dir2});
+        index = new FileBackedWALIndex(partitionName, 4, false, 0, new File[]{dir0, dir1, dir2});
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(UIO.intBytes(2)), new WALPointer(2L, System.currentTimeMillis(), false))));
         got = index.getPointer(new WALKey(UIO.intBytes(2)));
@@ -55,8 +55,8 @@ public class FileBackedRowIndexNGTest {
         File dir0 = Files.createTempDir();
         File dir1 = Files.createTempDir();
         File dir2 = Files.createTempDir();
-        RegionName regionName = new RegionName(false, "r1", "t1");
-        FileBackedWALIndex index = new FileBackedWALIndex(regionName, 4, false, 0, new File[]{dir0, dir1, dir2});
+        PartitionName partitionName = new PartitionName(false, "r1", "t1");
+        FileBackedWALIndex index = new FileBackedWALIndex(partitionName, 4, false, 0, new File[]{dir0, dir1, dir2});
 
         for (int i = 0; i < 50; i++) {
             index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(

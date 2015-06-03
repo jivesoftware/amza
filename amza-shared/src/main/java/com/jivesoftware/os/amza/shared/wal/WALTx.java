@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 
 /**
  *
@@ -17,7 +17,7 @@ public interface WALTx {
 
     void validateAndRepair() throws Exception;
 
-    WALIndex load(VersionedRegionName regionName) throws Exception;
+    WALIndex load(VersionedPartitionName partitionName) throws Exception;
 
     long length() throws Exception;
 

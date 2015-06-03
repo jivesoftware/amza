@@ -6,7 +6,7 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALIndex.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
@@ -140,19 +140,19 @@ public class BinaryWALTx implements WALTx {
     }
 
     @Override
-    public WALIndex load(VersionedRegionName versionedRegionName) throws Exception {
+    public WALIndex load(VersionedPartitionName versionedPartitionName) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
 
             if (!io.validate()) {
-                LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", versionedRegionName);
-                walIndexProvider.deleteIndex(versionedRegionName);
-                LOG.warn("Removed wal index for {}.", versionedRegionName);
+                LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", versionedPartitionName);
+                walIndexProvider.deleteIndex(versionedPartitionName);
+                LOG.warn("Removed wal index for {}.", versionedPartitionName);
             }
 
-            final WALIndex walIndex = walIndexProvider.createIndex(versionedRegionName);
+            final WALIndex walIndex = walIndexProvider.createIndex(versionedPartitionName);
             if (walIndex.isEmpty()) {
-                LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedRegionName);
+                LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedPartitionName);
 
                 final MutableLong rebuilt = new MutableLong();
                 io.scan(0, true, (final long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
@@ -172,10 +172,10 @@ public class BinaryWALTx implements WALTx {
                     }
                     return true;
                 });
-                LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedRegionName);
+                LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
                 walIndex.commit();
             } else {
-                LOG.info("Checking {} for {}.", walIndex.getClass().getSimpleName(), versionedRegionName);
+                LOG.info("Checking {} for {}.", walIndex.getClass().getSimpleName(), versionedPartitionName);
                 final MutableLong repair = new MutableLong();
                 io.reverseScan(new RowStream() {
                     long commitedUpToTxId = Long.MIN_VALUE;
@@ -201,7 +201,7 @@ public class BinaryWALTx implements WALTx {
                         }
                     }
                 });
-                LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedRegionName);
+                LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
                 walIndex.commit();
             }
             io.initLeaps();
@@ -293,7 +293,7 @@ public class BinaryWALTx implements WALTx {
                 compactionIO.move(dir);
                 // Reopen the world
                 io = ioProvider.create(dir, name);
-                LOG.info("Compacted region " + dir.getAbsolutePath() + "/" + name
+                LOG.info("Compacted partition " + dir.getAbsolutePath() + "/" + name
                     + " was:" + sizeBeforeCompaction + "bytes "
                     + " isNow:" + sizeAfterCompaction + "bytes.");
                 if (compactionRowIndex != null) {

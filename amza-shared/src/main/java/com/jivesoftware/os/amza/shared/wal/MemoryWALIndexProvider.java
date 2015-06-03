@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 
 /**
  *
@@ -9,11 +9,11 @@ import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
 public class MemoryWALIndexProvider implements WALIndexProvider<MemoryWALIndex> {
 
     @Override
-    public MemoryWALIndex createIndex(VersionedRegionName versionedRegionName) throws Exception {
+    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         return new MemoryWALIndex();
     }
 
     @Override
-    public void deleteIndex(VersionedRegionName versionedRegionName) throws Exception {
+    public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
     }
 }

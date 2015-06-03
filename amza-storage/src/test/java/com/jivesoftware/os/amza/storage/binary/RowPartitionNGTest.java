@@ -5,8 +5,8 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -29,7 +29,7 @@ import org.testng.annotations.Test;
  *
  * @author jonathan.colt
  */
-public class RowRegionNGTest {
+public class RowPartitionNGTest {
 
     final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
     final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
@@ -42,12 +42,12 @@ public class RowRegionNGTest {
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedRegionName regionName = new VersionedRegionName(new RegionName(false, "ring", "booya"), 0);
+        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring", "booya"), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         final OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        final IndexedWAL indexedWAL = new IndexedWAL(regionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
+        final IndexedWAL indexedWAL = new IndexedWAL(partitionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
         indexedWAL.load();
 
         final Random r = new Random();
@@ -115,12 +115,12 @@ public class RowRegionNGTest {
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(false, "ring", "booya"), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring", "booya"), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        testEventualConsitency(versionedRegionName, idProvider, binaryWALTx);
+        testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx);
     }
 
     @Test
@@ -131,17 +131,17 @@ public class RowRegionNGTest {
         RowIOProvider binaryRowIOProvider = new MemoryBackedRowIOProvider(ioStats, 1);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(false, "ring", "booya"), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring", "booya"), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        testEventualConsitency(versionedRegionName, idProvider, binaryWALTx);
+        testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx);
     }
 
-    private void testEventualConsitency(VersionedRegionName versionedRegionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
+    private void testEventualConsitency(VersionedPartitionName versionedPartitionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
         throws Exception {
-        IndexedWAL indexedWAL = new IndexedWAL(versionedRegionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
+        IndexedWAL indexedWAL = new IndexedWAL(versionedPartitionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
         indexedWAL.load();
         WALValue value = indexedWAL.get(rk(1));
         Assert.assertNull(value);

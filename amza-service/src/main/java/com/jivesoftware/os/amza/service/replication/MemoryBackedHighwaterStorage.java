@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.collect.ListMultimap;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MemoryBackedHighwaterStorage implements HighwaterStorage {
 
-    private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedRegionName, Long>> lastTransactionIds = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedPartitionName, Long>> lastTransactionIds = new ConcurrentHashMap<>();
 
     @Override
     public void clearRing(RingMember member) {
@@ -34,18 +34,18 @@ public class MemoryBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public boolean expunge(VersionedRegionName versionedRegionName) throws Exception {
-        for (ConcurrentHashMap<VersionedRegionName, Long> got:lastTransactionIds.values()) {
-            got.remove(versionedRegionName);
+    public boolean expunge(VersionedPartitionName versionedPartitionName) throws Exception {
+        for (ConcurrentHashMap<VersionedPartitionName, Long> got:lastTransactionIds.values()) {
+            got.remove(versionedPartitionName);
         }
         return true;
     }
 
     @Override
-    public WALHighwater getRegionHighwater(VersionedRegionName versionedRegionName) throws Exception {
+    public WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception {
         List<WALHighwater.RingMemberHighwater> highwaters = new ArrayList<>();
         for (RingMember ringMember : lastTransactionIds.keySet()) {
-            Long highwaterTxId = lastTransactionIds.get(ringMember).get(versionedRegionName);
+            Long highwaterTxId = lastTransactionIds.get(ringMember).get(versionedPartitionName);
             if (highwaterTxId != null) {
                 highwaters.add(new WALHighwater.RingMemberHighwater(ringMember, highwaterTxId));
             }
@@ -54,40 +54,40 @@ public class MemoryBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public void setIfLarger(RingMember ringMember, VersionedRegionName versionedRegionName, int update, long highWatermark) {
-        ConcurrentHashMap<VersionedRegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(ringMember);
-        if (lastRegionTransactionIds == null) {
-            lastRegionTransactionIds = new ConcurrentHashMap<>();
-            lastTransactionIds.put(ringMember, lastRegionTransactionIds);
+    public void setIfLarger(RingMember ringMember, VersionedPartitionName versionedPartitionName, int update, long highWatermark) {
+        ConcurrentHashMap<VersionedPartitionName, Long> lastPartitionTransactionIds = lastTransactionIds.get(ringMember);
+        if (lastPartitionTransactionIds == null) {
+            lastPartitionTransactionIds = new ConcurrentHashMap<>();
+            lastTransactionIds.put(ringMember, lastPartitionTransactionIds);
         }
-        Long got = lastRegionTransactionIds.get(versionedRegionName);
+        Long got = lastPartitionTransactionIds.get(versionedPartitionName);
         if (got == null) {
-            Long had = lastRegionTransactionIds.putIfAbsent(versionedRegionName, highWatermark);
+            Long had = lastPartitionTransactionIds.putIfAbsent(versionedPartitionName, highWatermark);
             if (had < highWatermark) {
-                lastRegionTransactionIds.put(versionedRegionName, had);
+                lastPartitionTransactionIds.put(versionedPartitionName, had);
             }
         } else {
             if (got < highWatermark) {
-                lastRegionTransactionIds.put(versionedRegionName, highWatermark);
+                lastPartitionTransactionIds.put(versionedPartitionName, highWatermark);
             }
         }
     }
 
     @Override
-    public void clear(RingMember member, VersionedRegionName versionedRegionName) {
-        ConcurrentHashMap<VersionedRegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(member);
-        if (lastRegionTransactionIds != null) {
-            lastRegionTransactionIds.remove(versionedRegionName);
+    public void clear(RingMember member, VersionedPartitionName versionedPartitionName) {
+        ConcurrentHashMap<VersionedPartitionName, Long> lastPartitionTransactionIds = lastTransactionIds.get(member);
+        if (lastPartitionTransactionIds != null) {
+            lastPartitionTransactionIds.remove(versionedPartitionName);
         }
     }
 
     @Override
-    public Long get(RingMember member, VersionedRegionName versionedRegionName) {
-        ConcurrentHashMap<VersionedRegionName, Long> lastRegionTransactionIds = lastTransactionIds.get(member);
-        if (lastRegionTransactionIds == null) {
+    public Long get(RingMember member, VersionedPartitionName versionedPartitionName) {
+        ConcurrentHashMap<VersionedPartitionName, Long> lastPartitionTransactionIds = lastTransactionIds.get(member);
+        if (lastPartitionTransactionIds == null) {
             return -1L;
         }
-        Long got = lastRegionTransactionIds.get(versionedRegionName);
+        Long got = lastPartitionTransactionIds.get(versionedPartitionName);
         if (got == null) {
             return -1L;
         }
@@ -100,7 +100,7 @@ public class MemoryBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public void flush(ListMultimap<RingMember, VersionedRegionName> flush) throws Exception {
+    public void flush(ListMultimap<RingMember, VersionedPartitionName> flush) throws Exception {
     }
 
 }

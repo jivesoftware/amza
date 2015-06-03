@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared.region;
+package com.jivesoftware.os.amza.shared.partition;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -23,27 +23,27 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
 import java.util.Objects;
 
-public class RegionName implements Comparable<RegionName> {
+public class PartitionName implements Comparable<PartitionName> {
 
-    private final boolean systemRegion;
+    private final boolean systemPartition;
     private final String ringName;
-    private final String regionName;
+    private final String partitionName;
     private transient int hash = 0;
 
     public byte[] toBytes() throws IOException {
         HeapFiler memoryFiler = new HeapFiler();
         UIO.writeByte(memoryFiler, 0, "version");
-        UIO.writeBoolean(memoryFiler, systemRegion, "systemRegion");
+        UIO.writeBoolean(memoryFiler, systemPartition, "systemPartition");
         UIO.writeString(memoryFiler, ringName, "ringName");
-        UIO.writeString(memoryFiler, regionName, "regionName");
+        UIO.writeString(memoryFiler, partitionName, "partitionName");
         return memoryFiler.getBytes();
     }
 
-    public static RegionName fromBytes(byte[] bytes) throws IOException {
+    public static PartitionName fromBytes(byte[] bytes) throws IOException {
         HeapFiler memoryFiler = new HeapFiler(bytes);
         if (UIO.readByte(memoryFiler, "version") == 0) {
-            return new RegionName(
-                UIO.readBoolean(memoryFiler, "systemRegion"),
+            return new PartitionName(
+                UIO.readBoolean(memoryFiler, "systemPartition"),
                 UIO.readString(memoryFiler, "ringName"),
                 UIO.readString(memoryFiler, "ringName"));
         }
@@ -54,36 +54,36 @@ public class RegionName implements Comparable<RegionName> {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
-    public static RegionName fromBase64(String base64) throws IOException {
+    public static PartitionName fromBase64(String base64) throws IOException {
         return fromBytes(BaseEncoding.base64Url().decode(base64));
     }
 
     @JsonCreator
-    public RegionName(@JsonProperty("systemRegion") boolean systemRegion,
+    public PartitionName(@JsonProperty("systemPartition") boolean systemPartition,
         @JsonProperty("ringName") String ringName,
-        @JsonProperty("regionName") String regionName) {
-        this.systemRegion = systemRegion;
+        @JsonProperty("partitionName") String partitionName) {
+        this.systemPartition = systemPartition;
         this.ringName = ringName.toUpperCase(); // I love this!!! NOT
-        this.regionName = regionName;
+        this.partitionName = partitionName;
     }
 
-    public boolean isSystemRegion() {
-        return systemRegion;
+    public boolean isSystemPartition() {
+        return systemPartition;
     }
 
     public String getRingName() {
         return ringName;
     }
 
-    public String getRegionName() {
-        return regionName;
+    public String getPartitionName() {
+        return partitionName;
     }
 
     @Override
     public String toString() {
-        return "Region{"
-            + "systemRegion=" + systemRegion
-            + ", name=" + regionName
+        return "Partition{"
+            + "systemPartition=" + systemPartition
+            + ", name=" + partitionName
             + ", ring=" + ringName
             + '}';
     }
@@ -93,9 +93,9 @@ public class RegionName implements Comparable<RegionName> {
         int hash = this.hash;
         if (hash == 0) {
             hash = 7;
-            hash = 29 * hash + (this.systemRegion ? 1 : 0);
+            hash = 29 * hash + (this.systemPartition ? 1 : 0);
             hash = 29 * hash + Objects.hashCode(this.ringName);
-            hash = 29 * hash + Objects.hashCode(this.regionName);
+            hash = 29 * hash + Objects.hashCode(this.partitionName);
             this.hash = hash;
         }
         return hash;
@@ -109,22 +109,22 @@ public class RegionName implements Comparable<RegionName> {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final RegionName other = (RegionName) obj;
-        if (this.systemRegion != other.systemRegion) {
+        final PartitionName other = (PartitionName) obj;
+        if (this.systemPartition != other.systemPartition) {
             return false;
         }
         if (!Objects.equals(this.ringName, other.ringName)) {
             return false;
         }
-        if (!Objects.equals(this.regionName, other.regionName)) {
+        if (!Objects.equals(this.partitionName, other.partitionName)) {
             return false;
         }
         return true;
     }
 
     @Override
-    public int compareTo(RegionName o) {
-        int i = Boolean.compare(systemRegion, o.systemRegion);
+    public int compareTo(PartitionName o) {
+        int i = Boolean.compare(systemPartition, o.systemPartition);
         if (i != 0) {
             return i;
         }
@@ -132,7 +132,7 @@ public class RegionName implements Comparable<RegionName> {
         if (i != 0) {
             return i;
         }
-        i = regionName.compareTo(o.regionName);
+        i = partitionName.compareTo(o.partitionName);
         if (i != 0) {
             return i;
         }

@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.storage;
 
-import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -34,7 +34,7 @@ public class FileBackedWALIndex implements WALIndex {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final RegionName regionName;
+    private final PartitionName partitionName;
     private final int keySize;
     private final boolean variableKeySizes;
     private final int payloadSize = 8 + 8 + 1; // fp, timetamp, tombstone
@@ -43,12 +43,12 @@ public class FileBackedWALIndex implements WALIndex {
     private AutoGrowingByteBufferBackedFiler filer;
     private SkipListMapContext sls;
 
-    public FileBackedWALIndex(RegionName regionName,
+    public FileBackedWALIndex(PartitionName partitionName,
         int keySize,
         boolean variableKeySizes,
         int directoryOffset,
         File... directories) {
-        this.regionName = regionName;
+        this.partitionName = partitionName;
         this.keySize = keySize;
         this.variableKeySizes = variableKeySizes;
         this.directoryOffset = directoryOffset;
@@ -61,7 +61,7 @@ public class FileBackedWALIndex implements WALIndex {
         }
 
         if (filer == null) {
-            String prefix = regionName.toBase64();
+            String prefix = partitionName.toBase64();
             byte[] headKey = new byte[keySize];
             Arrays.fill(headKey, Byte.MIN_VALUE);
 
@@ -123,8 +123,8 @@ public class FileBackedWALIndex implements WALIndex {
                     }
                     coldStart = false;
                 } else {
-                    LOG.error("Corrupt rowIndex for {}. Please rebuild.", regionName);
-                    throw new RuntimeException("Your row index is corrupt. Please rebuild." + regionName);
+                    LOG.error("Corrupt rowIndex for {}. Please rebuild.", partitionName);
+                    throw new RuntimeException("Your row index is corrupt. Please rebuild." + partitionName);
                 }
             }
 
@@ -168,7 +168,7 @@ public class FileBackedWALIndex implements WALIndex {
             }
         } else {
             if (MapStore.INSTANCE.isFull(sls.mapContext)) {
-                String prefix = regionName.toBase64();
+                String prefix = partitionName.toBase64();
                 byte[] headKey = new byte[keySize];
                 Arrays.fill(headKey, Byte.MIN_VALUE);
 
@@ -199,13 +199,13 @@ public class FileBackedWALIndex implements WALIndex {
                     SkipListMapStore.INSTANCE.copyTo(filer, sls, newFiler, newSLS, null);
 
                 } catch (Exception x) {
-                    LOG.error("Failed to grow row index for " + regionName, x);
+                    LOG.error("Failed to grow row index for " + partitionName, x);
                     try {
                         for (File dir : newDirectories) {
                             FileUtils.deleteDirectory(dir);
                         }
                     } catch (Exception xx) {
-                        LOG.error("Failed to cleanup after a failed grow " + regionName, xx);
+                        LOG.error("Failed to cleanup after a failed grow " + partitionName, xx);
                         throw xx;
                     }
                     throw x;
@@ -439,7 +439,7 @@ public class FileBackedWALIndex implements WALIndex {
 
     @Override
     public CompactionWALIndex startCompaction() throws Exception {
-        final String prefix = regionName.toBase64();
+        final String prefix = partitionName.toBase64();
         final File[] compactingDirectories = new File[directories.length];
         final File[] compactedDirectories = new File[directories.length];
         for (int i = 0; i < directories.length; i++) {
@@ -454,7 +454,7 @@ public class FileBackedWALIndex implements WALIndex {
             compactingDirectories[i].mkdirs();
         }
 
-        final FileBackedWALIndex fileBackedRowIndex = new FileBackedWALIndex(regionName,
+        final FileBackedWALIndex fileBackedRowIndex = new FileBackedWALIndex(partitionName,
             keySize,
             variableKeySizes,
             directoryOffset,

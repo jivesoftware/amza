@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.collect.ImmutableSet;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
@@ -35,7 +35,7 @@ public class WALs {
     private final String[] workingDirectories;
     private final String storeName;
     private final WALStorageProvider walStorageProvider;
-    private final ConcurrentHashMap<VersionedRegionName, WALStorage> walStores = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<VersionedPartitionName, WALStorage> walStores = new ConcurrentHashMap<>();
     private final StripingLocksProvider locksProvider = new StripingLocksProvider(1024); // TODO expose to config
     private final Semaphore[] semaphores = new Semaphore[1024];
 
@@ -54,58 +54,58 @@ public class WALs {
         return storeName;
     }
 
-    private Semaphore getSemaphore(VersionedRegionName versionedRegionName) {
-        return semaphores[Math.abs(versionedRegionName.hashCode()) % semaphores.length];
+    private Semaphore getSemaphore(VersionedPartitionName versionedPartitionName) {
+        return semaphores[Math.abs(versionedPartitionName.hashCode()) % semaphores.length];
     }
 
     public void load() throws Exception {
-        Set<VersionedRegionName> versionedRegionNames = walStorageProvider.listExisting(workingDirectories, storeName);
-        for (VersionedRegionName versionedRegionName : versionedRegionNames) {
+        Set<VersionedPartitionName> versionedPartitionNames = walStorageProvider.listExisting(workingDirectories, storeName);
+        for (VersionedPartitionName versionedPartitionName : versionedPartitionNames) {
             try {
-                getStorage(versionedRegionName);
+                getStorage(versionedPartitionName);
             } catch (Exception x) {
-                LOG.warn("Failed to load storage for region {}", new Object[]{versionedRegionName}, x);
+                LOG.warn("Failed to load storage for partition {}", new Object[]{versionedPartitionName}, x);
             }
         }
     }
 
-    public <R> R execute(VersionedRegionName versionedRegionName, Tx<R> tx) throws Exception {
-        Semaphore semaphore = getSemaphore(versionedRegionName);
+    public <R> R execute(VersionedPartitionName versionedPartitionName, Tx<R> tx) throws Exception {
+        Semaphore semaphore = getSemaphore(versionedPartitionName);
         semaphore.acquire();
         try {
-            return tx.execute(getStorage(versionedRegionName));
+            return tx.execute(getStorage(versionedPartitionName));
         } finally {
             semaphore.release();
         }
     }
 
-    private WALStorage getStorage(VersionedRegionName versionedRegionName) throws Exception {
-        synchronized (locksProvider.lock(versionedRegionName, 1234)) {
-            WALStorage storage = walStores.get(versionedRegionName);
+    private WALStorage getStorage(VersionedPartitionName versionedPartitionName) throws Exception {
+        synchronized (locksProvider.lock(versionedPartitionName, 1234)) {
+            WALStorage storage = walStores.get(versionedPartitionName);
             if (storage == null) {
-                File workingDirectory = new File(workingDirectories[Math.abs(versionedRegionName.hashCode()) % workingDirectories.length]);
-                storage = walStorageProvider.create(workingDirectory, storeName, versionedRegionName, null);
+                File workingDirectory = new File(workingDirectories[Math.abs(versionedPartitionName.hashCode()) % workingDirectories.length]);
+                storage = walStorageProvider.create(workingDirectory, storeName, versionedPartitionName, null);
                 storage.load();
-                walStores.put(versionedRegionName, storage);
+                walStores.put(versionedPartitionName, storage);
             }
             return storage;
         }
     }
 
-    public void removeIfEmpty(VersionedRegionName versionedRegionName) throws Exception {
-        Semaphore semaphore = getSemaphore(versionedRegionName);
+    public void removeIfEmpty(VersionedPartitionName versionedPartitionName) throws Exception {
+        Semaphore semaphore = getSemaphore(versionedPartitionName);
         semaphore.acquire(SEMAPHORE_PERMITS);
         try {
-            WALStorage storage = walStores.get(versionedRegionName);
+            WALStorage storage = walStores.get(versionedPartitionName);
             if (storage != null && storage.delete(true)) {
-                walStores.remove(versionedRegionName);
+                walStores.remove(versionedPartitionName);
             }
         } finally {
             semaphore.release(SEMAPHORE_PERMITS);
         }
     }
 
-    public Set<VersionedRegionName> getAllRegions() {
+    public Set<VersionedPartitionName> getAllPartitions() {
         return ImmutableSet.copyOf(walStores.keySet());
     }
 

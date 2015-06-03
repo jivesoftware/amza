@@ -17,7 +17,7 @@ import com.jivesoftware.os.amza.ui.endpoints.AmzaUIEndpoints.AmzaClusterName;
 import com.jivesoftware.os.amza.ui.endpoints.HealthPluginEndpoints;
 import com.jivesoftware.os.amza.ui.region.AmzaClusterPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaInspectPluginRegion;
-import com.jivesoftware.os.amza.ui.region.AmzaRegionsPluginRegion;
+import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaRingsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaStressPluginRegion;
 import com.jivesoftware.os.amza.ui.region.HeaderRegion;
@@ -62,8 +62,7 @@ public class AmzaUIInitializer {
         SoyService soyService = new SoyService(renderer, new HeaderRegion("soy.chrome.headerRegion", renderer),
             new HomeRegion("soy.page.homeRegion", renderer));
 
-        List<ManagePlugin> plugins = Lists.newArrayList(
-            new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
+        List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
                 HealthPluginEndpoints.class,
                 new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats", renderer, amzaService.getAmzaHostRing(), amzaService, amzaStats)),
             new ManagePlugin("repeat", "Rings", "/amza/ui/rings",
@@ -71,7 +70,7 @@ public class AmzaUIInitializer {
                 new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getAmzaHostRing())),
             new ManagePlugin("map-marker", "Regions", "/amza/ui/regions",
                 AmzaRegionsPluginEndpoints.class,
-                new AmzaRegionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaHostRing(), amzaService)),
+                new AmzaPartitionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaHostRing(), amzaService)),
             new ManagePlugin("leaf", "Cluster", "/amza/ui/cluster",
                 AmzaClusterPluginEndpoints.class,
                 new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaHostRing())),

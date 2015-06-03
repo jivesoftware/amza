@@ -109,10 +109,10 @@ public class AmzaReplicationRestEndpoints {
                 BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
                 final DataOutputStream dos = new DataOutputStream(bos);
                 try {
-                    amzaInstance.streamingTakeFromRegion(dos,
+                    amzaInstance.streamingTakeFromPartition(dos,
                         takeRequest.getTaker(),
                         takeRequest.getTakerHost(),
-                        takeRequest.getRegionName(),
+                        takeRequest.getPartitionName(),
                         takeRequest.getHighestTransactionId());
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);

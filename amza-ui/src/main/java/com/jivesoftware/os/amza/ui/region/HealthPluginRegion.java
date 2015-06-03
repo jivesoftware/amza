@@ -5,10 +5,10 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.service.AmzaRegion;
+import com.jivesoftware.os.amza.service.AmzaPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRing;
-import com.jivesoftware.os.amza.shared.region.RegionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -125,14 +125,14 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         try {
             data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
             List<Map<String, Object>> regionTotals = new ArrayList<>();
-            ArrayList<RegionName> regions = new ArrayList<>(amzaService.getRegionNames());
-            Collections.sort(regions);
-            for (RegionName regionName : regions) {
-                Totals totals = amzaStats.getRegionTotals().get(regionName);
+            ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
+            Collections.sort(partitionNames);
+            for (PartitionName partitionName : partitionNames) {
+                Totals totals = amzaStats.getPartitionTotals().get(partitionName);
                 if (totals == null) {
                     totals = new Totals();
                 }
-                regionTotals.add(regionTotals(regionName, totals));
+                regionTotals.add(regionTotals(partitionName, totals));
             }
             data.put("regionTotals", regionTotals);
         } catch (Exception e) {
@@ -141,10 +141,10 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         return renderer.render(statsTemplate, data);
     }
 
-    public Map<String, Object> regionTotals(RegionName name, AmzaStats.Totals totals) throws Exception {
+    public Map<String, Object> regionTotals(PartitionName name, AmzaStats.Totals totals) throws Exception {
         Map<String, Object> map = new HashMap<>();
         if (name != null) {
-            map.put("name", name.getRegionName());
+            map.put("name", name.getPartitionName());
             map.put("ringName", name.getRingName());
             NavigableMap<RingMember, RingHost> ring = amzaRing.getRing(name.getRingName());
             List<Map<String, String>> ringMaps = new ArrayList<>();
@@ -155,7 +155,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             }
             map.put("ring", ringMaps);
 
-            AmzaRegion region = amzaService.getRegion(name);
+            AmzaPartition region = amzaService.getPartition(name);
             map.put("count", String.valueOf(region.count()));
         }
         map.put("received", String.valueOf(totals.received.get()));

@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
@@ -34,16 +34,16 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     }
 
     @Override
-    public BerkeleyDBWALIndex createIndex(VersionedRegionName versionedRegionName) throws Exception {
-        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, versionedRegionName.toBase64());
-        return new BerkeleyDBWALIndex(environments[Math.abs(versionedRegionName.hashCode()) % environments.length], name);
+    public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, versionedPartitionName.toBase64());
+        return new BerkeleyDBWALIndex(environments[Math.abs(versionedPartitionName.hashCode()) % environments.length], name);
     }
 
     @Override
-    public void deleteIndex(VersionedRegionName versionedRegionName) throws Exception {
-        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, versionedRegionName.toBase64());
+    public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, versionedPartitionName.toBase64());
         for (BerkeleyDBWALIndexName n : name.all()) {
-            environments[Math.abs(versionedRegionName.hashCode()) % environments.length].removeDatabase(null, n.getName());
+            environments[Math.abs(versionedPartitionName.hashCode()) % environments.length].removeDatabase(null, n.getName());
         }
     }
 

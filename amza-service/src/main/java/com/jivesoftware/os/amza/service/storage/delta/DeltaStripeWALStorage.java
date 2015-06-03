@@ -5,8 +5,8 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.service.storage.RegionStore;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
@@ -16,7 +16,7 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
@@ -59,7 +59,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
     private final long compactAfterNUpdates;
-    private final ConcurrentHashMap<VersionedRegionName, RegionDelta> regionDeltas = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<VersionedPartitionName, PartitionDelta> partitionDeltas = new ConcurrentHashMap<>();
     private final Object oneWriterAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
     private final ExecutorService compactionThreads;
@@ -117,12 +117,12 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public boolean expunge(VersionedRegionName versionedRegionName, WALStorage walStorage) throws Exception {
+    public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
         acquireAll();
         boolean expunged = true;
         try {
-            expunged &= highwaterStorage.expunge(versionedRegionName);
-            regionDeltas.remove(versionedRegionName);
+            expunged &= highwaterStorage.expunge(versionedPartitionName);
+            partitionDeltas.remove(versionedPartitionName);
             return expunged;
         } finally {
             releaseAll();
@@ -130,7 +130,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void load(final RegionIndex regionIndex) throws Exception {
+    public void load(final PartitionIndex partitionIndex) throws Exception {
         LOG.info("Reloading deltas...");
         long start = System.currentTimeMillis();
         synchronized (oneWriterAtATimeLock) {
@@ -141,29 +141,29 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 for (int i = 0; i < deltaWALs.size(); i++) {
                     final DeltaWAL wal = deltaWALs.get(i);
                     if (i > 0) {
-                        compactDelta(regionIndex, deltaWAL.get(), () -> wal);
+                        compactDelta(partitionIndex, deltaWAL.get(), () -> wal);
                     }
                     deltaWAL.set(wal);
                     wal.load((long rowFP, final long rowTxId, RowType rowType, byte[] rawRow) -> {
                         if (rowType == RowType.primary) {
                             WALRow row = primaryRowMarshaller.fromRow(rawRow);
                             ByteBuffer bb = ByteBuffer.wrap(row.key.getKey());
-                            byte[] regionNameBytes = new byte[bb.getShort()];
-                            bb.get(regionNameBytes);
+                            byte[] partitionNameBytes = new byte[bb.getShort()];
+                            bb.get(partitionNameBytes);
                             final byte[] keyBytes = new byte[bb.getInt()];
                             bb.get(keyBytes);
 
-                            VersionedRegionName versionedRegionName = VersionedRegionName.fromBytes(regionNameBytes);
-                            RegionStore regionStore = regionIndex.get(versionedRegionName);
-                            if (regionStore == null) {
-                                LOG.error("Should be impossible must fix! Your it :) regionName:" + versionedRegionName);
+                            VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(partitionNameBytes);
+                            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                            if (partitionStore == null) {
+                                LOG.error("Should be impossible must fix! Your it :) partitionName:" + versionedPartitionName);
                             } else {
                                 acquireOne();
                                 try {
-                                    RegionDelta delta = getRegionDeltas(versionedRegionName);
+                                    PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
                                     WALKey key = new WALKey(keyBytes);
-                                    WALValue regionValue = regionStore.get(key);
-                                    if (regionValue == null || regionValue.getTimestampId() < row.value.getTimestampId()) {
+                                    WALValue partitionValue = partitionStore.get(key);
+                                    if (partitionValue == null || partitionValue.getTimestampId() < row.value.getTimestampId()) {
                                         WALTimestampId got = delta.getTimestampId(key);
                                         if (got == null || got.getTimestampId() < row.value.getTimestampId()) {
                                             delta.put(key, new WALPointer(rowFP, row.value.getTimestampId(), row.value.getTombstoned()));
@@ -195,62 +195,62 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     // todo any one call this should have atleast 1 numTickleMeElmaphore
-    private RegionDelta getRegionDeltas(VersionedRegionName versionedRegionName) {
-        RegionDelta regionDelta = regionDeltas.get(versionedRegionName);
-        if (regionDelta == null) {
+    private PartitionDelta getPartitionDeltas(VersionedPartitionName versionedPartitionName) {
+        PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
+        if (partitionDelta == null) {
             DeltaWAL wal = deltaWAL.get();
             if (wal == null) {
                 throw new IllegalStateException("Delta WAL is currently unavailable.");
             }
-            regionDelta = new RegionDelta(versionedRegionName, wal, primaryRowMarshaller, highwaterRowMarshaller, null);
-            RegionDelta had = regionDeltas.putIfAbsent(versionedRegionName, regionDelta);
+            partitionDelta = new PartitionDelta(versionedPartitionName, wal, primaryRowMarshaller, highwaterRowMarshaller, null);
+            PartitionDelta had = partitionDeltas.putIfAbsent(versionedPartitionName, partitionDelta);
             if (had != null) {
-                regionDelta = had;
+                partitionDelta = had;
             }
         }
-        return regionDelta;
+        return partitionDelta;
     }
 
     @Override
-    public void compact(final RegionIndex regionIndex) throws Exception {
+    public void compact(final PartitionIndex partitionIndex) throws Exception {
         if (updateSinceLastCompaction.get() < compactAfterNUpdates) { // TODO or some memory pressure BS!
             return;
         }
 
         if (!compacting.compareAndSet(false, true)) {
-            LOG.warn("Trying to compact DeltaStripe:" + regionIndex + " while another compaction is already in progress.");
+            LOG.warn("Trying to compact DeltaStripe:" + partitionIndex + " while another compaction is already in progress.");
             return;
         }
         try {
             updateSinceLastCompaction.set(0);
-            compactDelta(regionIndex, deltaWAL.get(), deltaWALFactory::create);
+            compactDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create);
         } finally {
             compacting.set(false);
         }
     }
 
-    private void compactDelta(final RegionIndex regionIndex, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
+    private void compactDelta(final PartitionIndex partitionIndex, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
         final List<Future<Boolean>> futures = new ArrayList<>();
         acquireAll();
         try {
-            for (Map.Entry<VersionedRegionName, RegionDelta> e : regionDeltas.entrySet()) {
+            for (Map.Entry<VersionedPartitionName, PartitionDelta> e : partitionDeltas.entrySet()) {
                 if (e.getValue().compacting.get() != null) {
                     LOG.warn("Ingress is faster than we can compact!");
                     return;
                 }
             }
-            LOG.info("Compacting delta regions...");
+            LOG.info("Compacting delta partitions...");
             DeltaWAL newDeltaWAL = newWAL.call();
             deltaWAL.set(newDeltaWAL);
-            for (Map.Entry<VersionedRegionName, RegionDelta> e : regionDeltas.entrySet()) {
-                final RegionDelta regionDelta = new RegionDelta(e.getKey(), newDeltaWAL, primaryRowMarshaller, highwaterRowMarshaller, e.getValue());
-                regionDeltas.put(e.getKey(), regionDelta);
+            for (Map.Entry<VersionedPartitionName, PartitionDelta> e : partitionDeltas.entrySet()) {
+                final PartitionDelta partitionDelta = new PartitionDelta(e.getKey(), newDeltaWAL, primaryRowMarshaller, highwaterRowMarshaller, e.getValue());
+                partitionDeltas.put(e.getKey(), partitionDelta);
                 futures.add(compactionThreads.submit(() -> {
                     try {
-                        regionDelta.compact(regionIndex);
+                        partitionDelta.compact(partitionIndex);
                         return true;
                     } catch (Exception x) {
-                        LOG.error("Failed to compact:" + regionDelta, x);
+                        LOG.error("Failed to compact:" + partitionDelta, x);
                         return false;
                     }
                 }));
@@ -269,9 +269,9 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         try {
             if (!failed) {
                 wal.destroy();
-                LOG.info("Compacted delta regions.");
+                LOG.info("Compacted delta partitions.");
             } else {
-                LOG.warn("Compaction of delta region FAILED.");
+                LOG.warn("Compaction of delta partition FAILED.");
             }
         } finally {
             releaseAll();
@@ -279,7 +279,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public RowsChanged update(VersionedRegionName versionedRegionName,
+    public RowsChanged update(VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         Commitable<WALValue> updates) throws Exception {
 
@@ -302,7 +302,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             RowsChanged rowsChanged;
 
             // only grabbing pointers means our removes and clobbers don't include the old values, but for now this is more efficient.
-            WALTimestampId[] currentTimestamps = getTimestamps(versionedRegionName, storage, keys, values);
+            WALTimestampId[] currentTimestamps = getTimestamps(versionedPartitionName, storage, keys, values);
             for (int i = 0; i < keys.size(); i++) {
                 WALKey key = keys.get(i);
                 WALTimestampId currentTimestamp = currentTimestamps[i];
@@ -325,18 +325,18 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             }
 
             if (apply.isEmpty()) {
-                rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
-                RegionDelta delta = getRegionDeltas(versionedRegionName);
-                WALHighwater regionHighwater = null;
+                PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
+                WALHighwater partitionHighwater = null;
                 if (delta.shouldWriteHighwater()) {
-                    regionHighwater = highwaterStorage.getRegionHighwater(versionedRegionName);
+                    partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
                     LOG.inc("highwaterHint", 1);
-                    LOG.inc("highwaterHint", 1, versionedRegionName.getRegionName().getRegionName());
+                    LOG.inc("highwaterHint", 1, versionedPartitionName.getPartitionName().getPartitionName());
                 }
 
                 synchronized (oneWriterAtATimeLock) {
-                    DeltaWAL.DeltaWALApplied updateApplied = wal.update(versionedRegionName, apply, regionHighwater);
+                    DeltaWAL.DeltaWALApplied updateApplied = wal.update(versionedPartitionName, apply, partitionHighwater);
 
                     Iterator<Table.Cell<Long, WALKey, WALValue>> iter = apply.cellSet().iterator();
                     while (iter.hasNext()) {
@@ -354,7 +354,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                         }
                     }
                     delta.appendTxFps(updateApplied.txId, updateApplied.keyToRowPointer.values());
-                    rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                    rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
                 }
             }
 
@@ -366,14 +366,14 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void takeRowUpdatesSince(VersionedRegionName versionedRegionName, WALStorage storage, long transactionId, RowStream rowStream) throws Exception {
+    public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, RowStream rowStream) throws Exception {
         if (!storage.takeRowUpdatesSince(transactionId, rowStream)) {
             return;
         }
 
         acquireOne();
         try {
-            RegionDelta delta = getRegionDeltas(versionedRegionName);
+            PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
             delta.takeRowUpdatesSince(transactionId, rowStream);
         } finally {
             releaseOne();
@@ -381,7 +381,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public boolean takeFromTransactionId(VersionedRegionName versionedRegionName, WALStorage storage, long transactionId, Highwaters highwaters,
+    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, Highwaters highwaters,
         Scan<WALValue> scan)
         throws Exception {
 
@@ -391,7 +391,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
         acquireOne();
         try {
-            RegionDelta delta = getRegionDeltas(versionedRegionName);
+            PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
             return delta.takeFromTransactionId(transactionId, highwaters, scan);
         } finally {
             releaseOne();
@@ -399,10 +399,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public WALValue get(VersionedRegionName versionedRegionName, WALStorage storage, WALKey key) throws Exception {
+    public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         acquireOne();
         try {
-            Optional<WALValue> deltaGot = getRegionDeltas(versionedRegionName).get(key);
+            Optional<WALValue> deltaGot = getPartitionDeltas(versionedPartitionName).get(key);
             if (deltaGot != null) {
                 return deltaGot.orNull();
             }
@@ -414,10 +414,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public boolean containsKey(VersionedRegionName versionedRegionName, WALStorage storage, WALKey key) throws Exception {
+    public boolean containsKey(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         acquireOne();
         try {
-            Boolean contained = getRegionDeltas(versionedRegionName).containsKey(key);
+            Boolean contained = getPartitionDeltas(versionedPartitionName).containsKey(key);
             if (contained != null) {
                 return contained;
             }
@@ -427,10 +427,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         return storage.containsKey(key);
     }
 
-    private WALTimestampId[] getTimestamps(VersionedRegionName versionedRegionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws
+    private WALTimestampId[] getTimestamps(VersionedPartitionName versionedPartitionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws
         Exception {
         WALKey[] consumableKeys = keys.toArray(new WALKey[keys.size()]);
-        DeltaResult<WALTimestampId[]> deltas = getRegionDeltas(versionedRegionName).getTimestampIds(consumableKeys);
+        DeltaResult<WALTimestampId[]> deltas = getPartitionDeltas(versionedPartitionName).getTimestampIds(consumableKeys);
         if (deltas.missed) {
             WALTimestampId[] timestamps = deltas.result;
             WALPointer[] got = storage.getPointers(consumableKeys, values);
@@ -446,12 +446,12 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void rangeScan(final VersionedRegionName versionedRegionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to,
+    public void rangeScan(final VersionedPartitionName versionedPartitionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to,
         final Scan<WALValue> scan)
         throws Exception {
         acquireOne();
         try {
-            RegionDelta delta = getRegionDeltas(versionedRegionName);
+            PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
             final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
             rangeScannable.rangeScan(from, to, new Scan<WALValue>() {
                 Map.Entry<WALKey, WALValue> d;
@@ -506,10 +506,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void rowScan(final VersionedRegionName versionedRegionName, Scannable<WALValue> scanable, final Scan<WALValue> scan) throws Exception {
+    public void rowScan(final VersionedPartitionName versionedPartitionName, Scannable<WALValue> scanable, final Scan<WALValue> scan) throws Exception {
         acquireOne();
         try {
-            RegionDelta delta = getRegionDeltas(versionedRegionName);
+            PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
             final DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
             scanable.rowScan(new Scan<WALValue>() {
                 Map.Entry<WALKey, WALValue> d;
@@ -566,17 +566,17 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     /**
      * Stupid expensive!!!!
      *
-     * @param regionName RegionName
+     * @param partitionName PartitionName
      * @param storage Storage
      * @return long
      * @throws Exception .
      */
     @Override
-    public long count(VersionedRegionName versionedRegionName, WALStorage storage) throws Exception {
+    public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         int count = 0;
         acquireOne();
         try {
-            ArrayList<WALKey> keys = new ArrayList<>(getRegionDeltas(versionedRegionName).keySet());
+            ArrayList<WALKey> keys = new ArrayList<>(getPartitionDeltas(versionedPartitionName).keySet());
             List<Boolean> containsKey = storage.containsKey(keys);
             count = Iterables.frequency(containsKey, Boolean.FALSE);
         } finally {

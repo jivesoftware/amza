@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.shared.region.RegionProperties;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -15,27 +15,27 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author jonathan.colt
  */
-public class RegionCompactor {
+public class PartitionCompactor {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private ScheduledExecutorService scheduledThreadPool;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaStats amzaStats;
-    private final RegionIndex regionIndex;
+    private final PartitionIndex partitionIndex;
     private final long checkIfCompactionIsNeededIntervalInMillis;
     private final long removeTombstonedOlderThanNMillis;
     private final int numberOfCompactorThreads;
 
-    public RegionCompactor(AmzaStats amzaStats,
-        RegionIndex regionIndex,
+    public PartitionCompactor(AmzaStats amzaStats,
+        PartitionIndex partitionIndex,
         TimestampedOrderIdProvider orderIdProvider,
         long checkIfCompactionIsNeededIntervalInMillis,
         final long removeTombstonedOlderThanNMillis,
         int numberOfCompactorThreads) {
 
         this.amzaStats = amzaStats;
-        this.regionIndex = regionIndex;
+        this.partitionIndex = partitionIndex;
         this.orderIdProvider = orderIdProvider;
         this.checkIfCompactionIsNeededIntervalInMillis = checkIfCompactionIsNeededIntervalInMillis;
         this.removeTombstonedOlderThanNMillis = removeTombstonedOlderThanNMillis;
@@ -47,7 +47,7 @@ public class RegionCompactor {
         final int silenceBackToBackErrors = 100;
         if (scheduledThreadPool == null) {
             scheduledThreadPool = Executors.newScheduledThreadPool(numberOfCompactorThreads,
-                new ThreadFactoryBuilder().setNameFormat("region-compactor-%d").build());
+                new ThreadFactoryBuilder().setNameFormat("partition-compactor-%d").build());
             for (int i = 0; i < numberOfCompactorThreads; i++) {
                 final int stripe = i;
                 scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
@@ -81,25 +81,25 @@ public class RegionCompactor {
 
     private void compactTombstone(int stripe, long removeTombstonedOlderThanTimestampId) throws Exception {
 
-        for (VersionedRegionName versionedRegionName : regionIndex.getAllRegions()) {
-            if (Math.abs(versionedRegionName.getRegionName().hashCode()) % numberOfCompactorThreads == stripe) {
+        for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
+            if (Math.abs(versionedPartitionName.getPartitionName().hashCode()) % numberOfCompactorThreads == stripe) {
                 long ttlTimestampId = 0;
-                RegionProperties regionProperties = regionIndex.getProperties(versionedRegionName.getRegionName());
-                if (regionProperties != null) {
-                    long ttlInMillis = regionProperties.walStorageDescriptor.primaryIndexDescriptor.ttlInMillis;
+                PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
+                if (partitionProperties != null) {
+                    long ttlInMillis = partitionProperties.walStorageDescriptor.primaryIndexDescriptor.ttlInMillis;
                     if (ttlInMillis > 0) {
                         ttlTimestampId = orderIdProvider.getApproximateId(orderIdProvider.nextId(), -ttlInMillis);
                     }
                 }
                 try {
-                    amzaStats.beginCompaction("Compacting Tombstones:" + versionedRegionName);
+                    amzaStats.beginCompaction("Compacting Tombstones:" + versionedPartitionName);
                     try {
-                        regionIndex.get(versionedRegionName).compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
+                        partitionIndex.get(versionedPartitionName).compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
                     } finally {
-                        amzaStats.endCompaction("Compacting Tombstones:" + versionedRegionName);
+                        amzaStats.endCompaction("Compacting Tombstones:" + versionedPartitionName);
                     }
                 } catch (Exception x) {
-                    LOG.warn("Failed to compact tombstones region:" + versionedRegionName, x);
+                    LOG.warn("Failed to compact tombstones partition:" + versionedPartitionName, x);
                 }
             }
         }

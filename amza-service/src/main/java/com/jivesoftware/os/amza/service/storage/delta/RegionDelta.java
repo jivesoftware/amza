@@ -3,14 +3,14 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.service.storage.RegionStore;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.Scan;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
@@ -37,27 +37,27 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * @author jonathan.colt
  */
-class RegionDelta {
+class PartitionDelta {
 
     public static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final VersionedRegionName versionedRegionName;
+    private final VersionedPartitionName versionedPartitionName;
     private final DeltaWAL deltaWAL;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
-    final AtomicReference<RegionDelta> compacting;
+    final AtomicReference<PartitionDelta> compacting;
 
     private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>();
     private final ConcurrentNavigableMap<WALKey, WALPointer> orderedIndex = new ConcurrentSkipListMap<>();
     private final ConcurrentSkipListMap<Long, List<Long>> txIdWAL = new ConcurrentSkipListMap<>();
     private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
 
-    RegionDelta(VersionedRegionName versionedRegionName,
+    PartitionDelta(VersionedPartitionName versionedPartitionName,
         DeltaWAL deltaWAL,
         PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
-        RegionDelta compacting) {
-        this.versionedRegionName = versionedRegionName;
+        PartitionDelta compacting) {
+        this.versionedPartitionName = versionedPartitionName;
         this.deltaWAL = deltaWAL;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
@@ -67,9 +67,9 @@ class RegionDelta {
     Optional<WALValue> get(WALKey key) throws Exception {
         WALPointer got = pointerIndex.get(key);
         if (got == null) {
-            RegionDelta regionDelta = compacting.get();
-            if (regionDelta != null) {
-                return regionDelta.get(key);
+            PartitionDelta partitionDelta = compacting.get();
+            if (partitionDelta != null) {
+                return partitionDelta.get(key);
             }
             return null;
         }
@@ -81,9 +81,9 @@ class RegionDelta {
         if (got != null) {
             return new WALTimestampId(got.getTimestampId(), got.getTombstoned());
         }
-        RegionDelta regionDelta = compacting.get();
-        if (regionDelta != null) {
-            return regionDelta.getTimestampId(key);
+        PartitionDelta partitionDelta = compacting.get();
+        if (partitionDelta != null) {
+            return partitionDelta.getTimestampId(key);
         }
         return null;
     }
@@ -126,9 +126,9 @@ class RegionDelta {
         if (got != null) {
             return !got.getTombstoned();
         }
-        RegionDelta regionDelta = compacting.get();
-        if (regionDelta != null) {
-            return regionDelta.containsKey(key);
+        PartitionDelta partitionDelta = compacting.get();
+        if (partitionDelta != null) {
+            return partitionDelta.containsKey(key);
         }
         return null;
 
@@ -156,7 +156,7 @@ class RegionDelta {
         if (got == 0) {
             should = true;
         }
-        if (got > 1000) { // TODO expose to region config
+        if (got > 1000) { // TODO expose to partition config
             updatesSinceLastHighwaterFlush.set(0);
         }
         return should;
@@ -164,10 +164,10 @@ class RegionDelta {
 
     Set<WALKey> keySet() {
         Set<WALKey> keySet = pointerIndex.keySet();
-        RegionDelta regionDelta = compacting.get();
-        if (regionDelta != null) {
+        PartitionDelta partitionDelta = compacting.get();
+        if (partitionDelta != null) {
             HashSet<WALKey> all = new HashSet<>(keySet);
-            all.addAll(regionDelta.keySet());
+            all.addAll(partitionDelta.keySet());
             return all;
         }
         return keySet;
@@ -176,11 +176,11 @@ class RegionDelta {
     DeltaPeekableElmoIterator rangeScanIterator(WALKey from, WALKey to) {
         Iterator<Map.Entry<WALKey, WALPointer>> iterator = orderedIndex.subMap(from, to).entrySet().iterator();
         Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
-        RegionDelta compactingRegionDelta = compacting.get();
+        PartitionDelta compactingPartitionDelta = compacting.get();
         DeltaWAL compactingDeltaWAL = null;
-        if (compactingRegionDelta != null) {
-            compactingIterator = compactingRegionDelta.orderedIndex.subMap(from, to).entrySet().iterator();
-            compactingDeltaWAL = compactingRegionDelta.deltaWAL;
+        if (compactingPartitionDelta != null) {
+            compactingIterator = compactingPartitionDelta.orderedIndex.subMap(from, to).entrySet().iterator();
+            compactingDeltaWAL = compactingPartitionDelta.deltaWAL;
         }
         return new DeltaPeekableElmoIterator(iterator, compactingIterator, deltaWAL, compactingDeltaWAL);
     }
@@ -188,11 +188,11 @@ class RegionDelta {
     DeltaPeekableElmoIterator rowScanIterator() {
         Iterator<Map.Entry<WALKey, WALPointer>> iterator = orderedIndex.entrySet().iterator();
         Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
-        RegionDelta compactingRegionDelta = compacting.get();
+        PartitionDelta compactingPartitionDelta = compacting.get();
         DeltaWAL compactingDeltaWAL = null;
-        if (compactingRegionDelta != null) {
-            compactingIterator = compactingRegionDelta.orderedIndex.entrySet().iterator();
-            compactingDeltaWAL = compactingRegionDelta.deltaWAL;
+        if (compactingPartitionDelta != null) {
+            compactingIterator = compactingPartitionDelta.orderedIndex.entrySet().iterator();
+            compactingDeltaWAL = compactingPartitionDelta.deltaWAL;
         }
         return new DeltaPeekableElmoIterator(iterator, compactingIterator, deltaWAL, compactingDeltaWAL);
     }
@@ -216,9 +216,9 @@ class RegionDelta {
     }
 
     boolean takeRowUpdatesSince(long transactionId, final RowStream rowStream) throws Exception {
-        RegionDelta regionDelta = compacting.get();
-        if (regionDelta != null) {
-            if (!regionDelta.takeRowUpdatesSince(transactionId, rowStream)) {
+        PartitionDelta partitionDelta = compacting.get();
+        if (partitionDelta != null) {
+            if (!partitionDelta.takeRowUpdatesSince(transactionId, rowStream)) {
                 return false;
             }
         }
@@ -232,9 +232,9 @@ class RegionDelta {
     }
 
     public boolean takeFromTransactionId(final long transactionId, Highwaters highwaters, final Scan<WALValue> scan) throws Exception {
-        RegionDelta regionDelta = compacting.get();
-        if (regionDelta != null) {
-            if (!regionDelta.takeFromTransactionId(transactionId, highwaters, scan)) {
+        PartitionDelta partitionDelta = compacting.get();
+        if (partitionDelta != null) {
+            if (!partitionDelta.takeFromTransactionId(transactionId, highwaters, scan)) {
                 return false;
             }
         }
@@ -255,15 +255,15 @@ class RegionDelta {
         });
     }
 
-    void compact(RegionIndex regionIndex) throws Exception {
-        final RegionDelta compact = compacting.get();
+    void compact(PartitionIndex partitionIndex) throws Exception {
+        final PartitionDelta compact = compacting.get();
         if (compact != null) {
             if (!compact.txIdWAL.isEmpty()) {
-                final RegionStore regionStore = regionIndex.get(compact.versionedRegionName);
-                final long highestTxId = regionStore.highestTxId();
-                LOG.info("Merging ({}) deltas for region: {} from tx: {}", compact.orderedIndex.size(), compact.versionedRegionName, highestTxId);
+                final PartitionStore partitionStore = partitionIndex.get(compact.versionedPartitionName);
+                final long highestTxId = partitionStore.highestTxId();
+                LOG.info("Merging ({}) deltas for partition: {} from tx: {}", compact.orderedIndex.size(), compact.versionedPartitionName, highestTxId);
                 LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
-                regionStore.directCommit(true, (highwater, scan) -> {
+                partitionStore.directCommit(true, (highwater, scan) -> {
                     try {
                         eos:
                         for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
@@ -272,8 +272,8 @@ class RegionDelta {
                                 KeyValueHighwater kvh = compact.deltaWAL.hydrateKeyValueHighwater(fp);
 
                                 ByteBuffer bb = ByteBuffer.wrap(kvh.key.getKey());
-                                byte[] regionNameBytes = new byte[bb.getShort()];
-                                bb.get(regionNameBytes);
+                                byte[] partitionNameBytes = new byte[bb.getShort()];
+                                bb.get(partitionNameBytes);
                                 final byte[] keyBytes = new byte[bb.getInt()];
                                 bb.get(keyBytes);
 
@@ -296,7 +296,7 @@ class RegionDelta {
                         throw new RuntimeException("Error while streaming entry set.", ex);
                     }
                 });
-                LOG.info("Merged deltas for " + compact.versionedRegionName);
+                LOG.info("Merged deltas for " + compact.versionedPartitionName);
             }
         }
         compacting.set(null);

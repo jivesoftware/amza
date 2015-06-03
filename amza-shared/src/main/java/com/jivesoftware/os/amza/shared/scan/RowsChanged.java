@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.shared.scan;
 
 import com.google.common.collect.Table;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
@@ -25,28 +25,28 @@ import java.util.Map;
 
 public class RowsChanged implements Commitable<WALValue> {
 
-    private final VersionedRegionName versionedRegionName;
+    private final VersionedPartitionName versionedPartitionName;
     private final long oldestApply;
     private final Table<Long, WALKey, WALValue> apply;
     private final Map<WALKey, WALTimestampId> remove;
     private final Map<WALKey, WALTimestampId> clobber;
 
-    public RowsChanged(VersionedRegionName versionedRegionName,
+    public RowsChanged(VersionedPartitionName versionedPartitionName,
         long oldestApply,
         Table<Long, WALKey, WALValue> apply,
         Map<WALKey, WALTimestampId> remove,
         Map<WALKey, WALTimestampId> clobber) {
-        this.versionedRegionName = versionedRegionName;
+        this.versionedPartitionName = versionedPartitionName;
         this.oldestApply = oldestApply;
         this.apply = apply;
         this.remove = remove;
         this.clobber = clobber;
     }
 
-    public VersionedRegionName getVersionedRegionName() {
-        return versionedRegionName;
+    public VersionedPartitionName getVersionedPartitionName() {
+        return versionedPartitionName;
     }
-
+    
     public long getOldestRowTxId() {
         return oldestApply;
     }
@@ -89,7 +89,7 @@ public class RowsChanged implements Commitable<WALValue> {
     @Override
     public String toString() {
         return "RowsChanged{"
-            + "versionedRegionName=" + versionedRegionName
+            + "versionedPartitionName=" + versionedPartitionName
             + ", oldestApply=" + oldestApply
             + ", apply=" + apply
             + ", remove=" + remove

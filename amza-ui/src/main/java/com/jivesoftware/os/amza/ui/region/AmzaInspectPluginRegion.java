@@ -1,10 +1,10 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.service.AmzaRegion;
+import com.jivesoftware.os.amza.service.AmzaPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.AmzaRegionUpdates;
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -78,11 +78,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             List<Map<String, String>> rows = new ArrayList<>();
 
             if (input.action.equals("scan")) {
-                AmzaRegion amzaRegion = lookupRegion(input, msg);
-                if (amzaRegion != null) {
+                AmzaPartition amzaPartition = lookupPartition(input, msg);
+                if (amzaPartition != null) {
                     final AtomicLong offset = new AtomicLong(input.offset);
                     final AtomicLong batch = new AtomicLong(input.batchSize);
-                    amzaRegion.scan(null, null, (rowTxId, key, value) -> {
+                    amzaPartition.scan(null, null, (rowTxId, key, value) -> {
                         if (offset.decrementAndGet() >= 0) {
                             return true;
                         }
@@ -103,13 +103,13 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     });
                 }
             } else if (input.action.equals("get")) {
-                AmzaRegion amzaRegion = lookupRegion(input, msg);
-                if (amzaRegion != null) {
+                AmzaPartition amzaPartition = lookupPartition(input, msg);
+                if (amzaPartition != null) {
                     List<byte[]> rawKeys = stringToWALKeys(input);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        amzaRegion.get(rawKeys, (rowTxId, key, value) -> {
+                        amzaPartition.get(rawKeys, (rowTxId, key, value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
                             row.put("keyAsHex", bytesToHex(key.getKey()));
@@ -124,16 +124,16 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     }
                 }
             } else if (input.action.equals("remove")) {
-                AmzaRegion amzaRegion = lookupRegion(input, msg);
-                if (amzaRegion != null) {
+                AmzaPartition amzaPartition = lookupPartition(input, msg);
+                if (amzaPartition != null) {
                     List<byte[]> rawKeys = stringToWALKeys(input);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to remove. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        AmzaRegionUpdates updates = new AmzaRegionUpdates();
+                        AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         updates.removeAll(rawKeys, -1);
-                        amzaRegion.commit(updates);
-                        amzaRegion.get(rawKeys, (rowTxId, key, value) -> {
+                        amzaPartition.commit(updates);
+                        amzaPartition.get(rawKeys, (rowTxId, key, value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
                             row.put("keyAsHex", bytesToHex(key.getKey()));
@@ -170,12 +170,12 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
         return walKeys;
     }
 
-    private AmzaRegion lookupRegion(AmzaInspectPluginRegionInput input, List<String> msg) throws Exception {
-        AmzaRegion region = amzaService.getRegion(new RegionName(input.systemRegion, input.ringName, input.regionName));
-        if (region == null) {
+    private AmzaPartition lookupPartition(AmzaInspectPluginRegionInput input, List<String> msg) throws Exception {
+        AmzaPartition partition = amzaService.getPartition(new PartitionName(input.systemRegion, input.ringName, input.regionName));
+        if (partition == null) {
             msg.add("No region for ringName:" + input.ringName + " regionName:" + input.regionName + " isSystem:" + input.systemRegion);
         }
-        return region;
+        return partition;
     }
 
     @Override

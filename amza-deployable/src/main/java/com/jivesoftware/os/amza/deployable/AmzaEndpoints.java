@@ -16,12 +16,12 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.collect.Iterables;
-import com.jivesoftware.os.amza.service.AmzaRegion;
+import com.jivesoftware.os.amza.service.AmzaPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.AmzaRegionUpdates;
-import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -56,48 +56,48 @@ public class AmzaEndpoints {
     @GET
     @Consumes("application/json")
     @Path("/set")
-    public Response set(@QueryParam("region") String region,
+    public Response set(@QueryParam("partition") String partition,
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            AmzaRegion amzaRegion = createRegionIfAbsent(region);
+            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
             String[] keys = key.split(",");
             String[] values = value.split(",");
-            AmzaRegionUpdates updates = new AmzaRegionUpdates();
+            AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
                 updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
             }
-            amzaRegion.commit(updates);
+            amzaPartition.commit(updates);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
-            LOG.warn("Failed to set region:" + region + " key:" + key + " value:" + value, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to set region:" + region + " key:" + key + " value:" + value, x);
+            LOG.warn("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
         }
     }
 
     @POST
     @Consumes("application/json")
-    @Path("/multiSet/{region}")
-    public Response multiSet(@PathParam("region") String region, Map<String, String> values) {
+    @Path("/multiSet/{partition}")
+    public Response multiSet(@PathParam("partition") String partition, Map<String, String> values) {
         try {
-            AmzaRegion amzaRegion = createRegionIfAbsent(region);
-            AmzaRegionUpdates updates = new AmzaRegionUpdates();
+            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(input.getKey()
                 .getBytes(), input.getValue().getBytes())), -1);
-            amzaRegion.commit(updates);
+            amzaPartition.commit(updates);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
-            LOG.warn("Failed to set region:" + region + " values:" + values, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to set region:" + region + " values:" + values, x);
+            LOG.warn("Failed to set partition:" + partition + " values:" + values, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partition + " values:" + values, x);
         }
     }
 
     @GET
     @Consumes("application/json")
     @Path("/get")
-    public Response get(@QueryParam("region") String region,
+    public Response get(@QueryParam("partition") String partition,
         @QueryParam("key") String key) {
         try {
             String[] keys = key.split(",");
@@ -106,37 +106,37 @@ public class AmzaEndpoints {
                 rawKeys.add(k.getBytes());
             }
 
-            AmzaRegion amzaRegion = createRegionIfAbsent(region);
+            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
             List<byte[]> got = new ArrayList<>();
-            amzaRegion.get(rawKeys, (rowTxId, key1, scanned) -> {
+            amzaPartition.get(rawKeys, (rowTxId, key1, scanned) -> {
                 got.add(scanned.getValue());
                 return true;
             });
             return ResponseHelper.INSTANCE.jsonResponse(got);
         } catch (Exception x) {
-            LOG.warn("Failed to get region:" + region + " key:" + key, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to get region:" + region + " key:" + key, x);
+            LOG.warn("Failed to get partition:" + partition + " key:" + key, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to get partition:" + partition + " key:" + key, x);
         }
     }
 
     @GET
     @Consumes("application/json")
     @Path("/remove")
-    public Response remove(@QueryParam("region") String region,
+    public Response remove(@QueryParam("partition") String partition,
         @QueryParam("key") String key) {
         try {
-            AmzaRegion amzaRegion = createRegionIfAbsent(region);
-            AmzaRegionUpdates updates = new AmzaRegionUpdates();
+            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             updates.remove(key.getBytes(), -1);
-            amzaRegion.commit(updates);
+            amzaPartition.commit(updates);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
-            LOG.warn("Failed to remove region:" + region + " key:" + key, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to remove region:" + region + " key:" + key, x);
+            LOG.warn("Failed to remove partition:" + partition + " key:" + key, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to remove partition:" + partition + " key:" + key, x);
         }
     }
 
-    AmzaRegion createRegionIfAbsent(String simpleRegionName) throws Exception {
+    AmzaPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
         int ringSize = amzaService.getAmzaHostRing().getRingSize("default");
         int systemRingSize = amzaService.getAmzaHostRing().getRingSize("system");
@@ -147,19 +147,19 @@ public class AmzaEndpoints {
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
-        RegionName regionName = new RegionName(false, "default", simpleRegionName);
-        amzaService.setPropertiesIfAbsent(regionName, new RegionProperties(storageDescriptor, 1, 1, false));
+        PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, 1, false));
 
-        AmzaService.AmzaRegionRoute regionRoute = amzaService.getRegionRoute(regionName);
+        AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
         long start = System.currentTimeMillis();
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
-        while (regionRoute.orderedRegionHosts.isEmpty() && (System.currentTimeMillis() - start) > maxSleep) {
+        while (partitionRoute.orderedPartitionHosts.isEmpty() && (System.currentTimeMillis() - start) > maxSleep) {
             Thread.sleep(1000); // Sorry calling thread.
-            regionRoute = amzaService.getRegionRoute(regionName);
+            partitionRoute = amzaService.getPartitionRoute(partitionName);
         }
-        if (regionRoute.orderedRegionHosts.isEmpty()) {
-            throw new RuntimeException("Region failed to come ONLINE in " + maxSleep);
+        if (partitionRoute.orderedPartitionHosts.isEmpty()) {
+            throw new RuntimeException("Partition failed to come ONLINE in " + maxSleep);
         }
-        return amzaService.getRegion(regionName);
+        return amzaService.getPartition(partitionName);
     }
 }

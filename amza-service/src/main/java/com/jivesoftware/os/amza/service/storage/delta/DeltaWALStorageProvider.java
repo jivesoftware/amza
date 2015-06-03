@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
 
 /**
@@ -9,5 +9,5 @@ import com.jivesoftware.os.amza.shared.wal.WALStorage;
  */
 public interface DeltaWALStorageProvider {
 
-    StripeWALStorage getDeltaWALStorage(RegionName regionName, WALStorage storage);
+    StripeWALStorage getDeltaWALStorage(PartitionName partitionName, WALStorage storage);
 }

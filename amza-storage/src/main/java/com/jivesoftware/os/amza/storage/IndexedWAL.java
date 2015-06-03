@@ -24,7 +24,7 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -65,7 +65,7 @@ public class IndexedWAL implements WALStorage {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
-    private final VersionedRegionName versionedRegionName;
+    private final VersionedPartitionName versionedPartitionName;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller<byte[]> rowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
@@ -93,7 +93,7 @@ public class IndexedWAL implements WALStorage {
         }
     };
 
-    public IndexedWAL(VersionedRegionName versionedRegionName,
+    public IndexedWAL(VersionedPartitionName versionedPartitionName,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
@@ -102,7 +102,7 @@ public class IndexedWAL implements WALStorage {
         int maxUpdatesBetweenIndexCommitMarker,
         int tombstoneCompactionFactor) {
 
-        this.versionedRegionName = versionedRegionName;
+        this.versionedPartitionName = versionedPartitionName;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
@@ -142,8 +142,8 @@ public class IndexedWAL implements WALStorage {
         tickleMeElmophore.release(numTickleMeElmaphore);
     }
 
-    public VersionedRegionName getVersionedRegionName() {
-        return versionedRegionName;
+    public VersionedPartitionName getVersionedPartitionName() {
+        return versionedPartitionName;
     }
 
     @Override
@@ -172,7 +172,7 @@ public class IndexedWAL implements WALStorage {
     }
 
     private long compact(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-        final String metricPrefix = "region>" + versionedRegionName.getRegionName() + ">ring>" + versionedRegionName.getRegionName().getRingName() + ">";
+        final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName() + ">ring>" + versionedPartitionName.getPartitionName().getRingName() + ">";
         Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
         if (compact.isPresent()) {
             acquireAll();
@@ -212,7 +212,7 @@ public class IndexedWAL implements WALStorage {
         acquireAll();
         try {
 
-            walIndex.compareAndSet(null, walTx.load(versionedRegionName));
+            walIndex.compareAndSet(null, walTx.load(versionedPartitionName));
 
             final MutableLong lastTxId = new MutableLong(0);
             final AtomicLong rowsVisited = new AtomicLong(maxUpdatesBetweenCompactionHintMarker.get());
@@ -362,7 +362,7 @@ public class IndexedWAL implements WALStorage {
             final NavigableMap<WALKey, Long> keyToRowPointer = new TreeMap<>();
 
             if (apply.isEmpty()) {
-                rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
                 walTx.write((WALWriter rowWriter) -> {
                     List<Long> rawTransactionIds = useUpdateTxId ? new ArrayList<>() : null;
@@ -433,7 +433,7 @@ public class IndexedWAL implements WALStorage {
                             stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue(),
                             value.getTimestampId()));
                     }
-                    rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                    rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
                 }
             }
 
@@ -596,7 +596,7 @@ public class IndexedWAL implements WALStorage {
         } catch (Exception x) {
             String base64;
             try {
-                base64 = versionedRegionName.toBase64();
+                base64 = versionedPartitionName.toBase64();
             } catch (IOException e) {
                 base64 = e.getMessage();
             }
@@ -608,7 +608,7 @@ public class IndexedWAL implements WALStorage {
                 length = -1;
             }
 
-            throw new RuntimeException("Failed to hydrate for " + versionedRegionName + " base64=" + base64 + " size=" + length + " fp=" + indexFP, x);
+            throw new RuntimeException("Failed to hydrate for " + versionedPartitionName + " base64=" + base64 + " size=" + length + " fp=" + indexFP, x);
         }
     }
 

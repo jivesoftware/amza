@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.test;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -49,7 +49,7 @@ public class AmzaServiceTest {
         for (int i = 0; i < maxNumberOfServices; i++) {
             cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i));
         }
-        final RegionName regionName = new RegionName(false, "test", "region1");
+        final PartitionName partitionName = new PartitionName(false, "test", "partition1");
         final CountDownLatch latch = new CountDownLatch(1);
         Executors.newCachedThreadPool().submit(new Runnable() {
             int removeService = maxRemovedServices;
@@ -62,13 +62,13 @@ public class AmzaServiceTest {
                     try {
                         AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                         if (node != null) {
-                            node.create(regionName);
+                            node.create(partitionName);
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
                             WALKey indexKey = new WALKey(key.getBytes());
-                            node.update(regionName, indexKey, ("" + random.nextInt()).getBytes(), System.currentTimeMillis(), tombstone);
+                            node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), System.currentTimeMillis(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
-                            node.get(regionName, indexKey);
+                            node.get(partitionName, indexKey);
                         }
                     } catch (Exception x) {
                         System.out.println(x.getMessage());

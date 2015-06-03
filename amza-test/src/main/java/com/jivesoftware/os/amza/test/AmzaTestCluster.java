@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.AmzaChangeIdPacker;
-import com.jivesoftware.os.amza.service.AmzaRegion;
+import com.jivesoftware.os.amza.service.AmzaPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -26,12 +26,12 @@ import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.MemoryBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.shared.AmzaRegionUpdates;
-import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
+import com.jivesoftware.os.amza.service.storage.PartitionProvider;
+import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -114,12 +114,12 @@ public class AmzaTestCluster {
         config.takeFromNeighborsIntervalInMillis = 1000;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
 
-        UpdatesTaker updateTaker = (takerRingMember, takerRingHost, node, regionName, transactionId, tookRowUpdates) -> {
+        UpdatesTaker updateTaker = (takerRingMember, takerRingHost, node, partitionName, transactionId, tookRowUpdates) -> {
             AmzaNode amzaNode = cluster.get(node.getKey());
             if (amzaNode == null) {
                 throw new IllegalStateException("Service doesn't exists for " + node.getValue());
             } else {
-                boolean isOnline = amzaNode.takeRegion(regionName, transactionId, tookRowUpdates);
+                boolean isOnline = amzaNode.takePartition(partitionName, transactionId, tookRowUpdates);
                 return new StreamingTakeResult(null, null, isOnline ? new HashMap<>() : null);
             }
         };
@@ -128,16 +128,16 @@ public class AmzaTestCluster {
         final TimestampedOrderIdProvider orderIdProvider = ORDER_ID_PROVIDER;
 
         final ObjectMapper mapper = new ObjectMapper();
-        RegionPropertyMarshaller regionPropertyMarshaller = new RegionPropertyMarshaller() {
+        PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
             @Override
-            public RegionProperties fromBytes(byte[] bytes) throws Exception {
-                return mapper.readValue(bytes, RegionProperties.class);
+            public PartitionProperties fromBytes(byte[] bytes) throws Exception {
+                return mapper.readValue(bytes, PartitionProperties.class);
             }
 
             @Override
-            public byte[] toBytes(RegionProperties regionProperties) throws Exception {
-                return mapper.writeValueAsBytes(regionProperties);
+            public byte[] toBytes(PartitionProperties partitionProperties) throws Exception {
+                return mapper.writeValueAsBytes(partitionProperties);
             }
         };
 
@@ -149,7 +149,7 @@ public class AmzaTestCluster {
             ringMember,
             ringHost,
             orderIdProvider,
-            regionPropertyMarshaller,
+            partitionPropertyMarshaller,
             new WALIndexProviderRegistry(),
             updateTaker,
             Optional.<SendFailureListener>absent(),
@@ -158,11 +158,11 @@ public class AmzaTestCluster {
 
         amzaService.start();
 
-        final RegionName regionName = new RegionName(false, "test", "region1");
-        amzaService.watch(regionName, (RowsChanged changes) -> {
+        final PartitionName partitionName = new PartitionName(false, "test", "partition1");
+        amzaService.watch(partitionName, (RowsChanged changes) -> {
             if (changes.getApply().size() > 0) {
                 System.out.println("Service:" + ringMember
-                    + " Region:" + regionName.getRegionName()
+                    + " Partition:" + partitionName.getPartitionName()
                     + " Changed:" + changes.getApply().size());
             }
         });
@@ -232,52 +232,52 @@ public class AmzaTestCluster {
             amzaService.stop();
         }
 
-        public void create(RegionName regionName) throws Exception {
+        public void create(PartitionName partitionName) throws Exception {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
 
-            amzaService.setPropertiesIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
+            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, 2, false));
 
-            AmzaService.AmzaRegionRoute regionRoute = amzaService.getRegionRoute(regionName);
-            while (regionRoute.orderedRegionHosts.isEmpty()) {
-                LOG.info("Waiting for " + regionName + " to come online.");
+            AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
+            while (partitionRoute.orderedPartitionHosts.isEmpty()) {
+                LOG.info("Waiting for " + partitionName + " to come online.");
                 Thread.sleep(100);
-                regionRoute = amzaService.getRegionRoute(regionName);
+                partitionRoute = amzaService.getPartitionRoute(partitionName);
             }
         }
 
-        public void update(RegionName regionName, WALKey k, byte[] v, long timestamp, boolean tombstone) throws Exception {
+        public void update(PartitionName partitionName, WALKey k, byte[] v, long timestamp, boolean tombstone) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
-            AmzaRegion amzaRegion = amzaService.getRegion(regionName);
-            AmzaRegionUpdates updates = new AmzaRegionUpdates();
+            AmzaPartition amzaPartition = amzaService.getPartition(partitionName);
+            AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             if (tombstone) {
                 updates.remove(k.getKey(), timestamp);
             } else {
                 updates.set(k.getKey(), v, timestamp);
             }
-            amzaRegion.commit(updates);
+            amzaPartition.commit(updates);
 
         }
 
-        public byte[] get(RegionName regionName, WALKey key) throws Exception {
+        public byte[] get(PartitionName partitionName, WALKey key) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
-            AmzaRegion amzaRegion = amzaService.getRegion(regionName);
+            AmzaPartition amzaPartition = amzaService.getPartition(partitionName);
             List<byte[]> got = new ArrayList<>();
-            amzaRegion.get(Collections.singletonList(key.getKey()), (rowTxId, key1, timestampedValue) -> {
+            amzaPartition.get(Collections.singletonList(key.getKey()), (rowTxId, key1, timestampedValue) -> {
                 got.add(timestampedValue.getValue());
                 return true;
             });
             return got.get(0);
         }
 
-        public boolean takeRegion(RegionName regionName, long transactionId, RowStream rowStream) {
+        public boolean takePartition(PartitionName partitionName, long transactionId, RowStream rowStream) {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
@@ -288,7 +288,7 @@ public class AmzaTestCluster {
             try {
                 ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
                 Future<Object> submit = asIfOverTheWire.submit(() -> {
-                    amzaService.streamingTakeFromRegion(new DataOutputStream(bytesOut), ringMember, ringHost, regionName, transactionId);
+                    amzaService.streamingTakeFromPartition(new DataOutputStream(bytesOut), ringMember, ringHost, partitionName, transactionId);
                     return null;
                 });
                 submit.get();
@@ -312,17 +312,17 @@ public class AmzaTestCluster {
                 return true;
             }
 
-            Set<RegionName> allARegions = amzaService.getRegionNames();
-            Set<RegionName> allBRegions = service.amzaService.getRegionNames();
+            Set<PartitionName> allAPartitions = amzaService.getPartitionNames();
+            Set<PartitionName> allBPartitions = service.amzaService.getPartitionNames();
 
-            if (allARegions.size() != allBRegions.size()) {
-                System.out.println(allARegions + " -vs- " + allBRegions);
+            if (allAPartitions.size() != allBPartitions.size()) {
+                System.out.println(allAPartitions + " -vs- " + allBPartitions);
                 return false;
             }
 
-            Set<RegionName> regionNames = new HashSet<>();
-            regionNames.addAll(allARegions);
-            regionNames.addAll(allBRegions);
+            Set<PartitionName> partitionNames = new HashSet<>();
+            partitionNames.addAll(allAPartitions);
+            partitionNames.addAll(allBPartitions);
 
             NavigableMap<RingMember, RingHost> aRing = amzaService.getAmzaRingReader().getRing("system");
             NavigableMap<RingMember, RingHost> bRing = service.amzaService.getAmzaRingReader().getRing("system");
@@ -332,15 +332,15 @@ public class AmzaTestCluster {
                 return false;
             }
 
-            for (RegionName regionName : regionNames) {
-                if (regionName.equals(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName())) {
+            for (PartitionName partitionName : partitionNames) {
+                if (partitionName.equals(PartitionProvider.HIGHWATER_MARK_INDEX.getPartitionName())) {
                     continue;
                 }
 
-                AmzaRegion a = amzaService.getRegion(regionName);
-                AmzaRegion b = service.amzaService.getRegion(regionName);
+                AmzaPartition a = amzaService.getPartition(partitionName);
+                AmzaPartition b = service.amzaService.getPartition(partitionName);
                 if (a == null || b == null) {
-                    System.out.println(regionName + " " + amzaService.getAmzaHostRing().getRingMember() + " " + a + " -- vs --"
+                    System.out.println(partitionName + " " + amzaService.getAmzaHostRing().getRingMember() + " " + a + " -- vs --"
                         + service.amzaService.getAmzaHostRing().getRingMember() + " " + b);
                     return false;
                 }

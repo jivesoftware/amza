@@ -17,25 +17,25 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.replication.RegionBackedHighwaterStorage;
-import com.jivesoftware.os.amza.service.replication.RegionChangeTaker;
-import com.jivesoftware.os.amza.service.replication.RegionCompactor;
-import com.jivesoftware.os.amza.service.replication.RegionComposter;
-import com.jivesoftware.os.amza.service.replication.RegionStatusStorage;
-import com.jivesoftware.os.amza.service.replication.RegionStripe;
-import com.jivesoftware.os.amza.service.replication.RegionStripeProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionChangeTaker;
+import com.jivesoftware.os.amza.service.replication.PartitionCompactor;
+import com.jivesoftware.os.amza.service.replication.PartitionComposter;
+import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
+import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.RegionTx;
-import com.jivesoftware.os.amza.shared.region.TxRegionStatus;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionTx;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -97,45 +97,45 @@ public class AmzaServiceInitializer {
         RingMember ringMember,
         RingHost ringHost,
         TimestampedOrderIdProvider orderIdProvider,
-        RegionPropertyMarshaller regionPropertyMarshaller,
-        WALStorageProvider regionsWALStorageProvider,
+        PartitionPropertyMarshaller partitionPropertyMarshaller,
+        WALStorageProvider partitionsWALStorageProvider,
         UpdatesTaker updatesTaker,
         Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
         RowChanges allRowChanges) throws Exception {
 
-        AmzaRegionWatcher amzaRegionWatcher = new AmzaRegionWatcher(allRowChanges);
+        AmzaPartitionWatcher amzaPartitionWatcher = new AmzaPartitionWatcher(allRowChanges);
 
         RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
-        RegionIndex regionIndex = new RegionIndex(amzaStats, config.workingDirectories, "amza/stores",
-            regionsWALStorageProvider, regionPropertyMarshaller, config.hardFsync);
+        PartitionIndex partitionIndex = new PartitionIndex(amzaStats, config.workingDirectories, "amza/stores",
+            partitionsWALStorageProvider, partitionPropertyMarshaller, config.hardFsync);
 
-        AmzaRingReader amzaRingReader = new AmzaRingReader(ringMember, regionIndex);
+        AmzaRingReader amzaRingReader = new AmzaRingReader(ringMember, partitionIndex);
 
-        RegionStripe systemRegionStripe = new RegionStripe("system",
+        PartitionStripe systemPartitionStripe = new PartitionStripe("system",
             amzaStats,
-            regionIndex,
+            partitionIndex,
             new SystemStripeWALStorage(),
-            new TxRegionStatus() {
+            new TxPartitionStatus() {
 
                 @Override
-                public <R> R tx(RegionName regionName, RegionTx<R> tx) throws Exception {
-                    return tx.tx(new VersionedRegionName(regionName, 0), TxRegionStatus.Status.ONLINE);
+                public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
+                    return tx.tx(new VersionedPartitionName(partitionName, 0), TxPartitionStatus.Status.ONLINE);
                 }
             },
-            amzaRegionWatcher,
-            (VersionedRegionName input) -> input.getRegionName().isSystemRegion());
+            amzaPartitionWatcher,
+            (VersionedPartitionName input) -> input.getPartitionName().isSystemPartition());
 
-        RegionStatusStorage regionStatusStorage = new RegionStatusStorage(orderIdProvider, ringMember, systemRegionStripe);
-        regionIndex.open(regionStatusStorage);
+        PartitionStatusStorage partitionStatusStorage = new PartitionStatusStorage(orderIdProvider, ringMember, systemPartitionStripe);
+        partitionIndex.open(partitionStatusStorage);
 
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
-        RegionBackedHighwaterStorage highwaterStorage = new RegionBackedHighwaterStorage(orderIdProvider, ringMember, systemRegionStripe);
+        PartitionBackedHighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemPartitionStripe);
 
-        RegionStripe[] regionStripes = new RegionStripe[deltaStorageStripes];
+        PartitionStripe[] partitionStripes = new PartitionStripe[deltaStorageStripes];
         for (int i = 0; i < deltaStorageStripes; i++) {
             File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
@@ -146,33 +146,33 @@ public class AmzaServiceInitializer {
                 deltaWALFactory,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
-            regionStripes[i] = new RegionStripe("stripe-" + i, amzaStats, regionIndex, deltaWALStorage, regionStatusStorage, amzaRegionWatcher,
-                (versionedRegionName) -> {
-                    if (!versionedRegionName.getRegionName().isSystemRegion()) {
-                        return Math.abs(versionedRegionName.getRegionName().hashCode()) % deltaStorageStripes == stripeId;
+            partitionStripes[i] = new PartitionStripe("stripe-" + i, amzaStats, partitionIndex, deltaWALStorage, partitionStatusStorage, amzaPartitionWatcher,
+                (versionedPartitionName) -> {
+                    if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
+                        return Math.abs(versionedPartitionName.getPartitionName().hashCode()) % deltaStorageStripes == stripeId;
                     }
                     return false;
                 });
         }
 
-        RegionStripeProvider regionStripeProvider = new RegionStripeProvider(systemRegionStripe, regionStripes);
+        PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(systemPartitionStripe, partitionStripes);
 
-        RegionProvider regionProvider = new RegionProvider(
+        PartitionProvider partitionProvider = new PartitionProvider(
             orderIdProvider,
-            regionPropertyMarshaller,
-            regionIndex,
+            partitionPropertyMarshaller,
+            partitionIndex,
             allRowChanges,
             config.hardFsync);
 
-        ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(regionStripes.length,
+        ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
         List<Future> futures = new ArrayList<>();
-        for (final RegionStripe regionStripe : regionStripes) {
+        for (final PartitionStripe partitionStripe : partitionStripes) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
-                    regionStripe.load();
+                    partitionStripe.load();
                 } catch (Exception x) {
-                    LOG.error("Failed while loading " + regionStripe, x);
+                    LOG.error("Failed while loading " + partitionStripe, x);
                     throw new RuntimeException(x);
                 }
             }));
@@ -184,59 +184,59 @@ public class AmzaServiceInitializer {
 
         ScheduledExecutorService compactDeltasThreadPool = Executors.newScheduledThreadPool(config.numberOfCompactorThreads,
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
-        for (final RegionStripe regionStripe : regionStripes) {
+        for (final PartitionStripe partitionStripe : partitionStripes) {
             compactDeltasThreadPool.scheduleAtFixedRate(() -> {
                 try {
-                    regionStripe.compact();
+                    partitionStripe.compact();
                 } catch (Throwable x) {
                     LOG.error("Compactor failed.", x);
                 }
             }, config.deltaStripeCompactionIntervalInMillis, config.deltaStripeCompactionIntervalInMillis, TimeUnit.MILLISECONDS);
         }
 
-        AmzaHostRing amzaHostRing = new AmzaHostRing(amzaRingReader, systemRegionStripe, orderIdProvider);
-        amzaRegionWatcher.watch(RegionProvider.RING_INDEX.getRegionName(), amzaHostRing);
+        AmzaHostRing amzaHostRing = new AmzaHostRing(amzaRingReader, systemPartitionStripe, orderIdProvider);
+        amzaPartitionWatcher.watch(PartitionProvider.RING_INDEX.getPartitionName(), amzaHostRing);
         amzaHostRing.register(ringMember, ringHost);
         amzaHostRing.addRingMember("system", ringMember);
 
-        RegionChangeTaker changeTaker = new RegionChangeTaker(amzaStats,
+        PartitionChangeTaker changeTaker = new PartitionChangeTaker(amzaStats,
             amzaRingReader,
             ringHost,
-            regionIndex,
-            regionStripeProvider,
-            regionStripes,
+            partitionIndex,
+            partitionStripeProvider,
+            partitionStripes,
             highwaterStorage,
-            regionStatusStorage,
+            partitionStatusStorage,
             updatesTaker,
             takeFailureListener,
             config.takeFromNeighborsIntervalInMillis,
             config.numberOfTakerThreads,
             config.hardFsync);
 
-        RegionCompactor regionCompactor = new RegionCompactor(amzaStats,
-            regionIndex,
+        PartitionCompactor partitionCompactor = new PartitionCompactor(amzaStats,
+            partitionIndex,
             orderIdProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
             config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
-        RegionComposter regionComposter = new RegionComposter(regionIndex, regionProvider, amzaRingReader, regionStatusStorage, regionStripeProvider);
+        PartitionComposter partitionComposter = new PartitionComposter(partitionIndex, partitionProvider, amzaRingReader, partitionStatusStorage, partitionStripeProvider);
 
-        RecentRegionTakers recentRegionTakers = new RecentRegionTakers();
+        RecentPartitionTakers recentPartitionTakers = new RecentPartitionTakers();
 
         return new AmzaService(orderIdProvider,
             amzaStats,
             amzaRingReader,
             amzaHostRing,
             highwaterStorage,
-            regionStatusStorage,
+            partitionStatusStorage,
             changeTaker,
-            regionCompactor,
-            regionComposter, // its all about being GREEN!!
-            regionIndex,
-            regionProvider,
-            regionStripeProvider,
-            recentRegionTakers,
-            amzaRegionWatcher);
+            partitionCompactor,
+            partitionComposter, // its all about being GREEN!!
+            partitionIndex,
+            partitionProvider,
+            partitionStripeProvider,
+            recentPartitionTakers,
+            amzaPartitionWatcher);
     }
 }

@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared;
 
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import java.io.DataOutputStream;
@@ -23,15 +23,15 @@ import java.util.Set;
 
 public interface AmzaInstance {
 
-    Set<RegionName> getRegionNames();
+    Set<PartitionName> getPartitionNames();
 
-    void destroyRegion(RegionName regionName) throws Exception;
+    void destroyPartition(PartitionName partitionName) throws Exception;
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
 
-    void streamingTakeFromRegion(DataOutputStream dos,
+    void streamingTakeFromPartition(DataOutputStream dos,
         RingMember ringMember,
         RingHost ringHost,
-        RegionName regionName,
+        PartitionName partitionName,
         long highestTransactionId) throws Exception;
 }

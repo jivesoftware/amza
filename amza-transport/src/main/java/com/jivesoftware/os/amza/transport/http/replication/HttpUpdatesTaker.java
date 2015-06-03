@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -53,21 +53,21 @@ public class HttpUpdatesTaker implements UpdatesTaker {
     /**
      * @param taker
      * @param node
-     * @param regionName
+     * @param partitionName
      * @param transactionId
      * @param tookRowUpdates
-     * @return Will return null if the other node was reachable but the region on that node was NOT online.
+     * @return Will return null if the other node was reachable but the partition on that node was NOT online.
      * @throws Exception
      */
     @Override
     public StreamingTakeResult streamingTakeUpdates(RingMember taker,
         RingHost takerHost,
         Entry<RingMember, RingHost> node,
-        RegionName regionName,
+        PartitionName partitionName,
         long transactionId,
         RowStream tookRowUpdates) {
 
-        TakeRequest takeRequest = new TakeRequest(taker, takerHost, transactionId, regionName);
+        TakeRequest takeRequest = new TakeRequest(taker, takerHost, transactionId, partitionName);
 
         HttpStreamResponse httpStreamResponse;
         try {

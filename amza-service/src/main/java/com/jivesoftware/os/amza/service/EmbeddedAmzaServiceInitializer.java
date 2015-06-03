@@ -4,7 +4,7 @@ import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
+import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -27,7 +27,7 @@ public class EmbeddedAmzaServiceInitializer {
         RingMember ringMember,
         RingHost ringHost,
         final TimestampedOrderIdProvider orderIdProvider,
-        RegionPropertyMarshaller regionPropertyMarshaller,
+        PartitionPropertyMarshaller partitionPropertyMarshaller,
         final WALIndexProviderRegistry indexProviderRegistry,
         UpdatesTaker updatesTaker,
         Optional<SendFailureListener> sendFailureListener,
@@ -50,7 +50,7 @@ public class EmbeddedAmzaServiceInitializer {
             ringMember,
             ringHost,
             orderIdProvider,
-            regionPropertyMarshaller,
+            partitionPropertyMarshaller,
             walStorageProvider,
             updatesTaker,
             sendFailureListener,

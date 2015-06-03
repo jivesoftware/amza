@@ -10,8 +10,6 @@ import com.jivesoftware.os.amza.shared.TxRegionStatus;
 import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.VersionedRegionTransactor;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -34,18 +32,15 @@ public class RegionStatusStorage implements TxRegionStatus {
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final RegionStripe systemRegionStripe;
-    private final WALReplicator replicator;
     private final VersionedRegionTransactor transactor;
 
     public RegionStatusStorage(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
-        RegionStripe systemRegionStripe,
-        WALReplicator replicator) {
+        RegionStripe systemRegionStripe) {
 
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.systemRegionStripe = systemRegionStripe;
-        this.replicator = replicator;
         this.transactor = new VersionedRegionTransactor(1024, 1024); // TODO expose to config?
     }
 
@@ -180,8 +175,6 @@ public class RegionStatusStorage implements TxRegionStatus {
                 systemRegionStripe.commit(RegionProvider.REGION_ONLINE_INDEX.getRegionName(),
                     Optional.absent(),
                     false,
-                    replicator,
-                    WALStorageUpdateMode.replicateThenUpdate,
                     (highwaters, scan) -> {
                         scan.row(orderIdProvider.nextId(),
                             walKey(ringMember, regionName),
@@ -206,8 +199,6 @@ public class RegionStatusStorage implements TxRegionStatus {
                 systemRegionStripe.commit(RegionProvider.REGION_ONLINE_INDEX.getRegionName(),
                     Optional.absent(),
                     false,
-                    replicator,
-                    WALStorageUpdateMode.replicateThenUpdate,
                     (highwaters, scan) -> {
                         scan.row(orderIdProvider.nextId(),
                             walKey(rootRingMember, compost.getRegionName()),

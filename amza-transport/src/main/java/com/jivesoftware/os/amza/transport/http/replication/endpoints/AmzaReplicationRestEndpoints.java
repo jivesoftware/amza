@@ -17,12 +17,8 @@ package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaRing;
-import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.WALValue;
-import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
-import com.jivesoftware.os.amza.transport.http.replication.RowUpdates;
 import com.jivesoftware.os.amza.transport.http.replication.TakeRequest;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -68,7 +64,7 @@ public class AmzaReplicationRestEndpoints {
             amzaRing.addRingMember("system", ringMember);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
-            LOG.warn("Failed to add {}/{}/{} ", new Object[] { logicalName, host, port }, x);
+            LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to add system member: " + logicalName, x);
         }
     }
@@ -99,27 +95,6 @@ public class AmzaReplicationRestEndpoints {
             LOG.warn("Failed to get amza ring.", x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to get amza ring.", x);
         }
-    }
-
-    @POST
-    @Consumes("application/json")
-    @Path("/changes/add")
-    public Response changeset(final RowUpdates changeSet) {
-        try {
-            amzaInstance.updates(changeSet.getRegionName(), changeSetToScanable(changeSet));
-            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
-        } catch (Exception x) {
-            LOG.warn("Failed to apply changeset: " + changeSet, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to changeset " + changeSet, x);
-        }
-    }
-
-    private Commitable<WALValue> changeSetToScanable(final RowUpdates changeSet) throws Exception {
-
-        final BinaryPrimaryRowMarshaller rowMarshaller = new BinaryPrimaryRowMarshaller(); // TODO ah injest
-        return (highwaterMarks, scan) -> {
-            changeSet.stream(rowMarshaller, scan);
-        };
     }
 
     @POST

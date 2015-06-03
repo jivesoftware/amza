@@ -9,8 +9,6 @@ import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -29,18 +27,15 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final RegionStripe systemRegionStripe;
-    private final WALReplicator replicator;
     private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedRegionName, HighwaterUpdates>> hostToRegionToHighwaterUpdates =
         new ConcurrentHashMap<>();
 
     public RegionBackedHighwaterStorage(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
-        RegionStripe systemRegionStripe,
-        WALReplicator replicator) {
+        RegionStripe systemRegionStripe) {
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.systemRegionStripe = systemRegionStripe;
-        this.replicator = replicator;
     }
 
     @Override
@@ -55,8 +50,6 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
             systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(),
                 Optional.absent(),
                 false,
-                replicator,
-                WALStorageUpdateMode.replicateThenUpdate,
                 (highwaters, scan) -> {
                     scan.row(-1, key, new WALValue(value.getValue(), removeTimestamp, true));
                 });
@@ -101,8 +94,6 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
             systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(),
                 Optional.absent(),
                 false,
-                replicator,
-                WALStorageUpdateMode.replicateThenUpdate,
                 (highwater, scan) -> {
                     scan.row(-1, walKey(versionedRegionName, member), new WALValue(null, orderIdProvider.nextId(), true));
                 });
@@ -156,8 +147,6 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
             systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(),
                 Optional.absent(),
                 false,
-                replicator,
-                WALStorageUpdateMode.replicateThenUpdate,
                 (highwater, scan) -> {
                     long timestamp = orderIdProvider.nextId();
                     for (VersionedRegionName versionedRegionName : regions.keySet()) {
@@ -175,8 +164,6 @@ public class RegionBackedHighwaterStorage implements HighwaterStorage {
         systemRegionStripe.commit(RegionProvider.HIGHWATER_MARK_INDEX.getRegionName(),
             Optional.absent(),
             false,
-            replicator,
-            WALStorageUpdateMode.replicateThenUpdate,
             (highwater, scan) -> {
                 long timestamp = orderIdProvider.nextId();
                 for (Entry<RingMember, Collection<VersionedRegionName>> e : memberToRegionNames.asMap().entrySet()) {

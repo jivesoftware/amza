@@ -21,10 +21,8 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 
 public class RegionStore implements RangeScannable<WALValue> {
@@ -81,8 +79,8 @@ public class RegionStore implements RangeScannable<WALValue> {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged directCommit(boolean useUpdateTxId, WALReplicator replicator, WALStorageUpdateMode mode, Commitable<WALValue> updates) throws Exception {
-        RowsChanged changes = walStorage.update(useUpdateTxId, replicator, mode, updates);
+    public RowsChanged directCommit(boolean useUpdateTxId, Commitable<WALValue> updates) throws Exception {
+        RowsChanged changes = walStorage.update(useUpdateTxId, updates);
         walStorage.flush(hardFlush);
         return changes;
     }

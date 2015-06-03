@@ -51,7 +51,7 @@ public class AmzaServiceTest {
         }
         final RegionName regionName = new RegionName(false, "test", "region1");
         final CountDownLatch latch = new CountDownLatch(1);
-        Executors.newSingleThreadExecutor().submit(new Runnable() {
+        Executors.newCachedThreadPool().submit(new Runnable() {
             int removeService = maxRemovedServices;
             int addService = maxAddService;
             int offService = maxOffServices;

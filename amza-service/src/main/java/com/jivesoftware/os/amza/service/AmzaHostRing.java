@@ -28,8 +28,6 @@ import com.jivesoftware.os.amza.shared.RingNeighbors;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -75,17 +73,14 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRingReader ringReader;
     private final RegionStripe systemRegionStripe;
-    private final WALReplicator replicator;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final ConcurrentMap<String, Integer> ringSizes = Maps.newConcurrentMap();
 
     public AmzaHostRing(AmzaRingReader ringReader,
         RegionStripe systemRegionStripe,
-        WALReplicator replicator,
         TimestampedOrderIdProvider orderIdProvider) {
         this.ringReader = ringReader;
         this.systemRegionStripe = systemRegionStripe;
-        this.replicator = replicator;
         this.orderIdProvider = orderIdProvider;
     }
 
@@ -107,8 +102,6 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         systemRegionStripe.commit(RegionProvider.NODE_INDEX.getRegionName(),
             Optional.absent(),
             false,
-            replicator,
-            WALStorageUpdateMode.noReplication,
             (highwater, scan) -> {
                 scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(ringHost.toBytes(), orderIdProvider.nextId(), false));
             });
@@ -120,8 +113,6 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         systemRegionStripe.commit(RegionProvider.NODE_INDEX.getRegionName(),
             Optional.absent(),
             false,
-            replicator,
-            WALStorageUpdateMode.noReplication,
             (highwater, scan) -> {
                 scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
             });
@@ -221,8 +212,6 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         systemRegionStripe.commit(RegionProvider.RING_INDEX.getRegionName(),
             Optional.absent(),
             false,
-            replicator,
-            WALStorageUpdateMode.replicateThenUpdate,
             (highwater, scan) -> {
                 long timestamp = orderIdProvider.nextId();
                 for (RingMember member : members) {
@@ -243,8 +232,6 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
             systemRegionStripe.commit(RegionProvider.RING_INDEX.getRegionName(),
                 Optional.absent(),
                 false,
-                replicator,
-                WALStorageUpdateMode.replicateThenUpdate,
                 (highwater, scan) -> {
                     scan.row(-1, key, new WALValue(null, orderIdProvider.nextId(), true));
                 });

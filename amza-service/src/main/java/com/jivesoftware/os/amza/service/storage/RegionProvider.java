@@ -16,14 +16,12 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.service.replication.RegionChangeReplicator;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RowChanges;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 
@@ -38,21 +36,18 @@ public class RegionProvider {
 
     private final OrderIdProvider orderIdProvider;
     private final RegionPropertyMarshaller regionPropertyMarshaller;
-    private final RegionChangeReplicator replicator;
     private final RegionIndex regionIndex;
     private final RowChanges rowChanges;
     private final boolean hardFlush;
 
     public RegionProvider(OrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
-        RegionChangeReplicator replicator,
         RegionIndex regionIndex,
         RowChanges rowChanges,
         boolean hardFlush) {
 
         this.orderIdProvider = orderIdProvider;
         this.regionPropertyMarshaller = regionPropertyMarshaller;
-        this.replicator = replicator;
         this.regionIndex = regionIndex;
         this.rowChanges = rowChanges;
         this.hardFlush = hardFlush;
@@ -88,7 +83,7 @@ public class RegionProvider {
             byte[] rawRegionName = regionName.toBytes();
             WALKey regionKey = new WALKey(rawRegionName);
             RegionStore regionIndexStore = regionIndex.get(REGION_INDEX);
-            RowsChanged changed = regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
+            RowsChanged changed = regionIndexStore.directCommit(false, (highwater, scan) -> {
                 scan.row(-1, regionKey, new WALValue(rawRegionName, orderIdProvider.nextId(), false));
             });
             regionIndexStore.flush(hardFlush);
@@ -100,7 +95,7 @@ public class RegionProvider {
 
     public void updateRegionProperties(RegionName regionName, RegionProperties properties) throws Exception {
         RegionStore regionPropertiesStore = regionIndex.get(REGION_PROPERTIES);
-        RowsChanged changed = regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwater, scan) -> {
+        RowsChanged changed = regionPropertiesStore.directCommit(false, (highwater, scan) -> {
             scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(regionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
         });
         regionPropertiesStore.flush(hardFlush);
@@ -114,12 +109,12 @@ public class RegionProvider {
         Preconditions.checkArgument(!regionName.isSystemRegion(), "You cannot destroy a system region");
 
         RegionStore regionIndexStore = regionIndex.get(RegionProvider.REGION_INDEX);
-        regionIndexStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwaters, scan) -> {
+        regionIndexStore.directCommit(false, (highwaters, scan) -> {
             scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         });
 
         RegionStore regionPropertiesStore = regionIndex.get(RegionProvider.REGION_PROPERTIES);
-        regionPropertiesStore.directCommit(false, replicator, WALStorageUpdateMode.replicateThenUpdate, (highwaters, scan) -> {
+        regionPropertiesStore.directCommit(false, (highwaters, scan) -> {
             scan.row(-1, new WALKey(regionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         });
     }

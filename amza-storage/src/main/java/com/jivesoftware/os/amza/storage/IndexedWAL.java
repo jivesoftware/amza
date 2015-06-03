@@ -16,7 +16,6 @@
 package com.jivesoftware.os.amza.storage;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.jivesoftware.os.amza.shared.Commitable;
@@ -31,10 +30,8 @@ import com.jivesoftware.os.amza.shared.WALIndex;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.WALReader;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALTx;
 import com.jivesoftware.os.amza.shared.WALValue;
@@ -56,7 +53,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -305,8 +301,6 @@ public class IndexedWAL implements WALStorage {
      */
     @Override
     public RowsChanged update(final boolean useUpdateTxId,
-        WALReplicator walReplicator,
-        WALStorageUpdateMode updateMode,
         Commitable<WALValue> updates) throws Exception {
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
@@ -363,12 +357,6 @@ public class IndexedWAL implements WALStorage {
                         removes.put(key, currentTimestampId);
                     }
                 }
-            }
-
-            List<Future<?>> futures = Lists.newArrayListWithCapacity(1);
-
-            if (walReplicator != null && updateMode == WALStorageUpdateMode.replicateThenUpdate && !apply.isEmpty()) {
-                futures.add(walReplicator.replicate(new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
             }
 
             final NavigableMap<WALKey, Long> keyToRowPointer = new TreeMap<>();
@@ -447,10 +435,6 @@ public class IndexedWAL implements WALStorage {
                     }
                     rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
                 }
-
-                if (walReplicator != null && updateMode == WALStorageUpdateMode.updateThenReplicate && !apply.isEmpty()) {
-                    futures.add(walReplicator.replicate(new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
-                }
             }
 
             final boolean commitAndWriteMarker = apply.size() > 0 && indexUpdates.addAndGet(apply.size()) > maxUpdatesBetweenIndexCommitMarker.get();
@@ -468,9 +452,6 @@ public class IndexedWAL implements WALStorage {
                     }
                     return null;
                 });
-            }
-            for (Future<?> future : futures) {
-                future.get();
             }
             return rowsChanged;
         } finally {

@@ -18,8 +18,6 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.replication.RegionChangeReceiver;
-import com.jivesoftware.os.amza.service.replication.RegionChangeReplicator;
 import com.jivesoftware.os.amza.service.replication.RegionChangeTaker;
 import com.jivesoftware.os.amza.service.replication.RegionCompactor;
 import com.jivesoftware.os.amza.service.replication.RegionComposter;
@@ -29,7 +27,6 @@ import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.RegionName;
 import com.jivesoftware.os.amza.shared.RegionProperties;
@@ -45,7 +42,6 @@ import com.jivesoftware.os.amza.shared.TxRegionStatus;
 import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -77,15 +73,12 @@ public class AmzaService implements AmzaInstance {
     private final AmzaHostRing amzaHostRing;
     private final HighwaterStorage highwaterStorage;
     private final RegionStatusStorage regionStatusStorage;
-    private final RegionChangeReceiver changeReceiver;
     private final RegionChangeTaker changeTaker;
-    private final RegionChangeReplicator changeReplicator;
     private final RegionCompactor regionCompactor;
     private final RegionComposter regionComposter;
     private final RegionIndex regionIndex;
     private final RegionProvider regionProvider;
     private final RegionStripeProvider regionStripeProvider;
-    private final WALReplicator replicator;
     private final AmzaRegionWatcher regionWatcher;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
@@ -94,15 +87,12 @@ public class AmzaService implements AmzaInstance {
         AmzaHostRing amzaHostRing,
         HighwaterStorage highwaterMarks,
         RegionStatusStorage regionStatusStorage,
-        RegionChangeReceiver changeReceiver,
         RegionChangeTaker changeTaker,
-        RegionChangeReplicator changeReplicator,
         RegionCompactor regionCompactor,
         RegionComposter regionComposter,
         RegionIndex regionIndex,
         RegionProvider regionProvider,
         RegionStripeProvider regionStripeProvider,
-        WALReplicator replicator,
         AmzaRegionWatcher regionWatcher) {
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
@@ -110,15 +100,12 @@ public class AmzaService implements AmzaInstance {
         this.amzaHostRing = amzaHostRing;
         this.highwaterStorage = highwaterMarks;
         this.regionStatusStorage = regionStatusStorage;
-        this.changeReceiver = changeReceiver;
         this.changeTaker = changeTaker;
-        this.changeReplicator = changeReplicator;
         this.regionCompactor = regionCompactor;
         this.regionComposter = regionComposter;
         this.regionIndex = regionIndex;
         this.regionProvider = regionProvider;
         this.regionStripeProvider = regionStripeProvider;
-        this.replicator = replicator;
         this.regionWatcher = regionWatcher;
     }
 
@@ -147,16 +134,12 @@ public class AmzaService implements AmzaInstance {
     }
 
     synchronized public void start() throws Exception {
-        changeReceiver.start();
         changeTaker.start();
-        changeReplicator.start();
         regionCompactor.start();
     }
 
     synchronized public void stop() throws Exception {
-        changeReceiver.stop();
         changeTaker.stop();
-        changeReplicator.stop();
         regionCompactor.stop();
     }
 
@@ -249,7 +232,7 @@ public class AmzaService implements AmzaInstance {
     }
 
     public AmzaRegion getRegion(RegionName regionName) throws Exception {
-        return new AmzaRegion(amzaStats, orderIdProvider, regionName, replicator, regionStripeProvider.getRegionStripe(regionName), highwaterStorage);
+        return new AmzaRegion(amzaStats, orderIdProvider, regionName, regionStripeProvider.getRegionStripe(regionName), highwaterStorage);
     }
 
     public boolean hasRegion(RegionName regionName) throws Exception {
@@ -284,29 +267,12 @@ public class AmzaService implements AmzaInstance {
         regionProvider.destroyRegion(regionName);
     }
 
-    @Override
-    public void updates(RegionName regionName, Commitable<WALValue> rowUpdates) throws Exception {
-        changeReceiver.receiveChanges(regionName, rowUpdates);
-    }
-
     public void watch(RegionName regionName, RowChanges rowChanges) throws Exception {
         regionWatcher.watch(regionName, rowChanges);
     }
 
     public RowChanges unwatch(RegionName regionName) throws Exception {
         return regionWatcher.unwatch(regionName);
-    }
-
-    public boolean replicate(RegionName regionName, Commitable<WALValue> rowUpdates, int requireNReplicas) throws Exception {
-        NavigableMap<RingMember, RingHost> nodes = ringReader.getRing(regionName.getRingName());
-        //TODO consider spinning until we reach quorum, or force election to the sub-ring
-        RegionProperties regionProperties = getRegionProperties(regionName);
-        int numReplicated = changeReplicator.replicateUpdatesToRingHosts(regionName,
-            rowUpdates,
-            false,
-            nodes.entrySet().toArray(new Entry[nodes.size()]),
-            regionProperties.replicationFactor);
-        return numReplicated >= requireNReplicas;
     }
 
     private static final BiFunction<Long, Long, Long> maxMerge = (Long t, Long u) -> Math.max(t, u);

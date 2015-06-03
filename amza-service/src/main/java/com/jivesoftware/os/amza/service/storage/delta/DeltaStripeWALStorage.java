@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -21,9 +20,7 @@ import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
@@ -284,8 +281,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     @Override
     public RowsChanged update(VersionedRegionName versionedRegionName,
         WALStorage storage,
-        WALReplicator replicator,
-        WALStorageUpdateMode mode,
         Commitable<WALValue> updates) throws Exception {
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
@@ -329,11 +324,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 }
             }
 
-            List<Future<?>> futures = Lists.newArrayListWithCapacity(1);
-            if (replicator != null && mode == WALStorageUpdateMode.replicateThenUpdate && !apply.isEmpty()) {
-                futures.add(replicator.replicate(new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
-            }
-
             if (apply.isEmpty()) {
                 rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
             } else {
@@ -366,14 +356,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                     delta.appendTxFps(updateApplied.txId, updateApplied.keyToRowPointer.values());
                     rowsChanged = new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
                 }
-
-                if (replicator != null && mode == WALStorageUpdateMode.updateThenReplicate && !apply.isEmpty()) {
-                    futures.add(replicator.replicate(
-                        new RowsChanged(versionedRegionName, oldestAppliedTimestamp.get(), apply, removes, clobbers)));
-                }
-            }
-            for (Future<?> future : futures) {
-                future.get();
             }
 
             updateSinceLastCompaction.addAndGet(apply.size());

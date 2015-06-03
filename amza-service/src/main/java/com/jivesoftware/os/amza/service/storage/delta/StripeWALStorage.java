@@ -10,9 +10,7 @@ import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.Scannable;
 import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 
 /**
@@ -28,8 +26,6 @@ public interface StripeWALStorage {
 
     RowsChanged update(VersionedRegionName versionedRegionName,
         WALStorage storage,
-        WALReplicator replicator,
-        WALStorageUpdateMode mode,
         Commitable<WALValue> updates) throws Exception;
 
     WALValue get(VersionedRegionName versionedRegionName,

@@ -28,7 +28,6 @@ import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.shared.Commitable;
 import com.jivesoftware.os.amza.shared.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.RegionName;
@@ -38,12 +37,10 @@ import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.StreamingTakesConsumer;
-import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.UpdatesTaker.StreamingTakeResult;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -113,15 +110,6 @@ public class AmzaTestCluster {
         config.takeFromNeighborsIntervalInMillis = 1000;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
 
-        UpdatesSender changeSetSender = (Entry<RingMember, RingHost> node, RegionName mapName, Commitable<WALValue> changes) -> {
-            AmzaNode service1 = cluster.get(node.getKey());
-            if (service1 == null) {
-                throw new IllegalStateException("Service doesn't exists for " + node.getValue());
-            } else {
-                service1.addToReplicatedWAL(mapName, changes);
-            }
-        };
-
         UpdatesTaker taker = (Entry<RingMember, RingHost> node, RegionName regionName, long transactionId, RowStream tookRowUpdates) -> {
             AmzaNode amzaNode = cluster.get(node.getKey());
             if (amzaNode == null) {
@@ -159,7 +147,6 @@ public class AmzaTestCluster {
             orderIdProvider,
             regionPropertyMarshaller,
             new WALIndexProviderRegistry(),
-            changeSetSender,
             taker,
             Optional.<SendFailureListener>absent(),
             Optional.<TakeFailureListener>absent(), (RowsChanged changes) -> {
@@ -246,16 +233,6 @@ public class AmzaTestCluster {
                 Thread.sleep(100);
                 regionRoute = amzaService.getRegionRoute(regionName);
             }
-        }
-
-        void addToReplicatedWAL(RegionName mapName, Commitable<WALValue> changes) throws Exception {
-            if (off) {
-                throw new RuntimeException("Service is off:" + serviceHost);
-            }
-            if (random.nextInt(100) > (100 - oddsOfAConnectionFailureWhenAdding)) {
-                throw new RuntimeException("Random connection failure:" + serviceHost);
-            }
-            amzaService.updates(mapName, changes);
         }
 
         public void update(RegionName regionName, WALKey k, byte[] v, long timestamp, boolean tombstone) throws Exception {

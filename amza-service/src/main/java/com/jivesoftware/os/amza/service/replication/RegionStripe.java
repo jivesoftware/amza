@@ -22,8 +22,6 @@ import com.jivesoftware.os.amza.shared.TxRegionStatus;
 import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -82,12 +80,11 @@ public class RegionStripe {
     public RowsChanged commit(RegionName regionName,
         Optional<Long> specificVersion,
         boolean requiresOnline,
-        WALReplicator replicator,
-        WALStorageUpdateMode walStorageUpdateMode,
         Commitable<WALValue> updates) throws Exception {
 
         return txRegionState.tx(regionName, (versionedRegionName, regionStatus) -> {
-            Preconditions.checkState(regionStatus == TxRegionStatus.Status.ONLINE || !requiresOnline, "Region:%s status:%s is not online.", regionName, regionStatus);
+            Preconditions.checkState(regionStatus == TxRegionStatus.Status.ONLINE || !requiresOnline, "Region:%s status:%s is not online.", regionName,
+                regionStatus);
             if (specificVersion.isPresent() && versionedRegionName.getRegionVersion() != specificVersion.get()) {
                 return null;
             }
@@ -95,8 +92,7 @@ public class RegionStripe {
             if (regionStore == null) {
                 throw new IllegalStateException("No region defined for " + regionName);
             } else {
-                RowsChanged changes = storage.update(versionedRegionName, regionStore.getWalStorage(), replicator,
-                    walStorageUpdateMode, updates);
+                RowsChanged changes = storage.update(versionedRegionName, regionStore.getWalStorage(), updates);
                 if (allRowChanges != null && !changes.isEmpty()) {
                     allRowChanges.changes(changes);
                 }

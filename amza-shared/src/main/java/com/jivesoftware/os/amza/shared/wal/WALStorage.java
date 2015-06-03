@@ -25,7 +25,7 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     boolean delete(boolean ifEmpty) throws Exception;
 
-    RowsChanged update(boolean useUpdateTxId, WALReplicator walReplicator, WALStorageUpdateMode upateMode, Commitable<WALValue> rowUpdates) throws Exception;
+    RowsChanged update(boolean useUpdateTxId, Commitable<WALValue> rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
 

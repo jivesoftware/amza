@@ -13,7 +13,6 @@ import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALKey;
 import com.jivesoftware.os.amza.shared.WALPointer;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALTimestampId;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
@@ -264,41 +263,39 @@ class RegionDelta {
                 final long highestTxId = regionStore.highestTxId();
                 LOG.info("Merging ({}) deltas for region: {} from tx: {}", compact.orderedIndex.size(), compact.versionedRegionName, highestTxId);
                 LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
-                regionStore.directCommit(true,
-                    null,
-                    WALStorageUpdateMode.noReplication, (highwater, scan) -> {
-                        try {
-                            eos:
-                            for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
-                                long txId = e.getKey();
-                                for (long fp : e.getValue()) {
-                                    KeyValueHighwater kvh = compact.deltaWAL.hydrateKeyValueHighwater(fp);
+                regionStore.directCommit(true, (highwater, scan) -> {
+                    try {
+                        eos:
+                        for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
+                            long txId = e.getKey();
+                            for (long fp : e.getValue()) {
+                                KeyValueHighwater kvh = compact.deltaWAL.hydrateKeyValueHighwater(fp);
 
-                                    ByteBuffer bb = ByteBuffer.wrap(kvh.key.getKey());
-                                    byte[] regionNameBytes = new byte[bb.getShort()];
-                                    bb.get(regionNameBytes);
-                                    final byte[] keyBytes = new byte[bb.getInt()];
-                                    bb.get(keyBytes);
+                                ByteBuffer bb = ByteBuffer.wrap(kvh.key.getKey());
+                                byte[] regionNameBytes = new byte[bb.getShort()];
+                                bb.get(regionNameBytes);
+                                final byte[] keyBytes = new byte[bb.getInt()];
+                                bb.get(keyBytes);
 
-                                    WALKey key = new WALKey(keyBytes);
-                                    WALPointer pointer = compact.orderedIndex.get(key);
-                                    if (pointer == null) {
-                                        throw new RuntimeException("Delta WAL missing key: " + key);
+                                WALKey key = new WALKey(keyBytes);
+                                WALPointer pointer = compact.orderedIndex.get(key);
+                                if (pointer == null) {
+                                    throw new RuntimeException("Delta WAL missing key: " + key);
+                                }
+                                if (pointer.getFp() == fp) {
+                                    if (!scan.row(txId, key, kvh.value)) {
+                                        break eos;
                                     }
-                                    if (pointer.getFp() == fp) {
-                                        if (!scan.row(txId, key, kvh.value)) {
-                                            break eos;
-                                        }
-                                        if (kvh.highwater != null) {
-                                            highwater.highwater(kvh.highwater);
-                                        }
+                                    if (kvh.highwater != null) {
+                                        highwater.highwater(kvh.highwater);
                                     }
                                 }
                             }
-                        } catch (Throwable ex) {
-                            throw new RuntimeException("Error while streaming entry set.", ex);
                         }
-                    });
+                    } catch (Throwable ex) {
+                        throw new RuntimeException("Error while streaming entry set.", ex);
+                    }
+                });
                 LOG.info("Merged deltas for " + compact.versionedRegionName);
             }
         }

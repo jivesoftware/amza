@@ -20,8 +20,6 @@ import java.util.Set;
 
 public interface AmzaInstance {
 
-    void updates(RegionName regionName, Commitable<WALValue> updates) throws Exception;
-
     Set<RegionName> getRegionNames();
 
     void destroyRegion(RegionName regionName) throws Exception;

@@ -63,6 +63,7 @@ import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
@@ -200,6 +201,7 @@ public class AmzaTestCluster {
         private final HighwaterStorage highWaterMarks;
         private boolean off = false;
         private int flapped = 0;
+        private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
 
         public AmzaNode(RingMember ringMember,
             RingHost ringHost,
@@ -285,7 +287,7 @@ public class AmzaTestCluster {
 
             try {
                 ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-                Future<Object> submit = Executors.newSingleThreadExecutor().submit(() -> {
+                Future<Object> submit = asIfOverTheWire.submit(() -> {
                     amzaService.streamingTakeFromRegion(new DataOutputStream(bytesOut), ringMember, ringHost, regionName, transactionId);
                     return null;
                 });

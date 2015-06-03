@@ -1,5 +1,6 @@
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.ring.RingMember;
 import java.util.List;
 
 /**

@@ -20,7 +20,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
-import com.jivesoftware.os.amza.mapdb.MapdbWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -30,12 +29,12 @@ import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.RegionProperties;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
@@ -82,7 +81,6 @@ public class Main {
         amzaServiceConfig.workingDirectories = workingDirs;
 
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
-        indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(workingDirs));
         indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
 
         UpdatesTaker taker = new HttpUpdatesTaker(amzaStats);

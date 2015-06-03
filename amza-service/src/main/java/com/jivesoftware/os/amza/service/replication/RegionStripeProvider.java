@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 

@@ -1,6 +1,7 @@
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.wal;
 
 import com.google.common.base.Optional;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
 
 /**
  *

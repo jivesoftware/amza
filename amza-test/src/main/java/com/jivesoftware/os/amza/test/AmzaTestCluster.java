@@ -28,20 +28,21 @@ import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.shared.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RegionProperties;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.StreamingTakesConsumer;
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.UpdatesTaker.StreamingTakeResult;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.AmzaRegionUpdates;
+import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker.StreamingTakeResult;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -52,10 +53,12 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map.Entry;
+import java.util.List;
 import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
@@ -110,7 +113,7 @@ public class AmzaTestCluster {
         config.takeFromNeighborsIntervalInMillis = 1000;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
 
-        UpdatesTaker taker = (Entry<RingMember, RingHost> node, RegionName regionName, long transactionId, RowStream tookRowUpdates) -> {
+        UpdatesTaker updateTaker = (takerRingMember, takerRingHost, node, regionName, transactionId, tookRowUpdates) -> {
             AmzaNode amzaNode = cluster.get(node.getKey());
             if (amzaNode == null) {
                 throw new IllegalStateException("Service doesn't exists for " + node.getValue());
@@ -147,7 +150,7 @@ public class AmzaTestCluster {
             orderIdProvider,
             regionPropertyMarshaller,
             new WALIndexProviderRegistry(),
-            taker,
+            updateTaker,
             Optional.<SendFailureListener>absent(),
             Optional.<TakeFailureListener>absent(), (RowsChanged changes) -> {
             });
@@ -182,7 +185,7 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(ringHost, amzaService, highWaterMarks);
+        service = new AmzaNode(ringMember, ringHost, amzaService, highWaterMarks);
         cluster.put(ringMember, service);
         System.out.println("Added serviceHost:" + ringMember + " to the cluster.");
         return service;
@@ -191,21 +194,27 @@ public class AmzaTestCluster {
     public class AmzaNode {
 
         private final Random random = new Random();
-        private final RingHost serviceHost;
+        private final RingMember ringMember;
+        private final RingHost ringHost;
         private final AmzaService amzaService;
         private final HighwaterStorage highWaterMarks;
         private boolean off = false;
         private int flapped = 0;
 
-        public AmzaNode(RingHost serviceHost, AmzaService amzaService, HighwaterStorage highWaterMarks) {
-            this.serviceHost = serviceHost;
+        public AmzaNode(RingMember ringMember,
+            RingHost ringHost,
+            AmzaService amzaService,
+            HighwaterStorage highWaterMarks) {
+
+            this.ringMember = ringMember;
+            this.ringHost = ringHost;
             this.amzaService = amzaService;
             this.highWaterMarks = highWaterMarks;
         }
 
         @Override
         public String toString() {
-            return serviceHost.toString();
+            return ringMember.toString();
         }
 
         public boolean isOff() {
@@ -227,9 +236,9 @@ public class AmzaTestCluster {
 
             amzaService.setPropertiesIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
 
-            AmzaService.AmzaRoute regionRoute = amzaService.getRegionRoute(regionName);
+            AmzaService.AmzaRegionRoute regionRoute = amzaService.getRegionRoute(regionName);
             while (regionRoute.orderedRegionHosts.isEmpty()) {
-                LOG.info("Wating for " + regionName + " to come online.");
+                LOG.info("Waiting for " + regionName + " to come online.");
                 Thread.sleep(100);
                 regionRoute = amzaService.getRegionRoute(regionName);
             }
@@ -237,38 +246,47 @@ public class AmzaTestCluster {
 
         public void update(RegionName regionName, WALKey k, byte[] v, long timestamp, boolean tombstone) throws Exception {
             if (off) {
-                throw new RuntimeException("Service is off:" + serviceHost);
+                throw new RuntimeException("Service is off:" + ringMember);
             }
+
             AmzaRegion amzaRegion = amzaService.getRegion(regionName);
+            AmzaRegionUpdates updates = new AmzaRegionUpdates();
+
             if (tombstone) {
-                amzaRegion.remove(k);
+                updates.remove(k.getKey(), timestamp);
             } else {
-                amzaRegion.set(k, v);
+                updates.set(k.getKey(), v, timestamp);
             }
+            amzaRegion.commit(updates);
 
         }
 
         public byte[] get(RegionName regionName, WALKey key) throws Exception {
             if (off) {
-                throw new RuntimeException("Service is off:" + serviceHost);
+                throw new RuntimeException("Service is off:" + ringMember);
             }
 
             AmzaRegion amzaRegion = amzaService.getRegion(regionName);
-            return amzaRegion.get(key);
+            List<byte[]> got = new ArrayList<>();
+            amzaRegion.get(Collections.singletonList(key.getKey()), (rowTxId, key1, timestampedValue) -> {
+                got.add(timestampedValue.getValue());
+                return true;
+            });
+            return got.get(0);
         }
 
         public boolean takeRegion(RegionName regionName, long transactionId, RowStream rowStream) {
             if (off) {
-                throw new RuntimeException("Service is off:" + serviceHost);
+                throw new RuntimeException("Service is off:" + ringMember);
             }
             if (random.nextInt(100) > (100 - oddsOfAConnectionFailureWhenTaking)) {
-                throw new RuntimeException("Random take failure:" + serviceHost);
+                throw new RuntimeException("Random take failure:" + ringMember);
             }
 
             try {
                 ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
                 Future<Object> submit = Executors.newSingleThreadExecutor().submit(() -> {
-                    amzaService.streamingTakeFromRegion(new DataOutputStream(bytesOut), regionName, transactionId);
+                    amzaService.streamingTakeFromRegion(new DataOutputStream(bytesOut), ringMember, ringHost, regionName, transactionId);
                     return null;
                 });
                 submit.get();
@@ -283,7 +301,7 @@ public class AmzaTestCluster {
 
         public void printService() throws Exception {
             if (off) {
-                System.out.println(serviceHost.getHost() + ":" + serviceHost.getPort() + " is OFF flapped:" + flapped);
+                System.out.println(ringHost.getHost() + ":" + ringHost.getPort() + " is OFF flapped:" + flapped);
             }
         }
 

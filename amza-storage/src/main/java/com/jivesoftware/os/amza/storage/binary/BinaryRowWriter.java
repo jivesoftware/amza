@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.RowType;
-import com.jivesoftware.os.amza.shared.WALWriter;
+import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.IWriteable;
 import com.jivesoftware.os.amza.shared.filer.UIO;

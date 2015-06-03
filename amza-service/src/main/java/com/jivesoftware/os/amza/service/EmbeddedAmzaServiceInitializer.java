@@ -5,11 +5,11 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RowChanges;
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.WALStorageProvider;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.RowChanges;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;

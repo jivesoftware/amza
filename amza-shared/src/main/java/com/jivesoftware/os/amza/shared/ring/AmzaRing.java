@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.ring;
 
 import java.util.NavigableMap;
 

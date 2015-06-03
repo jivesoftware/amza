@@ -1,13 +1,13 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Prefix;
-import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.WALIndex;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALPointer;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.region.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.wal.WALIndex;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.Cursor;
@@ -264,7 +264,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    synchronized public void rangeScan(WALKey from, WALKey to, final Scan<WALPointer> scan) throws Exception {
+    public void rangeScan(WALKey from, WALKey to, Scan<WALPointer> scan) throws Exception {
         lock.acquire();
         Cursor cursor = null;
         try {
@@ -274,7 +274,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
             if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
                 do {
                     WALKey key = new WALKey(keyEntry.getData());
-                    if (key.compareTo(to) >= 0) {
+                    if (to != null && key.compareTo(to) >= 0) {
                         break;
                     }
                     WALPointer value = entryToWALPointer(valueEntry);

@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.RowType;
-import com.jivesoftware.os.amza.shared.WALStorage;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**

@@ -3,8 +3,8 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.service.AmzaRingReader;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.shared.TxRegionStatus.Status;
-import com.jivesoftware.os.amza.shared.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.region.TxRegionStatus.Status;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
 import java.util.ArrayList;
 import java.util.List;
 

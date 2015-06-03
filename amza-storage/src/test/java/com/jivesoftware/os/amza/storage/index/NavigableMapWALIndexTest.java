@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.storage.index;
 
-import com.jivesoftware.os.amza.shared.MemoryWALIndex;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALPointer;
+import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.util.AbstractMap;
 import java.util.Collections;

@@ -15,6 +15,9 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
 import java.io.DataOutputStream;
 import java.util.Set;
 
@@ -26,5 +29,9 @@ public interface AmzaInstance {
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
 
-    void streamingTakeFromRegion(DataOutputStream dos, RegionName regionName, long highestTransactionId) throws Exception;
+    void streamingTakeFromRegion(DataOutputStream dos,
+        RingMember ringMember,
+        RingHost ringHost,
+        RegionName regionName,
+        long highestTransactionId) throws Exception;
 }

@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.shared.VersionedRegionName;
-import com.jivesoftware.os.amza.shared.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALStorageProvider;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
+import com.jivesoftware.os.amza.shared.wal.WALStorage;
+import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;

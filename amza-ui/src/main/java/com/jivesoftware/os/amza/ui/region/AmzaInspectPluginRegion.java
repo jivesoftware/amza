@@ -3,9 +3,8 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaRegion;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.AmzaRegionUpdates;
+import com.jivesoftware.os.amza.shared.region.RegionName;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -83,7 +82,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                 if (amzaRegion != null) {
                     final AtomicLong offset = new AtomicLong(input.offset);
                     final AtomicLong batch = new AtomicLong(input.batchSize);
-                    amzaRegion.scan((long rowTxId, WALKey key, WALValue value) -> {
+                    amzaRegion.scan(null, null, (rowTxId, key, value) -> {
                         if (offset.decrementAndGet() >= 0) {
                             return true;
                         }
@@ -95,7 +94,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             row.put("valueAsHex", bytesToHex(value.getValue()));
                             row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
                             row.put("timestamp", String.valueOf(value.getTimestampId()));
-                            row.put("tombstone", String.valueOf(value.getTombstoned()));
+                            row.put("tombstone", "false");
                             rows.add(row);
                             return true;
                         } else {
@@ -106,11 +105,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             } else if (input.action.equals("get")) {
                 AmzaRegion amzaRegion = lookupRegion(input, msg);
                 if (amzaRegion != null) {
-                    List<WALKey> walKeys = stringToWALKeys(input);
-                    if (walKeys.isEmpty()) {
+                    List<byte[]> rawKeys = stringToWALKeys(input);
+                    if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        amzaRegion.get(walKeys, (long rowTxId, WALKey key, WALValue value) -> {
+                        amzaRegion.get(rawKeys, (rowTxId, key, value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
                             row.put("keyAsHex", bytesToHex(key.getKey()));
@@ -118,7 +117,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             row.put("valueAsHex", bytesToHex(value.getValue()));
                             row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
                             row.put("timestamp", String.valueOf(value.getTimestampId()));
-                            row.put("tombstone", String.valueOf(value.getTombstoned()));
+                            row.put("tombstone", "false");
                             rows.add(row);
                             return true;
                         });
@@ -127,12 +126,14 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             } else if (input.action.equals("remove")) {
                 AmzaRegion amzaRegion = lookupRegion(input, msg);
                 if (amzaRegion != null) {
-                    List<WALKey> walKeys = stringToWALKeys(input);
-                    if (walKeys.isEmpty()) {
+                    List<byte[]> rawKeys = stringToWALKeys(input);
+                    if (rawKeys.isEmpty()) {
                         msg.add("No keys to remove. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        amzaRegion.remove(walKeys);
-                        amzaRegion.get(walKeys, (long rowTxId, WALKey key, WALValue value) -> {
+                        AmzaRegionUpdates updates = new AmzaRegionUpdates();
+                        updates.removeAll(rawKeys, -1);
+                        amzaRegion.commit(updates);
+                        amzaRegion.get(rawKeys, (rowTxId, key, value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
                             row.put("keyAsHex", bytesToHex(key.getKey()));
@@ -140,7 +141,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             row.put("valueAsHex", bytesToHex(value.getValue()));
                             row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
                             row.put("timestamp", String.valueOf(value.getTimestampId()));
-                            row.put("tombstone", String.valueOf(value.getTombstoned()));
+                            row.put("tombstone", "false");
                             rows.add(row);
                             return true;
                         });
@@ -159,12 +160,12 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
         return renderer.render(template, data);
     }
 
-    private List<WALKey> stringToWALKeys(AmzaInspectPluginRegionInput input) {
+    private List<byte[]> stringToWALKeys(AmzaInspectPluginRegionInput input) {
         String[] keys = input.key.split(",");
-        List<WALKey> walKeys = new ArrayList<>();
+        List<byte[]> walKeys = new ArrayList<>();
         for (String key : keys) {
             byte[] rawKey = hexStringToByteArray(key.trim());
-            walKeys.add(new WALKey(rawKey));
+            walKeys.add(rawKey);
         }
         return walKeys;
     }

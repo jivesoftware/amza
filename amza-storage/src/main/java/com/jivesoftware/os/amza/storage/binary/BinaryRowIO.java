@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.RowType;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
 import java.nio.ByteBuffer;

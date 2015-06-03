@@ -17,9 +17,9 @@ package com.jivesoftware.os.amza.ui.endpoints;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.AmzaRing;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.ring.AmzaRing;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;

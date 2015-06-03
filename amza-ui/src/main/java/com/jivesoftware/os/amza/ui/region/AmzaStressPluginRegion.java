@@ -5,13 +5,13 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaRegion;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RegionProperties;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.AmzaRegionUpdates;
+import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -217,9 +217,12 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             }
 
             try {
-                amzaRegion.set(Iterables.transform(values.entrySet(), (Map.Entry<String, String> input1) -> new AbstractMap.SimpleEntry<>(new WALKey(input1
-                    .getKey()
-                    .getBytes()), input1.getValue().getBytes())));
+                AmzaRegionUpdates updates = new AmzaRegionUpdates();
+                updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(input1.getKey().getBytes(),
+                    input1.getValue().getBytes())), -1);
+                amzaRegion.commit(updates);
+
+
             } catch (Exception x) {
                 log.warn("Failed to set region:" + regionName + " values:" + values, x);
             }
@@ -242,7 +245,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         RegionName regionName = new RegionName(false, "default", simpleRegionName);
         amzaService.setPropertiesIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
 
-        AmzaService.AmzaRoute regionRoute = amzaService.getRegionRoute(regionName);
+        AmzaService.AmzaRegionRoute regionRoute = amzaService.getRegionRoute(regionName);
         while (regionRoute.orderedRegionHosts.isEmpty()) {
             Thread.sleep(1000);
             regionRoute = amzaService.getRegionRoute(regionName);

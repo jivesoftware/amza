@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.AmzaRing;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.ring.AmzaRing;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.transport.http.replication.TakeRequest;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -109,7 +109,11 @@ public class AmzaReplicationRestEndpoints {
                 BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
                 final DataOutputStream dos = new DataOutputStream(bos);
                 try {
-                    amzaInstance.streamingTakeFromRegion(dos, takeRequest.getRegionName(), takeRequest.getHighestTransactionId());
+                    amzaInstance.streamingTakeFromRegion(dos,
+                        takeRequest.getTaker(),
+                        takeRequest.getTakerHost(),
+                        takeRequest.getRegionName(),
+                        takeRequest.getHighestTransactionId());
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);

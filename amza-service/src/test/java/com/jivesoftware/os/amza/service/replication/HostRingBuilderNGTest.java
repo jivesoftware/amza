@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RingNeighbors;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.ring.RingNeighbors;
 import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Map.Entry;

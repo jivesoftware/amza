@@ -16,14 +16,14 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.StreamingTakesConsumer;
-import com.jivesoftware.os.amza.shared.StreamingTakesConsumer.StreamingTakeConsumed;
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
+import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer.StreamingTakeConsumed;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClient;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfig;
 import com.jivesoftware.os.amza.transport.http.replication.client.HttpClientConfiguration;
@@ -51,6 +51,7 @@ public class HttpUpdatesTaker implements UpdatesTaker {
     }
 
     /**
+     * @param taker
      * @param node
      * @param regionName
      * @param transactionId
@@ -59,12 +60,14 @@ public class HttpUpdatesTaker implements UpdatesTaker {
      * @throws Exception
      */
     @Override
-    public StreamingTakeResult streamingTakeUpdates(Entry<RingMember, RingHost> node,
+    public StreamingTakeResult streamingTakeUpdates(RingMember taker,
+        RingHost takerHost,
+        Entry<RingMember, RingHost> node,
         RegionName regionName,
         long transactionId,
         RowStream tookRowUpdates) {
 
-        TakeRequest takeRequest = new TakeRequest(transactionId, regionName);
+        TakeRequest takeRequest = new TakeRequest(taker, takerHost, transactionId, regionName);
 
         HttpStreamResponse httpStreamResponse;
         try {

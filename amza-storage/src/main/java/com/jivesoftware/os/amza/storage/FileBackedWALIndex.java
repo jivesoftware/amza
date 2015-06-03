@@ -1,12 +1,12 @@
 package com.jivesoftware.os.amza.storage;
 
-import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.WALIndex;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALPointer;
+import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.region.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.wal.WALIndex;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.filer.io.AutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.filer.io.FileBackedMemMappedByteBufferFactory;
 import com.jivesoftware.os.filer.io.api.KeyRange;
@@ -402,7 +402,7 @@ public class FileBackedWALIndex implements WALIndex {
     @Override
     synchronized public void rangeScan(WALKey from, WALKey to, final Scan<WALPointer> scan) throws Exception {
         try {
-            List<KeyRange> ranges = Collections.singletonList(new KeyRange(from.getKey(), to.getKey()));
+            List<KeyRange> ranges = Collections.singletonList(new KeyRange(from.getKey(), to == null ? null : to.getKey()));
             SkipListMapContext slmc = ensureCapacity(0);
             if (slmc != null) {
                 SkipListMapStore.INSTANCE.streamKeys(filer, sls, sls, ranges, (byte[] key) -> {

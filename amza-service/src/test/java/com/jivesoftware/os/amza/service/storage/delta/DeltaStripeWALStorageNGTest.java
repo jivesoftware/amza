@@ -9,25 +9,23 @@ import com.jivesoftware.os.amza.service.storage.JacksonRegionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
-import com.jivesoftware.os.amza.shared.Commitable;
-import com.jivesoftware.os.amza.shared.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.Highwaters;
-import com.jivesoftware.os.amza.shared.NoOpWALReplicator;
-import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RegionProperties;
-import com.jivesoftware.os.amza.shared.RegionTx;
-import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.TxRegionStatus;
-import com.jivesoftware.os.amza.shared.VersionedRegionName;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
-import com.jivesoftware.os.amza.shared.WALStorage;
-import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.region.RegionTx;
+import com.jivesoftware.os.amza.shared.region.TxRegionStatus;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALStorage;
+import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
@@ -90,8 +88,6 @@ public class DeltaStripeWALStorageNGTest {
         DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(highwaterStorage, 1, primaryRowMarshaller, highwaterRowMarshaller,
             deltaWALFactory, 0);
         deltaStripeWALStorage.load(regionIndex);
-
-        WALReplicator replicator = new NoOpWALReplicator();
 
         WALStorage storage = regionStore.getWalStorage();
         Assert.assertNull(deltaStripeWALStorage.get(versionedRegionName, storage, key(1)));

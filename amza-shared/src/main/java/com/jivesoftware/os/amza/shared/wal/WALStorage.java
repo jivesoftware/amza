@@ -13,8 +13,14 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.shared.scan.RangeScannable;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
 import java.util.List;
 
 public interface WALStorage extends RangeScannable<WALValue> {

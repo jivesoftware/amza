@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.RegionProperties;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
 
 /**
  *

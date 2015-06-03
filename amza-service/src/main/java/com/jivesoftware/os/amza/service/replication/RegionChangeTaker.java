@@ -10,24 +10,24 @@ import com.google.common.collect.SetMultimap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingReader;
 import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.shared.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
-import com.jivesoftware.os.amza.shared.RegionProperties;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RingNeighbors;
-import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.RowType;
-import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.TxRegionStatus;
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.UpdatesTaker.StreamingTakeResult;
-import com.jivesoftware.os.amza.shared.VersionedRegionName;
-import com.jivesoftware.os.amza.shared.WALHighwater;
-import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.region.TxRegionStatus;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.ring.RingNeighbors;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker.StreamingTakeResult;
+import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
@@ -60,6 +60,7 @@ public class RegionChangeTaker {
     private ScheduledExecutorService masterTakerThreadPool;
     private ExecutorService slaveTakerThreadPool;
     private final AmzaRingReader amzaRingReader;
+    private final RingHost ringHost;
     private final AmzaStats amzaStats;
     private final RegionIndex regionIndex;
     private final RegionStripeProvider regionStripeProvider;
@@ -74,6 +75,7 @@ public class RegionChangeTaker {
 
     public RegionChangeTaker(AmzaStats amzaStats,
         AmzaRingReader amzaRingReader,
+        RingHost ringHost,
         RegionIndex regionIndex,
         RegionStripeProvider regionStripeProvider,
         RegionStripe[] stripes,
@@ -87,6 +89,7 @@ public class RegionChangeTaker {
 
         this.amzaStats = amzaStats;
         this.amzaRingReader = amzaRingReader;
+        this.ringHost = ringHost;
         this.regionIndex = regionIndex;
         this.regionStripeProvider = regionStripeProvider;
         this.stripes = stripes;
@@ -241,10 +244,10 @@ public class RegionChangeTaker {
                 if (ring[i] == null) {
                     continue;
                 }
-                Entry<RingMember, RingHost> node = ring[i];
+                Entry<RingMember, RingHost> takeFromNode = ring[i];
                 ring[i] = null;
 
-                RingMember ringMember = node.getKey();
+                RingMember ringMember = takeFromNode.getKey();
                 Long highwaterMark = highwaterStorage.get(ringMember, versionedRegionName);
                 if (highwaterMark == null) {
                     // TODO it would be nice to ask this node to recommend an initial highwater based on
@@ -259,7 +262,9 @@ public class RegionChangeTaker {
 
                 int updates = 0;
 
-                StreamingTakeResult streamingTakeResult = updatesTaker.streamingTakeUpdates(node,
+                StreamingTakeResult streamingTakeResult = updatesTaker.streamingTakeUpdates(amzaRingReader.getRingMember(),
+                    ringHost,
+                    takeFromNode,
                     versionedRegionName.getRegionName(),
                     highwaterMark,
                     takeRowStream);
@@ -267,22 +272,22 @@ public class RegionChangeTaker {
 
                 if (streamingTakeResult.error != null) {
                     if (takeFailureListener.isPresent()) {
-                        takeFailureListener.get().failedToTake(node, streamingTakeResult.error);
+                        takeFailureListener.get().failedToTake(takeFromNode, streamingTakeResult.error);
                     }
-                    if (amzaStats.takeErrors.count(node) == 0) {
-                        LOG.warn("Error while taking from host:{}", node);
+                    if (amzaStats.takeErrors.count(takeFromNode) == 0) {
+                        LOG.warn("Error while taking from host:{}", takeFromNode);
                         LOG.trace("Error while taking from host:{} region:{} takeFromFactor:{}",
-                            new Object[] { node, versionedRegionName, takeFromFactor }, streamingTakeResult.error);
+                            new Object[]{takeFromNode, versionedRegionName, takeFromFactor}, streamingTakeResult.error);
                     }
                     amzaStats.takeErrors.add(ringMember);
                 } else if (streamingTakeResult.unreachable != null) {
                     if (takeFailureListener.isPresent()) {
-                        takeFailureListener.get().failedToTake(node, streamingTakeResult.unreachable);
+                        takeFailureListener.get().failedToTake(takeFromNode, streamingTakeResult.unreachable);
                     }
-                    if (amzaStats.takeErrors.count(node) == 0) {
-                        LOG.debug("Unreachable while taking from host:{}", node);
+                    if (amzaStats.takeErrors.count(takeFromNode) == 0) {
+                        LOG.debug("Unreachable while taking from host:{}", takeFromNode);
                         LOG.trace("Unreachable while taking from host:{} region:{} takeFromFactor:{}",
-                            new Object[] { node, versionedRegionName, takeFromFactor }, streamingTakeResult.unreachable);
+                            new Object[]{takeFromNode, versionedRegionName, takeFromFactor}, streamingTakeResult.unreachable);
                     }
                     amzaStats.takeErrors.add(ringMember);
                 } else {
@@ -308,7 +313,7 @@ public class RegionChangeTaker {
                     amzaStats.took(ringMember);
                     amzaStats.takeErrors.setCount(ringMember, 0);
                     if (takeFailureListener.isPresent()) {
-                        takeFailureListener.get().tookFrom(node);
+                        takeFailureListener.get().tookFrom(takeFromNode);
                     }
                     taken.increment();
                     if (taken.intValue() >= takeFromFactor) {

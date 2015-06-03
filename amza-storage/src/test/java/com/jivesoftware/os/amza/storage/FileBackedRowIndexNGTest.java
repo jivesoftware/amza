@@ -1,10 +1,10 @@
 package com.jivesoftware.os.amza.storage;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.WALIndex;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALPointer;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.wal.WALIndex;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.File;
 import java.util.AbstractMap;

@@ -1,4 +1,6 @@
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.scan;
+
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 
 /**
  *

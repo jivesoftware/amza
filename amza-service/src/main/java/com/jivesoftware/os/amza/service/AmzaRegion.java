@@ -15,166 +15,101 @@
  */
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.replication.RegionStripe;
-import com.jivesoftware.os.amza.service.storage.RowStoreUpdates;
-import com.jivesoftware.os.amza.service.storage.RowsStorageUpdates;
-import com.jivesoftware.os.amza.shared.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.Highwaters;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RowStream;
-import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.WALHighwater;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.AmzaRegionAPI;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.take.TakeResult;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Map.Entry;
+import java.util.Collection;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
-public class AmzaRegion {
+public class AmzaRegion implements AmzaRegionAPI {
 
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
+    private final RingMember ringMember;
     private final RegionName regionName;
     private final RegionStripe regionStripe;
     private final HighwaterStorage highwaterStorage;
+    private final RecentRegionTakers recentRegionTakers;
 
     public AmzaRegion(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
+        RingMember ringMember,
         RegionName regionName,
         RegionStripe regionStripe,
-        HighwaterStorage highwaterStorage) {
+        HighwaterStorage highwaterStorage,
+        RecentRegionTakers recentRegionTakers) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
+        this.ringMember = ringMember;
         this.regionName = regionName;
         this.regionStripe = regionStripe;
         this.highwaterStorage = highwaterStorage;
+        this.recentRegionTakers = recentRegionTakers;
     }
 
     public RegionName getRegionName() {
         return regionName;
     }
 
-    public WALKey set(WALKey key, byte[] value) throws Exception {
-        if (value == null) {
-            throw new IllegalStateException("Value cannot be null.");
-        }
-        long timestamp = orderIdProvider.nextId();
-        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
-        tx.put(key, new WALValue(value, timestamp, false));
-        tx.commit();
-        return key;
+    @Override
+    public TakeQuorum commit(Commitable<WALValue> updates) throws Exception {
+        long timestampId = orderIdProvider.nextId();
+        RowsChanged commit = regionStripe.commit(regionName, Optional.absent(), true, (highwaters, scan) -> {
+            updates.commitable(highwaters, (rowTxId, key, scanned) -> {
+                WALValue value = scanned.getTimestampId() > 0 ? scanned : new WALValue(scanned.getValue(), timestampId, scanned.getTombstoned());
+                return scan.row(rowTxId, key, value);
+            });
+        });
+
+        Collection<RingHost> recentTakers = recentRegionTakers.recentTakers(regionName);
+        return new TakeQuorum(ringMember, commit.getLargestCommitedTxId(), recentTakers);
     }
 
-    public WALKey setValue(WALKey key, WALValue value) throws Exception {
-        if (value == null) {
-            throw new IllegalStateException("Value cannot be null.");
-        }
-        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
-        tx.put(key, value);
-        tx.commit();
-        return key;
-    }
-
-    public void set(Iterable<Entry<WALKey, byte[]>> entries) throws Exception {
-        long timestamp = orderIdProvider.nextId();
-        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
-        for (Entry<WALKey, byte[]> e : entries) {
-            WALKey k = e.getKey();
-            byte[] v = e.getValue();
-            if (v == null) {
-                throw new IllegalStateException("Value cannot be null.");
-            }
-            tx.put(k, new WALValue(v, timestamp, false));
-        }
-        tx.commit();
-    }
-
-    public void setValues(Iterable<Entry<WALKey, WALValue>> entries) throws Exception {
-        RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
-        for (Entry<WALKey, WALValue> e : entries) {
-            WALKey k = e.getKey();
-            WALValue v = e.getValue();
-            if (v == null) {
-                throw new IllegalStateException("Value cannot be null.");
-            }
-            tx.put(k, v);
-        }
-        tx.commit();
-    }
-
-    public byte[] get(WALKey key) throws Exception {
-        WALValue got = regionStripe.get(regionName, key);
-        if (got == null) {
-            return null;
-        }
-        if (got.getTombstoned()) {
-            return null;
-        }
-        return got.getValue();
-    }
-
-    public WALValue getValue(WALKey key) throws Exception {
-        return regionStripe.get(regionName, key);
-    }
-
-    public List<byte[]> get(List<WALKey> keys) throws Exception {
-        List<byte[]> values = new ArrayList<>();
-        for (WALKey key : keys) {
-            values.add(get(key));
-        }
-        return values;
-    }
-
-    public void get(Iterable<WALKey> keys, Scan<WALValue> valuesStream) throws Exception {
-        for (final WALKey key : keys) {
-            WALValue rowIndexValue = regionStripe.get(regionName, key);
-            if (rowIndexValue != null && !rowIndexValue.getTombstoned()) {
-                if (!valuesStream.row(-1, key, rowIndexValue)) {
-                    return;
-                }
-            }
+    @Override
+    public void get(Iterable<byte[]> keys, Scan<TimestampedValue> valuesStream) throws Exception {
+        for (byte[] key : keys) {
+            WALKey walKey = new WALKey(key);
+            WALValue got = regionStripe.get(regionName, walKey); // TODO Hmmm add a multi get?
+            valuesStream.row(-1, walKey, got == null ? null : got.toTimestampedValue());
         }
     }
 
-    public void scan(Scan<WALValue> stream) throws Exception {
-        regionStripe.rowScan(regionName, (rowTxId, key, value) -> value.getTombstoned() || stream.row(rowTxId, key, value));
-    }
-
-    public void rangeScan(WALKey from, WALKey to, Scan<WALValue> stream) throws Exception {
-        regionStripe.rangeScan(regionName, from, to, (rowTxId, key, value) -> value.getTombstoned() || stream.row(rowTxId, key, value));
-    }
-
-    public boolean remove(WALKey key) throws Exception {
-        RowStoreUpdates tx = regionStripe.startTransaction(regionName);
-        tx.put(key, new WALValue(null, orderIdProvider.nextId(), true));
-        tx.commit();
-        return true;
-    }
-
-    public void remove(Iterable<WALKey> keys) throws Exception {
-        long timestamp = orderIdProvider.nextId();
-        RowStoreUpdates tx = regionStripe.startTransaction(regionName);
-        for (WALKey key : keys) {
-            tx.put(key, new WALValue(null, timestamp, true));
+    @Override
+    public void scan(byte[] from, byte[] to, Scan<TimestampedValue> scan) throws Exception {
+        if (from == null && to == null) {
+            regionStripe.rowScan(regionName, (rowTxId, key, scanned) -> scan.row(rowTxId, key, scanned.toTimestampedValue()));
+        } else {
+            regionStripe.rangeScan(regionName,
+                from == null ? new WALKey(new byte[0]) : new WALKey(from),
+                to == null ? null : new WALKey(to),
+                (rowTxId, key, scanned) -> scan.row(rowTxId, key, scanned.toTimestampedValue()));
         }
-        tx.commit();
     }
 
-    public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        regionStripe.takeRowUpdatesSince(regionName, transactionId, rowStream);
-    }
-
-    public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<WALValue> scan) throws Exception {
+    @Override
+    public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
         final MutableLong lastTxId = new MutableLong(-1);
         WALHighwater tookToEnd = regionStripe.takeFromTransactionId(regionName, transactionId, highwaterStorage, highwaters, (rowTxId, key, value) -> {
-            if (value.getTombstoned() || scan.row(rowTxId, key, value)) {
+            if (value.getTombstoned() || scan.row(rowTxId, key, value.toTimestampedValue())) {
                 if (rowTxId > lastTxId.longValue()) {
                     lastTxId.setValue(rowTxId);
                 }
@@ -182,25 +117,18 @@ public class AmzaRegion {
             }
             return false;
         });
-        return new TakeResult(lastTxId.longValue(), tookToEnd);
+        return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd);
     }
 
-    public static class TakeResult {
-
-        public final long lastTxId;
-        public final WALHighwater tookToEnd;
-
-        public TakeResult(long lastTxId, WALHighwater tookToEnd) {
-            this.lastTxId = lastTxId;
-            this.tookToEnd = tookToEnd;
-        }
+    public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
+        regionStripe.takeRowUpdatesSince(regionName, transactionId, rowStream);
     }
 
     //  Use for testing
     public boolean compare(final AmzaRegion amzaRegion) throws Exception {
         final MutableInt compared = new MutableInt(0);
         final MutableBoolean passed = new MutableBoolean(true);
-        amzaRegion.scan((long txid, WALKey key, WALValue value) -> {
+        amzaRegion.scan(null, null, (txid, key, value) -> {
             try {
                 compared.increment();
 
@@ -224,16 +152,9 @@ public class AmzaRegion {
 
                     return false;
                 }
-                if (value.getTombstoned() != timestampedValue.getTombstoned()) {
-                    System.out.println("INCONSISTENCY: " + comparing + " tombstone:" + timestampedValue.getTombstoned()
-                        + " != '" + value.getTombstoned()
-                        + "' \n" + timestampedValue + " vs " + value);
-                    passed.setValue(false);
-                    return false;
-                }
                 if (value.getValue() == null && timestampedValue.getValue() != null) {
                     System.out.println("INCONSISTENCY: " + comparing + " null values:" + timestampedValue.getTombstoned()
-                        + " != '" + value.getTombstoned()
+                        + " != '" + value
                         + "' \n" + timestampedValue + " vs " + value);
                     passed.setValue(false);
                     return false;
@@ -260,4 +181,5 @@ public class AmzaRegion {
     public long count() throws Exception {
         return regionStripe.count(regionName);
     }
+
 }

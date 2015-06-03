@@ -16,10 +16,10 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.collect.ListMultimap;
-import com.jivesoftware.os.amza.shared.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.VersionedRegionName;
-import com.jivesoftware.os.amza.shared.WALHighwater;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;

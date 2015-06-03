@@ -13,8 +13,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
 import java.util.Map;
 import java.util.Map.Entry;
 

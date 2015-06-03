@@ -27,43 +27,37 @@ import com.jivesoftware.os.amza.service.storage.RegionIndex;
 import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.RegionStore;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RegionProperties;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RingNeighbors;
-import com.jivesoftware.os.amza.shared.RowChanges;
-import com.jivesoftware.os.amza.shared.RowType;
-import com.jivesoftware.os.amza.shared.Scan;
-import com.jivesoftware.os.amza.shared.TakeCursors;
-import com.jivesoftware.os.amza.shared.TakeCursors.RingMemberCursor;
-import com.jivesoftware.os.amza.shared.TxRegionStatus;
-import com.jivesoftware.os.amza.shared.VersionedRegionName;
-import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALValue;
+import com.jivesoftware.os.amza.shared.AmzaRegionAPIProvider;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.region.TxRegionStatus;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.ring.RingNeighbors;
+import com.jivesoftware.os.amza.shared.scan.RowChanges;
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
-import java.util.function.BiFunction;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * Amza pronounced (AH m z ah )
  * Sanskrit word meaning partition / share.
  */
-public class AmzaService implements AmzaInstance {
+public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -79,6 +73,7 @@ public class AmzaService implements AmzaInstance {
     private final RegionIndex regionIndex;
     private final RegionProvider regionProvider;
     private final RegionStripeProvider regionStripeProvider;
+    private final RecentRegionTakers recentRegionTakers;
     private final AmzaRegionWatcher regionWatcher;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
@@ -93,6 +88,7 @@ public class AmzaService implements AmzaInstance {
         RegionIndex regionIndex,
         RegionProvider regionProvider,
         RegionStripeProvider regionStripeProvider,
+        RecentRegionTakers recentRegionTakers,
         AmzaRegionWatcher regionWatcher) {
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
@@ -106,6 +102,7 @@ public class AmzaService implements AmzaInstance {
         this.regionIndex = regionIndex;
         this.regionProvider = regionProvider;
         this.regionStripeProvider = regionStripeProvider;
+        this.recentRegionTakers = recentRegionTakers;
         this.regionWatcher = regionWatcher;
     }
 
@@ -158,7 +155,7 @@ public class AmzaService implements AmzaInstance {
         }
     }
 
-    public AmzaRoute getRegionRoute(RegionName regionName) throws Exception {
+    public AmzaRegionRoute getRegionRoute(RegionName regionName) throws Exception {
 
         List<RingHost> orderedRegionHosts = new ArrayList<>();
         List<RingMember> unregisteredRingMembers = new ArrayList<>();
@@ -170,7 +167,7 @@ public class AmzaService implements AmzaInstance {
 
         RegionProperties properties = regionIndex.getProperties(regionName);
         if (properties == null) {
-            return new AmzaRoute(new ArrayList<>(ring.values()),
+            return new AmzaRegionRoute(new ArrayList<>(ring.values()),
                 Collections.emptyList(),
                 Collections.emptyList(),
                 Collections.emptyList(),
@@ -203,10 +200,11 @@ public class AmzaService implements AmzaInstance {
                 orderedRegionHosts.add(e.getValue());
             }
         }
-        return new AmzaRoute(Collections.emptyList(), orderedRegionHosts, unregisteredRingMembers, ketchupRingMembers, expungedRingMembers, missingRingMembers);
+        return new AmzaRegionRoute(Collections.emptyList(), orderedRegionHosts, unregisteredRingMembers, ketchupRingMembers, expungedRingMembers,
+            missingRingMembers);
     }
 
-    public static class AmzaRoute {
+    public static class AmzaRegionRoute {
 
         public List<RingHost> uninitializedHosts;
         public List<RingHost> orderedRegionHosts;
@@ -215,7 +213,7 @@ public class AmzaService implements AmzaInstance {
         public List<RingMember> expungedRingMembers;
         public List<RingMember> missingRingMembers;
 
-        public AmzaRoute(List<RingHost> uninitializedHosts,
+        public AmzaRegionRoute(List<RingHost> uninitializedHosts,
             List<RingHost> orderedRegionHosts,
             List<RingMember> unregisteredRingMembers,
             List<RingMember> ketchupRingMembers,
@@ -231,8 +229,15 @@ public class AmzaService implements AmzaInstance {
 
     }
 
+    @Override
     public AmzaRegion getRegion(RegionName regionName) throws Exception {
-        return new AmzaRegion(amzaStats, orderIdProvider, regionName, regionStripeProvider.getRegionStripe(regionName), highwaterStorage);
+        return new AmzaRegion(amzaStats,
+            orderIdProvider,
+            ringReader.getRingMember(),
+            regionName,
+            regionStripeProvider.getRegionStripe(regionName),
+            highwaterStorage,
+            recentRegionTakers);
     }
 
     public boolean hasRegion(RegionName regionName) throws Exception {
@@ -275,38 +280,11 @@ public class AmzaService implements AmzaInstance {
         return regionWatcher.unwatch(regionName);
     }
 
-    private static final BiFunction<Long, Long, Long> maxMerge = (Long t, Long u) -> Math.max(t, u);
-
-    public TakeCursors takeFromTransactionId(AmzaRegion region, long transactionId, final Scan<WALValue> scan)
-        throws Exception {
-        if (region == null) {
-            return null;
-        }
-
-        Map<RingMember, Long> ringMemberToMaxTxId = new HashMap<>();
-        AmzaRegion.TakeResult takeResult = region.takeFromTransactionId(transactionId, (highwater) -> {
-            for (RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
-                ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, maxMerge);
-            }
-        }, scan);
-        if (takeResult.tookToEnd != null) {
-            for (RingMemberHighwater highwater : takeResult.tookToEnd.ringMemberHighwater) {
-                ringMemberToMaxTxId.merge(highwater.ringMember, highwater.transactionId, maxMerge);
-            }
-        }
-        ringMemberToMaxTxId.merge(amzaHostRing.getRingMember(), takeResult.lastTxId, maxMerge);
-
-        List<RingMemberCursor> cursors = new ArrayList<>();
-        for (Entry<RingMember, Long> entry : ringMemberToMaxTxId.entrySet()) {
-            cursors.add(new RingMemberCursor(entry.getKey(), entry.getValue()));
-        }
-        cursors.add(new TakeCursors.RingMemberCursor(amzaHostRing.getRingMember(), takeResult.lastTxId));
-        return new TakeCursors(cursors);
-
-    }
-
+    
     @Override
     public void streamingTakeFromRegion(DataOutputStream dos,
+        RingMember ringMember,
+        RingHost ringHost,
         RegionName regionName,
         long highestTransactionId) throws Exception {
 
@@ -344,6 +322,8 @@ public class AmzaService implements AmzaInstance {
                 }
                 dos.writeByte(0); // last entry marker
                 bytes.increment();
+                recentRegionTakers.took(ringMember, ringHost, regionName);
+
             } else {
                 dos.writeByte(0); // not online
                 dos.writeByte(0); // last entry marker

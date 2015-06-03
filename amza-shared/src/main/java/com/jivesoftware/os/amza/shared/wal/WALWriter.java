@@ -13,8 +13,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import java.util.List;
 
 public interface WALWriter {

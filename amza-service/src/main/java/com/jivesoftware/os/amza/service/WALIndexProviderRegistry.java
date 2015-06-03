@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.service;
 
-import com.jivesoftware.os.amza.shared.MemoryWALIndexProvider;
-import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
-import com.jivesoftware.os.amza.shared.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
+import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;
+import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
+import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**

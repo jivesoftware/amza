@@ -18,11 +18,11 @@ package com.jivesoftware.os.amza.deployable;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.AmzaRegion;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RegionProperties;
-import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.AmzaRegionUpdates;
+import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -30,7 +30,6 @@ import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
@@ -62,13 +61,13 @@ public class AmzaEndpoints {
         @QueryParam("value") String value) {
         try {
             AmzaRegion amzaRegion = createRegionIfAbsent(region);
-            List<Entry<WALKey, byte[]>> entries = new ArrayList<>();
             String[] keys = key.split(",");
             String[] values = value.split(",");
+            AmzaRegionUpdates updates = new AmzaRegionUpdates();
             for (int i = 0; i < keys.length; i++) {
-                entries.add(new AbstractMap.SimpleEntry<>(new WALKey(keys[i].getBytes()), values[i].getBytes()));
+                updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
             }
-            amzaRegion.set(entries);
+            amzaRegion.commit(updates);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set region:" + region + " key:" + key + " value:" + value, x);
@@ -82,8 +81,12 @@ public class AmzaEndpoints {
     public Response multiSet(@PathParam("region") String region, Map<String, String> values) {
         try {
             AmzaRegion amzaRegion = createRegionIfAbsent(region);
-            amzaRegion.set(Iterables.transform(values.entrySet(), (Entry<String, String> input) -> new AbstractMap.SimpleEntry<>(new WALKey(input.getKey()
-                .getBytes()), input.getValue().getBytes())));
+            AmzaRegionUpdates updates = new AmzaRegionUpdates();
+
+            updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(input.getKey()
+                .getBytes(), input.getValue().getBytes())), -1);
+            amzaRegion.commit(updates);
+
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set region:" + region + " values:" + values, x);
@@ -98,13 +101,17 @@ public class AmzaEndpoints {
         @QueryParam("key") String key) {
         try {
             String[] keys = key.split(",");
-            List<WALKey> rowKeys = new ArrayList<>();
+            List<byte[]> rawKeys = new ArrayList<>();
             for (String k : keys) {
-                rowKeys.add(new WALKey(k.getBytes()));
+                rawKeys.add(k.getBytes());
             }
 
             AmzaRegion amzaRegion = createRegionIfAbsent(region);
-            List<byte[]> got = amzaRegion.get(rowKeys);
+            List<byte[]> got = new ArrayList<>();
+            amzaRegion.get(rawKeys, (rowTxId, key1, scanned) -> {
+                got.add(scanned.getValue());
+                return true;
+            });
             return ResponseHelper.INSTANCE.jsonResponse(got);
         } catch (Exception x) {
             LOG.warn("Failed to get region:" + region + " key:" + key, x);
@@ -119,7 +126,10 @@ public class AmzaEndpoints {
         @QueryParam("key") String key) {
         try {
             AmzaRegion amzaRegion = createRegionIfAbsent(region);
-            return Response.ok(amzaRegion.remove(new WALKey(key.getBytes())), MediaType.TEXT_PLAIN).build();
+            AmzaRegionUpdates updates = new AmzaRegionUpdates();
+            updates.remove(key.getBytes(), -1);
+            amzaRegion.commit(updates);
+            return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove region:" + region + " key:" + key, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to remove region:" + region + " key:" + key, x);
@@ -140,7 +150,7 @@ public class AmzaEndpoints {
         RegionName regionName = new RegionName(false, "default", simpleRegionName);
         amzaService.setPropertiesIfAbsent(regionName, new RegionProperties(storageDescriptor, 1, 1, false));
 
-        AmzaService.AmzaRoute regionRoute = amzaService.getRegionRoute(regionName);
+        AmzaService.AmzaRegionRoute regionRoute = amzaService.getRegionRoute(regionName);
         long start = System.currentTimeMillis();
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         while (regionRoute.orderedRegionHosts.isEmpty() && (System.currentTimeMillis() - start) > maxSleep) {

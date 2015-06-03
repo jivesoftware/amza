@@ -17,19 +17,35 @@ package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.jivesoftware.os.amza.shared.RegionName;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
 
 public class TakeRequest {
 
     private final long highestTransactionId;
+    private final RingMember taker;
+    private final RingHost takerHost;
     private final RegionName regionName;
 
     @JsonCreator
     public TakeRequest(
+        @JsonProperty("taker") RingMember taker,
+        @JsonProperty("takerHost") RingHost takerHost,
         @JsonProperty("highestTransactionId") long highestTransactionId,
         @JsonProperty("regionName") RegionName regionName) {
+        this.taker = taker;
+        this.takerHost = takerHost;
         this.highestTransactionId = highestTransactionId;
         this.regionName = regionName;
+    }
+
+    public RingMember getTaker() {
+        return taker;
+    }
+
+    public RingHost getTakerHost() {
+        return takerHost;
     }
 
     public long getHighestTransactionId() {
@@ -42,6 +58,7 @@ public class TakeRequest {
 
     @Override
     public String toString() {
-        return "TakeRequest{" + "highestTransactionId=" + highestTransactionId + ", regionName=" + regionName + '}';
+        return "TakeRequest{" + "highestTransactionId=" + highestTransactionId + ", taker=" + taker + ", regionName=" + regionName + '}';
     }
+
 }

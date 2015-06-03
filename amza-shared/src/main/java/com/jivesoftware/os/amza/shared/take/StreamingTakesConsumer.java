@@ -1,5 +1,8 @@
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.take;
 
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.HashMap;

@@ -13,8 +13,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.region.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;

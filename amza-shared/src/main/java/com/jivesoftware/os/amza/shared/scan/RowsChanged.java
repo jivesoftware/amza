@@ -13,9 +13,14 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.scan;
 
 import com.google.common.collect.Table;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
+import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Map;
 
 public class RowsChanged implements Commitable<WALValue> {
@@ -89,6 +94,10 @@ public class RowsChanged implements Commitable<WALValue> {
             + ", apply=" + apply
             + ", remove=" + remove
             + ", clobber=" + clobber + '}';
+    }
+
+    public long getLargestCommitedTxId() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
 }

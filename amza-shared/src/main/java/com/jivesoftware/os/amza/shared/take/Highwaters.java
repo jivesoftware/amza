@@ -1,4 +1,6 @@
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.take;
+
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 
 /**
  *

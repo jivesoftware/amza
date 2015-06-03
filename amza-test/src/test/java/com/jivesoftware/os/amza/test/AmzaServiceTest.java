@@ -16,10 +16,10 @@
 package com.jivesoftware.os.amza.test;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.WALKey;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
@@ -131,7 +131,7 @@ public class AmzaServiceTest {
             DONE:
             for (int i = 0; i < nodes.size(); i++) {
                 AmzaNode a = nodes.get(i);
-                for (int j = i + 1; j < nodes.size(); j++) {
+                for (int j = 0; j < nodes.size(); j++) {
                     AmzaNode b = nodes.get(j);
                     if (!a.compare(b)) {
                         falseCount++;

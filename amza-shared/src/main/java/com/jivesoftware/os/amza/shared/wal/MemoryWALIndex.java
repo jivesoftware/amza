@@ -13,8 +13,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.region.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.scan.Scan;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -63,11 +66,21 @@ public class MemoryWALIndex implements WALIndex {
 
     @Override
     public void rangeScan(WALKey from, WALKey to, Scan<WALPointer> scan) throws Exception {
-        for (Entry<WALKey, WALPointer> e : index.subMap(from, to).entrySet()) {
-            WALKey key = e.getKey();
-            WALPointer rowPointer = e.getValue();
-            if (!scan.row(-1, key, rowPointer)) {
-                break;
+        if (to == null) {
+             for (Entry<WALKey, WALPointer> e : index.tailMap(from, true).entrySet()) {
+                WALKey key = e.getKey();
+                WALPointer rowPointer = e.getValue();
+                if (!scan.row(-1, key, rowPointer)) {
+                    break;
+                }
+            }
+        } else {
+            for (Entry<WALKey, WALPointer> e : index.subMap(from, to).entrySet()) {
+                WALKey key = e.getKey();
+                WALPointer rowPointer = e.getValue();
+                if (!scan.row(-1, key, rowPointer)) {
+                    break;
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.region;
 
-import com.jivesoftware.os.amza.shared.TxRegionStatus.Status;
+import com.jivesoftware.os.amza.shared.region.TxRegionStatus.Status;
 
 /**
  *

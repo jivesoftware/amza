@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
 import java.util.Map;
 
 class RingWalker {

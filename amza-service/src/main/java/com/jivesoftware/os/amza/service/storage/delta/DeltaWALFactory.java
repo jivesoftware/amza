@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.shared.NoOpWALIndexProvider;
-import com.jivesoftware.os.amza.shared.WALTx;
+import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;
+import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;

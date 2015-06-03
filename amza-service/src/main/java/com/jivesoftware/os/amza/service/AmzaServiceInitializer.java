@@ -32,16 +32,16 @@ import com.jivesoftware.os.amza.service.storage.RegionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RegionTx;
-import com.jivesoftware.os.amza.shared.RingHost;
-import com.jivesoftware.os.amza.shared.RingMember;
-import com.jivesoftware.os.amza.shared.RowChanges;
-import com.jivesoftware.os.amza.shared.TxRegionStatus;
-import com.jivesoftware.os.amza.shared.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.VersionedRegionName;
-import com.jivesoftware.os.amza.shared.WALStorageProvider;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.region.RegionTx;
+import com.jivesoftware.os.amza.shared.region.TxRegionStatus;
+import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
@@ -64,7 +64,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = new String[]{"./var/data/"};
 
         public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
@@ -201,6 +201,7 @@ public class AmzaServiceInitializer {
 
         RegionChangeTaker changeTaker = new RegionChangeTaker(amzaStats,
             amzaRingReader,
+            ringHost,
             regionIndex,
             regionStripeProvider,
             regionStripes,
@@ -221,6 +222,8 @@ public class AmzaServiceInitializer {
 
         RegionComposter regionComposter = new RegionComposter(regionIndex, regionProvider, amzaRingReader, regionStatusStorage, regionStripeProvider);
 
+        RecentRegionTakers recentRegionTakers = new RecentRegionTakers();
+
         return new AmzaService(orderIdProvider,
             amzaStats,
             amzaRingReader,
@@ -233,6 +236,7 @@ public class AmzaServiceInitializer {
             regionIndex,
             regionProvider,
             regionStripeProvider,
+            recentRegionTakers,
             amzaRegionWatcher);
     }
 }

@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.service;
 
-import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RowChanges;
-import com.jivesoftware.os.amza.shared.RowsChanged;
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.scan.RowChanges;
+import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AmzaRegionWatcher implements RowChanges {

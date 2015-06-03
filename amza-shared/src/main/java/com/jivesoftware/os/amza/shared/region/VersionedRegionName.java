@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.region;
 
 import com.google.common.io.BaseEncoding;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;

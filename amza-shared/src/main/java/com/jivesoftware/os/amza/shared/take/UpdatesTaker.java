@@ -13,19 +13,26 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.shared;
+package com.jivesoftware.os.amza.shared.take;
 
+import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
 import java.util.Map;
 import java.util.Map.Entry;
 
 public interface UpdatesTaker {
 
-    StreamingTakeResult streamingTakeUpdates(Entry<RingMember, RingHost> node,
+    StreamingTakeResult streamingTakeUpdates(RingMember taker,
+        RingHost takerHost,
+        Entry<RingMember, RingHost> node,
         RegionName partitionName,
         long transactionId,
         RowStream tookRowUpdates);
 
     class StreamingTakeResult {
+
         public final Throwable unreachable;
         public final Throwable error;
         public final Map<RingMember, Long> otherHighwaterMarks;

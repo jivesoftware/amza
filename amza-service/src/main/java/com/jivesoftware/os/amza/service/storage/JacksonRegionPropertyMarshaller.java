@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.RegionProperties;
+import com.jivesoftware.os.amza.shared.region.RegionProperties;
 
 /**
  *

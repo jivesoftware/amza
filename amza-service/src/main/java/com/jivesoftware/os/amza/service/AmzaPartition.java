@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.service.replication.RegionStripe;
-import com.jivesoftware.os.amza.shared.AmzaRegionAPI;
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
@@ -39,48 +39,48 @@ import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
-public class AmzaRegion implements AmzaRegionAPI {
+public class AmzaPartition implements AmzaPartitionAPI {
 
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
     private final RingMember ringMember;
-    private final RegionName regionName;
-    private final RegionStripe regionStripe;
+    private final PartitionName partitionName;
+    private final PartitionStripe partitionStripe;
     private final HighwaterStorage highwaterStorage;
-    private final RecentRegionTakers recentRegionTakers;
+    private final RecentPartitionTakers recentPartitionTakers;
 
-    public AmzaRegion(AmzaStats amzaStats,
+    public AmzaPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
         RingMember ringMember,
-        RegionName regionName,
-        RegionStripe regionStripe,
+        PartitionName partitionName,
+        PartitionStripe partitionStripe,
         HighwaterStorage highwaterStorage,
-        RecentRegionTakers recentRegionTakers) {
+        RecentPartitionTakers recentPartitionTakers) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.ringMember = ringMember;
-        this.regionName = regionName;
-        this.regionStripe = regionStripe;
+        this.partitionName = partitionName;
+        this.partitionStripe = partitionStripe;
         this.highwaterStorage = highwaterStorage;
-        this.recentRegionTakers = recentRegionTakers;
+        this.recentPartitionTakers = recentPartitionTakers;
     }
 
-    public RegionName getRegionName() {
-        return regionName;
+    public PartitionName getPartitionName() {
+        return partitionName;
     }
 
     @Override
     public TakeQuorum commit(Commitable<WALValue> updates) throws Exception {
         long timestampId = orderIdProvider.nextId();
-        RowsChanged commit = regionStripe.commit(regionName, Optional.absent(), true, (highwaters, scan) -> {
+        RowsChanged commit = partitionStripe.commit(partitionName, Optional.absent(), true, (highwaters, scan) -> {
             updates.commitable(highwaters, (rowTxId, key, scanned) -> {
                 WALValue value = scanned.getTimestampId() > 0 ? scanned : new WALValue(scanned.getValue(), timestampId, scanned.getTombstoned());
                 return scan.row(rowTxId, key, value);
             });
         });
 
-        Collection<RingHost> recentTakers = recentRegionTakers.recentTakers(regionName);
+        Collection<RingHost> recentTakers = recentPartitionTakers.recentTakers(partitionName);
         return new TakeQuorum(ringMember, commit.getLargestCommitedTxId(), recentTakers);
     }
 
@@ -88,7 +88,7 @@ public class AmzaRegion implements AmzaRegionAPI {
     public void get(Iterable<byte[]> keys, Scan<TimestampedValue> valuesStream) throws Exception {
         for (byte[] key : keys) {
             WALKey walKey = new WALKey(key);
-            WALValue got = regionStripe.get(regionName, walKey); // TODO Hmmm add a multi get?
+            WALValue got = partitionStripe.get(partitionName, walKey); // TODO Hmmm add a multi get?
             valuesStream.row(-1, walKey, got == null ? null : got.toTimestampedValue());
         }
     }
@@ -96,9 +96,9 @@ public class AmzaRegion implements AmzaRegionAPI {
     @Override
     public void scan(byte[] from, byte[] to, Scan<TimestampedValue> scan) throws Exception {
         if (from == null && to == null) {
-            regionStripe.rowScan(regionName, (rowTxId, key, scanned) -> scan.row(rowTxId, key, scanned.toTimestampedValue()));
+            partitionStripe.rowScan(partitionName, (rowTxId, key, scanned) -> scan.row(rowTxId, key, scanned.toTimestampedValue()));
         } else {
-            regionStripe.rangeScan(regionName,
+            partitionStripe.rangeScan(partitionName,
                 from == null ? new WALKey(new byte[0]) : new WALKey(from),
                 to == null ? null : new WALKey(to),
                 (rowTxId, key, scanned) -> scan.row(rowTxId, key, scanned.toTimestampedValue()));
@@ -108,7 +108,7 @@ public class AmzaRegion implements AmzaRegionAPI {
     @Override
     public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
         final MutableLong lastTxId = new MutableLong(-1);
-        WALHighwater tookToEnd = regionStripe.takeFromTransactionId(regionName, transactionId, highwaterStorage, highwaters, (rowTxId, key, value) -> {
+        WALHighwater tookToEnd = partitionStripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters, (rowTxId, key, value) -> {
             if (value.getTombstoned() || scan.row(rowTxId, key, value.toTimestampedValue())) {
                 if (rowTxId > lastTxId.longValue()) {
                     lastTxId.setValue(rowTxId);
@@ -121,20 +121,20 @@ public class AmzaRegion implements AmzaRegionAPI {
     }
 
     public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        regionStripe.takeRowUpdatesSince(regionName, transactionId, rowStream);
+        partitionStripe.takeRowUpdatesSince(partitionName, transactionId, rowStream);
     }
 
     //  Use for testing
-    public boolean compare(final AmzaRegion amzaRegion) throws Exception {
+    public boolean compare(final AmzaPartition amzaPartition) throws Exception {
         final MutableInt compared = new MutableInt(0);
         final MutableBoolean passed = new MutableBoolean(true);
-        amzaRegion.scan(null, null, (txid, key, value) -> {
+        amzaPartition.scan(null, null, (txid, key, value) -> {
             try {
                 compared.increment();
 
-                WALValue timestampedValue = regionStripe.get(regionName, key);
-                String comparing = regionName.getRingName() + ":" + regionName.getRegionName()
-                    + " to " + amzaRegion.regionName.getRingName() + ":" + amzaRegion.regionName.getRegionName() + "\n";
+                WALValue timestampedValue = partitionStripe.get(partitionName, key);
+                String comparing = partitionName.getRingName() + ":" + partitionName.getPartitionName()
+                    + " to " + amzaPartition.partitionName.getRingName() + ":" + amzaPartition.partitionName.getPartitionName() + "\n";
 
                 if (timestampedValue == null) {
                     System.out.println("INCONSISTENCY: " + comparing + " key:null"
@@ -174,12 +174,12 @@ public class AmzaRegion implements AmzaRegionAPI {
             }
         });
 
-        System.out.println("region:" + amzaRegion.regionName.getRegionName() + " compared:" + compared + " keys");
+        System.out.println("partition:" + amzaPartition.partitionName.getPartitionName() + " compared:" + compared + " keys");
         return passed.booleanValue();
     }
 
     public long count() throws Exception {
-        return regionStripe.count(regionName);
+        return partitionStripe.count(partitionName);
     }
 
 }

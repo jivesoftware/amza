@@ -8,7 +8,7 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -19,7 +19,7 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 public class SystemStripeWALStorage implements StripeWALStorage {
 
     @Override
-    public void load(RegionIndex regionIndex) throws Exception {
+    public void load(PartitionIndex partitionIndex) throws Exception {
     }
 
     @Override
@@ -27,16 +27,16 @@ public class SystemStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void compact(RegionIndex regionIndex) throws Exception {
+    public void compact(PartitionIndex partitionIndex) throws Exception {
     }
 
     @Override
-    public boolean expunge(VersionedRegionName versionedRegionName, WALStorage walStorage) throws Exception {
+    public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
         return walStorage.expunge();
     }
 
     @Override
-    public RowsChanged update(VersionedRegionName versionedRegionName,
+    public RowsChanged update(VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         Commitable<WALValue> updates) throws Exception {
 
@@ -44,41 +44,41 @@ public class SystemStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public WALValue get(VersionedRegionName versionedRegionName, WALStorage storage, WALKey key) throws Exception {
+    public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         return storage.get(key);
     }
 
     @Override
-    public boolean containsKey(VersionedRegionName versionedRegionName, WALStorage storage, WALKey key) throws Exception {
+    public boolean containsKey(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         return storage.containsKey(key);
     }
 
     @Override
-    public void takeRowUpdatesSince(VersionedRegionName versionedRegionName, WALStorage storage, long transactionId, RowStream rowUpdates)
+    public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, RowStream rowUpdates)
         throws Exception {
         storage.takeRowUpdatesSince(transactionId, rowUpdates);
     }
 
     @Override
-    public boolean takeFromTransactionId(VersionedRegionName versionedRegionName, WALStorage storage, long transactionId, Highwaters highwaters,
+    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, Highwaters highwaters,
         Scan<WALValue> scan)
         throws Exception {
         return storage.takeFromTransactionId(transactionId, highwaters, scan);
     }
 
     @Override
-    public void rangeScan(VersionedRegionName versionedRegionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to, Scan<WALValue> scan) throws
+    public void rangeScan(VersionedPartitionName versionedPartitionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to, Scan<WALValue> scan) throws
         Exception {
         rangeScannable.rangeScan(from, to, scan);
     }
 
     @Override
-    public void rowScan(VersionedRegionName versionedRegionName, Scannable<WALValue> scanable, Scan<WALValue> scan) throws Exception {
+    public void rowScan(VersionedPartitionName versionedPartitionName, Scannable<WALValue> scanable, Scan<WALValue> scan) throws Exception {
         scanable.rowScan(scan);
     }
 
     @Override
-    public long count(VersionedRegionName versionedRegionName, WALStorage storage) throws Exception {
+    public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         return storage.count();
     }
 }

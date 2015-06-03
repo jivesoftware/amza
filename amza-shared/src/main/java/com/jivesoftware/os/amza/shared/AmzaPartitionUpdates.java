@@ -23,11 +23,11 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class AmzaRegionUpdates implements Commitable<WALValue> {
+public class AmzaPartitionUpdates implements Commitable<WALValue> {
 
     private final ConcurrentSkipListMap<WALKey, WALValue> changes;
 
-    public AmzaRegionUpdates() {
+    public AmzaPartitionUpdates() {
         this.changes = new ConcurrentSkipListMap<>();
     }
 

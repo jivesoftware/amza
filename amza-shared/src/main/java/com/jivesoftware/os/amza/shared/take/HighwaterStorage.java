@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.shared.take;
 
 import com.google.common.collect.ListMultimap;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 
@@ -24,16 +24,16 @@ public interface HighwaterStorage {
 
     void clearRing(RingMember ringMember) throws Exception;
 
-    void setIfLarger(RingMember ringMember, VersionedRegionName versionedRegionName, int updates, long highWatermark) throws Exception;
+    void setIfLarger(RingMember ringMember, VersionedPartitionName versionedPartitionName, int updates, long highWatermark) throws Exception;
 
-    void clear(RingMember ringMember, VersionedRegionName versionedRegionName) throws Exception;
+    void clear(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
 
-    Long get(RingMember ringMember, VersionedRegionName versionedRegionName) throws Exception;
+    Long get(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
 
-    WALHighwater getRegionHighwater(VersionedRegionName versionedRegionName) throws Exception;
+    WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception;
 
-    void flush(ListMultimap<RingMember, VersionedRegionName> flush) throws Exception;
+    void flush(ListMultimap<RingMember, VersionedPartitionName> flush) throws Exception;
 
-    boolean expunge(VersionedRegionName versionedRegionName) throws Exception;
+    boolean expunge(VersionedPartitionName versionedPartitionName) throws Exception;
 
 }

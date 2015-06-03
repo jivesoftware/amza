@@ -13,7 +13,7 @@ import java.util.Collection;
  *
  * @author jonathan.colt
  */
-public interface AmzaRegionAPI {
+public interface AmzaPartitionAPI {
 
     TakeQuorum commit(Commitable<WALValue> updates) throws Exception;
 

@@ -2,8 +2,8 @@ package com.jivesoftware.os.amza.shared.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -38,7 +38,7 @@ public class AmzaStats {
     private final AtomicLong totalCompactions = new AtomicLong();
 
     private final Totals grandTotals = new Totals();
-    private final Map<RegionName, Totals> regionTotals = new ConcurrentHashMap<>();
+    private final Map<PartitionName, Totals> partitionTotals = new ConcurrentHashMap<>();
 
     public final Multiset<RingMember> takeErrors = ConcurrentHashMultiset.create();
     public final Multiset<RingMember> replicateErrors = ConcurrentHashMultiset.create();
@@ -138,82 +138,82 @@ public class AmzaStats {
         return grandTotals;
     }
 
-    public void took(RingMember from, RegionName regionName, int count, long smallestTxId) {
+    public void took(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.takes.addAndGet(count);
-        Totals totals = regionTotals(regionName);
+        Totals totals = partitionTotals(partitionName);
         totals.takes.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.takesLag.set(lag);
         grandTotals.takesLag.set((grandTotals.takesLag.get() + lag) / 2);
     }
 
-    public void tookApplied(RingMember from, RegionName regionName, int count, long smallestTxId) {
+    public void tookApplied(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.takeApplies.addAndGet(count);
-        Totals totals = regionTotals(regionName);
+        Totals totals = partitionTotals(partitionName);
         totals.takeApplies.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.takeAppliesLag.set(lag);
         grandTotals.takesLag.set((grandTotals.takesLag.get() + lag) / 2);
     }
 
-    public void direct(RegionName regionName, int count, long smallestTxId) {
+    public void direct(PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.directApplies.addAndGet(count);
-        Totals totals = regionTotals(regionName);
+        Totals totals = partitionTotals(partitionName);
         totals.directApplies.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.directAppliesLag.set(lag);
         grandTotals.directAppliesLag.set((grandTotals.directAppliesLag.get() + lag) / 2);
     }
 
-    public void replicated(RingMember to, RegionName regionName, int count, long smallestTxId) {
+    public void replicated(RingMember to, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.replicates.addAndGet(count);
-        Totals totals = regionTotals(regionName);
+        Totals totals = partitionTotals(partitionName);
         totals.replicates.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.replicatesLag.set(lag);
         grandTotals.replicatesLag.set((grandTotals.replicatesLag.get() + lag) / 2);
     }
 
-    public void received(RegionName versionedRegionName, int count, long smallestTxId) {
+    public void received(PartitionName versionedPartitionName, int count, long smallestTxId) {
         grandTotals.received.addAndGet(count);
-        Totals totals = regionTotals(versionedRegionName);
+        Totals totals = partitionTotals(versionedPartitionName);
         totals.received.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.receivedLag.set(lag);
         grandTotals.receivedLag.set((grandTotals.receivedLag.get() + lag) / 2);
     }
 
-    public void receivedApplied(RegionName regionName, int count, long smallestTxId) {
+    public void receivedApplied(PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.receivedApplies.addAndGet(count);
-        Totals totals = regionTotals(regionName);
+        Totals totals = partitionTotals(partitionName);
         totals.receivedApplies.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.receivedAppliesLag.set(lag);
         grandTotals.receivedAppliesLag.set((grandTotals.receivedAppliesLag.get() + lag) / 2);
     }
 
-    private Totals regionTotals(RegionName versionedRegionName) {
-        Totals got = regionTotals.get(versionedRegionName);
+    private Totals partitionTotals(PartitionName versionedPartitionName) {
+        Totals got = partitionTotals.get(versionedPartitionName);
         if (got == null) {
             got = new Totals();
-            regionTotals.put(versionedRegionName, got);
+            partitionTotals.put(versionedPartitionName, got);
         }
         return got;
     }
 
-    public Map<RegionName, Totals> getRegionTotals() {
-        return regionTotals;
+    public Map<PartitionName, Totals> getPartitionTotals() {
+        return partitionTotals;
     }
 
     private void logChanges(String name, RowsChanged changed) {
         if (!changed.isEmpty()) {
-            VersionedRegionName versionedRegionName = changed.getVersionedRegionName();
-            RegionName regionName = versionedRegionName.getRegionName();
+            VersionedPartitionName versionedPartitionName = changed.getVersionedPartitionName();
+            PartitionName partitionName = versionedPartitionName.getPartitionName();
 
-            LOG.debug("{} {} to region: {}:{} lag:{}", new Object[]{name,
+            LOG.debug("{} {} to partition: {}:{} lag:{}", new Object[]{name,
                 changed.getApply().size(),
-                regionName.getRegionName(),
-                regionName.getRingName(),
+                partitionName.getPartitionName(),
+                partitionName.getRingName(),
                 lag(changed)});
         }
     }

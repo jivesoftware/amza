@@ -28,10 +28,10 @@ import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
+import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -113,16 +113,16 @@ public class AmzaMain {
             final ObjectMapper mapper = new ObjectMapper();
             mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
             mapper.configure(SerializationFeature.INDENT_OUTPUT, false);
-            RegionPropertyMarshaller regionPropertyMarshaller = new RegionPropertyMarshaller() {
+            PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
                 @Override
-                public RegionProperties fromBytes(byte[] bytes) throws Exception {
-                    return mapper.readValue(bytes, RegionProperties.class);
+                public PartitionProperties fromBytes(byte[] bytes) throws Exception {
+                    return mapper.readValue(bytes, PartitionProperties.class);
                 }
 
                 @Override
-                public byte[] toBytes(RegionProperties regionProperties) throws Exception {
-                    return mapper.writeValueAsBytes(regionProperties);
+                public byte[] toBytes(PartitionProperties partitionProperties) throws Exception {
+                    return mapper.writeValueAsBytes(partitionProperties);
                 }
             };
 
@@ -137,7 +137,7 @@ public class AmzaMain {
                 ringMember,
                 ringHost,
                 orderIdProvider,
-                regionPropertyMarshaller,
+                partitionPropertyMarshaller,
                 indexProviderRegistry,
                 taker,
                 Optional.<SendFailureListener>absent(),

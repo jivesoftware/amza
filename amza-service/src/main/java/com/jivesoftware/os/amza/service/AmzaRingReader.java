@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.amza.service.replication.HostRingBuilder;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.service.storage.RegionStore;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.ring.RingNeighbors;
@@ -23,11 +23,11 @@ public class AmzaRingReader {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final RingMember ringMember;
-    private final RegionIndex regionIndex;
+    private final PartitionIndex partitionIndex;
 
-    public AmzaRingReader(RingMember ringMember, RegionIndex regionIndex) {
+    public AmzaRingReader(RingMember ringMember, PartitionIndex partitionIndex) {
         this.ringMember = ringMember;
-        this.regionIndex = regionIndex;
+        this.partitionIndex = partitionIndex;
     }
 
     String keyToRingName(WALKey key) throws IOException {
@@ -61,12 +61,12 @@ public class AmzaRingReader {
     }
 
     public boolean isMemberOfRing(String ringName) throws Exception {
-        RegionStore ringIndex = regionIndex.get(RegionProvider.RING_INDEX);
+        PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
         return ringIndex.containsKey(key(ringName, ringMember));
     }
 
     public NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception {
-        RegionStore ringIndex = regionIndex.get(RegionProvider.RING_INDEX);
+        PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
         WALKey from = key(ringName, null);
         List<RingMember> ring = new ArrayList<>();
         ringIndex.rangeScan(from, from.prefixUpperExclusive(), (long orderId, WALKey key, WALValue value) -> {
@@ -74,7 +74,7 @@ public class AmzaRingReader {
             return true;
         });
 
-        RegionStore nodeIndex = regionIndex.get(RegionProvider.NODE_INDEX);
+        PartitionStore nodeIndex = partitionIndex.get(PartitionProvider.NODE_INDEX);
         WALKey[] memberKeys = new WALKey[ring.size()];
         for (int i = 0; i < memberKeys.length; i++) {
             memberKeys[i] = new WALKey(ring.get(i).toBytes());

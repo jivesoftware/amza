@@ -43,10 +43,10 @@ public class AmzaSetStress {
         final int count = Integer.parseInt(args[3]);
         final int batchSize = 100;
 
-        String regionName = "lorem";
+        String partitionName = "lorem";
 
         for (int i = 0; i < 8; i++) {
-            final String rname = regionName + i;
+            final String rname = partitionName + i;
             final org.apache.http.client.HttpClient httpClient = HttpClients.createDefault();
 
             Thread t = new Thread() {
@@ -64,14 +64,14 @@ public class AmzaSetStress {
     }
 
     private static void feed(org.apache.http.client.HttpClient httpClient,
-        String hostName, int port, String regionName, int firstDocId, int count, int batchSize) throws IOException, InterruptedException {
+        String hostName, int port, String partitionName, int firstDocId, int count, int batchSize) throws IOException, InterruptedException {
         long start = System.currentTimeMillis();
         for (int key = firstDocId; key < count; key++) {
             StringBuilder url = new StringBuilder();
             url.append("http://");
             url.append(hostName).append(":").append(port);
             url.append("/amza/multiSet");
-            url.append("/").append(regionName);
+            url.append("/").append(partitionName);
 
             Map<String, String> values = new LinkedHashMap<>();
             for (int b = 0; b < batchSize; b++) {
@@ -105,7 +105,7 @@ public class AmzaSetStress {
             if (key % 100 == 0) {
                 long elapse = System.currentTimeMillis() - start;
                 double millisPerAdd = ((double) elapse / (double) key);
-                System.out.println(regionName + " millisPerAdd:" + millisPerAdd + " addsPerSec:" + (1000d / millisPerAdd) + " key:" + key);
+                System.out.println(partitionName + " millisPerAdd:" + millisPerAdd + " addsPerSec:" + (1000d / millisPerAdd) + " key:" + key);
             }
         }
     }

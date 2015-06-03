@@ -19,8 +19,10 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.service.replication.RegionStripe;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.storage.PartitionProvider;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.ring.AmzaRing;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -29,8 +31,6 @@ import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -72,21 +72,21 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRingReader ringReader;
-    private final RegionStripe systemRegionStripe;
+    private final PartitionStripe systemPartitionStripe;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final ConcurrentMap<String, Integer> ringSizes = Maps.newConcurrentMap();
 
     public AmzaHostRing(AmzaRingReader ringReader,
-        RegionStripe systemRegionStripe,
+        PartitionStripe systemPartitionStripe,
         TimestampedOrderIdProvider orderIdProvider) {
         this.ringReader = ringReader;
-        this.systemRegionStripe = systemRegionStripe;
+        this.systemPartitionStripe = systemPartitionStripe;
         this.orderIdProvider = orderIdProvider;
     }
 
     @Override
     public void changes(RowsChanged changes) throws Exception {
-        if (RegionProvider.RING_INDEX.equals(changes.getVersionedRegionName())) {
+        if (PartitionProvider.RING_INDEX.equals(changes.getVersionedPartitionName())) {
             for (WALKey key : changes.getApply().columnKeySet()) {
                 ringSizes.remove(ringReader.keyToRingName(key));
             }
@@ -95,11 +95,11 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
 
     @Override
     public void register(RingMember ringMember, RingHost ringHost) throws Exception {
-        WALValue registeredHost = systemRegionStripe.get(RegionProvider.NODE_INDEX.getRegionName(), new WALKey(ringMember.toBytes()));
+        WALValue registeredHost = systemPartitionStripe.get(PartitionProvider.NODE_INDEX.getPartitionName(), new WALKey(ringMember.toBytes()));
         if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
             return;
         }
-        systemRegionStripe.commit(RegionProvider.NODE_INDEX.getRegionName(),
+        systemPartitionStripe.commit(PartitionProvider.NODE_INDEX.getPartitionName(),
             Optional.absent(),
             false,
             (highwater, scan) -> {
@@ -110,7 +110,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
 
     @Override
     public void deregister(RingMember ringMember) throws Exception {
-        systemRegionStripe.commit(RegionProvider.NODE_INDEX.getRegionName(),
+        systemPartitionStripe.commit(PartitionProvider.NODE_INDEX.getPartitionName(),
             Optional.absent(),
             false,
             (highwater, scan) -> {
@@ -124,7 +124,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
     }
 
     public RingHost getRingHost() throws Exception {
-        WALValue registeredHost = systemRegionStripe.get(RegionProvider.NODE_INDEX.getRegionName(), new WALKey(getRingMember().toBytes()));
+        WALValue registeredHost = systemPartitionStripe.get(PartitionProvider.NODE_INDEX.getPartitionName(), new WALKey(getRingMember().toBytes()));
         if (registeredHost != null) {
             return RingHost.fromBytes(registeredHost.getValue());
         } else {
@@ -197,7 +197,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         final WALKey key = ringReader.key(ringName, ringMember);
-        WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX.getRegionName(), key);
+        WALValue had = systemPartitionStripe.get(PartitionProvider.RING_INDEX.getPartitionName(), key);
         if (had == null || had.getTombstoned()) {
             NavigableMap<RingMember, RingHost> ring = ringReader.getRing(ringName);
             setInternal(ringName, Iterables.concat(ring.keySet(), Collections.singleton(ringMember)));
@@ -209,7 +209,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
          We deliberatly do a slab update of rings to ensure "all at once" ring visibility.
          */
 
-        systemRegionStripe.commit(RegionProvider.RING_INDEX.getRegionName(),
+        systemPartitionStripe.commit(PartitionProvider.RING_INDEX.getPartitionName(),
             Optional.absent(),
             false,
             (highwater, scan) -> {
@@ -227,9 +227,9 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         final WALKey key = ringReader.key(ringName, ringMember);
-        WALValue had = systemRegionStripe.get(RegionProvider.RING_INDEX.getRegionName(), key);
+        WALValue had = systemPartitionStripe.get(PartitionProvider.RING_INDEX.getPartitionName(), key);
         if (had != null) {
-            systemRegionStripe.commit(RegionProvider.RING_INDEX.getRegionName(),
+            systemPartitionStripe.commit(PartitionProvider.RING_INDEX.getPartitionName(),
                 Optional.absent(),
                 false,
                 (highwater, scan) -> {
@@ -245,14 +245,14 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
     @Override
     public void allRings(final RingStream ringStream) throws Exception {
         Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
-        systemRegionStripe.rowScan(RegionProvider.NODE_INDEX.getRegionName(), (long rowTxId, WALKey key, WALValue rawRingHost) -> {
+        systemPartitionStripe.rowScan(PartitionProvider.NODE_INDEX.getPartitionName(), (long rowTxId, WALKey key, WALValue rawRingHost) -> {
             RingMember ringMember = RingMember.fromBytes(key.getKey());
             RingHost ringHost = RingHost.fromBytes(rawRingHost.getValue());
             ringMemberToRingHost.put(ringMember, ringHost);
             return true;
         });
 
-        systemRegionStripe.rowScan(RegionProvider.RING_INDEX.getRegionName(), (long rowTxId, WALKey key, WALValue value) -> {
+        systemPartitionStripe.rowScan(PartitionProvider.RING_INDEX.getPartitionName(), (long rowTxId, WALKey key, WALValue value) -> {
             HeapFiler filer = new HeapFiler(key.getKey());
             String ringName = UIO.readString(filer, "ringName");
             UIO.readByte(filer, "seperator");

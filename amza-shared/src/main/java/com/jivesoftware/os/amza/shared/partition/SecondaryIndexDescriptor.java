@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.shared.region;
+package com.jivesoftware.os.amza.shared.partition;
 
 import java.util.Map;
 

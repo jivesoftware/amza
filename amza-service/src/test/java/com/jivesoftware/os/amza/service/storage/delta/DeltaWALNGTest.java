@@ -4,9 +4,9 @@ import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -34,7 +34,7 @@ public class DeltaWALNGTest {
 
     @Test
     public void testLoad() throws Exception {
-        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(true, "test", "test"), 1);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(true, "test", "test"), 1);
         File tmp = Files.createTempDir();
         final PrimaryRowMarshaller<byte[]> primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
@@ -47,7 +47,7 @@ public class DeltaWALNGTest {
         for (int i = 0; i < 10; i++) {
             apply1.put(-1L, new WALKey((i + "k").getBytes()), new WALValue((i + "v").getBytes(), ids.nextId(), false));
         }
-        DeltaWAL.DeltaWALApplied update1 = deltaWAL.update(versionedRegionName, apply1, null);
+        DeltaWAL.DeltaWALApplied update1 = deltaWAL.update(versionedPartitionName, apply1, null);
         for (Entry<WALKey, Long> e : update1.keyToRowPointer.entrySet()) {
             System.out.println("update1 k=" + new String(e.getKey().getKey()) + " fp=" + e.getValue());
         }
@@ -56,7 +56,7 @@ public class DeltaWALNGTest {
         for (int i = 0; i < 10; i++) {
             apply2.put(-1L, new WALKey((i + "k").getBytes()), new WALValue((i + "v").getBytes(), ids.nextId(), false));
         }
-        DeltaWAL.DeltaWALApplied update2 = deltaWAL.update(versionedRegionName, apply1, null);
+        DeltaWAL.DeltaWALApplied update2 = deltaWAL.update(versionedPartitionName, apply1, null);
         for (Entry<WALKey, Long> e : update2.keyToRowPointer.entrySet()) {
             System.out.println("update2 k=" + new String(e.getKey().getKey()) + " fp=" + e.getValue());
         }
@@ -65,8 +65,8 @@ public class DeltaWALNGTest {
             if (rowType == RowType.primary) {
                 WALRow row = primaryRowMarshaller.fromRow(rawRow);
                 ByteBuffer bb = ByteBuffer.wrap(row.key.getKey());
-                byte[] regionNameBytes = new byte[bb.getShort()];
-                bb.get(regionNameBytes);
+                byte[] partitionNameBytes = new byte[bb.getShort()];
+                bb.get(partitionNameBytes);
                 byte[] keyBytes = new byte[bb.getInt()];
                 bb.get(keyBytes);
 

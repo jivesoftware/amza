@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
@@ -22,8 +22,8 @@ public class BerkeleyDBWALIndexTest {
     @Test
     public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
-        VersionedRegionName regionName = new VersionedRegionName(new RegionName(false, "r1", "t1"), 0);
-        BerkeleyDBWALIndex index = getIndex(dir0, regionName);
+        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1", "t1"), 0);
+        BerkeleyDBWALIndex index = getIndex(dir0, partitionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(UIO.intBytes(1)), new WALPointer(1L, System.currentTimeMillis(), false))));
 
@@ -32,7 +32,7 @@ public class BerkeleyDBWALIndexTest {
         index.close();
 
         // reopen
-        index = getIndex(dir0, regionName);
+        index = getIndex(dir0, partitionName);
         index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
             new WALKey(UIO.intBytes(2)), new WALPointer(2L, System.currentTimeMillis(), false))));
         got = index.getPointer(new WALKey(UIO.intBytes(2)));
@@ -53,8 +53,8 @@ public class BerkeleyDBWALIndexTest {
     public void testCompact() throws Exception {
 
         File dir0 = Files.createTempDir();
-        VersionedRegionName versionedRegionName = new VersionedRegionName(new RegionName(false, "r1", "t1"), 0);
-        BerkeleyDBWALIndex index = getIndex(dir0, versionedRegionName);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1", "t1"), 0);
+        BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
 
         for (int i = 0; i < 50; i++) {
             index.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
@@ -81,8 +81,8 @@ public class BerkeleyDBWALIndexTest {
         }
     }
 
-    private BerkeleyDBWALIndex getIndex(File dir0, VersionedRegionName regionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(regionName);
+    private BerkeleyDBWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
+        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
     }
 
 }

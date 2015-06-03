@@ -3,14 +3,15 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.base.Optional;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRing;
-import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.RegionProperties;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.region.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
+import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -25,7 +26,7 @@ import java.util.Set;
  *
  */
 // soy.page.amzaRingPluginRegion
-public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsPluginRegion.AmzaRegionsPluginRegionInput>> {
+public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaPartitionsPluginRegionInput>> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
@@ -34,7 +35,7 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
     private final AmzaRing amzaRing;
     private final AmzaService amzaService;
 
-    public AmzaRegionsPluginRegion(String template,
+    public AmzaPartitionsPluginRegion(String template,
         SoyRenderer renderer,
         AmzaRing amzaRing,
         AmzaService amzaService) {
@@ -44,13 +45,13 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
         this.amzaService = amzaService;
     }
 
-    public static class AmzaRegionsPluginRegionInput {
+    public static class AmzaPartitionsPluginRegionInput {
 
         final String host;
         final String port;
         final String action;
 
-        public AmzaRegionsPluginRegionInput(String host, String port, String action) {
+        public AmzaPartitionsPluginRegionInput(String host, String port, String action) {
             this.host = host;
             this.port = port;
             this.action = action;
@@ -59,12 +60,12 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
     }
 
     @Override
-    public String render(Optional<AmzaRegionsPluginRegionInput> optionalInput) {
+    public String render(Optional<AmzaPartitionsPluginRegionInput> optionalInput) {
         Map<String, Object> data = Maps.newHashMap();
 
         try {
             if (optionalInput.isPresent()) {
-                AmzaRegionsPluginRegionInput input = optionalInput.get();
+                AmzaPartitionsPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
 
@@ -75,15 +76,15 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
                 }
 
                 List<Map<String, Object>> rows = new ArrayList<>();
-                Set<RegionName> regionNames = amzaService.getRegionNames();
-                for (RegionName regionName : regionNames) {
+                Set<PartitionName> partitionNames = amzaService.getPartitionNames();
+                for (PartitionName partitionName : partitionNames) {
 
                     Map<String, Object> row = new HashMap<>();
-                    row.put("type", regionName.isSystemRegion() ? "SYSTEM" : "USER");
-                    row.put("name", regionName.getRegionName());
-                    row.put("ringName", regionName.getRingName());
+                    row.put("type", partitionName.isSystemPartition()? "SYSTEM" : "USER");
+                    row.put("name", partitionName.getPartitionName());
+                    row.put("ringName", partitionName.getRingName());
 
-                    NavigableMap<RingMember, RingHost> ring = amzaRing.getRing(regionName.getRingName());
+                    NavigableMap<RingMember, RingHost> ring = amzaRing.getRing(partitionName.getRingName());
                     List<Map<String, Object>> ringHosts = new ArrayList<>();
                     for (Map.Entry<RingMember, RingHost> r : ring.entrySet()) {
                         Map<String, Object> ringHost = new HashMap<>();
@@ -94,8 +95,8 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
                     }
                     row.put("ring", ringHosts);
 
-                    RegionProperties regionProperties = amzaService.getRegionProperties(regionName);
-                    if (regionProperties == null) {
+                    PartitionProperties partitionProperties = amzaService.getPartitionProperties(partitionName);
+                    if (partitionProperties == null) {
                         row.put("disabled", "?");
                         row.put("replicationFactor", "?");
                         row.put("takeFromFactor", "?");
@@ -105,10 +106,10 @@ public class AmzaRegionsPluginRegion implements PageRegion<Optional<AmzaRegionsP
                         row.put("walStorageDescriptor", walStorageDescriptor(storageDescriptor));
 
                     } else {
-                        row.put("disabled", regionProperties.disabled);
-                        row.put("replicationFactor", regionProperties.replicationFactor);
-                        row.put("takeFromFactor", regionProperties.takeFromFactor);
-                        row.put("walStorageDescriptor", walStorageDescriptor(regionProperties.walStorageDescriptor));
+                        row.put("disabled", partitionProperties.disabled);
+                        row.put("replicationFactor", partitionProperties.replicationFactor);
+                        row.put("takeFromFactor", partitionProperties.takeFromFactor);
+                        row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
                     }
 
                     rows.add(row);

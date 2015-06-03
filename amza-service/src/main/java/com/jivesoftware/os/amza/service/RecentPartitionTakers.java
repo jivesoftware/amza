@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.service;
 
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import java.util.ArrayList;
@@ -28,16 +28,16 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author jonathan.colt
  */
-public class RecentRegionTakers {
+public class RecentPartitionTakers {
 
-    private final ConcurrentHashMap<RegionName, Takers> recentRegionTakers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<PartitionName, Takers> recentPartitionTakers = new ConcurrentHashMap<>();
 
-    public void took(RingMember ringMember, RingHost ringHost, RegionName regionName) {
-        recentRegionTakers.computeIfAbsent(regionName, (t) -> new Takers()).took(ringMember, ringHost);
+    public void took(RingMember ringMember, RingHost ringHost, PartitionName partitionName) {
+        recentPartitionTakers.computeIfAbsent(partitionName, (t) -> new Takers()).took(ringMember, ringHost);
     }
 
-    public Collection<RingHost> recentTakers(RegionName regionName) {
-        Takers takers = recentRegionTakers.get(regionName);
+    public Collection<RingHost> recentTakers(PartitionName partitionName) {
+        Takers takers = recentPartitionTakers.get(partitionName);
         if (takers == null) {
             return Collections.emptyList();
         }

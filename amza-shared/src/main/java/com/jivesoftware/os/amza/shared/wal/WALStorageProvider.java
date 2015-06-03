@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import java.io.File;
 import java.io.IOException;
 import java.util.Set;
@@ -24,8 +24,8 @@ public interface WALStorageProvider {
 
     WALStorage create(File workingDirectory,
         String domain,
-        VersionedRegionName regionName,
+        VersionedPartitionName partitionName,
         WALStorageDescriptor storageDescriptor) throws Exception;
 
-    Set<VersionedRegionName> listExisting(String[] workingDirectories, String domain) throws IOException;
+    Set<VersionedPartitionName> listExisting(String[] workingDirectories, String domain) throws IOException;
 }

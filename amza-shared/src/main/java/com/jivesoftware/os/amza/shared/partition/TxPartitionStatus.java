@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.shared.region;
+package com.jivesoftware.os.amza.shared.partition;
 
 import java.util.Arrays;
 
@@ -6,7 +6,7 @@ import java.util.Arrays;
  *
  * @author jonathan.colt
  */
-public interface TxRegionStatus {
+public interface TxPartitionStatus {
 
     public static enum Status {
 
@@ -31,6 +31,6 @@ public interface TxRegionStatus {
         }
     }
 
-    <R> R tx(RegionName regionName, RegionTx<R> tx) throws Exception;
+    <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception;
 
 }

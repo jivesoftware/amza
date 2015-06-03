@@ -17,7 +17,7 @@ package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
@@ -27,18 +27,18 @@ import java.util.List;
 public class RowUpdates {
 
     private final long highestTransactionId;
-    private final RegionName regionName;
+    private final PartitionName partitionName;
     private final List<Long> rowTxIds;
     private final List<byte[]> rows;
 
     @JsonCreator
     public RowUpdates(
         @JsonProperty("highestTransactionId") long highestTransactionId,
-        @JsonProperty("tableName") RegionName regionName,
+        @JsonProperty("tableName") PartitionName partitionName,
         @JsonProperty("rowTxIds") List<Long> rowTxIds,
         @JsonProperty("rows") List<byte[]> rows) {
         this.highestTransactionId = highestTransactionId;
-        this.regionName = regionName;
+        this.partitionName = partitionName;
         this.rowTxIds = rowTxIds;
         this.rows = rows;
     }
@@ -47,8 +47,8 @@ public class RowUpdates {
         return highestTransactionId;
     }
 
-    public RegionName getRegionName() {
-        return regionName;
+    public PartitionName getPartitionName() {
+        return partitionName;
     }
 
     public List<Long> getRowTxIds() {
@@ -72,7 +72,7 @@ public class RowUpdates {
     public String toString() {
         return "RowUpdates{"
             + "highestTransactionId=" + highestTransactionId
-            + ", regionName=" + regionName
+            + ", partitionName=" + partitionName
             + ", highestTransactionId=" + highestTransactionId
             + ", changes=" + rows + '}';
     }

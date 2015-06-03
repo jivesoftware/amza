@@ -47,10 +47,10 @@ public class AmzaGetStress {
         final int count = Integer.parseInt(args[3]);
         final int batchSize = 100;
 
-        String regionName = "lorem";
+        String partitionName = "lorem";
 
         for (int i = 0; i < 1024; i++) {
-            final String rname = regionName + i;
+            final String rname = partitionName + i;
             final org.apache.http.client.HttpClient httpClient = HttpClients.createDefault();
 
             Thread t = new Thread() {
@@ -68,14 +68,14 @@ public class AmzaGetStress {
     }
 
     private static void get(org.apache.http.client.HttpClient httpClient,
-        String hostName, int port, String regionName, int firstDocId, int count, int batchSize) throws IOException, InterruptedException {
+        String hostName, int port, String partitionName, int firstDocId, int count, int batchSize) throws IOException, InterruptedException {
         long start = System.currentTimeMillis();
         for (int key = firstDocId; key < count; key++) {
             StringBuilder url = new StringBuilder();
             url.append("http://");
             url.append(hostName).append(":").append(port);
             url.append("/amza/get");
-            url.append("?region=").append(regionName);
+            url.append("?partition=").append(partitionName);
             url.append("&key=");
 
             Set<String> expectedValues = Sets.newHashSet();
@@ -104,7 +104,7 @@ public class AmzaGetStress {
                                 }
                             }
                             if (!expectedValues.isEmpty()) {
-                                System.out.println("Missing values in " + regionName + " for key " + key + ": " + expectedValues);
+                                System.out.println("Missing values in " + partitionName + " for key " + key + ": " + expectedValues);
                             }
                             break;
                         }
@@ -120,7 +120,7 @@ public class AmzaGetStress {
             if (key % 100 == 0) {
                 long elapse = System.currentTimeMillis() - start;
                 double millisPerAdd = ((double) elapse / (double) key);
-                System.out.println(regionName + " millisPerGet:" + millisPerAdd + " getsPerSec:" + (1000d / millisPerAdd) + " key:" + key);
+                System.out.println(partitionName + " millisPerGet:" + millisPerAdd + " getsPerSec:" + (1000d / millisPerAdd) + " key:" + key);
             }
         }
     }

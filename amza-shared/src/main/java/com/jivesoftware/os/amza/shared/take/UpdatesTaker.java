@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared.take;
 
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -27,7 +27,7 @@ public interface UpdatesTaker {
     StreamingTakeResult streamingTakeUpdates(RingMember taker,
         RingHost takerHost,
         Entry<RingMember, RingHost> node,
-        RegionName partitionName,
+        PartitionName partitionName,
         long transactionId,
         RowStream tookRowUpdates);
 

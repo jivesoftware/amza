@@ -15,11 +15,11 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 
 public interface WALIndexProvider<T extends WALIndex> {
 
-    T createIndex(VersionedRegionName versionedRegionName) throws Exception;
+    T createIndex(VersionedPartitionName versionedPartitionName) throws Exception;
 
-    void deleteIndex(VersionedRegionName versionedRegionName) throws Exception;
+    void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception;
 }

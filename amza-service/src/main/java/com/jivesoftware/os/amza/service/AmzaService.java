@@ -18,20 +18,20 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.replication.RegionChangeTaker;
-import com.jivesoftware.os.amza.service.replication.RegionCompactor;
-import com.jivesoftware.os.amza.service.replication.RegionComposter;
-import com.jivesoftware.os.amza.service.replication.RegionStatusStorage;
-import com.jivesoftware.os.amza.service.replication.RegionStripeProvider;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.service.storage.RegionProvider;
-import com.jivesoftware.os.amza.service.storage.RegionStore;
+import com.jivesoftware.os.amza.service.replication.PartitionChangeTaker;
+import com.jivesoftware.os.amza.service.replication.PartitionCompactor;
+import com.jivesoftware.os.amza.service.replication.PartitionComposter;
+import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.AmzaRegionAPIProvider;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.RegionProperties;
-import com.jivesoftware.os.amza.shared.region.TxRegionStatus;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.ring.RingNeighbors;
@@ -57,7 +57,7 @@ import org.apache.commons.lang.mutable.MutableLong;
  * Amza pronounced (AH m z ah )
  * Sanskrit word meaning partition / share.
  */
-public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
+public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -66,44 +66,44 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
     private final AmzaRingReader ringReader;
     private final AmzaHostRing amzaHostRing;
     private final HighwaterStorage highwaterStorage;
-    private final RegionStatusStorage regionStatusStorage;
-    private final RegionChangeTaker changeTaker;
-    private final RegionCompactor regionCompactor;
-    private final RegionComposter regionComposter;
-    private final RegionIndex regionIndex;
-    private final RegionProvider regionProvider;
-    private final RegionStripeProvider regionStripeProvider;
-    private final RecentRegionTakers recentRegionTakers;
-    private final AmzaRegionWatcher regionWatcher;
+    private final PartitionStatusStorage partitionStatusStorage;
+    private final PartitionChangeTaker changeTaker;
+    private final PartitionCompactor partitionCompactor;
+    private final PartitionComposter partitionComposter;
+    private final PartitionIndex partitionIndex;
+    private final PartitionProvider partitionProvider;
+    private final PartitionStripeProvider partitionStripeProvider;
+    private final RecentPartitionTakers recentPartitionTakers;
+    private final AmzaPartitionWatcher partitionWatcher;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
         AmzaStats amzaStats,
         AmzaRingReader ringReader,
         AmzaHostRing amzaHostRing,
         HighwaterStorage highwaterMarks,
-        RegionStatusStorage regionStatusStorage,
-        RegionChangeTaker changeTaker,
-        RegionCompactor regionCompactor,
-        RegionComposter regionComposter,
-        RegionIndex regionIndex,
-        RegionProvider regionProvider,
-        RegionStripeProvider regionStripeProvider,
-        RecentRegionTakers recentRegionTakers,
-        AmzaRegionWatcher regionWatcher) {
+        PartitionStatusStorage partitionStatusStorage,
+        PartitionChangeTaker changeTaker,
+        PartitionCompactor partitionCompactor,
+        PartitionComposter partitionComposter,
+        PartitionIndex partitionIndex,
+        PartitionProvider partitionProvider,
+        PartitionStripeProvider partitionStripeProvider,
+        RecentPartitionTakers recentPartitionTakers,
+        AmzaPartitionWatcher partitionWatcher) {
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.ringReader = ringReader;
         this.amzaHostRing = amzaHostRing;
         this.highwaterStorage = highwaterMarks;
-        this.regionStatusStorage = regionStatusStorage;
+        this.partitionStatusStorage = partitionStatusStorage;
         this.changeTaker = changeTaker;
-        this.regionCompactor = regionCompactor;
-        this.regionComposter = regionComposter;
-        this.regionIndex = regionIndex;
-        this.regionProvider = regionProvider;
-        this.regionStripeProvider = regionStripeProvider;
-        this.recentRegionTakers = recentRegionTakers;
-        this.regionWatcher = regionWatcher;
+        this.partitionCompactor = partitionCompactor;
+        this.partitionComposter = partitionComposter;
+        this.partitionIndex = partitionIndex;
+        this.partitionProvider = partitionProvider;
+        this.partitionStripeProvider = partitionStripeProvider;
+        this.recentPartitionTakers = recentPartitionTakers;
+        this.partitionWatcher = partitionWatcher;
     }
 
     public AmzaRingReader getAmzaRingReader() {
@@ -118,26 +118,26 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
         return highwaterStorage;
     }
 
-    public RegionStatusStorage getRegionMemberStatusStorage() {
-        return regionStatusStorage;
+    public PartitionStatusStorage getPartitionMemberStatusStorage() {
+        return partitionStatusStorage;
     }
 
-    public RegionComposter getRegionComposter() {
-        return regionComposter;
+    public PartitionComposter getPartitionComposter() {
+        return partitionComposter;
     }
 
-    public RegionProvider getRegionProvider() {
-        return regionProvider;
+    public PartitionProvider getPartitionProvider() {
+        return partitionProvider;
     }
 
     synchronized public void start() throws Exception {
         changeTaker.start();
-        regionCompactor.start();
+        partitionCompactor.start();
     }
 
     synchronized public void stop() throws Exception {
         changeTaker.stop();
-        regionCompactor.stop();
+        partitionCompactor.stop();
     }
 
     @Override
@@ -148,40 +148,40 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
         return orderIdProvider.getApproximateId(timestampId, deltaMillis);
     }
 
-    public void setPropertiesIfAbsent(RegionName regionName, RegionProperties regionProperties) throws Exception {
-        RegionProperties properties = regionIndex.getProperties(regionName);
+    public void setPropertiesIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception {
+        PartitionProperties properties = partitionIndex.getProperties(partitionName);
         if (properties == null) {
-            regionProvider.updateRegionProperties(regionName, regionProperties);
+            partitionProvider.updatePartitionProperties(partitionName, partitionProperties);
         }
     }
 
-    public AmzaRegionRoute getRegionRoute(RegionName regionName) throws Exception {
+    public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName) throws Exception {
 
-        List<RingHost> orderedRegionHosts = new ArrayList<>();
+        List<RingHost> orderedPartitionHosts = new ArrayList<>();
         List<RingMember> unregisteredRingMembers = new ArrayList<>();
         List<RingMember> ketchupRingMembers = new ArrayList<>();
         List<RingMember> expungedRingMembers = new ArrayList<>();
         List<RingMember> missingRingMembers = new ArrayList<>();
 
-        NavigableMap<RingMember, RingHost> ring = amzaHostRing.getRing(regionName.getRingName());
+        NavigableMap<RingMember, RingHost> ring = amzaHostRing.getRing(partitionName.getRingName());
 
-        RegionProperties properties = regionIndex.getProperties(regionName);
+        PartitionProperties properties = partitionIndex.getProperties(partitionName);
         if (properties == null) {
-            return new AmzaRegionRoute(new ArrayList<>(ring.values()),
+            return new AmzaPartitionRoute(new ArrayList<>(ring.values()),
                 Collections.emptyList(),
                 Collections.emptyList(),
                 Collections.emptyList(),
                 Collections.emptyList(),
                 Collections.emptyList());
         }
-        if (amzaHostRing.isMemberOfRing(regionName.getRingName())) {
-            regionStatusStorage.tx(regionName, (versionedRegionName, regionStatus) -> {
-                if (regionStatus == null) {
-                    versionedRegionName = regionStatusStorage.markAsKetchup(regionName);
+        if (amzaHostRing.isMemberOfRing(partitionName.getRingName())) {
+            partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+                if (partitionStatus == null) {
+                    versionedPartitionName = partitionStatusStorage.markAsKetchup(partitionName);
                 }
 
-                regionProvider.createRegionStoreIfAbsent(versionedRegionName, properties);
-                return getRegion(regionName);
+                partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
+                return getPartition(partitionName);
             });
         }
 
@@ -189,38 +189,38 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
             if (e.getValue() == RingHost.UNKNOWN_RING_HOST) {
                 unregisteredRingMembers.add(e.getKey());
             }
-            RegionStatusStorage.VersionedStatus versionedStatus = regionStatusStorage.getStatus(e.getKey(), regionName);
+            PartitionStatusStorage.VersionedStatus versionedStatus = partitionStatusStorage.getStatus(e.getKey(), partitionName);
             if (versionedStatus == null) {
                 missingRingMembers.add(e.getKey());
-            } else if (versionedStatus.status == TxRegionStatus.Status.EXPUNGE) {
+            } else if (versionedStatus.status == TxPartitionStatus.Status.EXPUNGE) {
                 expungedRingMembers.add(e.getKey());
-            } else if (versionedStatus.status == TxRegionStatus.Status.KETCHUP) {
+            } else if (versionedStatus.status == TxPartitionStatus.Status.KETCHUP) {
                 ketchupRingMembers.add(e.getKey());
             } else {
-                orderedRegionHosts.add(e.getValue());
+                orderedPartitionHosts.add(e.getValue());
             }
         }
-        return new AmzaRegionRoute(Collections.emptyList(), orderedRegionHosts, unregisteredRingMembers, ketchupRingMembers, expungedRingMembers,
+        return new AmzaPartitionRoute(Collections.emptyList(), orderedPartitionHosts, unregisteredRingMembers, ketchupRingMembers, expungedRingMembers,
             missingRingMembers);
     }
 
-    public static class AmzaRegionRoute {
+    public static class AmzaPartitionRoute {
 
         public List<RingHost> uninitializedHosts;
-        public List<RingHost> orderedRegionHosts;
+        public List<RingHost> orderedPartitionHosts;
         public List<RingMember> unregisteredRingMembers;
         public List<RingMember> ketchupRingMembers;
         public List<RingMember> expungedRingMembers;
         public List<RingMember> missingRingMembers;
 
-        public AmzaRegionRoute(List<RingHost> uninitializedHosts,
-            List<RingHost> orderedRegionHosts,
+        public AmzaPartitionRoute(List<RingHost> uninitializedHosts,
+            List<RingHost> orderedPartitionHosts,
             List<RingMember> unregisteredRingMembers,
             List<RingMember> ketchupRingMembers,
             List<RingMember> expungedRingMembers,
             List<RingMember> missingRingMembers) {
             this.uninitializedHosts = uninitializedHosts;
-            this.orderedRegionHosts = orderedRegionHosts;
+            this.orderedPartitionHosts = orderedPartitionHosts;
             this.unregisteredRingMembers = unregisteredRingMembers;
             this.ketchupRingMembers = ketchupRingMembers;
             this.expungedRingMembers = expungedRingMembers;
@@ -230,24 +230,24 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
     }
 
     @Override
-    public AmzaRegion getRegion(RegionName regionName) throws Exception {
-        return new AmzaRegion(amzaStats,
+    public AmzaPartition getPartition(PartitionName partitionName) throws Exception {
+        return new AmzaPartition(amzaStats,
             orderIdProvider,
             ringReader.getRingMember(),
-            regionName,
-            regionStripeProvider.getRegionStripe(regionName),
+            partitionName,
+            partitionStripeProvider.getPartitionStripe(partitionName),
             highwaterStorage,
-            recentRegionTakers);
+            recentPartitionTakers);
     }
 
-    public boolean hasRegion(RegionName regionName) throws Exception {
-        if (regionName.isSystemRegion()) {
+    public boolean hasPartition(PartitionName partitionName) throws Exception {
+        if (partitionName.isSystemPartition()) {
             return true;
         } else {
-            RegionStore store = regionIndex.get(RegionProvider.REGION_INDEX);
+            PartitionStore store = partitionIndex.get(PartitionProvider.REGION_INDEX);
             if (store != null) {
-                byte[] rawRegionName = regionName.toBytes();
-                WALValue timestampedKeyValueStoreName = store.get(new WALKey(rawRegionName));
+                byte[] rawPartitionName = partitionName.toBytes();
+                WALValue timestampedKeyValueStoreName = store.get(new WALKey(rawPartitionName));
                 if (timestampedKeyValueStoreName != null && !timestampedKeyValueStoreName.getTombstoned()) {
                     return true;
                 }
@@ -257,45 +257,45 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
     }
 
     @Override
-    public Set<RegionName> getRegionNames() {
-        return Sets.newHashSet(Lists.newArrayList(Iterables.transform(regionIndex.getAllRegions(), (VersionedRegionName input) -> {
-            return input.getRegionName();
+    public Set<PartitionName> getPartitionNames() {
+        return Sets.newHashSet(Lists.newArrayList(Iterables.transform(partitionIndex.getAllPartitions(), (VersionedPartitionName input) -> {
+            return input.getPartitionName();
         })));
     }
 
-    public RegionProperties getRegionProperties(RegionName regionName) throws Exception {
-        return regionIndex.getProperties(regionName);
+    public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {
+        return partitionIndex.getProperties(partitionName);
     }
 
     @Override
-    public void destroyRegion(final RegionName regionName) throws Exception {
-        regionProvider.destroyRegion(regionName);
+    public void destroyPartition(final PartitionName partitionName) throws Exception {
+        partitionProvider.destroyPartition(partitionName);
     }
 
-    public void watch(RegionName regionName, RowChanges rowChanges) throws Exception {
-        regionWatcher.watch(regionName, rowChanges);
+    public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
+        partitionWatcher.watch(partitionName, rowChanges);
     }
 
-    public RowChanges unwatch(RegionName regionName) throws Exception {
-        return regionWatcher.unwatch(regionName);
+    public RowChanges unwatch(PartitionName partitionName) throws Exception {
+        return partitionWatcher.unwatch(partitionName);
     }
 
     
     @Override
-    public void streamingTakeFromRegion(DataOutputStream dos,
+    public void streamingTakeFromPartition(DataOutputStream dos,
         RingMember ringMember,
         RingHost ringHost,
-        RegionName regionName,
+        PartitionName partitionName,
         long highestTransactionId) throws Exception {
 
         MutableLong bytes = new MutableLong(0);
-        boolean needsToMarkAsKetchup = regionStatusStorage.tx(regionName, (versionedRegionName, regionStatus) -> {
-            if (regionStatus == TxRegionStatus.Status.ONLINE) {
+        boolean needsToMarkAsKetchup = partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+            if (partitionStatus == TxPartitionStatus.Status.ONLINE) {
                 dos.writeByte(1); // fully online
                 bytes.increment();
-                RingNeighbors hostRing = amzaHostRing.getRingNeighbors(regionName.getRingName());
+                RingNeighbors hostRing = amzaHostRing.getRingNeighbors(partitionName.getRingName());
                 for (Entry<RingMember, RingHost> node : hostRing.getAboveRing()) {
-                    Long highwatermark = highwaterStorage.get(node.getKey(), versionedRegionName);
+                    Long highwatermark = highwaterStorage.get(node.getKey(), versionedPartitionName);
                     if (highwatermark != null) {
                         byte[] ringMemberBytes = node.getKey().toBytes();
                         dos.writeByte(1);
@@ -308,9 +308,9 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
 
                 dos.writeByte(0); // last entry marker
                 bytes.increment();
-                AmzaRegion region = getRegion(regionName);
-                if (region != null) {
-                    region.takeRowUpdatesSince(highestTransactionId, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+                AmzaPartition partition = getPartition(partitionName);
+                if (partition != null) {
+                    partition.takeRowUpdatesSince(highestTransactionId, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
                         dos.writeByte(1);
                         dos.writeLong(rowTxId);
                         dos.writeByte(rowType.toByte());
@@ -322,7 +322,7 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
                 }
                 dos.writeByte(0); // last entry marker
                 bytes.increment();
-                recentRegionTakers.took(ringMember, ringHost, regionName);
+                recentPartitionTakers.took(ringMember, ringHost, partitionName);
 
             } else {
                 dos.writeByte(0); // not online
@@ -330,12 +330,12 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
                 dos.writeByte(0); // last entry marker
                 bytes.add(3);
 
-                if (versionedRegionName == null || regionStatus == null) {
-                    // someone thinks we're a member for this region
+                if (versionedPartitionName == null || partitionStatus == null) {
+                    // someone thinks we're a member for this partition
                     return true;
                 } else {
                     // BOOTSTRAP'S BOOTSTRAPS!
-                    regionIndex.get(versionedRegionName);
+                    partitionIndex.get(versionedPartitionName);
                 }
             }
             return false;
@@ -345,11 +345,11 @@ public class AmzaService implements AmzaInstance, AmzaRegionAPIProvider {
 
         if (needsToMarkAsKetchup) {
             try {
-                if (amzaHostRing.isMemberOfRing(regionName.getRingName()) && regionProvider.hasRegion(regionName)) {
-                    regionStatusStorage.markAsKetchup(regionName);
+                if (amzaHostRing.isMemberOfRing(partitionName.getRingName()) && partitionProvider.hasPartition(partitionName)) {
+                    partitionStatusStorage.markAsKetchup(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for region {}", new Object[]{regionName}, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
             }
         }
     }

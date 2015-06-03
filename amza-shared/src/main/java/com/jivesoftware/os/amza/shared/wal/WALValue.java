@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.shared.wal;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.jivesoftware.os.amza.shared.AmzaRegionAPI.TimestampedValue;
+import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TimestampedValue;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -53,15 +53,15 @@ public class WALValue implements Serializable {
 
     @JsonIgnore
     public TimestampedValue toTimestampedValue() {
-        return new TimestampedValue(timestamp,value);
+        return new TimestampedValue(timestamp, value);
     }
 
     @Override
     public String toString() {
-        return "WALValue{" +
-            "timestamp=" + timestamp +
-            ", tombstoned=" + tombstoned +
-            ", value=" + (value != null ? new String(value, StandardCharsets.US_ASCII) : "null") + '}';
+        return "WALValue{"
+            + "timestamp=" + timestamp
+            + ", tombstoned=" + tombstoned
+            + ", value=" + (value != null ? new String(value, StandardCharsets.US_ASCII) : "null") + '}';
     }
 
     @Override

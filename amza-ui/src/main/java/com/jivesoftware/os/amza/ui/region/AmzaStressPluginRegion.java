@@ -3,12 +3,12 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.service.AmzaRegion;
+import com.jivesoftware.os.amza.service.AmzaPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.AmzaRegionUpdates;
-import com.jivesoftware.os.amza.shared.region.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.region.RegionName;
-import com.jivesoftware.os.amza.shared.region.RegionProperties;
+import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
@@ -58,8 +58,8 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         final String regionPrefix;
         final int numBatches;
         final int batchSize;
-        final int numRegions;
-        final int numThreadsPerRegion;
+        final int numPartitions;
+        final int numThreadsPerPartition;
         final String action;
 
         public AmzaStressPluginRegionInput(String name,
@@ -73,8 +73,8 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             this.regionPrefix = regionPrefix;
             this.numBatches = numBatches;
             this.batchSize = batchSize;
-            this.numRegions = numRegions;
-            this.numThreadsPerRegion = numThreadsPerRegion;
+            this.numPartitions = numRegions;
+            this.numThreadsPerPartition = numThreadsPerRegion;
             this.action = action;
         }
     }
@@ -121,8 +121,8 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
                 row.put("regionPrefix", stress.input.regionPrefix);
                 row.put("numBatches", String.valueOf(stress.input.numBatches));
                 row.put("batchSize", String.valueOf(stress.input.batchSize));
-                row.put("numRegions", String.valueOf(stress.input.numRegions));
-                row.put("numThreadsPerRegion", String.valueOf(stress.input.numThreadsPerRegion));
+                row.put("numRegions", String.valueOf(stress.input.numPartitions));
+                row.put("numThreadsPerRegion", String.valueOf(stress.input.numThreadsPerPartition));
 
                 row.put("elapsed", HealthPluginRegion.getDurationBreakdown(elapsed));
                 row.put("added", String.valueOf(added));
@@ -158,9 +158,9 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
         private void start() throws Exception {
 
-            for (int i = 0; i < input.numRegions; i++) {
+            for (int i = 0; i < input.numPartitions; i++) {
                 String regionName = input.regionPrefix + i;
-                for (int j = 0; j < input.numThreadsPerRegion; j++) {
+                for (int j = 0; j < input.numThreadsPerPartition; j++) {
                     executor.submit(new Feeder(regionName, j));
                 }
             }
@@ -195,7 +195,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
         private void completed() {
             int completed = this.completed.incrementAndGet();
-            if (completed == input.numRegions * input.numThreadsPerRegion) {
+            if (completed == input.numPartitions * input.numThreadsPerPartition) {
                 endTimeMillis.set(System.currentTimeMillis());
             }
         }
@@ -207,7 +207,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         }
 
         private void feed(String regionName, int batch, int threadIndex) throws Exception {
-            AmzaRegion amzaRegion = createRegionIfAbsent(regionName);
+            AmzaPartition amzaPartition = createPartitionIfAbsent(regionName);
 
             Map<String, String> values = new LinkedHashMap<>();
             int bStart = threadIndex * input.batchSize;
@@ -217,10 +217,10 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             }
 
             try {
-                AmzaRegionUpdates updates = new AmzaRegionUpdates();
+                AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                 updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(input1.getKey().getBytes(),
                     input1.getValue().getBytes())), -1);
-                amzaRegion.commit(updates);
+                amzaPartition.commit(updates);
 
 
             } catch (Exception x) {
@@ -232,7 +232,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         }
     }
 
-    private AmzaRegion createRegionIfAbsent(String simpleRegionName) throws Exception {
+    private AmzaPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
         NavigableMap<RingMember, RingHost> ring = amzaService.getAmzaHostRing().getRing("default");
         if (ring.isEmpty()) {
@@ -242,16 +242,16 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
-        RegionName regionName = new RegionName(false, "default", simpleRegionName);
-        amzaService.setPropertiesIfAbsent(regionName, new RegionProperties(storageDescriptor, 2, 2, false));
+        PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, 2, false));
 
-        AmzaService.AmzaRegionRoute regionRoute = amzaService.getRegionRoute(regionName);
-        while (regionRoute.orderedRegionHosts.isEmpty()) {
+        AmzaService.AmzaPartitionRoute regionRoute = amzaService.getPartitionRoute(partitionName);
+        while (regionRoute.orderedPartitionHosts.isEmpty()) {
             Thread.sleep(1000);
-            regionRoute = amzaService.getRegionRoute(regionName);
+            regionRoute = amzaService.getPartitionRoute(partitionName);
         }
 
-        return amzaService.getRegion(regionName);
+        return amzaService.getPartition(partitionName);
     }
 
     @Override

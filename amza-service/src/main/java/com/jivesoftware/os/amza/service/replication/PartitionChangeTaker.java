@@ -9,10 +9,10 @@ import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingReader;
-import com.jivesoftware.os.amza.service.storage.RegionIndex;
-import com.jivesoftware.os.amza.shared.region.RegionProperties;
-import com.jivesoftware.os.amza.shared.region.TxRegionStatus;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.ring.RingNeighbors;
@@ -54,7 +54,7 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class RegionChangeTaker {
+public class PartitionChangeTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private ScheduledExecutorService masterTakerThreadPool;
@@ -62,25 +62,25 @@ public class RegionChangeTaker {
     private final AmzaRingReader amzaRingReader;
     private final RingHost ringHost;
     private final AmzaStats amzaStats;
-    private final RegionIndex regionIndex;
-    private final RegionStripeProvider regionStripeProvider;
-    private final RegionStripe[] stripes;
+    private final PartitionIndex partitionIndex;
+    private final PartitionStripeProvider partitionStripeProvider;
+    private final PartitionStripe[] stripes;
     private final UpdatesTaker updatesTaker;
     private final HighwaterStorage highwaterStorage;
-    private final RegionStatusStorage regionStatusStorage;
+    private final PartitionStatusStorage partitionStatusStorage;
     private final Optional<TakeFailureListener> takeFailureListener;
     private final long takeFromNeighborsIntervalInMillis;
     private final int numberOfTakerThreads;
     private final boolean hardFlush;
 
-    public RegionChangeTaker(AmzaStats amzaStats,
+    public PartitionChangeTaker(AmzaStats amzaStats,
         AmzaRingReader amzaRingReader,
         RingHost ringHost,
-        RegionIndex regionIndex,
-        RegionStripeProvider regionStripeProvider,
-        RegionStripe[] stripes,
+        PartitionIndex partitionIndex,
+        PartitionStripeProvider partitionStripeProvider,
+        PartitionStripe[] stripes,
         HighwaterStorage highwaterStorage,
-        RegionStatusStorage regionStatusStorage,
+        PartitionStatusStorage partitionStatusStorage,
         UpdatesTaker updatesTaker,
         Optional<TakeFailureListener> takeFailureListener,
         long takeFromNeighborsIntervalInMillis,
@@ -90,11 +90,11 @@ public class RegionChangeTaker {
         this.amzaStats = amzaStats;
         this.amzaRingReader = amzaRingReader;
         this.ringHost = ringHost;
-        this.regionIndex = regionIndex;
-        this.regionStripeProvider = regionStripeProvider;
+        this.partitionIndex = partitionIndex;
+        this.partitionStripeProvider = partitionStripeProvider;
         this.stripes = stripes;
         this.highwaterStorage = highwaterStorage;
-        this.regionStatusStorage = regionStatusStorage;
+        this.partitionStatusStorage = partitionStatusStorage;
         this.updatesTaker = updatesTaker;
         this.takeFailureListener = takeFailureListener;
         this.takeFromNeighborsIntervalInMillis = takeFromNeighborsIntervalInMillis;
@@ -121,7 +121,7 @@ public class RegionChangeTaker {
 
             masterTakerThreadPool.scheduleWithFixedDelay(() -> {
                 try {
-                    takeChanges(regionStripeProvider.getSystemRegionStripe());
+                    takeChanges(partitionStripeProvider.getSystemPartitionStripe());
                 } catch (Throwable x) {
                     LOG.warn("Shouldn't have gotten here. Implements please catch your expections.", x);
                 }
@@ -138,25 +138,23 @@ public class RegionChangeTaker {
         }
     }
 
-    public void takeChanges(RegionStripe stripe) throws Exception {
+    public void takeChanges(PartitionStripe stripe) throws Exception {
         while (true) {
-            ListMultimap<RingMember, VersionedRegionName> flushMap = Multimaps.synchronizedListMultimap(
-                ArrayListMultimap.<RingMember, VersionedRegionName>create());
-            Set<VersionedRegionName> onlineSet = Collections.newSetFromMap(Maps.newConcurrentMap());
-            Set<VersionedRegionName> ketchupSet = Collections.newSetFromMap(Maps.newConcurrentMap());
-            SetMultimap<VersionedRegionName, RingMember> membersUnreachable = Multimaps.synchronizedSetMultimap(
-                HashMultimap.<VersionedRegionName, RingMember>create());
+            ListMultimap<RingMember, VersionedPartitionName> flushMap = Multimaps.synchronizedListMultimap(ArrayListMultimap.<RingMember, VersionedPartitionName>create());
+            Set<VersionedPartitionName> onlineSet = Collections.newSetFromMap(Maps.newConcurrentMap());
+            Set<VersionedPartitionName> ketchupSet = Collections.newSetFromMap(Maps.newConcurrentMap());
+            SetMultimap<VersionedPartitionName, RingMember> membersUnreachable = Multimaps.synchronizedSetMultimap(HashMultimap.<VersionedPartitionName, RingMember>create());
 
             List<Future<?>> futures = new ArrayList<>();
-            stripe.txAllRegions((versionedRegionName, regionStatus) -> {
-                if (regionStatus == TxRegionStatus.Status.KETCHUP || regionStatus == TxRegionStatus.Status.ONLINE) {
-                    final RingNeighbors hostRing = amzaRingReader.getRingNeighbors(versionedRegionName.getRegionName().getRingName());
-                    final RegionProperties regionProperties = regionIndex.getProperties(versionedRegionName.getRegionName());
-                    if (regionProperties != null && regionProperties.takeFromFactor > 0) {
+            stripe.txAllPartitions((versionedPartitionName, partitionStatus) -> {
+                if (partitionStatus == TxPartitionStatus.Status.KETCHUP || partitionStatus == TxPartitionStatus.Status.ONLINE) {
+                    final RingNeighbors hostRing = amzaRingReader.getRingNeighbors(versionedPartitionName.getPartitionName().getRingName());
+                    final PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
+                    if (partitionProperties != null && partitionProperties.takeFromFactor > 0) {
 
                         futures.add(slaveTakerThreadPool.submit(() -> {
                             try {
-                                List<TookResult> took = takeChanges(hostRing.getAboveRing(), stripe, versionedRegionName, regionProperties.takeFromFactor);
+                                List<TookResult> took = takeChanges(hostRing.getAboveRing(), stripe, versionedPartitionName, partitionProperties.takeFromFactor);
                                 boolean allInKetchup = true;
                                 boolean oneTookFully = false;
                                 for (TookResult t : took) {
@@ -167,20 +165,20 @@ public class RegionChangeTaker {
                                         oneTookFully = true;
                                     }
                                     if (t.flushedAny) {
-                                        flushMap.put(t.versionedRingMember, versionedRegionName);
+                                        flushMap.put(t.versionedRingMember, versionedPartitionName);
                                     }
                                     if (t.tookUnreachable) {
-                                        membersUnreachable.put(versionedRegionName, t.versionedRingMember);
+                                        membersUnreachable.put(versionedPartitionName, t.versionedRingMember);
                                     }
                                 }
                                 if (allInKetchup) {
-                                    ketchupSet.add(versionedRegionName);
+                                    ketchupSet.add(versionedPartitionName);
                                 }
                                 if (oneTookFully) {
-                                    onlineSet.add(versionedRegionName);
+                                    onlineSet.add(versionedPartitionName);
                                 }
                             } catch (Exception x) {
-                                LOG.warn("Failed to take from " + versionedRegionName, x);
+                                LOG.warn("Failed to take from " + versionedPartitionName, x);
                             }
                         }));
                     }
@@ -196,13 +194,13 @@ public class RegionChangeTaker {
                 }
             }
 
-            for (VersionedRegionName versionedRegionName : onlineSet) {
-                regionStatusStorage.markAsOnline(versionedRegionName);
+            for (VersionedPartitionName versionedPartitionName : onlineSet) {
+                partitionStatusStorage.markAsOnline(versionedPartitionName);
             }
-            for (VersionedRegionName versionedRegionName : ketchupSet) {
-                regionStatusStorage.elect(amzaRingReader.getRing(versionedRegionName.getRegionName().getRingName()).keySet(),
-                    membersUnreachable.get(versionedRegionName),
-                    versionedRegionName);
+            for (VersionedPartitionName versionedPartitionName : ketchupSet) {
+                partitionStatusStorage.elect(amzaRingReader.getRing(versionedPartitionName.getPartitionName().getRingName()).keySet(),
+                    membersUnreachable.get(versionedPartitionName),
+                    versionedPartitionName);
             }
             if (flushMap.isEmpty()) {
                 break;
@@ -232,8 +230,8 @@ public class RegionChangeTaker {
     }
 
     private List<TookResult> takeChanges(Entry<RingMember, RingHost>[] ring,
-        RegionStripe regionStripe,
-        VersionedRegionName versionedRegionName,
+        PartitionStripe partitionStripe,
+        VersionedPartitionName versionedPartitionName,
         int takeFromFactor) throws Exception {
 
         final MutableInt taken = new MutableInt(0);
@@ -248,15 +246,15 @@ public class RegionChangeTaker {
                 ring[i] = null;
 
                 RingMember ringMember = takeFromNode.getKey();
-                Long highwaterMark = highwaterStorage.get(ringMember, versionedRegionName);
+                Long highwaterMark = highwaterStorage.get(ringMember, versionedPartitionName);
                 if (highwaterMark == null) {
                     // TODO it would be nice to ask this node to recommend an initial highwater based on
                     // TODO all of our highwaters vs. its highwater history and its start of ingress.
                     highwaterMark = -1L;
                 }
                 TakeRowStream takeRowStream = new TakeRowStream(amzaStats,
-                    versionedRegionName,
-                    regionStripe,
+                    versionedPartitionName,
+                    partitionStripe,
                     ringMember,
                     highwaterMark);
 
@@ -265,7 +263,7 @@ public class RegionChangeTaker {
                 StreamingTakeResult streamingTakeResult = updatesTaker.streamingTakeUpdates(amzaRingReader.getRingMember(),
                     ringHost,
                     takeFromNode,
-                    versionedRegionName.getRegionName(),
+                    versionedPartitionName.getPartitionName(),
                     highwaterMark,
                     takeRowStream);
                 boolean tookFully = (streamingTakeResult.otherHighwaterMarks != null);
@@ -276,8 +274,8 @@ public class RegionChangeTaker {
                     }
                     if (amzaStats.takeErrors.count(takeFromNode) == 0) {
                         LOG.warn("Error while taking from host:{}", takeFromNode);
-                        LOG.trace("Error while taking from host:{} region:{} takeFromFactor:{}",
-                            new Object[]{takeFromNode, versionedRegionName, takeFromFactor}, streamingTakeResult.error);
+                        LOG.trace("Error while taking from host:{} partition:{} takeFromFactor:{}",
+                            new Object[]{takeFromNode, versionedPartitionName, takeFromFactor}, streamingTakeResult.error);
                     }
                     amzaStats.takeErrors.add(ringMember);
                 } else if (streamingTakeResult.unreachable != null) {
@@ -286,8 +284,8 @@ public class RegionChangeTaker {
                     }
                     if (amzaStats.takeErrors.count(takeFromNode) == 0) {
                         LOG.debug("Unreachable while taking from host:{}", takeFromNode);
-                        LOG.trace("Unreachable while taking from host:{} region:{} takeFromFactor:{}",
-                            new Object[]{takeFromNode, versionedRegionName, takeFromFactor}, streamingTakeResult.unreachable);
+                        LOG.trace("Unreachable while taking from host:{} partition:{} takeFromFactor:{}",
+                            new Object[]{takeFromNode, versionedPartitionName, takeFromFactor}, streamingTakeResult.unreachable);
                     }
                     amzaStats.takeErrors.add(ringMember);
                 } else {
@@ -306,7 +304,7 @@ public class RegionChangeTaker {
                     streamingTakeResult.unreachable != null));
 
                 for (Entry<RingMember, Long> entry : takeRowStream.flushedHighwatermarks.entrySet()) {
-                    highwaterStorage.setIfLarger(entry.getKey(), versionedRegionName, updates, entry.getValue());
+                    highwaterStorage.setIfLarger(entry.getKey(), versionedPartitionName, updates, entry.getValue());
                 }
 
                 if (tookFully) {
@@ -330,8 +328,8 @@ public class RegionChangeTaker {
     static class TakeRowStream implements RowStream {
 
         private final AmzaStats amzaStats;
-        private final VersionedRegionName versionedRegionName;
-        private final RegionStripe regionStripe;
+        private final VersionedPartitionName versionedPartitionName;
+        private final PartitionStripe partitionStripe;
         private final RingMember ringMember;
         private final MutableLong highWaterMark;
         private final Map<WALKey, WALValue> batch = new HashMap<>();
@@ -345,13 +343,13 @@ public class RegionChangeTaker {
         private final Map<RingMember, Long> flushedHighwatermarks = new HashMap<>();
 
         public TakeRowStream(AmzaStats amzaStats,
-            VersionedRegionName versionedRegionName,
-            RegionStripe regionStripe,
+            VersionedPartitionName versionedPartitionName,
+            PartitionStripe partitionStripe,
             RingMember ringMember,
             long lastHighwaterMark) {
             this.amzaStats = amzaStats;
-            this.versionedRegionName = versionedRegionName;
-            this.regionStripe = regionStripe;
+            this.versionedPartitionName = versionedPartitionName;
+            this.partitionStripe = partitionStripe;
             this.ringMember = ringMember;
             this.highWaterMark = new MutableLong(lastHighwaterMark);
             this.lastTxId = new MutableLong(Long.MIN_VALUE);
@@ -400,15 +398,15 @@ public class RegionChangeTaker {
             int numFlushed = 0;
             int batchSize = batch.size();
             if (!batch.isEmpty()) {
-                amzaStats.took(ringMember, versionedRegionName.getRegionName(), batch.size(), oldestTxId.longValue());
+                amzaStats.took(ringMember, versionedPartitionName.getPartitionName(), batch.size(), oldestTxId.longValue());
                 WALHighwater walh = highwater.get();
                 MemoryWALUpdates updates = new MemoryWALUpdates(batch, walh);
-                RowsChanged changes = regionStripe.commit(versionedRegionName.getRegionName(),
-                    Optional.of(versionedRegionName.getRegionVersion()),
+                RowsChanged changes = partitionStripe.commit(versionedPartitionName.getPartitionName(),
+                    Optional.of(versionedPartitionName.getPartitionVersion()),
                     false,
                     updates);
                 if (changes != null) {
-                    amzaStats.tookApplied(ringMember, versionedRegionName.getRegionName(), changes.getApply().size(), changes.getOldestRowTxId());
+                    amzaStats.tookApplied(ringMember, versionedPartitionName.getPartitionName(), changes.getApply().size(), changes.getOldestRowTxId());
                     if (walh != null) {
                         for (RingMemberHighwater memberHighwater : walh.ringMemberHighwater) {
                             flushedHighwatermarks.merge(memberHighwater.ringMember, memberHighwater.transactionId, (a, b) -> {
@@ -425,10 +423,10 @@ public class RegionChangeTaker {
             }
             highwater.set(null);
             if (batchSize > 0) {
-                amzaStats.took(ringMember, versionedRegionName.getRegionName(), batchSize, Long.MAX_VALUE);
+                amzaStats.took(ringMember, versionedPartitionName.getPartitionName(), batchSize, Long.MAX_VALUE);
             }
             if (numFlushed > 0) {
-                amzaStats.tookApplied(ringMember, versionedRegionName.getRegionName(), numFlushed, Long.MAX_VALUE);
+                amzaStats.tookApplied(ringMember, versionedPartitionName.getPartitionName(), numFlushed, Long.MAX_VALUE);
             }
             return flushed.get();
         }

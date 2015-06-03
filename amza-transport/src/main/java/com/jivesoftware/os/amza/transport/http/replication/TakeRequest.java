@@ -17,7 +17,7 @@ package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.jivesoftware.os.amza.shared.region.RegionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 
@@ -26,18 +26,18 @@ public class TakeRequest {
     private final long highestTransactionId;
     private final RingMember taker;
     private final RingHost takerHost;
-    private final RegionName regionName;
+    private final PartitionName partitionName;
 
     @JsonCreator
     public TakeRequest(
         @JsonProperty("taker") RingMember taker,
         @JsonProperty("takerHost") RingHost takerHost,
         @JsonProperty("highestTransactionId") long highestTransactionId,
-        @JsonProperty("regionName") RegionName regionName) {
+        @JsonProperty("partitionName") PartitionName partitionName) {
         this.taker = taker;
         this.takerHost = takerHost;
         this.highestTransactionId = highestTransactionId;
-        this.regionName = regionName;
+        this.partitionName = partitionName;
     }
 
     public RingMember getTaker() {
@@ -52,13 +52,13 @@ public class TakeRequest {
         return highestTransactionId;
     }
 
-    public RegionName getRegionName() {
-        return regionName;
+    public PartitionName getPartitionName() {
+        return partitionName;
     }
 
     @Override
     public String toString() {
-        return "TakeRequest{" + "highestTransactionId=" + highestTransactionId + ", taker=" + taker + ", regionName=" + regionName + '}';
+        return "TakeRequest{" + "highestTransactionId=" + highestTransactionId + ", taker=" + taker + ", partitionName=" + partitionName + '}';
     }
 
 }

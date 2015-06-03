@@ -4,7 +4,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Table;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.region.VersionedRegionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALReader;
@@ -65,11 +65,11 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         wal.flush(fsync);
     }
 
-    WALKey regionPrefixedKey(VersionedRegionName versionedRegionName, WALKey key) throws IOException {
-        byte[] regionNameBytes = versionedRegionName.toBytes();
-        ByteBuffer bb = ByteBuffer.allocate(2 + regionNameBytes.length + 4 + key.getKey().length);
-        bb.putShort((short) regionNameBytes.length);
-        bb.put(regionNameBytes);
+    WALKey partitionPrefixedKey(VersionedPartitionName versionedPartitionName, WALKey key) throws IOException {
+        byte[] partitionNameBytes = versionedPartitionName.toBytes();
+        ByteBuffer bb = ByteBuffer.allocate(2 + partitionNameBytes.length + 4 + key.getKey().length);
+        bb.putShort((short) partitionNameBytes.length);
+        bb.put(partitionNameBytes);
         bb.putInt(key.getKey().length);
         bb.put(key.getKey());
         return new WALKey(bb.array());
@@ -87,7 +87,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         return new WALValue(filer.getBytes(), value.getTimestampId(), value.getTombstoned());
     }
 
-    public DeltaWALApplied update(final VersionedRegionName versionedRegionName,
+    public DeltaWALApplied update(final VersionedPartitionName versionedPartitionName,
         final Table<Long, WALKey, WALValue> apply,
         WALHighwater highwaterHint) throws Exception {
         final Map<WALKey, Long> keyToRowPointer = new HashMap<>();
@@ -103,7 +103,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                 WALKey key = cell.getColumnKey();
                 WALValue value = cell.getValue();
                 keys.add(key);
-                key = regionPrefixedKey(versionedRegionName, key);
+                key = partitionPrefixedKey(versionedPartitionName, key);
                 value = appendHighwaterHints(value, count == 0 ? highwaterHint : null);
                 rawRows.add(primaryRowMarshaller.toRow(key, value));
 
@@ -134,8 +134,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                     byte[] rawRow = reader.read(fp);
                     WALRow row = primaryRowMarshaller.fromRow(rawRow);
                     ByteBuffer bb = ByteBuffer.wrap(row.key.getKey());
-                    byte[] regionNameBytes = new byte[bb.getShort()];
-                    bb.get(regionNameBytes);
+                    byte[] partitionNameBytes = new byte[bb.getShort()];
+                    bb.get(partitionNameBytes);
                     byte[] keyBytes = new byte[bb.getInt()];
                     bb.get(keyBytes);
 

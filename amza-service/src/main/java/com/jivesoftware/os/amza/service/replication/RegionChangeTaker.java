@@ -26,7 +26,6 @@ import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.storage.WALRow;
@@ -402,8 +401,7 @@ public class RegionChangeTaker {
                 RowsChanged changes = regionStripe.commit(versionedRegionName.getRegionName(),
                     Optional.of(versionedRegionName.getRegionVersion()),
                     false,
-                    null,
-                    WALStorageUpdateMode.noReplication, updates);
+                    updates);
                 if (changes != null) {
                     amzaStats.tookApplied(ringMember, versionedRegionName.getRegionName(), changes.getApply().size(), changes.getOldestRowTxId());
                     if (walh != null) {

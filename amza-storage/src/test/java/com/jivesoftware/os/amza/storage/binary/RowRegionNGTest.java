@@ -2,16 +2,13 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
-import com.google.common.util.concurrent.Futures;
 import com.jivesoftware.os.amza.shared.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.RegionName;
-import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.VersionedRegionName;
 import com.jivesoftware.os.amza.shared.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALStorageUpdateMode;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
@@ -107,8 +104,7 @@ public class RowRegionNGTest {
             WALKey key = new WALKey(UIO.intBytes(r.nextInt(range)));
             updates.put(key, new WALValue(UIO.intBytes(i), idProvider.nextId(), false));
         }
-        indexedWAL.update(false, (RowsChanged rowsChanged) -> Futures.immediateFuture(true), WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(
-            updates, null));
+        indexedWAL.update(false, new MemoryWALUpdates(updates, null));
     }
 
     @Test
@@ -213,7 +209,6 @@ public class RowRegionNGTest {
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
-        indexedWAL.update(false, (RowsChanged rowsChanged) -> Futures.immediateFuture(true), WALStorageUpdateMode.updateThenReplicate, new MemoryWALUpdates(
-            updates, null));
+        indexedWAL.update(false, new MemoryWALUpdates(updates, null));
     }
 }

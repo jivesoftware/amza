@@ -8,7 +8,6 @@ import com.jivesoftware.os.amza.service.storage.RegionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowChanges;
-import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.WALStorageProvider;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -30,7 +29,6 @@ public class EmbeddedAmzaServiceInitializer {
         final TimestampedOrderIdProvider orderIdProvider,
         RegionPropertyMarshaller regionPropertyMarshaller,
         final WALIndexProviderRegistry indexProviderRegistry,
-        UpdatesSender updatesSender,
         UpdatesTaker updatesTaker,
         Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
@@ -45,11 +43,6 @@ public class EmbeddedAmzaServiceInitializer {
         WALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
             rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, orderIdProvider, tombstoneCompactionFactor, compactAfterGrowthFactor);
 
-        WALStorageProvider tmpWALStorageProvider = new TemporaryWALStorageProvider(rowIOProvider,
-            primaryRowMarshaller,
-            highwaterRowMarshaller,
-            orderIdProvider);
-
         return new AmzaServiceInitializer().initialize(config,
             amzaStats,
             primaryRowMarshaller,
@@ -59,9 +52,6 @@ public class EmbeddedAmzaServiceInitializer {
             orderIdProvider,
             regionPropertyMarshaller,
             walStorageProvider,
-            tmpWALStorageProvider,
-            tmpWALStorageProvider,
-            updatesSender,
             updatesTaker,
             sendFailureListener,
             takeFailureListener,

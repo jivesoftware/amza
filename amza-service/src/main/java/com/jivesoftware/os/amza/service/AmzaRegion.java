@@ -25,7 +25,6 @@ import com.jivesoftware.os.amza.shared.RowStream;
 import com.jivesoftware.os.amza.shared.Scan;
 import com.jivesoftware.os.amza.shared.WALHighwater;
 import com.jivesoftware.os.amza.shared.WALKey;
-import com.jivesoftware.os.amza.shared.WALReplicator;
 import com.jivesoftware.os.amza.shared.WALValue;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -42,21 +41,18 @@ public class AmzaRegion {
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
     private final RegionName regionName;
-    private final WALReplicator replicator;
     private final RegionStripe regionStripe;
     private final HighwaterStorage highwaterStorage;
 
     public AmzaRegion(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
         RegionName regionName,
-        WALReplicator replicator,
         RegionStripe regionStripe,
         HighwaterStorage highwaterStorage) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.regionName = regionName;
-        this.replicator = replicator;
         this.regionStripe = regionStripe;
         this.highwaterStorage = highwaterStorage;
     }
@@ -72,7 +68,7 @@ public class AmzaRegion {
         long timestamp = orderIdProvider.nextId();
         RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
         tx.put(key, new WALValue(value, timestamp, false));
-        tx.commit(replicator);
+        tx.commit();
         return key;
     }
 
@@ -82,7 +78,7 @@ public class AmzaRegion {
         }
         RowStoreUpdates tx = new RowStoreUpdates(amzaStats, regionName, regionStripe, new RowsStorageUpdates(regionName, regionStripe));
         tx.put(key, value);
-        tx.commit(replicator);
+        tx.commit();
         return key;
     }
 
@@ -97,7 +93,7 @@ public class AmzaRegion {
             }
             tx.put(k, new WALValue(v, timestamp, false));
         }
-        tx.commit(replicator);
+        tx.commit();
     }
 
     public void setValues(Iterable<Entry<WALKey, WALValue>> entries) throws Exception {
@@ -110,7 +106,7 @@ public class AmzaRegion {
             }
             tx.put(k, v);
         }
-        tx.commit(replicator);
+        tx.commit();
     }
 
     public byte[] get(WALKey key) throws Exception {
@@ -158,7 +154,7 @@ public class AmzaRegion {
     public boolean remove(WALKey key) throws Exception {
         RowStoreUpdates tx = regionStripe.startTransaction(regionName);
         tx.put(key, new WALValue(null, orderIdProvider.nextId(), true));
-        tx.commit(replicator);
+        tx.commit();
         return true;
     }
 
@@ -168,7 +164,7 @@ public class AmzaRegion {
         for (WALKey key : keys) {
             tx.put(key, new WALValue(null, timestamp, true));
         }
-        tx.commit(replicator);
+        tx.commit();
     }
 
     public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {

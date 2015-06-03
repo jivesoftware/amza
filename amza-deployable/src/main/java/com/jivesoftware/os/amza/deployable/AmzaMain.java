@@ -36,7 +36,6 @@ import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
@@ -109,7 +108,6 @@ public class AmzaMain {
             WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
             indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
 
-            HttpUpdatesSender changeSetSender = new HttpUpdatesSender(amzaStats);
             HttpUpdatesTaker taker = new HttpUpdatesTaker(amzaStats);
 
             final ObjectMapper mapper = new ObjectMapper();
@@ -141,7 +139,6 @@ public class AmzaMain {
                 orderIdProvider,
                 regionPropertyMarshaller,
                 indexProviderRegistry,
-                changeSetSender,
                 taker,
                 Optional.<SendFailureListener>absent(),
                 Optional.<TakeFailureListener>absent(), (RowsChanged changes) -> {

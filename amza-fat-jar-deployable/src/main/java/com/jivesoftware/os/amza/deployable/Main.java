@@ -35,10 +35,8 @@ import com.jivesoftware.os.amza.shared.RegionProperties;
 import com.jivesoftware.os.amza.shared.RingHost;
 import com.jivesoftware.os.amza.shared.RingMember;
 import com.jivesoftware.os.amza.shared.RowsChanged;
-import com.jivesoftware.os.amza.shared.UpdatesSender;
 import com.jivesoftware.os.amza.shared.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesSender;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
@@ -87,7 +85,6 @@ public class Main {
         indexProviderRegistry.register("mapdb", new MapdbWALIndexProvider(workingDirs));
         indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
 
-        UpdatesSender changeSetSender = new HttpUpdatesSender(amzaStats);
         UpdatesTaker taker = new HttpUpdatesTaker(amzaStats);
 
         RegionPropertyMarshaller regionPropertyMarshaller = new RegionPropertyMarshaller() {
@@ -110,7 +107,6 @@ public class Main {
             orderIdProvider,
             regionPropertyMarshaller,
             indexProviderRegistry,
-            changeSetSender,
             taker,
             Optional.<SendFailureListener>absent(),
             Optional.<TakeFailureListener>absent(),

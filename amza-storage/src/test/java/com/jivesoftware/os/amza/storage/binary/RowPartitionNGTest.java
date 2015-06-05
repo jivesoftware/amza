@@ -2,16 +2,16 @@ package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -26,7 +26,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
- *
  * @author jonathan.colt
  */
 public class RowPartitionNGTest {

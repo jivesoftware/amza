@@ -18,13 +18,14 @@ package com.jivesoftware.os.amza.storage;
 import com.google.common.base.Optional;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
+import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -36,7 +37,6 @@ import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -172,7 +172,8 @@ public class IndexedWAL implements WALStorage {
     }
 
     private long compact(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-        final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName() + ">ring>" + versionedPartitionName.getPartitionName().getRingName() + ">";
+        final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName() + ">ring>" + versionedPartitionName.getPartitionName()
+            .getRingName() + ">";
         Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
         if (compact.isPresent()) {
             acquireAll();
@@ -264,7 +265,7 @@ public class IndexedWAL implements WALStorage {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
@@ -275,9 +276,9 @@ public class IndexedWAL implements WALStorage {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId}));
+                indexCommitedUpToTxId }));
         }
     }
 
@@ -629,12 +630,11 @@ public class IndexedWAL implements WALStorage {
     }
 
     /**
-
-     @param sinceTransactionId
-     @param highwaters Nullable
-     @param scan
-     @return
-     @throws Exception
+     * @param sinceTransactionId
+     * @param highwaters         Nullable
+     * @param scan
+     * @return
+     * @throws Exception
      */
     @Override
     public boolean takeFromTransactionId(final long sinceTransactionId, Highwaters highwaters, Scan<WALValue> scan) throws Exception {

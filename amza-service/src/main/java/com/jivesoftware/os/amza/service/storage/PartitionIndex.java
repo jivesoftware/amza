@@ -120,7 +120,7 @@ public class PartitionIndex implements RowChanges {
                 return partitionStore;
             }
         }
-        
+
         WALKey partitionNameKey = new WALKey(partitionName.toBytes());
         if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
             if (!getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(partitionNameKey)) {

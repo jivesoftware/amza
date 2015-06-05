@@ -7,16 +7,16 @@ import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
@@ -366,7 +366,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, RowStream rowStream) throws Exception {
+    public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
+        WALStorage storage,
+        long transactionId,
+        RowStream rowStream) throws Exception {
         if (!storage.takeRowUpdatesSince(transactionId, rowStream)) {
             return;
         }
@@ -567,7 +570,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
      * Stupid expensive!!!!
      *
      * @param partitionName PartitionName
-     * @param storage Storage
+     * @param storage       Storage
      * @return long
      * @throws Exception .
      */

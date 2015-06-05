@@ -64,7 +64,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[]{"./var/data/"};
+        public String[] workingDirectories = new String[] { "./var/data/" };
 
         public int resendReplicasIntervalInMillis = 1000;
         public int applyReplicasIntervalInMillis = 1000;
@@ -220,7 +220,8 @@ public class AmzaServiceInitializer {
             config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
-        PartitionComposter partitionComposter = new PartitionComposter(partitionIndex, partitionProvider, amzaRingReader, partitionStatusStorage, partitionStripeProvider);
+        PartitionComposter partitionComposter = new PartitionComposter(partitionIndex, partitionProvider, amzaRingReader, partitionStatusStorage,
+            partitionStripeProvider);
 
         RecentPartitionTakers recentPartitionTakers = new RecentPartitionTakers();
 

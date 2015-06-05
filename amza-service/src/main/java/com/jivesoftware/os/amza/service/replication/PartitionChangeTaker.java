@@ -140,10 +140,12 @@ public class PartitionChangeTaker {
 
     public void takeChanges(PartitionStripe stripe) throws Exception {
         while (true) {
-            ListMultimap<RingMember, VersionedPartitionName> flushMap = Multimaps.synchronizedListMultimap(ArrayListMultimap.<RingMember, VersionedPartitionName>create());
+            ListMultimap<RingMember, VersionedPartitionName> flushMap = Multimaps.synchronizedListMultimap(
+                ArrayListMultimap.<RingMember, VersionedPartitionName>create());
             Set<VersionedPartitionName> onlineSet = Collections.newSetFromMap(Maps.newConcurrentMap());
             Set<VersionedPartitionName> ketchupSet = Collections.newSetFromMap(Maps.newConcurrentMap());
-            SetMultimap<VersionedPartitionName, RingMember> membersUnreachable = Multimaps.synchronizedSetMultimap(HashMultimap.<VersionedPartitionName, RingMember>create());
+            SetMultimap<VersionedPartitionName, RingMember> membersUnreachable = Multimaps.synchronizedSetMultimap(
+                HashMultimap.<VersionedPartitionName, RingMember>create());
 
             List<Future<?>> futures = new ArrayList<>();
             stripe.txAllPartitions((versionedPartitionName, partitionStatus) -> {
@@ -154,7 +156,8 @@ public class PartitionChangeTaker {
 
                         futures.add(slaveTakerThreadPool.submit(() -> {
                             try {
-                                List<TookResult> took = takeChanges(hostRing.getAboveRing(), stripe, versionedPartitionName, partitionProperties.takeFromFactor);
+                                List<TookResult> took = takeChanges(hostRing.getAboveRing(), stripe, versionedPartitionName,
+                                    partitionProperties.takeFromFactor);
                                 boolean allInKetchup = true;
                                 boolean oneTookFully = false;
                                 for (TookResult t : took) {
@@ -275,7 +278,7 @@ public class PartitionChangeTaker {
                     if (amzaStats.takeErrors.count(takeFromNode) == 0) {
                         LOG.warn("Error while taking from host:{}", takeFromNode);
                         LOG.trace("Error while taking from host:{} partition:{} takeFromFactor:{}",
-                            new Object[]{takeFromNode, versionedPartitionName, takeFromFactor}, streamingTakeResult.error);
+                            new Object[] { takeFromNode, versionedPartitionName, takeFromFactor }, streamingTakeResult.error);
                     }
                     amzaStats.takeErrors.add(ringMember);
                 } else if (streamingTakeResult.unreachable != null) {
@@ -285,7 +288,7 @@ public class PartitionChangeTaker {
                     if (amzaStats.takeErrors.count(takeFromNode) == 0) {
                         LOG.debug("Unreachable while taking from host:{}", takeFromNode);
                         LOG.trace("Unreachable while taking from host:{} partition:{} takeFromFactor:{}",
-                            new Object[]{takeFromNode, versionedPartitionName, takeFromFactor}, streamingTakeResult.unreachable);
+                            new Object[] { takeFromNode, versionedPartitionName, takeFromFactor }, streamingTakeResult.unreachable);
                     }
                     amzaStats.takeErrors.add(ringMember);
                 } else {

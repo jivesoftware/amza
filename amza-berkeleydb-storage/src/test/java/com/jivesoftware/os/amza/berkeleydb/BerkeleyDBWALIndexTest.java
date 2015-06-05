@@ -1,12 +1,12 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.File;
 import java.util.AbstractMap;
 import java.util.Collections;
@@ -82,7 +82,7 @@ public class BerkeleyDBWALIndexTest {
     }
 
     private BerkeleyDBWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
+        return new BerkeleyDBWALIndexProvider(new String[] { dir0.getAbsolutePath() }, 1).createIndex(partitionName);
     }
 
 }

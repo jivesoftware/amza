@@ -16,10 +16,10 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.storage.filer.MemoryBackedWALFiler;
@@ -34,7 +34,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
- *
  * @author jonathan
  */
 public class BinaryRowReaderWriterTest {
@@ -62,9 +61,9 @@ public class BinaryRowReaderWriterTest {
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 3);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 0L), Collections.singletonList(new byte[]{1, 2, 3, 4}));
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 1L), Collections.singletonList(new byte[]{1, 2, 3, 5}));
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 2L), Collections.singletonList(new byte[]{1, 2, 3, 6}));
+        binaryRowWriter.writePrimary(Collections.nCopies(1, 0L), Collections.singletonList(new byte[] { 1, 2, 3, 4 }));
+        binaryRowWriter.writePrimary(Collections.nCopies(1, 1L), Collections.singletonList(new byte[] { 1, 2, 3, 5 }));
+        binaryRowWriter.writePrimary(Collections.nCopies(1, 2L), Collections.singletonList(new byte[] { 1, 2, 3, 6 }));
 
         Assert.assertTrue(binaryRowReader.validate());
 
@@ -105,7 +104,7 @@ public class BinaryRowReaderWriterTest {
         Assert.assertTrue(readStream.rows.isEmpty());
         readStream.clear();
 
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 0L), Collections.singletonList(new byte[]{1, 2, 3, 4}));
+        binaryRowWriter.writePrimary(Collections.nCopies(1, 0L), Collections.singletonList(new byte[] { 1, 2, 3, 4 }));
         binaryRowReader.scan(0, false, readStream);
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
@@ -114,15 +113,15 @@ public class BinaryRowReaderWriterTest {
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
 
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 2L), Collections.singletonList(new byte[]{2, 3, 4, 5}));
+        binaryRowWriter.writePrimary(Collections.nCopies(1, 2L), Collections.singletonList(new byte[] { 2, 3, 4, 5 }));
         binaryRowReader.scan(0, false, readStream);
         Assert.assertEquals(readStream.rows.size(), 2);
         readStream.clear();
 
         binaryRowReader.reverseScan(readStream);
         Assert.assertEquals(readStream.rows.size(), 2);
-        Assert.assertTrue(Arrays.equals(readStream.rows.get(0), new byte[]{2, 3, 4, 5}));
-        Assert.assertTrue(Arrays.equals(readStream.rows.get(1), new byte[]{1, 2, 3, 4}));
+        Assert.assertTrue(Arrays.equals(readStream.rows.get(0), new byte[] { 2, 3, 4, 5 }));
+        Assert.assertTrue(Arrays.equals(readStream.rows.get(1), new byte[] { 1, 2, 3, 4 }));
         readStream.clear();
     }
 

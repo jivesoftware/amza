@@ -15,13 +15,13 @@
  */
 package com.jivesoftware.os.amza.storage.binary;
 
-import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.IReadable;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
+import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.amza.storage.filer.WALFiler;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;

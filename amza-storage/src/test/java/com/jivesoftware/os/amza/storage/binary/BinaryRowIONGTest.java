@@ -1,10 +1,10 @@
 package com.jivesoftware.os.amza.storage.binary;
 
 import com.google.common.collect.Lists;
-import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.storage.filer.MemoryBackedWALFiler;

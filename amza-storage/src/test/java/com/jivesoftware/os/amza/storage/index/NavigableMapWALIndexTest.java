@@ -15,10 +15,10 @@
  */
 package com.jivesoftware.os.amza.storage.index;
 
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.util.AbstractMap;
 import java.util.Collections;
 import org.testng.annotations.Test;

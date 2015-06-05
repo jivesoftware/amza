@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TakeQuorum;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TimestampedValue;
@@ -12,18 +13,20 @@ import com.jivesoftware.os.amza.shared.take.TakeCursors;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 
 /**
- *
  * @author jonathan.colt
  */
 public class Coolwhip {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaPartitionAPIProvider provider;
     private final AmzaPartitionAwaitQuorum awaitQuorum;
@@ -46,7 +49,9 @@ public class Coolwhip {
             if (takeQuorum.getTakeOrderHosts().size() < desiredTakeQuorum) {
                 throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + desiredTakeQuorum);
             } else {
-                awaitQuorum.await(partitionName, takeQuorum, desiredTakeQuorum, timeUnit.toMillis(timeout));
+                long timeoutMillis = timeUnit.toMillis(timeout);
+                LOG.debug("Awaiting quorum for {} ms", timeoutMillis);
+                awaitQuorum.await(partitionName, takeQuorum, desiredTakeQuorum, timeoutMillis);
             }
         }
     }
@@ -75,7 +80,7 @@ public class Coolwhip {
         long transactionId,
         Scan<TimestampedValue> scan) throws Exception {
 
-        Map<RingMember, Long> ringMemberToMaxTxId = new HashMap<>();
+        Map<RingMember, Long> ringMemberToMaxTxId = Maps.newHashMap();
         TakeResult takeResult = provider.getPartition(partitionName).takeFromTransactionId(transactionId, (highwater) -> {
             for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                 ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, maxMerge);

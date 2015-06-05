@@ -80,7 +80,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaParti
                 for (PartitionName partitionName : partitionNames) {
 
                     Map<String, Object> row = new HashMap<>();
-                    row.put("type", partitionName.isSystemPartition()? "SYSTEM" : "USER");
+                    row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                     row.put("name", partitionName.getPartitionName());
                     row.put("ringName", partitionName.getRingName());
 

@@ -46,7 +46,7 @@ public class RowsChanged implements Commitable<WALValue> {
     public VersionedPartitionName getVersionedPartitionName() {
         return versionedPartitionName;
     }
-    
+
     public long getOldestRowTxId() {
         return oldestApply;
     }

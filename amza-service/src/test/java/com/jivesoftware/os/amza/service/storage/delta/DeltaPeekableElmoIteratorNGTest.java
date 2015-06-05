@@ -3,10 +3,10 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.storage.WALRow;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +36,7 @@ public class DeltaPeekableElmoIteratorNGTest {
             for (int i = 0; i < 128; i++) {
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
-                    WALKey key = new WALKey(new byte[]{(byte) i});
+                    WALKey key = new WALKey(new byte[] { (byte) i });
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     wal.put(key, pointer);
@@ -46,7 +46,7 @@ public class DeltaPeekableElmoIteratorNGTest {
                 }
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
-                    WALKey key = new WALKey(new byte[]{(byte) i});
+                    WALKey key = new WALKey(new byte[] { (byte) i });
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     other.put(key, pointer);

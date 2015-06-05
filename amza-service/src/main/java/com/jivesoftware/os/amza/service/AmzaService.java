@@ -280,7 +280,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         return partitionWatcher.unwatch(partitionName);
     }
 
-    
+
     @Override
     public void streamingTakeFromPartition(DataOutputStream dos,
         RingMember ringMember,
@@ -349,7 +349,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                     partitionStatusStorage.markAsKetchup(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
             }
         }
     }

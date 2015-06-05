@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.collect.ListMultimap;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +35,7 @@ public class MemoryBackedHighwaterStorage implements HighwaterStorage {
 
     @Override
     public boolean expunge(VersionedPartitionName versionedPartitionName) throws Exception {
-        for (ConcurrentHashMap<VersionedPartitionName, Long> got:lastTransactionIds.values()) {
+        for (ConcurrentHashMap<VersionedPartitionName, Long> got : lastTransactionIds.values()) {
             got.remove(versionedPartitionName);
         }
         return true;

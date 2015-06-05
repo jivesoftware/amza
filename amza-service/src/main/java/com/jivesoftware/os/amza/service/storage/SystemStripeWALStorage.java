@@ -1,14 +1,14 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.service.storage.delta.StripeWALStorage;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -67,8 +67,11 @@ public class SystemStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void rangeScan(VersionedPartitionName versionedPartitionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to, Scan<WALValue> scan) throws
-        Exception {
+    public void rangeScan(VersionedPartitionName versionedPartitionName,
+        RangeScannable<WALValue> rangeScannable,
+        WALKey from,
+        WALKey to,
+        Scan<WALValue> scan) throws Exception {
         rangeScannable.rangeScan(from, to, scan);
     }
 

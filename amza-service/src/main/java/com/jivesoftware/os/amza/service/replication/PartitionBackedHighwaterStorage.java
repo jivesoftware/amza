@@ -3,15 +3,15 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.google.common.collect.ListMultimap;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -167,7 +167,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             (highwater, scan) -> {
                 long timestamp = orderIdProvider.nextId();
                 for (Entry<RingMember, Collection<VersionedPartitionName>> e : memberToPartitionNames.asMap().entrySet()) {
-                    final ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(e.getKey());
+                    final ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(
+                        e.getKey());
                     if (partitionHighwaterUpdates != null) {
                         for (VersionedPartitionName versionedPartitionName : e.getValue()) {
                             HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.get(versionedPartitionName);

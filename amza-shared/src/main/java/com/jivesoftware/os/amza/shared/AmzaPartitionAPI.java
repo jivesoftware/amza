@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
+import java.util.Arrays;
 import java.util.Collection;
 
 /**
@@ -74,6 +75,13 @@ public interface AmzaPartitionAPI {
             return value;
         }
 
+        @Override
+        public String toString() {
+            return "TimestampedValue{" +
+                "timestampId=" + timestampId +
+                ", value=" + Arrays.toString(value) +
+                '}';
+        }
     }
 
 }

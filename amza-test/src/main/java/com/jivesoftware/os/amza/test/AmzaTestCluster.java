@@ -71,7 +71,7 @@ public class AmzaTestCluster {
 
     private final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private static final TimestampedOrderIdProvider ORDER_ID_PROVIDER = new OrderIdProviderImpl(new ConstantWriterIdProvider(1),
+    public static final TimestampedOrderIdProvider ORDER_ID_PROVIDER = new OrderIdProviderImpl(new ConstantWriterIdProvider(1),
         new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
 
     private final File workingDirctory;
@@ -119,7 +119,7 @@ public class AmzaTestCluster {
             if (amzaNode == null) {
                 throw new IllegalStateException("Service doesn't exists for " + node.getValue());
             } else {
-                boolean isOnline = amzaNode.takePartition(partitionName, transactionId, tookRowUpdates);
+                boolean isOnline = amzaNode.takePartition(takerRingMember, partitionName, transactionId, tookRowUpdates);
                 return new StreamingTakeResult(null, null, isOnline ? new HashMap<>() : null);
             }
         };
@@ -271,13 +271,13 @@ public class AmzaTestCluster {
             AmzaPartition amzaPartition = amzaService.getPartition(partitionName);
             List<byte[]> got = new ArrayList<>();
             amzaPartition.get(Collections.singletonList(key.getKey()), (rowTxId, key1, timestampedValue) -> {
-                got.add(timestampedValue.getValue());
+                got.add(timestampedValue != null ? timestampedValue.getValue() : null);
                 return true;
             });
             return got.get(0);
         }
 
-        public boolean takePartition(PartitionName partitionName, long transactionId, RowStream rowStream) {
+        public boolean takePartition(RingMember takerRingMember, PartitionName partitionName, long transactionId, RowStream rowStream) {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
@@ -295,6 +295,18 @@ public class AmzaTestCluster {
                 StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
                 StreamingTakesConsumer.StreamingTakeConsumed consumed = streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()),
                     rowStream);
+                    /*
+                    (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+                        if (!partitionName.isSystemPartition()) {
+                            if (rowType == RowType.primary) {
+                                BinaryPrimaryRowMarshaller binaryPrimaryRowMarshaller = new BinaryPrimaryRowMarshaller();
+                                System.out.println("TOOK:" + takerRingMember + "." + partitionName +
+                                    " FROM:" + ringMember + " VALUE:" + binaryPrimaryRowMarshaller.fromRow(row));
+                            }
+                        }
+                        return rowStream.row(rowFP, rowTxId, rowType, row);
+                    });
+                    */
                 return consumed.isOnline;
             } catch (Exception e) {
                 throw new RuntimeException(e);

@@ -20,7 +20,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TimestampedValue;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public class WALValue implements Serializable {
@@ -61,7 +60,7 @@ public class WALValue implements Serializable {
         return "WALValue{"
             + "timestamp=" + timestamp
             + ", tombstoned=" + tombstoned
-            + ", value=" + (value != null ? new String(value, StandardCharsets.US_ASCII) : "null") + '}';
+            + ", value=" + (value != null ? Arrays.toString(value) : "null") + '}';
     }
 
     @Override

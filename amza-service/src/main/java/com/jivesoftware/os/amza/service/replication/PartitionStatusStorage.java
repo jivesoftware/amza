@@ -243,5 +243,13 @@ public class PartitionStatusStorage implements TxPartitionStatus {
             this.status = status;
             this.version = version;
         }
+
+        @Override
+        public String toString() {
+            return "VersionedStatus{" +
+                "status=" + status +
+                ", version=" + version +
+                '}';
+        }
     }
 }

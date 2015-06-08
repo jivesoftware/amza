@@ -22,7 +22,6 @@ import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -81,7 +80,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
         });
 
         Collection<RingHost> recentTakers = recentPartitionTakers.recentTakers(partitionName);
-        return new TakeQuorum(ringMember, commit.getLargestCommitedTxId(), recentTakers);
+        return new TakeQuorum(ringMember, commit.getLargestCommittedTxId(), recentTakers);
     }
 
     @Override
@@ -89,19 +88,19 @@ public class AmzaPartition implements AmzaPartitionAPI {
         for (byte[] key : keys) {
             WALKey walKey = new WALKey(key);
             WALValue got = partitionStripe.get(partitionName, walKey); // TODO Hmmm add a multi get?
-            valuesStream.row(-1, walKey, got == null ? null : got.toTimestampedValue());
+            valuesStream.row(-1, walKey, got == null || got.getTombstoned() ? null : got.toTimestampedValue());
         }
     }
 
     @Override
     public void scan(byte[] from, byte[] to, Scan<TimestampedValue> scan) throws Exception {
         if (from == null && to == null) {
-            partitionStripe.rowScan(partitionName, (rowTxId, key, scanned) -> scan.row(rowTxId, key, scanned.toTimestampedValue()));
+            partitionStripe.rowScan(partitionName, (rowTxId, key, scanned) -> scanned.getTombstoned() || scan.row(rowTxId, key, scanned.toTimestampedValue()));
         } else {
             partitionStripe.rangeScan(partitionName,
                 from == null ? new WALKey(new byte[0]) : new WALKey(from),
                 to == null ? null : new WALKey(to),
-                (rowTxId, key, scanned) -> scan.row(rowTxId, key, scanned.toTimestampedValue()));
+                (rowTxId, key, scanned) -> scanned.getTombstoned() || scan.row(rowTxId, key, scanned.toTimestampedValue()));
         }
     }
 
@@ -118,10 +117,6 @@ public class AmzaPartition implements AmzaPartitionAPI {
             return false;
         });
         return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd);
-    }
-
-    public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        partitionStripe.takeRowUpdatesSince(partitionName, transactionId, rowStream);
     }
 
     //  Use for testing

@@ -363,7 +363,7 @@ public class IndexedWAL implements WALStorage {
             final NavigableMap<WALKey, Long> keyToRowPointer = new TreeMap<>();
 
             if (apply.isEmpty()) {
-                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers, -1);
             } else {
                 walTx.write((WALWriter rowWriter) -> {
                     List<Long> rawTransactionIds = useUpdateTxId ? new ArrayList<>() : null;
@@ -434,7 +434,8 @@ public class IndexedWAL implements WALStorage {
                             stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue(),
                             value.getTimestampId()));
                     }
-                    rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                    rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers,
+                        indexCommitedUpToTxId.longValue());
                 }
             }
 

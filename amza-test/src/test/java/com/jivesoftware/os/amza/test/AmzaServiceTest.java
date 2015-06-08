@@ -66,12 +66,12 @@ public class AmzaServiceTest {
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
                             WALKey indexKey = new WALKey(key.getBytes());
-                            node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), System.currentTimeMillis(), tombstone);
+                            node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), AmzaTestCluster.ORDER_ID_PROVIDER.nextId(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
                             node.get(partitionName, indexKey);
                         }
                     } catch (Exception x) {
-                        System.out.println(x.getMessage());
+                        x.printStackTrace();
                     }
 
                     try {
@@ -86,7 +86,7 @@ public class AmzaServiceTest {
                             }
                         }
                     } catch (Exception x) {
-                        System.out.println(x.getMessage());
+                        x.printStackTrace();
                     }
 
                     try {
@@ -100,7 +100,7 @@ public class AmzaServiceTest {
                             }
                         }
                     } catch (Exception x) {
-                        System.out.println(x.getMessage());
+                        x.printStackTrace();
                     }
 
                     try {
@@ -134,6 +134,7 @@ public class AmzaServiceTest {
                 for (int j = 0; j < nodes.size(); j++) {
                     AmzaNode b = nodes.get(j);
                     if (!a.compare(b)) {
+                        System.out.println(a + " is NOT consistent with " + b);
                         falseCount++;
                         break DONE;
                     }

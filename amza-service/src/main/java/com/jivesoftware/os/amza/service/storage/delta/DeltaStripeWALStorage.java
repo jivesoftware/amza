@@ -325,7 +325,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             }
 
             if (apply.isEmpty()) {
-                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers, -1);
             } else {
                 PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
                 WALHighwater partitionHighwater = null;
@@ -354,7 +354,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                         }
                     }
                     delta.appendTxFps(updateApplied.txId, updateApplied.keyToRowPointer.values());
-                    rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers);
+                    rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers, updateApplied.txId);
                 }
             }
 
@@ -568,11 +568,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
     /**
      * Stupid expensive!!!!
-     *
-     * @param partitionName PartitionName
-     * @param storage       Storage
-     * @return long
-     * @throws Exception .
      */
     @Override
     public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {

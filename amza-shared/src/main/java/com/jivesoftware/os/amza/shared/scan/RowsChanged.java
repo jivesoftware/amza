@@ -30,17 +30,20 @@ public class RowsChanged implements Commitable<WALValue> {
     private final Table<Long, WALKey, WALValue> apply;
     private final Map<WALKey, WALTimestampId> remove;
     private final Map<WALKey, WALTimestampId> clobber;
+    private final long largestCommittedTxId;
 
     public RowsChanged(VersionedPartitionName versionedPartitionName,
         long oldestApply,
         Table<Long, WALKey, WALValue> apply,
         Map<WALKey, WALTimestampId> remove,
-        Map<WALKey, WALTimestampId> clobber) {
+        Map<WALKey, WALTimestampId> clobber,
+        long largestCommittedTxId) {
         this.versionedPartitionName = versionedPartitionName;
         this.oldestApply = oldestApply;
         this.apply = apply;
         this.remove = remove;
         this.clobber = clobber;
+        this.largestCommittedTxId = largestCommittedTxId;
     }
 
     public VersionedPartitionName getVersionedPartitionName() {
@@ -86,6 +89,10 @@ public class RowsChanged implements Commitable<WALValue> {
         }
     }
 
+    public long getLargestCommittedTxId() {
+        return largestCommittedTxId;
+    }
+
     @Override
     public String toString() {
         return "RowsChanged{"
@@ -94,10 +101,6 @@ public class RowsChanged implements Commitable<WALValue> {
             + ", apply=" + apply
             + ", remove=" + remove
             + ", clobber=" + clobber + '}';
-    }
-
-    public long getLargestCommitedTxId() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
 }

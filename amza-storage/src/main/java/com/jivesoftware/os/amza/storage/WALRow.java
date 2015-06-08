@@ -16,4 +16,11 @@ public class WALRow {
         this.value = value;
     }
 
+    @Override
+    public String toString() {
+        return "WALRow{" +
+            "key=" + key +
+            ", value=" + value +
+            '}';
+    }
 }

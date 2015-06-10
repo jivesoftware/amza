@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
@@ -66,6 +67,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     private final AmzaRingReader ringReader;
     private final AmzaHostRing amzaHostRing;
     private final HighwaterStorage highwaterStorage;
+    private final AckWaters ackWaters;
     private final PartitionStatusStorage partitionStatusStorage;
     private final PartitionChangeTaker changeTaker;
     private final PartitionCompactor partitionCompactor;
@@ -81,6 +83,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         AmzaRingReader ringReader,
         AmzaHostRing amzaHostRing,
         HighwaterStorage highwaterMarks,
+        AckWaters ackWaters,
         PartitionStatusStorage partitionStatusStorage,
         PartitionChangeTaker changeTaker,
         PartitionCompactor partitionCompactor,
@@ -95,6 +98,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         this.ringReader = ringReader;
         this.amzaHostRing = amzaHostRing;
         this.highwaterStorage = highwaterMarks;
+        this.ackWaters = ackWaters;
         this.partitionStatusStorage = partitionStatusStorage;
         this.changeTaker = changeTaker;
         this.partitionCompactor = partitionCompactor;
@@ -237,6 +241,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
             partitionName,
             partitionStripeProvider.getPartitionStripe(partitionName),
             highwaterStorage,
+            ackWaters,
             recentPartitionTakers);
     }
 
@@ -292,6 +297,8 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         boolean needsToMarkAsKetchup = partitionStripe.takeRowUpdatesSince(partitionName, highestTransactionId,
             (versionedPartitionName, partitionStatus, streamer) -> {
                 if (partitionStatus == TxPartitionStatus.Status.ONLINE) {
+                    ackWaters.set(ringHost, versionedPartitionName, highestTransactionId);
+                    dos.writeLong(versionedPartitionName.getPartitionVersion());
                     dos.writeByte(1); // fully online
                     bytes.increment();
                     RingNeighbors hostRing = amzaHostRing.getRingNeighbors(partitionName.getRingName());
@@ -325,11 +332,11 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                     recentPartitionTakers.took(ringMember, ringHost, partitionName);
                     return false;
                 } else {
+                    dos.writeLong(-1);
                     dos.writeByte(0); // not online
                     dos.writeByte(0); // last entry marker
                     dos.writeByte(0); // last entry marker
                     bytes.add(3);
-
                     if (versionedPartitionName == null || partitionStatus == null) {
                         // someone thinks we're a member for this partition
                         return true;
@@ -349,9 +356,16 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                     partitionStatusStorage.markAsKetchup(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
             }
         }
+    }
+
+    @Override
+    public void takeAcks(RingMember ringMember, RingHost ringHost, StreamableAcks acks) throws Exception {
+        acks.stream((VersionedPartitionName versionedPartitionName, long txId) -> {
+            ackWaters.set(ringHost, versionedPartitionName, txId);
+        });
     }
 
 }

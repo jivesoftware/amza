@@ -17,7 +17,9 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
+import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -32,6 +34,8 @@ import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
 import java.util.Collection;
 import org.apache.commons.lang.mutable.MutableBoolean;
@@ -40,12 +44,15 @@ import org.apache.commons.lang.mutable.MutableLong;
 
 public class AmzaPartition implements AmzaPartitionAPI {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
     private final RingMember ringMember;
     private final PartitionName partitionName;
     private final PartitionStripe partitionStripe;
     private final HighwaterStorage highwaterStorage;
+    private final AckWaters ackWaters;
     private final RecentPartitionTakers recentPartitionTakers;
 
     public AmzaPartition(AmzaStats amzaStats,
@@ -54,6 +61,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
         PartitionName partitionName,
         PartitionStripe partitionStripe,
         HighwaterStorage highwaterStorage,
+        AckWaters ackWaters,
         RecentPartitionTakers recentPartitionTakers) {
 
         this.amzaStats = amzaStats;
@@ -62,6 +70,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
         this.partitionName = partitionName;
         this.partitionStripe = partitionStripe;
         this.highwaterStorage = highwaterStorage;
+        this.ackWaters = ackWaters;
         this.recentPartitionTakers = recentPartitionTakers;
     }
 
@@ -70,7 +79,10 @@ public class AmzaPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public TakeQuorum commit(Commitable<WALValue> updates) throws Exception {
+    public TakeQuorum commit(Commitable<WALValue> updates,
+        int desiredQuorum,
+        long timeoutInMillis) throws Exception {
+
         long timestampId = orderIdProvider.nextId();
         RowsChanged commit = partitionStripe.commit(partitionName, Optional.absent(), true, (highwaters, scan) -> {
             updates.commitable(highwaters, (rowTxId, key, scanned) -> {
@@ -80,6 +92,16 @@ public class AmzaPartition implements AmzaPartitionAPI {
         });
 
         Collection<RingHost> recentTakers = recentPartitionTakers.recentTakers(partitionName);
+
+        if (desiredQuorum > 0) {
+            if (recentTakers.size() < desiredQuorum) {
+                throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + desiredQuorum);
+            } else {
+                LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
+                ackWaters.await(commit.getVersionedPartitionName(), commit.getLargestCommittedTxId(), recentTakers, desiredQuorum, timeoutInMillis);
+            }
+        }
+
         return new TakeQuorum(ringMember, commit.getLargestCommittedTxId(), recentTakers);
     }
 

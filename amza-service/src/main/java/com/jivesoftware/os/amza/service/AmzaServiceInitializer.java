@@ -32,6 +32,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
+import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionTx;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
@@ -77,6 +78,7 @@ public class AmzaServiceInitializer {
         public int numberOfApplierThreads = 8;
         public int numberOfCompactorThreads = 8;
         public int numberOfTakerThreads = 8;
+        public int numberOfAckerThreads = 8;
         public int numberOfReplicatorThreads = 24;
 
         public int corruptionParanoiaFactor = 10;
@@ -211,6 +213,7 @@ public class AmzaServiceInitializer {
             takeFailureListener,
             config.takeFromNeighborsIntervalInMillis,
             config.numberOfTakerThreads,
+            config.numberOfAckerThreads,
             config.hardFsync);
 
         PartitionCompactor partitionCompactor = new PartitionCompactor(amzaStats,
@@ -224,12 +227,14 @@ public class AmzaServiceInitializer {
             partitionStripeProvider);
 
         RecentPartitionTakers recentPartitionTakers = new RecentPartitionTakers();
+        AckWaters ackWaters = new AckWaters();
 
         return new AmzaService(orderIdProvider,
             amzaStats,
             amzaRingReader,
             amzaHostRing,
             highwaterStorage,
+            ackWaters,
             partitionStatusStorage,
             changeTaker,
             partitionCompactor,

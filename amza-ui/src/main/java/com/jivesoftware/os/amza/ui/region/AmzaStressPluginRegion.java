@@ -220,7 +220,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                 updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(input1.getKey().getBytes(),
                     input1.getValue().getBytes())), -1);
-                amzaPartition.commit(updates);
+                amzaPartition.commit(updates, 1, 30_000); // TODO expose to UI
 
 
             } catch (Exception x) {

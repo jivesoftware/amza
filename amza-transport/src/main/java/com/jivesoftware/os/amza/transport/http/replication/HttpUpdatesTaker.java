@@ -35,6 +35,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.BufferedInputStream;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -48,6 +49,18 @@ public class HttpUpdatesTaker implements UpdatesTaker {
 
     public HttpUpdatesTaker(AmzaStats amzaStats) {
         this.amzaStats = amzaStats;
+    }
+
+    @Override
+    public boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, Collection<AckTaken> ackTook) {
+        try {
+            return getRequestHelper(ringHost).executeRequest(ackTook,
+                "/amza/changes/acked/" + ringMember.getMember() + "/" + ringHost.getHost() + "/" + ringHost.getPort(),
+                Boolean.class, false);
+        } catch (Exception x) {
+            LOG.warn("Failed to deliver acks for ringHost:{} acks:{}", new Object[]{ringHost, ackTook}, x);
+            return false;
+        }
     }
 
     /**
@@ -73,15 +86,15 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         try {
             httpStreamResponse = getRequestHelper(node.getValue()).executeStreamingPostRequest(takeRequest, "/amza/changes/streamingTake");
         } catch (Exception e) {
-            return new StreamingTakeResult(e, null, null);
+            return new StreamingTakeResult(-1, e, null, null);
         }
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
             StreamingTakeConsumed consumed = streamingTakesConsumer.consume(bis, tookRowUpdates);
             amzaStats.netStats.read.addAndGet(consumed.bytes);
-            return new StreamingTakeResult(null, null, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
+            return new StreamingTakeResult(consumed.partitionVersion, null, null, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
         } catch (Exception e) {
-            return new StreamingTakeResult(null, e, null);
+            return new StreamingTakeResult(-1, null, e, null);
         } finally {
             httpStreamResponse.close();
         }

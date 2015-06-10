@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker.AckTaken;
 import com.jivesoftware.os.amza.shared.take.UpdatesTaker.StreamingTakeResult;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
@@ -34,11 +35,13 @@ import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -59,6 +62,7 @@ public class PartitionChangeTaker {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private ScheduledExecutorService masterTakerThreadPool;
     private ExecutorService slaveTakerThreadPool;
+    private ExecutorService ackerThreadPool;
     private final AmzaRingReader amzaRingReader;
     private final RingHost ringHost;
     private final AmzaStats amzaStats;
@@ -71,6 +75,7 @@ public class PartitionChangeTaker {
     private final Optional<TakeFailureListener> takeFailureListener;
     private final long takeFromNeighborsIntervalInMillis;
     private final int numberOfTakerThreads;
+    private final int numberOfAckerThreads;
     private final boolean hardFlush;
 
     public PartitionChangeTaker(AmzaStats amzaStats,
@@ -85,6 +90,7 @@ public class PartitionChangeTaker {
         Optional<TakeFailureListener> takeFailureListener,
         long takeFromNeighborsIntervalInMillis,
         int numberOfTakerThreads,
+        int numberOfAckerThreads,
         boolean hardFlush) {
 
         this.amzaStats = amzaStats;
@@ -99,6 +105,7 @@ public class PartitionChangeTaker {
         this.takeFailureListener = takeFailureListener;
         this.takeFromNeighborsIntervalInMillis = takeFromNeighborsIntervalInMillis;
         this.numberOfTakerThreads = numberOfTakerThreads;
+        this.numberOfAckerThreads = numberOfAckerThreads;
         this.hardFlush = hardFlush;
     }
 
@@ -106,6 +113,7 @@ public class PartitionChangeTaker {
 
         if (masterTakerThreadPool == null) {
             slaveTakerThreadPool = Executors.newFixedThreadPool(numberOfTakerThreads);
+            ackerThreadPool = Executors.newFixedThreadPool(numberOfAckerThreads);
             masterTakerThreadPool = Executors.newScheduledThreadPool(stripes.length + 1, new ThreadFactoryBuilder().setNameFormat(
                 "masterTakeChanges-%d").build());
             for (int i = 0; i < stripes.length; i++) {
@@ -138,6 +146,44 @@ public class PartitionChangeTaker {
         }
     }
 
+    static class RingMemberAndHost {
+
+        private final RingMember ringMember;
+        private final RingHost ringHost;
+
+        public RingMemberAndHost(RingMember ringMember, RingHost ringHost) {
+            this.ringMember = ringMember;
+            this.ringHost = ringHost;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 3;
+            hash = 11 * hash + Objects.hashCode(this.ringMember);
+            hash = 11 * hash + Objects.hashCode(this.ringHost);
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final RingMemberAndHost other = (RingMemberAndHost) obj;
+            if (!Objects.equals(this.ringMember, other.ringMember)) {
+                return false;
+            }
+            if (!Objects.equals(this.ringHost, other.ringHost)) {
+                return false;
+            }
+            return true;
+        }
+
+    }
+
     public void takeChanges(PartitionStripe stripe) throws Exception {
         while (true) {
             ListMultimap<RingMember, VersionedPartitionName> flushMap = Multimaps.synchronizedListMultimap(
@@ -146,6 +192,8 @@ public class PartitionChangeTaker {
             Set<VersionedPartitionName> ketchupSet = Collections.newSetFromMap(Maps.newConcurrentMap());
             SetMultimap<VersionedPartitionName, RingMember> membersUnreachable = Multimaps.synchronizedSetMultimap(
                 HashMultimap.<VersionedPartitionName, RingMember>create());
+
+            ListMultimap<RingMemberAndHost, AckTaken> ackMap = Multimaps.synchronizedListMultimap(ArrayListMultimap.<RingMemberAndHost, AckTaken>create());
 
             List<Future<?>> futures = new ArrayList<>();
             stripe.txAllPartitions((versionedPartitionName, partitionStatus) -> {
@@ -158,6 +206,7 @@ public class PartitionChangeTaker {
                             try {
                                 List<TookResult> took = takeChanges(hostRing.getAboveRing(), stripe, versionedPartitionName,
                                     partitionProperties.takeFromFactor);
+
                                 boolean allInKetchup = true;
                                 boolean oneTookFully = false;
                                 for (TookResult t : took) {
@@ -166,12 +215,13 @@ public class PartitionChangeTaker {
                                     }
                                     if (t.tookFully) {
                                         oneTookFully = true;
+                                        ackMap.put(new RingMemberAndHost(t.ringMember, t.ringHost), new AckTaken(t.versionedPartitionName, t.txId));
                                     }
                                     if (t.flushedAny) {
-                                        flushMap.put(t.versionedRingMember, versionedPartitionName);
+                                        flushMap.put(t.ringMember, versionedPartitionName);
                                     }
                                     if (t.tookUnreachable) {
-                                        membersUnreachable.put(versionedPartitionName, t.versionedRingMember);
+                                        membersUnreachable.put(versionedPartitionName, t.ringMember);
                                     }
                                 }
                                 if (allInKetchup) {
@@ -210,20 +260,45 @@ public class PartitionChangeTaker {
             } else {
                 stripe.flush(hardFlush);
                 highwaterStorage.flush(flushMap);
+
+                List<Future<?>> ackFutures = new ArrayList<>();
+                for (Entry<RingMemberAndHost, Collection<AckTaken>> e : ackMap.asMap().entrySet()) {
+                    futures.add(ackerThreadPool.submit(() -> {
+                        try {
+                            updatesTaker.ackTakenUpdate(e.getKey().ringMember, e.getKey().ringHost, e.getValue());
+                        } catch (Exception x) {
+                            LOG.warn("Failed to ack for " + e.getKey(), x);
+                        }
+                    }));
+                }
+                for (Future<?> f : ackFutures) {
+                    try {
+                        f.get();
+                    } catch (ExecutionException x) {
+                        LOG.warn("Failed to ack.", x);
+                    }
+                }
             }
         }
     }
 
     static class TookResult {
 
-        public final RingMember versionedRingMember;
+        public final RingMember ringMember;
+        public final RingHost ringHost;
+        public final VersionedPartitionName versionedPartitionName;
+        public final long txId;
         public final boolean flushedAny;
         public final boolean tookFully;
         public final boolean tookError;
         public final boolean tookUnreachable;
 
-        public TookResult(RingMember ringMember, boolean flushedAny, boolean tookFully, boolean tookError, boolean tookUnreachable) {
-            this.versionedRingMember = ringMember;
+        public TookResult(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName,
+            long txId, boolean flushedAny, boolean tookFully, boolean tookError, boolean tookUnreachable) {
+            this.ringMember = ringMember;
+            this.ringHost = ringHost;
+            this.versionedPartitionName = versionedPartitionName;
+            this.txId = txId;
             this.flushedAny = flushedAny;
             this.tookFully = tookFully;
             this.tookError = tookError;
@@ -278,7 +353,7 @@ public class PartitionChangeTaker {
                     if (amzaStats.takeErrors.count(takeFromNode) == 0) {
                         LOG.warn("Error while taking from host:{}", takeFromNode);
                         LOG.trace("Error while taking from host:{} partition:{} takeFromFactor:{}",
-                            new Object[] { takeFromNode, versionedPartitionName, takeFromFactor }, streamingTakeResult.error);
+                            new Object[]{takeFromNode, versionedPartitionName, takeFromFactor}, streamingTakeResult.error);
                     }
                     amzaStats.takeErrors.add(ringMember);
                 } else if (streamingTakeResult.unreachable != null) {
@@ -288,7 +363,7 @@ public class PartitionChangeTaker {
                     if (amzaStats.takeErrors.count(takeFromNode) == 0) {
                         LOG.debug("Unreachable while taking from host:{}", takeFromNode);
                         LOG.trace("Unreachable while taking from host:{} partition:{} takeFromFactor:{}",
-                            new Object[] { takeFromNode, versionedPartitionName, takeFromFactor }, streamingTakeResult.unreachable);
+                            new Object[]{takeFromNode, versionedPartitionName, takeFromFactor}, streamingTakeResult.unreachable);
                     }
                     amzaStats.takeErrors.add(ringMember);
                 } else {
@@ -301,6 +376,9 @@ public class PartitionChangeTaker {
                 }
 
                 tookFrom.add(new TookResult(ringMember,
+                    takeFromNode.getValue(),
+                    new VersionedPartitionName(versionedPartitionName.getPartitionName(), streamingTakeResult.partitionVersion),
+                    takeRowStream.largestFlushedTxId(),
                     updates > 0,
                     tookFully,
                     streamingTakeResult.error != null,
@@ -338,6 +416,7 @@ public class PartitionChangeTaker {
         private final Map<WALKey, WALValue> batch = new HashMap<>();
         private final MutableLong oldestTxId = new MutableLong(Long.MAX_VALUE);
         private final MutableLong lastTxId;
+        private final MutableLong flushedTxId;
         private final AtomicInteger streamed = new AtomicInteger(0);
         private final AtomicInteger flushed = new AtomicInteger(0);
         private final AtomicReference<WALHighwater> highwater = new AtomicReference<>();
@@ -356,6 +435,7 @@ public class PartitionChangeTaker {
             this.ringMember = ringMember;
             this.highWaterMark = new MutableLong(lastHighwaterMark);
             this.lastTxId = new MutableLong(Long.MIN_VALUE);
+            this.flushedTxId = new MutableLong(-1);
         }
 
         @Override
@@ -364,8 +444,8 @@ public class PartitionChangeTaker {
                 if (lastTxId.longValue() == Long.MIN_VALUE) {
                     lastTxId.setValue(txId);
                 } else if (lastTxId.longValue() != txId) {
-                    lastTxId.setValue(txId);
                     flush();
+                    lastTxId.setValue(txId);
                     batch.clear();
                     oldestTxId.setValue(Long.MAX_VALUE);
                 }
@@ -398,6 +478,7 @@ public class PartitionChangeTaker {
         }
 
         public int flush() throws Exception {
+            flushedTxId.setValue(lastTxId.longValue());
             int numFlushed = 0;
             int batchSize = batch.size();
             if (!batch.isEmpty()) {
@@ -433,6 +514,9 @@ public class PartitionChangeTaker {
             }
             return flushed.get();
         }
-    }
 
+        public long largestFlushedTxId() {
+            return flushedTxId.longValue();
+        }
+    }
 }

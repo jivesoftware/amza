@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.ring.AmzaRing;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.TakeRequest;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -27,6 +28,7 @@ import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 import java.util.NavigableMap;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -125,6 +127,27 @@ public class AmzaReplicationRestEndpoints {
         } catch (Exception x) {
             LOG.warn("Failed to apply changeset: " + takeRequest, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to changeset " + takeRequest, x);
+        }
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/changes/acked/{logicalName}/{host}/{port}")
+    public Response acks(@PathParam("logicalName") String ringMemberName,
+        @PathParam("host") String ringHostName,
+        @PathParam("port") int ringHostPort,
+        List<UpdatesTaker.AckTaken> acks) {
+        try {
+            amzaInstance.takeAcks(new RingMember(ringMemberName), new RingHost(ringHostName, ringHostPort), (AmzaInstance.AcksStream acksStream) -> {
+                for (UpdatesTaker.AckTaken ack : acks) {
+                    acksStream.stream(ack.partitionName, ack.txId);
+                }
+            });
+            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
+        } catch (Exception x) {
+            LOG.warn("Failed to acked: " + acks, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to acked " + acks, x);
         }
     }
 

@@ -132,7 +132,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     } else {
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         updates.removeAll(rawKeys, -1);
-                        amzaPartition.commit(updates);
+                        amzaPartition.commit(updates, 1, 30_000); // TODO expose to UI
                         amzaPartition.get(rawKeys, (rowTxId, key, value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));

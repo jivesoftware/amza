@@ -16,13 +16,35 @@
 package com.jivesoftware.os.amza.shared.take;
 
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Map.Entry;
 
 public interface UpdatesTaker {
+
+    /*
+     Return true id acks were acked!
+     */
+    boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, Collection<AckTaken> ackTaken);
+
+    static public class AckTaken {
+
+        public VersionedPartitionName partitionName;
+        public long txId;
+
+        public AckTaken() {
+        }
+
+        public AckTaken(VersionedPartitionName partitionName, long txId) {
+            this.partitionName = partitionName;
+            this.txId = txId;
+        }
+
+    }
 
     StreamingTakeResult streamingTakeUpdates(RingMember taker,
         RingHost takerHost,
@@ -33,13 +55,16 @@ public interface UpdatesTaker {
 
     class StreamingTakeResult {
 
+        public final long partitionVersion;
         public final Throwable unreachable;
         public final Throwable error;
         public final Map<RingMember, Long> otherHighwaterMarks;
 
-        public StreamingTakeResult(Exception unreachable,
+        public StreamingTakeResult(long partitionVersion,
+            Exception unreachable,
             Exception error,
             Map<RingMember, Long> otherHighwaterMarks) {
+            this.partitionVersion = partitionVersion;
             this.unreachable = unreachable;
             this.error = error;
             this.otherHighwaterMarks = otherHighwaterMarks;

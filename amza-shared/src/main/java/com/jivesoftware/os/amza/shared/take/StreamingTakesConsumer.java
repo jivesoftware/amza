@@ -15,11 +15,12 @@ public class StreamingTakesConsumer {
 
     public StreamingTakeConsumed consume(InputStream bis, RowStream tookRowUpdates) throws Exception {
         Map<RingMember, Long> neighborsHighwaterMarks = new HashMap<>();
+        long partitionVersion;
         boolean isOnline;
         long bytes = 0;
         try (DataInputStream dis = new DataInputStream(bis)) {
+            partitionVersion = dis.readLong();
             isOnline = dis.readByte() == 1;
-
             while (dis.readByte() == 1) {
                 byte[] ringMemberBytes = new byte[dis.readInt()];
                 dis.readFully(ringMemberBytes);
@@ -38,15 +39,17 @@ public class StreamingTakesConsumer {
                 }
             }
         }
-        return new StreamingTakeConsumed(isOnline, neighborsHighwaterMarks, bytes);
+        return new StreamingTakeConsumed(partitionVersion, isOnline, neighborsHighwaterMarks, bytes);
     }
 
     public static class StreamingTakeConsumed {
+        public final long partitionVersion;
         public final boolean isOnline;
         public final Map<RingMember, Long> neighborsHighwaterMarks;
         public final long bytes;
 
-        public StreamingTakeConsumed(boolean isOnline, Map<RingMember, Long> neighborsHighwaterMarks, long bytes) {
+        public StreamingTakeConsumed(long partitionVersion, boolean isOnline, Map<RingMember, Long> neighborsHighwaterMarks, long bytes) {
+            this.partitionVersion = partitionVersion;
             this.isOnline = isOnline;
             this.neighborsHighwaterMarks = neighborsHighwaterMarks;
             this.bytes = bytes;

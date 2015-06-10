@@ -67,7 +67,7 @@ public class AmzaEndpoints {
             for (int i = 0; i < keys.length; i++) {
                 updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
             }
-            amzaPartition.commit(updates);
+            amzaPartition.commit(updates, 1, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
@@ -85,7 +85,7 @@ public class AmzaEndpoints {
 
             updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(input.getKey()
                 .getBytes(), input.getValue().getBytes())), -1);
-            amzaPartition.commit(updates);
+            amzaPartition.commit(updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -128,7 +128,7 @@ public class AmzaEndpoints {
             AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             updates.remove(key.getBytes(), -1);
-            amzaPartition.commit(updates);
+            amzaPartition.commit(updates, 1, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove partition:" + partition + " key:" + key, x);

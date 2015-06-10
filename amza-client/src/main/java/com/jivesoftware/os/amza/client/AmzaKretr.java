@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.client;
 
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TakeQuorum;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TimestampedValue;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
@@ -19,22 +18,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 
 /**
  * @author jonathan.colt
  */
-public class Coolwhip {
+public class AmzaKretr {  // Aka Partition Client
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final AmzaPartitionAPIProvider provider;
-    private final AmzaPartitionAwaitQuorum awaitQuorum;
+    private final AmzaPartitionAPIProvider partitionAPIProvider;
 
-    public Coolwhip(AmzaPartitionAPIProvider partitionName,
-        AmzaPartitionAwaitQuorum awaitQuorum) {
-        this.provider = partitionName;
-        this.awaitQuorum = awaitQuorum;
+    public AmzaKretr(AmzaPartitionAPIProvider partitionAPIProvider) {
+        this.partitionAPIProvider = partitionAPIProvider;
     }
 
     public void commit(PartitionName partitionName,
@@ -43,56 +38,37 @@ public class Coolwhip {
         long timeout,
         TimeUnit timeUnit) throws Exception {
 
-        AmzaPartitionAPI partition = provider.getPartition(partitionName);
-        TakeQuorum takeQuorum = partition.commit(commitable);
-        if (desiredTakeQuorum > 0) {
-            if (takeQuorum.getTakeOrderHosts().size() < desiredTakeQuorum) {
-                throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + desiredTakeQuorum);
-            } else {
-                long timeoutMillis = timeUnit.toMillis(timeout);
-                LOG.debug("Awaiting quorum for {} ms", timeoutMillis);
-                awaitQuorum.await(partitionName, takeQuorum, desiredTakeQuorum, timeoutMillis);
-            }
-        }
-    }
-
-    public static class FailedToAchieveQuorumException extends Exception {
-
-        public FailedToAchieveQuorumException(String message) {
-            super(message);
-        }
-
+        AmzaPartitionAPI partition = partitionAPIProvider.getPartition(partitionName);
+        partition.commit(commitable, desiredTakeQuorum, timeUnit.toMillis(timeout));
     }
 
     public void get(PartitionName partitionName, Iterable<byte[]> keys, Scan<TimestampedValue> valuesStream) throws Exception {
         // TODO impl quorum reads?
-        provider.getPartition(partitionName).get(keys, valuesStream);
+        partitionAPIProvider.getPartition(partitionName).get(keys, valuesStream);
     }
 
     public void scan(PartitionName partitionName, byte[] from, byte[] to, Scan<TimestampedValue> stream) throws Exception {
         // TODO impl WTF quorum scan? Really
-        provider.getPartition(partitionName).scan(from, to, stream);
+        partitionAPIProvider.getPartition(partitionName).scan(from, to, stream);
     }
-
-    private static final BiFunction<Long, Long, Long> maxMerge = Math::max;
 
     public TakeCursors takeFromTransactionId(PartitionName partitionName,
         long transactionId,
         Scan<TimestampedValue> scan) throws Exception {
 
         Map<RingMember, Long> ringMemberToMaxTxId = Maps.newHashMap();
-        TakeResult takeResult = provider.getPartition(partitionName).takeFromTransactionId(transactionId, (highwater) -> {
+        TakeResult takeResult = partitionAPIProvider.getPartition(partitionName).takeFromTransactionId(transactionId, (highwater) -> {
             for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
-                ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, maxMerge);
+                ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
             }
         }, scan);
 
         if (takeResult.tookToEnd != null) {
             for (WALHighwater.RingMemberHighwater highwater : takeResult.tookToEnd.ringMemberHighwater) {
-                ringMemberToMaxTxId.merge(highwater.ringMember, highwater.transactionId, maxMerge);
+                ringMemberToMaxTxId.merge(highwater.ringMember, highwater.transactionId, Math::max);
             }
         }
-        ringMemberToMaxTxId.merge(takeResult.tookFrom, takeResult.lastTxId, maxMerge);
+        ringMemberToMaxTxId.merge(takeResult.tookFrom, takeResult.lastTxId, Math::max);
 
         List<TakeCursors.RingMemberCursor> cursors = new ArrayList<>();
         for (Map.Entry<RingMember, Long> entry : ringMemberToMaxTxId.entrySet()) {

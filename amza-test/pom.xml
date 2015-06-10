@@ -66,6 +66,12 @@
             <groupId>com.jivesoftware.os.mlogger</groupId>
             <artifactId>core</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-client</artifactId>
+            <version>0.84-SNAPSHOT</version>
+            <type>jar</type>
+        </dependency>
     </dependencies>
     <name>amza-test</name>
 </project>

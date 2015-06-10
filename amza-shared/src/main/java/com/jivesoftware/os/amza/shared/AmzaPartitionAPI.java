@@ -16,17 +16,19 @@ import java.util.Collection;
  */
 public interface AmzaPartitionAPI {
 
-    TakeQuorum commit(Commitable<WALValue> updates) throws Exception;
+    TakeQuorum commit(Commitable<WALValue> updates,
+        int desiredQuorum,
+        long timeoutInMillis) throws Exception;
 
     void get(Iterable<byte[]> keys, Scan<TimestampedValue> valuesStream) throws Exception;
 
     /**
 
-    @param from nullable (inclusive)
-    @param to nullable (exclusive)
-    @param stream
-    @throws Exception
-    */
+     @param from nullable (inclusive)
+     @param to nullable (exclusive)
+     @param stream
+     @throws Exception
+     */
     void scan(byte[] from, byte[] to, Scan<TimestampedValue> stream) throws Exception;
 
     TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception;
@@ -77,10 +79,10 @@ public interface AmzaPartitionAPI {
 
         @Override
         public String toString() {
-            return "TimestampedValue{" +
-                "timestampId=" + timestampId +
-                ", value=" + Arrays.toString(value) +
-                '}';
+            return "TimestampedValue{"
+                + "timestampId=" + timestampId
+                + ", value=" + Arrays.toString(value)
+                + '}';
         }
     }
 

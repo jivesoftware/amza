@@ -75,7 +75,6 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     private final PartitionIndex partitionIndex;
     private final PartitionProvider partitionProvider;
     private final PartitionStripeProvider partitionStripeProvider;
-    private final RecentPartitionTakers recentPartitionTakers;
     private final AmzaPartitionWatcher partitionWatcher;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
@@ -91,7 +90,6 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         PartitionIndex partitionIndex,
         PartitionProvider partitionProvider,
         PartitionStripeProvider partitionStripeProvider,
-        RecentPartitionTakers recentPartitionTakers,
         AmzaPartitionWatcher partitionWatcher) {
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
@@ -106,7 +104,6 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         this.partitionIndex = partitionIndex;
         this.partitionProvider = partitionProvider;
         this.partitionStripeProvider = partitionStripeProvider;
-        this.recentPartitionTakers = recentPartitionTakers;
         this.partitionWatcher = partitionWatcher;
     }
 
@@ -122,7 +119,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         return highwaterStorage;
     }
 
-    public PartitionStatusStorage getPartitionMemberStatusStorage() {
+    public PartitionStatusStorage getPartitionStatusStorage() {
         return partitionStatusStorage;
     }
 
@@ -182,8 +179,10 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
             partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
                 if (partitionStatus == null) {
                     versionedPartitionName = partitionStatusStorage.markAsKetchup(partitionName);
+                    if (properties.takeFromFactor == 0) {
+                        partitionStatusStorage.markAsOnline(versionedPartitionName);
+                    }
                 }
-
                 partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
                 return getPartition(partitionName);
             });
@@ -241,8 +240,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
             partitionName,
             partitionStripeProvider.getPartitionStripe(partitionName),
             highwaterStorage,
-            ackWaters,
-            recentPartitionTakers);
+            ackWaters, ringReader);
     }
 
     public boolean hasPartition(PartitionName partitionName) throws Exception {
@@ -263,9 +261,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
     @Override
     public Set<PartitionName> getPartitionNames() {
-        return Sets.newHashSet(Lists.newArrayList(Iterables.transform(partitionIndex.getAllPartitions(), (VersionedPartitionName input) -> {
-            return input.getPartitionName();
-        })));
+        return Sets.newHashSet(Lists.newArrayList(Iterables.transform(partitionIndex.getAllPartitions(), VersionedPartitionName::getPartitionName)));
     }
 
     public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {
@@ -297,7 +293,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         boolean needsToMarkAsKetchup = partitionStripe.takeRowUpdatesSince(partitionName, highestTransactionId,
             (versionedPartitionName, partitionStatus, streamer) -> {
                 if (partitionStatus == TxPartitionStatus.Status.ONLINE) {
-                    ackWaters.set(ringHost, versionedPartitionName, highestTransactionId);
+                    ackWaters.set(ringMember, versionedPartitionName, highestTransactionId);
                     dos.writeLong(versionedPartitionName.getPartitionVersion());
                     dos.writeByte(1); // fully online
                     bytes.increment();
@@ -329,7 +325,6 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
                     dos.writeByte(0); // last entry marker
                     bytes.increment();
-                    recentPartitionTakers.took(ringMember, ringHost, partitionName);
                     return false;
                 } else {
                     dos.writeLong(-1);
@@ -356,7 +351,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                     partitionStatusStorage.markAsKetchup(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
             }
         }
     }
@@ -364,8 +359,30 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     @Override
     public void takeAcks(RingMember ringMember, RingHost ringHost, StreamableAcks acks) throws Exception {
         acks.stream((VersionedPartitionName versionedPartitionName, long txId) -> {
-            ackWaters.set(ringHost, versionedPartitionName, txId);
+            ackWaters.set(ringMember, versionedPartitionName, txId);
         });
     }
 
+    public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
+        if (!amzaHostRing.isMemberOfRing(partitionName.getRingName())) {
+            throw new IllegalStateException("Not a member of the ring: " + partitionName.getRingName());
+        }
+
+        PartitionProperties properties = partitionIndex.getProperties(partitionName);
+        if (properties == null) {
+            throw new IllegalStateException("No properties for partition: " + partitionName);
+        }
+        partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+            if (partitionStatus == null) {
+                versionedPartitionName = partitionStatusStorage.markAsKetchup(partitionName);
+                if (properties.takeFromFactor == 0) {
+                    partitionStatusStorage.markAsOnline(versionedPartitionName);
+                }
+            }
+            partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
+            return null;
+        });
+
+        partitionStatusStorage.awaitOnline(partitionName, timeoutMillis);
+    }
 }

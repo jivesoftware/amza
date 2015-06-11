@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -37,7 +36,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
-import java.util.Collection;
+import java.util.Set;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -53,7 +52,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
     private final PartitionStripe partitionStripe;
     private final HighwaterStorage highwaterStorage;
     private final AckWaters ackWaters;
-    private final RecentPartitionTakers recentPartitionTakers;
+    private final AmzaRingReader ringReader;
 
     public AmzaPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
@@ -62,7 +61,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
         PartitionStripe partitionStripe,
         HighwaterStorage highwaterStorage,
         AckWaters ackWaters,
-        RecentPartitionTakers recentPartitionTakers) {
+        AmzaRingReader ringReader) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
@@ -71,7 +70,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
         this.partitionStripe = partitionStripe;
         this.highwaterStorage = highwaterStorage;
         this.ackWaters = ackWaters;
-        this.recentPartitionTakers = recentPartitionTakers;
+        this.ringReader = ringReader;
     }
 
     public PartitionName getPartitionName() {
@@ -79,8 +78,8 @@ public class AmzaPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public TakeQuorum commit(Commitable<WALValue> updates,
-        int desiredQuorum,
+    public void commit(Commitable<WALValue> updates,
+        int takeQuorum,
         long timeoutInMillis) throws Exception {
 
         long timestampId = orderIdProvider.nextId();
@@ -91,37 +90,37 @@ public class AmzaPartition implements AmzaPartitionAPI {
             });
         });
 
-        Collection<RingHost> recentTakers = recentPartitionTakers.recentTakers(partitionName);
+        Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(partitionName.getRingName());
 
-        if (desiredQuorum > 0) {
-            if (recentTakers.size() < desiredQuorum) {
-                throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + desiredQuorum);
+        if (takeQuorum > 0) {
+            if (ringMembers.size() < takeQuorum) {
+                throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
             } else {
                 LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-                ackWaters.await(commit.getVersionedPartitionName(), commit.getLargestCommittedTxId(), recentTakers, desiredQuorum, timeoutInMillis);
+                int takenBy = ackWaters.await(commit.getVersionedPartitionName(), commit.getLargestCommittedTxId(), ringMembers, takeQuorum, timeoutInMillis);
+                if (takenBy < takeQuorum) {
+                    throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
+                }
             }
         }
-
-        return new TakeQuorum(ringMember, commit.getLargestCommittedTxId(), recentTakers);
     }
 
     @Override
-    public void get(Iterable<byte[]> keys, Scan<TimestampedValue> valuesStream) throws Exception {
-        for (byte[] key : keys) {
-            WALKey walKey = new WALKey(key);
+    public void get(Iterable<WALKey> keys, Scan<TimestampedValue> valuesStream) throws Exception {
+        for (WALKey walKey : keys) {
             WALValue got = partitionStripe.get(partitionName, walKey); // TODO Hmmm add a multi get?
             valuesStream.row(-1, walKey, got == null || got.getTombstoned() ? null : got.toTimestampedValue());
         }
     }
 
     @Override
-    public void scan(byte[] from, byte[] to, Scan<TimestampedValue> scan) throws Exception {
+    public void scan(WALKey from, WALKey to, Scan<TimestampedValue> scan) throws Exception {
         if (from == null && to == null) {
             partitionStripe.rowScan(partitionName, (rowTxId, key, scanned) -> scanned.getTombstoned() || scan.row(rowTxId, key, scanned.toTimestampedValue()));
         } else {
             partitionStripe.rangeScan(partitionName,
-                from == null ? new WALKey(new byte[0]) : new WALKey(from),
-                to == null ? null : new WALKey(to),
+                from == null ? new WALKey(new byte[0]) : from,
+                to,
                 (rowTxId, key, scanned) -> scanned.getTombstoned() || scan.row(rowTxId, key, scanned.toTimestampedValue()));
         }
     }

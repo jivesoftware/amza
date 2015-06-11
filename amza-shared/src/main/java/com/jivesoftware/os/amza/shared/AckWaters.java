@@ -1,87 +1,63 @@
 package com.jivesoftware.os.amza.shared;
 
+import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AckWaters {
 
-    private final ConcurrentHashMap<RingHost, ConcurrentHashMap<VersionedPartitionName, Long>> ackWaters = new ConcurrentHashMap<>();
-    private final AtomicLong[] changedLocks = new AtomicLong[1024]; // TODO expose to config.
+    private final AwaitNotify<VersionedPartitionName> awaitNotify;
+    private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedPartitionName, Long>> ackWaters = new ConcurrentHashMap<>();
 
-    public AckWaters() {
-        for (int i = 0; i < changedLocks.length; i++) {
-            changedLocks[i] = new AtomicLong();
-        }
+    public AckWaters(int stripingLevel) {
+        this.awaitNotify = new AwaitNotify<>(stripingLevel);
     }
 
-    public void set(RingHost ringHost, VersionedPartitionName partitionName, Long txId) {
-        ConcurrentHashMap<VersionedPartitionName, Long> partitionTxIds = ackWaters.computeIfAbsent(ringHost, (RingHost t) -> {
-            return new ConcurrentHashMap<>();
+    public void set(RingMember ringMember, VersionedPartitionName partitionName, Long txId) throws Exception {
+        ConcurrentHashMap<VersionedPartitionName, Long> partitionTxIds = ackWaters.computeIfAbsent(ringMember, (t) -> new ConcurrentHashMap<>());
+        awaitNotify.notifyChange(partitionName, () -> {
+            long merge = partitionTxIds.merge(partitionName, txId, Math::max);
+            return (merge == txId);
         });
-        AtomicLong changedLock = getChangedLock(partitionName);
-        changedLock.incrementAndGet();
-        long merge = partitionTxIds.merge(partitionName, txId, Math::max);
-        if (merge == txId) {
-            synchronized (changedLock) {
-                changedLock.notifyAll();
-            }
-        }
     }
 
-    public Long get(RingHost ringHost, VersionedPartitionName partitionName) {
-        ConcurrentHashMap<VersionedPartitionName, Long> partitionTxIds = ackWaters.get(ringHost);
+    public Long get(RingMember ringMember, VersionedPartitionName partitionName) {
+        ConcurrentHashMap<VersionedPartitionName, Long> partitionTxIds = ackWaters.get(ringMember);
         if (partitionTxIds == null) {
             return null;
         }
         return partitionTxIds.get(partitionName);
     }
 
-    public AtomicLong getChangedLock(VersionedPartitionName partitionName) {
-        return changedLocks[Math.abs(partitionName.hashCode()) % changedLocks.length];
-    }
-
     public int await(VersionedPartitionName partitionName,
         long desiredTxId,
-        Collection<RingHost> takeOrderHosts,
+        Collection<RingMember> takeRingMembers,
         int desiredTakeQuorum,
         long toMillis) throws Exception {
 
-        RingHost[] ringHosts = takeOrderHosts.toArray(new RingHost[takeOrderHosts.size()]);
-        int passed = 0;
-        long startTime = System.currentTimeMillis();
-        do {
-            AtomicLong changedLock = getChangedLock(partitionName);
-            long version = changedLock.get();
-            for (int i = 0; i < ringHosts.length; i++) {
-                RingHost ringHost = ringHosts[i];
-                if (ringHost == null) {
+        RingMember[] ringMembers = takeRingMembers.toArray(new RingMember[takeRingMembers.size()]);
+        int[] passed = new int[1];
+        return awaitNotify.awaitChange(partitionName, () -> {
+            for (int i = 0; i < ringMembers.length; i++) {
+                RingMember ringMember = ringMembers[i];
+                if (ringMember == null) {
                     continue;
                 }
-                Long txId = get(ringHost, partitionName);
+                Long txId = get(ringMember, partitionName);
                 if (txId != null && txId >= desiredTxId) {
-                    passed++;
-                    ringHosts[i] = null;
+                    passed[0]++;
+                    ringMembers[i] = null;
                 }
-                if (passed >= desiredTakeQuorum) {
-                    return passed;
-                }
-            }
-            synchronized (changedLock) {
-                if (version == changedLock.get()) {
-                    long elapse = System.currentTimeMillis() - startTime;
-                    if (passed < desiredTakeQuorum && elapse < toMillis) {
-                        changedLock.wait(toMillis - elapse);
-                    }
+                if (passed[0] >= desiredTakeQuorum) {
+                    return Optional.of(passed[0]);
                 }
             }
-        } while (System.currentTimeMillis() - startTime < toMillis);
-        return passed;
+            return null;
+        }, toMillis);
     }
 }

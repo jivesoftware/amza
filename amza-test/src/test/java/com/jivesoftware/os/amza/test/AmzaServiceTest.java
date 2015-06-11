@@ -132,6 +132,9 @@ public class AmzaServiceTest {
             for (int i = 0; i < nodes.size(); i++) {
                 AmzaNode a = nodes.get(i);
                 for (int j = 0; j < nodes.size(); j++) {
+                    if (i == j) {
+                        continue;
+                    }
                     AmzaNode b = nodes.get(j);
                     if (!a.compare(b)) {
                         System.out.println(a + " is NOT consistent with " + b);

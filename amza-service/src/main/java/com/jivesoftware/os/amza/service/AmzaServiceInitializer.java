@@ -67,25 +67,23 @@ public class AmzaServiceInitializer {
 
         public String[] workingDirectories = new String[] { "./var/data/" };
 
-        public int resendReplicasIntervalInMillis = 1000;
-        public int applyReplicasIntervalInMillis = 1000;
         public int takeFromNeighborsIntervalInMillis = 1000;
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
 
-        public int numberOfResendThreads = 8;
-        public int numberOfApplierThreads = 8;
         public int numberOfCompactorThreads = 8;
         public int numberOfTakerThreads = 8;
         public int numberOfAckerThreads = 8;
-        public int numberOfReplicatorThreads = 24;
 
         public int corruptionParanoiaFactor = 10;
 
         public int numberOfDeltaStripes = 4;
         public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
         public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
+
+        public int ackWatersStripingLevel = 1024;
+        public int awaitOnlineStripingLevel = 1024;
 
         public boolean hardFsync = false;
 
@@ -129,7 +127,8 @@ public class AmzaServiceInitializer {
             amzaPartitionWatcher,
             (VersionedPartitionName input) -> input.getPartitionName().isSystemPartition());
 
-        PartitionStatusStorage partitionStatusStorage = new PartitionStatusStorage(orderIdProvider, ringMember, systemPartitionStripe);
+        PartitionStatusStorage partitionStatusStorage = new PartitionStatusStorage(orderIdProvider, ringMember, systemPartitionStripe,
+            config.awaitOnlineStripingLevel);
         partitionIndex.open(partitionStatusStorage);
 
         final int deltaStorageStripes = config.numberOfDeltaStripes;
@@ -226,8 +225,7 @@ public class AmzaServiceInitializer {
         PartitionComposter partitionComposter = new PartitionComposter(partitionIndex, partitionProvider, amzaRingReader, partitionStatusStorage,
             partitionStripeProvider);
 
-        RecentPartitionTakers recentPartitionTakers = new RecentPartitionTakers();
-        AckWaters ackWaters = new AckWaters();
+        AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
 
         return new AmzaService(orderIdProvider,
             amzaStats,
@@ -242,7 +240,6 @@ public class AmzaServiceInitializer {
             partitionIndex,
             partitionProvider,
             partitionStripeProvider,
-            recentPartitionTakers,
             amzaPartitionWatcher);
     }
 }

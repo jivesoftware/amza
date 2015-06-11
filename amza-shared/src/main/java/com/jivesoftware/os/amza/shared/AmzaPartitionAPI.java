@@ -1,14 +1,12 @@
 package com.jivesoftware.os.amza.shared;
 
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Arrays;
-import java.util.Collection;
 
 /**
  *
@@ -16,11 +14,11 @@ import java.util.Collection;
  */
 public interface AmzaPartitionAPI {
 
-    TakeQuorum commit(Commitable<WALValue> updates,
+    void commit(Commitable<WALValue> updates,
         int desiredQuorum,
         long timeoutInMillis) throws Exception;
 
-    void get(Iterable<byte[]> keys, Scan<TimestampedValue> valuesStream) throws Exception;
+    void get(Iterable<WALKey> keys, Scan<TimestampedValue> valuesStream) throws Exception;
 
     /**
 
@@ -29,35 +27,9 @@ public interface AmzaPartitionAPI {
      @param stream
      @throws Exception
      */
-    void scan(byte[] from, byte[] to, Scan<TimestampedValue> stream) throws Exception;
+    void scan(WALKey from, WALKey to, Scan<TimestampedValue> stream) throws Exception;
 
     TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception;
-
-    class TakeQuorum {
-
-        private final RingMember commitedTo;
-        private final long txId;
-        private final Collection<RingHost> takeOrderHosts;
-
-        public TakeQuorum(RingMember commitedTo, long txId, Collection<RingHost> takeOrderHosts) {
-            this.commitedTo = commitedTo;
-            this.txId = txId;
-            this.takeOrderHosts = takeOrderHosts;
-        }
-
-        public RingMember getCommitedTo() {
-            return commitedTo;
-        }
-
-        public long getTxId() {
-            return txId;
-        }
-
-        public Collection<RingHost> getTakeOrderHosts() {
-            return takeOrderHosts;
-        }
-
-    }
 
     class TimestampedValue {
 

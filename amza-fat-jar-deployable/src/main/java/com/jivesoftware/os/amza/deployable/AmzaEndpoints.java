@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.jaxrs.util.ResponseHelper;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -65,7 +66,7 @@ public class AmzaEndpoints {
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
-                updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
+                updates.set(new WALKey(keys[i].getBytes()), values[i].getBytes(), -1);
             }
             amzaPartition.commit(updates, 1, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
@@ -83,8 +84,8 @@ public class AmzaEndpoints {
             AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
-            updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(input.getKey()
-                .getBytes(), input.getValue().getBytes())), -1);
+            updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()),
+                input.getValue().getBytes())), -1);
             amzaPartition.commit(updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
@@ -101,9 +102,9 @@ public class AmzaEndpoints {
         @QueryParam("key") String key) {
         try {
             String[] keys = key.split(",");
-            List<byte[]> rawKeys = new ArrayList<>();
+            List<WALKey> rawKeys = new ArrayList<>();
             for (String k : keys) {
-                rawKeys.add(k.getBytes());
+                rawKeys.add(new WALKey(k.getBytes()));
             }
 
             AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
@@ -127,7 +128,7 @@ public class AmzaEndpoints {
         try {
             AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-            updates.remove(key.getBytes(), -1);
+            updates.remove(new WALKey(key.getBytes()), -1);
             amzaPartition.commit(updates, 1, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {

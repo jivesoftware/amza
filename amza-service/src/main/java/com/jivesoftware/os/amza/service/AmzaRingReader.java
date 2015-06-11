@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.service.replication.HostRingBuilder;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -17,16 +18,17 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.TreeMap;
 
 public class AmzaRingReader {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private final RingMember ringMember;
+    private final RingMember rootRingMember;
     private final PartitionIndex partitionIndex;
 
-    public AmzaRingReader(RingMember ringMember, PartitionIndex partitionIndex) {
-        this.ringMember = ringMember;
+    public AmzaRingReader(RingMember rootRingMember, PartitionIndex partitionIndex) {
+        this.rootRingMember = rootRingMember;
         this.partitionIndex = partitionIndex;
     }
 
@@ -53,16 +55,16 @@ public class AmzaRingReader {
     }
 
     public RingMember getRingMember() {
-        return ringMember;
+        return rootRingMember;
     }
 
     public RingNeighbors getRingNeighbors(String ringName) throws Exception {
-        return new HostRingBuilder().build(ringMember, getRing(ringName));
+        return new HostRingBuilder().build(rootRingMember, getRing(ringName));
     }
 
     public boolean isMemberOfRing(String ringName) throws Exception {
         PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
-        return ringIndex.containsKey(key(ringName, ringMember));
+        return ringIndex.containsKey(key(ringName, rootRingMember));
     }
 
     public NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception {
@@ -90,6 +92,20 @@ public class AmzaRingReader {
             }
         }
         return orderedRing;
+    }
+
+    public Set<RingMember> getNeighboringRingMembers(String ringName) throws Exception {
+        PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
+        WALKey from = key(ringName, null);
+        Set<RingMember> ring = Sets.newHashSet();
+        ringIndex.rangeScan(from, from.prefixUpperExclusive(), (long orderId, WALKey key, WALValue value) -> {
+            RingMember ringMember = keyToRingMember(key);
+            if (!ringMember.equals(rootRingMember)) {
+                ring.add(keyToRingMember(key));
+            }
+            return true;
+        });
+        return ring;
     }
 
 }

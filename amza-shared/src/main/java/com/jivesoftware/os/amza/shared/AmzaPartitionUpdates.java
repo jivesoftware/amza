@@ -31,43 +31,59 @@ public class AmzaPartitionUpdates implements Commitable<WALValue> {
         this.changes = new ConcurrentSkipListMap<>();
     }
 
-    public void setAll(Iterable<Entry<byte[], byte[]>> updates, long timestampId) throws Exception {
-        for (Entry<byte[], byte[]> update : updates) {
+    public AmzaPartitionUpdates setAll(Iterable<Entry<WALKey, byte[]>> updates) throws Exception {
+        setAll(updates, -1);
+        return this;
+    }
+
+    public AmzaPartitionUpdates setAll(Iterable<Entry<WALKey, byte[]>> updates, long timestampId) throws Exception {
+        for (Entry<WALKey, byte[]> update : updates) {
             set(update.getKey(), update.getValue(), timestampId);
         }
+        return this;
     }
 
-    public boolean set(byte[] key, byte[] value, long timestampId) throws Exception {
+    public AmzaPartitionUpdates set(WALKey key, byte[] value) throws Exception {
+        return set(key, value, -1);
+    }
+
+    public AmzaPartitionUpdates set(WALKey key, byte[] value, long timestampId) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        changes.merge(new WALKey(key), new WALValue(value, timestampId, false), (existing, provided) -> {
+        changes.merge(key, new WALValue(value, timestampId, false), (existing, provided) -> {
             if (provided.getTimestampId() >= existing.getTimestampId()) {
                 return provided;
             } else {
                 return existing;
             }
         });
-        return true;
+        return this;
     }
 
-    public void removeAll(Iterable<byte[]> keys, long timestampId) throws Exception {
-        for (byte[] key : keys) {
+    public AmzaPartitionUpdates removeAll(Iterable<WALKey> keys, long timestampId) throws Exception {
+        for (WALKey key : keys) {
             remove(key, timestampId);
         }
+        return this;
     }
 
-    public void remove(byte[] key, long timestamp) throws Exception {
+    public AmzaPartitionUpdates remove(WALKey key) throws Exception {
+        return remove(key, -1);
+    }
+
+    public AmzaPartitionUpdates remove(WALKey key, long timestamp) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        changes.merge(new WALKey(key), new WALValue(null, timestamp, true), (existing, provided) -> {
+        changes.merge(key, new WALValue(null, timestamp, true), (existing, provided) -> {
             if (provided.getTimestampId() >= existing.getTimestampId()) {
                 return provided;
             } else {
                 return existing;
             }
         });
+        return this;
     }
 
     @Override

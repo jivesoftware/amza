@@ -91,15 +91,10 @@ public class AmzaMain {
             final String[] workingDirs = amzaConfig.getWorkingDirs().split(",");
 
             final AmzaServiceInitializer.AmzaServiceConfig amzaServiceConfig = new AmzaServiceInitializer.AmzaServiceConfig();
-            amzaServiceConfig.applyReplicasIntervalInMillis = amzaConfig.getApplyReplicasIntervalInMillis();
             amzaServiceConfig.checkIfCompactionIsNeededIntervalInMillis = amzaConfig.getCheckIfCompactionIsNeededIntervalInMillis();
             amzaServiceConfig.compactTombstoneIfOlderThanNMillis = amzaConfig.getCompactTombstoneIfOlderThanNMillis();
-            amzaServiceConfig.numberOfApplierThreads = amzaConfig.getNumberOfApplierThreads();
             amzaServiceConfig.numberOfCompactorThreads = amzaConfig.getNumberOfCompactorThreads();
-            amzaServiceConfig.numberOfReplicatorThreads = amzaConfig.getNumberOfReplicatorThreads();
-            amzaServiceConfig.numberOfResendThreads = amzaConfig.getNumberOfResendThreads();
             amzaServiceConfig.numberOfTakerThreads = amzaConfig.getNumberOfTakerThreads();
-            amzaServiceConfig.resendReplicasIntervalInMillis = amzaConfig.getResendReplicasIntervalInMillis();
             amzaServiceConfig.takeFromNeighborsIntervalInMillis = amzaConfig.getTakeFromNeighborsIntervalInMillis();
             amzaServiceConfig.workingDirectories = workingDirs;
 

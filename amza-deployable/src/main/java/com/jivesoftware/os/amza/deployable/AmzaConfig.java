@@ -24,12 +24,6 @@ public interface AmzaConfig extends Config {
     String getWorkingDirs();
 
     @IntDefault(1000)
-    int getResendReplicasIntervalInMillis();
-
-    @IntDefault(1000)
-    int getApplyReplicasIntervalInMillis();
-
-    @IntDefault(1000)
     int getTakeFromNeighborsIntervalInMillis();
 
     @LongDefault(60_000)
@@ -39,18 +33,9 @@ public interface AmzaConfig extends Config {
     long getCompactTombstoneIfOlderThanNMillis();
 
     @IntDefault(8)
-    int getNumberOfResendThreads();
-
-    @IntDefault(8)
-    int getNumberOfApplierThreads();
-
-    @IntDefault(8)
     int getNumberOfCompactorThreads();
 
     @IntDefault(8)
     int getNumberOfTakerThreads();
-
-    @IntDefault(24)
-    int getNumberOfReplicatorThreads();
 
 }

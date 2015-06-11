@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.service.AmzaPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -105,7 +106,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             } else if (input.action.equals("get")) {
                 AmzaPartition amzaPartition = lookupPartition(input, msg);
                 if (amzaPartition != null) {
-                    List<byte[]> rawKeys = stringToWALKeys(input);
+                    List<WALKey> rawKeys = stringToWALKeys(input);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
@@ -126,7 +127,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             } else if (input.action.equals("remove")) {
                 AmzaPartition amzaPartition = lookupPartition(input, msg);
                 if (amzaPartition != null) {
-                    List<byte[]> rawKeys = stringToWALKeys(input);
+                    List<WALKey> rawKeys = stringToWALKeys(input);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to remove. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
@@ -160,12 +161,12 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
         return renderer.render(template, data);
     }
 
-    private List<byte[]> stringToWALKeys(AmzaInspectPluginRegionInput input) {
+    private List<WALKey> stringToWALKeys(AmzaInspectPluginRegionInput input) {
         String[] keys = input.key.split(",");
-        List<byte[]> walKeys = new ArrayList<>();
+        List<WALKey> walKeys = new ArrayList<>();
         for (String key : keys) {
             byte[] rawKey = hexStringToByteArray(key.trim());
-            walKeys.add(rawKey);
+            walKeys.add(new WALKey(rawKey));
         }
         return walKeys;
     }

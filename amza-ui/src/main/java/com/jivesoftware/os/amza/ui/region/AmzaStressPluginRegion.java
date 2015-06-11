@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -218,7 +219,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
             try {
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-                updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(input1.getKey().getBytes(),
+                updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(new WALKey(input1.getKey().getBytes()),
                     input1.getValue().getBytes())), -1);
                 amzaPartition.commit(updates, 1, 30_000); // TODO expose to UI
 

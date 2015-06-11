@@ -90,6 +90,7 @@ public class PartitionProvider {
             if (!changed.isEmpty()) {
                 rowChanges.changes(changed);
             }
+            partitionIndex.get(versionedPartitionName);
         }
     }
 

@@ -218,6 +218,7 @@ public class AmzaHostRing implements AmzaRing, RowChanges {
                     scan.row(-1, ringReader.key(ringName, member), new WALValue(new byte[0], timestamp, false));
                 }
             });
+        ringSizes.remove(ringName);
 
         LOG.info("Ring update:{} -> {}", ringName, members);
     }

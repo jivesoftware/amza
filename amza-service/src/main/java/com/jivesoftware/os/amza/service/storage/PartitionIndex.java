@@ -130,7 +130,6 @@ public class PartitionIndex implements RowChanges {
 
         PartitionProperties properties = getProperties(partitionName);
         if (properties == null) {
-
             WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(partitionNameKey);
             if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
                 return null;
@@ -178,12 +177,6 @@ public class PartitionIndex implements RowChanges {
             LOG.info("Opened partition:" + versionedPartitionName);
             return partitionStore;
         }
-    }
-
-    public void put(VersionedPartitionName versionedPartitionName, PartitionStore partitionStore) {
-        ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.computeIfAbsent(versionedPartitionName.getPartitionName(),
-            (partitionName) -> new ConcurrentHashMap<>());
-        versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
     }
 
     public void putProperties(PartitionName partitionName, PartitionProperties properties) {

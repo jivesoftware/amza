@@ -200,40 +200,43 @@ public class PartitionChangeTaker {
                 if (partitionStatus == TxPartitionStatus.Status.KETCHUP || partitionStatus == TxPartitionStatus.Status.ONLINE) {
                     final RingNeighbors hostRing = amzaRingReader.getRingNeighbors(versionedPartitionName.getPartitionName().getRingName());
                     final PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
-                    if (partitionProperties != null && partitionProperties.takeFromFactor > 0) {
+                    if (partitionProperties != null) {
+                        if (partitionProperties.takeFromFactor > 0) {
+                            futures.add(slaveTakerThreadPool.submit(() -> {
+                                try {
+                                    List<TookResult> took = takeChanges(hostRing.getAboveRing(), stripe, versionedPartitionName,
+                                        partitionProperties.takeFromFactor);
 
-                        futures.add(slaveTakerThreadPool.submit(() -> {
-                            try {
-                                List<TookResult> took = takeChanges(hostRing.getAboveRing(), stripe, versionedPartitionName,
-                                    partitionProperties.takeFromFactor);
-
-                                boolean allInKetchup = true;
-                                boolean oneTookFully = false;
-                                for (TookResult t : took) {
-                                    if (t.tookFully || t.tookError) {
-                                        allInKetchup = false;
+                                    boolean allInKetchup = true;
+                                    boolean oneTookFully = false;
+                                    for (TookResult t : took) {
+                                        if (t.tookFully || t.tookError) {
+                                            allInKetchup = false;
+                                        }
+                                        if (t.tookFully) {
+                                            oneTookFully = true;
+                                            ackMap.put(new RingMemberAndHost(t.ringMember, t.ringHost), new AckTaken(t.versionedPartitionName, t.txId));
+                                        }
+                                        if (t.flushedAny) {
+                                            flushMap.put(t.ringMember, versionedPartitionName);
+                                        }
+                                        if (t.tookUnreachable) {
+                                            membersUnreachable.put(versionedPartitionName, t.ringMember);
+                                        }
                                     }
-                                    if (t.tookFully) {
-                                        oneTookFully = true;
-                                        ackMap.put(new RingMemberAndHost(t.ringMember, t.ringHost), new AckTaken(t.versionedPartitionName, t.txId));
+                                    if (allInKetchup) {
+                                        ketchupSet.add(versionedPartitionName);
                                     }
-                                    if (t.flushedAny) {
-                                        flushMap.put(t.ringMember, versionedPartitionName);
+                                    if (oneTookFully) {
+                                        onlineSet.add(versionedPartitionName);
                                     }
-                                    if (t.tookUnreachable) {
-                                        membersUnreachable.put(versionedPartitionName, t.ringMember);
-                                    }
+                                } catch (Exception x) {
+                                    LOG.warn("Failed to take from " + versionedPartitionName, x);
                                 }
-                                if (allInKetchup) {
-                                    ketchupSet.add(versionedPartitionName);
-                                }
-                                if (oneTookFully) {
-                                    onlineSet.add(versionedPartitionName);
-                                }
-                            } catch (Exception x) {
-                                LOG.warn("Failed to take from " + versionedPartitionName, x);
-                            }
-                        }));
+                            }));
+                        } else {
+                            onlineSet.add(versionedPartitionName);
+                        }
                     }
                 }
                 return null;
@@ -375,7 +378,7 @@ public class PartitionChangeTaker {
                     }
                 }
 
-                tookFrom.add(new TookResult(ringMember,
+                tookFrom.add(new TookResult(takeFromNode.getKey(),
                     takeFromNode.getValue(),
                     new VersionedPartitionName(versionedPartitionName.getPartitionName(), streamingTakeResult.partitionVersion),
                     takeRowStream.largestFlushedTxId(),

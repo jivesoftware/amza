@@ -42,14 +42,14 @@ import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
+import com.jivesoftware.os.routing.bird.deployable.Deployable;
+import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
 import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
 import com.jivesoftware.os.routing.bird.health.api.HealthCheckRegistry;
 import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
-import com.jivesoftware.os.upena.main.Deployable;
-import com.jivesoftware.os.upena.main.InstanceConfig;
 import java.util.Arrays;
 
 public class AmzaMain {

@@ -12,10 +12,9 @@
     <packaging>pom</packaging>
     <properties>
         <jive.utils.version>0.93</jive.utils.version>
-        <mlogger.version>0.9</mlogger.version>
+        <mlogger.version>0.10</mlogger.version>
         <filer.version>0.72</filer.version>
-        <upena-version>0.125-SNAPSHOT</upena-version>
-        <routing.bird.version>0.2</routing.bird.version>
+        <routing.bird.version>0.5</routing.bird.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>
@@ -46,9 +45,9 @@
                 <version>${routing.bird.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.jivesoftware.os.upena</groupId>
-                <artifactId>upena-main</artifactId>
-                <version>${upena-version}</version>
+                <groupId>com.jivesoftware.os.routing.bird</groupId>
+                <artifactId>deployable</artifactId>
+                <version>${routing.bird.version}</version>
                 <type>jar</type>
             </dependency>
             <dependency>

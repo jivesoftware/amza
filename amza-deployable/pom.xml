@@ -17,9 +17,8 @@
     </properties>
     <dependencies>
         <dependency>
-            <groupId>com.jivesoftware.os.upena</groupId>
-            <artifactId>upena-main</artifactId>
-            <type>jar</type>
+            <groupId>com.jivesoftware.os.routing.bird</groupId>
+            <artifactId>deployable</artifactId>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.routing.bird</groupId>

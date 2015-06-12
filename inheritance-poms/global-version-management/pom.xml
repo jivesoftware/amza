@@ -15,10 +15,16 @@
         <mlogger.version>0.9</mlogger.version>
         <filer.version>0.72</filer.version>
         <upena-version>0.116</upena-version>
+        <routing.bird.version>0.1-SNAPSHOT</routing.bird.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.jivesoftware.os.routing.bird</groupId>
+                <artifactId>routing-bird-http-client</artifactId>
+                <version>${routing.bird.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.jive.utils</groupId>
                 <artifactId>health</artifactId>

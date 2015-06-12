@@ -39,12 +39,12 @@ import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
-import com.jivesoftware.os.jive.utils.base.service.ServiceHandle;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
-import com.jivesoftware.os.server.http.jetty.jersey.server.InitializeRestfulServer;
-import com.jivesoftware.os.server.http.jetty.jersey.server.JerseyEndpoints;
+import com.jivesoftware.os.routing.bird.server.InitializeRestfulServer;
+import com.jivesoftware.os.routing.bird.server.JerseyEndpoints;
+import com.jivesoftware.os.routing.bird.server.RestfulServer;
 import java.util.Random;
 
 public class Main {
@@ -136,8 +136,8 @@ public class Main {
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);
         initializeRestfulServer.addClasspathResource("/resources");
         initializeRestfulServer.addContextHandler("/", jerseyEndpoints);
-        ServiceHandle serviceHandle = initializeRestfulServer.build();
-        serviceHandle.start();
+        RestfulServer restfulServer = initializeRestfulServer.build();
+        restfulServer.start();
 
         System.out.println("-----------------------------------------------------------------------");
         System.out.println("|      Jetty Service Online");

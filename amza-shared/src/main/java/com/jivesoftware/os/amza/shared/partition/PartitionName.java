@@ -50,14 +50,6 @@ public class PartitionName implements Comparable<PartitionName> {
         throw new IOException("Invalid version:" + bytes[0]);
     }
 
-    public String toBase64() throws IOException {
-        return BaseEncoding.base64Url().encode(toBytes());
-    }
-
-    public static PartitionName fromBase64(String base64) throws IOException {
-        return fromBytes(BaseEncoding.base64Url().decode(base64));
-    }
-
     @JsonCreator
     public PartitionName(@JsonProperty("systemPartition") boolean systemPartition,
         @JsonProperty("ringName") String ringName,
@@ -65,6 +57,14 @@ public class PartitionName implements Comparable<PartitionName> {
         this.systemPartition = systemPartition;
         this.ringName = ringName.toUpperCase(); // I love this!!! NOT
         this.partitionName = partitionName;
+    }
+
+    public String toBase64() throws IOException {
+        return BaseEncoding.base64Url().encode(toBytes());
+    }
+
+    public static PartitionName fromBase64(String base64) throws IOException {
+        return fromBytes(BaseEncoding.base64Url().decode(base64));
     }
 
     public boolean isSystemPartition() {

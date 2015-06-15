@@ -52,8 +52,8 @@ public class AckWaters {
         RingMember[] ringMembers = takeRingMembers.toArray(new RingMember[takeRingMembers.size()]);
         int[] passed = new int[1];
         LOG.startTimer("ackWaters>await");
-        LOG.inc("ackWaters>await>request", partitionName.getPartitionName().getPartitionName());
         try {
+            LOG.inc("ackWaters>await>request", partitionName.getPartitionName().getPartitionName());
             return awaitNotify.awaitChange(partitionName, () -> {
                 for (int i = 0; i < ringMembers.length; i++) {
                     RingMember ringMember = ringMembers[i];

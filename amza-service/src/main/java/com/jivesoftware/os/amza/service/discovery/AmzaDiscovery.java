@@ -37,7 +37,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- *
  * This is still a work in progress.
  */
 public class AmzaDiscovery {
@@ -112,7 +111,8 @@ public class AmzaDiscovery {
                                 if (!allMemberSeen.contains(amzaRing.getRingMember())) {
                                     LOG.error("We have not seen our own multicast.");
                                 }
-                                LOG.error("It has been " + elapse + " and we have not discovery any other members.");
+                                LOG.error("We have not discovered any other members, elapsed:{} multicastGroup:{} multicastPort:{}",
+                                    elapse, multicastGroup, multicastPort);
                             }
                         }
                     } catch (Exception x) {

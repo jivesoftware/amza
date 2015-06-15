@@ -1,5 +1,7 @@
 package com.jivesoftware.os.amza.shared.partition;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -35,18 +37,19 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
         throw new IOException("Invalid version:" + bytes[0]);
     }
 
+    @JsonCreator
+    public VersionedPartitionName(@JsonProperty("partitionName") PartitionName partitionName,
+        @JsonProperty("partitionVersion") long partitionVersion) {
+        this.partitionName = partitionName;
+        this.partitionVersion = partitionVersion;
+    }
+
     public String toBase64() throws IOException {
         return BaseEncoding.base64Url().encode(toBytes());
     }
 
     public static VersionedPartitionName fromBase64(String base64) throws IOException {
         return fromBytes(BaseEncoding.base64Url().decode(base64));
-    }
-
-    public VersionedPartitionName(PartitionName partitionName,
-        long partitionVersion) {
-        this.partitionName = partitionName;
-        this.partitionVersion = partitionVersion;
     }
 
     public PartitionName getPartitionName() {

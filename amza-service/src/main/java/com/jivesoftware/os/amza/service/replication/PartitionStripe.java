@@ -56,6 +56,10 @@ public class PartitionStripe {
         this.predicate = stripingPredicate;
     }
 
+    public String getName() {
+        return name;
+    }
+
     boolean expungePartition(VersionedPartitionName versionedPartitionName) throws Exception {
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         if (partitionStore != null) {

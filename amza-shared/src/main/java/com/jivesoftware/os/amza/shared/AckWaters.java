@@ -24,14 +24,14 @@ public class AckWaters {
 
     public void set(RingMember ringMember, VersionedPartitionName partitionName, Long txId) throws Exception {
         ConcurrentHashMap<VersionedPartitionName, Long> partitionTxIds = ackWaters.computeIfAbsent(ringMember, (t) -> new ConcurrentHashMap<>());
-        LOG.startTenantTimer("ackWaters>await", partitionName.getPartitionName().getPartitionName());
+        LOG.startTenantTimer("ackWaters>set", partitionName.getPartitionName().getPartitionName());
         try {
             awaitNotify.notifyChange(partitionName, () -> {
                 long merge = partitionTxIds.merge(partitionName, txId, Math::max);
                 return (merge == txId);
             });
         } finally {
-            LOG.stopTenantTimer("ackWaters>await", partitionName.getPartitionName().getPartitionName());
+            LOG.stopTenantTimer("ackWaters>set", partitionName.getPartitionName().getPartitionName());
         }
     }
 

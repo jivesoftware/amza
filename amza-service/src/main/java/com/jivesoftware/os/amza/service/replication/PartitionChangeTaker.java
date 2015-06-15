@@ -431,8 +431,8 @@ public class PartitionChangeTaker {
             }
             return tookFrom;
         } finally {
-            LOG.startTimer("take>all");
-            LOG.startTimer("take>" + metricName);
+            LOG.stopTimer("take>all");
+            LOG.stopTimer("take>" + metricName);
         }
 
     }

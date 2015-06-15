@@ -272,22 +272,27 @@ public class PartitionChangeTaker {
                     stripe.flush(hardFlush);
                     highwaterStorage.flush(flushMap);
 
-                    List<Future<?>> ackFutures = new ArrayList<>();
-                    for (Entry<RingMemberAndHost, Collection<AckTaken>> e : ackMap.asMap().entrySet()) {
-                        futures.add(ackerThreadPool.submit(() -> {
-                            try {
-                                updatesTaker.ackTakenUpdate(e.getKey().ringMember, e.getKey().ringHost, e.getValue());
-                            } catch (Exception x) {
-                                LOG.warn("Failed to ack for " + e.getKey(), x);
-                            }
-                        }));
-                    }
-                    for (Future<?> f : ackFutures) {
-                        try {
-                            f.get();
-                        } catch (ExecutionException x) {
-                            LOG.warn("Failed to ack.", x);
+                    LOG.startTimer("takeAll>takeAck");
+                    try {
+                        List<Future<?>> ackFutures = new ArrayList<>();
+                        for (Entry<RingMemberAndHost, Collection<AckTaken>> e : ackMap.asMap().entrySet()) {
+                            ackFutures.add(ackerThreadPool.submit(() -> {
+                                try {
+                                    updatesTaker.ackTakenUpdate(e.getKey().ringMember, e.getKey().ringHost, e.getValue());
+                                } catch (Exception x) {
+                                    LOG.warn("Failed to ack for " + e.getKey(), x);
+                                }
+                            }));
                         }
+                        for (Future<?> f : ackFutures) {
+                            try {
+                                f.get();
+                            } catch (ExecutionException x) {
+                                LOG.warn("Failed to ack.", x);
+                            }
+                        }
+                    } finally {
+                        LOG.stopTimer("takeAll>takeAck");
                     }
                 }
             } finally {

@@ -94,6 +94,12 @@ public class AmzaRingReader {
         return orderedRing;
     }
 
+    public RingHost getRingHost(RingMember ringMember) throws Exception {
+        PartitionStore nodeIndex = partitionIndex.get(PartitionProvider.NODE_INDEX);
+        WALValue[] rawRingHosts = nodeIndex.get(new WALKey[]{new WALKey(ringMember.toBytes())});
+        return rawRingHosts[0] == null || rawRingHosts[0].getTombstoned() ? null : RingHost.fromBytes(rawRingHosts[0].getValue());
+    }
+
     public Set<RingMember> getNeighboringRingMembers(String ringName) throws Exception {
         PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
         WALKey from = key(ringName, null);

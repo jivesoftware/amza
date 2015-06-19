@@ -132,6 +132,33 @@ public class AmzaReplicationRestEndpoints {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/changes/streaming/partition/updates/{timeoutMillis}")
+    public Response streamingPartitionUpdates(@PathParam("timeoutMillis") long timeoutMillis) {
+        try {
+
+            StreamingOutput stream = (OutputStream os) -> {
+                os.flush();
+                BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
+                final DataOutputStream dos = new DataOutputStream(bos);
+                try {
+                    amzaInstance.streamingTakePartitionUpdates(dos, timeoutMillis);
+                } catch (Exception x) {
+                    LOG.error("Failed to stream takes.", x);
+                    throw new IOException("Failed to stream takes.", x);
+                } finally {
+                    dos.flush();
+                }
+            };
+            return Response.ok(stream).build();
+        } catch (Exception x) {
+            LOG.warn("Failed to stream partition updates. ", x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to stream partition updates.", x);
+        }
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/changes/acked/{logicalName}/{host}/{port}")
     public Response acks(@PathParam("logicalName") String ringMemberName,

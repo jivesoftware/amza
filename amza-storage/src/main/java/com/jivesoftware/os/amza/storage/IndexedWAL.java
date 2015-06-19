@@ -26,6 +26,7 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.take.PartitionUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -65,6 +66,7 @@ public class IndexedWAL implements WALStorage {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
+    private final PartitionUpdates partitionUpdates;
     private final VersionedPartitionName versionedPartitionName;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller<byte[]> rowMarshaller;
@@ -93,7 +95,8 @@ public class IndexedWAL implements WALStorage {
         }
     };
 
-    public IndexedWAL(VersionedPartitionName versionedPartitionName,
+    public IndexedWAL(PartitionUpdates partitionUpdates,
+        VersionedPartitionName versionedPartitionName,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
@@ -102,6 +105,7 @@ public class IndexedWAL implements WALStorage {
         int maxUpdatesBetweenIndexCommitMarker,
         int tombstoneCompactionFactor) {
 
+        this.partitionUpdates = partitionUpdates;
         this.versionedPartitionName = versionedPartitionName;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
@@ -172,8 +176,8 @@ public class IndexedWAL implements WALStorage {
     }
 
     private long compact(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-        final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName().getPartitionName() +
-            ">ring>" + versionedPartitionName.getPartitionName().getRingName() + ">";
+        final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName().getPartitionName()
+            + ">ring>" + versionedPartitionName.getPartitionName().getRingName() + ">";
         Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
         if (compact.isPresent()) {
             acquireAll();
@@ -265,7 +269,7 @@ public class IndexedWAL implements WALStorage {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[] {
+            rowWriter.writeSystem(UIO.longsBytes(new long[]{
                 RowType.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
@@ -276,9 +280,9 @@ public class IndexedWAL implements WALStorage {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[] {
+            rowWriter.writeSystem(UIO.longsBytes(new long[]{
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId }));
+                indexCommitedUpToTxId}));
         }
     }
 
@@ -437,6 +441,7 @@ public class IndexedWAL implements WALStorage {
                     rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers,
                         indexCommitedUpToTxId.longValue());
                 }
+                partitionUpdates.updated(versionedPartitionName.getPartitionName(), indexCommitedUpToTxId.longValue());
             }
 
             final boolean commitAndWriteMarker = apply.size() > 0 && indexUpdates.addAndGet(apply.size()) > maxUpdatesBetweenIndexCommitMarker.get();

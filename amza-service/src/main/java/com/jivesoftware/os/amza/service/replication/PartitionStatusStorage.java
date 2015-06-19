@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -33,7 +34,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
 
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
-    private final PartitionStripe systemPartitionStripe;
+    private final SystemWALStorage systemWALStorage;
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
 
@@ -41,11 +42,11 @@ public class PartitionStatusStorage implements TxPartitionStatus {
 
     public PartitionStatusStorage(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
-        PartitionStripe systemPartitionStripe,
+        SystemWALStorage systemWALStorage,
         int awaitOnlineStripingLevel) {
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
-        this.systemPartitionStripe = systemPartitionStripe;
+        this.systemWALStorage = systemWALStorage;
         this.transactor = new VersionedPartitionTransactor(1024, 1024); // TODO expose to config?
         this.awaitNotify = new AwaitNotify<>(awaitOnlineStripingLevel);
     }
@@ -66,7 +67,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
             return tx.tx(new VersionedPartitionName(partitionName, 0), Status.ONLINE);
         }
 
-        WALValue rawStatus = systemPartitionStripe.get(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), walKey(rootRingMember, partitionName));
+        WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
         if (rawStatus == null) {
             return tx.tx(null, null);
         } else {
@@ -81,7 +82,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         }
         for (RingMember ringMember : ringMembers) {
             WALKey key = walKey(ringMember, versionedPartitionName.getPartitionName());
-            WALValue rawStatus = systemPartitionStripe.get(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), key);
+            WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, key);
             if (rawStatus == null || rawStatus.getTombstoned()) {
                 if (membersUnreachable.contains(ringMember)) {
                     continue;
@@ -99,7 +100,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
     }
 
     public VersionedStatus getStatus(RingMember ringMember, PartitionName partitionName) throws Exception {
-        WALValue rawStatus = systemPartitionStripe.get(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), walKey(ringMember, partitionName));
+        WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
         if (rawStatus == null || rawStatus.getTombstoned()) {
             return null;
         }
@@ -132,7 +133,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
     public void streamLocalState(PartitionMemberStatusStream stream) throws Exception {
         WALKey from = walKey(rootRingMember, null);
         WALKey to = from.prefixUpperExclusive();
-        systemPartitionStripe.rangeScan(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), from, to, (rowTxId, key, value) -> {
+        systemWALStorage.rangeScan(PartitionProvider.REGION_ONLINE_INDEX, from, to, (rowTxId, key, value) -> {
             HeapFiler filer = new HeapFiler(key.getKey());
             UIO.readByte(filer, "serializationVersion");
             RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member"));
@@ -146,7 +147,10 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         });
     }
 
-    private VersionedStatus set(RingMember ringMember, PartitionName partitionName, VersionedStatus versionedStatus) throws Exception {
+    private VersionedStatus set(RingMember ringMember,
+        PartitionName partitionName,
+        VersionedStatus versionedStatus) throws Exception {
+
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
         VersionedStatus cachedStatus = localStatusCache.get(versionedPartitionName);
         if (cachedStatus != null && cachedStatus.equals(versionedStatus)) {
@@ -155,7 +159,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
 
         return transactor.doWithAll(versionedPartitionName, versionedStatus.status, (currentVersionedPartitionName, status) -> {
 
-            WALValue rawStatus = systemPartitionStripe.get(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), walKey(rootRingMember, partitionName));
+            WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
             VersionedStatus commitableVersionStatus = null;
             VersionedStatus returnableStatus = null;
 
@@ -177,9 +181,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
             if (commitableVersionStatus != null) {
                 byte[] versionedStatusBytes = commitableVersionStatus.toBytes();
                 awaitNotify.notifyChange(partitionName, () -> {
-                    RowsChanged rowsChanged = systemPartitionStripe.commit(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(),
-                        Optional.absent(),
-                        false,
+                    RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
                         (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
                             walKey(ringMember, partitionName),
                             new WALValue(versionedStatusBytes, orderIdProvider.nextId(), false)));
@@ -202,9 +204,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         for (VersionedPartitionName compost : composted) {
             transactor.doWithAll(compost, Status.EXPUNGE, (versionedPartitionName, partitionStatus) -> {
                 awaitNotify.notifyChange(compost.getPartitionName(), () -> {
-                    RowsChanged rowsChanged = systemPartitionStripe.commit(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(),
-                        Optional.absent(),
-                        false,
+                    RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
                         (highwaters, scan) -> {
                             scan.row(orderIdProvider.nextId(),
                                 walKey(rootRingMember, compost.getPartitionName()),
@@ -268,10 +268,10 @@ public class PartitionStatusStorage implements TxPartitionStatus {
 
         @Override
         public String toString() {
-            return "VersionedStatus{" +
-                "status=" + status +
-                ", version=" + version +
-                '}';
+            return "VersionedStatus{"
+                + "status=" + status
+                + ", version=" + version
+                + '}';
         }
     }
 }

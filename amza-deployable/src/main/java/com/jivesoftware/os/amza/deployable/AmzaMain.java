@@ -35,7 +35,6 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
@@ -147,7 +146,6 @@ public class AmzaMain {
             deployable.addInjectables(AmzaService.class, amzaService);
             deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
             deployable.addInjectables(AmzaInstance.class, amzaService);
-            deployable.addInjectables(HighwaterStorage.class, amzaService.getHighwaterMarks());
 
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, amzaStats, new AmzaUIInitializer.InjectionCallback() {
 

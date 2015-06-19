@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.take.PartitionUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
@@ -22,6 +23,7 @@ import java.util.Set;
  */
 public class IndexedWALStorageProvider implements WALStorageProvider {
 
+    private final PartitionUpdates partitionUpdates;
     private final WALIndexProviderRegistry indexProviderRegistry;
     private final RowIOProvider rowIOProvider;
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
@@ -30,13 +32,15 @@ public class IndexedWALStorageProvider implements WALStorageProvider {
     private final int tombstoneCompactionFactor;
     private final int compactAfterGrowthFactor;
 
-    public IndexedWALStorageProvider(WALIndexProviderRegistry indexProviderRegistry,
+    public IndexedWALStorageProvider(PartitionUpdates partitionUpdates,
+        WALIndexProviderRegistry indexProviderRegistry,
         RowIOProvider rowIOProvider,
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         TimestampedOrderIdProvider orderIdProvider,
         int tombstoneCompactionFactor,
         int compactAfterGrowthFactor) {
+        this.partitionUpdates = partitionUpdates;
         this.indexProviderRegistry = indexProviderRegistry;
         this.rowIOProvider = rowIOProvider;
         this.primaryRowMarshaller = primaryRowMarshaller;
@@ -56,7 +60,8 @@ public class IndexedWALStorageProvider implements WALStorageProvider {
         directory.mkdirs();
         BinaryWALTx binaryWALTx = new BinaryWALTx(directory, versionedPartitionName.toBase64(), rowIOProvider, primaryRowMarshaller, walIndexProvider,
             compactAfterGrowthFactor);
-        return new IndexedWAL(versionedPartitionName,
+        return new IndexedWAL(partitionUpdates,
+            versionedPartitionName,
             orderIdProvider,
             primaryRowMarshaller,
             highwaterRowMarshaller,

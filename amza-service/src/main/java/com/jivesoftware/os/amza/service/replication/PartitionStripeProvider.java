@@ -1,39 +1,39 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 
 /**
  * @author jonathan.colt
  */
 public class PartitionStripeProvider {
 
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-
-    private final PartitionStripe systemStripe;
     private final PartitionStripe[] deltaStripes;
+    private final HighwaterStorage[] highwaterStorages;
 
-    public PartitionStripeProvider(PartitionStripe systemStripe, PartitionStripe[] stripes) {
-        this.systemStripe = systemStripe;
-        this.deltaStripes = stripes;
+    public PartitionStripeProvider(PartitionStripe[] deltaStripes, HighwaterStorage[] highwaterStorages) {
+        this.deltaStripes = deltaStripes;
+        this.highwaterStorages = highwaterStorages;
     }
 
-    public PartitionStripe getSystemPartitionStripe() {
-        return systemStripe;
+    public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
+        Preconditions.checkArgument(!partitionName.isSystemPartition(), "No systems allowed.");
+        int stripeIndex = Math.abs(partitionName.hashCode()) % deltaStripes.length;
+        return tx.tx(deltaStripes[stripeIndex], highwaterStorages[stripeIndex]);
     }
 
-    public PartitionStripe getPartitionStripe(PartitionName partitionName) throws Exception {
-        if (partitionName.isSystemPartition()) {
-            return systemStripe;
-        }
-        return deltaStripes[Math.abs(partitionName.hashCode()) % deltaStripes.length];
+    void flush(PartitionName partitionName, boolean hardFlush) throws Exception {
+        int stripeIndex = Math.abs(partitionName.hashCode()) % deltaStripes.length;
+        highwaterStorages[stripeIndex].flush(() -> {
+            deltaStripes[stripeIndex].flush(hardFlush);
+            return null;
+        });
     }
 
-    public void removePartition(VersionedPartitionName versionedPartitionName) throws Exception {
-        if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
-            deltaStripes[Math.abs(versionedPartitionName.getPartitionName().hashCode()) % deltaStripes.length].expungePartition(versionedPartitionName);
-        }
+    public interface StripeTx<R> {
+
+        R tx(PartitionStripe stripe, HighwaterStorage highwaterStorage) throws Exception;
     }
+
 }

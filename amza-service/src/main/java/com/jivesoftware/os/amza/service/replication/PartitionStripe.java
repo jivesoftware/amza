@@ -24,6 +24,7 @@ import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Objects;
 
 /**
  * @author jonathan.colt
@@ -70,38 +71,48 @@ public class PartitionStripe {
 
     public void txAllPartitions(PartitionTx<Void> tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getAllPartitions(), predicate)) {
-            txPartitionStatus.tx(versionedPartitionName.getPartitionName(), (currentVersionedPartitionName, partitionStatus) -> {
-                if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                    return tx.tx(currentVersionedPartitionName, partitionStatus);
-                }
-                return null;
-            });
+            txPartitionStatus.tx(versionedPartitionName.getPartitionName(),
+                (currentVersionedPartitionName, partitionStatus) -> {
+                    if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
+                        return tx.tx(currentVersionedPartitionName, partitionStatus);
+                    }
+                    return null;
+                });
         }
     }
 
-    public RowsChanged commit(PartitionName partitionName,
+    public <R> R txPartition(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
+        return txPartitionStatus.tx(partitionName,
+            (currentVersionedPartitionName, partitionStatus) -> {
+                return tx.tx(currentVersionedPartitionName, partitionStatus);
+            });
+    }
+
+    public RowsChanged commit(HighwaterStorage highwaterStorage,
+        PartitionName partitionName,
         Optional<Long> specificVersion,
         boolean requiresOnline,
         Commitable<WALValue> updates) throws Exception {
 
-        return txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE || !requiresOnline, "Partition:%s status:%s is not online.",
-                partitionName,
-                partitionStatus);
-            if (specificVersion.isPresent() && versionedPartitionName.getPartitionVersion() != specificVersion.get()) {
-                return null;
-            }
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            if (partitionStore == null) {
-                throw new IllegalStateException("No partition defined for " + partitionName);
-            } else {
-                RowsChanged changes = storage.update(versionedPartitionName, partitionStore.getWalStorage(), updates);
-                if (allRowChanges != null && !changes.isEmpty()) {
-                    allRowChanges.changes(changes);
+        return txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE || !requiresOnline, "Partition:%s status:%s is not online.",
+                    partitionName,
+                    partitionStatus);
+                if (specificVersion.isPresent() && versionedPartitionName.getPartitionVersion() != specificVersion.get()) {
+                    return null;
                 }
-                return changes;
-            }
-        });
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + partitionName);
+                } else {
+                    RowsChanged changes = storage.update(highwaterStorage, versionedPartitionName, partitionStore.getWalStorage(), updates);
+                    if (allRowChanges != null && !changes.isEmpty()) {
+                        allRowChanges.changes(changes);
+                    }
+                    return changes;
+                }
+            });
     }
 
     public void flush(boolean fsync) throws Exception {
@@ -109,47 +120,50 @@ public class PartitionStripe {
     }
 
     public WALValue get(PartitionName partitionName, WALKey key) throws Exception {
-        return txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
-                partitionStatus);
+        return txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
+                    partitionStatus);
 
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            if (partitionStore == null) {
-                throw new IllegalStateException("No partition defined for " + versionedPartitionName);
-            } else {
-                return storage.get(versionedPartitionName, partitionStore.getWalStorage(), key);
-            }
-        });
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                } else {
+                    return storage.get(versionedPartitionName, partitionStore.getWalStorage(), key);
+                }
+            });
     }
 
     public void rowScan(PartitionName partitionName, Scan<WALValue> scan) throws Exception {
-        txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
-                partitionStatus);
+        txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
+                    partitionStatus);
 
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            if (partitionStore == null) {
-                throw new IllegalStateException("No partition defined for " + versionedPartitionName);
-            } else {
-                storage.rowScan(versionedPartitionName, partitionStore, scan);
-            }
-            return null;
-        });
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                } else {
+                    storage.rowScan(versionedPartitionName, partitionStore, scan);
+                }
+                return null;
+            });
     }
 
     public void rangeScan(PartitionName partitionName, WALKey from, WALKey to, Scan<WALValue> stream) throws Exception {
-        txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
-                partitionStatus);
+        txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
+                    partitionStatus);
 
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            if (partitionStore == null) {
-                throw new IllegalStateException("No partition defined for " + versionedPartitionName);
-            } else {
-                storage.rangeScan(versionedPartitionName, partitionStore, from, to, stream);
-            }
-            return null;
-        });
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                } else {
+                    storage.rangeScan(versionedPartitionName, partitionStore, from, to, stream);
+                }
+                return null;
+            });
     }
 
     public interface TakeRowUpdates<R> {
@@ -166,20 +180,21 @@ public class PartitionStripe {
         long transactionId,
         TakeRowUpdates<R> takeRowUpdates)
         throws Exception {
-        return txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            if (versionedPartitionName == null || partitionStatus == null) {
-                return takeRowUpdates.give(null, null, null);
-            }
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            if (partitionStore == null) {
-                throw new IllegalStateException("No partition defined for " + versionedPartitionName);
-            } else {
-                RowStreamer streamer = (partitionStatus == TxPartitionStatus.Status.ONLINE)
-                    ? rowStream -> storage.takeRowUpdatesSince(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
-                    : null;
-                return takeRowUpdates.give(versionedPartitionName, partitionStatus, streamer);
-            }
-        });
+        return txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                if (versionedPartitionName == null || partitionStatus == null) {
+                    return takeRowUpdates.give(null, null, null);
+                }
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                } else {
+                    RowStreamer streamer = (partitionStatus == TxPartitionStatus.Status.ONLINE)
+                        ? rowStream -> storage.takeRowUpdatesSince(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
+                        : null;
+                    return takeRowUpdates.give(versionedPartitionName, partitionStatus, streamer);
+                }
+            });
     }
 
     public WALHighwater takeFromTransactionId(PartitionName partitionName,
@@ -188,51 +203,54 @@ public class PartitionStripe {
         Highwaters highwaters,
         Scan<WALValue> scan) throws Exception {
 
-        return txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+        return txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
 
-            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-            Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
-                partitionStatus);
+                WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
+                    partitionStatus);
 
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            if (partitionStore == null) {
-                throw new IllegalStateException("No partition defined for " + versionedPartitionName);
-            } else {
-                if (storage.takeFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, highwaters, scan)) {
-                    return partitionHighwater;
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    return null;
+                    if (storage.takeFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, highwaters, scan)) {
+                        return partitionHighwater;
+                    } else {
+                        return null;
+                    }
                 }
-            }
-        });
+            });
     }
 
     public long count(PartitionName partitionName) throws Exception {
-        return txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
-                partitionStatus);
+        return txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
+                    partitionStatus);
 
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            if (partitionStore == null) {
-                throw new IllegalStateException("No partition defined for " + versionedPartitionName);
-            } else {
-                return storage.count(versionedPartitionName, partitionStore.getWalStorage());
-            }
-        });
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                } else {
+                    return storage.count(versionedPartitionName, partitionStore.getWalStorage());
+                }
+            });
     }
 
     public boolean containsKey(PartitionName partitionName, WALKey key) throws Exception {
-        return txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
-                partitionStatus);
+        return txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
+                    partitionStatus);
 
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            if (partitionStore == null) {
-                throw new IllegalStateException("No partition defined for " + versionedPartitionName);
-            } else {
-                return storage.containsKey(versionedPartitionName, partitionStore.getWalStorage(), key);
-            }
-        });
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                } else {
+                    return storage.containsKey(versionedPartitionName, partitionStore.getWalStorage(), key);
+                }
+            });
     }
 
     public void load() throws Exception {
@@ -252,6 +270,28 @@ public class PartitionStripe {
         return "PartitionStripe{"
             + "name='" + name + '\''
             + '}';
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 19 * hash + Objects.hashCode(this.name);
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final PartitionStripe other = (PartitionStripe) obj;
+        if (!Objects.equals(this.name, other.name)) {
+            return false;
+        }
+        return true;
     }
 
 }

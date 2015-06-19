@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.take.PartitionUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
@@ -52,7 +53,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
-    private final HighwaterStorage highwaterStorage;
+    private final PartitionUpdates partitionUpdates;
     private final int index;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
@@ -74,14 +75,14 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     };
 
-    public DeltaStripeWALStorage(HighwaterStorage highwaterStorage,
+    public DeltaStripeWALStorage(PartitionUpdates partitionUpdates,
         int index,
         PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         DeltaWALFactory deltaWALFactory,
         long compactAfterNUpdates) {
 
-        this.highwaterStorage = highwaterStorage;
+        this.partitionUpdates = partitionUpdates;
         this.index = index;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
@@ -119,11 +120,9 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     @Override
     public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
         acquireAll();
-        boolean expunged = true;
         try {
-            expunged &= highwaterStorage.expunge(versionedPartitionName);
             partitionDeltas.remove(versionedPartitionName);
-            return expunged;
+            return true;
         } finally {
             releaseAll();
         }
@@ -279,7 +278,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public RowsChanged update(VersionedPartitionName versionedPartitionName,
+    public RowsChanged update(HighwaterStorage highwaterStorage, VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         Commitable<WALValue> updates) throws Exception {
 
@@ -334,9 +333,9 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                     LOG.inc("highwaterHint", 1);
                     LOG.inc("highwaterHint", 1, versionedPartitionName.getPartitionName().getPartitionName());
                 }
-
+                DeltaWAL.DeltaWALApplied updateApplied;
                 synchronized (oneWriterAtATimeLock) {
-                    DeltaWAL.DeltaWALApplied updateApplied = wal.update(versionedPartitionName, apply, partitionHighwater);
+                    updateApplied = wal.update(versionedPartitionName, apply, partitionHighwater);
 
                     Iterator<Table.Cell<Long, WALKey, WALValue>> iter = apply.cellSet().iterator();
                     while (iter.hasNext()) {
@@ -356,6 +355,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                     delta.appendTxFps(updateApplied.txId, updateApplied.keyToRowPointer.values());
                     rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers, updateApplied.txId);
                 }
+                partitionUpdates.updated(versionedPartitionName.getPartitionName(), updateApplied.txId);
             }
 
             updateSinceLastCompaction.addAndGet(apply.size());

@@ -111,7 +111,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + ringHost.getHost() + "-" + ringHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + ringHost.getHost() + "-" + ringHost.getPort()};
         config.takeFromNeighborsIntervalInMillis = 5;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
 
@@ -149,6 +149,17 @@ public class AmzaTestCluster {
                         transactionId,
                         tookRowUpdates);
                     return new StreamingTakeResult(consumed.partitionVersion, null, null, consumed.isOnline ? new HashMap<>() : null);
+                }
+            }
+
+            @Override
+            public void streamingTakePartitionUpdates(Map.Entry<RingMember, RingHost> node, long timeoutMillis,
+                UpdatesTaker.PartitionUpdatedStream updatedPartitionsStream) throws Exception {
+                AmzaNode amzaNode = cluster.get(node.getKey());
+                if (amzaNode == null) {
+                    throw new IllegalStateException("Service doesn't exists for " + node.getValue());
+                } else {
+                    amzaNode.takePartitionUpdates(timeoutMillis, updatedPartitionsStream);
                 }
             }
         };
@@ -337,18 +348,6 @@ public class AmzaTestCluster {
                 StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
                 StreamingTakesConsumer.StreamingTakeConsumed consumed = streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()),
                     rowStream);
-                /*
-                 (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
-                 if (!partitionName.isSystemPartition()) {
-                 if (rowType == RowType.primary) {
-                 BinaryPrimaryRowMarshaller binaryPrimaryRowMarshaller = new BinaryPrimaryRowMarshaller();
-                 System.out.println("TOOK:" + takerRingMember + "." + partitionName +
-                 " FROM:" + ringMember + " VALUE:" + binaryPrimaryRowMarshaller.fromRow(row));
-                 }
-                 }
-                 return rowStream.row(rowFP, rowTxId, rowType, row);
-                 });
-                 */
                 return consumed;
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -404,6 +403,21 @@ public class AmzaTestCluster {
                 }
             }
             return true;
+        }
+
+        private void takePartitionUpdates(long timeoutMillis, UpdatesTaker.PartitionUpdatedStream updatedPartitionsStream) {
+            if (off) {
+                throw new RuntimeException("Service is off:" + ringMember);
+            }
+            if (random.nextInt(100) > (100 - oddsOfAConnectionFailureWhenTaking)) {
+                throw new RuntimeException("Random take failure:" + ringMember);
+            }
+
+            try {
+                amzaService.streamingTakePartitionUpdates(timeoutMillis, updatedPartitionsStream);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
     }

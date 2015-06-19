@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
+import com.jivesoftware.os.amza.shared.take.PartitionUpdates;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
@@ -45,8 +46,18 @@ public class RowPartitionNGTest {
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
-        final OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        final IndexedWAL indexedWAL = new IndexedWAL(partitionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
+        OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
+        PartitionUpdates partitionUpdates = new PartitionUpdates();
+        IndexedWAL indexedWAL = new IndexedWAL(partitionUpdates,
+            partitionName,
+            idProvider,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            binaryWALTx,
+            1000,
+            1000,
+            2);
+
         indexedWAL.load();
 
         final Random r = new Random();
@@ -140,7 +151,17 @@ public class RowPartitionNGTest {
 
     private void testEventualConsitency(VersionedPartitionName versionedPartitionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
         throws Exception {
-        IndexedWAL indexedWAL = new IndexedWAL(versionedPartitionName, idProvider, primaryRowMarshaller, highwaterRowMarshaller, binaryWALTx, 1000, 1000, 2);
+        PartitionUpdates partitionUpdates = new PartitionUpdates();
+        IndexedWAL indexedWAL = new IndexedWAL(partitionUpdates,
+            versionedPartitionName,
+            idProvider,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            binaryWALTx,
+            1000,
+            1000,
+            2);
+
         indexedWAL.load();
         WALValue value = indexedWAL.get(rk(1));
         Assert.assertNull(value);

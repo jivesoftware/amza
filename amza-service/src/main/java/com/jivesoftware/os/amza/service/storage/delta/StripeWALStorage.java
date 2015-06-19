@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
@@ -24,7 +25,8 @@ public interface StripeWALStorage {
 
     void compact(PartitionIndex partitionIndex) throws Exception;
 
-    RowsChanged update(VersionedPartitionName versionedPartitionName,
+    RowsChanged update(HighwaterStorage highwaterStorage,
+        VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         Commitable<WALValue> updates) throws Exception;
 

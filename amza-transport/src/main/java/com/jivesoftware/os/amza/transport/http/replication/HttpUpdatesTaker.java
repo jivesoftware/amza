@@ -100,6 +100,25 @@ public class HttpUpdatesTaker implements UpdatesTaker {
         }
     }
 
+    @Override
+    public void streamingTakePartitionUpdates(Entry<RingMember, RingHost> node, long timeoutMillis,
+        PartitionUpdatedStream updatedPartitionsStream) throws Exception {
+
+        HttpStreamResponse httpStreamResponse;
+        try {
+            httpStreamResponse = getRequestHelper(node.getValue()).executeStreamingPostRequest(null,
+                "/amza/changes/streaming/partition/updates/" + timeoutMillis);
+        } catch (Exception e) {
+            throw e;
+        }
+        try {
+            BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
+            streamingTakesConsumer.consume(bis, updatedPartitionsStream);
+        } finally {
+            httpStreamResponse.close();
+        }
+    }
+
     HttpRequestHelper getRequestHelper(RingHost ringHost) {
         HttpRequestHelper requestHelper = requestHelpers.get(ringHost);
         if (requestHelper == null) {

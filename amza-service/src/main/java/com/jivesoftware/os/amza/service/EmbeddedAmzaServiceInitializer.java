@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.PartitionUpdates;
 import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
@@ -40,7 +41,9 @@ public class EmbeddedAmzaServiceInitializer {
 
         int tombstoneCompactionFactor = 2; // TODO expose to config;
         int compactAfterGrowthFactor = 2; // TODO expose to config;
-        WALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
+
+        PartitionUpdates partitionUpdates = new PartitionUpdates();
+        WALStorageProvider walStorageProvider = new IndexedWALStorageProvider(partitionUpdates, indexProviderRegistry,
             rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, orderIdProvider, tombstoneCompactionFactor, compactAfterGrowthFactor);
 
         return new AmzaServiceInitializer().initialize(config,
@@ -52,6 +55,7 @@ public class EmbeddedAmzaServiceInitializer {
             orderIdProvider,
             partitionPropertyMarshaller,
             walStorageProvider,
+            partitionUpdates,
             updatesTaker,
             sendFailureListener,
             takeFailureListener,

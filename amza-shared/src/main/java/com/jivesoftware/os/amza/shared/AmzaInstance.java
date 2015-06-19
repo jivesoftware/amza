@@ -30,6 +30,9 @@ public interface AmzaInstance {
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
 
+    void streamingTakePartitionUpdates(DataOutputStream dos,
+        long timeoutMillis) throws Exception;
+
     void streamingTakeFromPartition(DataOutputStream dos,
         RingMember ringMember,
         RingHost ringHost,

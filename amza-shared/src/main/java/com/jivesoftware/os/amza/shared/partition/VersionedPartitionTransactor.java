@@ -20,15 +20,25 @@ public class VersionedPartitionTransactor {
         this.numPermits = numPermits;
     }
 
-    public <R> R doWithOne(VersionedPartitionName versionedPartitionName, Status status, PartitionTx<R> tx) throws Exception {
+    public <R> R doWithOne(VersionedPartitionName versionedPartitionName,
+        Status status,
+        PartitionTx<R> tx) throws Exception {
+
         return doWith(versionedPartitionName, status, 1, tx);
     }
 
-    public <R> R doWithAll(VersionedPartitionName versionedPartitionName, Status status, PartitionTx<R> tx) throws Exception {
+    public <R> R doWithAll(VersionedPartitionName versionedPartitionName,
+        Status status,
+        PartitionTx<R> tx) throws Exception {
+
         return doWith(versionedPartitionName, status, numPermits, tx);
     }
 
-    private <R> R doWith(VersionedPartitionName versionedPartitionName, Status status, int count, PartitionTx<R> tx) throws Exception {
+    private <R> R doWith(VersionedPartitionName versionedPartitionName,
+        Status status,
+        int count,
+        PartitionTx<R> tx) throws Exception {
+
         Semaphore semaphore = semaphore(versionedPartitionName);
         semaphore.acquire(count);
         try {

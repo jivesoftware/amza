@@ -1,8 +1,10 @@
 package com.jivesoftware.os.amza.shared.take;
 
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.shared.take.UpdatesTaker.PartitionUpdatedStream;
 import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -12,6 +14,15 @@ import java.util.Map;
  *
  */
 public class StreamingTakesConsumer {
+
+    public void consume(InputStream bis, PartitionUpdatedStream updatedPartitionsStream) throws Exception {
+        try (DataInputStream dis = new DataInputStream(bis)) {
+            byte[] partitionNameBytes = new byte[dis.readInt()];
+            dis.readFully(partitionNameBytes);
+            long txId = dis.readLong();
+            updatedPartitionsStream.update(PartitionName.fromBytes(partitionNameBytes), txId);
+        }
+    }
 
     public StreamingTakeConsumed consume(InputStream bis, RowStream tookRowUpdates) throws Exception {
         Map<RingMember, Long> neighborsHighwaterMarks = new HashMap<>();
@@ -43,6 +54,7 @@ public class StreamingTakesConsumer {
     }
 
     public static class StreamingTakeConsumed {
+
         public final long partitionVersion;
         public final boolean isOnline;
         public final Map<RingMember, Long> neighborsHighwaterMarks;

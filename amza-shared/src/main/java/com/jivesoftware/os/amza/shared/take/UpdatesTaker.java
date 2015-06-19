@@ -26,6 +26,15 @@ import java.util.Map.Entry;
 
 public interface UpdatesTaker {
 
+    void streamingTakePartitionUpdates(Entry<RingMember, RingHost> node,
+        long timeoutMillis,
+        PartitionUpdatedStream updatedPartitionsStream) throws Exception;
+
+    interface PartitionUpdatedStream {
+
+        void update(PartitionName partitionName, long txId) throws Exception;
+    }
+
     /*
      Return true id acks were acked!
      */

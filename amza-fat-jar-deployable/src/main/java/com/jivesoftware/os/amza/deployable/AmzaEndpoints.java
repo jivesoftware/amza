@@ -139,10 +139,10 @@ public class AmzaEndpoints {
 
     AmzaPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
-        int ringSize = amzaService.getAmzaHostRing().getRingSize("default");
-        int systemRingSize = amzaService.getAmzaHostRing().getRingSize("system");
+        int ringSize = amzaService.getRingReader().getRingSize("default");
+        int systemRingSize = amzaService.getRingReader().getRingSize("system");
         if (ringSize < systemRingSize) {
-            amzaService.getAmzaHostRing().buildRandomSubRing("default", systemRingSize);
+            amzaService.getRingWriter().buildRandomSubRing("default", systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),

@@ -235,9 +235,9 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
     private AmzaPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
-        NavigableMap<RingMember, RingHost> ring = amzaService.getAmzaHostRing().getRing("default");
+        NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default");
         if (ring.isEmpty()) {
-            amzaService.getAmzaHostRing().buildRandomSubRing("default", amzaService.getAmzaHostRing().getRing("system").size());
+            amzaService.getRingWriter().buildRandomSubRing("default", amzaService.getRingReader().getRing("system").size());
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),

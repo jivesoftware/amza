@@ -295,6 +295,7 @@ class PartitionDelta {
                     } catch (Throwable ex) {
                         throw new RuntimeException("Error while streaming entry set.", ex);
                     }
+                }, (versionedPartitionName, txId) -> {
                 });
                 LOG.info("Merged deltas for " + compact.versionedPartitionName);
             }

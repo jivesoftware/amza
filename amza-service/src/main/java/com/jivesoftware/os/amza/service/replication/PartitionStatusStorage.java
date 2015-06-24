@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -35,6 +36,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final SystemWALStorage systemWALStorage;
+    private final WALUpdated walUpdated;
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
 
@@ -43,10 +45,12 @@ public class PartitionStatusStorage implements TxPartitionStatus {
     public PartitionStatusStorage(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
         SystemWALStorage systemWALStorage,
+        WALUpdated walUpdated,
         int awaitOnlineStripingLevel) {
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.systemWALStorage = systemWALStorage;
+        this.walUpdated = walUpdated;
         this.transactor = new VersionedPartitionTransactor(1024, 1024); // TODO expose to config?
         this.awaitNotify = new AwaitNotify<>(awaitOnlineStripingLevel);
     }
@@ -184,7 +188,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
                     RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
                         (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
                             walKey(ringMember, partitionName),
-                            new WALValue(versionedStatusBytes, orderIdProvider.nextId(), false)));
+                            new WALValue(versionedStatusBytes, orderIdProvider.nextId(), false)), walUpdated);
                     return !rowsChanged.isEmpty();
                 });
                 LOG.info("{}: {} versionedPartitionName:{} was updated to {}", rootRingMember, ringMember, versionedPartitionName, commitableVersionStatus);
@@ -209,7 +213,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
                             scan.row(orderIdProvider.nextId(),
                                 walKey(rootRingMember, compost.getPartitionName()),
                                 new WALValue(null, orderIdProvider.nextId(), true));
-                        });
+                        }, walUpdated);
                     return !rowsChanged.isEmpty();
                 });
                 localStatusCache.remove(compost);

@@ -159,7 +159,7 @@ public class AmzaTestCluster {
                 if (amzaNode == null) {
                     throw new IllegalStateException("Service doesn't exists for " + node.getValue());
                 } else {
-                    amzaNode.takePartitionUpdates(timeoutMillis, updatedPartitionsStream);
+                    amzaNode.takePartitionUpdates(node.getKey(), ORDER_ID_PROVIDER.nextId(), timeoutMillis, updatedPartitionsStream);
                 }
             }
         };
@@ -211,16 +211,16 @@ public class AmzaTestCluster {
         );
 
         try {
-            amzaService.getAmzaHostRing().addRingMember("system", ringMember); // ?? Hacky
-            amzaService.getAmzaHostRing().addRingMember("test", ringMember); // ?? Hacky
+            amzaService.getRingWriter().addRingMember("system", ringMember); // ?? Hacky
+            amzaService.getRingWriter().addRingMember("test", ringMember); // ?? Hacky
             if (lastAmzaService != null) {
-                amzaService.getAmzaHostRing().register(lastAmzaService.getAmzaHostRing().getRingMember(), lastAmzaService.getAmzaHostRing().getRingHost());
-                amzaService.getAmzaHostRing().addRingMember("system", lastAmzaService.getAmzaHostRing().getRingMember()); // ?? Hacky
-                amzaService.getAmzaHostRing().addRingMember("test", lastAmzaService.getAmzaHostRing().getRingMember()); // ?? Hacky
+                amzaService.getRingWriter().register(lastAmzaService.getRingReader().getRingMember(), lastAmzaService.getRingWriter().getRingHost());
+                amzaService.getRingWriter().addRingMember("system", lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
+                amzaService.getRingWriter().addRingMember("test", lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
 
-                lastAmzaService.getAmzaHostRing().register(ringMember, ringHost);
-                lastAmzaService.getAmzaHostRing().addRingMember("system", ringMember); // ?? Hacky
-                lastAmzaService.getAmzaHostRing().addRingMember("test", ringMember); // ?? Hacky
+                lastAmzaService.getRingWriter().register(ringMember, ringHost);
+                lastAmzaService.getRingWriter().addRingMember("system", ringMember); // ?? Hacky
+                lastAmzaService.getRingWriter().addRingMember("test", ringMember); // ?? Hacky
             }
             lastAmzaService = amzaService;
         } catch (Exception x) {
@@ -377,8 +377,8 @@ public class AmzaTestCluster {
             partitionNames.addAll(allAPartitions);
             partitionNames.addAll(allBPartitions);
 
-            NavigableMap<RingMember, RingHost> aRing = amzaService.getAmzaRingReader().getRing("system");
-            NavigableMap<RingMember, RingHost> bRing = service.amzaService.getAmzaRingReader().getRing("system");
+            NavigableMap<RingMember, RingHost> aRing = amzaService.getRingReader().getRing("system");
+            NavigableMap<RingMember, RingHost> bRing = service.amzaService.getRingReader().getRing("system");
 
             if (!aRing.equals(bRing)) {
                 System.out.println(aRing + "-vs-" + bRing);
@@ -393,8 +393,8 @@ public class AmzaTestCluster {
                 AmzaPartition a = amzaService.getPartition(partitionName);
                 AmzaPartition b = service.amzaService.getPartition(partitionName);
                 if (a == null || b == null) {
-                    System.out.println(partitionName + " " + amzaService.getAmzaHostRing().getRingMember() + " " + a + " -- vs --"
-                        + service.amzaService.getAmzaHostRing().getRingMember() + " " + b);
+                    System.out.println(partitionName + " " + amzaService.getRingReader().getRingMember() + " " + a + " -- vs --"
+                        + service.amzaService.getRingReader().getRingMember() + " " + b);
                     return false;
                 }
                 if (!a.compare(b)) {
@@ -405,7 +405,11 @@ public class AmzaTestCluster {
             return true;
         }
 
-        private void takePartitionUpdates(long timeoutMillis, UpdatesTaker.PartitionUpdatedStream updatedPartitionsStream) {
+        private void takePartitionUpdates(RingMember ringMember,
+            long sessionId,
+            long timeoutMillis,
+            UpdatesTaker.PartitionUpdatedStream updatedPartitionsStream) {
+
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
@@ -414,7 +418,7 @@ public class AmzaTestCluster {
             }
 
             try {
-                amzaService.streamingTakePartitionUpdates(timeoutMillis, updatedPartitionsStream);
+                amzaService.streamingTakePartitionUpdates(ringMember, sessionId, timeoutMillis, updatedPartitionsStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

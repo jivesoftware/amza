@@ -30,6 +30,7 @@ import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -46,22 +47,25 @@ public class AmzaPartition implements AmzaPartitionAPI {
 
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
+    private final WALUpdated walUpdated;
     private final RingMember ringMember;
     private final PartitionName partitionName;
     private final PartitionStripeProvider partitionStripeProvider;
     private final AckWaters ackWaters;
-    private final AmzaRingReader ringReader;
+    private final AmzaRingStoreReader ringReader;
 
     public AmzaPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
+        WALUpdated walUpdated,
         RingMember ringMember,
         PartitionName partitionName,
         PartitionStripeProvider partitionStripeProvider,
         AckWaters ackWaters,
-        AmzaRingReader ringReader) {
+        AmzaRingStoreReader ringReader) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
+        this.walUpdated = walUpdated;
         this.ringMember = ringMember;
         this.partitionName = partitionName;
         this.partitionStripeProvider = partitionStripeProvider;
@@ -85,7 +89,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
                     WALValue value = scanned.getTimestampId() > 0 ? scanned : new WALValue(scanned.getValue(), timestampId, scanned.getTombstoned());
                     return scan.row(rowTxId, key, value);
                 });
-            });
+            }, walUpdated);
 
             Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(partitionName.getRingName());
 

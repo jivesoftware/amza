@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.service.AmzaRingReader;
+import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
@@ -16,13 +16,13 @@ public class PartitionComposter {
 
     private final PartitionIndex partitionIndex;
     private final PartitionProvider partitionProvider;
-    private final AmzaRingReader amzaRingReader;
+    private final AmzaRingStoreReader amzaRingReader;
     private final PartitionStripeProvider partitionStripeProvider;
     private final PartitionStatusStorage partitionStatusStorage;
 
     public PartitionComposter(PartitionIndex partitionIndex,
         PartitionProvider partitionProvider,
-        AmzaRingReader amzaRingReader,
+        AmzaRingStoreReader amzaRingReader,
         PartitionStatusStorage partitionMemberStatusStorage,
         PartitionStripeProvider partitionStripeProvider) {
 

@@ -7,7 +7,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.AmzaRingReader;
+import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
@@ -30,6 +30,7 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
@@ -66,7 +67,8 @@ public class PartitionChangeTaker implements RowChanges {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private ScheduledExecutorService updatedTakerThreadPool;
     private ExecutorService changeTakerThreadPool;
-    private final AmzaRingReader amzaRingReader;
+    private final AmzaRingStoreReader amzaRingReader;
+    private final WALUpdated walUpdated;
     private final RingHost ringHost;
     private final SystemWALStorage systemWALStorage;
     private final HighwaterStorage systemHighwaterStorage;
@@ -85,7 +87,8 @@ public class PartitionChangeTaker implements RowChanges {
     private final ConcurrentHashMap<RingMember, PartitionsUpdatedTaker> updatedTaker = new ConcurrentHashMap<>();
 
     public PartitionChangeTaker(AmzaStats amzaStats,
-        AmzaRingReader amzaRingReader,
+        AmzaRingStoreReader amzaRingReader,
+        WALUpdated walUpdated,
         RingHost ringHost,
         SystemWALStorage systemWALStorage,
         HighwaterStorage systemHighwaterStorage,
@@ -99,6 +102,7 @@ public class PartitionChangeTaker implements RowChanges {
 
         this.amzaStats = amzaStats;
         this.amzaRingReader = amzaRingReader;
+        this.walUpdated = walUpdated;
         this.ringHost = ringHost;
         this.systemWALStorage = systemWALStorage;
         this.systemHighwaterStorage = systemHighwaterStorage;
@@ -188,9 +192,10 @@ public class PartitionChangeTaker implements RowChanges {
             if (u == null) {
                 CommitChanges commitChanges;
                 if (partitionName.isSystemPartition()) {
-                    commitChanges = new SystemPartitionCommitChanges(new VersionedPartitionName(partitionName, 0), systemWALStorage, systemHighwaterStorage);
+                    commitChanges = new SystemPartitionCommitChanges(new VersionedPartitionName(partitionName, 0), systemWALStorage, systemHighwaterStorage,
+                        walUpdated);
                 } else {
-                    commitChanges = new StripedPartitionCommitChanges(partitionName, partitionStripeProvider, hardFlush);
+                    commitChanges = new StripedPartitionCommitChanges(partitionName, partitionStripeProvider, hardFlush, walUpdated);
                 }
                 u = new ChangeTaker(amzaStats, ringHost, amzaRingReader, partitionIndex, partitionStatusStorage,
                     updatesTaker, takeFailureListener,
@@ -223,7 +228,7 @@ public class PartitionChangeTaker implements RowChanges {
     static class PartitionsUpdatedTaker implements Runnable {
 
         private final RingMember ringMember;
-        private final AmzaRingReader amzaRingReader;
+        private final AmzaRingStoreReader amzaRingReader;
         private final UpdatesTaker updatesTaker;
 
         private final ExecutorService updateTakerThreadPool;
@@ -231,7 +236,7 @@ public class PartitionChangeTaker implements RowChanges {
         private final AtomicBoolean disposed = new AtomicBoolean(false);
 
         public PartitionsUpdatedTaker(RingMember ringMember,
-            AmzaRingReader amzaRingReader,
+            AmzaRingStoreReader amzaRingReader,
             UpdatesTaker updatesTaker,
             ExecutorService updateTakerThreadPool,
             ConcurrentHashMap<PartitionName, ChangeTaker> changeTakers) {
@@ -280,7 +285,7 @@ public class PartitionChangeTaker implements RowChanges {
 
         private final AmzaStats amzaStats;
         private final RingHost ringHost;
-        private final AmzaRingReader amzaRingReader;
+        private final AmzaRingStoreReader amzaRingReader;
         private final PartitionIndex partitionIndex;
         private final PartitionStatusStorage partitionStatusStorage;
         private final UpdatesTaker updatesTaker;
@@ -295,7 +300,7 @@ public class PartitionChangeTaker implements RowChanges {
 
         public ChangeTaker(AmzaStats amzaStats,
             RingHost ringHost,
-            AmzaRingReader amzaRingReader,
+            AmzaRingStoreReader amzaRingReader,
             PartitionIndex partitionIndex,
             PartitionStatusStorage partitionStatusStorage,
             UpdatesTaker updatesTaker,
@@ -662,10 +667,6 @@ public class PartitionChangeTaker implements RowChanges {
                     });
                     flushed.set(streamed.get());
                     numFlushed = changes.getApply().size();
-                    if (numFlushed > 0) {
-
-                        LOG.info(versionedPartitionName + " " + ringMember + " " + changes);
-                    }
                 }
             }
             highwater.set(null);

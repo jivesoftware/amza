@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -31,7 +32,7 @@ import static com.jivesoftware.os.amza.service.storage.PartitionProvider.REGION_
 /**
  * @author jonathan.colt
  */
-public class PartitionIndex implements RowChanges {
+public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -191,6 +192,7 @@ public class PartitionIndex implements RowChanges {
         return get(versionedPartitionName) != null;
     }
 
+    @Override
     public Iterable<VersionedPartitionName> getAllPartitions() {
         return Iterables.concat(Iterables.transform(partitionStores.entrySet(), (partitionVersions) -> {
             return Iterables.transform(partitionVersions.getValue().keySet(), (partitionVersion) -> {

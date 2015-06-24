@@ -8,7 +8,7 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.ring.AmzaRing;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -50,7 +50,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
     private final String template;
     private final String statsTemplate;
     private final SoyRenderer renderer;
-    private final AmzaRing amzaRing;
+    private final AmzaRingReader ringReader;
     private final AmzaService amzaService;
     private final AmzaStats amzaStats;
 
@@ -63,14 +63,14 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
     public HealthPluginRegion(String template,
         String statsTemplate,
         SoyRenderer renderer,
-        AmzaRing amzaRing,
+        AmzaRingReader ringReader,
         AmzaService amzaService,
         AmzaStats amzaStats
     ) {
         this.template = template;
         this.statsTemplate = statsTemplate;
         this.renderer = renderer;
-        this.amzaRing = amzaRing;
+        this.ringReader = ringReader;
         this.amzaService = amzaService;
         this.amzaStats = amzaStats;
 
@@ -146,7 +146,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         if (name != null) {
             map.put("name", name.getPartitionName());
             map.put("ringName", name.getRingName());
-            NavigableMap<RingMember, RingHost> ring = amzaRing.getRing(name.getRingName());
+            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(name.getRingName());
             List<Map<String, String>> ringMaps = new ArrayList<>();
             for (Entry<RingMember, RingHost> r : ring.entrySet()) {
                 ringMaps.add(ImmutableMap.of("member", r.getKey().getMember(),

@@ -4,7 +4,7 @@ import com.google.common.collect.Lists;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.tofu.SoyTofu;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.ring.AmzaRing;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaClusterPluginEndpoints;
@@ -64,16 +64,16 @@ public class AmzaUIInitializer {
 
         List<ManagePlugin> plugins = Lists.newArrayList(new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
                 HealthPluginEndpoints.class,
-                new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats", renderer, amzaService.getAmzaHostRing(), amzaService, amzaStats)),
+                new HealthPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats", renderer, amzaService.getRingReader(), amzaService, amzaStats)),
             new ManagePlugin("repeat", "Rings", "/amza/ui/rings",
                 AmzaRingsPluginEndpoints.class,
-                new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getAmzaHostRing())),
+                new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getRingWriter(), amzaService.getRingReader())),
             new ManagePlugin("map-marker", "Regions", "/amza/ui/regions",
                 AmzaRegionsPluginEndpoints.class,
-                new AmzaPartitionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getAmzaHostRing(), amzaService)),
+                new AmzaPartitionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getRingReader(), amzaService)),
             new ManagePlugin("leaf", "Cluster", "/amza/ui/cluster",
                 AmzaClusterPluginEndpoints.class,
-                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getAmzaHostRing())),
+                new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getRingWriter(), amzaService.getRingReader())),
             new ManagePlugin("scale", "Stress", "/amza/ui/stress",
                 AmzaStressPluginEndpoints.class,
                 new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService)),
@@ -91,7 +91,7 @@ public class AmzaUIInitializer {
 
         injectionCallback.addEndpoint(AmzaUIEndpoints.class);
         injectionCallback.addInjectable(AmzaClusterName.class, new AmzaClusterName((clusterName == null) ? "manual" : clusterName));
-        injectionCallback.addInjectable(AmzaRing.class, amzaService.getAmzaHostRing());
+        injectionCallback.addInjectable(AmzaRingWriter.class, amzaService.getRingWriter());
         injectionCallback.addInjectable(AmzaStats.class, amzaStats);
         injectionCallback.addInjectable(RingHost.class, host);
     }

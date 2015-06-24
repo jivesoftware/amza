@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 
 /**
@@ -24,9 +25,9 @@ public class SystemWALStorage {
     }
 
     public RowsChanged update(VersionedPartitionName versionedPartitionName,
-        Commitable<WALValue> updates) throws Exception {
+        Commitable<WALValue> updates, WALUpdated updated) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getWalStorage().update(false, updates);
+        return partitionIndex.get(versionedPartitionName).getWalStorage().update(false, updates, updated);
     }
 
     public WALValue get(VersionedPartitionName versionedPartitionName, WALKey key) throws Exception {

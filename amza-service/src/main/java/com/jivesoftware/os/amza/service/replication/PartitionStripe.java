@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -92,7 +93,8 @@ public class PartitionStripe {
         PartitionName partitionName,
         Optional<Long> specificVersion,
         boolean requiresOnline,
-        Commitable<WALValue> updates) throws Exception {
+        Commitable<WALValue> updates,
+        WALUpdated updated) throws Exception {
 
         return txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
@@ -106,7 +108,7 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + partitionName);
                 } else {
-                    RowsChanged changes = storage.update(highwaterStorage, versionedPartitionName, partitionStore.getWalStorage(), updates);
+                    RowsChanged changes = storage.update(highwaterStorage, versionedPartitionName, partitionStore.getWalStorage(), updates, updated);
                     if (allRowChanges != null && !changes.isEmpty()) {
                         allRowChanges.changes(changes);
                     }

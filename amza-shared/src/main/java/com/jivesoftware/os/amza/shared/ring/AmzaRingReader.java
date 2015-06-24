@@ -6,17 +6,11 @@ import java.util.NavigableMap;
  *
  * @author jonathan.colt
  */
-public interface AmzaRing {
+public interface AmzaRingReader {
 
-    void deregister(RingMember ringMember) throws Exception;
-
-    void register(RingMember ringMember, RingHost ringHost) throws Exception;
+    RingMember getRingMember();
 
     RingNeighbors getRingNeighbors(String ringName) throws Exception;
-
-    void addRingMember(String ringName, RingMember ringMember) throws Exception;
-
-    void removeRingMember(String ringName, RingMember ringHost) throws Exception;
 
     NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception;
 
@@ -26,6 +20,13 @@ public interface AmzaRing {
 
     interface RingStream {
 
-        boolean stream(String ringName, RingMember ringMember, RingHost ringHost);
+        boolean stream(String ringName, RingMember ringMember, RingHost ringHost) throws Exception;
+    }
+
+    void getRingNames(RingMember ringMember, RingNameStream ringNameStream) throws Exception;
+
+    interface RingNameStream {
+
+        boolean stream(String ringName) throws Exception;
     }
 }

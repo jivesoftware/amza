@@ -26,7 +26,6 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.take.PartitionUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -36,6 +35,7 @@ import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -66,7 +66,6 @@ public class IndexedWAL implements WALStorage {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
-    private final PartitionUpdates partitionUpdates;
     private final VersionedPartitionName versionedPartitionName;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller<byte[]> rowMarshaller;
@@ -95,8 +94,7 @@ public class IndexedWAL implements WALStorage {
         }
     };
 
-    public IndexedWAL(PartitionUpdates partitionUpdates,
-        VersionedPartitionName versionedPartitionName,
+    public IndexedWAL(VersionedPartitionName versionedPartitionName,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
@@ -105,7 +103,6 @@ public class IndexedWAL implements WALStorage {
         int maxUpdatesBetweenIndexCommitMarker,
         int tombstoneCompactionFactor) {
 
-        this.partitionUpdates = partitionUpdates;
         this.versionedPartitionName = versionedPartitionName;
         this.orderIdProvider = orderIdProvider;
         this.rowMarshaller = rowMarshaller;
@@ -306,7 +303,8 @@ public class IndexedWAL implements WALStorage {
      */
     @Override
     public RowsChanged update(final boolean useUpdateTxId,
-        Commitable<WALValue> updates) throws Exception {
+        Commitable<WALValue> updates,
+        WALUpdated updated) throws Exception {
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         final Table<Long, WALKey, WALValue> apply = TreeBasedTable.create();
@@ -441,7 +439,7 @@ public class IndexedWAL implements WALStorage {
                     rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers,
                         indexCommitedUpToTxId.longValue());
                 }
-                partitionUpdates.updated(versionedPartitionName.getPartitionName(), indexCommitedUpToTxId.longValue());
+                updated.updated(versionedPartitionName, indexCommitedUpToTxId.longValue());
             }
 
             final boolean commitAndWriteMarker = apply.size() > 0 && indexUpdates.addAndGet(apply.size()) > maxUpdatesBetweenIndexCommitMarker.get();

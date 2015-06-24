@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.ring.AmzaRing;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
@@ -32,16 +32,16 @@ public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaParti
 
     private final String template;
     private final SoyRenderer renderer;
-    private final AmzaRing amzaRing;
+    private final AmzaRingReader ringReader;
     private final AmzaService amzaService;
 
     public AmzaPartitionsPluginRegion(String template,
         SoyRenderer renderer,
-        AmzaRing amzaRing,
+        AmzaRingReader ringReader,
         AmzaService amzaService) {
         this.template = template;
         this.renderer = renderer;
-        this.amzaRing = amzaRing;
+        this.ringReader = ringReader;
         this.amzaService = amzaService;
     }
 
@@ -84,7 +84,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaParti
                     row.put("name", partitionName.getPartitionName());
                     row.put("ringName", partitionName.getRingName());
 
-                    NavigableMap<RingMember, RingHost> ring = amzaRing.getRing(partitionName.getRingName());
+                    NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
                     List<Map<String, Object>> ringHosts = new ArrayList<>();
                     for (Map.Entry<RingMember, RingHost> r : ring.entrySet()) {
                         Map<String, Object> ringHost = new HashMap<>();

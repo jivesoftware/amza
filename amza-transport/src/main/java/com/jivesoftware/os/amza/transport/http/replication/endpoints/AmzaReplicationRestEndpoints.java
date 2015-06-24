@@ -16,7 +16,8 @@
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.ring.AmzaRing;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
@@ -44,12 +45,15 @@ import javax.ws.rs.core.StreamingOutput;
 public class AmzaReplicationRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private final AmzaRing amzaRing;
+    private final AmzaRingWriter ringWriter;
+    private final AmzaRingReader ringReader;
     private final AmzaInstance amzaInstance;
 
-    public AmzaReplicationRestEndpoints(@Context AmzaRing amzaRing,
+    public AmzaReplicationRestEndpoints(@Context AmzaRingWriter ringWriter,
+        @Context AmzaRingReader ringReader,
         @Context AmzaInstance amzaInstance) {
-        this.amzaRing = amzaRing;
+        this.ringWriter = ringWriter;
+        this.ringReader = ringReader;
         this.amzaInstance = amzaInstance;
     }
 
@@ -62,8 +66,8 @@ public class AmzaReplicationRestEndpoints {
         try {
             LOG.info("Attempting to add {}/{}/{} ", logicalName, host, port);
             RingMember ringMember = new RingMember(logicalName);
-            amzaRing.register(ringMember, new RingHost(host, port));
-            amzaRing.addRingMember("system", ringMember);
+            ringWriter.register(ringMember, new RingHost(host, port));
+            ringWriter.addRingMember("system", ringMember);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
@@ -77,7 +81,7 @@ public class AmzaReplicationRestEndpoints {
     public Response removeMember(@PathParam("logicalName") String logicalName) {
         try {
             LOG.info("Attempting to remove RingHost: " + logicalName);
-            amzaRing.removeRingMember("system", new RingMember(logicalName));
+            ringWriter.removeRingMember("system", new RingMember(logicalName));
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + logicalName, x);
@@ -91,7 +95,7 @@ public class AmzaReplicationRestEndpoints {
     public Response getRing() {
         try {
             LOG.info("Attempting to get amza ring.");
-            NavigableMap<RingMember, RingHost> ring = amzaRing.getRing("system");
+            NavigableMap<RingMember, RingHost> ring = ringReader.getRing("system");
             return ResponseHelper.INSTANCE.jsonResponse(ring);
         } catch (Exception x) {
             LOG.warn("Failed to get amza ring.", x);
@@ -133,8 +137,10 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/changes/streaming/partition/updates/{timeoutMillis}")
-    public Response streamingPartitionUpdates(@PathParam("timeoutMillis") long timeoutMillis) {
+    @Path("/changes/streaming/partition/updates/{ringMember}/{takSessionId}}/{timeoutMillis}")
+    public Response streamingPartitionUpdates(@PathParam("ringMember") String ringMemberString,
+        @PathParam("takSessionId") long takSessionId,
+        @PathParam("timeoutMillis") long timeoutMillis) {
         try {
 
             StreamingOutput stream = (OutputStream os) -> {
@@ -142,7 +148,7 @@ public class AmzaReplicationRestEndpoints {
                 BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
                 final DataOutputStream dos = new DataOutputStream(bos);
                 try {
-                    amzaInstance.streamingTakePartitionUpdates(dos, timeoutMillis);
+                    amzaInstance.streamingTakePartitionUpdates(dos, new RingMember(ringMemberString), takSessionId, timeoutMillis);
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);

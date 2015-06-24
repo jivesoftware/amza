@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
@@ -26,6 +27,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final SystemWALStorage systemWALStorage;
+    private final WALUpdated walUpdated;
 
     private final int numPermits = 1024;
     private final Semaphore bigBird = new Semaphore(numPermits, true); // TODO expose to config
@@ -35,9 +37,12 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     public PartitionBackedHighwaterStorage(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
-        SystemWALStorage systemWALStorage) {
+        SystemWALStorage systemWALStorage,
+        WALUpdated walUpdated) {
+
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
+        this.walUpdated = walUpdated;
         this.systemWALStorage = systemWALStorage;
     }
 
@@ -55,7 +60,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                 systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX,
                     (highwaters, scan) -> {
                         scan.row(-1, key, new WALValue(value.getValue(), removeTimestamp, true));
-                    });
+                    }, walUpdated);
                 return true;
             });
             return true;
@@ -109,7 +114,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                 systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX,
                     (highwater, scan) -> {
                         scan.row(-1, walKey(versionedPartitionName, member), new WALValue(null, orderIdProvider.nextId(), true));
-                    });
+                    }, walUpdated);
                 partitionHighwaterUpdates.remove(versionedPartitionName);
             }
         } finally {
@@ -170,7 +175,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                         for (VersionedPartitionName versionedPartitionName : partitions.keySet()) {
                             scan.row(-1, walKey(versionedPartitionName, member), new WALValue(null, timestamp, true));
                         }
-                    });
+                    }, walUpdated);
 
             }
             hostToPartitionToHighwaterUpdates.remove(member);
@@ -209,7 +214,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                         });
                     });
 
-                });
+                }, walUpdated);
         } finally {
             bigBird.release(numPermits);
         }

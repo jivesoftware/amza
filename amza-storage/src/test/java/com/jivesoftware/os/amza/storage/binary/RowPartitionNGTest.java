@@ -6,12 +6,13 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
-import com.jivesoftware.os.amza.shared.take.PartitionUpdates;
+import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -31,6 +32,9 @@ import org.testng.annotations.Test;
  */
 public class RowPartitionNGTest {
 
+    private final WALUpdated updated = (VersionedPartitionName versionedPartitionName, long txId) -> {
+    };
+
     final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
     final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
 
@@ -47,8 +51,8 @@ public class RowPartitionNGTest {
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        PartitionUpdates partitionUpdates = new PartitionUpdates();
-        IndexedWAL indexedWAL = new IndexedWAL(partitionUpdates,
+        TakeCoordinator takeCoordinator = new TakeCoordinator(idProvider);
+        IndexedWAL indexedWAL = new IndexedWAL(
             partitionName,
             idProvider,
             primaryRowMarshaller,
@@ -114,7 +118,7 @@ public class RowPartitionNGTest {
             WALKey key = new WALKey(UIO.intBytes(r.nextInt(range)));
             updates.put(key, new WALValue(UIO.intBytes(i), idProvider.nextId(), false));
         }
-        indexedWAL.update(false, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(false, new MemoryWALUpdates(updates, null), updated);
     }
 
     @Test
@@ -151,8 +155,7 @@ public class RowPartitionNGTest {
 
     private void testEventualConsitency(VersionedPartitionName versionedPartitionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
         throws Exception {
-        PartitionUpdates partitionUpdates = new PartitionUpdates();
-        IndexedWAL indexedWAL = new IndexedWAL(partitionUpdates,
+        IndexedWAL indexedWAL = new IndexedWAL(
             versionedPartitionName,
             idProvider,
             primaryRowMarshaller,
@@ -229,6 +232,6 @@ public class RowPartitionNGTest {
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
-        indexedWAL.update(false, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(false, new MemoryWALUpdates(updates, null), updated);
     }
 }

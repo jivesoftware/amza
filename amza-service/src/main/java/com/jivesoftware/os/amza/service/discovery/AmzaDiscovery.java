@@ -18,7 +18,8 @@ package com.jivesoftware.os.amza.service.discovery;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.AmzaHostRing;
+import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
+import com.jivesoftware.os.amza.service.AmzaRingStoreWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -43,17 +44,21 @@ public class AmzaDiscovery {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final AmzaHostRing amzaRing;
+    private final AmzaRingStoreReader ringStoreReader;
+    private final AmzaRingStoreWriter ringStoreWriter;
     private final String clusterName;
     private final InetAddress multicastGroup;
     private final int multicastPort;
     private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2, new ThreadFactoryBuilder().setNameFormat("discovery-%d").build());
 
-    public AmzaDiscovery(AmzaHostRing amzaRing,
+    public AmzaDiscovery(AmzaRingStoreReader ringStoreReader,
+        AmzaRingStoreWriter ringStoreWriter,
         String clusterName,
         String multicastGroup,
         int multicastPort) throws UnknownHostException {
-        this.amzaRing = amzaRing;
+
+        this.ringStoreReader = ringStoreReader;
+        this.ringStoreWriter = ringStoreWriter;
         this.clusterName = clusterName;
         this.multicastGroup = InetAddress.getByName(multicastGroup);
         this.multicastPort = multicastPort;
@@ -94,21 +99,21 @@ public class AmzaDiscovery {
                                 int port = Integer.parseInt(clusterMemberHostPort.get(3).trim());
                                 RingMember ringMember = new RingMember(member);
                                 RingHost anotherRingHost = new RingHost(host, port);
-                                NavigableMap<RingMember, RingHost> ring = amzaRing.getRing("system");
+                                NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing("system");
                                 RingHost ringHost = ring.get(ringMember);
                                 if (ringHost == null) {
                                     LOG.info("Adding ringMember:" + ringMember + " on host:" + anotherRingHost + " to cluster: " + clusterName);
-                                    amzaRing.register(ringMember, anotherRingHost);
-                                    amzaRing.addRingMember("system", ringMember);
+                                    ringStoreWriter.register(ringMember, anotherRingHost);
+                                    ringStoreWriter.addRingMember("system", ringMember);
                                     allMemberSeen.add(ringMember);
                                 } else if (!ringHost.equals(anotherRingHost)) {
                                     LOG.info("Updating ringMember:" + ringMember + " on host:" + anotherRingHost + " for cluster:" + clusterName);
-                                    amzaRing.register(ringMember, anotherRingHost);
+                                    ringStoreWriter.register(ringMember, anotherRingHost);
                                 }
                             }
                             long elapse = System.currentTimeMillis() - startTime;
                             if (elapse > timeout && allMemberSeen.size() <= 1) {
-                                if (!allMemberSeen.contains(amzaRing.getRingMember())) {
+                                if (!allMemberSeen.contains(ringStoreReader.getRingMember())) {
                                     LOG.error("We have not seen our own multicast.");
                                 }
                                 LOG.error("We have not discovered any other members, elapsed:{} multicastGroup:{} multicastPort:{}",
@@ -133,8 +138,8 @@ public class AmzaDiscovery {
         public void run() {
             String message = "";
             try (MulticastSocket socket = new MulticastSocket()) {
-                RingMember ringMember = amzaRing.getRingMember();
-                RingHost ringHost = amzaRing.getRingHost();
+                RingMember ringMember = ringStoreReader.getRingMember();
+                RingHost ringHost = ringStoreWriter.getRingHost();
                 if (ringHost != RingHost.UNKNOWN_RING_HOST) {
                     message = (clusterName + "|" + ringMember.getMember() + "|" + ringHost.getHost() + "|" + ringHost.getPort());
                     byte[] buf = new byte[512];

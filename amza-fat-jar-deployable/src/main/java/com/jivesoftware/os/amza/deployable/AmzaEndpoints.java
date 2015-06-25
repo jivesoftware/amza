@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -140,7 +141,7 @@ public class AmzaEndpoints {
     AmzaPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
         int ringSize = amzaService.getRingReader().getRingSize("default");
-        int systemRingSize = amzaService.getRingReader().getRingSize("system");
+        int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
         if (ringSize < systemRingSize) {
             amzaService.getRingWriter().buildRandomSubRing("default", systemRingSize);
         }

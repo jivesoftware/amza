@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
@@ -19,18 +20,18 @@ class SystemPartitionCommitChanges implements CommitChanges {
     final HighwaterStorage highwaterStorage;
     final WALUpdated walUpdated;
 
-    public SystemPartitionCommitChanges(VersionedPartitionName versionedPartitionName,
+    public SystemPartitionCommitChanges(PartitionName partitionName,
         SystemWALStorage systemWALStorage,
         HighwaterStorage highwaterStorage,
         WALUpdated walUpdated) {
-        this.versionedPartitionName = versionedPartitionName;
+        this.versionedPartitionName = new VersionedPartitionName(partitionName, 0);
         this.systemWALStorage = systemWALStorage;
         this.highwaterStorage = highwaterStorage;
         this.walUpdated = walUpdated;
     }
 
     @Override
-    public boolean shouldAwake(RingMember ringMember, long txId) throws Exception {
+    public boolean needsTxId(RingMember ringMember, long txId) throws Exception {
         highwaterStorage.get(ringMember, versionedPartitionName);
         Long highwater = highwaterStorage.get(ringMember, versionedPartitionName);
         return highwater == null || txId > highwater;

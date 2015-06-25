@@ -19,6 +19,7 @@ import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -28,12 +29,12 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 
 public class PartitionProvider {
 
-    public static final VersionedPartitionName NODE_INDEX = new VersionedPartitionName(new PartitionName(true, "system", "NODE_INDEX"), 0);
-    public static final VersionedPartitionName RING_INDEX = new VersionedPartitionName(new PartitionName(true, "system", "RING_INDEX"), 0);
-    public static final VersionedPartitionName REGION_INDEX = new VersionedPartitionName(new PartitionName(true, "system", "REGION_INDEX"), 0);
-    public static final VersionedPartitionName REGION_PROPERTIES = new VersionedPartitionName(new PartitionName(true, "system", "REGION_PROPERTIES"), 0);
-    public static final VersionedPartitionName HIGHWATER_MARK_INDEX = new VersionedPartitionName(new PartitionName(true, "system", "HIGHWATER_MARK_INDEX"), 0);
-    public static final VersionedPartitionName REGION_ONLINE_INDEX = new VersionedPartitionName(new PartitionName(true, "system", "REGION_ONLINE_INDEX"), 0);
+    public static final VersionedPartitionName NODE_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "NODE_INDEX"), 0);
+    public static final VersionedPartitionName RING_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "RING_INDEX"), 0);
+    public static final VersionedPartitionName REGION_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_INDEX"), 0);
+    public static final VersionedPartitionName REGION_PROPERTIES = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_PROPERTIES"), 0);
+    public static final VersionedPartitionName HIGHWATER_MARK_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "HIGHWATER_MARK_INDEX"), 0);
+    public static final VersionedPartitionName REGION_ONLINE_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_ONLINE_INDEX"), 0);
 
     private final OrderIdProvider orderIdProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;

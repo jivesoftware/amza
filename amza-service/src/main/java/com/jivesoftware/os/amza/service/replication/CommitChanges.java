@@ -12,11 +12,11 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
  */
 interface CommitChanges {
 
-    boolean shouldAwake(RingMember ringMember, long txId) throws Exception;
+    boolean needsTxId(RingMember ringMember, long txId) throws Exception;
 
     void commit(CommitTx commitTx) throws Exception;
 
-    public static interface CommitTx {
+    interface CommitTx {
 
         RowsChanged tx(VersionedPartitionName versionedPartitionName, HighwaterStorage highwaterStorage, CommitTo commitTo) throws Exception;
     }

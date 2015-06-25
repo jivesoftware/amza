@@ -8,6 +8,8 @@ import java.util.NavigableMap;
  */
 public interface AmzaRingReader {
 
+    String SYSTEM_RING = "system";
+
     RingMember getRingMember();
 
     RingNeighbors getRingNeighbors(String ringName) throws Exception;

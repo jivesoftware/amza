@@ -26,7 +26,9 @@ import java.util.Map.Entry;
 
 public interface UpdatesTaker {
 
-    void streamingTakePartitionUpdates(Entry<RingMember, RingHost> node,
+    void streamingTakePartitionUpdates(RingMember fromRingMember,
+        RingHost fromRingHost,
+        long takeSessionId,
         long timeoutMillis,
         PartitionUpdatedStream updatedPartitionsStream) throws Exception;
 
@@ -35,29 +37,9 @@ public interface UpdatesTaker {
         void update(PartitionName partitionName, long txId) throws Exception;
     }
 
-    /*
-     Return true id acks were acked!
-     */
-    boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, Collection<AckTaken> ackTaken);
-
-    static public class AckTaken {
-
-        public VersionedPartitionName partitionName;
-        public long txId;
-
-        public AckTaken() {
-        }
-
-        public AckTaken(VersionedPartitionName partitionName, long txId) {
-            this.partitionName = partitionName;
-            this.txId = txId;
-        }
-
-    }
-
-    StreamingTakeResult streamingTakeUpdates(RingMember taker,
-        RingHost takerHost,
-        Entry<RingMember, RingHost> node,
+    StreamingTakeResult streamingTakeUpdates(RingMember asRingMember,
+        RingMember fromRingMember,
+        RingHost fromRingHost,
         PartitionName partitionName,
         long transactionId,
         RowStream tookRowUpdates);
@@ -78,5 +60,25 @@ public interface UpdatesTaker {
             this.error = error;
             this.otherHighwaterMarks = otherHighwaterMarks;
         }
+    }
+
+    /*
+     Return true if acks were acked!
+     */
+    boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId);
+
+    class AckTaken {
+
+        public VersionedPartitionName partitionName;
+        public long txId;
+
+        public AckTaken() {
+        }
+
+        public AckTaken(VersionedPartitionName partitionName, long txId) {
+            this.partitionName = partitionName;
+            this.txId = txId;
+        }
+
     }
 }

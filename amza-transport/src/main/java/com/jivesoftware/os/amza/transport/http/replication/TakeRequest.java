@@ -25,27 +25,20 @@ public class TakeRequest {
 
     private final long highestTransactionId;
     private final RingMember taker;
-    private final RingHost takerHost;
     private final PartitionName partitionName;
 
     @JsonCreator
     public TakeRequest(
         @JsonProperty("taker") RingMember taker,
-        @JsonProperty("takerHost") RingHost takerHost,
         @JsonProperty("highestTransactionId") long highestTransactionId,
         @JsonProperty("partitionName") PartitionName partitionName) {
         this.taker = taker;
-        this.takerHost = takerHost;
         this.highestTransactionId = highestTransactionId;
         this.partitionName = partitionName;
     }
 
     public RingMember getTaker() {
         return taker;
-    }
-
-    public RingHost getTakerHost() {
-        return takerHost;
     }
 
     public long getHighestTransactionId() {

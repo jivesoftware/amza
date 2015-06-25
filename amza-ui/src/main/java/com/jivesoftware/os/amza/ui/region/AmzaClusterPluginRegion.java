@@ -64,14 +64,14 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
 
                 if (input.action.equals("add")) {
                     ringWriter.register(new RingMember(input.member), new RingHost(input.host, input.port));
-                    ringWriter.addRingMember("system", new RingMember(input.member));
+                    ringWriter.addRingMember(AmzaRingReader.SYSTEM_RING, new RingMember(input.member));
                 } else if (input.action.equals("remove")) {
-                    ringWriter.removeRingMember("system", new RingMember(input.member));
+                    ringWriter.removeRingMember(AmzaRingReader.SYSTEM_RING, new RingMember(input.member));
                     ringWriter.deregister(new RingMember(input.member));
                 }
 
                 List<Map<String, String>> rows = new ArrayList<>();
-                for (Entry<RingMember, RingHost> node : ringReader.getRing("system").entrySet()) {
+                for (Entry<RingMember, RingHost> node : ringReader.getRing(AmzaRingReader.SYSTEM_RING).entrySet()) {
 
                     Map<String, String> row = new HashMap<>();
                     row.put("member", node.getKey().getMember());

@@ -16,11 +16,11 @@
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
 import com.jivesoftware.os.amza.transport.http.replication.TakeRequest;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -29,7 +29,6 @@ import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.List;
 import java.util.NavigableMap;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -67,7 +66,7 @@ public class AmzaReplicationRestEndpoints {
             LOG.info("Attempting to add {}/{}/{} ", logicalName, host, port);
             RingMember ringMember = new RingMember(logicalName);
             ringWriter.register(ringMember, new RingHost(host, port));
-            ringWriter.addRingMember("system", ringMember);
+            ringWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
@@ -81,7 +80,7 @@ public class AmzaReplicationRestEndpoints {
     public Response removeMember(@PathParam("logicalName") String logicalName) {
         try {
             LOG.info("Attempting to remove RingHost: " + logicalName);
-            ringWriter.removeRingMember("system", new RingMember(logicalName));
+            ringWriter.removeRingMember(AmzaRingReader.SYSTEM_RING, new RingMember(logicalName));
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + logicalName, x);
@@ -95,7 +94,7 @@ public class AmzaReplicationRestEndpoints {
     public Response getRing() {
         try {
             LOG.info("Attempting to get amza ring.");
-            NavigableMap<RingMember, RingHost> ring = ringReader.getRing("system");
+            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
             return ResponseHelper.INSTANCE.jsonResponse(ring);
         } catch (Exception x) {
             LOG.warn("Failed to get amza ring.", x);
@@ -117,7 +116,6 @@ public class AmzaReplicationRestEndpoints {
                 try {
                     amzaInstance.streamingTakeFromPartition(dos,
                         takeRequest.getTaker(),
-                        takeRequest.getTakerHost(),
                         takeRequest.getPartitionName(),
                         takeRequest.getHighestTransactionId());
                 } catch (Exception x) {
@@ -137,9 +135,9 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/changes/streaming/partition/updates/{ringMember}/{takSessionId}}/{timeoutMillis}")
+    @Path("/changes/streaming/partition/updates/{ringMember}/{takeSessionId}/{timeoutMillis}")
     public Response streamingPartitionUpdates(@PathParam("ringMember") String ringMemberString,
-        @PathParam("takSessionId") long takSessionId,
+        @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
         try {
 
@@ -148,7 +146,7 @@ public class AmzaReplicationRestEndpoints {
                 BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
                 final DataOutputStream dos = new DataOutputStream(bos);
                 try {
-                    amzaInstance.streamingTakePartitionUpdates(dos, new RingMember(ringMemberString), takSessionId, timeoutMillis);
+                    amzaInstance.streamingTakePartitionUpdates(dos, new RingMember(ringMemberString), takeSessionId, timeoutMillis);
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);
@@ -166,21 +164,21 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @Path("/changes/acked/{logicalName}/{host}/{port}")
-    public Response acks(@PathParam("logicalName") String ringMemberName,
+    @Path("/changes/acked/{memberName}/{host}/{port}/{versionedPartitionName}/{txId}")
+    public Response acks(@PathParam("memberName") String ringMemberName,
         @PathParam("host") String ringHostName,
         @PathParam("port") int ringHostPort,
-        List<UpdatesTaker.AckTaken> acks) {
+        @PathParam("versionedPartitionName") String versionedPartitionName,
+        @PathParam("txId") long txId) {
         try {
-            amzaInstance.takeAcks(new RingMember(ringMemberName), new RingHost(ringHostName, ringHostPort), (AmzaInstance.AcksStream acksStream) -> {
-                for (UpdatesTaker.AckTaken ack : acks) {
-                    acksStream.stream(ack.partitionName, ack.txId);
-                }
+            amzaInstance.takeAcks(new RingMember(ringMemberName), new RingHost(ringHostName, ringHostPort), (acksStream) -> {
+                acksStream.stream(VersionedPartitionName.fromBase64(versionedPartitionName), txId);
             });
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
-            LOG.warn("Failed to acked: " + acks, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to acked " + acks, x);
+            LOG.warn("Failed to ack for member:{} partition:{} txId:{}",
+                new Object[] { ringMemberName, versionedPartitionName, txId }, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to ack.", x);
         }
     }
 

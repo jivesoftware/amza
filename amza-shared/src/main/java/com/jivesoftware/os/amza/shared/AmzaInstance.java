@@ -35,7 +35,6 @@ public interface AmzaInstance {
 
     void streamingTakeFromPartition(DataOutputStream dos,
         RingMember ringMember,
-        RingHost ringHost,
         PartitionName partitionName,
         long highestTransactionId) throws Exception;
 

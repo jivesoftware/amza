@@ -25,7 +25,7 @@ import java.util.Map.Entry;
  */
 public interface TakeFailureListener {
 
-    void failedToTake(Entry<RingMember, RingHost> node, Throwable reason);
+    void failedToTake(RingMember ringMember, RingHost ringHost, Throwable reason);
 
-    void tookFrom(Entry<RingMember, RingHost> node);
+    void tookFrom(RingMember ringMember, RingHost ringHost);
 }

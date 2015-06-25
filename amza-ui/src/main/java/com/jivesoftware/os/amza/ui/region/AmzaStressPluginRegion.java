@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -237,7 +238,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
         NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default");
         if (ring.isEmpty()) {
-            amzaService.getRingWriter().buildRandomSubRing("default", amzaService.getRingReader().getRing("system").size());
+            amzaService.getRingWriter().buildRandomSubRing("default", amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING));
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),

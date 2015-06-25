@@ -293,11 +293,11 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
     @Override
     public void streamingTakePartitionUpdates(DataOutputStream dos, RingMember ringMember, long takeSessionId, long timeoutMillis) throws Exception {
-        takeCoordinator.take(ringStoreReader, ringMember, takeSessionId, timeoutMillis, (PartitionName partitionName, long txId1) -> {
+        takeCoordinator.take(ringStoreReader, ringMember, takeSessionId, timeoutMillis, (partitionName, txId) -> {
             byte[] bytes = partitionName.toBytes();
             dos.writeInt(bytes.length);
             dos.write(bytes);
-            dos.writeLong(txId1);
+            dos.writeLong(txId);
         });
     }
 
@@ -310,7 +310,6 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     @Override
     public void streamingTakeFromPartition(DataOutputStream dos,
         RingMember ringMember,
-        RingHost ringHost,
         PartitionName partitionName,
         long highestTransactionId) throws Exception {
 

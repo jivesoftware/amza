@@ -20,6 +20,7 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AmzaRingStoreWriter;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -99,12 +100,12 @@ public class AmzaDiscovery {
                                 int port = Integer.parseInt(clusterMemberHostPort.get(3).trim());
                                 RingMember ringMember = new RingMember(member);
                                 RingHost anotherRingHost = new RingHost(host, port);
-                                NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing("system");
+                                NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
                                 RingHost ringHost = ring.get(ringMember);
                                 if (ringHost == null) {
                                     LOG.info("Adding ringMember:" + ringMember + " on host:" + anotherRingHost + " to cluster: " + clusterName);
                                     ringStoreWriter.register(ringMember, anotherRingHost);
-                                    ringStoreWriter.addRingMember("system", ringMember);
+                                    ringStoreWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
                                     allMemberSeen.add(ringMember);
                                 } else if (!ringHost.equals(anotherRingHost)) {
                                     LOG.info("Updating ringMember:" + ringMember + " on host:" + anotherRingHost + " for cluster:" + clusterName);

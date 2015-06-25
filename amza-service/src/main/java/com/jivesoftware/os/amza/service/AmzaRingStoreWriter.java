@@ -19,6 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -129,7 +130,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     }
 
     public void ensureMaximalSubRing(String ringName) throws Exception {
-        ensureSubRing(ringName, ringStoreReader.getRingSize("system"));
+        ensureSubRing(ringName, ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING));
     }
 
     public void ensureSubRing(String ringName, int desiredRingSize) throws Exception {
@@ -147,7 +148,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }
-        NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing("system");
+        NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
         if (ring.size() < desiredRingSize) {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }

@@ -35,6 +35,7 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -48,6 +49,9 @@ import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -201,7 +205,7 @@ public class AmzaServiceInitializer {
         AmzaRingStoreWriter amzaRingWriter = new AmzaRingStoreWriter(amzaRingReader, systemWALStorage, orderIdProvider, walUpdated, ringSizesCache);
         amzaPartitionWatcher.watch(PartitionProvider.RING_INDEX.getPartitionName(), amzaRingWriter);
         amzaRingWriter.register(ringMember, ringHost);
-        amzaRingWriter.addRingMember("system", ringMember);
+        amzaRingWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
 
         PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemWALStorage, walUpdated);
         PartitionChangeTaker changeTaker = new PartitionChangeTaker(amzaStats,
@@ -213,6 +217,7 @@ public class AmzaServiceInitializer {
             partitionStripeProvider,
             partitionStatusStorage,
             updatesTaker,
+            new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),
             takeFailureListener,
             config.numberOfTakerThreads,
             config.hardFsync);

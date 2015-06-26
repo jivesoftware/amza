@@ -143,8 +143,7 @@ public class AmzaReplicationRestEndpoints {
 
             StreamingOutput stream = (OutputStream os) -> {
                 os.flush();
-                BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
-                final DataOutputStream dos = new DataOutputStream(bos);
+                final DataOutputStream dos = new DataOutputStream(os);
                 try {
                     amzaInstance.streamingTakePartitionUpdates(dos, new RingMember(ringMemberString), takeSessionId, timeoutMillis);
                 } catch (Exception x) {
@@ -171,9 +170,10 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("versionedPartitionName") String versionedPartitionName,
         @PathParam("txId") long txId) {
         try {
-            amzaInstance.takeAcks(new RingMember(ringMemberName), new RingHost(ringHostName, ringHostPort), (acksStream) -> {
-                acksStream.stream(VersionedPartitionName.fromBase64(versionedPartitionName), txId);
-            });
+            amzaInstance.remoteMemberTookToTxId(new RingMember(ringMemberName),
+                new RingHost(ringHostName, ringHostPort), 
+                VersionedPartitionName.fromBase64(versionedPartitionName),
+                txId);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to ack for member:{} partition:{} txId:{}",

@@ -31,22 +31,16 @@ public interface AmzaInstance {
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
 
     void streamingTakePartitionUpdates(DataOutputStream dos,
-         RingMember ringMember, long takeSessionId,long timeoutMillis) throws Exception;
+        RingMember ringMember, long takeSessionId, long timeoutMillis) throws Exception;
 
     void streamingTakeFromPartition(DataOutputStream dos,
         RingMember ringMember,
         PartitionName partitionName,
         long highestTransactionId) throws Exception;
 
-    void takeAcks(RingMember ringMember, RingHost ringHost, StreamableAcks acks) throws Exception;
-
-    interface StreamableAcks {
-        void stream(AcksStream acksStream) throws Exception;
-    }
-
-    interface AcksStream {
-
-        void stream(VersionedPartitionName versionedPartitionName, long txId) throws Exception;
-    }
+    void remoteMemberTookToTxId(RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        VersionedPartitionName remoteVersionedPartitionName,
+        long localTxId) throws Exception;
 
 }

@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.service.storage;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -32,9 +33,12 @@ public class PartitionProvider {
     public static final VersionedPartitionName NODE_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "NODE_INDEX"), 0);
     public static final VersionedPartitionName RING_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "RING_INDEX"), 0);
     public static final VersionedPartitionName REGION_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_INDEX"), 0);
-    public static final VersionedPartitionName REGION_PROPERTIES = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_PROPERTIES"), 0);
-    public static final VersionedPartitionName HIGHWATER_MARK_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "HIGHWATER_MARK_INDEX"), 0);
-    public static final VersionedPartitionName REGION_ONLINE_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_ONLINE_INDEX"), 0);
+    public static final VersionedPartitionName REGION_PROPERTIES = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING,
+        "REGION_PROPERTIES"), 0);
+    public static final VersionedPartitionName HIGHWATER_MARK_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING,
+        "HIGHWATER_MARK_INDEX"), 0);
+    public static final VersionedPartitionName REGION_ONLINE_INDEX = new VersionedPartitionName(new PartitionName(true, AmzaRingReader.SYSTEM_RING,
+        "REGION_ONLINE_INDEX"), 0);
 
     private final OrderIdProvider orderIdProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;
@@ -77,7 +81,10 @@ public class PartitionProvider {
         return false;
     }
 
-    public void createPartitionStoreIfAbsent(VersionedPartitionName versionedPartitionName, PartitionProperties properties) throws Exception {
+    public void createPartitionStoreIfAbsent(VersionedPartitionName versionedPartitionName,
+        Status partitionStatus,
+        PartitionProperties properties) throws Exception {
+
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot create a system partition");
 
@@ -88,7 +95,7 @@ public class PartitionProvider {
             byte[] rawPartitionName = partitionName.toBytes();
             WALKey partitionKey = new WALKey(rawPartitionName);
             PartitionStore partitionIndexStore = partitionIndex.get(REGION_INDEX);
-            RowsChanged changed = partitionIndexStore.directCommit(false, (highwater, scan) -> {
+            RowsChanged changed = partitionIndexStore.directCommit(false, partitionStatus, (highwater, scan) -> {
                 scan.row(-1, partitionKey, new WALValue(rawPartitionName, orderIdProvider.nextId(), false));
             }, walUpdated);
             partitionIndexStore.flush(hardFlush);
@@ -101,7 +108,7 @@ public class PartitionProvider {
 
     public void updatePartitionProperties(PartitionName partitionName, PartitionProperties properties) throws Exception {
         PartitionStore partitionPropertiesStore = partitionIndex.get(REGION_PROPERTIES);
-        RowsChanged changed = partitionPropertiesStore.directCommit(false, (highwater, scan) -> {
+        RowsChanged changed = partitionPropertiesStore.directCommit(false, Status.ONLINE, (highwater, scan) -> {
             scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(partitionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
         }, walUpdated);
         partitionPropertiesStore.flush(hardFlush);
@@ -115,12 +122,12 @@ public class PartitionProvider {
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot destroy a system partition");
 
         PartitionStore partitionIndexStore = partitionIndex.get(PartitionProvider.REGION_INDEX);
-        partitionIndexStore.directCommit(false, (highwaters, scan) -> {
+        partitionIndexStore.directCommit(false, Status.ONLINE, (highwaters, scan) -> {
             scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         }, walUpdated);
 
         PartitionStore partitionPropertiesStore = partitionIndex.get(PartitionProvider.REGION_PROPERTIES);
-        partitionPropertiesStore.directCommit(false, (highwaters, scan) -> {
+        partitionPropertiesStore.directCommit(false, Status.ONLINE, (highwaters, scan) -> {
             scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         }, walUpdated);
     }

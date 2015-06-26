@@ -24,7 +24,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author jonathan.colt
@@ -41,6 +41,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
     private final AwaitNotify<PartitionName> awaitNotify;
 
     private final Map<VersionedPartitionName, VersionedStatus> localStatusCache = Maps.newConcurrentMap();
+    private final ConcurrentHashMap<PartitionName, ConcurrentHashMap<RingMember, VersionedStatus>> remoteStatusCache = new ConcurrentHashMap<>();
 
     public PartitionStatusStorage(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
@@ -80,27 +81,35 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         }
     }
 
-    public void elect(Collection<RingMember> ringMembers, Set<RingMember> membersUnreachable, VersionedPartitionName versionedPartitionName) throws Exception {
-        if (versionedPartitionName.getPartitionName().isSystemPartition() || ringMembers.isEmpty()) {
-            return;
-        }
-        for (RingMember ringMember : ringMembers) {
-            WALKey key = walKey(ringMember, versionedPartitionName.getPartitionName());
-            WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, key);
-            if (rawStatus == null || rawStatus.getTombstoned()) {
-                if (membersUnreachable.contains(ringMember)) {
-                    continue;
-                } else {
-                    return;
+    public void remoteStatus(RingMember remoteRingMember, PartitionName partitionName, VersionedStatus remoteVersionedStatus) {
+
+        ConcurrentHashMap<RingMember, VersionedStatus> ringMemberStatus = remoteStatusCache.computeIfAbsent(partitionName,
+            (key) -> {
+                return new ConcurrentHashMap<>();
+            });
+
+        ringMemberStatus.merge(remoteRingMember, remoteVersionedStatus, (existing, updated) -> {
+            return (updated.version > existing.version) ? updated : existing;
+        });
+
+    }
+
+    public void elect(Collection<RingMember> remoteRingMembers, VersionedPartitionName localVersionedPartitionName) throws Exception {
+
+        ConcurrentHashMap<RingMember, VersionedStatus> ringMemberStatus = remoteStatusCache.get(localVersionedPartitionName.getPartitionName());
+        if (ringMemberStatus != null) {
+            int inKetchup = 0;
+            for (RingMember ringMember : remoteRingMembers) {
+                VersionedStatus remoteRingMemberStatus = ringMemberStatus.get(ringMember);
+                if (remoteRingMemberStatus != null && Status.KETCHUP == remoteRingMemberStatus.status) {
+                    inKetchup++;
                 }
             }
-            VersionedStatus versionedStatus = VersionedStatus.fromBytes(rawStatus.getValue());
-            if (versionedStatus.status == Status.ONLINE) {
-                return;
+            if (inKetchup == remoteRingMembers.size()) {
+                markAsOnline(localVersionedPartitionName);
+                LOG.info("Resolving cold start stalemate. " + rootRingMember + " was elected as online for " + localVersionedPartitionName);
             }
         }
-        LOG.info("Resolving cold start stalemate. " + rootRingMember);
-        markAsOnline(versionedPartitionName);
     }
 
     public VersionedStatus getStatus(RingMember ringMember, PartitionName partitionName) throws Exception {

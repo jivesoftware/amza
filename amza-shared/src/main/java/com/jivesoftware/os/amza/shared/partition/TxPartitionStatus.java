@@ -10,7 +10,11 @@ public interface TxPartitionStatus {
 
     public static enum Status {
 
-        EXPUNGE(new byte[]{2}), ONLINE(new byte[]{1}), KETCHUP(new byte[]{0});
+        EXPUNGE(new byte[]{2}),
+        ONLINE(new byte[]{1}),
+        KETCHUP(new byte[]{0}),
+        COMPACTING(new byte[]{-1});
+
         private final byte[] serializedForm;
 
         private Status(byte[] serializedForm) {

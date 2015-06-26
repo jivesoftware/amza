@@ -29,11 +29,11 @@ import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
-import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -111,24 +111,20 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + ringHost.getHost() + "-" + ringHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + ringHost.getHost() + "-" + ringHost.getPort()};
         config.takeFromNeighborsIntervalInMillis = 5;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
 
         UpdatesTaker updateTaker = new UpdatesTaker() {
 
             @Override
-            public boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, Collection<UpdatesTaker.AckTaken> ackTaken) {
+            public boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId) {
                 AmzaNode amzaNode = cluster.get(ringMember);
                 if (amzaNode == null) {
                     throw new IllegalStateException("Service doesn't exists for " + ringMember);
                 } else {
                     try {
-                        amzaNode.takeAcks(ringMember, ringHost, (AmzaInstance.AcksStream acksStream) -> {
-                            for (AckTaken a : ackTaken) {
-                                acksStream.stream(a.partitionName, a.txId);
-                            }
-                        });
+                        amzaNode.remoteMemberTookToTxId(ringMember, ringHost, versionedPartitionName, txId);
                         return true;
                     } catch (Exception x) {
                         throw new RuntimeException("Issue while applying acks.", x);
@@ -167,7 +163,11 @@ public class AmzaTestCluster {
                 if (amzaNode == null) {
                     throw new IllegalStateException("Service doesn't exists for " + fromRingMember);
                 } else {
-                    amzaNode.takePartitionUpdates(fromRingMember, ORDER_ID_PROVIDER.nextId(), timeoutMillis, updatedPartitionsStream);
+                    amzaNode.takePartitionUpdates(fromRingMember, ORDER_ID_PROVIDER.nextId(), timeoutMillis, (versionedPartitionName, status, txId) -> {
+                        if (versionedPartitionName != null) {
+                            updatedPartitionsStream.update(versionedPartitionName, status, txId);
+                        }
+                    });
                 }
             }
         };
@@ -330,8 +330,11 @@ public class AmzaTestCluster {
             return got.get(0);
         }
 
-        void takeAcks(RingMember ringMember, RingHost ringHost, AmzaInstance.StreamableAcks acks) throws Exception {
-            amzaService.takeAcks(ringMember, ringHost, acks);
+        void remoteMemberTookToTxId(RingMember ringMember,
+            RingHost ringHost,
+            VersionedPartitionName remoteVersionedPartitionName,
+            long localTxId) throws Exception {
+            amzaService.remoteMemberTookToTxId(ringMember, ringHost, remoteVersionedPartitionName, localTxId);
         }
 
         public StreamingTakesConsumer.StreamingTakeConsumed takePartition(RingMember asRingMember,

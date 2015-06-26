@@ -19,6 +19,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -302,7 +303,8 @@ public class IndexedWAL implements WALStorage {
      }
      */
     @Override
-    public RowsChanged update(final boolean useUpdateTxId,
+    public RowsChanged update(boolean useUpdateTxId,
+        Status partitionStatus,
         Commitable<WALValue> updates,
         WALUpdated updated) throws Exception {
 
@@ -439,7 +441,7 @@ public class IndexedWAL implements WALStorage {
                     rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers,
                         indexCommitedUpToTxId.longValue());
                 }
-                updated.updated(versionedPartitionName, indexCommitedUpToTxId.longValue());
+                updated.updated(versionedPartitionName, partitionStatus, indexCommitedUpToTxId.longValue());
             }
 
             final boolean commitAndWriteMarker = apply.size() > 0 && indexUpdates.addAndGet(apply.size()) > maxUpdatesBetweenIndexCommitMarker.get();

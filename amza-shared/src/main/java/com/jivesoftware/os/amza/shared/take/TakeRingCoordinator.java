@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.shared.take;
 
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -23,38 +23,42 @@ public class TakeRingCoordinator {
 
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
-    private final ConcurrentHashMap<PartitionName, TakePartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
     public TakeRingCoordinator(TimestampedOrderIdProvider timestampedOrderIdProvider, Map.Entry<RingMember, RingHost>[] ringMembers) {
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.versionedRing.compareAndSet(null, new VersionedRing(timestampedOrderIdProvider.nextId(), ringMembers));
     }
 
-    void cya(Set<PartitionName> retain) {
-        ConcurrentHashMap.KeySetView<PartitionName, TakePartitionCoordinator> keySet = partitionCoordinators.keySet();
+    void cya(Set<VersionedPartitionName> retain) {
+        ConcurrentHashMap.KeySetView<VersionedPartitionName, TakeVersionedPartitionCoordinator> keySet = partitionCoordinators.keySet();
         keySet.removeAll(Sets.difference(keySet, retain));
     }
 
-    void take(RingMember ringMember, long takeSessionId, PartitionUpdatedStream updatedPartitionsStream) throws Exception {
-        for (TakePartitionCoordinator coordinator : partitionCoordinators.values()) {
-            coordinator.take(takeSessionId, versionedRing.get(), ringMember, timestampedOrderIdProvider, updatedPartitionsStream);
+    long take(RingMember ringMember, long takeSessionId, PartitionUpdatedStream updatedPartitionsStream) throws Exception {
+        long suggestedWaitInMillis = Long.MAX_VALUE;
+        for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
+            suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
+                coordinator.take(takeSessionId, versionedRing.get(), ringMember, timestampedOrderIdProvider, updatedPartitionsStream)
+            );
         }
+        return suggestedWaitInMillis;
     }
 
-    void update(Entry<RingMember, RingHost>[] aboveRing, VersionedPartitionName versionedPartitionName, long txId) {
+    void update(Entry<RingMember, RingHost>[] aboveRing, VersionedPartitionName versionedPartitionName, Status status, long txId) {
         VersionedRing ring = versionedRing.updateAndGet((existing) -> {
             return existing.isStillValid(aboveRing) ? existing : new VersionedRing(timestampedOrderIdProvider.nextId(), aboveRing);
         });
         long slowTakeInMillis = 60_000L; // TODO config
-        TakePartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName.getPartitionName(), (key) -> {
-            return new TakePartitionCoordinator(versionedPartitionName.getPartitionName(),
-                new AtomicLong(txId), timestampedOrderIdProvider.getApproximateId(slowTakeInMillis));
+        TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName, (key) -> {
+            return new TakeVersionedPartitionCoordinator(versionedPartitionName,
+                new AtomicLong(txId), slowTakeInMillis, timestampedOrderIdProvider.getApproximateId(slowTakeInMillis));
         });
-        coordinator.updateTxId(ring, txId);
+        coordinator.updateTxId(ring, status, txId);
     }
 
-    void took(RingMember ringMember, PartitionName partitionName, long txId) {
-        TakePartitionCoordinator coordinator = partitionCoordinators.get(partitionName);
+    void remoteMemberTookToTxId(RingMember ringMember, VersionedPartitionName partitionName, long txId) {
+        TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(partitionName);
         if (coordinator != null) {
             coordinator.took(versionedRing.get(), ringMember, txId);
         }
@@ -66,8 +70,10 @@ public class TakeRingCoordinator {
         final int takeFromFactor;
         final LinkedHashMap<RingMember, Integer> members;
 
-        public VersionedRing(long version, Map.Entry<RingMember, RingHost>[] ringMembers) {
+        public VersionedRing(long version, Map.Entry<RingMember, RingHost>[] ring) {
             this.version = version;
+
+            Map.Entry<RingMember, RingHost>[] ringMembers = ring.clone();
             members = new LinkedHashMap<>();
             takeFromFactor = 1 + (int) Math.sqrt(ringMembers.length);
             int taken = takeFromFactor;

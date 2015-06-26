@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 
 /**
@@ -8,6 +9,6 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
  */
 public interface WALUpdated {
 
-    void updated(VersionedPartitionName versionedPartitionName, long txId) throws Exception;
+    void updated(VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception;
 
 }

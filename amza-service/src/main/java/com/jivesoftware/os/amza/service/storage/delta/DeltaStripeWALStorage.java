@@ -7,6 +7,7 @@ import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
@@ -21,8 +22,8 @@ import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
@@ -58,6 +59,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
+    private final WALUpdated walUpdated;
     private final long compactAfterNUpdates;
     private final ConcurrentHashMap<VersionedPartitionName, PartitionDelta> partitionDeltas = new ConcurrentHashMap<>();
     private final Object oneWriterAtATimeLock = new Object();
@@ -78,12 +80,14 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         DeltaWALFactory deltaWALFactory,
+        WALUpdated walUpdated,
         long compactAfterNUpdates) {
 
         this.index = index;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.deltaWALFactory = deltaWALFactory;
+        this.walUpdated = walUpdated;
         this.compactAfterNUpdates = compactAfterNUpdates;
         int numberOfCompactorThreads = 1; // TODO expose to config;
         this.compactionThreads = Executors.newFixedThreadPool(numberOfCompactorThreads,
@@ -190,6 +194,16 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
+    @Override
+    public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
+        PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
+        if (partitionDelta == null) {
+            return -1;
+        }
+        return partitionDelta.highestTxId();
+    }
+
+
     // todo any one call this should have atleast 1 numTickleMeElmaphore
     private PartitionDelta getPartitionDeltas(VersionedPartitionName versionedPartitionName) {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
@@ -198,7 +212,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             if (wal == null) {
                 throw new IllegalStateException("Delta WAL is currently unavailable.");
             }
-            partitionDelta = new PartitionDelta(versionedPartitionName, wal, primaryRowMarshaller, highwaterRowMarshaller, null);
+            partitionDelta = new PartitionDelta(versionedPartitionName, wal, walUpdated, primaryRowMarshaller, highwaterRowMarshaller, null);
             PartitionDelta had = partitionDeltas.putIfAbsent(versionedPartitionName, partitionDelta);
             if (had != null) {
                 partitionDelta = had;
@@ -239,7 +253,12 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             DeltaWAL newDeltaWAL = newWAL.call();
             deltaWAL.set(newDeltaWAL);
             for (Map.Entry<VersionedPartitionName, PartitionDelta> e : partitionDeltas.entrySet()) {
-                final PartitionDelta partitionDelta = new PartitionDelta(e.getKey(), newDeltaWAL, primaryRowMarshaller, highwaterRowMarshaller, e.getValue());
+                PartitionDelta partitionDelta = new PartitionDelta(e.getKey(),
+                    newDeltaWAL,
+                    walUpdated,
+                    primaryRowMarshaller,
+                    highwaterRowMarshaller,
+                    e.getValue());
                 partitionDeltas.put(e.getKey(), partitionDelta);
                 futures.add(compactionThreads.submit(() -> {
                     try {
@@ -274,7 +293,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    public RowsChanged update(HighwaterStorage highwaterStorage, VersionedPartitionName versionedPartitionName,
+    @Override
+    public RowsChanged update(HighwaterStorage highwaterStorage,
+        VersionedPartitionName versionedPartitionName,
+        Status partitionStatus,
         WALStorage storage,
         Commitable<WALValue> updates,
         WALUpdated updated) throws Exception {
@@ -352,7 +374,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                     delta.appendTxFps(updateApplied.txId, updateApplied.keyToRowPointer.values());
                     rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers, updateApplied.txId);
                 }
-                updated.updated(versionedPartitionName, updateApplied.txId);
+                updated.updated(versionedPartitionName, partitionStatus, updateApplied.txId);
             }
 
             updateSinceLastCompaction.addAndGet(apply.size());

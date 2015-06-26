@@ -6,6 +6,7 @@ import com.google.common.collect.Iterators;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
@@ -14,6 +15,7 @@ import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
@@ -43,6 +45,7 @@ class PartitionDelta {
 
     private final VersionedPartitionName versionedPartitionName;
     private final DeltaWAL deltaWAL;
+    private final WALUpdated walUpdated;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     final AtomicReference<PartitionDelta> compacting;
@@ -54,11 +57,13 @@ class PartitionDelta {
 
     PartitionDelta(VersionedPartitionName versionedPartitionName,
         DeltaWAL deltaWAL,
+        WALUpdated walUpdated,
         PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         PartitionDelta compacting) {
         this.versionedPartitionName = versionedPartitionName;
         this.deltaWAL = deltaWAL;
+        this.walUpdated = walUpdated;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.compacting = new AtomicReference<>(compacting);
@@ -206,6 +211,13 @@ class PartitionDelta {
         fps.add(rowFP);
     }
 
+    long highestTxId() {
+        if (txIdWAL.isEmpty()) {
+            return -1;
+        }
+        return txIdWAL.lastKey();
+    }
+
     void appendTxFps(long rowTxId, Collection<Long> rowFPs) {
         List<Long> fps = txIdWAL.get(rowTxId);
         if (fps != null) {
@@ -263,7 +275,7 @@ class PartitionDelta {
                 final long highestTxId = partitionStore.highestTxId();
                 LOG.info("Merging ({}) deltas for partition: {} from tx: {}", compact.orderedIndex.size(), compact.versionedPartitionName, highestTxId);
                 LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
-                partitionStore.directCommit(true, (highwater, scan) -> {
+                partitionStore.directCommit(true, Status.COMPACTING, (highwater, scan) -> {
                     try {
                         eos:
                         for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
@@ -295,8 +307,7 @@ class PartitionDelta {
                     } catch (Throwable ex) {
                         throw new RuntimeException("Error while streaming entry set.", ex);
                     }
-                }, (versionedPartitionName, txId) -> {
-                });
+                }, walUpdated);
                 LOG.info("Merged deltas for " + compact.versionedPartitionName);
             }
         }

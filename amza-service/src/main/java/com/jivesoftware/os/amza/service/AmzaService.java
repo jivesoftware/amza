@@ -121,6 +121,10 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         this.partitionWatcher = partitionWatcher;
     }
 
+    public PartitionIndex getPartitionIndex() {
+        return partitionIndex;
+    }
+
     public AmzaRingStoreReader getRingReader() {
         return ringStoreReader;
     }
@@ -193,7 +197,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                         partitionStatusStorage.markAsOnline(versionedPartitionName);
                     }
                 }
-                partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
+                partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, partitionStatus, properties);
                 return getPartition(partitionName);
             });
         }
@@ -293,11 +297,19 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
     @Override
     public void streamingTakePartitionUpdates(DataOutputStream dos, RingMember ringMember, long takeSessionId, long timeoutMillis) throws Exception {
-        takeCoordinator.take(ringStoreReader, ringMember, takeSessionId, timeoutMillis, (partitionName, txId) -> {
-            byte[] bytes = partitionName.toBytes();
-            dos.writeInt(bytes.length);
-            dos.write(bytes);
-            dos.writeLong(txId);
+        takeCoordinator.take(ringStoreReader, ringMember, takeSessionId, timeoutMillis, (partitionName, status, txId) -> {
+            if (partitionName == null && status == null && txId == 0) {
+                dos.write(0);
+                dos.flush();
+            } else {
+                dos.write(1);
+                byte[] bytes = partitionName.toBytes();
+                dos.writeInt(bytes.length);
+                dos.write(bytes);
+                dos.write(status.getSerializedForm());
+                dos.writeLong(txId);
+                dos.flush();
+            }
         });
     }
 
@@ -403,10 +415,12 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     @Override
-    public void takeAcks(RingMember ringMember, RingHost ringHost, StreamableAcks acks) throws Exception {
-        acks.stream((VersionedPartitionName versionedPartitionName, long txId) -> {
-            ackWaters.set(ringMember, versionedPartitionName, txId);
-        });
+    public void remoteMemberTookToTxId(RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        VersionedPartitionName remoteVersionedPartitionName,
+        long localTxId) throws Exception {
+        ackWaters.set(remoteRingMember, remoteVersionedPartitionName, localTxId);
+        takeCoordinator.remoteMemberTookToTxId(remoteRingMember, remoteVersionedPartitionName, localTxId);
     }
 
     public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
@@ -425,7 +439,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                     partitionStatusStorage.markAsOnline(versionedPartitionName);
                 }
             }
-            partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
+            partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, partitionStatus, properties);
             return null;
         });
 

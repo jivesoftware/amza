@@ -47,7 +47,7 @@ public class HostRingBuilder {
         }
 
         ArrayList<Entry<RingMember, RingHost>> above = new ArrayList<>();
-        ArrayList<Entry<RingMember, RingHost>> below = new ArrayList<>();
+        ArrayList<Entry<RingMember, RingHost>> below = new ArrayList<>(); // TODO kill
         int aboveI = rootIndex - 1;
         int belowI = rootIndex + 1;
         for (int i = 1; i < ring.size(); i++) {

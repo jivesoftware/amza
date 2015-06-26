@@ -76,7 +76,9 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 openExecutor.submit(() -> {
                     try {
                         txPartitionState.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-                            get(versionedPartitionName);
+                            if (versionedPartitionName != null) {
+                                get(versionedPartitionName);
+                            }
                             return null;
                         });
                         numOpened.incrementAndGet();

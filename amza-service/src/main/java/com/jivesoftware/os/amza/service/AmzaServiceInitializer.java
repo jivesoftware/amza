@@ -34,6 +34,7 @@ import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
@@ -51,13 +52,13 @@ import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
-import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -106,7 +107,6 @@ public class AmzaServiceInitializer {
         TimestampedOrderIdProvider orderIdProvider,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         WALStorageProvider partitionsWALStorageProvider,
-        TakeCoordinator takeCoordinator,
         UpdatesTaker updatesTaker,
         Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
@@ -122,9 +122,15 @@ public class AmzaServiceInitializer {
         PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
         PartitionStore nodeIndex = partitionIndex.get(PartitionProvider.NODE_INDEX);
         ConcurrentMap<String, Integer> ringSizesCache = new ConcurrentHashMap<>();
-        AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache);
-        WALUpdated walUpdated = (VersionedPartitionName versionedPartitionName, long txId) -> {
-            takeCoordinator.updated(amzaRingReader, versionedPartitionName, txId);
+        ConcurrentMap<RingMember, Set<String>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
+        AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
+
+        TakeCoordinator takeCoordinator = new TakeCoordinator(orderIdProvider);
+
+        WALUpdated walUpdated = (versionedPartitionName, status, txId) -> {
+            if (status != TxPartitionStatus.Status.COMPACTING) {
+                takeCoordinator.updated(amzaRingReader, versionedPartitionName, status, txId);
+            }
         };
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex);
@@ -136,6 +142,18 @@ public class AmzaServiceInitializer {
             config.awaitOnlineStripingLevel);
 
         partitionIndex.open(partitionStatusStorage);
+        // cold start
+        for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
+            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            PartitionStatusStorage.VersionedStatus status = partitionStatusStorage.getStatus(ringMember, versionedPartitionName.getPartitionName());
+            if (status != null && status.version == versionedPartitionName.getPartitionVersion()) {
+                takeCoordinator.updated(amzaRingReader, versionedPartitionName, status.status, partitionStore.highestTxId());
+            } else {
+                LOG.warn("Status:{} wasn't aligned with versioned partition:{}", status, versionedPartitionName);
+            }
+        }
+
+        takeCoordinator.cya(partitionIndex);
 
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
@@ -150,6 +168,7 @@ public class AmzaServiceInitializer {
                 primaryRowMarshaller,
                 highwaterRowMarshaller,
                 deltaWALFactory,
+                walUpdated,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
             partitionStripes[i] = new PartitionStripe("stripe-" + i, amzaStats, partitionIndex, deltaWALStorage, partitionStatusStorage, amzaPartitionWatcher,
@@ -179,6 +198,9 @@ public class AmzaServiceInitializer {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
                     partitionStripe.load();
+                    partitionStripe.highestPartitionTxIds((versionedPartitionName, partitionStatus, highestTxId) -> {
+                        takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionStatus, highestTxId);
+                    });
                 } catch (Exception x) {
                     LOG.error("Failed while loading " + partitionStripe, x);
                     throw new RuntimeException(x);
@@ -202,7 +224,12 @@ public class AmzaServiceInitializer {
             }, config.deltaStripeCompactionIntervalInMillis, config.deltaStripeCompactionIntervalInMillis, TimeUnit.MILLISECONDS);
         }
 
-        AmzaRingStoreWriter amzaRingWriter = new AmzaRingStoreWriter(amzaRingReader, systemWALStorage, orderIdProvider, walUpdated, ringSizesCache);
+        AmzaRingStoreWriter amzaRingWriter = new AmzaRingStoreWriter(amzaRingReader,
+            systemWALStorage,
+            orderIdProvider,
+            walUpdated,
+            ringSizesCache,
+            ringMemberRingNamesCache);
         amzaPartitionWatcher.watch(PartitionProvider.RING_INDEX.getPartitionName(), amzaRingWriter);
         amzaRingWriter.register(ringMember, ringHost);
         amzaRingWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);

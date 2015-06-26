@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -27,7 +28,7 @@ public class SystemWALStorage {
     public RowsChanged update(VersionedPartitionName versionedPartitionName,
         Commitable<WALValue> updates, WALUpdated updated) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getWalStorage().update(false, updates, updated);
+        return partitionIndex.get(versionedPartitionName).getWalStorage().update(false, Status.ONLINE, updates, updated);
     }
 
     public WALValue get(VersionedPartitionName versionedPartitionName, WALKey key) throws Exception {

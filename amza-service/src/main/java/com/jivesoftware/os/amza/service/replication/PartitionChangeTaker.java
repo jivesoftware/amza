@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
-import com.jivesoftware.os.amza.shared.take.UpdatesTaker.AckTaken;
 import com.jivesoftware.os.amza.shared.take.UpdatesTaker.StreamingTakeResult;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
@@ -42,7 +41,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -57,7 +55,7 @@ import static com.jivesoftware.os.amza.service.storage.PartitionProvider.REGION_
 public class PartitionChangeTaker implements RowChanges {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private ScheduledExecutorService updatedTakerThreadPool;
+    private ScheduledExecutorService updateTakerThreadPool;
     private ExecutorService changeTakerThreadPool;
 
     private final AmzaStats amzaStats;
@@ -109,10 +107,10 @@ public class PartitionChangeTaker implements RowChanges {
         this.hardFlush = hardFlush;
     }
 
-    synchronized public void start() throws Exception {
+    public void start() throws Exception {
 
-        if (updatedTakerThreadPool == null) {
-            updatedTakerThreadPool = Executors.newScheduledThreadPool(numberOfTakerThreads, new ThreadFactoryBuilder().setNameFormat(
+        if (updateTakerThreadPool == null) {
+            updateTakerThreadPool = Executors.newScheduledThreadPool(numberOfTakerThreads, new ThreadFactoryBuilder().setNameFormat(
                 "updatedTakeChanges-%d").build());
             changeTakerThreadPool = Executors.newFixedThreadPool(numberOfTakerThreads, new ThreadFactoryBuilder().setNameFormat(
                 "changeTakeChanges-%d").build());
@@ -127,8 +125,8 @@ public class PartitionChangeTaker implements RowChanges {
                             LOG.info("Added updateTaker for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
                         }
                         for (RingMember ringMember : Sets.difference(updatedTaker.keySet(), desireRingMembers)) {
-                            updatedTaker.compute(ringMember, (RingMember t, MemberLatestTransactionsTaker u) -> {
-                                u.dispose();
+                            updatedTaker.compute(ringMember, (key, latestTransactionsTaker) -> {
+                                latestTransactionsTaker.dispose();
                                 LOG.info("Removed updateTaker for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
                                 return null;
                             });
@@ -154,13 +152,8 @@ public class PartitionChangeTaker implements RowChanges {
     void addUpdateTaker(RingMember ringMember) {
         updatedTaker.compute(ringMember, (RingMember t, MemberLatestTransactionsTaker taker) -> {
             if (taker == null) {
-                taker = new MemberLatestTransactionsTaker(ringMember,
-                    amzaRingReader,
-                    updatesTaker,
-                    sessionIdProvider,
-                    changeTakerThreadPool,
-                    changeTakerThreadPool);
-                updatedTakerThreadPool.scheduleWithFixedDelay(taker, 0, 1, TimeUnit.SECONDS);// TODO config
+                taker = new MemberLatestTransactionsTaker(ringMember);
+                updateTakerThreadPool.submit(taker);
             }
             return taker;
         });
@@ -177,114 +170,150 @@ public class PartitionChangeTaker implements RowChanges {
     }
 
     synchronized public void stop() throws Exception {
-        if (updatedTakerThreadPool != null) {
+        if (updateTakerThreadPool != null) {
             this.changeTakerThreadPool.shutdownNow();
             this.changeTakerThreadPool = null;
-            this.updatedTakerThreadPool.shutdownNow();
-            this.updatedTakerThreadPool = null;
+            this.updateTakerThreadPool.shutdownNow();
+            this.updateTakerThreadPool = null;
         }
     }
 
     private class MemberLatestTransactionsTaker implements Runnable {
 
         private final RingMember fromRingMember;
-        private final AmzaRingStoreReader amzaRingReader;
-        private final UpdatesTaker updatesTaker;
-        private final OrderIdProvider sessionIdProvider;
 
-        private final ExecutorService updateTakerThreadPool;
-        private final ExecutorService changeTakerThreadPool;
-        private final ConcurrentHashMap<PartitionName, MemberPartitionTaker> changeTakers = new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<VersionedPartitionName, MemberPartitionTaker> changeTakers = new ConcurrentHashMap<>();
         private final AtomicBoolean disposed = new AtomicBoolean(false);
 
-        public MemberLatestTransactionsTaker(RingMember fromRingMember,
-            AmzaRingStoreReader amzaRingReader,
-            UpdatesTaker updatesTaker,
-            OrderIdProvider sessionIdProvider,
-            ExecutorService updateTakerThreadPool,
-            ExecutorService changeTakerThreadPool) {
+        public MemberLatestTransactionsTaker(RingMember fromRingMember) {
             this.fromRingMember = fromRingMember;
-            this.amzaRingReader = amzaRingReader;
-            this.updatesTaker = updatesTaker;
-            this.sessionIdProvider = sessionIdProvider;
-            this.updateTakerThreadPool = updateTakerThreadPool;
-            this.changeTakerThreadPool = changeTakerThreadPool;
         }
 
         public void dispose() {
-            for (MemberPartitionTaker memberPartitionTaker : changeTakers.values()) {
-                memberPartitionTaker.dispose();
-            }
             disposed.set(true);
         }
 
         @Override
         public void run() {
-            try {
-                if (disposed.get()) {
-                    return;
-                }
-                RingHost fromRingHost = amzaRingReader.getRingHost(fromRingMember);
-                updatesTaker.streamingTakePartitionUpdates(amzaRingReader.getRingMember(),
-                    fromRingHost,
-                    sessionIdProvider.nextId(),
-                    10_000, // TODO expose config
-                    (partitionName, txId) -> {
-                        changeTakers.compute(partitionName, (_partitionName, taker) -> {
-                            if (taker == null) {
-                                CommitChanges commitChanges;
-                                if (partitionName.isSystemPartition()) {
-                                    commitChanges = new SystemPartitionCommitChanges(partitionName, systemWALStorage, systemHighwaterStorage, walUpdated);
-                                } else {
-                                    commitChanges = new StripedPartitionCommitChanges(partitionName, partitionStripeProvider, hardFlush, walUpdated);
-                                }
-                                taker = new MemberPartitionTaker(fromRingMember, fromRingHost, partitionName, commitChanges);
-                                if (taker.needsTxId(txId)) {
-                                    changeTakerThreadPool.submit(taker);
+            while (!disposed.get()) {
+                try {
+                    RingHost fromRingHost = amzaRingReader.getRingHost(fromRingMember);
+                    updatesTaker.streamingTakePartitionUpdates(amzaRingReader.getRingMember(),
+                        fromRingHost,
+                        sessionIdProvider.nextId(),
+                        10_000, // TODO expose config
+                        (remoteVersionedPartitionName, remoteStatus, txId) -> {
+                            if (disposed.get()) {
+                                throw new InterruptedException("MemberLatestTransactionsTaker for " + fromRingMember + " has been disposed.");
+                            }
+
+                            partitionStatusStorage.remoteStatus(fromRingMember,
+                                remoteVersionedPartitionName.getPartitionName(),
+                                new PartitionStatusStorage.VersionedStatus(remoteStatus, remoteVersionedPartitionName.getPartitionVersion()));
+
+                            changeTakers.compute(remoteVersionedPartitionName, (_versionedPartitionName, taker) -> {
+
+                                if (taker == null) {
+                                    CommitChanges commitChanges;
+                                    PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
+                                    if (partitionName.isSystemPartition()) {
+                                        commitChanges = new SystemPartitionCommitChanges(partitionName, systemWALStorage, systemHighwaterStorage, walUpdated);
+                                    } else {
+                                        commitChanges = new StripedPartitionCommitChanges(partitionName, partitionStripeProvider, hardFlush, walUpdated);
+                                    }
+                                    MemberPartitionTaker runTaker = taker;
+                                    taker = new MemberPartitionTaker(disposed,
+                                        fromRingMember,
+                                        fromRingHost,
+                                        remoteVersionedPartitionName,
+                                        commitChanges,
+                                        (changed, startVersion, version) -> {
+                                            changeTakers.compute(remoteVersionedPartitionName, (key, memberPartitionTaker) -> {
+                                                if (!disposed.get() && (changed || startVersion < version.get())) {
+                                                    changeTakerThreadPool.submit(runTaker);
+                                                    return memberPartitionTaker;
+                                                } else {
+                                                    return null;
+                                                }
+                                            });
+                                        },
+                                        (x) -> {
+                                            changeTakerThreadPool.submit(runTaker);
+                                        });
+                                    if (taker.needsTxId(txId)) {
+                                        changeTakerThreadPool.submit(taker);
+                                        return taker;
+                                    }
+                                } else if (taker.needsTxId(txId)) {
                                     return taker;
                                 }
-                            } else if (taker.needsTxId(txId)) {
-                                return taker;
-                            }
-                            return null;
+                                return null;
+                            });
                         });
-                        if (disposed.get()) {
-                            Thread.currentThread().interrupt();
-                            throw new InterruptedException("Taker has been shutdown.");
-                        }
-                    });
-            } catch (InterruptedException ie) {
-                // expected and swallowed.
-            } catch (Exception x) {
-                LOG.error("Failed to take partitions updated:{}", new Object[] { fromRingMember }, x);
-                updateTakerThreadPool.submit(this);
+                } catch (InterruptedException ie) {
+                    return;
+                } catch (Exception x) {
+                    LOG.error("Failed to take partitions updated:{}", new Object[]{fromRingMember}, x);
+                    try {
+                        Thread.sleep(1_000);
+                    } catch (InterruptedException ie) {
+                        return;
+                    }
+                }
             }
         }
+    }
+
+    interface OnCompletion {
+
+        void completed(boolean changed, long startVersion, AtomicLong version);
+    }
+
+    interface OnError {
+
+        void error(Exception x);
     }
 
     private class MemberPartitionTaker implements Runnable {
 
         private final RingMember fromRingMember;
         private final RingHost fromRingHost;
-        private final PartitionName partitionName;
+        private final VersionedPartitionName remoteVersionedPartitionName;
         private final CommitChanges commitChanges;
+        private final OnCompletion onCompletion;
+        private final OnError onError;
 
-        private final AtomicBoolean disposed = new AtomicBoolean(false);
+        private final AtomicBoolean disposed;
         private final AtomicLong version = new AtomicLong(0);
 
-        public MemberPartitionTaker(RingMember fromRingMember,
+        public MemberPartitionTaker(AtomicBoolean disposed,
+            RingMember fromRingMember,
             RingHost fromRingHost,
-            PartitionName partitionName,
-            CommitChanges commitChanges) {
+            VersionedPartitionName remoteVersionedPartitionName,
+            CommitChanges commitChanges,
+            OnCompletion onCompletion,
+            OnError onError) {
 
+            this.disposed = disposed;
             this.fromRingMember = fromRingMember;
             this.fromRingHost = fromRingHost;
-            this.partitionName = partitionName;
+            this.remoteVersionedPartitionName = remoteVersionedPartitionName;
             this.commitChanges = commitChanges;
+            this.onCompletion = onCompletion;
+            this.onError = onError;
         }
 
-        public void dispose() {
-            disposed.set(true);
+        private boolean needsTxId(long txId) {
+            try {
+                if (commitChanges.needsTxId(fromRingMember, txId)) {
+                    LOG.debug("Partition:{} needs tx:{}", remoteVersionedPartitionName, txId);
+                    version.incrementAndGet();
+                    return true;
+                }
+                return false;
+            } catch (Exception x) {
+                throw new RuntimeException(x);
+            }
         }
 
         @Override
@@ -292,45 +321,39 @@ public class PartitionChangeTaker implements RowChanges {
             if (disposed.get()) {
                 return;
             }
+            long currentVersion = version.get();
+            PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
             LOG.startTimer("take>" + partitionName.getRingName() + ">" + partitionName.getPartitionName());
             try {
 
-                commitChanges.commit((versionedPartitionName, highwaterStorage, commitTo) -> {
+                commitChanges.commit((localVersionedPartitionName, highwaterStorage, commitTo) -> {
 
                     boolean flushed = false;
 
-                    final PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
+                    final PartitionProperties partitionProperties = partitionIndex.getProperties(localVersionedPartitionName.getPartitionName());
                     if (partitionProperties != null) {
                         if (partitionProperties.takeFromFactor > 0) {
                             try {
                                 TookResult result = takeChanges(commitTo,
                                     highwaterStorage,
-                                    versionedPartitionName,
+                                    localVersionedPartitionName,
                                     partitionProperties.takeFromFactor);
 
-                                /*
-                                Set<RingMember> membersUnreachable = new HashSet<>();
-                                if (result.tookUnreachable) {
-                                    membersUnreachable.add(result.ringMember);
-                                }
-                                if (allInKetchup) {
-                                    partitionStatusStorage.elect(amzaRingReader.getRing(versionedPartitionName.getPartitionName().getRingName()).keySet(),
-                                        membersUnreachable,
-                                        versionedPartitionName);
-                                }
-                                */
+                                
                                 if (result.tookFully) {
-                                    partitionStatusStorage.markAsOnline(versionedPartitionName);
+                                    partitionStatusStorage.markAsOnline(localVersionedPartitionName);
+                                } else if (!result.tookError) {
+                                    String ringName = localVersionedPartitionName.getPartitionName().getRingName();
+                                    Set<RingMember> remoteRingMembers = amzaRingReader.getNeighboringRingMembers(ringName);
+                                    partitionStatusStorage.elect(remoteRingMembers, localVersionedPartitionName);
                                 }
                                 if (result.flushedAny) {
-                                    flushed = true;
-
                                     LOG.startTimer("takeAll>takeAck");
                                     try {
                                         updatesTaker.ackTakenUpdate(fromRingMember, fromRingHost, result.versionedPartitionName, result.txId);
                                     } catch (Exception x) {
                                         LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                                            new Object[] { fromRingMember, fromRingHost, versionedPartitionName }, x);
+                                            new Object[]{fromRingMember, fromRingHost, localVersionedPartitionName}, x);
                                     } finally {
                                         LOG.stopTimer("takeAll>takeAck");
                                     }
@@ -338,41 +361,22 @@ public class PartitionChangeTaker implements RowChanges {
                                 flushed = result.flushedAny;
                             } catch (Exception x) {
                                 LOG.warn("Failed to take from member:{} host:{} partition:{}",
-                                    new Object[] { fromRingMember, fromRingHost, versionedPartitionName }, x);
+                                    new Object[]{fromRingMember, fromRingHost, localVersionedPartitionName}, x);
                             }
                         } else {
-                            partitionStatusStorage.markAsOnline(versionedPartitionName);
+                            partitionStatusStorage.markAsOnline(localVersionedPartitionName);
                         }
                     }
-                    if (flushed) {
-                        changeTakerThreadPool.submit(this);
-                    } else {
-                        //LOG.info("Dormant " + partitionName);
-                        //TODO pop from parent map dormant.set(true);
-                        //TESTING ONLY changeTakerThreadPool.submit(this);
-                    }
+                    onCompletion.completed(flushed, currentVersion, version);
                     return null;
                 });
 
             } catch (Exception x) {
                 LOG.error("Failed to take from member:{} host:{} partition:{}",
-                    new Object[] { fromRingMember, fromRingHost, partitionName }, x);
-                changeTakerThreadPool.submit(this);
+                    new Object[]{fromRingMember, fromRingHost, remoteVersionedPartitionName}, x);
+                onError.error(x);
             } finally {
                 LOG.stopTimer("take>" + partitionName.getRingName() + ">" + partitionName.getPartitionName());
-            }
-        }
-
-        private boolean needsTxId(long txId) {
-            try {
-                if (commitChanges.needsTxId(fromRingMember, txId)) {
-                    LOG.debug("Partition:{} needs tx:{}", partitionName, txId);
-                    version.incrementAndGet();
-                    return true;
-                }
-                return false;
-            } catch (Exception x) {
-                throw new RuntimeException(x);
             }
         }
 
@@ -418,7 +422,7 @@ public class PartitionChangeTaker implements RowChanges {
                     if (amzaStats.takeErrors.count(fromRingMember) == 0) {
                         LOG.warn("Error while taking from member:{} host:{}", fromRingMember, fromRingHost);
                         LOG.trace("Error while taking from member:{} host:{} partition:{} takeFromFactor:{}",
-                            new Object[] { fromRingMember, fromRingHost, versionedPartitionName, takeFromFactor }, streamingTakeResult.error);
+                            new Object[]{fromRingMember, fromRingHost, versionedPartitionName, takeFromFactor}, streamingTakeResult.error);
                     }
                     amzaStats.takeErrors.add(fromRingMember);
                 } else if (streamingTakeResult.unreachable != null) {
@@ -430,13 +434,13 @@ public class PartitionChangeTaker implements RowChanges {
                     if (amzaStats.takeErrors.count(fromRingMember) == 0) {
                         LOG.debug("Unreachable while taking from member:{} host:{}", fromRingMember, fromRingHost);
                         LOG.trace("Unreachable while taking from member:{} host:{} partition:{} takeFromFactor:{}",
-                            new Object[] { fromRingMember, fromRingHost, versionedPartitionName, takeFromFactor }, streamingTakeResult.unreachable);
+                            new Object[]{fromRingMember, fromRingHost, versionedPartitionName, takeFromFactor}, streamingTakeResult.unreachable);
                     }
                     amzaStats.takeErrors.add(fromRingMember);
                 } else {
                     updates = takeRowStream.flush();
                     if (updates > 0) {
-                        LOG.info("(" + updates + ") " + partitionName + " " + commitTo + " -> " + fromRingMember + "/" + fromRingHost);
+                        LOG.info("(" + updates + ") " + versionedPartitionName + " " + commitTo + " -> " + fromRingMember + "/" + fromRingHost);
                     }
                     if (tookFully) {
                         for (Entry<RingMember, Long> otherHighwaterMark : streamingTakeResult.otherHighwaterMarks.entrySet()) {

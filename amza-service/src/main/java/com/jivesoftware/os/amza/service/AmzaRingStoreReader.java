@@ -16,6 +16,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -30,15 +31,18 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     private final PartitionStore ringIndex;
     private final PartitionStore nodeIndex;
     private final ConcurrentMap<String, Integer> ringSizesCache;
+    private final ConcurrentMap<RingMember, Set<String>> ringMemberRingNamesCache;
 
     public AmzaRingStoreReader(RingMember rootRingMember,
         PartitionStore ringIndex,
         PartitionStore nodeIndex,
-        ConcurrentMap<String, Integer> ringSizesCache) {
+        ConcurrentMap<String, Integer> ringSizesCache,
+        ConcurrentMap<RingMember, Set<String>> ringMemberRingNamesCache) {
         this.rootRingMember = rootRingMember;
         this.ringIndex = ringIndex;
         this.nodeIndex = nodeIndex;
         this.ringSizesCache = ringSizesCache;
+        this.ringMemberRingNamesCache = ringMemberRingNamesCache;
     }
 
     String keyToRingName(WALKey key) throws IOException {
@@ -124,19 +128,27 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     @Override
     public void getRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
 
-        // TODO add caching or another index to mitigate this brute force scan
-        LOG.warn("This is a slow call please fix.");
-        ringIndex.rowScan((long rowTxId, WALKey key, WALValue value) -> {
-            HeapFiler filer = new HeapFiler(key.getKey());
-            String ringName = UIO.readString(filer, "ringName");
-            UIO.readByte(filer, "seperator");
-            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
-            if (ringMember.equals(desiredRingMember)) {
-                ringNameStream.stream(ringName);
+        Set<String> ringNames = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember, (key) -> {
+            Set<String> set = new HashSet<>();
+            try {
+                ringIndex.rowScan((long rowTxId, WALKey walKey, WALValue value) -> {
+                    HeapFiler filer = new HeapFiler(walKey.getKey());
+                    String ringName = UIO.readString(filer, "ringName");
+                    UIO.readByte(filer, "seperator");
+                    RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
+                    if (ringMember.equals(desiredRingMember)) {
+                        set.add(ringName);
+                    }
+                    return true;
+                });
+                return set;
+            } catch (Exception x) {
+                throw new RuntimeException(x);
             }
-            return true;
         });
-
+        for (String ringName : ringNames) {
+            ringNameStream.stream(ringName);
+        }
     }
 
     @Override

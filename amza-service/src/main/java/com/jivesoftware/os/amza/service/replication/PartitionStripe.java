@@ -7,6 +7,7 @@ import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.StripeWALStorage;
+import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionTx;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
@@ -70,12 +71,16 @@ public class PartitionStripe {
         return false;
     }
 
-    public void txAllPartitions(PartitionTx<Void> tx) throws Exception {
+    public void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getAllPartitions(), predicate)) {
             txPartitionStatus.tx(versionedPartitionName.getPartitionName(),
                 (currentVersionedPartitionName, partitionStatus) -> {
                     if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                        return tx.tx(currentVersionedPartitionName, partitionStatus);
+                        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                        if (partitionStore != null) {
+                            long highestTxId = storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
+                            tx.tx(currentVersionedPartitionName, partitionStatus, highestTxId);
+                        }
                     }
                     return null;
                 });
@@ -108,7 +113,12 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + partitionName);
                 } else {
-                    RowsChanged changes = storage.update(highwaterStorage, versionedPartitionName, partitionStore.getWalStorage(), updates, updated);
+                    RowsChanged changes = storage.update(highwaterStorage,
+                        versionedPartitionName,
+                        partitionStatus,
+                        partitionStore.getWalStorage(),
+                        updates,
+                        updated);
                     if (allRowChanges != null && !changes.isEmpty()) {
                         allRowChanges.changes(changes);
                     }

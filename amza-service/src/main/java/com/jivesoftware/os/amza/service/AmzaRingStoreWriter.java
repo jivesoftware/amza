@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -70,19 +71,21 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     private final SystemWALStorage systemWALStorage;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final ConcurrentMap<String, Integer> ringSizes;
+    private final ConcurrentMap<RingMember, Set<String>> ringMemberRingNamesCache;
     private final WALUpdated walUpdated;
 
     public AmzaRingStoreWriter(AmzaRingStoreReader ringStoreReader,
         SystemWALStorage systemWALStorage,
         TimestampedOrderIdProvider orderIdProvider,
         WALUpdated walUpdated,
-        ConcurrentMap<String, Integer> ringSizes) {
+        ConcurrentMap<String, Integer> ringSizes,
+        ConcurrentMap<RingMember, Set<String>> ringMemberRingNamesCache) {
         this.ringStoreReader = ringStoreReader;
         this.systemWALStorage = systemWALStorage;
         this.orderIdProvider = orderIdProvider;
         this.walUpdated = walUpdated;
         this.ringSizes = ringSizes;
-      
+        this.ringMemberRingNamesCache = ringMemberRingNamesCache;
     }
 
     @Override
@@ -90,6 +93,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (PartitionProvider.RING_INDEX.equals(changes.getVersionedPartitionName())) {
             for (WALKey key : changes.getApply().columnKeySet()) {
                 ringSizes.remove(ringStoreReader.keyToRingName(key));
+                ringMemberRingNamesCache.remove(ringStoreReader.keyToRingMember(key));
             }
         }
     }

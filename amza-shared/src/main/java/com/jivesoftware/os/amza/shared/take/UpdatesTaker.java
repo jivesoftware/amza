@@ -16,13 +16,12 @@
 package com.jivesoftware.os.amza.shared.take;
 
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import java.util.Collection;
 import java.util.Map;
-import java.util.Map.Entry;
 
 public interface UpdatesTaker {
 
@@ -34,7 +33,7 @@ public interface UpdatesTaker {
 
     interface PartitionUpdatedStream {
 
-        void update(PartitionName partitionName, long txId) throws Exception;
+        void update(VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception;
     }
 
     StreamingTakeResult streamingTakeUpdates(RingMember asRingMember,
@@ -67,18 +66,4 @@ public interface UpdatesTaker {
      */
     boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId);
 
-    class AckTaken {
-
-        public VersionedPartitionName partitionName;
-        public long txId;
-
-        public AckTaken() {
-        }
-
-        public AckTaken(VersionedPartitionName partitionName, long txId) {
-            this.partitionName = partitionName;
-            this.txId = txId;
-        }
-
-    }
 }

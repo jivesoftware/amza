@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
@@ -28,9 +29,13 @@ public interface StripeWALStorage {
 
     RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
+        Status partitionStatus,
         WALStorage storage,
         Commitable<WALValue> updates,
         WALUpdated updated) throws Exception;
+
+    long getHighestTxId(VersionedPartitionName versionedPartitionName,
+        WALStorage storage) throws Exception;
 
     WALValue get(VersionedPartitionName versionedPartitionName,
         WALStorage storage,

@@ -144,7 +144,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
     public Map<String, Object> regionTotals(PartitionName name, AmzaStats.Totals totals) throws Exception {
         Map<String, Object> map = new HashMap<>();
         if (name != null) {
-            map.put("name", name.getPartitionName());
+            map.put("name", name.getName());
             map.put("ringName", name.getRingName());
             NavigableMap<RingMember, RingHost> ring = ringReader.getRing(name.getRingName());
             List<Map<String, String>> ringMaps = new ArrayList<>();

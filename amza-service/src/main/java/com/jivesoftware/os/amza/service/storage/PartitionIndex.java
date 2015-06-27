@@ -164,7 +164,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     private PartitionStore open(VersionedPartitionName versionedPartitionName, PartitionProperties properties) throws Exception {
         synchronized (locksProvider.lock(versionedPartitionName, 1234)) {
             ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.computeIfAbsent(versionedPartitionName.getPartitionName(),
-                (partitionName) -> new ConcurrentHashMap<>());
+                (key) -> new ConcurrentHashMap<>());
 
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {

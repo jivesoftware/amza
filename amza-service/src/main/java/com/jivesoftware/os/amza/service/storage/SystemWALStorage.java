@@ -43,8 +43,8 @@ public class SystemWALStorage {
 
     public <R> R takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
         long transactionId,
-        PartitionStripe.TakeRowUpdates<R> takeRowUpdates)
-        throws Exception {
+        PartitionStripe.TakeRowUpdates<R> takeRowUpdates) throws Exception {
+        
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
 
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);

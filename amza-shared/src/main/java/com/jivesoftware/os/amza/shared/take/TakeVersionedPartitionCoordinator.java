@@ -4,14 +4,15 @@ import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.shared.take.TakeRingCoordinator.VersionedRing;
-import com.jivesoftware.os.amza.shared.take.UpdatesTaker.PartitionUpdatedStream;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -28,7 +29,7 @@ public class TakeVersionedPartitionCoordinator {
     final long slowTakeMillis;
     final long slowTakeId;
     final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
-    final AtomicReference<Integer> currentCategory = new AtomicReference<>();
+    final AtomicInteger currentCategory = new AtomicInteger(1);
     final AtomicLong lastTakeSessionId = new AtomicLong(0);
 
     public TakeVersionedPartitionCoordinator(VersionedPartitionName versionedPartitionName, AtomicLong txId, long slowTakeMillis, long slowTakeId) {
@@ -43,35 +44,38 @@ public class TakeVersionedPartitionCoordinator {
         if (this.txId.get() < txId) {
             this.txId.set(txId);
             updateCategory(versionedRing);
+            LOG.info("UPDATE: partition:{} status:{} txId:{} ", versionedPartitionName, status, txId);
         }
     }
 
-    long take(long takeSessionId,
+    long availableRowsStream(long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
-        PartitionUpdatedStream updatedPartitionsStream) throws Exception {
+        AvailableStream availableStream) throws Exception {
 
         Integer category = versionedRing.getCategory(ringMember);
         if (category != null && category <= currentCategory.get()) {
             long takeTxId = txId.get();
             took.compute(ringMember, (RingMember t, SessionedTxId u) -> {
-                if (u != null) {
-                    try {
+                try {
+                    if (u == null) {
+                        availableStream.available(versionedPartitionName, status.get(), takeTxId);
+                        return new SessionedTxId(takeSessionId, takeTxId - slowTakeId);
+                    } else {
                         if (u.sessionId != takeSessionId) {
-                            updatedPartitionsStream.update(versionedPartitionName, status.get(), takeTxId);// TODO add PartitionStatus, txId
+                            availableStream.available(versionedPartitionName, status.get(), takeTxId);
+                            LOG.info("ringMember:{} nudged:{} status:{} txId:{}", ringMember, versionedPartitionName, status, takeTxId);
                             return new SessionedTxId(takeSessionId, takeTxId);
                         } else {
                             if (u.txId < takeTxId) {
-                                updatedPartitionsStream.update(versionedPartitionName, status.get(), takeTxId);// TODO add PartitionStatus, txId
+                                availableStream.available(versionedPartitionName, status.get(), takeTxId);
                             }
                             return u;
                         }
-                    } catch (Exception x) {
-                        throw new RuntimeException(x);
                     }
-                } else {
-                    return new SessionedTxId(takeSessionId, takeTxId - slowTakeId);
+                } catch (Exception x) {
+                    throw new RuntimeException(x);
                 }
             });
             return Long.MAX_VALUE;
@@ -82,10 +86,10 @@ public class TakeVersionedPartitionCoordinator {
         return category * slowTakeMillis;
     }
 
-    void took(VersionedRing versionedRing, RingMember ringMember, long txId) {
-        took.compute(ringMember, (RingMember t, SessionedTxId u) -> {
-            if (u != null) {
-                return new SessionedTxId(u.sessionId, txId);
+    void rowsTaken(VersionedRing versionedRing, RingMember remoteRingMember, long localTxId) {
+        took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
+            if (existingSessionedTxId != null) {
+                return new SessionedTxId(existingSessionedTxId.sessionId, localTxId);
             }
             return null;
         });
@@ -101,7 +105,7 @@ public class TakeVersionedPartitionCoordinator {
 
         long currentTxId = txId.get();
         int fastEnough = 0;
-        int worstCategory = 0;
+        int worstCategory = 1;
         for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
             if (fastEnough < versionedRing.takeFromFactor) {
                 SessionedTxId lastTxId = took.get(candidate.getKey());

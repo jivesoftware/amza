@@ -30,17 +30,19 @@ public interface AmzaInstance {
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
 
-    void streamingTakePartitionUpdates(DataOutputStream dos,
-        RingMember ringMember, long takeSessionId, long timeoutMillis) throws Exception;
+    void availableRowsStream(DataOutputStream dos,
+        RingMember remoteRingMember,
+        long takeSessionId,
+        long timeoutMillis) throws Exception;
 
-    void streamingTakeFromPartition(DataOutputStream dos,
-        RingMember ringMember,
-        PartitionName partitionName,
-        long highestTransactionId) throws Exception;
+    void rowsStream(DataOutputStream dos,
+        RingMember remoteRingMember,
+        VersionedPartitionName localVersionedPartitionName,
+        long localTxId) throws Exception;
 
-    void remoteMemberTookToTxId(RingMember remoteRingMember,
+    void rowsTaken(RingMember remoteRingMember,
         RingHost remoteRingHost,
-        VersionedPartitionName remoteVersionedPartitionName,
+        VersionedPartitionName localVersionedPartitionName,
         long localTxId) throws Exception;
 
 }

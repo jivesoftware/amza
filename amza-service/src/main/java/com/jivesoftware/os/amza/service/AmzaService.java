@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.replication.PartitionChangeTaker;
+import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.replication.PartitionCompactor;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
@@ -37,12 +37,11 @@ import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.ring.RingNeighbors;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
-import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -76,7 +75,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     private final HighwaterStorage systemHighwaterStorage;
     private final TakeCoordinator takeCoordinator;
     private final PartitionStatusStorage partitionStatusStorage;
-    private final PartitionChangeTaker changeTaker;
+    private final RowChangeTaker changeTaker;
     private final PartitionCompactor partitionCompactor;
     private final PartitionComposter partitionComposter;
     private final PartitionIndex partitionIndex;
@@ -94,7 +93,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         HighwaterStorage systemHighwaterStorage,
         TakeCoordinator takeCoordinator,
         PartitionStatusStorage partitionStatusStorage,
-        PartitionChangeTaker changeTaker,
+        RowChangeTaker changeTaker,
         PartitionCompactor partitionCompactor,
         PartitionComposter partitionComposter,
         PartitionIndex partitionIndex,
@@ -296,8 +295,8 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     @Override
-    public void streamingTakePartitionUpdates(DataOutputStream dos, RingMember ringMember, long takeSessionId, long timeoutMillis) throws Exception {
-        takeCoordinator.take(ringStoreReader, ringMember, takeSessionId, timeoutMillis, (partitionName, status, txId) -> {
+    public void availableRowsStream(DataOutputStream dos, RingMember remoteRingMember, long takeSessionId, long timeoutMillis) throws Exception {
+        takeCoordinator.availableRowsStream(ringStoreReader, remoteRingMember, takeSessionId, timeoutMillis, (partitionName, status, txId) -> {
             if (partitionName == null && status == null && txId == 0) {
                 dos.write(0);
                 dos.flush();
@@ -314,31 +313,42 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     // for testing online
-    public void streamingTakePartitionUpdates(RingMember ringMember, long takeSessionId, long timeoutMillis,
-        UpdatesTaker.PartitionUpdatedStream partitionUpdatedStream) throws Exception {
-        takeCoordinator.take(ringStoreReader, ringMember, takeSessionId, timeoutMillis, partitionUpdatedStream);
+    public void availableRowsStream(RingMember remoteRingMember, long takeSessionId, long timeoutMillis,
+        RowsTaker.AvailableStream availableStream) throws Exception {
+        takeCoordinator.availableRowsStream(ringStoreReader, remoteRingMember, takeSessionId, timeoutMillis, availableStream);
     }
 
     @Override
-    public void streamingTakeFromPartition(DataOutputStream dos,
-        RingMember ringMember,
-        PartitionName partitionName,
-        long highestTransactionId) throws Exception {
+    public void rowsStream(DataOutputStream dos,
+        RingMember remoteRingMember,
+        VersionedPartitionName localVersionedPartitionName,
+        long localTxId) throws Exception {
 
         MutableLong bytes = new MutableLong(0);
         boolean needsToMarkAsKetchup;
-        if (partitionName.isSystemPartition()) {
-            needsToMarkAsKetchup = systemWALStorage.takeRowUpdatesSince(new VersionedPartitionName(partitionName, 0), highestTransactionId,
-                (VersionedPartitionName versionedPartitionName, TxPartitionStatus.Status partitionStatus, PartitionStripe.RowStreamer streamer) -> {
-                    return streamOnline(ringMember, versionedPartitionName, highestTransactionId, dos, bytes, partitionName, systemHighwaterStorage, streamer);
+        if (localVersionedPartitionName.getPartitionName().isSystemPartition()) {
+            needsToMarkAsKetchup = systemWALStorage.takeRowUpdatesSince(localVersionedPartitionName, localTxId,
+                (versionedPartitionName, partitionStatus, rowStreamer) -> {
+                    return streamOnline(remoteRingMember,
+                        versionedPartitionName,
+                        localTxId,
+                        dos,
+                        bytes,
+                        systemHighwaterStorage,
+                        rowStreamer);
                 });
         } else {
-            needsToMarkAsKetchup = partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-                return stripe.takeRowUpdatesSince(partitionName, highestTransactionId,
+            needsToMarkAsKetchup = partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(), (stripe, highwaterStorage) -> {
+                return stripe.takeRowUpdatesSince(localVersionedPartitionName.getPartitionName(), localTxId,
                     (versionedPartitionName, partitionStatus, streamer) -> {
-                        if (partitionStatus == TxPartitionStatus.Status.ONLINE) {
-                            return streamOnline(ringMember, versionedPartitionName, highestTransactionId,
-                                dos, bytes, partitionName, highwaterStorage, streamer);
+                        if (localVersionedPartitionName.equals(versionedPartitionName) && partitionStatus == TxPartitionStatus.Status.ONLINE) {
+                            return streamOnline(remoteRingMember,
+                                versionedPartitionName,
+                                localTxId,
+                                dos,
+                                bytes,
+                                highwaterStorage,
+                                streamer);
                         } else {
                             return streamOffline(dos, bytes, versionedPartitionName, partitionStatus);
                         }
@@ -349,6 +359,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         amzaStats.netStats.wrote.addAndGet(bytes.longValue());
 
         if (needsToMarkAsKetchup) {
+            PartitionName partitionName = localVersionedPartitionName.getPartitionName();
             try {
                 if (ringStoreWriter.isMemberOfRing(partitionName.getRingName()) && partitionProvider.hasPartition(partitionName)) {
                     partitionStatusStorage.markAsKetchup(partitionName);
@@ -377,14 +388,19 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         }
     }
 
-    private boolean streamOnline(RingMember ringMember, VersionedPartitionName versionedPartitionName, long highestTransactionId, DataOutputStream dos,
-        MutableLong bytes, PartitionName partitionName, HighwaterStorage highwaterStorage, PartitionStripe.RowStreamer streamer) throws IOException, Exception {
+    private boolean streamOnline(RingMember ringMember,
+        VersionedPartitionName versionedPartitionName,
+        long highestTransactionId,
+        DataOutputStream dos,
+        MutableLong bytes,
+        HighwaterStorage highwaterStorage,
+        PartitionStripe.RowStreamer streamer) throws Exception {
+
         ackWaters.set(ringMember, versionedPartitionName, highestTransactionId);
         dos.writeLong(versionedPartitionName.getPartitionVersion());
         dos.writeByte(1); // fully online
         bytes.increment();
-        RingNeighbors hostRing = ringStoreReader.getRingNeighbors(partitionName.getRingName());
-        for (Entry<RingMember, RingHost> node : hostRing.getAboveRing()) {
+        for (Entry<RingMember, RingHost> node : ringStoreReader.getNeighbors(versionedPartitionName.getPartitionName().getRingName())) {
             Long highwatermark = highwaterStorage.get(node.getKey(), versionedPartitionName);
             if (highwatermark != null) {
                 byte[] ringMemberBytes = node.getKey().toBytes();
@@ -415,12 +431,12 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     @Override
-    public void remoteMemberTookToTxId(RingMember remoteRingMember,
+    public void rowsTaken(RingMember remoteRingMember,
         RingHost remoteRingHost,
-        VersionedPartitionName remoteVersionedPartitionName,
+        VersionedPartitionName localVersionedPartitionName,
         long localTxId) throws Exception {
-        ackWaters.set(remoteRingMember, remoteVersionedPartitionName, localTxId);
-        takeCoordinator.remoteMemberTookToTxId(remoteRingMember, remoteVersionedPartitionName, localTxId);
+        ackWaters.set(remoteRingMember, localVersionedPartitionName, localTxId);
+        takeCoordinator.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId);
     }
 
     public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {

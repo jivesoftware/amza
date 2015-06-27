@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 
 /**
@@ -25,16 +24,6 @@ class StripedPartitionCommitChanges implements CommitChanges {
         this.partitionStripeProvider = partitionStripeProvider;
         this.hardFlush = hardFlush;
         this.walUpdated = walUpdated;
-    }
-
-    @Override
-    public boolean needsTxId(RingMember ringMember, long txId) throws Exception {
-        return partitionStripeProvider.txPartition(partitionName,
-            (stripe, highwaterStorage) -> stripe.txPartition(partitionName,
-                (versionedPartitionName, partitionStatus) -> {
-                    Long highwater = highwaterStorage.get(ringMember, versionedPartitionName);
-                    return highwater == null || txId > highwater;
-                }));
     }
 
     @Override

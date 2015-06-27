@@ -212,7 +212,7 @@ public class AmzaStats {
 
             LOG.debug("{} {} to partition: {}:{} lag:{}", new Object[]{name,
                 changed.getApply().size(),
-                partitionName.getPartitionName(),
+                partitionName.getName(),
                 partitionName.getRingName(),
                 lag(changed)});
         }

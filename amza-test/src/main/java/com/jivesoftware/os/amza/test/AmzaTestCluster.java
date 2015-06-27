@@ -41,8 +41,9 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
-import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
+import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer.StreamingTakeConsumed;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -103,71 +104,73 @@ public class AmzaTestCluster {
         cluster.remove(ringMember);
     }
 
-    public AmzaNode newNode(final RingMember ringMember, final RingHost ringHost) throws Exception {
+    public AmzaNode newNode(final RingMember localRingMember, final RingHost localRingHost) throws Exception {
 
-        AmzaNode service = cluster.get(ringMember);
+        AmzaNode service = cluster.get(localRingMember);
         if (service != null) {
             return service;
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + ringHost.getHost() + "-" + ringHost.getPort()};
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.takeFromNeighborsIntervalInMillis = 5;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
 
-        UpdatesTaker updateTaker = new UpdatesTaker() {
+        RowsTaker updateTaker = new RowsTaker() {
 
             @Override
-            public boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId) {
-                AmzaNode amzaNode = cluster.get(ringMember);
+            public void availableRowsStream(RingMember localRingMember,
+                RingMember remoteRingMember,
+                RingHost remoteRingHost,
+                long takeSessionId,
+                long timeoutMillis,
+                RowsTaker.AvailableStream updatedPartitionsStream) throws Exception {
+
+                AmzaNode amzaNode = cluster.get(remoteRingMember);
                 if (amzaNode == null) {
-                    throw new IllegalStateException("Service doesn't exists for " + ringMember);
+                    throw new IllegalStateException("Service doesn't exists for " + remoteRingMember);
+                } else {
+                    amzaNode.takePartitionUpdates(localRingMember, ORDER_ID_PROVIDER.nextId(), timeoutMillis, (versionedPartitionName, status, txId) -> {
+                        if (versionedPartitionName != null) {
+                            updatedPartitionsStream.available(versionedPartitionName, status, txId);
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public RowsTaker.StreamingRowsResult rowsStream(RingMember localRingMember,
+                RingMember remoteRingMember,
+                RingHost remoteRingHost,
+                VersionedPartitionName remoteVersionedPartitionName,
+                long remoteTxId, 
+                RowStream rowStream) {
+
+                AmzaNode amzaNode = cluster.get(remoteRingMember);
+                if (amzaNode == null) {
+                    throw new IllegalStateException("Service doesn't exist for " + localRingMember);
+                } else {
+                    StreamingTakesConsumer.StreamingTakeConsumed consumed = amzaNode.rowsStream(localRingMember,
+                        remoteVersionedPartitionName,
+                        remoteTxId,
+                        rowStream);
+                    return new StreamingRowsResult(null, null, consumed.isOnline ? new HashMap<>() : null);
+                }
+            }
+
+            @Override
+            public boolean rowsTaken(RingMember remoteRingMember, RingHost remoteRingHost, VersionedPartitionName remoteVersionedPartitionName,
+                long remoteTxId) {
+                AmzaNode amzaNode = cluster.get(remoteRingMember);
+                if (amzaNode == null) {
+                    throw new IllegalStateException("Service doesn't exists for " + localRingMember);
                 } else {
                     try {
-                        amzaNode.remoteMemberTookToTxId(ringMember, ringHost, versionedPartitionName, txId);
+                        amzaNode.remoteMemberTookToTxId(remoteRingMember, remoteRingHost, remoteVersionedPartitionName, remoteTxId);
                         return true;
                     } catch (Exception x) {
                         throw new RuntimeException("Issue while applying acks.", x);
                     }
-                }
-            }
-
-            @Override
-            public StreamingTakeResult streamingTakeUpdates(RingMember asRingMember,
-                RingMember fromRingMember,
-                RingHost fromRingHost,
-                PartitionName partitionName,
-                long transactionId,
-                RowStream tookRowUpdates) {
-
-                AmzaNode amzaNode = cluster.get(fromRingMember);
-                if (amzaNode == null) {
-                    throw new IllegalStateException("Service doesn't exist for " + ringMember);
-                } else {
-                    StreamingTakesConsumer.StreamingTakeConsumed consumed = amzaNode.takePartition(asRingMember,
-                        partitionName,
-                        transactionId,
-                        tookRowUpdates);
-                    return new StreamingTakeResult(consumed.partitionVersion, null, null, consumed.isOnline ? new HashMap<>() : null);
-                }
-            }
-
-            @Override
-            public void streamingTakePartitionUpdates(RingMember fromRingMember,
-                RingHost fromRingHost,
-                long takeSessionId,
-                long timeoutMillis,
-                PartitionUpdatedStream updatedPartitionsStream) throws Exception {
-
-                AmzaNode amzaNode = cluster.get(fromRingMember);
-                if (amzaNode == null) {
-                    throw new IllegalStateException("Service doesn't exists for " + fromRingMember);
-                } else {
-                    amzaNode.takePartitionUpdates(fromRingMember, ORDER_ID_PROVIDER.nextId(), timeoutMillis, (versionedPartitionName, status, txId) -> {
-                        if (versionedPartitionName != null) {
-                            updatedPartitionsStream.update(versionedPartitionName, status, txId);
-                        }
-                    });
                 }
             }
         };
@@ -194,8 +197,8 @@ public class AmzaTestCluster {
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
             amzaStats,
-            ringMember,
-            ringHost,
+            localRingMember,
+            localRingHost,
             orderIdProvider,
             partitionPropertyMarshaller,
             new WALIndexProviderRegistry(),
@@ -211,24 +214,24 @@ public class AmzaTestCluster {
         amzaService.watch(partitionName,
             (RowsChanged changes) -> {
                 if (changes.getApply().size() > 0) {
-                    System.out.println("Service:" + ringMember
-                        + " Partition:" + partitionName.getPartitionName()
+                    System.out.println("Service:" + localRingMember
+                        + " Partition:" + partitionName.getName()
                         + " Changed:" + changes.getApply().size());
                 }
             }
         );
 
         try {
-            amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, ringMember); // ?? Hacky
-            amzaService.getRingWriter().addRingMember("test", ringMember); // ?? Hacky
+            amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, localRingMember); // ?? Hacky
+            amzaService.getRingWriter().addRingMember("test", localRingMember); // ?? Hacky
             if (lastAmzaService != null) {
                 amzaService.getRingWriter().register(lastAmzaService.getRingReader().getRingMember(), lastAmzaService.getRingWriter().getRingHost());
                 amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
                 amzaService.getRingWriter().addRingMember("test", lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
 
-                lastAmzaService.getRingWriter().register(ringMember, ringHost);
-                lastAmzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, ringMember); // ?? Hacky
-                lastAmzaService.getRingWriter().addRingMember("test", ringMember); // ?? Hacky
+                lastAmzaService.getRingWriter().register(localRingMember, localRingHost);
+                lastAmzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, localRingMember); // ?? Hacky
+                lastAmzaService.getRingWriter().addRingMember("test", localRingMember); // ?? Hacky
             }
             lastAmzaService = amzaService;
         } catch (Exception x) {
@@ -237,12 +240,12 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(ringMember, ringHost, amzaService, highWaterMarks);
+        service = new AmzaNode(localRingMember, localRingHost, amzaService, highWaterMarks);
 
-        cluster.put(ringMember, service);
+        cluster.put(localRingMember, service);
 
         System.out.println(
-            "Added serviceHost:" + ringMember + " to the cluster.");
+            "Added serviceHost:" + localRingMember + " to the cluster.");
         return service;
     }
 
@@ -297,7 +300,7 @@ public class AmzaTestCluster {
             AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
             while (partitionRoute.orderedPartitionHosts.isEmpty()) {
                 LOG.info("Waiting for " + partitionName + " to come online.");
-                Thread.sleep(100);
+                Thread.sleep(10000);
                 partitionRoute = amzaService.getPartitionRoute(partitionName);
             }
         }
@@ -334,12 +337,12 @@ public class AmzaTestCluster {
             RingHost ringHost,
             VersionedPartitionName remoteVersionedPartitionName,
             long localTxId) throws Exception {
-            amzaService.remoteMemberTookToTxId(ringMember, ringHost, remoteVersionedPartitionName, localTxId);
+            amzaService.rowsTaken(ringMember, ringHost, remoteVersionedPartitionName, localTxId);
         }
 
-        public StreamingTakesConsumer.StreamingTakeConsumed takePartition(RingMember asRingMember,
-            PartitionName partitionName,
-            long transactionId,
+        public StreamingTakeConsumed rowsStream(RingMember remoteRingMember,
+            VersionedPartitionName localVersionedPartitionName,
+            long localTxId,
             RowStream rowStream) {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
@@ -351,7 +354,7 @@ public class AmzaTestCluster {
             try {
                 ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
                 Future<Object> submit = asIfOverTheWire.submit(() -> {
-                    amzaService.streamingTakeFromPartition(new DataOutputStream(bytesOut), asRingMember, partitionName, transactionId);
+                    amzaService.rowsStream(new DataOutputStream(bytesOut), remoteRingMember, localVersionedPartitionName, localTxId);
                     return null;
                 });
                 submit.get();
@@ -418,7 +421,7 @@ public class AmzaTestCluster {
         private void takePartitionUpdates(RingMember ringMember,
             long sessionId,
             long timeoutMillis,
-            UpdatesTaker.PartitionUpdatedStream updatedPartitionsStream) {
+            RowsTaker.AvailableStream updatedPartitionsStream) {
 
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
@@ -428,7 +431,7 @@ public class AmzaTestCluster {
             }
 
             try {
-                amzaService.streamingTakePartitionUpdates(ringMember, sessionId, timeoutMillis, updatedPartitionsStream);
+                amzaService.availableRowsStream(ringMember, sessionId, timeoutMillis, updatedPartitionsStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

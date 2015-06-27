@@ -1,5 +1,7 @@
 package com.jivesoftware.os.amza.shared.ring;
 
+import java.util.List;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 
 /**
@@ -12,7 +14,7 @@ public interface AmzaRingReader {
 
     RingMember getRingMember();
 
-    RingNeighbors getRingNeighbors(String ringName) throws Exception;
+    List<Entry<RingMember, RingHost>> getNeighbors(String ringName) throws Exception;
 
     NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception;
 

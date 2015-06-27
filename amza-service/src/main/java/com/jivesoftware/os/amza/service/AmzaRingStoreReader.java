@@ -1,24 +1,24 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.replication.HostRingBuilder;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.ring.RingNeighbors;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -73,8 +73,17 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     }
 
     @Override
-    public RingNeighbors getRingNeighbors(String ringName) throws Exception {
-        return new HostRingBuilder().build(rootRingMember, getRing(ringName));
+    public List<Entry<RingMember, RingHost>> getNeighbors(String ringName) throws Exception {
+        NavigableMap<RingMember, RingHost> ring = getRing(ringName);
+        if (!ring.containsKey(rootRingMember) || ring.size() < 2) {
+            return Collections.emptyList();
+        } else {
+            List<Entry<RingMember, RingHost>> neighbors = new ArrayList<>(ring.size() - 1);
+            neighbors.addAll(ring.tailMap(rootRingMember, false).entrySet());
+            neighbors.addAll(ring.headMap(rootRingMember, false).entrySet());
+            return neighbors;
+        }
+
     }
 
     public boolean isMemberOfRing(String ringName) throws Exception {

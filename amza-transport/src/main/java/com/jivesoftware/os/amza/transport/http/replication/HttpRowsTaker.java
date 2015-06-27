@@ -16,15 +16,14 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer.StreamingTakeConsumed;
-import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
@@ -38,7 +37,7 @@ import java.io.BufferedInputStream;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class HttpUpdatesTaker implements UpdatesTaker {
+public class HttpRowsTaker implements RowsTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -46,19 +45,23 @@ public class HttpUpdatesTaker implements UpdatesTaker {
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
 
-    public HttpUpdatesTaker(AmzaStats amzaStats) {
+    public HttpRowsTaker(AmzaStats amzaStats) {
         this.amzaStats = amzaStats;
     }
 
     @Override
-    public void streamingTakePartitionUpdates(RingMember fromRingMember, RingHost fromRingHost, long takeSessionId, long timeoutMillis,
-        PartitionUpdatedStream updatedPartitionsStream) throws Exception {
+    public void availableRowsStream(RingMember localRingMember,
+        RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        long takeSessionId,
+        long timeoutMillis,
+        AvailableStream availableStream) throws Exception {
 
-        HttpStreamResponse httpStreamResponse = getRequestHelper(fromRingHost).executeStreamingPostRequest(null,
-            "/amza/changes/streaming/partition/updates/" + fromRingMember.getMember() + "/" + takeSessionId + "/" + timeoutMillis);
+        HttpStreamResponse httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
+            "/rows/available/" + localRingMember.getMember() + "/" + takeSessionId + "/" + timeoutMillis);
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
-            streamingTakesConsumer.consume(bis, updatedPartitionsStream);
+            streamingTakesConsumer.consume(bis, availableStream);
         } finally {
             httpStreamResponse.close();
         }
@@ -74,43 +77,45 @@ public class HttpUpdatesTaker implements UpdatesTaker {
      * @throws Exception
      */
     @Override
-    public StreamingTakeResult streamingTakeUpdates(RingMember asRingMember,
-        RingMember fromRingMember,
-        RingHost fromRingHost,
-        PartitionName partitionName,
-        long transactionId,
-        RowStream tookRowUpdates) {
-
-        TakeRequest takeRequest = new TakeRequest(asRingMember, transactionId, partitionName);
+    public StreamingRowsResult rowsStream(RingMember localRingMember,
+        RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        VersionedPartitionName remoteVersionedPartitionName,
+        long remoteTxId,
+        RowStream rowStream) {
 
         HttpStreamResponse httpStreamResponse;
         try {
-            httpStreamResponse = getRequestHelper(fromRingHost).executeStreamingPostRequest(takeRequest, "/amza/changes/streamingTake");
+            httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
+                "/rows/stream/" + localRingMember.getMember() + "/" + remoteVersionedPartitionName.toBase64() + "/" + remoteTxId);
         } catch (Exception e) {
-            return new StreamingTakeResult(-1, e, null, null);
+            return new StreamingRowsResult(e, null, null);
         }
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
-            StreamingTakeConsumed consumed = streamingTakesConsumer.consume(bis, tookRowUpdates);
+            StreamingTakeConsumed consumed = streamingTakesConsumer.consume(bis, rowStream);
             amzaStats.netStats.read.addAndGet(consumed.bytes);
-            return new StreamingTakeResult(consumed.partitionVersion, null, null, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
+            return new StreamingRowsResult(null, null, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
         } catch (Exception e) {
-            return new StreamingTakeResult(-1, null, e, null);
+            return new StreamingRowsResult(null, e, null);
         } finally {
             httpStreamResponse.close();
         }
     }
 
     @Override
-    public boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId) {
+    public boolean rowsTaken(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId) {
         try {
             return getRequestHelper(ringHost).executeRequest(null,
-                "/amza/changes/acked/" + ringMember.getMember() + "/" + ringHost.getHost() + "/" + ringHost.getPort() +
-                    "/" + versionedPartitionName.toBase64() + "/" + txId,
+                "/rows/taken/"
+                + ringMember.getMember() + "/"
+                + ringHost.getHost() + "/" + ringHost.getPort() + "/"
+                + versionedPartitionName.toBase64() + "/"
+                + txId,
                 Boolean.class, false);
         } catch (Exception x) {
             LOG.warn("Failed to deliver acks for member:{} host:{} partition:{} tx:{}",
-                new Object[] { ringMember, ringHost, versionedPartitionName, txId }, x);
+                new Object[]{ringMember, ringHost, versionedPartitionName, txId}, x);
             return false;
         }
     }

@@ -10,11 +10,11 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.take.UpdatesTaker.PartitionUpdatedStream;
+import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.Map;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -41,7 +41,14 @@ public class TakeCoordinator {
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
     }
 
-    public void cya(VersionedPartitionProvider partitionProvider) {
+    public void awakeCya() {
+        cyaLock.incrementAndGet();
+        synchronized (cyaLock) {
+            cyaLock.notifyAll();
+        }
+    }
+
+    public void cya(AmzaRingReader ringReader, VersionedPartitionProvider partitionProvider) {
         long cyaIntervalMillis = 1_000; // TODO config
         ExecutorService cya = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("cya-%d").build());
         cya.submit(() -> {
@@ -57,8 +64,12 @@ public class TakeCoordinator {
                     takeRingCoordinators.keySet().removeAll(Sets.difference(takeRingCoordinators.keySet(), desired.keySet()));
                     for (String ringName : desired.keySet()) {
                         TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
+                        List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
                         if (takeRingCoordinator != null) {
-                            takeRingCoordinator.cya(desired.get(ringName));
+                            takeRingCoordinator.cya(neighbors, desired.get(ringName));
+                        } else {
+                            ensureRingCoodinator(ringName, neighbors);
+                            awakeRemoteTakers(neighbors);
                         }
                     }
 
@@ -80,21 +91,17 @@ public class TakeCoordinator {
         });
     }
 
-    public void awakeCya() {
-        cyaLock.incrementAndGet();
-        synchronized (cyaLock) {
-            cyaLock.notifyAll();
-        }
-    }
-
     public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception {
         updates.incrementAndGet();
         String ringName = versionedPartitionName.getPartitionName().getRingName();
-        Map.Entry<RingMember, RingHost>[] aboveRing = ringReader.getRingNeighbors(ringName).getAboveRing();
-        TakeRingCoordinator ring = ensureRingCoodinator(ringName, aboveRing);
-        ring.update(aboveRing, versionedPartitionName, status, txId);
+        List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
+        TakeRingCoordinator ring = ensureRingCoodinator(ringName, neighbors);
+        ring.update(neighbors, versionedPartitionName, status, txId);
+        awakeRemoteTakers(neighbors);
+    }
 
-        for (Entry<RingMember, RingHost> r : aboveRing) {
+    private void awakeRemoteTakers(List<Entry<RingMember, RingHost>> neighbors) {
+        for (Entry<RingMember, RingHost> r : neighbors) {
             Object lock = ringMembersLocks.computeIfAbsent(r.getKey(), (ringMember) -> new Object());
             synchronized (lock) {
                 lock.notifyAll();
@@ -102,36 +109,53 @@ public class TakeCoordinator {
         }
     }
 
-    private TakeRingCoordinator ensureRingCoodinator(String ringName, Entry<RingMember, RingHost>[] aboveRing) {
+    private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
         return takeRingCoordinators.computeIfAbsent(ringName, (key) -> {
-            return new TakeRingCoordinator(timestampedOrderIdProvider, aboveRing);
+            return new TakeRingCoordinator(ringName, timestampedOrderIdProvider, neighbors);
         });
     }
 
-    public void take(AmzaRingReader ringReader,
-        RingMember ringMember,
+    public void availableRowsStream(AmzaRingReader ringReader,
+        RingMember remoteRingMember,
         long takeSessionId,
         long timeoutMillis,
-        PartitionUpdatedStream updatedPartitionsStream) throws Exception {
+        AvailableStream availableStream) throws Exception {
+
+        AvailableStream watchAvailableStream = (versionedPartitionName, status, txId) -> {
+            if (versionedPartitionName != null) {
+                LOG.info("OFFER:local:{} partition:{} status:{} txId:{} to remote:{}",
+                    ringReader.getRingMember(), versionedPartitionName, status, txId, remoteRingMember);
+            }
+            availableStream.available(versionedPartitionName, status, txId);
+        };
+
         while (true) {
             long start = updates.get();
+            //LOG.info("CHECKING:remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
 
             long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
-            ringReader.getRingNames(ringMember, (ringName) -> {
+            ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
                 if (ring != null) {
-                    suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0], ring.take(ringMember, takeSessionId, updatedPartitionsStream));
+                    suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
+                        ring.availableRowsStream(remoteRingMember, takeSessionId, watchAvailableStream));
                 }
                 return true;
             });
+            if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
+                suggestedWaitInMillis[0] = heartBeatIntervalMillis; // Hmmm
+            }
 
-            Object lock = ringMembersLocks.computeIfAbsent(ringMember, (key) -> new Object());
+            Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, (key) -> new Object());
             synchronized (lock) {
                 long time = System.currentTimeMillis();
                 long timeToWait = suggestedWaitInMillis[0];
                 while (start == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
-                    lock.wait(Math.min(timeToWait, heartBeatIntervalMillis));
-                    updatedPartitionsStream.update(null, null, 0); // Ping aka keep the socket alive
+                    long wait = Math.min(timeToWait, heartBeatIntervalMillis);
+                    //LOG.info("PARKED:remote:{} for {}millis on local:{}",
+                    //    remoteRingMember, wait, ringReader.getRingMember());
+                    lock.wait(wait);
+                    watchAvailableStream.available(null, null, 0); // Ping aka keep the socket alive
                     timeToWait -= heartBeatIntervalMillis;
                     if (timeToWait < 0) {
                         break;
@@ -141,11 +165,12 @@ public class TakeCoordinator {
         }
     }
 
-    public void remoteMemberTookToTxId(RingMember remoteRingMember,
-        VersionedPartitionName remoteVersionedPartitionName,
+    public void rowsTaken(RingMember remoteRingMember,
+        VersionedPartitionName localVersionedPartitionName,
         long localTxId) {
-        TakeRingCoordinator ring = takeRingCoordinators.get(remoteVersionedPartitionName.getPartitionName().getRingName());
-        ring.remoteMemberTookToTxId(remoteRingMember, remoteVersionedPartitionName, localTxId);
+        String ringName = localVersionedPartitionName.getPartitionName().getRingName();
+        TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
+        ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId);
     }
 
 }

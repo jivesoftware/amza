@@ -27,7 +27,7 @@ public class PartitionName implements Comparable<PartitionName> {
 
     private final boolean systemPartition;
     private final String ringName;
-    private final String partitionName;
+    private final String name;
     private transient int hash = 0;
 
     public byte[] toBytes() throws IOException {
@@ -35,7 +35,7 @@ public class PartitionName implements Comparable<PartitionName> {
         UIO.writeByte(memoryFiler, 0, "version");
         UIO.writeBoolean(memoryFiler, systemPartition, "systemPartition");
         UIO.writeString(memoryFiler, ringName, "ringName");
-        UIO.writeString(memoryFiler, partitionName, "partitionName");
+        UIO.writeString(memoryFiler, name, "name");
         return memoryFiler.getBytes();
     }
 
@@ -45,7 +45,7 @@ public class PartitionName implements Comparable<PartitionName> {
             return new PartitionName(
                 UIO.readBoolean(memoryFiler, "systemPartition"),
                 UIO.readString(memoryFiler, "ringName"),
-                UIO.readString(memoryFiler, "ringName"));
+                UIO.readString(memoryFiler, "name"));
         }
         throw new IOException("Invalid version:" + bytes[0]);
     }
@@ -53,10 +53,10 @@ public class PartitionName implements Comparable<PartitionName> {
     @JsonCreator
     public PartitionName(@JsonProperty("systemPartition") boolean systemPartition,
         @JsonProperty("ringName") String ringName,
-        @JsonProperty("partitionName") String partitionName) {
+        @JsonProperty("name") String name) {
         this.systemPartition = systemPartition;
         this.ringName = ringName.toUpperCase(); // I love this!!! NOT
-        this.partitionName = partitionName;
+        this.name = name;
     }
 
     public String toBase64() throws IOException {
@@ -75,15 +75,15 @@ public class PartitionName implements Comparable<PartitionName> {
         return ringName;
     }
 
-    public String getPartitionName() {
-        return partitionName;
+    public String getName() {
+        return name;
     }
 
     @Override
     public String toString() {
         return "Partition{"
             + "systemPartition=" + systemPartition
-            + ", name=" + partitionName
+            + ", name=" + name
             + ", ring=" + ringName
             + '}';
     }
@@ -95,7 +95,7 @@ public class PartitionName implements Comparable<PartitionName> {
             hash = 7;
             hash = 29 * hash + (this.systemPartition ? 1 : 0);
             hash = 29 * hash + Objects.hashCode(this.ringName);
-            hash = 29 * hash + Objects.hashCode(this.partitionName);
+            hash = 29 * hash + Objects.hashCode(this.name);
             this.hash = hash;
         }
         return hash;
@@ -116,7 +116,7 @@ public class PartitionName implements Comparable<PartitionName> {
         if (!Objects.equals(this.ringName, other.ringName)) {
             return false;
         }
-        if (!Objects.equals(this.partitionName, other.partitionName)) {
+        if (!Objects.equals(this.name, other.name)) {
             return false;
         }
         return true;
@@ -132,7 +132,7 @@ public class PartitionName implements Comparable<PartitionName> {
         if (i != 0) {
             return i;
         }
-        i = partitionName.compareTo(o.partitionName);
+        i = name.compareTo(o.name);
         if (i != 0) {
             return i;
         }

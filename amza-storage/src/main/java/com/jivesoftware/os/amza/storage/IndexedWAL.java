@@ -174,7 +174,7 @@ public class IndexedWAL implements WALStorage {
     }
 
     private long compact(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-        final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName().getPartitionName()
+        final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName().getName()
             + ">ring>" + versionedPartitionName.getPartitionName().getRingName() + ">";
         Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
         if (compact.isPresent()) {

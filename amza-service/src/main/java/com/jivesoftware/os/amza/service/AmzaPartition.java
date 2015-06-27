@@ -164,8 +164,8 @@ public class AmzaPartition implements AmzaPartitionAPI {
                 compared.increment();
                 return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
                     WALValue timestampedValue = stripe.get(partitionName, key);
-                    String comparing = partitionName.getRingName() + ":" + partitionName.getPartitionName()
-                        + " to " + amzaPartition.partitionName.getRingName() + ":" + amzaPartition.partitionName.getPartitionName() + "\n";
+                    String comparing = partitionName.getRingName() + ":" + partitionName.getName()
+                        + " to " + amzaPartition.partitionName.getRingName() + ":" + amzaPartition.partitionName.getName() + "\n";
 
                     if (timestampedValue == null) {
                         System.out.println("INCONSISTENCY: " + comparing + " key:null"
@@ -206,7 +206,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
             }
         });
 
-        System.out.println("partition:" + amzaPartition.partitionName.getPartitionName() + " compared:" + compared + " keys");
+        System.out.println("partition:" + amzaPartition.partitionName.getName() + " compared:" + compared + " keys");
         return passed.booleanValue();
     }
 

@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -28,13 +27,6 @@ class SystemPartitionCommitChanges implements CommitChanges {
         this.systemWALStorage = systemWALStorage;
         this.highwaterStorage = highwaterStorage;
         this.walUpdated = walUpdated;
-    }
-
-    @Override
-    public boolean needsTxId(RingMember ringMember, long txId) throws Exception {
-        highwaterStorage.get(ringMember, versionedPartitionName);
-        Long highwater = highwaterStorage.get(ringMember, versionedPartitionName);
-        return highwater == null || txId > highwater;
     }
 
     @Override

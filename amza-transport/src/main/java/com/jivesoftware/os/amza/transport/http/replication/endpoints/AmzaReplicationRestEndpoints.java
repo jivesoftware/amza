@@ -21,7 +21,6 @@ import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.transport.http.replication.TakeRequest;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
@@ -29,6 +28,7 @@ import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.NavigableMap;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -105,8 +105,11 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/changes/streamingTake")
-    public Response streamingTake(final TakeRequest takeRequest) {
+    @Path("/rows/stream/{ringMemberString}/{versionedPartitionName}/{txId}")
+    public Response rowsStream(@PathParam("ringMemberString") String ringMemberString,
+        @PathParam("versionedPartitionName") String versionedPartitionName,
+        @PathParam("txId") long txId) {
+
         try {
 
             StreamingOutput stream = (OutputStream os) -> {
@@ -114,10 +117,10 @@ public class AmzaReplicationRestEndpoints {
                 BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
                 final DataOutputStream dos = new DataOutputStream(bos);
                 try {
-                    amzaInstance.streamingTakeFromPartition(dos,
-                        takeRequest.getTaker(),
-                        takeRequest.getPartitionName(),
-                        takeRequest.getHighestTransactionId());
+                    amzaInstance.rowsStream(dos,
+                        new RingMember(ringMemberString),
+                        VersionedPartitionName.fromBase64(versionedPartitionName),
+                        txId);
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);
@@ -127,16 +130,17 @@ public class AmzaReplicationRestEndpoints {
             };
             return Response.ok(stream).build();
         } catch (Exception x) {
-            LOG.warn("Failed to apply changeset: " + takeRequest, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to changeset " + takeRequest, x);
+            Object[] vals = new Object[]{ringMemberString, versionedPartitionName, txId};
+            LOG.warn("Failed to rowsStream {} {} {}. ", vals, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to rowsStream " + Arrays.toString(vals), x);
         }
     }
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/changes/streaming/partition/updates/{ringMember}/{takeSessionId}/{timeoutMillis}")
-    public Response streamingPartitionUpdates(@PathParam("ringMember") String ringMemberString,
+    @Path("/rows/available/{ringMember}/{takeSessionId}/{timeoutMillis}")
+    public Response availableRowsStream(@PathParam("ringMember") String ringMemberString,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
         try {
@@ -145,7 +149,7 @@ public class AmzaReplicationRestEndpoints {
                 os.flush();
                 final DataOutputStream dos = new DataOutputStream(os);
                 try {
-                    amzaInstance.streamingTakePartitionUpdates(dos, new RingMember(ringMemberString), takeSessionId, timeoutMillis);
+                    amzaInstance.availableRowsStream(dos, new RingMember(ringMemberString), takeSessionId, timeoutMillis);
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);
@@ -163,21 +167,21 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @Path("/changes/acked/{memberName}/{host}/{port}/{versionedPartitionName}/{txId}")
-    public Response acks(@PathParam("memberName") String ringMemberName,
+    @Path("/rows/taken/{memberName}/{host}/{port}/{versionedPartitionName}/{txId}")
+    public Response rowsTaken(@PathParam("memberName") String ringMemberName,
         @PathParam("host") String ringHostName,
         @PathParam("port") int ringHostPort,
         @PathParam("versionedPartitionName") String versionedPartitionName,
         @PathParam("txId") long txId) {
         try {
-            amzaInstance.remoteMemberTookToTxId(new RingMember(ringMemberName),
-                new RingHost(ringHostName, ringHostPort), 
+            amzaInstance.rowsTaken(new RingMember(ringMemberName),
+                new RingHost(ringHostName, ringHostPort),
                 VersionedPartitionName.fromBase64(versionedPartitionName),
                 txId);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to ack for member:{} partition:{} txId:{}",
-                new Object[] { ringMemberName, versionedPartitionName, txId }, x);
+                new Object[]{ringMemberName, versionedPartitionName, txId}, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to ack.", x);
         }
     }

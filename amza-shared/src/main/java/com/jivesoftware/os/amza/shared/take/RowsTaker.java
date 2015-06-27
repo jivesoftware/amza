@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.shared.take;
 
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
@@ -23,47 +22,42 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import java.util.Map;
 
-public interface UpdatesTaker {
+public interface RowsTaker {
 
-    void streamingTakePartitionUpdates(RingMember fromRingMember,
-        RingHost fromRingHost,
+    void availableRowsStream(RingMember localRingMember,
+        RingMember remoteRingMember,
+        RingHost remoteRingHost,
         long takeSessionId,
         long timeoutMillis,
-        PartitionUpdatedStream updatedPartitionsStream) throws Exception;
+        AvailableStream availableStream) throws Exception;
 
-    interface PartitionUpdatedStream {
+    interface AvailableStream {
 
-        void update(VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception;
+        void available(VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception;
     }
 
-    StreamingTakeResult streamingTakeUpdates(RingMember asRingMember,
-        RingMember fromRingMember,
-        RingHost fromRingHost,
-        PartitionName partitionName,
-        long transactionId,
-        RowStream tookRowUpdates);
+    StreamingRowsResult rowsStream(RingMember localRingMember,
+        RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        VersionedPartitionName remoteVersionedPartitionName,
+        long remoteTxId,
+        RowStream rowStream);
 
-    class StreamingTakeResult {
+    class StreamingRowsResult {
 
-        public final long partitionVersion;
         public final Throwable unreachable;
         public final Throwable error;
         public final Map<RingMember, Long> otherHighwaterMarks;
 
-        public StreamingTakeResult(long partitionVersion,
-            Exception unreachable,
+        public StreamingRowsResult(Exception unreachable,
             Exception error,
             Map<RingMember, Long> otherHighwaterMarks) {
-            this.partitionVersion = partitionVersion;
             this.unreachable = unreachable;
             this.error = error;
             this.otherHighwaterMarks = otherHighwaterMarks;
         }
     }
 
-    /*
-     Return true if acks were acked!
-     */
-    boolean ackTakenUpdate(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId);
+    boolean rowsTaken(RingMember remoteRingMember, RingHost remoteRingHost, VersionedPartitionName remoteVersionedPartitionName, long remoteTxId);
 
 }

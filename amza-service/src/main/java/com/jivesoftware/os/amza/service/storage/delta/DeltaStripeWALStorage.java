@@ -350,7 +350,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 if (delta.shouldWriteHighwater()) {
                     partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
                     LOG.inc("highwaterHint", 1);
-                    LOG.inc("highwaterHint", 1, versionedPartitionName.getPartitionName().getPartitionName());
+                    LOG.inc("highwaterHint", 1, versionedPartitionName.getPartitionName().getName());
                 }
                 DeltaWAL.DeltaWALApplied updateApplied;
                 synchronized (oneWriterAtATimeLock) {

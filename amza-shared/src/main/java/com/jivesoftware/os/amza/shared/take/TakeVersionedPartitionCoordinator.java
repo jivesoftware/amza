@@ -70,8 +70,10 @@ public class TakeVersionedPartitionCoordinator {
                         } else {
                             if (u.txId < takeTxId) {
                                 availableStream.available(versionedPartitionName, status.get(), takeTxId);
+                                return new SessionedTxId(takeSessionId, takeTxId);
+                            } else {
+                                return u;
                             }
-                            return u;
                         }
                     }
                 } catch (Exception x) {

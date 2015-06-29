@@ -168,6 +168,10 @@ public class TakeCoordinator {
     public void rowsTaken(RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId) {
+
+        LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
+            remoteRingMember, null, localTxId, localVersionedPartitionName);
+
         String ringName = localVersionedPartitionName.getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
         ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId);

@@ -202,8 +202,8 @@ public class RowChangeTaker implements RowChanges {
                                 throw new InterruptedException("MemberLatestTransactionsTaker for " + remoteRingMember + " has been disposed.");
                             }
 
-                            LOG.info("AVAILABLE: local:{} was told remote:{} partition:{} status:{} txId:{} is available.",
-                                ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
+                            //LOG.info("AVAILABLE: local:{} was told remote:{} partition:{} status:{} txId:{} is available.",
+                            //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
 
                             partitionStatusStorage.remoteStatus(remoteRingMember,
                                 remoteVersionedPartitionName.getPartitionName(),
@@ -212,16 +212,16 @@ public class RowChangeTaker implements RowChanges {
                             if (remoteVersionedPartitionName.getPartitionName().isSystemPartition()) {
                                 Long highwater = systemHighwaterStorage.get(remoteRingMember, remoteVersionedPartitionName);
                                 if (highwater != null && highwater >= txId) {
-                                    LOG.info("ALREADY CURRENT: local:{} txId:{} vs remote:{} partition:{} status:{} txId:{}.",
-                                        ringHost, highwater, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
+                                    //LOG.info("ALREADY CURRENT: local:{} txId:{} vs remote:{} partition:{} status:{} txId:{}.",
+                                    //    ringHost, highwater, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
                                     return;
                                 }
                             } else {
                                 if (partitionStripeProvider.txPartition(remoteVersionedPartitionName.getPartitionName(), (stripe, highwaterStorage) -> {
                                     Long highwater = highwaterStorage.get(remoteRingMember, remoteVersionedPartitionName);
                                     if (highwater != null && highwater >= txId) {
-                                        LOG.info("ALREADY CURRENT: local:{} txId:{} vs remote:{} partition:{} status:{} txId:{}.",
-                                            ringHost, highwater, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
+                                        //LOG.info("ALREADY CURRENT: local:{} txId:{} vs remote:{} partition:{} status:{} txId:{}.",
+                                        //    ringHost, highwater, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
                                         return true;
                                     } else {
                                         return false;
@@ -412,6 +412,9 @@ public class RowChangeTaker implements RowChanges {
                                         if (updates > 0) {
                                             LOG.info("APPLIED: ({}) {} {} -> {}/{}",
                                                 updates, remoteVersionedPartitionName, commitTo, remoteRingMember, remoteRingHost);
+                                        } else {
+                                            LOG.info("EMPTY TAKE: ({}) {} {} -> {}/{}",
+                                                updates, remoteVersionedPartitionName, commitTo, remoteRingMember, remoteRingHost);
                                         }
                                         if (tookFully) {
                                             for (Entry<RingMember, Long> otherHighwaterMark : rowsResult.otherHighwaterMarks.entrySet()) {
@@ -434,9 +437,7 @@ public class RowChangeTaker implements RowChanges {
                                         }
                                     }
 
-                                    LOG.info("local:{} <- remote:{} partition:{} txId:{}",
-                                        ringHost, remoteRingHost, remoteVersionedPartitionName, takeRowStream.largestFlushedTxId());
-
+                                   
                                     if (tookFully) {
                                         partitionStatusStorage.markAsOnline(localVersionedPartitionName);
                                     } else if (rowsResult.error == null) {

@@ -48,7 +48,7 @@ public class TakeCoordinator {
         }
     }
 
-    public void cya(AmzaRingReader ringReader, VersionedPartitionProvider partitionProvider) {
+    public void start(AmzaRingReader ringReader, VersionedPartitionProvider partitionProvider) {
         long cyaIntervalMillis = 1_000; // TODO config
         ExecutorService cya = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("cya-%d").build());
         cya.submit(() -> {

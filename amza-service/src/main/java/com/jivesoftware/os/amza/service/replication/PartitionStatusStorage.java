@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
@@ -12,8 +13,10 @@ import com.jivesoftware.os.amza.shared.partition.PartitionTx;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -36,6 +39,8 @@ public class PartitionStatusStorage implements TxPartitionStatus {
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final SystemWALStorage systemWALStorage;
+    private final AmzaRingReader amzaRingReader;
+    private final TakeCoordinator takeCoordinator;
     private final WALUpdated walUpdated;
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
@@ -47,11 +52,15 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         RingMember rootRingMember,
         SystemWALStorage systemWALStorage,
         WALUpdated walUpdated,
+        AmzaRingReader amzaRingReader,
+        TakeCoordinator takeCoordinator,
         int awaitOnlineStripingLevel) {
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.systemWALStorage = systemWALStorage;
         this.walUpdated = walUpdated;
+        this.amzaRingReader = amzaRingReader;
+        this.takeCoordinator = takeCoordinator;
         this.transactor = new VersionedPartitionTransactor(1024, 1024); // TODO expose to config?
         this.awaitNotify = new AwaitNotify<>(awaitOnlineStripingLevel);
     }
@@ -101,6 +110,9 @@ public class PartitionStatusStorage implements TxPartitionStatus {
             int inKetchup = 0;
             for (RingMember ringMember : remoteRingMembers) {
                 VersionedStatus remoteRingMemberStatus = ringMemberStatus.get(ringMember);
+                if (remoteRingMemberStatus == null) {
+                    remoteRingMemberStatus = getStatus(ringMember, localVersionedPartitionName.getPartitionName());
+                }
                 if (remoteRingMemberStatus != null && Status.KETCHUP == remoteRingMemberStatus.status) {
                     inKetchup++;
                 }
@@ -126,7 +138,8 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         }
         long partitionVersion = orderIdProvider.nextId();
         VersionedStatus versionedStatus = set(rootRingMember, partitionName, new VersionedStatus(Status.KETCHUP, partitionVersion));
-        return new VersionedPartitionName(partitionName, versionedStatus.version);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
+        return versionedPartitionName;
     }
 
     public void markAsOnline(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -203,6 +216,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
                 LOG.info("STATUS {}: {} versionedPartitionName:{} was updated to {}",
                     rootRingMember, ringMember, versionedPartitionName, commitableVersionStatus);
                 localStatusCache.put(currentVersionedPartitionName, commitableVersionStatus);
+                takeCoordinator.updated(amzaRingReader, versionedPartitionName, commitableVersionStatus.status, 0);
             }
             return returnableStatus;
         });
@@ -276,6 +290,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         }
 
         VersionedStatus(Status status, long version) {
+            Preconditions.checkNotNull(status, "Status cannot be null");
             this.status = status;
             this.version = version;
         }

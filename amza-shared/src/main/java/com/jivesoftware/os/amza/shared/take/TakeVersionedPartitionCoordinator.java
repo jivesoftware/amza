@@ -24,7 +24,7 @@ public class TakeVersionedPartitionCoordinator {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     final VersionedPartitionName versionedPartitionName;
-    final AtomicReference<Status> status = new AtomicReference<>();
+    final AtomicReference<Status> status;
     final AtomicLong txId;
     final long slowTakeMillis;
     final long slowTakeId;
@@ -32,8 +32,14 @@ public class TakeVersionedPartitionCoordinator {
     final AtomicInteger currentCategory = new AtomicInteger(1);
     final AtomicLong lastTakeSessionId = new AtomicLong(0);
 
-    public TakeVersionedPartitionCoordinator(VersionedPartitionName versionedPartitionName, AtomicLong txId, long slowTakeMillis, long slowTakeId) {
+    public TakeVersionedPartitionCoordinator(VersionedPartitionName versionedPartitionName,
+        Status status,
+        AtomicLong txId,
+        long slowTakeMillis,
+        long slowTakeId) {
+
         this.versionedPartitionName = versionedPartitionName;
+        this.status = new AtomicReference<>(status);
         this.txId = txId;
         this.slowTakeMillis = slowTakeMillis;
         this.slowTakeId = slowTakeId;
@@ -54,47 +60,56 @@ public class TakeVersionedPartitionCoordinator {
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         AvailableStream availableStream) throws Exception {
 
-        Integer category = versionedRing.getCategory(ringMember);
-        if (category != null && category <= currentCategory.get()) {
-            long takeTxId = txId.get();
-            took.compute(ringMember, (RingMember t, SessionedTxId u) -> {
-                try {
-                    if (u == null) {
-                        availableStream.available(versionedPartitionName, status.get(), takeTxId);
-                        return new SessionedTxId(takeSessionId, takeTxId - slowTakeId);
-                    } else {
-                        if (u.sessionId != takeSessionId) {
-                            availableStream.available(versionedPartitionName, status.get(), takeTxId);
-                            LOG.info("ringMember:{} nudged:{} status:{} txId:{}", ringMember, versionedPartitionName, status, takeTxId);
-                            return new SessionedTxId(takeSessionId, takeTxId);
+        long takeTxId = txId.get();
+        Status currentStatus = status.get();
+        if (currentStatus == Status.ONLINE) {
+
+            Integer category = versionedRing.getCategory(ringMember);
+            if (category != null && category <= currentCategory.get()) {
+                took.compute(ringMember, (RingMember t, SessionedTxId u) -> {
+                    try {
+                        if (u == null) {
+                            availableStream.available(versionedPartitionName, currentStatus, takeTxId);
+                            return new SessionedTxId(takeSessionId, takeTxId - slowTakeId);
                         } else {
-                            if (u.txId < takeTxId) {
-                                availableStream.available(versionedPartitionName, status.get(), takeTxId);
+                            if (u.sessionId != takeSessionId) {
+                                availableStream.available(versionedPartitionName, currentStatus, takeTxId);
+                                LOG.info("ringMember:{} nudged:{} status:{} txId:{}", ringMember, versionedPartitionName, currentStatus, takeTxId);
                                 return new SessionedTxId(takeSessionId, takeTxId);
                             } else {
-                                return u;
+                                if (u.txId < takeTxId) {
+                                    availableStream.available(versionedPartitionName, currentStatus, takeTxId);
+                                    return new SessionedTxId(takeSessionId, takeTxId);
+                                } else {
+                                    return u;
+                                }
                             }
                         }
+                    } catch (Exception x) {
+                        throw new RuntimeException(x);
                     }
-                } catch (Exception x) {
-                    throw new RuntimeException(x);
-                }
-            });
+                });
+                return Long.MAX_VALUE;
+            }
+            if (category == null) {
+                return Long.MAX_VALUE;
+            }
+            return category * slowTakeMillis;
+        } else {
+            availableStream.available(versionedPartitionName, currentStatus, takeTxId);
             return Long.MAX_VALUE;
         }
-        if (category == null) {
-            return Long.MAX_VALUE;
-        }
-        return category * slowTakeMillis;
     }
 
     void rowsTaken(VersionedRing versionedRing, RingMember remoteRingMember, long localTxId) {
-        took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
-            if (existingSessionedTxId != null) {
-                return new SessionedTxId(existingSessionedTxId.sessionId, localTxId);
-            }
-            return null;
-        });
+        if (status.get() == Status.ONLINE) {
+            took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
+                if (existingSessionedTxId != null) {
+                    return new SessionedTxId(existingSessionedTxId.sessionId, localTxId);
+                }
+                return null;
+            });
+        }
         updateCategory(versionedRing);
 
     }

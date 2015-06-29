@@ -178,6 +178,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
             LOG.info("Opened partition:" + versionedPartitionName);
+
             return partitionStore;
         }
     }

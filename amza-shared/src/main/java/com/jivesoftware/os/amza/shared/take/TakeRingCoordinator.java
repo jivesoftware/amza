@@ -41,15 +41,12 @@ public class TakeRingCoordinator {
     void cya(List<Entry<RingMember, RingHost>> neighbors, Set<VersionedPartitionName> retain) {
         ConcurrentHashMap.KeySetView<VersionedPartitionName, TakeVersionedPartitionCoordinator> keySet = partitionCoordinators.keySet();
         keySet.removeAll(Sets.difference(keySet, retain));
-        for (VersionedPartitionName add : Sets.difference(retain, keySet)) {
-            ensureCoordinator(add, 0, slowTakeInMillis);
-        }
         ensureVersionedRing(neighbors);
     }
 
     void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) {
         VersionedRing ring = ensureVersionedRing(neighbors);
-        TakeVersionedPartitionCoordinator coordinator = ensureCoordinator(versionedPartitionName, txId, slowTakeInMillis);
+        TakeVersionedPartitionCoordinator coordinator = ensureCoordinator(versionedPartitionName, status, txId, slowTakeInMillis);
         coordinator.updateTxId(ring, status, txId);
     }
 
@@ -71,9 +68,13 @@ public class TakeRingCoordinator {
         }
     }
 
-    private TakeVersionedPartitionCoordinator ensureCoordinator(VersionedPartitionName versionedPartitionName, long txId, long slowTakeInMillis) {
+    private TakeVersionedPartitionCoordinator ensureCoordinator(VersionedPartitionName versionedPartitionName,
+        Status status,
+        long txId,
+        long slowTakeInMillis) {
+
         return partitionCoordinators.computeIfAbsent(versionedPartitionName, (key) -> {
-            return new TakeVersionedPartitionCoordinator(versionedPartitionName,
+            return new TakeVersionedPartitionCoordinator(versionedPartitionName, status,
                 new AtomicLong(txId), slowTakeInMillis, timestampedOrderIdProvider.getApproximateId(slowTakeInMillis));
         });
     }

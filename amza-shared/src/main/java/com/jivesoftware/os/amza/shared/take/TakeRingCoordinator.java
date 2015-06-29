@@ -27,6 +27,7 @@ public class TakeRingCoordinator {
 
     private final String ringName;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
+    private final long slowTakeInMillis = 60_000L; // TODO config
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
@@ -40,12 +41,14 @@ public class TakeRingCoordinator {
     void cya(List<Entry<RingMember, RingHost>> neighbors, Set<VersionedPartitionName> retain) {
         ConcurrentHashMap.KeySetView<VersionedPartitionName, TakeVersionedPartitionCoordinator> keySet = partitionCoordinators.keySet();
         keySet.removeAll(Sets.difference(keySet, retain));
+        for (VersionedPartitionName add : Sets.difference(retain, keySet)) {
+            ensureCoordinator(add, 0, slowTakeInMillis);
+        }
         ensureVersionedRing(neighbors);
     }
 
     void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) {
         VersionedRing ring = ensureVersionedRing(neighbors);
-        long slowTakeInMillis = 60_000L; // TODO config
         TakeVersionedPartitionCoordinator coordinator = ensureCoordinator(versionedPartitionName, txId, slowTakeInMillis);
         coordinator.updateTxId(ring, status, txId);
     }

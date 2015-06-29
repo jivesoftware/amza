@@ -200,7 +200,8 @@ public class PartitionStatusStorage implements TxPartitionStatus {
                             new WALValue(versionedStatusBytes, orderIdProvider.nextId(), false)), walUpdated);
                     return !rowsChanged.isEmpty();
                 });
-                LOG.info("{}: {} versionedPartitionName:{} was updated to {}", rootRingMember, ringMember, versionedPartitionName, commitableVersionStatus);
+                LOG.info("STATUS {}: {} versionedPartitionName:{} was updated to {}",
+                    rootRingMember, ringMember, versionedPartitionName, commitableVersionStatus);
                 localStatusCache.put(currentVersionedPartitionName, commitableVersionStatus);
             }
             return returnableStatus;

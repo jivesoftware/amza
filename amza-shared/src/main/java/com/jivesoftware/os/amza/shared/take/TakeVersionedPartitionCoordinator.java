@@ -96,6 +96,7 @@ public class TakeVersionedPartitionCoordinator {
             return null;
         });
         updateCategory(versionedRing);
+
     }
 
     void cleanup(Set<RingMember> retain) {

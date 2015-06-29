@@ -123,15 +123,15 @@ public class TakeCoordinator {
 
         AvailableStream watchAvailableStream = (versionedPartitionName, status, txId) -> {
             if (versionedPartitionName != null) {
-                LOG.info("OFFER:local:{} partition:{} status:{} txId:{} to remote:{}",
-                    ringReader.getRingMember(), versionedPartitionName, status, txId, remoteRingMember);
+                LOG.info("OFFER:local:{} remote:{} txId:{} partition:{} status:{}",
+                    ringReader.getRingMember(), remoteRingMember, txId, versionedPartitionName, status);
             }
             availableStream.available(versionedPartitionName, status, txId);
         };
 
         while (true) {
             long start = updates.get();
-            //LOG.info("CHECKING:remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
+            LOG.info("CHECKING: remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
 
             long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
             ringReader.getRingNames(remoteRingMember, (ringName) -> {

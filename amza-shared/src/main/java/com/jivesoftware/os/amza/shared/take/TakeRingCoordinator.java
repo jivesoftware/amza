@@ -46,7 +46,10 @@ public class TakeRingCoordinator {
 
     void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) {
         VersionedRing ring = ensureVersionedRing(neighbors);
-        TakeVersionedPartitionCoordinator coordinator = ensureCoordinator(versionedPartitionName, status, txId, slowTakeInMillis);
+        TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName, (key) -> {
+            return new TakeVersionedPartitionCoordinator(versionedPartitionName, status,
+                new AtomicLong(txId), slowTakeInMillis, timestampedOrderIdProvider.getApproximateId(slowTakeInMillis));
+        });
         coordinator.updateTxId(ring, status, txId);
     }
 
@@ -66,17 +69,6 @@ public class TakeRingCoordinator {
         if (coordinator != null) {
             coordinator.rowsTaken(versionedRing.get(), remoteRingMember, localTxId);
         }
-    }
-
-    private TakeVersionedPartitionCoordinator ensureCoordinator(VersionedPartitionName versionedPartitionName,
-        Status status,
-        long txId,
-        long slowTakeInMillis) {
-
-        return partitionCoordinators.computeIfAbsent(versionedPartitionName, (key) -> {
-            return new TakeVersionedPartitionCoordinator(versionedPartitionName, status,
-                new AtomicLong(txId), slowTakeInMillis, timestampedOrderIdProvider.getApproximateId(slowTakeInMillis));
-        });
     }
 
     private VersionedRing ensureVersionedRing(List<Entry<RingMember, RingHost>> neighbors) {

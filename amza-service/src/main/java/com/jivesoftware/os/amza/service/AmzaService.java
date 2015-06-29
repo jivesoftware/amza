@@ -18,12 +18,13 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.replication.PartitionCompactor;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage.VersionedStatus;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
+import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
@@ -191,7 +192,9 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
                 if (partitionStatus == null) {
-                    versionedPartitionName = partitionStatusStorage.markAsKetchup(partitionName);
+                    VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
+                    versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
+                    partitionStatus = versionedStatus.status;
                     if (properties.takeFromFactor == 0) {
                         partitionStatusStorage.markAsOnline(versionedPartitionName);
                     }
@@ -450,7 +453,9 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         }
         partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
             if (partitionStatus == null) {
-                versionedPartitionName = partitionStatusStorage.markAsKetchup(partitionName);
+                VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
+                versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
+                partitionStatus = versionedStatus.status;
                 if (properties.takeFromFactor == 0) {
                     partitionStatusStorage.markAsOnline(versionedPartitionName);
                 }

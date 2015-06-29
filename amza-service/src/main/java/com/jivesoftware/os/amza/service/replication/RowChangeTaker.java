@@ -4,6 +4,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
+import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage.VersionedStatus;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
@@ -202,21 +203,21 @@ public class RowChangeTaker implements RowChanges {
                             if (disposed.get()) {
                                 throw new InterruptedException("MemberLatestTransactionsTaker for " + remoteRingMember + " has been disposed.");
                             }
+                            PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
 
-                            if (!amzaRingReader.isMemberOfRing(remoteVersionedPartitionName.getPartitionName().getRingName())) {
+                            if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
                                 LOG.info("NOT A MEMBER: local:{} remote:{}  txId:{} partition:{} status:{}",
                                     ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
                                 return;
                             } else {
-                                partitionStatusStorage.remoteStatus(remoteRingMember,
-                                    remoteVersionedPartitionName.getPartitionName(),
+                                partitionStatusStorage.remoteStatus(remoteRingMember, partitionName,
                                     new PartitionStatusStorage.VersionedStatus(remoteStatus, remoteVersionedPartitionName.getPartitionVersion()));
 
-
-                                boolean takeable = partitionStatusStorage.tx(remoteVersionedPartitionName.getPartitionName(),
+                                boolean takeable = partitionStatusStorage.tx(partitionName,
                                     (versionedPartitionName, partitionStatus) -> {
                                         if (versionedPartitionName == null) {
-                                            versionedPartitionName = partitionStatusStorage.markAsKetchup(remoteVersionedPartitionName.getPartitionName());
+                                            VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
+                                            versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
                                             LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} status:{}",
                                                 ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
                                         }
@@ -226,7 +227,7 @@ public class RowChangeTaker implements RowChanges {
                                                 ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
                                             return false;
                                         }
-                                        if (remoteVersionedPartitionName.getPartitionName().isSystemPartition()) {
+                                        if (partitionName.isSystemPartition()) {
                                             Long highwater = systemHighwaterStorage.get(remoteRingMember, versionedPartitionName);
                                             if (highwater != null && highwater >= txId) {
                                                 return false; // TODO ack OFFER?
@@ -235,7 +236,7 @@ public class RowChangeTaker implements RowChanges {
                                             }
                                         } else {
                                             VersionedPartitionName txVersionPartitionName = versionedPartitionName;
-                                            return partitionStripeProvider.txPartition(remoteVersionedPartitionName.getPartitionName(),
+                                            return partitionStripeProvider.txPartition(partitionName,
                                                 (stripe, highwaterStorage) -> {
                                                     Long highwater = highwaterStorage.get(remoteRingMember, txVersionPartitionName);
                                                     if (highwater != null && highwater >= txId) {
@@ -260,7 +261,6 @@ public class RowChangeTaker implements RowChanges {
 
                                 if (rowTaker == null) {
                                     CommitChanges commitChanges;
-                                    PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
                                     if (partitionName.isSystemPartition()) {
                                         commitChanges = new SystemPartitionCommitChanges(partitionName, systemWALStorage, systemHighwaterStorage, walUpdated);
                                     } else {
@@ -275,9 +275,13 @@ public class RowChangeTaker implements RowChanges {
                                         (_rowTaker, changed, startVersion, version) -> {
                                             versionedPartitionRowTakers.compute(remoteVersionedPartitionName, (key, memberPartitionTaker) -> {
                                                 if (!disposed.get() && (changed || startVersion < version.get())) {
+                                                    LOG.info("RE-SCHEDULED: local:{} take from remote:{} partition:{} status:{} txId:{}.",
+                                                        ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
                                                     rowTakerThreadPool.submit(_rowTaker);
-                                                    return memberPartitionTaker;
+                                                    return _rowTaker;
                                                 } else {
+                                                    LOG.info("ALL DONE: local:{} take from remote:{} partition:{} status:{} txId:{}.",
+                                                        ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
                                                     return null;
                                                 }
                                             });
@@ -286,7 +290,7 @@ public class RowChangeTaker implements RowChanges {
                                             rowTakerThreadPool.submit(_rowTaker);
                                         });
 
-                                    LOG.info("SCHEDUALED: local:{} take from remote:{} partition:{} status:{} txId:{}.",
+                                    LOG.info("SCHEDULED: local:{} take from remote:{} partition:{} status:{} txId:{}.",
                                         ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
                                     rowTakerThreadPool.submit(rowTaker);
                                     return rowTaker;
@@ -366,6 +370,9 @@ public class RowChangeTaker implements RowChanges {
             try {
 
                 LOG.info("TAKE: local:{}  remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
+                AtomicReference<VersionedPartitionName> attemptElection = new AtomicReference<>();
+                AtomicReference<VersionedPartitionName> markAsOnline = new AtomicReference<>();
+                AtomicLong largestFlushedTxId = new AtomicLong(-1L);
 
                 commitChanges.commit((localVersionedPartitionName, highwaterStorage, commitTo) -> {
 
@@ -375,11 +382,6 @@ public class RowChangeTaker implements RowChanges {
                     if (partitionProperties != null) {
                         if (partitionProperties.takeFromFactor > 0) {
                             try {
-//                                TookResult result = takeChanges(commitTo,
-//                                    highwaterStorage,
-//                                    localVersionedPartitionName,
-//                                    partitionProperties.takeFromFactor);
-//
 
                                 LOG.startTimer("take>all");
                                 LOG.startTimer("take>" + metricName);
@@ -460,20 +462,12 @@ public class RowChangeTaker implements RowChanges {
                                         if (takeFailureListener.isPresent()) {
                                             takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                         }
-                                        partitionStatusStorage.markAsOnline(localVersionedPartitionName);
+                                        markAsOnline.set(localVersionedPartitionName);
                                     } else if (rowsResult.error == null) {
-                                        String ringName = localVersionedPartitionName.getPartitionName().getRingName();
-                                        Set<RingMember> remoteRingMembers = amzaRingReader.getNeighboringRingMembers(ringName);
-                                        partitionStatusStorage.elect(remoteRingMembers, localVersionedPartitionName);
+                                        attemptElection.set(localVersionedPartitionName);
                                     }
                                     if (updates > 0) {
-                                        try {
-                                            rowsTaker.rowsTaken(remoteRingMember, remoteRingHost, remoteVersionedPartitionName, takeRowStream
-                                                .largestFlushedTxId());
-                                        } catch (Exception x) {
-                                            LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                                                new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
-                                        }
+                                        largestFlushedTxId.set(takeRowStream.largestFlushedTxId());
                                     }
                                     flushed = updates > 0;
 
@@ -487,12 +481,31 @@ public class RowChangeTaker implements RowChanges {
                                     new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
                             }
                         } else {
-                            partitionStatusStorage.markAsOnline(localVersionedPartitionName);
+                            markAsOnline.set(localVersionedPartitionName);
                         }
                     }
                     onCompletion.completed(this, flushed, currentVersion, version);
                     return null;
                 });
+
+                if (attemptElection.get() != null) {
+                    String ringName = attemptElection.get().getPartitionName().getRingName();
+                    Set<RingMember> remoteRingMembers = amzaRingReader.getNeighboringRingMembers(ringName);
+                    partitionStatusStorage.elect(remoteRingMembers, attemptElection.get());
+                }
+
+                if (markAsOnline.get() != null) {
+                    partitionStatusStorage.markAsOnline(markAsOnline.get());
+                }
+
+                if (largestFlushedTxId.get() > -1) {
+                    try {
+                        rowsTaker.rowsTaken(remoteRingMember, remoteRingHost, remoteVersionedPartitionName, largestFlushedTxId.get());
+                    } catch (Exception x) {
+                        LOG.warn("Failed to ack for member:{} host:{} partition:{}",
+                            new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                    }
+                }
 
             } catch (Exception x) {
                 LOG.error("Failed to take from member:{} host:{} partition:{}",

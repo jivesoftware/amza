@@ -199,7 +199,7 @@ public class PartitionStripe {
                 }
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
-                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                    return takeRowUpdates.give(null, null, null);
                 } else {
                     RowStreamer streamer = (partitionStatus == TxPartitionStatus.Status.ONLINE)
                         ? rowStream -> storage.takeRowUpdatesSince(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)

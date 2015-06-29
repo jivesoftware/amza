@@ -132,14 +132,12 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         return VersionedStatus.fromBytes(rawStatus.getValue());
     }
 
-    public VersionedPartitionName markAsKetchup(PartitionName partitionName) throws Exception {
+    public VersionedStatus markAsKetchup(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            return new VersionedPartitionName(partitionName, 0);
+            return new VersionedStatus(Status.ONLINE, 0);
         }
         long partitionVersion = orderIdProvider.nextId();
-        VersionedStatus versionedStatus = set(rootRingMember, partitionName, new VersionedStatus(Status.KETCHUP, partitionVersion));
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
-        return versionedPartitionName;
+        return set(rootRingMember, partitionName, new VersionedStatus(Status.KETCHUP, partitionVersion));
     }
 
     public void markAsOnline(VersionedPartitionName versionedPartitionName) throws Exception {

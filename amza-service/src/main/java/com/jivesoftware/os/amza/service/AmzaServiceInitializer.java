@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionCompactor;
@@ -128,9 +129,9 @@ public class AmzaServiceInitializer {
         AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
 
         WALUpdated walUpdated = (versionedPartitionName, status, txId) -> {
-            if (status != TxPartitionStatus.Status.COMPACTING) {
-                takeCoordinator.updated(amzaRingReader, versionedPartitionName, status, txId);
-            }
+            if (Preconditions.checkNotNull(status) != TxPartitionStatus.Status.COMPACTING) {
+                takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), status, txId);
+            }  
         };
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex);

@@ -3,8 +3,8 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.service.StripedPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
@@ -209,7 +209,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         }
 
         private void feed(String regionName, int batch, int threadIndex) throws Exception {
-            StripedPartition stripedPartition = createPartitionIfAbsent(regionName);
+            AmzaPartitionAPI partition = createPartitionIfAbsent(regionName);
 
             Map<String, String> values = new LinkedHashMap<>();
             int bStart = threadIndex * input.batchSize;
@@ -222,7 +222,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                 updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(new WALKey(input1.getKey().getBytes()),
                     input1.getValue().getBytes())), -1);
-                stripedPartition.commit(updates, 1, 30_000); // TODO expose to UI
+                partition.commit(updates, 1, 30_000); // TODO expose to UI
 
 
             } catch (Exception x) {
@@ -234,7 +234,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         }
     }
 
-    private StripedPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
+    private AmzaPartitionAPI createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
         NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default");
         if (ring.isEmpty()) {

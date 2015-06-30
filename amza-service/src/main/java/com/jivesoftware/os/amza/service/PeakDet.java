@@ -5,14 +5,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- *
  * @author jonathan.colt
  */
 public class PeakDet {
 
     public static void main(String[] args) {
-        double[] vector = new double[]{
-            0,1,2,3,4,5,1,2,3,4,8,7,6,5,4,3,2,1
+        double[] vector = new double[] {
+            0, 1, 2, 3, 4, 5, 1, 2, 3, 4, 8, 7, 6, 5, 4, 3, 2, 1
         };
         new PeakDet().peakdet(vector, 1);
     }
@@ -73,7 +72,7 @@ public class PeakDet {
          Minf=ieee_value(a, ieee_negative_inf)
          */
 
-        
+
         double mn = Double.POSITIVE_INFINITY;
         double mx = Double.NEGATIVE_INFINITY;
         double mnpos = Double.NaN;

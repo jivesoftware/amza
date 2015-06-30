@@ -44,7 +44,7 @@ public class EmbeddedAmzaServiceInitializer {
         WALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
             rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, orderIdProvider, tombstoneCompactionFactor, compactAfterGrowthFactor);
 
-        
+
         AmzaService service = new AmzaServiceInitializer().initialize(config,
             amzaStats,
             primaryRowMarshaller,

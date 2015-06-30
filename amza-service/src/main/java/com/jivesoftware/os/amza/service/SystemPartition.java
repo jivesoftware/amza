@@ -144,6 +144,7 @@ public class SystemPartition implements AmzaPartitionAPI {
         return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd ? partitionHighwater : null);
     }
 
+    @Override
     public long count() throws Exception {
         return systemWALStorage.count(versionedPartitionName);
     }

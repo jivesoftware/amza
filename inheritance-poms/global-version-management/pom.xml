@@ -46,9 +46,13 @@
             </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.routing.bird</groupId>
+                <artifactId>deployable-reporter-service</artifactId>
+                <version>${routing.bird.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jivesoftware.os.routing.bird</groupId>
                 <artifactId>deployable</artifactId>
                 <version>${routing.bird.version}</version>
-                <type>jar</type>
             </dependency>
             <dependency>
                 <groupId>de.ruedigermoeller</groupId>

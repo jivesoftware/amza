@@ -17,10 +17,8 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import java.util.Map.Entry;
 
 /**
- *
  * @author jonathan.colt
  */
 public interface TakeFailureListener {

@@ -5,8 +5,8 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.service.StripedPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
@@ -65,8 +65,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         SoyRenderer renderer,
         AmzaRingReader ringReader,
         AmzaService amzaService,
-        AmzaStats amzaStats
-    ) {
+        AmzaStats amzaStats) {
         this.template = template;
         this.statsTemplate = statsTemplate;
         this.renderer = renderer;
@@ -155,8 +154,8 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             }
             map.put("ring", ringMaps);
 
-            StripedPartition region = amzaService.getPartition(name);
-            map.put("count", String.valueOf(region.count()));
+            AmzaPartitionAPI partition = amzaService.getPartition(name);
+            map.put("count", String.valueOf(partition.count()));
         }
         map.put("received", String.valueOf(totals.received.get()));
         map.put("receivedLag", String.valueOf(totals.receivedLag.get()));
@@ -268,7 +267,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

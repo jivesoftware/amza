@@ -70,6 +70,10 @@
             <artifactId>routing-bird-server</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.jivesoftware.os.routing.bird</groupId>
+            <artifactId>routing-bird-shared</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.xerial.snappy</groupId>
             <artifactId>snappy-java</artifactId>
             <scope>runtime</scope>
@@ -96,7 +100,7 @@
             <version>0.92-SNAPSHOT</version>
             <type>jar</type>
         </dependency>
-        <!--        <dependency>
+        <!--<dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-mavibot-storage</artifactId>
             <version>0.20-SNAPSHOT</version>

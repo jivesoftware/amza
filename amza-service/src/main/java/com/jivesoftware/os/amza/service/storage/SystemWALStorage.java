@@ -10,7 +10,6 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 
@@ -44,7 +43,7 @@ public class SystemWALStorage {
     public <R> R takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
         long transactionId,
         PartitionStripe.TakeRowUpdates<R> takeRowUpdates) throws Exception {
-        
+
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
 
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);

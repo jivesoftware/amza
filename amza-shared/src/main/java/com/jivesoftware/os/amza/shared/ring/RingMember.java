@@ -39,7 +39,7 @@ public class RingMember implements Comparable<RingMember> {
         }
         return null;
     }
-    
+
 
     private final String member;
     private final byte[] memberAsBytes;

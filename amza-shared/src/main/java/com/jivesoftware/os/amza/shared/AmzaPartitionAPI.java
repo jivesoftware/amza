@@ -58,4 +58,6 @@ public interface AmzaPartitionAPI {
         }
     }
 
+    long count() throws Exception;
+
 }

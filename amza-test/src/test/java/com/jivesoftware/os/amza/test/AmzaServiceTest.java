@@ -66,7 +66,7 @@ public class AmzaServiceTest {
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
                             WALKey indexKey = new WALKey(key.getBytes());
-                            node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), AmzaTestCluster.ORDER_ID_PROVIDER.nextId(), tombstone);
+                            node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
                             node.get(partitionName, indexKey);
                         }

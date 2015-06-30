@@ -78,9 +78,6 @@ public class AmzaTestCluster {
 
     private final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    public static final TimestampedOrderIdProvider ORDER_ID_PROVIDER = new OrderIdProviderImpl(new ConstantWriterIdProvider(1),
-        new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
-
     private final File workingDirctory;
     private final ConcurrentSkipListMap<RingMember, AmzaNode> cluster = new ConcurrentSkipListMap<>();
     private int oddsOfAConnectionFailureWhenAdding = 0; // 0 never - 100 always
@@ -118,6 +115,10 @@ public class AmzaTestCluster {
         config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.takeFromNeighborsIntervalInMillis = 5;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
+        //config.useMemMap = true;
+
+        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()),
+            new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
 
         RowsTaker updateTaker = new RowsTaker() {
 
@@ -133,7 +134,7 @@ public class AmzaTestCluster {
                 if (amzaNode == null) {
                     throw new IllegalStateException("Service doesn't exists for " + remoteRingMember);
                 } else {
-                    amzaNode.takePartitionUpdates(localRingMember, ORDER_ID_PROVIDER.nextId(), timeoutMillis, (versionedPartitionName, status, txId) -> {
+                    amzaNode.takePartitionUpdates(localRingMember, orderIdProvider.nextId(), timeoutMillis, (versionedPartitionName, status, txId) -> {
                         if (versionedPartitionName != null) {
                             updatedPartitionsStream.available(versionedPartitionName, status, txId);
                         }
@@ -177,8 +178,6 @@ public class AmzaTestCluster {
                 }
             }
         };
-
-        final TimestampedOrderIdProvider orderIdProvider = ORDER_ID_PROVIDER;
 
         final ObjectMapper mapper = new ObjectMapper();
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
@@ -242,12 +241,11 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(localRingMember, localRingHost, amzaService, highWaterMarks);
+        service = new AmzaNode(localRingMember, localRingHost, amzaService, highWaterMarks, orderIdProvider);
 
         cluster.put(localRingMember, service);
 
-        System.out.println(
-            "Added serviceHost:" + localRingMember + " to the cluster.");
+        System.out.println("Added serviceHost:" + localRingMember + " to the cluster.");
         return service;
     }
 
@@ -258,6 +256,7 @@ public class AmzaTestCluster {
         private final RingHost ringHost;
         private final AmzaService amzaService;
         private final HighwaterStorage highWaterMarks;
+        private final TimestampedOrderIdProvider orderIdProvider;
         private boolean off = false;
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
@@ -266,13 +265,15 @@ public class AmzaTestCluster {
         public AmzaNode(RingMember ringMember,
             RingHost ringHost,
             AmzaService amzaService,
-            HighwaterStorage highWaterMarks) {
+            HighwaterStorage highWaterMarks,
+            TimestampedOrderIdProvider orderIdProvider) {
 
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
             this.highWaterMarks = highWaterMarks;
             this.clientProvider = new AmzaKretrProvider(amzaService);
+            this.orderIdProvider = orderIdProvider;
         }
 
         @Override
@@ -307,12 +308,13 @@ public class AmzaTestCluster {
             }
         }
 
-        public void update(PartitionName partitionName, WALKey k, byte[] v, long timestamp, boolean tombstone) throws Exception {
+        public void update(PartitionName partitionName, WALKey k, byte[] v, boolean tombstone) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
+            long timestamp = orderIdProvider.nextId();
             if (tombstone) {
                 updates.remove(k, timestamp);
             } else {

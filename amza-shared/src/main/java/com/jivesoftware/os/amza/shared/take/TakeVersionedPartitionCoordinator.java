@@ -30,7 +30,6 @@ public class TakeVersionedPartitionCoordinator {
     final long slowTakeId;
     final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
     final AtomicInteger currentCategory = new AtomicInteger(1);
-    final AtomicLong lastTakeSessionId = new AtomicLong(0);
 
     public TakeVersionedPartitionCoordinator(VersionedPartitionName versionedPartitionName,
         Status status,
@@ -114,6 +113,7 @@ public class TakeVersionedPartitionCoordinator {
 
     }
 
+    //TODO call this?
     void cleanup(Set<RingMember> retain) {
         ConcurrentHashMap.KeySetView<RingMember, SessionedTxId> keySet = took.keySet();
         keySet.removeAll(Sets.difference(keySet, retain));

@@ -14,6 +14,7 @@ import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 
 /**
@@ -22,19 +23,20 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 public class EmbeddedAmzaServiceInitializer {
 
     public AmzaService initialize(final AmzaServiceConfig config,
-        final AmzaStats amzaStats,
+        AmzaStats amzaStats,
         RingMember ringMember,
         RingHost ringHost,
-        final TimestampedOrderIdProvider orderIdProvider,
+        TimestampedOrderIdProvider orderIdProvider,
+        IdPacker idPacker,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
-        final WALIndexProviderRegistry indexProviderRegistry,
+        WALIndexProviderRegistry indexProviderRegistry,
         RowsTaker updatesTaker,
         Optional<TakeFailureListener> takeFailureListener,
-        final RowChanges allRowChanges) throws Exception {
+        RowChanges allRowChanges) throws Exception {
 
-        final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
-        final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
-        final RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
+        BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
+        BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
+        RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
         int tombstoneCompactionFactor = 2; // TODO expose to config;
         int compactAfterGrowthFactor = 2; // TODO expose to config;
@@ -50,6 +52,7 @@ public class EmbeddedAmzaServiceInitializer {
             ringMember,
             ringHost,
             orderIdProvider,
+            idPacker,
             partitionPropertyMarshaller,
             walStorageProvider,
             updatesTaker,

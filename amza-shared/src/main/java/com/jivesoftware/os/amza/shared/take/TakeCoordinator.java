@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
+import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -30,6 +31,7 @@ public class TakeCoordinator {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
+    private final IdPacker idPacker;
 
     private final ConcurrentHashMap<String, TakeRingCoordinator> takeRingCoordinators = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Object> ringMembersLocks = new ConcurrentHashMap<>();
@@ -40,10 +42,12 @@ public class TakeCoordinator {
     private final long slowTakeInMillis;
 
     public TakeCoordinator(TimestampedOrderIdProvider timestampedOrderIdProvider,
+        IdPacker idPacker,
         long cyaIntervalMillis,
         long heartbeatIntervalMillis,
         long slowTakeInMillis) {
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
+        this.idPacker = idPacker;
         this.cyaIntervalMillis = cyaIntervalMillis;
         this.heartbeatIntervalMillis = heartbeatIntervalMillis;
         this.slowTakeInMillis = slowTakeInMillis;
@@ -119,7 +123,7 @@ public class TakeCoordinator {
 
     private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
         return takeRingCoordinators.computeIfAbsent(ringName,
-            key -> new TakeRingCoordinator(ringName, timestampedOrderIdProvider, slowTakeInMillis, neighbors));
+            key -> new TakeRingCoordinator(ringName, timestampedOrderIdProvider, idPacker, slowTakeInMillis, neighbors));
     }
 
     public void availableRowsStream(AmzaRingReader ringReader,

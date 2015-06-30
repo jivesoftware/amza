@@ -36,6 +36,7 @@ import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
+import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -53,6 +54,7 @@ import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -111,6 +113,7 @@ public class AmzaServiceInitializer {
         RingMember ringMember,
         RingHost ringHost,
         TimestampedOrderIdProvider orderIdProvider,
+        IdPacker idPacker,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         WALStorageProvider partitionsWALStorageProvider,
         RowsTaker rowsTaker,
@@ -122,6 +125,7 @@ public class AmzaServiceInitializer {
         RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
         TakeCoordinator takeCoordinator = new TakeCoordinator(orderIdProvider,
+            idPacker,
             config.takeCyaIntervalInMillis,
             config.takeHeartbeatIntervalInMillis,
             config.takeSlowThresholdInMillis);
@@ -201,6 +205,11 @@ public class AmzaServiceInitializer {
             allRowChanges,
             config.hardFsync);
 
+        HighestPartitionTx takeHighestPartitionTx = (versionedPartitionName, partitionStatus, highestTxId) ->
+            takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionStatus, highestTxId);
+
+        systemWALStorage.highestPartitionTxIds(takeHighestPartitionTx);
+
         ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
         List<Future> futures = new ArrayList<>();
@@ -208,9 +217,7 @@ public class AmzaServiceInitializer {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
                     partitionStripe.load();
-                    partitionStripe.highestPartitionTxIds((versionedPartitionName, partitionStatus, highestTxId) -> {
-                        takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionStatus, highestTxId);
-                    });
+                    partitionStripe.highestPartitionTxIds(takeHighestPartitionTx);
                 } catch (Exception x) {
                     LOG.error("Failed while loading " + partitionStripe, x);
                     throw new RuntimeException(x);

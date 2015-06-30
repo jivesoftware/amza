@@ -197,10 +197,10 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     @Override
     public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
-        if (partitionDelta == null) {
-            return -1;
+        if (partitionDelta != null) {
+            return partitionDelta.highestTxId();
         }
-        return partitionDelta.highestTxId();
+        return storage.highestTxId();
     }
 
 

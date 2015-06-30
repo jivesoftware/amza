@@ -58,7 +58,7 @@ public class HttpRowsTaker implements RowsTaker {
         AvailableStream availableStream) throws Exception {
 
         HttpStreamResponse httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
-            "/rows/available/" + localRingMember.getMember() + "/" + takeSessionId + "/" + timeoutMillis);
+            "/amza/rows/available/" + localRingMember.getMember() + "/" + takeSessionId + "/" + timeoutMillis);
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
             streamingTakesConsumer.consume(bis, availableStream);
@@ -88,7 +88,7 @@ public class HttpRowsTaker implements RowsTaker {
         HttpStreamResponse httpStreamResponse;
         try {
             httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
-                "/rows/stream/" + localRingMember.getMember() + "/" + remoteVersionedPartitionName.toBase64() + "/" + remoteTxId);
+                "/amza/rows/stream/" + localRingMember.getMember() + "/" + remoteVersionedPartitionName.toBase64() + "/" + remoteTxId);
         } catch (Exception e) {
             return new StreamingRowsResult(e, null, null);
         }
@@ -108,7 +108,7 @@ public class HttpRowsTaker implements RowsTaker {
     public boolean rowsTaken(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId) {
         try {
             return getRequestHelper(ringHost).executeRequest(null,
-                "/rows/taken/"
+                "/amza/rows/taken/"
                 + ringMember.getMember() + "/"
                 + ringHost.getHost() + "/" + ringHost.getPort() + "/"
                 + versionedPartitionName.toBase64() + "/"

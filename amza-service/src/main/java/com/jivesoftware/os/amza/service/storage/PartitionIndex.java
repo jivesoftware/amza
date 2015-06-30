@@ -65,6 +65,12 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     public void open(TxPartitionStatus txPartitionState) throws Exception {
 
         PartitionStore partitionIndexStore = get(PartitionProvider.REGION_INDEX);
+        get(PartitionProvider.RING_INDEX);
+        get(PartitionProvider.NODE_INDEX);
+        get(PartitionProvider.HIGHWATER_MARK_INDEX);
+        get(PartitionProvider.REGION_ONLINE_INDEX);
+        get(PartitionProvider.REGION_PROPERTIES);
+
         final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
@@ -96,12 +102,6 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         while (!openExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
             LOG.info("Still opening partitions: opened={} failed={} total={}", numOpened.get(), numFailed.get(), total.get());
         }
-
-        get(PartitionProvider.RING_INDEX);
-        get(PartitionProvider.NODE_INDEX);
-        get(PartitionProvider.HIGHWATER_MARK_INDEX);
-        get(PartitionProvider.REGION_ONLINE_INDEX);
-        get(PartitionProvider.REGION_PROPERTIES);
     }
 
     public PartitionProperties getProperties(PartitionName partitionName) {

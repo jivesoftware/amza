@@ -38,7 +38,9 @@ import com.jivesoftware.os.amza.transport.http.replication.HttpRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.deployable.Deployable;
 import com.jivesoftware.os.routing.bird.deployable.InstanceConfig;
@@ -120,7 +122,10 @@ public class AmzaMain {
             };
 
             RingHost ringHost = new RingHost(instanceConfig.getHost(), instanceConfig.getMainPort());
-            final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(instanceConfig.getInstanceName()));
+            SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
+            TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(instanceConfig.getInstanceName()),
+                idPacker,
+                new JiveEpochTimestampProvider());
 
             RingMember ringMember = new RingMember(
                 Strings.padStart(String.valueOf(instanceConfig.getInstanceName()), 5, '0') + "_" + instanceConfig.getInstanceKey());
@@ -130,6 +135,7 @@ public class AmzaMain {
                 ringMember,
                 ringHost,
                 orderIdProvider,
+                idPacker,
                 partitionPropertyMarshaller,
                 indexProviderRegistry,
                 taker,

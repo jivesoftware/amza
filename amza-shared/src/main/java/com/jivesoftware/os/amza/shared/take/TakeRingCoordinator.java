@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
+import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -18,7 +19,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- *
  * @author jonathan.colt
  */
 public class TakeRingCoordinator {
@@ -27,16 +27,19 @@ public class TakeRingCoordinator {
 
     private final String ringName;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
+    private final IdPacker idPacker;
     private final long slowTakeInMillis;
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
     public TakeRingCoordinator(String ringName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
+        IdPacker idPacker,
         long slowTakeInMillis,
         List<Entry<RingMember, RingHost>> neighbors) {
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
+        this.idPacker = idPacker;
         this.slowTakeInMillis = slowTakeInMillis;
         //LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
         this.versionedRing.compareAndSet(null, new VersionedRing(timestampedOrderIdProvider.nextId(), neighbors));
@@ -50,10 +53,9 @@ public class TakeRingCoordinator {
 
     void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) {
         VersionedRing ring = ensureVersionedRing(neighbors);
-        TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName, (key) -> {
-            return new TakeVersionedPartitionCoordinator(versionedPartitionName, status,
-                new AtomicLong(txId), slowTakeInMillis, timestampedOrderIdProvider.getApproximateId(slowTakeInMillis));
-        });
+        TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName,
+            key -> new TakeVersionedPartitionCoordinator(versionedPartitionName, status,
+                new AtomicLong(txId), slowTakeInMillis, idPacker.pack(slowTakeInMillis, 0, 0))); //TODO need orderIdProvider.deltaMillisToIds()
         coordinator.updateTxId(ring, status, txId);
     }
 

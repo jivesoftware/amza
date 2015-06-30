@@ -117,8 +117,10 @@ public class AmzaTestCluster {
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
 
+        AmzaChangeIdPacker idPacker = new AmzaChangeIdPacker();
         OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()),
-            new AmzaChangeIdPacker(), new JiveEpochTimestampProvider());
+            idPacker,
+            new JiveEpochTimestampProvider());
 
         RowsTaker updateTaker = new RowsTaker() {
 
@@ -201,6 +203,7 @@ public class AmzaTestCluster {
             localRingMember,
             localRingHost,
             orderIdProvider,
+            idPacker,
             partitionPropertyMarshaller,
             new WALIndexProviderRegistry(),
             updateTaker,

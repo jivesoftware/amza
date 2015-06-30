@@ -1,7 +1,10 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -17,6 +20,8 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
  * @author jonathan.colt
  */
 public class SystemWALStorage {
+
+    private static final Predicate<VersionedPartitionName> IS_SYSTEM_PREDICATE = input -> input.getPartitionName().isSystemPartition();
 
     private final PartitionIndex partitionIndex;
 
@@ -78,6 +83,16 @@ public class SystemWALStorage {
             throw new IllegalStateException("No partition defined for " + versionedPartitionName);
         } else {
             partitionIndex.get(versionedPartitionName).getWalStorage().rangeScan(from, to, stream);
+        }
+    }
+
+    public void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
+        for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getAllPartitions(), IS_SYSTEM_PREDICATE)) {
+            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            if (partitionStore != null) {
+                long highestTxId = partitionStore.getWalStorage().highestTxId();
+                tx.tx(versionedPartitionName, Status.ONLINE, highestTxId);
+            }
         }
     }
 

@@ -41,7 +41,7 @@ import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
-public class AmzaPartition implements AmzaPartitionAPI {
+public class StripedPartition implements AmzaPartitionAPI {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -54,7 +54,7 @@ public class AmzaPartition implements AmzaPartitionAPI {
     private final AckWaters ackWaters;
     private final AmzaRingStoreReader ringReader;
 
-    public AmzaPartition(AmzaStats amzaStats,
+    public StripedPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
         WALUpdated walUpdated,
         RingMember ringMember,
@@ -98,8 +98,11 @@ public class AmzaPartition implements AmzaPartitionAPI {
                     throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
                 } else {
                     LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-                    int takenBy = ackWaters
-                        .await(commit.getVersionedPartitionName(), commit.getLargestCommittedTxId(), ringMembers, takeQuorum, timeoutInMillis);
+                    int takenBy = ackWaters.await(commit.getVersionedPartitionName(),
+                        commit.getLargestCommittedTxId(),
+                        ringMembers,
+                        takeQuorum,
+                        timeoutInMillis);
                     if (takenBy < takeQuorum) {
                         throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
                     }
@@ -153,61 +156,6 @@ public class AmzaPartition implements AmzaPartitionAPI {
                 });
             return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd);
         });
-    }
-
-    //  Use for testing
-    public boolean compare(final AmzaPartition amzaPartition) throws Exception {
-        final MutableInt compared = new MutableInt(0);
-        final MutableBoolean passed = new MutableBoolean(true);
-        amzaPartition.scan(null, null, (txid, key, value) -> {
-            try {
-                compared.increment();
-                return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-                    WALValue timestampedValue = stripe.get(partitionName, key);
-                    String comparing = partitionName.getRingName() + ":" + partitionName.getName()
-                        + " to " + amzaPartition.partitionName.getRingName() + ":" + amzaPartition.partitionName.getName() + "\n";
-
-                    if (timestampedValue == null) {
-                        System.out.println("INCONSISTENCY: " + comparing + " key:null"
-                            + " != " + value.getTimestampId()
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    if (value.getTimestampId() != timestampedValue.getTimestampId()) {
-                        System.out.println("INCONSISTENCY: " + comparing + " timstamp:'" + timestampedValue.getTimestampId()
-                            + "' != '" + value.getTimestampId()
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        System.out.println("----------------------------------");
-
-                        return false;
-                    }
-                    if (value.getValue() == null && timestampedValue.getValue() != null) {
-                        System.out.println("INCONSISTENCY: " + comparing + " null values:" + timestampedValue.getTombstoned()
-                            + " != '" + value
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    if (value.getValue() != null && !Arrays.equals(value.getValue(), timestampedValue.getValue())) {
-                        System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(timestampedValue.getValue())
-                            + "' != '" + Arrays.toString(value.getValue())
-                            + "' aClass:" + timestampedValue.getValue().getClass()
-                            + "' bClass:" + value.getValue().getClass()
-                            + "' \n" + timestampedValue + " vs " + value);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    return true;
-                });
-            } catch (Exception x) {
-                throw new RuntimeException("Failed while comparing", x);
-            }
-        });
-
-        System.out.println("partition:" + amzaPartition.partitionName.getName() + " compared:" + compared + " keys");
-        return passed.booleanValue();
     }
 
     public long count() throws Exception {

@@ -123,15 +123,15 @@ public class TakeCoordinator {
 
         AvailableStream watchAvailableStream = (versionedPartitionName, status, txId) -> {
             if (versionedPartitionName != null) {
-                LOG.info("OFFER:local:{} remote:{} txId:{} partition:{} status:{}",
-                    ringReader.getRingMember(), remoteRingMember, txId, versionedPartitionName, status);
+                //LOG.info("OFFER:local:{} remote:{} txId:{} partition:{} status:{}",
+                //    ringReader.getRingMember(), remoteRingMember, txId, versionedPartitionName, status);
             }
             availableStream.available(versionedPartitionName, status, txId);
         };
 
         while (true) {
             long start = updates.get();
-            LOG.info("CHECKING: remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
+            //LOG.info("CHECKING: remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
 
             long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
@@ -169,8 +169,8 @@ public class TakeCoordinator {
         VersionedPartitionName localVersionedPartitionName,
         long localTxId) {
 
-        LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
-            remoteRingMember, null, localTxId, localVersionedPartitionName);
+        //LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
+        //    remoteRingMember, null, localTxId, localVersionedPartitionName);
 
         String ringName = localVersionedPartitionName.getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);

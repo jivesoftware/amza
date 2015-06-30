@@ -82,7 +82,6 @@ public class PartitionProvider {
     }
 
     public void createPartitionStoreIfAbsent(VersionedPartitionName versionedPartitionName,
-        Status partitionStatus,
         PartitionProperties properties) throws Exception {
 
         PartitionName partitionName = versionedPartitionName.getPartitionName();
@@ -95,7 +94,7 @@ public class PartitionProvider {
             byte[] rawPartitionName = partitionName.toBytes();
             WALKey partitionKey = new WALKey(rawPartitionName);
             PartitionStore partitionIndexStore = partitionIndex.get(REGION_INDEX);
-            RowsChanged changed = partitionIndexStore.directCommit(false, partitionStatus, (highwater, scan) -> {
+            RowsChanged changed = partitionIndexStore.directCommit(false, Status.ONLINE, (highwater, scan) -> {
                 scan.row(-1, partitionKey, new WALValue(rawPartitionName, orderIdProvider.nextId(), false));
             }, walUpdated);
             partitionIndexStore.flush(hardFlush);

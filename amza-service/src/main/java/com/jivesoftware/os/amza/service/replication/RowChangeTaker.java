@@ -7,9 +7,9 @@ import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage.VersionedStatus;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
@@ -27,7 +27,6 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
@@ -61,51 +60,48 @@ public class RowChangeTaker implements RowChanges {
 
     private final AmzaStats amzaStats;
     private final AmzaRingStoreReader amzaRingReader;
-    private final WALUpdated walUpdated;
     private final RingHost ringHost;
-    private final SystemWALStorage systemWALStorage;
     private final HighwaterStorage systemHighwaterStorage;
     private final PartitionIndex partitionIndex;
     private final PartitionStripeProvider partitionStripeProvider;
     private final PartitionStatusStorage partitionStatusStorage;
     private final RowsTaker rowsTaker;
+    private final SystemPartitionCommitChanges systemPartitionCommitChanges;
+    private final StripedPartitionCommitChanges stripedPartitionCommitChanges;
     private final OrderIdProvider sessionIdProvider;
     private final Optional<TakeFailureListener> takeFailureListener;
     private final int maxRowTakerThreads;
-    private final boolean hardFlush;
 
     private final Object realignmentLock = new Object();
     private final ConcurrentHashMap<RingMember, AvailableRows> updatedTaker = new ConcurrentHashMap<>();
 
     public RowChangeTaker(AmzaStats amzaStats,
         AmzaRingStoreReader amzaRingReader,
-        WALUpdated walUpdated,
         RingHost ringHost,
-        SystemWALStorage systemWALStorage,
         HighwaterStorage systemHighwaterStorage,
         PartitionIndex partitionIndex,
         PartitionStripeProvider partitionStripeProvider,
         PartitionStatusStorage partitionStatusStorage,
-        RowsTaker updatesTaker,
+        RowsTaker rowsTaker,
+        SystemPartitionCommitChanges systemPartitionCommitChanges,
+        StripedPartitionCommitChanges stripedPartitionCommitChanges,
         OrderIdProvider sessionIdProvider,
         Optional<TakeFailureListener> takeFailureListener,
-        int numberOfTakerThreads,
-        boolean hardFlush) {
+        int numberOfTakerThreads) {
 
         this.amzaStats = amzaStats;
         this.amzaRingReader = amzaRingReader;
-        this.walUpdated = walUpdated;
         this.ringHost = ringHost;
-        this.systemWALStorage = systemWALStorage;
         this.systemHighwaterStorage = systemHighwaterStorage;
         this.partitionIndex = partitionIndex;
         this.partitionStripeProvider = partitionStripeProvider;
         this.partitionStatusStorage = partitionStatusStorage;
-        this.rowsTaker = updatesTaker;
+        this.rowsTaker = rowsTaker;
+        this.systemPartitionCommitChanges = systemPartitionCommitChanges;
+        this.stripedPartitionCommitChanges = stripedPartitionCommitChanges;
         this.sessionIdProvider = sessionIdProvider;
         this.takeFailureListener = takeFailureListener;
         this.maxRowTakerThreads = numberOfTakerThreads;
-        this.hardFlush = hardFlush;
     }
 
     public void start() throws Exception {
@@ -123,7 +119,7 @@ public class RowChangeTaker implements RowChanges {
                             updatedTaker.compute(ringMember, (RingMember key, AvailableRows taker) -> {
                                 if (taker == null) {
                                     taker = new AvailableRows(ringMember);
-                                    LOG.info("ADDED AvailableRows for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
+                                    //LOG.info("ADDED AvailableRows for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
                                     availableRowThreadPool.submit(taker);
                                 }
                                 return taker;
@@ -132,7 +128,7 @@ public class RowChangeTaker implements RowChanges {
                         for (RingMember ringMember : Sets.difference(updatedTaker.keySet(), desireRingMembers)) {
                             updatedTaker.compute(ringMember, (key, taker) -> {
                                 taker.dispose();
-                                LOG.info("REMOVED AvailableRows for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
+                                //LOG.info("REMOVED AvailableRows for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
                                 return null;
                             });
                         }
@@ -193,7 +189,7 @@ public class RowChangeTaker implements RowChanges {
             while (!disposed.get()) {
                 try {
                     RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
-                    LOG.info("SUBSCRIBE: local:{} -> remote:{} ", ringHost, remoteRingHost);
+                    //LOG.info("SUBSCRIBE: local:{} -> remote:{} ", ringHost, remoteRingHost);
                     rowsTaker.availableRowsStream(amzaRingReader.getRingMember(),
                         remoteRingMember,
                         remoteRingHost,
@@ -204,35 +200,41 @@ public class RowChangeTaker implements RowChanges {
                                 throw new InterruptedException("MemberLatestTransactionsTaker for " + remoteRingMember + " has been disposed.");
                             }
                             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
+                            VersionedPartitionName localVersionedPartitionName = null;
 
                             if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
-                                LOG.info("NOT A MEMBER: local:{} remote:{}  txId:{} partition:{} status:{}",
-                                    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
+                                //LOG.info("NOT A MEMBER: local:{} remote:{}  txId:{} partition:{} status:{}",
+                                //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
                                 return;
                             } else {
                                 partitionStatusStorage.remoteStatus(remoteRingMember, partitionName,
                                     new PartitionStatusStorage.VersionedStatus(remoteStatus, remoteVersionedPartitionName.getPartitionVersion()));
 
-                                boolean takeable = partitionStatusStorage.tx(partitionName,
+                                localVersionedPartitionName = partitionStatusStorage.tx(partitionName,
                                     (versionedPartitionName, partitionStatus) -> {
                                         if (versionedPartitionName == null) {
                                             VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
                                             versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
-                                            LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} status:{}",
-                                                ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
+                                            //LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} status:{}",
+                                            //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
                                         }
                                         PartitionStore store = partitionIndex.get(versionedPartitionName);
                                         if (store == null) {
-                                            LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} status:{}",
-                                                ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
-                                            return false;
+                                            //LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} status:{}",
+                                            //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
+                                            return null;
+                                        }
+                                        if (partitionStatus != TxPartitionStatus.Status.KETCHUP && partitionStatus != TxPartitionStatus.Status.ONLINE) {
+                                            //LOG.info("INVALID STATE: local:{} remote:{}  txId:{} partition:{} localStatus:{} remoteStatus:{}",
+                                            //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, partitionStatus, remoteStatus);
+                                            return null;
                                         }
                                         if (partitionName.isSystemPartition()) {
                                             Long highwater = systemHighwaterStorage.get(remoteRingMember, versionedPartitionName);
                                             if (highwater != null && highwater >= txId) {
-                                                return false; // TODO ack OFFER?
+                                                return null; // TODO ack OFFER?
                                             } else {
-                                                return true;
+                                                return versionedPartitionName;
                                             }
                                         } else {
                                             VersionedPartitionName txVersionPartitionName = versionedPartitionName;
@@ -240,48 +242,46 @@ public class RowChangeTaker implements RowChanges {
                                                 (stripe, highwaterStorage) -> {
                                                     Long highwater = highwaterStorage.get(remoteRingMember, txVersionPartitionName);
                                                     if (highwater != null && highwater >= txId) {
-                                                        LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} status:{}",
-                                                            ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
-                                                        return false;    // TODO ack OFFER?
+                                                        //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} status:{}",
+                                                        //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
+                                                        return null;    // TODO ack OFFER?
                                                     } else {
-                                                        return true;
+                                                        return txVersionPartitionName;
                                                     }
                                                 });
                                         }
                                     });
-                                if (!takeable) {
+                                if (localVersionedPartitionName == null) {
                                     rowsTaker.rowsTaken(remoteRingMember, remoteRingHost, remoteVersionedPartitionName, -1);
                                     return;
                                 }
                             }
 
-                            LOG.info("AVAILABLE: local:{} was told remote:{} partition:{} status:{} txId:{} is available.",
-                                ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
+                            //LOG.info("AVAILABLE: local:{} was told remote:{} partition:{} status:{} txId:{} is available.",
+                            //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
+                            VersionedPartitionName txVersionPartitionName = localVersionedPartitionName;
                             versionedPartitionRowTakers.compute(remoteVersionedPartitionName, (_versionedPartitionName, rowTaker) -> {
 
-                                if (rowTaker == null) {
-                                    CommitChanges commitChanges;
-                                    if (partitionName.isSystemPartition()) {
-                                        commitChanges = new SystemPartitionCommitChanges(partitionName, systemWALStorage, systemHighwaterStorage, walUpdated);
-                                    } else {
-                                        commitChanges = new StripedPartitionCommitChanges(partitionName, partitionStripeProvider, hardFlush, walUpdated);
-                                    }
+                                if (rowTaker == null || rowTaker.localVersionedPartitionName.getPartitionVersion() < txVersionPartitionName
+                                    .getPartitionVersion()) {
 
                                     rowTaker = new RowTaker(disposed,
+                                        txVersionPartitionName,
                                         remoteRingMember,
                                         remoteRingHost,
                                         remoteVersionedPartitionName,
-                                        commitChanges,
-                                        (_rowTaker, changed, startVersion, version) -> {
-                                            versionedPartitionRowTakers.compute(remoteVersionedPartitionName, (key, memberPartitionTaker) -> {
-                                                if (!disposed.get() && (changed || startVersion < version.get())) {
-                                                    LOG.info("RE-SCHEDULED: local:{} take from remote:{} partition:{} status:{} txId:{}.",
-                                                        ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
-                                                    rowTakerThreadPool.submit(_rowTaker);
-                                                    return _rowTaker;
+                                        (initialRowTaker, changed, startVersion, version) -> {
+                                            versionedPartitionRowTakers.compute(remoteVersionedPartitionName, (key, latestRowerTaker) -> {
+                                                long initialVersion = initialRowTaker.localVersionedPartitionName.getPartitionVersion();
+                                                long latestVersion = latestRowerTaker.localVersionedPartitionName.getPartitionVersion();
+                                                if (!disposed.get() && initialVersion == latestVersion && (changed || startVersion < version.get())) {
+                                                    //LOG.info("RE-SCHEDULED: local:{} take from remote:{} partition:{} status:{} txId:{}.",
+                                                    //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
+                                                    rowTakerThreadPool.submit(initialRowTaker);
+                                                    return initialRowTaker;
                                                 } else {
-                                                    LOG.info("ALL DONE: local:{} take from remote:{} partition:{} status:{} txId:{}.",
-                                                        ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
+                                                    //LOG.info("ALL DONE: local:{} take from remote:{} partition:{} status:{} txId:{}.",
+                                                    //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
                                                     return null;
                                                 }
                                             });
@@ -290,8 +290,8 @@ public class RowChangeTaker implements RowChanges {
                                             rowTakerThreadPool.submit(_rowTaker);
                                         });
 
-                                    LOG.info("SCHEDULED: local:{} take from remote:{} partition:{} status:{} txId:{}.",
-                                        ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
+                                    //LOG.info("SCHEDULED: local:{} take from remote:{} partition:{} status:{} txId:{}.",
+                                    //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
                                     rowTakerThreadPool.submit(rowTaker);
                                     return rowTaker;
                                 } else {
@@ -304,7 +304,7 @@ public class RowChangeTaker implements RowChanges {
                 } catch (InterruptedException ie) {
                     return;
                 } catch (Exception x) {
-                    LOG.error("Failed to take partitions updated:{}", new Object[]{remoteRingMember}, x);
+                    LOG.error("Failed to take partitions updated:{}", new Object[] { remoteRingMember }, x);
                     try {
                         Thread.sleep(1_000);
                     } catch (InterruptedException ie) {
@@ -327,35 +327,34 @@ public class RowChangeTaker implements RowChanges {
 
     private class RowTaker implements Runnable {
 
+        private final AtomicBoolean disposed;
+        private final VersionedPartitionName localVersionedPartitionName;
         private final RingMember remoteRingMember;
         private final RingHost remoteRingHost;
         private final VersionedPartitionName remoteVersionedPartitionName;
-        private final CommitChanges commitChanges;
         private final OnCompletion onCompletion;
         private final OnError onError;
 
-        private final AtomicBoolean disposed;
         private final AtomicLong version = new AtomicLong(0);
 
         public RowTaker(AtomicBoolean disposed,
+            VersionedPartitionName localVersionedPartitionName,
             RingMember remoteRingMember,
             RingHost remoteRingHost,
             VersionedPartitionName remoteVersionedPartitionName,
-            CommitChanges commitChanges,
             OnCompletion onCompletion,
             OnError onError) {
-
             this.disposed = disposed;
+            this.localVersionedPartitionName = localVersionedPartitionName;
             this.remoteRingMember = remoteRingMember;
             this.remoteRingHost = remoteRingHost;
             this.remoteVersionedPartitionName = remoteVersionedPartitionName;
-            this.commitChanges = commitChanges;
             this.onCompletion = onCompletion;
             this.onError = onError;
         }
 
         private void moreRowsMayBeAvailable() {
-            LOG.info("NUDGE: local:{}  remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
+            //LOG.info("NUDGE: local:{}  remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
             version.incrementAndGet();
         }
 
@@ -369,16 +368,11 @@ public class RowChangeTaker implements RowChanges {
             String metricName = partitionName.getName() + "-" + partitionName.getRingName();
             try {
 
-                LOG.info("TAKE: local:{}  remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
-                AtomicReference<VersionedPartitionName> attemptElection = new AtomicReference<>();
-                AtomicReference<VersionedPartitionName> markAsOnline = new AtomicReference<>();
-                AtomicLong largestFlushedTxId = new AtomicLong(-1L);
-
-                commitChanges.commit((localVersionedPartitionName, highwaterStorage, commitTo) -> {
-
+                //LOG.info("TAKE: local:{}  remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
+                CommitChanges commitChanges = partitionName.isSystemPartition() ? systemPartitionCommitChanges : stripedPartitionCommitChanges;
+                    commitChanges.commit(localVersionedPartitionName, (highwaterStorage, commitTo) -> {
                     boolean flushed = false;
-
-                    final PartitionProperties partitionProperties = partitionIndex.getProperties(localVersionedPartitionName.getPartitionName());
+                    PartitionProperties partitionProperties = partitionIndex.getProperties(localVersionedPartitionName.getPartitionName());
                     if (partitionProperties != null) {
                         if (partitionProperties.takeFromFactor > 0) {
                             try {
@@ -418,7 +412,7 @@ public class RowChangeTaker implements RowChanges {
                                         if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                             LOG.warn("Error while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                             LOG.trace("Error while taking from member:{} host:{} partition:{}",
-                                                new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, rowsResult.error);
+                                                new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, rowsResult.error);
                                         }
                                         amzaStats.takeErrors.add(remoteRingMember);
                                     } else if (rowsResult.unreachable != null) {
@@ -430,18 +424,18 @@ public class RowChangeTaker implements RowChanges {
                                         if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                             LOG.debug("Unreachable while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                             LOG.trace("Unreachable while taking from member:{} host:{} partition:{}",
-                                                new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName},
+                                                new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName },
                                                 rowsResult.unreachable);
                                         }
                                         amzaStats.takeErrors.add(remoteRingMember);
                                     } else {
                                         updates = takeRowStream.flush();
                                         if (updates > 0) {
-                                            LOG.info("APPLIED: ({}) {} -> {}/{}",
-                                                updates, remoteVersionedPartitionName, remoteRingMember, remoteRingHost);
+                                            //LOG.info("APPLIED: ({}) {} -> {}/{}",
+                                            //    updates, remoteVersionedPartitionName, remoteRingMember, remoteRingHost);
                                         } else {
-                                            LOG.info("EMPTY TAKE: ({}) {} -> {}/{}",
-                                                updates, remoteVersionedPartitionName, remoteRingMember, remoteRingHost);
+                                            //LOG.info("EMPTY TAKE: ({}) {} -> {}/{}",
+                                            //    updates, remoteVersionedPartitionName, remoteRingMember, remoteRingHost);
                                         }
                                     }
 
@@ -462,14 +456,22 @@ public class RowChangeTaker implements RowChanges {
                                         if (takeFailureListener.isPresent()) {
                                             takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                         }
-                                        markAsOnline.set(localVersionedPartitionName);
+                                        partitionStatusStorage.markAsOnline(localVersionedPartitionName);
                                     } else if (rowsResult.error == null) {
-                                        attemptElection.set(localVersionedPartitionName);
+                                        String ringName = localVersionedPartitionName.getPartitionName().getRingName();
+                                        Set<RingMember> remoteRingMembers = amzaRingReader.getNeighboringRingMembers(ringName);
+                                        partitionStatusStorage.elect(remoteRingMembers, localVersionedPartitionName);
                                     }
                                     if (updates > 0) {
-                                        largestFlushedTxId.set(takeRowStream.largestFlushedTxId());
+                                        flushed = true;
+                                        try {
+                                            rowsTaker.rowsTaken(remoteRingMember, remoteRingHost, remoteVersionedPartitionName,
+                                                takeRowStream.largestFlushedTxId());
+                                        } catch (Exception x) {
+                                            LOG.warn("Failed to ack for member:{} host:{} partition:{}",
+                                                new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
+                                        }
                                     }
-                                    flushed = updates > 0;
 
                                 } finally {
                                     LOG.stopTimer("take>all");
@@ -478,38 +480,18 @@ public class RowChangeTaker implements RowChanges {
 
                             } catch (Exception x) {
                                 LOG.warn("Failed to take from member:{} host:{} partition:{}",
-                                    new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
+                                    new Object[] { remoteRingMember, remoteRingHost, localVersionedPartitionName }, x);
                             }
                         } else {
-                            markAsOnline.set(localVersionedPartitionName);
+                            partitionStatusStorage.markAsOnline(localVersionedPartitionName);
                         }
                     }
                     onCompletion.completed(this, flushed, currentVersion, version);
                     return null;
                 });
-
-                if (attemptElection.get() != null) {
-                    String ringName = attemptElection.get().getPartitionName().getRingName();
-                    Set<RingMember> remoteRingMembers = amzaRingReader.getNeighboringRingMembers(ringName);
-                    partitionStatusStorage.elect(remoteRingMembers, attemptElection.get());
-                }
-
-                if (markAsOnline.get() != null) {
-                    partitionStatusStorage.markAsOnline(markAsOnline.get());
-                }
-
-                if (largestFlushedTxId.get() > -1) {
-                    try {
-                        rowsTaker.rowsTaken(remoteRingMember, remoteRingHost, remoteVersionedPartitionName, largestFlushedTxId.get());
-                    } catch (Exception x) {
-                        LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                            new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
-                    }
-                }
-
             } catch (Exception x) {
                 LOG.error("Failed to take from member:{} host:{} partition:{}",
-                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
                 onError.error(this, x);
             }
         }

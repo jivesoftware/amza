@@ -88,10 +88,7 @@ public class PartitionStripe {
     }
 
     public <R> R txPartition(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-        return txPartitionStatus.tx(partitionName,
-            (currentVersionedPartitionName, partitionStatus) -> {
-                return tx.tx(currentVersionedPartitionName, partitionStatus);
-            });
+        return txPartitionStatus.tx(partitionName, tx);
     }
 
     public RowsChanged commit(HighwaterStorage highwaterStorage,

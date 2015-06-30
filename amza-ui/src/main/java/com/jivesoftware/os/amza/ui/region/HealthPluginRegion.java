@@ -5,7 +5,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.service.AmzaPartition;
+import com.jivesoftware.os.amza.service.StripedPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -155,7 +155,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             }
             map.put("ring", ringMaps);
 
-            AmzaPartition region = amzaService.getPartition(name);
+            StripedPartition region = amzaService.getPartition(name);
             map.put("count", String.valueOf(region.count()));
         }
         map.put("received", String.valueOf(totals.received.get()));

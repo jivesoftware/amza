@@ -34,7 +34,7 @@ public class TakeRingCoordinator {
     public TakeRingCoordinator(String ringName, TimestampedOrderIdProvider timestampedOrderIdProvider, List<Entry<RingMember, RingHost>> neighbors) {
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
-        LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
+        //LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
         this.versionedRing.compareAndSet(null, new VersionedRing(timestampedOrderIdProvider.nextId(), neighbors));
     }
 
@@ -76,7 +76,7 @@ public class TakeRingCoordinator {
             if (existing.isStillValid(neighbors)) {
                 return existing;
             } else {
-                LOG.info("RESIZED RING:" + ringName + " size:" + neighbors.size() + " " + this + " " + existing);
+                //LOG.info("RESIZED RING:" + ringName + " size:" + neighbors.size() + " " + this + " " + existing);
                 return new VersionedRing(timestampedOrderIdProvider.nextId(), neighbors);
             }
         });

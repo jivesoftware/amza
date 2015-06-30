@@ -26,6 +26,8 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.replication.SendFailureListener;
+import com.jivesoftware.os.amza.service.replication.StripedPartitionCommitChanges;
+import com.jivesoftware.os.amza.service.replication.SystemPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
@@ -74,7 +76,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[]{"./var/data/"};
+        public String[] workingDirectories = new String[] { "./var/data/" };
 
         public int takeFromNeighborsIntervalInMillis = 1000;
 
@@ -108,7 +110,7 @@ public class AmzaServiceInitializer {
         TimestampedOrderIdProvider orderIdProvider,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         WALStorageProvider partitionsWALStorageProvider,
-        RowsTaker updatesTaker,
+        RowsTaker rowsTaker,
         Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
         RowChanges allRowChanges) throws Exception {
@@ -131,7 +133,7 @@ public class AmzaServiceInitializer {
         WALUpdated walUpdated = (versionedPartitionName, status, txId) -> {
             if (Preconditions.checkNotNull(status) != TxPartitionStatus.Status.COMPACTING) {
                 takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), status, txId);
-            }  
+            }
         };
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex);
@@ -240,17 +242,17 @@ public class AmzaServiceInitializer {
         PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemWALStorage, walUpdated);
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             amzaRingReader,
-            walUpdated,
             ringHost,
-            systemWALStorage, systemHighwaterStorage,
+            systemHighwaterStorage,
             partitionIndex,
             partitionStripeProvider,
             partitionStatusStorage,
-            updatesTaker,
+            rowsTaker,
+            new SystemPartitionCommitChanges(systemWALStorage, systemHighwaterStorage, walUpdated),
+            new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),
             takeFailureListener,
-            config.numberOfTakerThreads,
-            config.hardFsync);
+            config.numberOfTakerThreads);
 
         PartitionCompactor partitionCompactor = new PartitionCompactor(amzaStats,
             partitionIndex,

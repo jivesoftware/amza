@@ -68,11 +68,12 @@ public class HttpRowsTaker implements RowsTaker {
     }
 
     /**
-     * @param asRingMember
-     * @param fromRingHost
-     * @param partitionName
-     * @param transactionId
-     * @param tookRowUpdates
+     * @param localRingMember
+     * @param remoteRingMember
+     * @param remoteRingHost
+     * @param remoteVersionedPartitionName
+     * @param remoteTxId
+     * @param rowStream
      * @return Will return null if the other node was reachable but the partition on that node was NOT online.
      * @throws Exception
      */

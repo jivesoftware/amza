@@ -11,11 +11,10 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
  */
 interface CommitChanges {
 
-    void commit(CommitTx commitTx) throws Exception;
+    void commit(VersionedPartitionName versionedPartitionName, CommitTx commitTx) throws Exception;
 
     interface CommitTx {
 
-        RowsChanged tx(VersionedPartitionName versionedPartitionName, HighwaterStorage highwaterStorage, CommitTo commitTo) throws Exception;
+        RowsChanged tx(HighwaterStorage highwaterStorage, CommitTo commitTo) throws Exception;
     }
-
 }

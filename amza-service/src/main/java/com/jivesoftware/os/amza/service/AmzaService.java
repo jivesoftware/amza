@@ -31,6 +31,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
@@ -39,6 +40,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
+import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
@@ -52,11 +54,14 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
+import org.apache.commons.lang.mutable.MutableBoolean;
+import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
@@ -191,15 +196,14 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         }
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-                if (partitionStatus == null) {
+                if (versionedPartitionName == null) {
                     VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
                     versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
-                    partitionStatus = versionedStatus.status;
                     if (properties.takeFromFactor == 0) {
                         partitionStatusStorage.markAsOnline(versionedPartitionName);
                     }
                 }
-                partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, partitionStatus, properties);
+                partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
                 return getPartition(partitionName);
             });
         }
@@ -249,14 +253,27 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     @Override
-    public AmzaPartition getPartition(PartitionName partitionName) throws Exception {
-        return new AmzaPartition(amzaStats,
-            orderIdProvider,
-            walUpdated,
-            ringStoreReader.getRingMember(),
-            partitionName,
-            partitionStripeProvider,
-            ackWaters, ringStoreReader);
+    public AmzaPartitionAPI getPartition(PartitionName partitionName) throws Exception {
+        if (partitionName.isSystemPartition()) {
+            return new SystemPartition(amzaStats,
+                orderIdProvider,
+                walUpdated,
+                ringStoreReader.getRingMember(),
+                partitionName,
+                systemWALStorage,
+                systemHighwaterStorage,
+                ackWaters,
+                ringStoreReader);
+        } else {
+            return new StripedPartition(amzaStats,
+                orderIdProvider,
+                walUpdated,
+                ringStoreReader.getRingMember(),
+                partitionName,
+                partitionStripeProvider,
+                ackWaters,
+                ringStoreReader);
+        }
     }
 
     public boolean hasPartition(PartitionName partitionName) throws Exception {
@@ -452,15 +469,14 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
             throw new IllegalStateException("No properties for partition: " + partitionName);
         }
         partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            if (partitionStatus == null) {
+            if (versionedPartitionName == null) {
                 VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
                 versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
-                partitionStatus = versionedStatus.status;
                 if (properties.takeFromFactor == 0) {
                     partitionStatusStorage.markAsOnline(versionedPartitionName);
                 }
             }
-            partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, partitionStatus, properties);
+            partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
             return null;
         });
 

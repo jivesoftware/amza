@@ -50,7 +50,7 @@ public class TakeVersionedPartitionCoordinator {
         if (this.txId.get() < txId) {
             this.txId.set(txId);
             updateCategory(versionedRing);
-            LOG.info("UPDATE: partition:{} status:{} txId:{} ", versionedPartitionName, status, txId);
+            //LOG.info("UPDATE: partition:{} status:{} txId:{} ", versionedPartitionName, status, txId);
         }
     }
 
@@ -74,7 +74,7 @@ public class TakeVersionedPartitionCoordinator {
                         } else {
                             if (u.sessionId != takeSessionId) {
                                 availableStream.available(versionedPartitionName, currentStatus, takeTxId);
-                                LOG.info("ringMember:{} nudged:{} status:{} txId:{}", ringMember, versionedPartitionName, currentStatus, takeTxId);
+                                //LOG.info("NEW: ringMember:{} nudged:{} status:{} txId:{}", ringMember, versionedPartitionName, currentStatus, takeTxId);
                                 return new SessionedTxId(takeSessionId, takeTxId);
                             } else {
                                 if (u.txId < takeTxId) {

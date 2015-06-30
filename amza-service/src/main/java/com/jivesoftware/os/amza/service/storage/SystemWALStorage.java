@@ -82,7 +82,7 @@ public class SystemWALStorage {
         }
     }
 
-    public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
-        return storage.count();
+    public long count(VersionedPartitionName versionedPartitionName) throws Exception {
+        return partitionIndex.get(versionedPartitionName).getWalStorage().count();
     }
 }

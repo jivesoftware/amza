@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.collect.Iterables;
-import com.jivesoftware.os.amza.service.AmzaPartition;
+import com.jivesoftware.os.amza.service.StripedPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
@@ -62,14 +62,14 @@ public class AmzaEndpoints {
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            StripedPartition stripedPartition = createPartitionIfAbsent(partition);
             String[] keys = key.split(",");
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
                 updates.set(new WALKey(keys[i].getBytes()), values[i].getBytes(), -1);
             }
-            amzaPartition.commit(updates, 1, 30000);
+            stripedPartition.commit(updates, 1, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
@@ -82,12 +82,12 @@ public class AmzaEndpoints {
     @Path("/multiSet/{partition}")
     public Response multiSet(@PathParam("partition") String partition, Map<String, String> values) {
         try {
-            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            StripedPartition stripedPartition = createPartitionIfAbsent(partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()),
                 input.getValue().getBytes())), -1);
-            amzaPartition.commit(updates, 1, 30000);
+            stripedPartition.commit(updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -108,9 +108,9 @@ public class AmzaEndpoints {
                 rawKeys.add(new WALKey(k.getBytes()));
             }
 
-            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            StripedPartition stripedPartition = createPartitionIfAbsent(partition);
             List<byte[]> got = new ArrayList<>();
-            amzaPartition.get(rawKeys, (rowTxId, key1, scanned) -> {
+            stripedPartition.get(rawKeys, (rowTxId, key1, scanned) -> {
                 got.add(scanned.getValue());
                 return true;
             });
@@ -127,10 +127,10 @@ public class AmzaEndpoints {
     public Response remove(@QueryParam("partition") String partition,
         @QueryParam("key") String key) {
         try {
-            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            StripedPartition stripedPartition = createPartitionIfAbsent(partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             updates.remove(new WALKey(key.getBytes()), -1);
-            amzaPartition.commit(updates, 1, 30000);
+            stripedPartition.commit(updates, 1, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove partition:" + partition + " key:" + key, x);
@@ -138,7 +138,7 @@ public class AmzaEndpoints {
         }
     }
 
-    AmzaPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
+    StripedPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
         int ringSize = amzaService.getRingReader().getRingSize("default");
         int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);

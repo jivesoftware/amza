@@ -12,35 +12,29 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
  *
  * @author jonathan.colt
  */
-class SystemPartitionCommitChanges implements CommitChanges {
+public class SystemPartitionCommitChanges implements CommitChanges {
 
-    final VersionedPartitionName versionedPartitionName;
     final SystemWALStorage systemWALStorage;
     final HighwaterStorage highwaterStorage;
     final WALUpdated walUpdated;
 
-    public SystemPartitionCommitChanges(PartitionName partitionName,
-        SystemWALStorage systemWALStorage,
+    public SystemPartitionCommitChanges(SystemWALStorage systemWALStorage,
         HighwaterStorage highwaterStorage,
         WALUpdated walUpdated) {
-        this.versionedPartitionName = new VersionedPartitionName(partitionName, 0);
         this.systemWALStorage = systemWALStorage;
         this.highwaterStorage = highwaterStorage;
         this.walUpdated = walUpdated;
     }
 
     @Override
-    public void commit(CommitTx commitTx) throws Exception {
-        commitTx.tx(versionedPartitionName, highwaterStorage,
-            (Commitable<WALValue> commitable) -> {
-                return systemWALStorage.update(versionedPartitionName, commitable, walUpdated);
-            });
+    public void commit(VersionedPartitionName versionedPartitionName, CommitTx commitTx) throws Exception {
+        commitTx.tx(highwaterStorage, commitable -> systemWALStorage.update(versionedPartitionName, commitable, walUpdated));
         highwaterStorage.flush(null);
     }
 
     @Override
     public String toString() {
-        return "SystemPartitionCommitChanges{" + "versionedPartitionName=" + versionedPartitionName + ", systemWALStorage=" + systemWALStorage + '}';
+        return "SystemPartitionCommitChanges{" + "systemWALStorage=" + systemWALStorage + '}';
     }
 
 }

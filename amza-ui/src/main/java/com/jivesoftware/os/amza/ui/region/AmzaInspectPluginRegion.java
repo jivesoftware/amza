@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.service.AmzaPartition;
+import com.jivesoftware.os.amza.service.StripedPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
@@ -79,11 +79,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             List<Map<String, String>> rows = new ArrayList<>();
 
             if (input.action.equals("scan")) {
-                AmzaPartition amzaPartition = lookupPartition(input, msg);
-                if (amzaPartition != null) {
+                StripedPartition stripedPartition = lookupPartition(input, msg);
+                if (stripedPartition != null) {
                     final AtomicLong offset = new AtomicLong(input.offset);
                     final AtomicLong batch = new AtomicLong(input.batchSize);
-                    amzaPartition.scan(null, null, (rowTxId, key, value) -> {
+                    stripedPartition.scan(null, null, (rowTxId, key, value) -> {
                         if (offset.decrementAndGet() >= 0) {
                             return true;
                         }
@@ -104,13 +104,13 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     });
                 }
             } else if (input.action.equals("get")) {
-                AmzaPartition amzaPartition = lookupPartition(input, msg);
-                if (amzaPartition != null) {
+                StripedPartition stripedPartition = lookupPartition(input, msg);
+                if (stripedPartition != null) {
                     List<WALKey> rawKeys = stringToWALKeys(input);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        amzaPartition.get(rawKeys, (rowTxId, key, value) -> {
+                        stripedPartition.get(rawKeys, (rowTxId, key, value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
                             row.put("keyAsHex", bytesToHex(key.getKey()));
@@ -125,16 +125,16 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     }
                 }
             } else if (input.action.equals("remove")) {
-                AmzaPartition amzaPartition = lookupPartition(input, msg);
-                if (amzaPartition != null) {
+                StripedPartition stripedPartition = lookupPartition(input, msg);
+                if (stripedPartition != null) {
                     List<WALKey> rawKeys = stringToWALKeys(input);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to remove. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         updates.removeAll(rawKeys, -1);
-                        amzaPartition.commit(updates, 1, 30_000); // TODO expose to UI
-                        amzaPartition.get(rawKeys, (rowTxId, key, value) -> {
+                        stripedPartition.commit(updates, 1, 30_000); // TODO expose to UI
+                        stripedPartition.get(rawKeys, (rowTxId, key, value) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("rowTxId", String.valueOf(rowTxId));
                             row.put("keyAsHex", bytesToHex(key.getKey()));
@@ -171,8 +171,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
         return walKeys;
     }
 
-    private AmzaPartition lookupPartition(AmzaInspectPluginRegionInput input, List<String> msg) throws Exception {
-        AmzaPartition partition = amzaService.getPartition(new PartitionName(input.systemRegion, input.ringName, input.regionName));
+    private StripedPartition lookupPartition(AmzaInspectPluginRegionInput input, List<String> msg) throws Exception {
+        StripedPartition partition = amzaService.getPartition(new PartitionName(input.systemRegion, input.ringName, input.regionName));
         if (partition == null) {
             msg.add("No region for ringName:" + input.ringName + " regionName:" + input.regionName + " isSystem:" + input.systemRegion);
         }

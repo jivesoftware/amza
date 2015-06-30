@@ -85,7 +85,7 @@ public class DeltaStripeWALStorageNGTest {
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
             new PrimaryIndexDescriptor("memory", 0, false, null), null, 100, 100);
 
-        partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, Status.ONLINE, new PartitionProperties(storageDescriptor, 0, 0, false));
+        partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, new PartitionProperties(storageDescriptor, 0, 0, false));
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         Assert.assertNotNull(partitionStore);
 

@@ -209,11 +209,11 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (partitionName.equals(HIGHWATER_MARK_INDEX.getPartitionName())) {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new PartitionProperties(storageDescriptor, 0, 0, false);
+            properties = new PartitionProperties(storageDescriptor, 0, false);
         } else {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new PartitionProperties(storageDescriptor, 2, 2, false);
+            properties = new PartitionProperties(storageDescriptor, 2, false);
         }
         return properties;
     }

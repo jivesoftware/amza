@@ -68,14 +68,14 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             String regionPrefix,
             int numBatches,
             int batchSize,
-            int numRegions,
+            int numPartitions,
             int numThreadsPerRegion,
             String action) {
             this.name = name;
             this.regionPrefix = regionPrefix;
             this.numBatches = numBatches;
             this.batchSize = batchSize;
-            this.numPartitions = numRegions;
+            this.numPartitions = numPartitions;
             this.numThreadsPerPartition = numThreadsPerRegion;
             this.action = action;
         }
@@ -123,7 +123,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
                 row.put("regionPrefix", stress.input.regionPrefix);
                 row.put("numBatches", String.valueOf(stress.input.numBatches));
                 row.put("batchSize", String.valueOf(stress.input.batchSize));
-                row.put("numRegions", String.valueOf(stress.input.numPartitions));
+                row.put("numPartitions", String.valueOf(stress.input.numPartitions));
                 row.put("numThreadsPerRegion", String.valueOf(stress.input.numThreadsPerPartition));
 
                 row.put("elapsed", HealthPluginRegion.getDurationBreakdown(elapsed));
@@ -245,7 +245,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, 2, false));
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
 
         AmzaService.AmzaPartitionRoute regionRoute = amzaService.getPartitionRoute(partitionName);
         while (regionRoute.orderedPartitionHosts.isEmpty()) {

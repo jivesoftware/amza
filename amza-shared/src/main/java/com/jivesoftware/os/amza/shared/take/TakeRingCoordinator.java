@@ -27,13 +27,17 @@ public class TakeRingCoordinator {
 
     private final String ringName;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
-    private final long slowTakeInMillis = 60_000L; // TODO config
+    private final long slowTakeInMillis;
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
-    public TakeRingCoordinator(String ringName, TimestampedOrderIdProvider timestampedOrderIdProvider, List<Entry<RingMember, RingHost>> neighbors) {
+    public TakeRingCoordinator(String ringName,
+        TimestampedOrderIdProvider timestampedOrderIdProvider,
+        long slowTakeInMillis,
+        List<Entry<RingMember, RingHost>> neighbors) {
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
+        this.slowTakeInMillis = slowTakeInMillis;
         //LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
         this.versionedRing.compareAndSet(null, new VersionedRing(timestampedOrderIdProvider.nextId(), neighbors));
     }
@@ -134,4 +138,10 @@ public class TakeRingCoordinator {
         }
     }
 
+    @Override
+    public String toString() {
+        return "TakeRingCoordinator{" +
+            "ringName='" + ringName + '\'' +
+            '}';
+    }
 }

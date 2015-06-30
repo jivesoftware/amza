@@ -50,7 +50,7 @@ public class AmzaUIInitializer {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/healthPluginRegion.soy"), "health.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaRingsPluginRegion.soy"), "amzaRings.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaClusterPluginRegion.soy"), "amzaCluster.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaRegionsPluginRegion.soy"), "amzaRegions.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaPartitionsPluginRegion.soy"), "amzaPartitions.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStats.soy"), "amzaStats.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStackedProgress.soy"), "amzaStackedProgress.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStressPluginRegion.soy"), "amzaStress.soy");
@@ -68,9 +68,9 @@ public class AmzaUIInitializer {
             new ManagePlugin("repeat", "Rings", "/amza/ui/rings",
                 AmzaRingsPluginEndpoints.class,
                 new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getRingWriter(), amzaService.getRingReader())),
-            new ManagePlugin("map-marker", "Regions", "/amza/ui/regions",
+            new ManagePlugin("map-marker", "Partitions", "/amza/ui/partitions",
                 AmzaRegionsPluginEndpoints.class,
-                new AmzaPartitionsPluginRegion("soy.page.amzaRegionsPluginRegion", renderer, amzaService.getRingReader(), amzaService)),
+                new AmzaPartitionsPluginRegion("soy.page.amzaPartitionsPluginRegion", renderer, amzaService.getRingReader(), amzaService)),
             new ManagePlugin("leaf", "Cluster", "/amza/ui/cluster",
                 AmzaClusterPluginEndpoints.class,
                 new AmzaClusterPluginRegion("soy.page.amzaClusterPluginRegion", renderer, amzaService.getRingWriter(), amzaService.getRingReader())),

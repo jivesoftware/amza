@@ -25,7 +25,7 @@ import java.util.Set;
 /**
  *
  */
-// soy.page.amzaRingPluginRegion
+// soy.page.amzaPartitionsPluginRegion
 public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaPartitionsPluginRegionInput>> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
@@ -98,7 +98,6 @@ public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaParti
                     PartitionProperties partitionProperties = amzaService.getPartitionProperties(partitionName);
                     if (partitionProperties == null) {
                         row.put("disabled", "?");
-                        row.put("replicationFactor", "?");
                         row.put("takeFromFactor", "?");
 
                         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
@@ -107,7 +106,6 @@ public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaParti
 
                     } else {
                         row.put("disabled", partitionProperties.disabled);
-                        row.put("replicationFactor", partitionProperties.replicationFactor);
                         row.put("takeFromFactor", partitionProperties.takeFromFactor);
                         row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
                     }
@@ -115,7 +113,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaParti
                     rows.add(row);
                 }
 
-                data.put("regions", rows);
+                data.put("partitions", rows);
 
             }
         } catch (Exception e) {
@@ -160,7 +158,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<Optional<AmzaParti
 
     @Override
     public String getTitle() {
-        return "Amza Regions";
+        return "Amza Partitions";
     }
 
 }

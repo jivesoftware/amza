@@ -2,12 +2,12 @@
 
 /**
  * 
- * @param? regions
+ * @param? partitions
  */
-{template .amzaRegionsPluginRegion}
-    {if $regions}
+{template .amzaPartitionsPluginRegion}
+    {if $partitions}
         <div class="panel panel-default">
-            <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Regions</div>
+            <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Partitions</div>
                 <div class="panel-body">
                     
                     <table class="table table-condensed">
@@ -19,7 +19,6 @@
                                 <th>RingName</th>
                                 <th>Disabled</th>
                                 <th>Index</th>
-                                <th>ReplicationFactor</th>
                                 <th>TakeFromFactor</th>
                             </tr>
                         </thead>
@@ -48,17 +47,13 @@
                                     </td>
                                     <td>TODO</td>
                                     <td>
-                                        <input type="number" name="replicationFactor" min="0" max="65536" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
-                                        class="form-control" placeholder="replicationFactor" value=""  title="">
-                                    </td>
-                                    <td>
                                         <input type="number" name="takeFromFactor" min="0" max="65536" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
                                         class="form-control" placeholder="takeFromFactor" value=""   title="">
                                     </td>
                                 </tr>
                             </form>
 
-                            {foreach $r in $regions}
+                            {foreach $r in $partitions}
                                 <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
                                     method="get" name="removeRingHost">
                                     <tr>    
@@ -94,10 +89,6 @@
                                             name="name" id="hostPicker"  title="{$r.disabled}">
                                         </td>
                                         <td>TODO</td>
-                                        <td>
-                                            <input type="number" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
-                                            placeholder="replicationFactor" value="{$r.replicationFactor}" name="replicationFactor" class="form-control">
-                                        </td>
                                         <td>
                                             <input type="number" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
                                             placeholder="takeFromFactor" value="{$r.takeFromFactor}" name="takeFromFactor" class="form-control">

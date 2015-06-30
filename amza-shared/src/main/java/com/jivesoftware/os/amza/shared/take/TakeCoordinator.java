@@ -35,12 +35,21 @@ public class TakeCoordinator {
     private final ConcurrentHashMap<RingMember, Object> ringMembersLocks = new ConcurrentHashMap<>();
     private final AtomicLong updates = new AtomicLong();
     private final AtomicLong cyaLock = new AtomicLong();
-    private final long heartBeatIntervalMillis = 1_000; //TODO config
+    private final long cyaIntervalMillis;
+    private final long heartbeatIntervalMillis;
+    private final long slowTakeInMillis;
 
-    public TakeCoordinator(TimestampedOrderIdProvider timestampedOrderIdProvider) {
+    public TakeCoordinator(TimestampedOrderIdProvider timestampedOrderIdProvider,
+        long cyaIntervalMillis,
+        long heartbeatIntervalMillis,
+        long slowTakeInMillis) {
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
+        this.cyaIntervalMillis = cyaIntervalMillis;
+        this.heartbeatIntervalMillis = heartbeatIntervalMillis;
+        this.slowTakeInMillis = slowTakeInMillis;
     }
 
+    //TODO bueller?
     public void awakeCya() {
         cyaLock.incrementAndGet();
         synchronized (cyaLock) {
@@ -49,7 +58,6 @@ public class TakeCoordinator {
     }
 
     public void start(AmzaRingReader ringReader, VersionedPartitionProvider partitionProvider) {
-        long cyaIntervalMillis = 1_000; // TODO config
         ExecutorService cya = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("cya-%d").build());
         cya.submit(() -> {
             while (true) {
@@ -110,9 +118,8 @@ public class TakeCoordinator {
     }
 
     private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
-        return takeRingCoordinators.computeIfAbsent(ringName, (key) -> {
-            return new TakeRingCoordinator(ringName, timestampedOrderIdProvider, neighbors);
-        });
+        return takeRingCoordinators.computeIfAbsent(ringName,
+            key -> new TakeRingCoordinator(ringName, timestampedOrderIdProvider, slowTakeInMillis, neighbors));
     }
 
     public void availableRowsStream(AmzaRingReader ringReader,
@@ -143,7 +150,7 @@ public class TakeCoordinator {
                 return true;
             });
             if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
-                suggestedWaitInMillis[0] = heartBeatIntervalMillis; // Hmmm
+                suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
             }
 
             Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, (key) -> new Object());
@@ -151,12 +158,12 @@ public class TakeCoordinator {
                 long time = System.currentTimeMillis();
                 long timeToWait = suggestedWaitInMillis[0];
                 while (start == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
-                    long wait = Math.min(timeToWait, heartBeatIntervalMillis);
+                    long wait = Math.min(timeToWait, heartbeatIntervalMillis);
                     //LOG.info("PARKED:remote:{} for {}millis on local:{}",
                     //    remoteRingMember, wait, ringReader.getRingMember());
                     lock.wait(wait);
                     watchAvailableStream.available(null, null, 0); // Ping aka keep the socket alive
-                    timeToWait -= heartBeatIntervalMillis;
+                    timeToWait -= heartbeatIntervalMillis;
                     if (timeToWait < 0) {
                         break;
                     }

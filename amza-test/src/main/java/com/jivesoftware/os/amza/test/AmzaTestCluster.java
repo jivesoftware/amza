@@ -24,7 +24,6 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.MemoryBackedHighwaterStorage;
-import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -179,7 +178,6 @@ public class AmzaTestCluster {
             }
         };
 
-        // TODO need to get writer id from somewhere other than port.
         final TimestampedOrderIdProvider orderIdProvider = ORDER_ID_PROVIDER;
 
         final ObjectMapper mapper = new ObjectMapper();
@@ -207,8 +205,8 @@ public class AmzaTestCluster {
             partitionPropertyMarshaller,
             new WALIndexProviderRegistry(),
             updateTaker,
-            Optional.<SendFailureListener>absent(),
-            Optional.<TakeFailureListener>absent(), (RowsChanged changes) -> {
+            Optional.<TakeFailureListener>absent(),
+            (RowsChanged changes) -> {
             });
 
         amzaService.start();
@@ -299,7 +297,7 @@ public class AmzaTestCluster {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
 
-            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, 2, false));
+            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
 
             AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
             while (partitionRoute.orderedPartitionHosts.isEmpty()) {

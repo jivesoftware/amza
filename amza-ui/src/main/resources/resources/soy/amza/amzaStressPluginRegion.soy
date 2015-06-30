@@ -21,7 +21,7 @@
                             <th>Region Prefix</th>
                             <th>Number of Batches</th>
                             <th>Batch Size</th>
-                            <th>Number of Regions</th>
+                            <th>Number of Partitions</th>
                             <th>Threads Per Region</th>
                         </tr>
                     </thead>
@@ -56,8 +56,8 @@
                                         data-original-title="" title="">
                                 </td>
                                 <td>
-                                    <input type="number" name="numRegions" min="1" max="65536" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                        class="form-control" placeholder="Number of Regions" value="" id="numRegionsPicker"
+                                    <input type="number" name="numPartitions" min="1" max="65536" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                        class="form-control" placeholder="Number of Partitions" value="" id="numPartitionsPicker"
                                         data-original-title="" title="">
                                 </td>
                                 <td>
@@ -85,7 +85,7 @@
                                         <td>{$s.regionPrefix}</td>
                                         <td>{$s.numBatches}</td>
                                         <td>{$s.batchSize}</td>
-                                        <td>{$s.numRegions}</td>
+                                        <td>{$s.numPartitions}</td>
                                         <td>{$s.numThreadsPerRegion}</td>
                                     </tr>
                                 </form>

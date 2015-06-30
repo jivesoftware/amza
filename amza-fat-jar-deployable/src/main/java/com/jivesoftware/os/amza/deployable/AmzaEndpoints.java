@@ -150,7 +150,7 @@ public class AmzaEndpoints {
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, 1, false));
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, false));
 
         AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
         long start = System.currentTimeMillis();

@@ -25,7 +25,6 @@ import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
-import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.StripedPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.SystemPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
@@ -99,6 +98,10 @@ public class AmzaServiceInitializer {
         public boolean hardFsync = false;
 
         public boolean useMemMap = false;
+
+        public long takeCyaIntervalInMillis = 1_000;
+        public long takeHeartbeatIntervalInMillis = 1_000;
+        public long takeSlowThresholdInMillis = 1_000 * 60;
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
@@ -111,7 +114,6 @@ public class AmzaServiceInitializer {
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         WALStorageProvider partitionsWALStorageProvider,
         RowsTaker rowsTaker,
-        Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
         RowChanges allRowChanges) throws Exception {
 
@@ -119,7 +121,10 @@ public class AmzaServiceInitializer {
 
         RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
-        TakeCoordinator takeCoordinator = new TakeCoordinator(orderIdProvider);
+        TakeCoordinator takeCoordinator = new TakeCoordinator(orderIdProvider,
+            config.takeCyaIntervalInMillis,
+            config.takeHeartbeatIntervalInMillis,
+            config.takeSlowThresholdInMillis);
 
         PartitionIndex partitionIndex = new PartitionIndex(amzaStats, config.workingDirectories, "amza/stores",
             partitionsWALStorageProvider, partitionPropertyMarshaller, config.hardFsync);

@@ -157,18 +157,12 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             AmzaPartitionAPI partition = amzaService.getPartition(name);
             map.put("count", String.valueOf(partition.count()));
         }
-        map.put("received", String.valueOf(totals.received.get()));
-        map.put("receivedLag", String.valueOf(totals.receivedLag.get()));
-        map.put("applies", String.valueOf(totals.receivedApplies.get()));
-        map.put("appliesLag", String.valueOf(totals.receivedAppliesLag.get()));
         map.put("gets", String.valueOf(totals.gets.get()));
         map.put("getsLag", String.valueOf(totals.getsLag.get()));
         map.put("scans", String.valueOf(totals.scans.get()));
         map.put("scansLag", String.valueOf(totals.scansLag.get()));
         map.put("directApplies", String.valueOf(totals.directApplies.get()));
         map.put("directAppliesLag", String.valueOf(totals.directAppliesLag.get()));
-        map.put("replicates", String.valueOf(totals.replicates.get()));
-        map.put("replicatesLag", String.valueOf(totals.replicatesLag.get()));
         map.put("takes", String.valueOf(totals.takes.get()));
         map.put("takesLag", String.valueOf(totals.takesLag.get()));
         map.put("takeApplies", String.valueOf(totals.takeApplies.get()));
@@ -224,21 +218,9 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
             (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
             String.valueOf(getDurationBreakdown(grandTotal.takeAppliesLag.longValue())) + " lag"));
 
-        sb.append(progress("Received Applied (" + grandTotal.receivedApplies + ")",
-            (int) (((double) grandTotal.receivedAppliesLag.longValue() / 1000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.receivedAppliesLag.longValue())) + " lag"));
-
-        sb.append(progress("Replicated (" + grandTotal.replicates + ")",
-            (int) (((double) grandTotal.replicatesLag.longValue() / 1000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.replicatesLag.longValue())) + " lag"));
-
         sb.append(progress("Took (" + grandTotal.takes + ")",
             (int) (((double) grandTotal.takesLag.longValue() / 10000d) * 100),
             String.valueOf(getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag"));
-
-        sb.append(progress("Received (" + grandTotal.received + ")",
-            (int) (((double) grandTotal.receivedLag.longValue() / 10000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.receivedLag.longValue())) + " lag"));
 
         sb.append("<p><pre>");
         for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {

@@ -23,7 +23,6 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
@@ -59,13 +58,12 @@ public class DeltaStripeWALStorageNGTest {
 
         File partitionTmpDir = Files.createTempDir();
         WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry();
-        TakeCoordinator takeCoordinator = new TakeCoordinator(new OrderIdProviderImpl(new ConstantWriterIdProvider(1)));
 
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
             walIndexProviderRegistry, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, ids, -1, -1);
         PartitionIndex partitionIndex = new PartitionIndex(
             new AmzaStats(),
-            new String[]{partitionTmpDir.getAbsolutePath()},
+            new String[] { partitionTmpDir.getAbsolutePath() },
             "domain",
             indexedWALStorageProvider,
             partitionPropertyMarshaller,
@@ -85,7 +83,7 @@ public class DeltaStripeWALStorageNGTest {
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
             new PrimaryIndexDescriptor("memory", 0, false, null), null, 100, 100);
 
-        partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, new PartitionProperties(storageDescriptor, 0, 0, false));
+        partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, new PartitionProperties(storageDescriptor, 0, false));
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         Assert.assertNotNull(partitionStore);
 

@@ -25,7 +25,6 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
-import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
@@ -105,7 +104,6 @@ public class Main {
             partitionPropertyMarshaller,
             indexProviderRegistry,
             taker,
-            Optional.<SendFailureListener>absent(),
             Optional.<TakeFailureListener>absent(),
             (RowsChanged changes) -> {
             });

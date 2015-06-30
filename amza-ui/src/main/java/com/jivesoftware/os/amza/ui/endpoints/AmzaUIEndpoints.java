@@ -124,12 +124,12 @@ public class AmzaUIEndpoints {
                 for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
                     if (host.equals(r)) {
                         if (!host.equals(r2)) {
-                            weights.add((int) (amzaStats.getTotalOffered(r2.getKey())));
+                            weights.add(0); //TODO FIX (int) (amzaStats.getTotalOffered(r2.getKey())));
                         } else {
                             weights.add(0);
                         }
                     } else if (host.equals(r2)) {
-                        weights.add((int) (amzaStats.getTotalOffered(r.getKey())));
+                        weights.add(0); //TODO FIX (int) (amzaStats.getTotalOffered(r.getKey())));
                     } else {
                         weights.add(0);
                     }
@@ -185,7 +185,7 @@ public class AmzaUIEndpoints {
 
             i = 0;
             for (Entry<RingMember, RingHost> r : ring.entrySet()) {
-                long totalOffered = amzaStats.getTotalOffered(r.getKey());
+                long totalOffered = 0; //TODO FIX amzaStats.getTotalOffered(r.getKey());
                 offered[i] = totalOffered;
                 if (totalOffered > 0) {
                     range.value(totalOffered);

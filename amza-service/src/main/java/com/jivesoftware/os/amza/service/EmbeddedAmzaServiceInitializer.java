@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
-import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
@@ -30,7 +29,6 @@ public class EmbeddedAmzaServiceInitializer {
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         final WALIndexProviderRegistry indexProviderRegistry,
         RowsTaker updatesTaker,
-        Optional<SendFailureListener> sendFailureListener,
         Optional<TakeFailureListener> takeFailureListener,
         final RowChanges allRowChanges) throws Exception {
 
@@ -55,7 +53,6 @@ public class EmbeddedAmzaServiceInitializer {
             partitionPropertyMarshaller,
             walStorageProvider,
             updatesTaker,
-            sendFailureListener,
             takeFailureListener,
             allRowChanges);
 

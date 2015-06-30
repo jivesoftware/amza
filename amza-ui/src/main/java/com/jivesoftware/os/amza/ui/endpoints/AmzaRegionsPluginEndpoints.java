@@ -20,22 +20,22 @@ import javax.ws.rs.core.Response;
  *
  */
 @Singleton
-@Path("/amza/ui/regions")
+@Path("/amza/ui/partitions")
 public class AmzaRegionsPluginEndpoints {
 
     private final SoyService soyService;
-    private final AmzaPartitionsPluginRegion regions;
+    private final AmzaPartitionsPluginRegion region;
 
-    public AmzaRegionsPluginEndpoints(@Context SoyService soyService, @Context AmzaPartitionsPluginRegion regions) {
+    public AmzaRegionsPluginEndpoints(@Context SoyService soyService, @Context AmzaPartitionsPluginRegion region) {
         this.soyService = soyService;
-        this.regions = regions;
+        this.region = region;
     }
 
     @GET
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
-        String rendered = soyService.renderPlugin(regions,
+        String rendered = soyService.renderPlugin(region,
             Optional.of(new AmzaPartitionsPluginRegionInput("", "", "")));
         return Response.ok(rendered).build();
     }
@@ -47,7 +47,7 @@ public class AmzaRegionsPluginEndpoints {
     public Response action(@FormParam("host") @DefaultValue("") String host,
         @FormParam("port") @DefaultValue("") String port,
         @FormParam("action") @DefaultValue("") String action) {
-        String rendered = soyService.renderPlugin(regions,
+        String rendered = soyService.renderPlugin(region,
             Optional.of(new AmzaPartitionsPluginRegionInput(host, port, action)));
         return Response.ok(rendered).build();
     }

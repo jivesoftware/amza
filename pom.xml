@@ -19,7 +19,6 @@
         <module>amza-transport</module>
         <module>amza-shared</module>
         <module>amza-client</module>
-        <module>amza-storage</module>
         <module>amza-berkeleydb-storage</module>
         <module>amza-ui</module>
         <module>amza-fat-jar-deployable</module>

@@ -15,11 +15,15 @@ import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 
 /**
  * @author jonathan.colt
  */
 public class SystemWALStorage {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private static final Predicate<VersionedPartitionName> IS_SYSTEM_PREDICATE = input -> input.getPartitionName().isSystemPartition();
 
@@ -37,6 +41,7 @@ public class SystemWALStorage {
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         RowsChanged changed = partitionStore.getWalStorage().update(false, updates);
         if (!changed.getApply().isEmpty()) {
+            LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
             updated.updated(versionedPartitionName, Status.ONLINE, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);

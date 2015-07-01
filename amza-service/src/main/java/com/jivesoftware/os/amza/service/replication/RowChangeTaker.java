@@ -7,7 +7,10 @@ import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage.VersionedStatus;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -26,10 +29,8 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
-import com.jivesoftware.os.amza.storage.WALRow;
-import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -216,6 +217,12 @@ public class RowChangeTaker implements RowChanges {
                             VersionedPartitionName currentLocalVersionedPartitionName = partitionStatusStorage.tx(partitionName,
                                 (localVersionedPartitionName, partitionStatus) -> {
                                     if (localVersionedPartitionName == null) {
+                                        PartitionProperties properties = partitionIndex.getProperties(partitionName);
+                                        if (properties == null) {
+//                                            LOG.info("MISSING PROPERTIES: local:{} remote:{}  txId:{} partition:{} status:{}",
+//                                                ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
+                                            return null;
+                                        }
                                         VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
                                         localVersionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
                                         //LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} status:{}",
@@ -382,7 +389,7 @@ public class RowChangeTaker implements RowChanges {
                         try {
                             Long highwaterMark = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
                             if (highwaterMark == null) {
-                                        // TODO it would be nice to ask this node to recommend an initial highwater based on
+                                // TODO it would be nice to ask this node to recommend an initial highwater based on
                                 // TODO all of our highwaters vs. its highwater history and its start of ingress.
                                 highwaterMark = -1L;
                             }

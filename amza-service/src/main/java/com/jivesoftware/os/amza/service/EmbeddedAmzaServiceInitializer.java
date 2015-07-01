@@ -10,10 +10,10 @@ import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
-import com.jivesoftware.os.amza.storage.binary.BinaryHighwaterRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryPrimaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryRowIOProvider;
-import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
+import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 

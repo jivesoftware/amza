@@ -1,9 +1,7 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
@@ -20,9 +18,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
-import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
-import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,6 +27,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.management.Attribute;
 import javax.management.AttributeList;
 import javax.management.InstanceNotFoundException;
@@ -43,7 +40,7 @@ import javax.management.ReflectionException;
  *
  */
 // soy.page.healthPluginRegion
-public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginRegion.HealthPluginRegionInput>> {
+public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginRegion.MetricsPluginRegionInput>> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
@@ -55,8 +52,6 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
     private final AmzaStats amzaStats;
 
     private final List<GarbageCollectorMXBean> garbageCollectors;
-    private final OperatingSystemMXBean osBean;
-    private final ThreadMXBean threadBean;
     private final MemoryMXBean memoryBean;
     private final RuntimeMXBean runtimeBean;
 
@@ -74,20 +69,18 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
         this.amzaStats = amzaStats;
 
         garbageCollectors = ManagementFactory.getGarbageCollectorMXBeans();
-        osBean = ManagementFactory.getOperatingSystemMXBean();
-        threadBean = ManagementFactory.getThreadMXBean();
         memoryBean = ManagementFactory.getMemoryMXBean();
         runtimeBean = ManagementFactory.getRuntimeMXBean();
 
     }
 
-    public static class HealthPluginRegionInput {
+    public static class MetricsPluginRegionInput {
 
         final String cluster;
         final String host;
         final String service;
 
-        public HealthPluginRegionInput(String cluster, String host, String service) {
+        public MetricsPluginRegionInput(String cluster, String host, String service) {
             this.cluster = cluster;
             this.host = host;
             this.service = service;
@@ -95,23 +88,34 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
     }
 
     @Override
-    public String render(Optional<HealthPluginRegionInput> optionalInput) {
+    public String render(Optional<MetricsPluginRegionInput> optionalInput) {
         Map<String, Object> data = Maps.newHashMap();
 
         try {
-            HealthPluginRegionInput input = optionalInput.get();
+            MetricsPluginRegionInput input = optionalInput.get();
+            List<Map<String, String>> longPolled = new ArrayList<>();
+            for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
+                AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
+                longPolled.add(ImmutableMap.of("member", polled.getKey().getMember(),
+                    "longPolled", String.valueOf(polled.getValue().get()),
+                    "longPollAvailables", String.valueOf(longPollAvailables == null ? "-1" : longPollAvailables.get())));
+            }
 
-            List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();
-            data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
-                (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
-                    input1.getKey(), "elapse", String.valueOf(input1.getValue()))));
+            data.put("longPolled", longPolled);
 
-            List<Map.Entry<String, Long>> recentCompaction = amzaStats.recentCompaction();
-            data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
-                (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
-                    input1.getKey(), "elapse", String.valueOf(input1.getValue()))));
-            data.put("totalCompactions", String.valueOf(amzaStats.getTotalCompactions()));
-
+            data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
+            List<Map<String, Object>> regionTotals = new ArrayList<>();
+            ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
+            Collections.sort(partitionNames);
+            for (PartitionName partitionName : partitionNames) {
+                Totals totals = amzaStats.getPartitionTotals().get(partitionName);
+                if (totals == null) {
+                    totals = new Totals();
+                }
+                regionTotals.add(regionTotals(partitionName, totals));
+            }
+            data.put("regionTotals", regionTotals);
+        
         } catch (Exception e) {
             log.error("Unable to retrieve data", e);
         }
@@ -261,7 +265,7 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;

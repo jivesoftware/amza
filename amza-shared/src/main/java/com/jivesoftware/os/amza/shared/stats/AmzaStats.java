@@ -32,6 +32,8 @@ public class AmzaStats {
     private final Map<String, Long> ongoingCompaction = new ConcurrentHashMap<>();
     private final List<Entry<String, Long>> recentCompaction = new ArrayList<>();
     private final AtomicLong totalCompactions = new AtomicLong();
+    public final Map<RingMember, AtomicLong> longPolled = new ConcurrentSkipListMap<>();
+    public final Map<RingMember, AtomicLong> longPollAvailables = new ConcurrentSkipListMap<>();
 
     private final Totals grandTotals = new Totals();
     private final Map<PartitionName, Totals> partitionTotals = new ConcurrentHashMap<>();
@@ -62,13 +64,16 @@ public class AmzaStats {
         public final AtomicLong directAppliesLag = new AtomicLong();
     }
 
+    public void longPolled(RingMember member) {
+        longPolled.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
+    }
+
+    public void longPollAvailables(RingMember member) {
+        longPollAvailables.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
+    }
+
     public void took(RingMember member) {
-        AtomicLong got = took.get(member);
-        if (got == null) {
-            got = new AtomicLong();
-            took.put(member, got);
-        }
-        got.incrementAndGet();
+        took.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
     }
 
     public long getTotalTakes(RingMember member) {
@@ -171,7 +176,6 @@ public class AmzaStats {
     public Map<PartitionName, Totals> getPartitionTotals() {
         return partitionTotals;
     }
-
 
     long lag(RowsChanged changed) {
         return lag(changed.getOldestRowTxId());

@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.ui.endpoints;
 
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion;
-import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.HealthPluginRegionInput;
+import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.MetricsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
 import javax.inject.Singleton;
 import javax.ws.rs.DefaultValue;
@@ -36,7 +36,7 @@ public class MetricsPluginEndpoints{
         @QueryParam("host") @DefaultValue("") String host,
         @QueryParam("service") @DefaultValue("") String service) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new HealthPluginRegionInput(cluster, host, service)));
+            Optional.of(new MetricsPluginRegionInput(cluster, host, service)));
         return Response.ok(rendered).build();
     }
 

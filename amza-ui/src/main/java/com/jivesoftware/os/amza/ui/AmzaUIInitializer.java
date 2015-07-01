@@ -49,7 +49,7 @@ public class AmzaUIInitializer {
 
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/chrome.soy"), "chome.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/homeRegion.soy"), "home.soy");
-        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/healthPluginRegion.soy"), "health.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/metricsPluginRegion.soy"), "metrics.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/compactionsPluginRegion.soy"), "compactions.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaRingsPluginRegion.soy"), "amzaRings.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaClusterPluginRegion.soy"), "amzaCluster.soy");
@@ -71,7 +71,7 @@ public class AmzaUIInitializer {
                 new AmzaInspectPluginRegion("soy.page.amzaInspectPluginRegion", renderer, amzaService)),
             new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
                 MetricsPluginEndpoints.class,
-                new MetricsPluginRegion("soy.page.healthPluginRegion", "soy.page.amzaStats", renderer, amzaService.getRingReader(), amzaService, amzaStats)),
+                new MetricsPluginRegion("soy.page.metricsPluginRegion", "soy.page.amzaStats", renderer, amzaService.getRingReader(), amzaService, amzaStats)),
             new ManagePlugin("compressed", "Compactions", "/amza/ui/compactions",
                 CompactionsPluginEndpoints.class,
                 new CompactionsPluginRegion("soy.page.compactionsPluginRegion", renderer, amzaService.getRingReader(), amzaService, amzaStats)),

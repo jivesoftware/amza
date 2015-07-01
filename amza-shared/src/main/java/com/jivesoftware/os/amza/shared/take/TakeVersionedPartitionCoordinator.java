@@ -110,7 +110,7 @@ public class TakeVersionedPartitionCoordinator {
         if (status.get() == Status.ONLINE) {
             took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
                 if (existingSessionedTxId != null) {
-                    return new SessionedTxId(existingSessionedTxId.sessionId, localTxId);
+                    return new SessionedTxId(existingSessionedTxId.sessionId, Math.max(localTxId, existingSessionedTxId.txId));
                 }
                 return null;
             });

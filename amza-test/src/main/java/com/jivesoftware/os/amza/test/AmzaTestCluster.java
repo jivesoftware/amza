@@ -112,7 +112,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.takeFromNeighborsIntervalInMillis = 5;
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
@@ -197,6 +197,7 @@ public class AmzaTestCluster {
 
         AmzaStats amzaStats = new AmzaStats();
         HighwaterStorage highWaterMarks = new MemoryBackedHighwaterStorage();
+        Optional<TakeFailureListener> absent = Optional.<TakeFailureListener>absent();
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
             amzaStats,
@@ -207,7 +208,7 @@ public class AmzaTestCluster {
             partitionPropertyMarshaller,
             new WALIndexProviderRegistry(),
             updateTaker,
-            Optional.<TakeFailureListener>absent(),
+            absent,
             (RowsChanged changes) -> {
             });
 
@@ -302,13 +303,7 @@ public class AmzaTestCluster {
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
 
             amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
-
-            AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
-            while (partitionRoute.orderedPartitionHosts.isEmpty()) {
-                LOG.info("Waiting for " + partitionName + " to come online.");
-                Thread.sleep(10000);
-                partitionRoute = amzaService.getPartitionRoute(partitionName);
-            }
+            amzaService.awaitOnline(partitionName, 10_000);
         }
 
         public void update(PartitionName partitionName, WALKey k, byte[] v, boolean tombstone) throws Exception {

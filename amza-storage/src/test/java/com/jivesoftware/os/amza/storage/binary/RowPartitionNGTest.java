@@ -4,7 +4,6 @@ import com.google.common.collect.Maps;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
@@ -12,7 +11,6 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.storage.IndexedWAL;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -31,9 +29,6 @@ import org.testng.annotations.Test;
  * @author jonathan.colt
  */
 public class RowPartitionNGTest {
-
-    private final WALUpdated updated = (VersionedPartitionName versionedPartitionName, Status status, long txId) -> {
-    };
 
     final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
     final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
@@ -117,7 +112,7 @@ public class RowPartitionNGTest {
             WALKey key = new WALKey(UIO.intBytes(r.nextInt(range)));
             updates.put(key, new WALValue(UIO.intBytes(i), idProvider.nextId(), false));
         }
-        indexedWAL.update(false, Status.ONLINE, new MemoryWALUpdates(updates, null), updated);
+        indexedWAL.update(false, new MemoryWALUpdates(updates, null));
     }
 
     @Test
@@ -231,6 +226,6 @@ public class RowPartitionNGTest {
     private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
-        indexedWAL.update(false, Status.ONLINE, new MemoryWALUpdates(updates, null), updated);
+        indexedWAL.update(false, new MemoryWALUpdates(updates, null));
     }
 }

@@ -169,11 +169,10 @@ public class TakeCoordinator {
 
             Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, (key) -> new Object());
             synchronized (lock) {
-                long timeToWait = suggestedWaitInMillis[0];
                 if (start == updates.get()) {
                     //LOG.info("PARKED LONG POLL:remote:{} for {}millis on local:{}",
                     //    remoteRingMember, wait, ringReader.getRingMember());
-                    lock.wait(Math.min(timeToWait, timeoutMillis));
+                    lock.wait(Math.min(suggestedWaitInMillis[0], timeoutMillis));
                     if (start == updates.get()) {
                         return; // Long poll is over
                     }

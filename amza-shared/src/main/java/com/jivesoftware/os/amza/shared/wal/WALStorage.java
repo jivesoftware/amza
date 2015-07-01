@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -32,7 +31,7 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     boolean delete(boolean ifEmpty) throws Exception;
 
-    RowsChanged update(boolean useUpdateTxId, Status partitionStatus, Commitable<WALValue> rowUpdates, WALUpdated updated) throws Exception;
+    RowsChanged update(boolean useUpdateTxId, Commitable<WALValue> rowUpdates) throws Exception;
 
     WALValue get(WALKey key) throws Exception;
 

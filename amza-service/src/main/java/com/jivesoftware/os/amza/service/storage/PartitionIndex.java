@@ -104,6 +104,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
     }
 
+    @Override
     public PartitionProperties getProperties(PartitionName partitionName) {
 
         PartitionProperties properties = partitionProperties.get(partitionName);

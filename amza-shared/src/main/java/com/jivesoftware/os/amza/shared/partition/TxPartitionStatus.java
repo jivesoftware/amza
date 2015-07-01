@@ -12,9 +12,8 @@ public interface TxPartitionStatus {
 
         EXPUNGE(new byte[]{2}),
         ONLINE(new byte[]{1}),
-        KETCHUP(new byte[]{0}),
-        COMPACTING(new byte[]{-1});
-
+        KETCHUP(new byte[]{0});
+        
         private final byte[] serializedForm;
 
         private Status(byte[] serializedForm) {

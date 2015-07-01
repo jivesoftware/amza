@@ -24,15 +24,23 @@ public class SystemWALStorage {
     private static final Predicate<VersionedPartitionName> IS_SYSTEM_PREDICATE = input -> input.getPartitionName().isSystemPartition();
 
     private final PartitionIndex partitionIndex;
+    private final boolean hardFlush;
 
-    public SystemWALStorage(PartitionIndex partitionIndex) {
+    public SystemWALStorage(PartitionIndex partitionIndex, boolean hardFlush) {
         this.partitionIndex = partitionIndex;
+        this.hardFlush = hardFlush;
     }
 
     public RowsChanged update(VersionedPartitionName versionedPartitionName,
         Commitable<WALValue> updates, WALUpdated updated) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getWalStorage().update(false, Status.ONLINE, updates, updated);
+        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        RowsChanged changed = partitionStore.getWalStorage().update(false, updates);
+        if (!changed.getApply().isEmpty()) {
+            updated.updated(versionedPartitionName, Status.ONLINE, changed.getLargestCommittedTxId());
+        }
+        partitionStore.flush(hardFlush);
+        return changed;
     }
 
     public WALValue get(VersionedPartitionName versionedPartitionName, WALKey key) throws Exception {

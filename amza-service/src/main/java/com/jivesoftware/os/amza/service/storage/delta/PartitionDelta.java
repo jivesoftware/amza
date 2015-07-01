@@ -6,7 +6,6 @@ import com.google.common.collect.Iterators;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
@@ -45,7 +44,6 @@ class PartitionDelta {
 
     private final VersionedPartitionName versionedPartitionName;
     private final DeltaWAL deltaWAL;
-    private final WALUpdated walUpdated;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     final AtomicReference<PartitionDelta> compacting;
@@ -63,7 +61,6 @@ class PartitionDelta {
         PartitionDelta compacting) {
         this.versionedPartitionName = versionedPartitionName;
         this.deltaWAL = deltaWAL;
-        this.walUpdated = walUpdated;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.compacting = new AtomicReference<>(compacting);
@@ -275,7 +272,7 @@ class PartitionDelta {
                 final long highestTxId = partitionStore.highestTxId();
                 LOG.info("Merging ({}) deltas for partition: {} from tx: {}", compact.orderedIndex.size(), compact.versionedPartitionName, highestTxId);
                 LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
-                partitionStore.directCommit(true, Status.COMPACTING, (highwater, scan) -> {
+                partitionStore.directCommit(true, (highwater, scan) -> {
                     try {
                         eos:
                         for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
@@ -307,7 +304,7 @@ class PartitionDelta {
                     } catch (Throwable ex) {
                         throw new RuntimeException("Error while streaming entry set.", ex);
                     }
-                }, walUpdated);
+                });
                 LOG.info("Merged deltas for " + compact.versionedPartitionName);
             }
         }

@@ -18,7 +18,6 @@ package com.jivesoftware.os.amza.service.storage;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -46,23 +45,23 @@ public class PartitionProvider {
     private final OrderIdProvider orderIdProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;
     private final PartitionIndex partitionIndex;
+    private final SystemWALStorage systemWALStorage;
     private final WALUpdated walUpdated;
     private final RowChanges rowChanges;
-    private final boolean hardFlush;
 
     public PartitionProvider(OrderIdProvider orderIdProvider,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         PartitionIndex partitionIndex,
+        SystemWALStorage systemWALStorage,
         WALUpdated walUpdated,
-        RowChanges rowChanges,
-        boolean hardFlush) {
+        RowChanges rowChanges) {
 
         this.orderIdProvider = orderIdProvider;
         this.partitionPropertyMarshaller = partitionPropertyMarshaller;
         this.partitionIndex = partitionIndex;
         this.walUpdated = walUpdated;
+        this.systemWALStorage = systemWALStorage;
         this.rowChanges = rowChanges;
-        this.hardFlush = hardFlush;
     }
 
     public boolean hasPartition(PartitionName partitionName) throws Exception {
@@ -70,13 +69,11 @@ public class PartitionProvider {
             return true;
         }
 
-        final byte[] rawPartitionName = partitionName.toBytes();
-        final WALKey partitionKey = new WALKey(rawPartitionName);
-        PartitionStore partitionPropertiesStore = partitionIndex.get(REGION_PROPERTIES);
-        WALValue propertiesValue = partitionPropertiesStore.get(partitionKey);
+        byte[] rawPartitionName = partitionName.toBytes();
+        WALKey partitionKey = new WALKey(rawPartitionName);
+        WALValue propertiesValue = systemWALStorage.get(REGION_PROPERTIES, partitionKey);
         if (propertiesValue != null && !propertiesValue.getTombstoned()) {
-            PartitionStore partitionIndexStore = partitionIndex.get(REGION_INDEX);
-            WALValue indexValue = partitionIndexStore.get(partitionKey);
+            WALValue indexValue = systemWALStorage.get(REGION_INDEX, partitionKey);
             if (indexValue != null && !indexValue.getTombstoned()) {
                 return true;
             }
@@ -96,11 +93,9 @@ public class PartitionProvider {
 
             byte[] rawPartitionName = partitionName.toBytes();
             WALKey partitionKey = new WALKey(rawPartitionName);
-            PartitionStore partitionIndexStore = partitionIndex.get(REGION_INDEX);
-            RowsChanged changed = partitionIndexStore.directCommit(false, Status.ONLINE, (highwater, scan) -> {
+            RowsChanged changed = systemWALStorage.update(REGION_INDEX, (highwater, scan) -> {
                 scan.row(-1, partitionKey, new WALValue(rawPartitionName, orderIdProvider.nextId(), false));
             }, walUpdated);
-            partitionIndexStore.flush(hardFlush);
             if (!changed.isEmpty()) {
                 rowChanges.changes(changed);
             }
@@ -109,11 +104,9 @@ public class PartitionProvider {
     }
 
     public void updatePartitionProperties(PartitionName partitionName, PartitionProperties properties) throws Exception {
-        PartitionStore partitionPropertiesStore = partitionIndex.get(REGION_PROPERTIES);
-        RowsChanged changed = partitionPropertiesStore.directCommit(false, Status.ONLINE, (highwater, scan) -> {
+        RowsChanged changed = systemWALStorage.update(REGION_PROPERTIES, (highwater, scan) -> {
             scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(partitionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
         }, walUpdated);
-        partitionPropertiesStore.flush(hardFlush);
         if (!changed.isEmpty()) {
             rowChanges.changes(changed);
         }
@@ -123,13 +116,11 @@ public class PartitionProvider {
     public void destroyPartition(PartitionName partitionName) throws Exception {
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot destroy a system partition");
 
-        PartitionStore partitionIndexStore = partitionIndex.get(PartitionProvider.REGION_INDEX);
-        partitionIndexStore.directCommit(false, Status.ONLINE, (highwaters, scan) -> {
+        systemWALStorage.update(REGION_INDEX, (highwaters, scan) -> {
             scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         }, walUpdated);
 
-        PartitionStore partitionPropertiesStore = partitionIndex.get(PartitionProvider.REGION_PROPERTIES);
-        partitionPropertiesStore.directCommit(false, Status.ONLINE, (highwaters, scan) -> {
+        systemWALStorage.update(REGION_PROPERTIES, (highwaters, scan) -> {
             scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         }, walUpdated);
     }

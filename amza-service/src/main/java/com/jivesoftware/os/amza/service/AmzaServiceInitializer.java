@@ -37,7 +37,6 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
@@ -142,12 +141,10 @@ public class AmzaServiceInitializer {
         AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
 
         WALUpdated walUpdated = (versionedPartitionName, status, txId) -> {
-            if (Preconditions.checkNotNull(status) != TxPartitionStatus.Status.COMPACTING) {
-                takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), status, txId);
-            }
+            takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), status, txId);
         };
 
-        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex);
+        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, config.hardFsync);
 
         PartitionStatusStorage partitionStatusStorage = new PartitionStatusStorage(orderIdProvider,
             ringMember,
@@ -204,9 +201,9 @@ public class AmzaServiceInitializer {
             orderIdProvider,
             partitionPropertyMarshaller,
             partitionIndex,
+            systemWALStorage,
             walUpdated,
-            allRowChanges,
-            config.hardFsync);
+            allRowChanges);
 
         HighestPartitionTx takeHighestPartitionTx = (versionedPartitionName, partitionStatus, highestTxId)
             -> takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionStatus, highestTxId);

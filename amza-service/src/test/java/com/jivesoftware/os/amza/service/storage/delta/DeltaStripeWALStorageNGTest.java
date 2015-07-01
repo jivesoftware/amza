@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshall
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
@@ -63,7 +64,7 @@ public class DeltaStripeWALStorageNGTest {
             walIndexProviderRegistry, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, ids, -1, -1);
         PartitionIndex partitionIndex = new PartitionIndex(
             new AmzaStats(),
-            new String[] { partitionTmpDir.getAbsolutePath() },
+            new String[]{partitionTmpDir.getAbsolutePath()},
             "domain",
             indexedWALStorageProvider,
             partitionPropertyMarshaller,
@@ -77,7 +78,10 @@ public class DeltaStripeWALStorageNGTest {
             }
         });
 
-        PartitionProvider partitionProvider = new PartitionProvider(ids, partitionPropertyMarshaller, partitionIndex, updated, partitionIndex, false);
+        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, false);
+
+        PartitionProvider partitionProvider = new PartitionProvider(ids,
+            partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, partitionIndex);
 
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring", "partitionName"), 1);
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(

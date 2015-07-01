@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -24,7 +23,6 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 
 public class PartitionStore implements RangeScannable<WALValue> {
@@ -81,8 +79,8 @@ public class PartitionStore implements RangeScannable<WALValue> {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged directCommit(boolean useUpdateTxId, Status partitionStatus, Commitable<WALValue> updates, WALUpdated updated) throws Exception {
-        RowsChanged changes = walStorage.update(useUpdateTxId, partitionStatus, updates, updated);
+    public RowsChanged directCommit(boolean useUpdateTxId, Commitable<WALValue> updates) throws Exception {
+        RowsChanged changes = walStorage.update(useUpdateTxId, updates);
         walStorage.flush(hardFlush);
         return changes;
     }

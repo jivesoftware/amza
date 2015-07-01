@@ -61,8 +61,12 @@ public class TakeRingCoordinator {
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName,
             (key) -> {
                 PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-                return new TakeVersionedPartitionCoordinator(properties, versionedPartitionName, status,
-                new AtomicLong(txId), slowTakeInMillis, idPacker.pack(slowTakeInMillis, 0, 0)); //TODO need orderIdProvider.deltaMillisToIds()
+                return new TakeVersionedPartitionCoordinator(properties,
+                    versionedPartitionName,
+                    status,
+                    new AtomicLong(txId),
+                    slowTakeInMillis,
+                    idPacker.pack(slowTakeInMillis, 0, 0)); //TODO need orderIdProvider.deltaMillisToIds()
             });
         coordinator.updateTxId(ring, status, txId);
     }

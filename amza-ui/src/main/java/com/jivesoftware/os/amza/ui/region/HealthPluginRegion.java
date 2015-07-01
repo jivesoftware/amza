@@ -163,6 +163,10 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         map.put("scansLag", String.valueOf(totals.scansLag.get()));
         map.put("directApplies", String.valueOf(totals.directApplies.get()));
         map.put("directAppliesLag", String.valueOf(totals.directAppliesLag.get()));
+        map.put("updates", String.valueOf(totals.updates.get()));
+        map.put("updatesLag", String.valueOf(totals.updatesLag.get()));
+        map.put("offers", String.valueOf(totals.offers.get()));
+        map.put("offersLag", String.valueOf(totals.offersLag.get()));
         map.put("takes", String.valueOf(totals.takes.get()));
         map.put("takesLag", String.valueOf(totals.takesLag.get()));
         map.put("takeApplies", String.valueOf(totals.takeApplies.get()));
@@ -213,6 +217,14 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
         sb.append(progress("Direct Applied (" + grandTotal.directApplies + ")",
             (int) (((double) grandTotal.directAppliesLag.longValue() / 1000d) * 100),
             String.valueOf(getDurationBreakdown(grandTotal.directAppliesLag.longValue())) + " lag"));
+
+        sb.append(progress("Updates (" + grandTotal.updates + ")",
+            (int) (((double) grandTotal.updatesLag.longValue() / 10000d) * 100),
+            String.valueOf(getDurationBreakdown(grandTotal.updatesLag.longValue())) + " lag"));
+
+        sb.append(progress("Offers (" + grandTotal.offers + ")",
+            (int) (((double) grandTotal.offersLag.longValue() / 10000d) * 100),
+            String.valueOf(getDurationBreakdown(grandTotal.offersLag.longValue())) + " lag"));
 
         sb.append(progress("Took Applied (" + grandTotal.takeApplies + ")",
             (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),

@@ -77,7 +77,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = new String[]{"./var/data/"};
 
         public int takeFromNeighborsIntervalInMillis = 1000;
 
@@ -102,7 +102,6 @@ public class AmzaServiceInitializer {
         public boolean useMemMap = false;
 
         public long takeCyaIntervalInMillis = 1_000;
-        public long takeHeartbeatIntervalInMillis = 1_000;
         public long takeSlowThresholdInMillis = 1_000 * 60;
         public long takeLongPollTimeoutMillis = 10_000;
     }
@@ -125,10 +124,10 @@ public class AmzaServiceInitializer {
 
         RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
-        TakeCoordinator takeCoordinator = new TakeCoordinator(orderIdProvider,
+        TakeCoordinator takeCoordinator = new TakeCoordinator(amzaStats,
+            orderIdProvider,
             idPacker,
             config.takeCyaIntervalInMillis,
-            config.takeHeartbeatIntervalInMillis,
             config.takeSlowThresholdInMillis);
 
         PartitionIndex partitionIndex = new PartitionIndex(amzaStats, config.workingDirectories, "amza/stores",
@@ -206,8 +205,8 @@ public class AmzaServiceInitializer {
             allRowChanges,
             config.hardFsync);
 
-        HighestPartitionTx takeHighestPartitionTx = (versionedPartitionName, partitionStatus, highestTxId) ->
-            takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionStatus, highestTxId);
+        HighestPartitionTx takeHighestPartitionTx = (versionedPartitionName, partitionStatus, highestTxId)
+            -> takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionStatus, highestTxId);
 
         systemWALStorage.highestPartitionTxIds(takeHighestPartitionTx);
 

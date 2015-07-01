@@ -18,16 +18,14 @@ public class StreamingTakesConsumer {
 
     public void consume(InputStream bis, AvailableStream updatedPartitionsStream) throws Exception {
         try (DataInputStream dis = new DataInputStream(bis)) {
-            while (true) {
-                if (dis.read() == 1) {
-                    byte[] versionedPartitionNameBytes = new byte[dis.readInt()];
-                    dis.readFully(versionedPartitionNameBytes);
-                    byte[] statusBytes = new byte[1];
-                    dis.readFully(statusBytes);
-                    Status status = Status.fromSerializedForm(statusBytes);
-                    long txId = dis.readLong();
-                    updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), status, txId);
-                }
+            while (dis.read() == 1) {
+                byte[] versionedPartitionNameBytes = new byte[dis.readInt()];
+                dis.readFully(versionedPartitionNameBytes);
+                byte[] statusBytes = new byte[1];
+                dis.readFully(statusBytes);
+                Status status = Status.fromSerializedForm(statusBytes);
+                long txId = dis.readLong();
+                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), status, txId);
             }
         }
     }

@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.shared.stats;
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -51,6 +50,10 @@ public class AmzaStats {
         public final AtomicLong getsLag = new AtomicLong();
         public final AtomicLong scans = new AtomicLong();
         public final AtomicLong scansLag = new AtomicLong();
+        public final AtomicLong updates = new AtomicLong();
+        public final AtomicLong updatesLag = new AtomicLong();
+        public final AtomicLong offers = new AtomicLong();
+        public final AtomicLong offersLag = new AtomicLong();
         public final AtomicLong takes = new AtomicLong();
         public final AtomicLong takesLag = new AtomicLong();
         public final AtomicLong takeApplies = new AtomicLong();
@@ -111,6 +114,24 @@ public class AmzaStats {
         return grandTotals;
     }
 
+    public void updates(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
+        grandTotals.updates.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.updates.addAndGet(count);
+        long lag = lag(smallestTxId);
+        totals.updatesLag.set(lag);
+        grandTotals.updatesLag.set((grandTotals.updatesLag.get() + lag) / 2);
+    }
+
+    public void offers(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
+        grandTotals.offers.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.offers.addAndGet(count);
+        long lag = lag(smallestTxId);
+        totals.offersLag.set(lag);
+        grandTotals.offersLag.set((grandTotals.offersLag.get() + lag) / 2);
+    }
+
     public void took(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.takes.addAndGet(count);
         Totals totals = partitionTotals(partitionName);
@@ -151,18 +172,6 @@ public class AmzaStats {
         return partitionTotals;
     }
 
-    private void logChanges(String name, RowsChanged changed) {
-        if (!changed.isEmpty()) {
-            VersionedPartitionName versionedPartitionName = changed.getVersionedPartitionName();
-            PartitionName partitionName = versionedPartitionName.getPartitionName();
-
-            LOG.debug("{} {} to partition: {}:{} lag:{}", new Object[] { name,
-                changed.getApply().size(),
-                partitionName.getName(),
-                partitionName.getRingName(),
-                lag(changed) });
-        }
-    }
 
     long lag(RowsChanged changed) {
         return lag(changed.getOldestRowTxId());

@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -30,6 +31,7 @@ public class TakeCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final AmzaStats amzaStats;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
     private final IdPacker idPacker;
 
@@ -38,18 +40,16 @@ public class TakeCoordinator {
     private final AtomicLong updates = new AtomicLong();
     private final AtomicLong cyaLock = new AtomicLong();
     private final long cyaIntervalMillis;
-    private final long heartbeatIntervalMillis;
     private final long slowTakeInMillis;
 
-    public TakeCoordinator(TimestampedOrderIdProvider timestampedOrderIdProvider,
+    public TakeCoordinator(AmzaStats amzaStats, TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
         long cyaIntervalMillis,
-        long heartbeatIntervalMillis,
         long slowTakeInMillis) {
+        this.amzaStats = amzaStats;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.idPacker = idPacker;
         this.cyaIntervalMillis = cyaIntervalMillis;
-        this.heartbeatIntervalMillis = heartbeatIntervalMillis;
         this.slowTakeInMillis = slowTakeInMillis;
     }
 
@@ -109,6 +109,7 @@ public class TakeCoordinator {
         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
         TakeRingCoordinator ring = ensureRingCoodinator(ringName, neighbors);
         ring.update(neighbors, versionedPartitionName, status, txId);
+        amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(neighbors);
     }
 
@@ -138,6 +139,7 @@ public class TakeCoordinator {
             //    ringReader.getRingMember(), remoteRingMember, txId, versionedPartitionName, status);
             offered.incrementAndGet();
             availableStream.available(versionedPartitionName, status, txId);
+            amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
         };
 
         while (true) {

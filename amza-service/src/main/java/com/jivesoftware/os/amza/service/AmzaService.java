@@ -313,19 +313,15 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     @Override
     public void availableRowsStream(DataOutputStream dos, RingMember remoteRingMember, long takeSessionId, long timeoutMillis) throws Exception {
         takeCoordinator.availableRowsStream(ringStoreReader, remoteRingMember, takeSessionId, timeoutMillis, (partitionName, status, txId) -> {
-            if (partitionName == null || status == null) {
-                dos.write(0);
-                dos.flush();
-            } else {
-                dos.write(1);
-                byte[] bytes = partitionName.toBytes();
-                dos.writeInt(bytes.length);
-                dos.write(bytes);
-                dos.write(status.getSerializedForm());
-                dos.writeLong(txId);
-                dos.flush();
-            }
+            dos.write(1);
+            byte[] bytes = partitionName.toBytes();
+            dos.writeInt(bytes.length);
+            dos.write(bytes);
+            dos.write(status.getSerializedForm());
+            dos.writeLong(txId);
         });
+        dos.write(0);
+        dos.flush();
     }
 
     // for testing online
@@ -381,7 +377,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                     partitionStatusStorage.markAsKetchup(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
             }
         }
     }

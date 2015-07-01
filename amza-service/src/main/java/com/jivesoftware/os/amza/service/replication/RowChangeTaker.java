@@ -189,6 +189,7 @@ public class RowChangeTaker implements RowChanges {
 
         @Override
         public void run() {
+            long sessionId = sessionIdProvider.nextId();
             while (!disposed.get()) {
                 try {
                     RingHost remoteRingHost = amzaRingReader.getRingHost(remoteRingMember);
@@ -196,7 +197,7 @@ public class RowChangeTaker implements RowChanges {
                     rowsTaker.availableRowsStream(amzaRingReader.getRingMember(),
                         remoteRingMember,
                         remoteRingHost,
-                        sessionIdProvider.nextId(),
+                        sessionId,
                         longPollTimeoutMillis,
                         (remoteVersionedPartitionName, remoteStatus, txId) -> {
                             if (disposed.get()) {

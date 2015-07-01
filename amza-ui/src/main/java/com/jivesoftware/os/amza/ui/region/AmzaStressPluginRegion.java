@@ -224,7 +224,6 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
                     input1.getValue().getBytes())), -1);
                 partition.commit(updates, 1, 30_000); // TODO expose to UI
 
-
             } catch (Exception x) {
                 log.warn("Failed to set region:" + regionName + " values:" + values, x);
             }

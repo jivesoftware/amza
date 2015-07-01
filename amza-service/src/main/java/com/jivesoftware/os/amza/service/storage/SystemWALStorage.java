@@ -41,7 +41,7 @@ public class SystemWALStorage {
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         RowsChanged changed = partitionStore.getWalStorage().update(false, updates);
         if (!changed.getApply().isEmpty()) {
-            LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
+            //LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
             updated.updated(versionedPartitionName, Status.ONLINE, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);

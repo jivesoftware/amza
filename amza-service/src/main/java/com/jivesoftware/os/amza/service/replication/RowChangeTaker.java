@@ -219,8 +219,8 @@ public class RowChangeTaker implements RowChanges {
                                     if (localVersionedPartitionName == null) {
                                         PartitionProperties properties = partitionIndex.getProperties(partitionName);
                                         if (properties == null) {
-//                                            LOG.info("MISSING PROPERTIES: local:{} remote:{}  txId:{} partition:{} status:{}",
-//                                                ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
+                                            //LOG.info("MISSING PROPERTIES: local:{} remote:{}  txId:{} partition:{} status:{}",
+                                            //      ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
                                             return null;
                                         }
                                         VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
@@ -565,8 +565,6 @@ public class RowChangeTaker implements RowChanges {
 
         public int flush() throws Exception {
             flushedTxId.setValue(lastTxId.longValue());
-            int numFlushed = 0;
-            int batchSize = batch.size();
             if (!batch.isEmpty()) {
                 amzaStats.took(ringMember, versionedPartitionName.getPartitionName(), batch.size(), oldestTxId.longValue());
                 WALHighwater walh = highwater.get();
@@ -580,16 +578,13 @@ public class RowChangeTaker implements RowChanges {
                     }
                     flushedHighwatermarks.merge(ringMember, highWaterMark.longValue(), Math::max);
                     flushed.set(streamed.get());
-                    numFlushed = changes.getApply().size();
+                    int numFlushed = changes.getApply().size();
+                    if (numFlushed > 0) {
+                        amzaStats.tookApplied(ringMember, versionedPartitionName.getPartitionName(), numFlushed, changes.getOldestRowTxId());
+                    }
                 }
             }
             highwater.set(null);
-            if (batchSize > 0) {
-                amzaStats.took(ringMember, versionedPartitionName.getPartitionName(), batchSize, Long.MAX_VALUE);
-            }
-            if (numFlushed > 0) {
-                amzaStats.tookApplied(ringMember, versionedPartitionName.getPartitionName(), numFlushed, Long.MAX_VALUE);
-            }
             return flushed.get();
         }
 

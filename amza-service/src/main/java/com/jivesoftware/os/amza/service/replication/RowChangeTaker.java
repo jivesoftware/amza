@@ -204,7 +204,7 @@ public class RowChangeTaker implements RowChanges {
                                 throw new InterruptedException("MemberLatestTransactionsTaker for " + remoteRingMember + " has been disposed.");
                             }
                             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
-                            VersionedPartitionName localVersionedPartitionName = null;
+                            VersionedPartitionName currentLocalVersionedPartitionName = null;
 
                             if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
                                 //LOG.info("NOT A MEMBER: local:{} remote:{}  txId:{} partition:{} status:{}",
@@ -214,15 +214,15 @@ public class RowChangeTaker implements RowChanges {
                                 partitionStatusStorage.remoteStatus(remoteRingMember, partitionName,
                                     new PartitionStatusStorage.VersionedStatus(remoteStatus, remoteVersionedPartitionName.getPartitionVersion()));
 
-                                localVersionedPartitionName = partitionStatusStorage.tx(partitionName,
-                                    (versionedPartitionName, partitionStatus) -> {
-                                        if (versionedPartitionName == null) {
+                                currentLocalVersionedPartitionName = partitionStatusStorage.tx(partitionName,
+                                    (localVersionedPartitionName, partitionStatus) -> {
+                                        if (localVersionedPartitionName == null) {
                                             VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
-                                            versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
+                                            localVersionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
                                             //LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} status:{}",
                                             //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
                                         }
-                                        PartitionStore store = partitionIndex.get(versionedPartitionName);
+                                        PartitionStore store = partitionIndex.get(localVersionedPartitionName);
                                         if (store == null) {
                                             //LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} status:{}",
                                             //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
@@ -234,28 +234,28 @@ public class RowChangeTaker implements RowChanges {
                                             return null;
                                         }
                                         if (partitionName.isSystemPartition()) {
-                                            Long highwater = systemHighwaterStorage.get(remoteRingMember, versionedPartitionName);
+                                            Long highwater = systemHighwaterStorage.get(remoteRingMember, localVersionedPartitionName);
                                             if (highwater != null && highwater >= txId) {
                                                 return null; // TODO ack OFFER?
                                             } else {
-                                                return versionedPartitionName;
+                                                return localVersionedPartitionName;
                                             }
                                         } else {
-                                            VersionedPartitionName txVersionPartitionName = versionedPartitionName;
+                                            VersionedPartitionName txLocalVersionPartitionName = localVersionedPartitionName;
                                             return partitionStripeProvider.txPartition(partitionName,
                                                 (stripe, highwaterStorage) -> {
-                                                    Long highwater = highwaterStorage.get(remoteRingMember, txVersionPartitionName);
+                                                    Long highwater = highwaterStorage.get(remoteRingMember, txLocalVersionPartitionName);
                                                     if (highwater != null && highwater >= txId) {
                                                         //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} status:{}",
                                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteStatus);
                                                         return null;    // TODO ack OFFER?
                                                     } else {
-                                                        return txVersionPartitionName;
+                                                        return txLocalVersionPartitionName;
                                                     }
                                                 });
                                         }
                                     });
-                                if (localVersionedPartitionName == null) {
+                                if (currentLocalVersionedPartitionName == null) {
                                     rowsTaker.rowsTaken(remoteRingMember, remoteRingHost, remoteVersionedPartitionName, -1);
                                     return;
                                 }
@@ -263,7 +263,7 @@ public class RowChangeTaker implements RowChanges {
 
                             //LOG.info("AVAILABLE: local:{} was told remote:{} partition:{} status:{} txId:{} is available.",
                             //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteStatus, txId);
-                            VersionedPartitionName txVersionPartitionName = localVersionedPartitionName;
+                            VersionedPartitionName txVersionPartitionName = currentLocalVersionedPartitionName;
                             versionedPartitionRowTakers.compute(remoteVersionedPartitionName, (_versionedPartitionName, rowTaker) -> {
 
                                 if (rowTaker == null || rowTaker.localVersionedPartitionName.getPartitionVersion() < txVersionPartitionName

@@ -1,0 +1,87 @@
+package com.jivesoftware.os.amza.ui.region;
+
+import com.google.common.base.Optional;
+import com.google.common.base.Predicates;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.List;
+import java.util.Map;
+
+/**
+ *
+ */
+// soy.page.compactionsPluginRegion
+public class CompactionsPluginRegion implements PageRegion<Optional<CompactionsPluginRegion.CompactionsPluginRegionInput>> {
+
+    private static final MetricLogger log = MetricLoggerFactory.getLogger();
+
+    private final String template;
+    private final SoyRenderer renderer;
+    private final AmzaRingReader ringReader;
+    private final AmzaService amzaService;
+    private final AmzaStats amzaStats;
+
+    public CompactionsPluginRegion(String template,
+        SoyRenderer renderer,
+        AmzaRingReader ringReader,
+        AmzaService amzaService,
+        AmzaStats amzaStats) {
+        this.template = template;
+        this.renderer = renderer;
+        this.ringReader = ringReader;
+        this.amzaService = amzaService;
+        this.amzaStats = amzaStats;
+
+    }
+
+    public static class CompactionsPluginRegionInput {
+
+        final String cluster;
+        final String host;
+        final String service;
+
+        public CompactionsPluginRegionInput(String cluster, String host, String service) {
+            this.cluster = cluster;
+            this.host = host;
+            this.service = service;
+        }
+    }
+
+    @Override
+    public String render(Optional<CompactionsPluginRegionInput> optionalInput) {
+        Map<String, Object> data = Maps.newHashMap();
+
+        try {
+            CompactionsPluginRegionInput input = optionalInput.get();
+
+            List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();
+            data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
+                (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
+                    input1.getKey(), "elapse", String.valueOf(input1.getValue()))));
+
+            List<Map.Entry<String, Long>> recentCompaction = amzaStats.recentCompaction();
+            data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
+                (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
+                    input1.getKey(), "elapse", String.valueOf(input1.getValue()))));
+            data.put("totalCompactions", String.valueOf(amzaStats.getTotalCompactions()));
+
+        } catch (Exception e) {
+            log.error("Unable to retrieve data", e);
+        }
+
+        return renderer.render(template, data);
+    }
+
+    @Override
+    public String getTitle() {
+        return "Compactions";
+    }
+
+}

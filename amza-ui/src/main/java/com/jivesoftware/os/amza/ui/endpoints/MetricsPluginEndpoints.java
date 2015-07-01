@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.ui.region.HealthPluginRegion;
-import com.jivesoftware.os.amza.ui.region.HealthPluginRegion.HealthPluginRegionInput;
+import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion;
+import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.HealthPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
 import javax.inject.Singleton;
 import javax.ws.rs.DefaultValue;
@@ -19,12 +19,12 @@ import javax.ws.rs.core.Response;
  */
 @Singleton
 @Path("/amza/ui/metrics")
-public class HealthPluginEndpoints {
+public class MetricsPluginEndpoints{
 
     private final SoyService soyService;
-    private final HealthPluginRegion pluginRegion;
+    private final MetricsPluginRegion pluginRegion;
 
-    public HealthPluginEndpoints(@Context SoyService soyService, @Context HealthPluginRegion pluginRegion) {
+    public MetricsPluginEndpoints(@Context SoyService soyService, @Context MetricsPluginRegion pluginRegion) {
         this.soyService = soyService;
         this.pluginRegion = pluginRegion;
     }

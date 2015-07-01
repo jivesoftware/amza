@@ -43,7 +43,7 @@ import javax.management.ReflectionException;
  *
  */
 // soy.page.healthPluginRegion
-public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegion.HealthPluginRegionInput>> {
+public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginRegion.HealthPluginRegionInput>> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
@@ -60,7 +60,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
     private final MemoryMXBean memoryBean;
     private final RuntimeMXBean runtimeBean;
 
-    public HealthPluginRegion(String template,
+    public MetricsPluginRegion(String template,
         String statsTemplate,
         SoyRenderer renderer,
         AmzaRingReader ringReader,
@@ -278,7 +278,7 @@ public class HealthPluginRegion implements PageRegion<Optional<HealthPluginRegio
 
     @Override
     public String getTitle() {
-        return "Health";
+        return "Metrics";
     }
 
     public static String humanReadableByteCount(long bytes, boolean si) {

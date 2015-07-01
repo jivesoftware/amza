@@ -91,6 +91,7 @@ public class SystemPartition implements AmzaPartitionAPI {
                 return scan.row(rowTxId, key, value);
             });
         }, walUpdated);
+        amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
 
         Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
 

@@ -1,0 +1,47 @@
+{namespace soy.page}
+
+/**
+ * @param ongoingCompactions
+ * @param recentCompactions
+ * @param totalCompactions
+ */
+{template .compactionsPluginRegion}
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-tasks"></span>{sp}Compactions - ({$totalCompactions})</div>
+        <div class="panel-body">
+            <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th><span class="glyphicon glyphicon-clock"></span>{sp}Elapse</th>
+                    </tr>
+                </thead>
+                
+                <tbody>
+                    <tr>
+                        <td colspan="2">
+                        Ongoing:
+                        </td>
+                    </tr>
+                    {foreach $c in $ongoingCompactions}
+                        <tr>
+                            <td>{$c.name}</td>
+                            <td>{$c.elapse}</td>
+                        </tr>
+                    {/foreach}
+                    <tr>
+                        <td colspan="2">
+                        Recently Completed:
+                        </td>
+                    </tr>
+                    {foreach $c in $recentCompactions}
+                        <tr>
+                            <td>{$c.name}</td>
+                            <td>{$c.elapse}</td>
+                        </tr>
+                    {/foreach}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{/template}

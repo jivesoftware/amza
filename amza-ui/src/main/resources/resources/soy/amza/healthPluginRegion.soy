@@ -1,22 +1,8 @@
 {namespace soy.page}
 
 /**
- * @param ongoingCompactions
- * @param recentCompactions
- * @param totalCompactions
  */
 {template .healthPluginRegion}
-     <div class="panel panel-default">
-/**
-<div class="panel-body">
-    <div id="center"><div id="fig">
-            <script type="text/javascript+protovis">
-var amzaChatter = amza.arc.fetch().data();
-var vis = new pv.Panel().width(450).height(270).bottom(90); var arc = vis.add(pv.Layout.Arc).nodes(amzaChatter.nodes).links(amzaChatter.links); arc.link.add(pv.Line); var dotSize = function(d) d.linkDegree + 4; var bygroup = function(d) d.group; var fillDark = function() this.fillStyle().darker(); arc.node.add(pv.Dot).size(dotSize).fillStyle(pv.Colors.category19().by(bygroup)).strokeStyle(fillDark);arc.label.add(pv.Label); vis.render(); vis.render();
-            </script>
-        </div></div>
- </div></div>*/
-    
     <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>{sp}Metrics</div>
         <div class="panel-body">
@@ -37,46 +23,6 @@ var vis = new pv.Panel().width(450).height(270).bottom(90); var arc = vis.add(pv
                 </thead>
                 <tbody id="stats">
                     
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-
-    <div class="panel panel-default">
-        <div class="panel-heading"><span class="glyphicon glyphicon-tasks"></span>{sp}Compactions - ({$totalCompactions})</div>
-        <div class="panel-body">
-            <table class="table table-condensed">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th><span class="glyphicon glyphicon-clock"></span>{sp}Elapse</th>
-                    </tr>
-                </thead>
-                
-                <tbody>
-                    <tr>
-                        <td colspan="2">
-                        Ongoing:
-                        </td>
-                    </tr>
-                    {foreach $c in $ongoingCompactions}
-                        <tr>
-                            <td>{$c.name}</td>
-                            <td>{$c.elapse}</td>
-                        </tr>
-                    {/foreach}
-                    <tr>
-                        <td colspan="2">
-                        Recently Completed:
-                        </td>
-                    </tr>
-                    {foreach $c in $recentCompactions}
-                        <tr>
-                            <td>{$c.name}</td>
-                            <td>{$c.elapse}</td>
-                        </tr>
-                    {/foreach}
                 </tbody>
             </table>
         </div>

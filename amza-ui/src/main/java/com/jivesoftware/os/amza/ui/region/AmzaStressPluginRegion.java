@@ -126,7 +126,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
                 row.put("numPartitions", String.valueOf(stress.input.numPartitions));
                 row.put("numThreadsPerRegion", String.valueOf(stress.input.numThreadsPerPartition));
 
-                row.put("elapsed", HealthPluginRegion.getDurationBreakdown(elapsed));
+                row.put("elapsed", MetricsPluginRegion.getDurationBreakdown(elapsed));
                 row.put("added", String.valueOf(added));
                 row.put("addedPerSecond", String.valueOf((double) added * 1000 / (double) elapsed));
                 rows.add(row);

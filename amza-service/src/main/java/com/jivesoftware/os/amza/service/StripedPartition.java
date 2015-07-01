@@ -87,6 +87,7 @@ public class StripedPartition implements AmzaPartitionAPI {
                     return scan.row(rowTxId, key, value);
                 });
             }, walUpdated);
+            amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
 
             Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(partitionName.getRingName());
 

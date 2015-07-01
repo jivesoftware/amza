@@ -132,11 +132,11 @@ public class TakeCoordinator {
         long timeoutMillis,
         AvailableStream availableStream) throws Exception {
 
+        AtomicLong offered = new AtomicLong();
         AvailableStream watchAvailableStream = (versionedPartitionName, status, txId) -> {
-            if (versionedPartitionName != null) {
-                //LOG.info("OFFER:local:{} remote:{} txId:{} partition:{} status:{}",
-                //    ringReader.getRingMember(), remoteRingMember, txId, versionedPartitionName, status);
-            }
+            //LOG.info("OFFER:local:{} remote:{} txId:{} partition:{} status:{}",
+            //    ringReader.getRingMember(), remoteRingMember, txId, versionedPartitionName, status);
+            offered.incrementAndGet();
             availableStream.available(versionedPartitionName, status, txId);
         };
 
@@ -154,25 +154,26 @@ public class TakeCoordinator {
                 return true;
             });
             if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
-                suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
+                suggestedWaitInMillis[0] = timeoutMillis; // Hmmm
+            }
+
+            if (offered.get() != 0) {
+                return;
             }
 
             Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, (key) -> new Object());
             synchronized (lock) {
-                long time = System.currentTimeMillis();
                 long timeToWait = suggestedWaitInMillis[0];
-                while (start == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
-                    long wait = Math.min(timeToWait, heartbeatIntervalMillis);
-                    //LOG.info("PARKED:remote:{} for {}millis on local:{}",
+                if (start == updates.get()) {
+                    //LOG.info("PARKED LONG POLL:remote:{} for {}millis on local:{}",
                     //    remoteRingMember, wait, ringReader.getRingMember());
-                    lock.wait(wait);
-                    watchAvailableStream.available(null, null, 0); // Ping aka keep the socket alive
-                    timeToWait -= heartbeatIntervalMillis;
-                    if (timeToWait < 0) {
-                        break;
+                    lock.wait(Math.min(timeToWait, timeoutMillis));
+                    if (start == updates.get()) {
+                        return; // Long poll is over
                     }
                 }
             }
+
         }
     }
 
@@ -182,7 +183,6 @@ public class TakeCoordinator {
 
         //LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
         //    remoteRingMember, null, localTxId, localVersionedPartitionName);
-
         String ringName = localVersionedPartitionName.getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
         ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId);

@@ -104,6 +104,7 @@ public class AmzaServiceInitializer {
         public long takeCyaIntervalInMillis = 1_000;
         public long takeHeartbeatIntervalInMillis = 1_000;
         public long takeSlowThresholdInMillis = 1_000 * 60;
+        public long takeLongPollTimeoutMillis = 10_000;
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
@@ -264,7 +265,8 @@ public class AmzaServiceInitializer {
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),
             takeFailureListener,
-            config.numberOfTakerThreads);
+            config.numberOfTakerThreads,
+            config.takeLongPollTimeoutMillis);
 
         PartitionCompactor partitionCompactor = new PartitionCompactor(amzaStats,
             partitionIndex,

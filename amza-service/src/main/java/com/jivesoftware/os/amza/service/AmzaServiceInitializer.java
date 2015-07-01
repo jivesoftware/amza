@@ -124,14 +124,15 @@ public class AmzaServiceInitializer {
 
         RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
+        PartitionIndex partitionIndex = new PartitionIndex(amzaStats, config.workingDirectories, "amza/stores",
+            partitionsWALStorageProvider, partitionPropertyMarshaller, config.hardFsync);
+
         TakeCoordinator takeCoordinator = new TakeCoordinator(amzaStats,
             orderIdProvider,
             idPacker,
+            partitionIndex,
             config.takeCyaIntervalInMillis,
             config.takeSlowThresholdInMillis);
-
-        PartitionIndex partitionIndex = new PartitionIndex(amzaStats, config.workingDirectories, "amza/stores",
-            partitionsWALStorageProvider, partitionPropertyMarshaller, config.hardFsync);
 
         PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
         PartitionStore nodeIndex = partitionIndex.get(PartitionProvider.NODE_INDEX);
@@ -167,7 +168,7 @@ public class AmzaServiceInitializer {
             }
         }
 
-        takeCoordinator.start(amzaRingReader, partitionIndex);
+        takeCoordinator.start(amzaRingReader);
 
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;

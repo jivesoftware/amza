@@ -33,6 +33,7 @@ public class TakeCoordinator {
 
     private final AmzaStats amzaStats;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
+    private final VersionedPartitionProvider versionedPartitionProvider;
     private final IdPacker idPacker;
 
     private final ConcurrentHashMap<String, TakeRingCoordinator> takeRingCoordinators = new ConcurrentHashMap<>();
@@ -42,13 +43,16 @@ public class TakeCoordinator {
     private final long cyaIntervalMillis;
     private final long slowTakeInMillis;
 
-    public TakeCoordinator(AmzaStats amzaStats, TimestampedOrderIdProvider timestampedOrderIdProvider,
+    public TakeCoordinator(AmzaStats amzaStats,
+        TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
+        VersionedPartitionProvider versionedPartitionProvider,
         long cyaIntervalMillis,
         long slowTakeInMillis) {
         this.amzaStats = amzaStats;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.idPacker = idPacker;
+        this.versionedPartitionProvider = versionedPartitionProvider;
         this.cyaIntervalMillis = cyaIntervalMillis;
         this.slowTakeInMillis = slowTakeInMillis;
     }
@@ -61,7 +65,7 @@ public class TakeCoordinator {
         }
     }
 
-    public void start(AmzaRingReader ringReader, VersionedPartitionProvider partitionProvider) {
+    public void start(AmzaRingReader ringReader) {
         ExecutorService cya = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("cya-%d").build());
         cya.submit(() -> {
             while (true) {
@@ -69,7 +73,7 @@ public class TakeCoordinator {
                 try {
                     SetMultimap<String, VersionedPartitionName> desired = HashMultimap.create();
 
-                    for (VersionedPartitionName versionedPartitionName : partitionProvider.getAllPartitions()) {
+                    for (VersionedPartitionName versionedPartitionName : versionedPartitionProvider.getAllPartitions()) {
                         desired.put(versionedPartitionName.getPartitionName().getRingName(), versionedPartitionName);
                     }
 
@@ -113,6 +117,11 @@ public class TakeCoordinator {
         awakeRemoteTakers(neighbors);
     }
 
+    private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
+        return takeRingCoordinators.computeIfAbsent(ringName,
+            key -> new TakeRingCoordinator(ringName, timestampedOrderIdProvider, idPacker, versionedPartitionProvider, slowTakeInMillis, neighbors));
+    }
+
     private void awakeRemoteTakers(List<Entry<RingMember, RingHost>> neighbors) {
         for (Entry<RingMember, RingHost> r : neighbors) {
             Object lock = ringMembersLocks.computeIfAbsent(r.getKey(), (ringMember) -> new Object());
@@ -120,11 +129,6 @@ public class TakeCoordinator {
                 lock.notifyAll();
             }
         }
-    }
-
-    private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
-        return takeRingCoordinators.computeIfAbsent(ringName,
-            key -> new TakeRingCoordinator(ringName, timestampedOrderIdProvider, idPacker, slowTakeInMillis, neighbors));
     }
 
     public void availableRowsStream(AmzaRingReader ringReader,

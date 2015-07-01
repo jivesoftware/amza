@@ -434,13 +434,6 @@ public class RowChangeTaker implements RowChanges {
                                         amzaStats.takeErrors.add(remoteRingMember);
                                     } else {
                                         updates = takeRowStream.flush();
-                                        if (updates > 0) {
-                                            //LOG.info("APPLIED: ({}) {} -> {}/{}",
-                                            //    updates, remoteVersionedPartitionName, remoteRingMember, remoteRingHost);
-                                        } else {
-                                            //LOG.info("EMPTY TAKE: ({}) {} -> {}/{}",
-                                            //    updates, remoteVersionedPartitionName, remoteRingMember, remoteRingHost);
-                                        }
                                     }
 
                                     for (Entry<RingMember, Long> entry : takeRowStream.flushedHighwatermarks.entrySet()) {

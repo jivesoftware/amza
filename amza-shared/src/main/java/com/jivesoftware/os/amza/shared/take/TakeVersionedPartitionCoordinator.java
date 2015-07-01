@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.shared.take;
 
 import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -22,26 +23,29 @@ import java.util.concurrent.atomic.AtomicReference;
 public class TakeVersionedPartitionCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-
+    final PartitionProperties properties;
     final VersionedPartitionName versionedPartitionName;
     final AtomicReference<Status> status;
     final AtomicLong txId;
     final long slowTakeMillis;
     final long slowTakeId;
     final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
-    final AtomicInteger currentCategory = new AtomicInteger(1);
+    final AtomicInteger currentCategory;
 
-    public TakeVersionedPartitionCoordinator(VersionedPartitionName versionedPartitionName,
+    public TakeVersionedPartitionCoordinator(PartitionProperties properties,
+        VersionedPartitionName versionedPartitionName,
         Status status,
         AtomicLong txId,
         long slowTakeMillis,
         long slowTakeId) {
 
+        this.properties = properties;
         this.versionedPartitionName = versionedPartitionName;
         this.status = new AtomicReference<>(status);
         this.txId = txId;
         this.slowTakeMillis = slowTakeMillis;
         this.slowTakeId = slowTakeId;
+        this.currentCategory = new AtomicInteger(properties.takeFromFactor > 0 ? 1 : -1);
     }
 
     void updateTxId(VersionedRing versionedRing, Status status, long txId) {
@@ -61,7 +65,7 @@ public class TakeVersionedPartitionCoordinator {
 
         long takeTxId = txId.get();
         Status currentStatus = status.get();
-        if (currentStatus == Status.ONLINE) {
+        if (currentStatus == Status.ONLINE && currentCategory.get() > -1) {
 
             Integer category = versionedRing.getCategory(ringMember);
             if (category != null && category <= currentCategory.get()) {
@@ -95,7 +99,9 @@ public class TakeVersionedPartitionCoordinator {
             }
             return category * slowTakeMillis;
         } else {
-            availableStream.available(versionedPartitionName, currentStatus, takeTxId);
+            if (properties.takeFromFactor > 0) {
+                availableStream.available(versionedPartitionName, currentStatus, takeTxId);
+            }
             return Long.MAX_VALUE;
         }
     }
@@ -121,24 +127,28 @@ public class TakeVersionedPartitionCoordinator {
 
     private void updateCategory(VersionedRing versionedRing) {
 
-        long currentTxId = txId.get();
-        int fastEnough = 0;
-        int worstCategory = 1;
-        for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
-            if (fastEnough < versionedRing.takeFromFactor) {
-                SessionedTxId lastTxId = took.get(candidate.getKey());
-                if (lastTxId != null) {
-                    long latency = currentTxId - lastTxId.txId;
-                    if (latency < slowTakeId * candidate.getValue()) {
-                        worstCategory = Math.max(worstCategory, candidate.getValue());
-                        fastEnough++;
+        if (properties.takeFromFactor == 0) {
+            currentCategory.set(-1);
+        } else {
+            long currentTxId = txId.get();
+            int fastEnough = 0;
+            int worstCategory = 1;
+            for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
+                if (fastEnough < Math.max(versionedRing.takeFromFactor, properties.takeFromFactor)) {
+                    SessionedTxId lastTxId = took.get(candidate.getKey());
+                    if (lastTxId != null) {
+                        long latency = currentTxId - lastTxId.txId;
+                        if (latency < slowTakeId * candidate.getValue()) {
+                            worstCategory = Math.max(worstCategory, candidate.getValue());
+                            fastEnough++;
+                        }
                     }
+                } else if (candidate.getValue() > worstCategory) {
+                    took.remove(candidate.getKey());
                 }
-            } else if (candidate.getValue() > worstCategory) {
-                took.remove(candidate.getKey());
             }
+            currentCategory.set(worstCategory);
         }
-        currentCategory.set(worstCategory);
 
     }
 

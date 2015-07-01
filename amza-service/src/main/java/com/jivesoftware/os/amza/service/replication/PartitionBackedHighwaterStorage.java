@@ -13,6 +13,8 @@ import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,10 +26,13 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final SystemWALStorage systemWALStorage;
     private final WALUpdated walUpdated;
+    private final long flushHighwatersAfterNUpdates;
 
     private final int numPermits = 1024;
     private final Semaphore bigBird = new Semaphore(numPermits, true); // TODO expose to config
@@ -38,12 +43,14 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     public PartitionBackedHighwaterStorage(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
         SystemWALStorage systemWALStorage,
-        WALUpdated walUpdated) {
+        WALUpdated walUpdated,
+        long flushHighwatersAfterNUpdates) {
 
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.walUpdated = walUpdated;
         this.systemWALStorage = systemWALStorage;
+        this.flushHighwatersAfterNUpdates = flushHighwatersAfterNUpdates;
     }
 
     @Override
@@ -84,6 +91,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     @Override
     public void setIfLarger(final RingMember member, final VersionedPartitionName versionedPartitionName, int updates, long highwaterTxId) throws Exception {
         bigBird.acquire();
+        updatesSinceLastFlush.addAndGet(updates);
         try {
             ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
             if (partitionHighwaterUpdates == null) {
@@ -186,35 +194,41 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     @Override
     public void flush(Callable<Void> preFlush) throws Exception {
-        if (updatesSinceLastFlush.get() < 10_000) { //  TODO config;
+        if (updatesSinceLastFlush.get() < flushHighwatersAfterNUpdates) {
             return;
         }
-
         bigBird.acquire(numPermits);
+        LOG.info("Flushing HIGHWATERS");
         try {
-            systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX,
-                (highwater, scan) -> {
-                    if (preFlush != null) {
-                        preFlush.call();
-                    }
+            long flushedUpdates = updatesSinceLastFlush.get();
+            if (flushedUpdates > flushHighwatersAfterNUpdates) {
 
-                    long timestamp = orderIdProvider.nextId();
-                    hostToPartitionToHighwaterUpdates.forEach((RingMember ringMember, ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> u) -> {
-                        u.forEach((VersionedPartitionName versionedPartitionName, HighwaterUpdates highwaterUpdates) -> {
-                            if (highwaterUpdates != null && highwaterUpdates.updates.get() > 0) {
-                                try {
-                                    long txId = highwaterUpdates.getTxId();
-                                    int total = highwaterUpdates.updates.get();
-                                    scan.row(-1, walKey(versionedPartitionName, ringMember), new WALValue(UIO.longBytes(txId), timestamp, false));
-                                    highwaterUpdates.update(txId, -total);
-                                } catch (Exception x) {
-                                    throw new RuntimeException();
+                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX,
+                    (highwater, scan) -> {
+                        if (preFlush != null) {
+                            preFlush.call();
+                        }
+
+                        long timestamp = orderIdProvider.nextId();
+                        hostToPartitionToHighwaterUpdates.forEach((RingMember ringMember, ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> u) -> {
+                            u.forEach((VersionedPartitionName versionedPartitionName, HighwaterUpdates highwaterUpdates) -> {
+                                if (highwaterUpdates != null && highwaterUpdates.updates.get() > 0) {
+                                    try {
+                                        long txId = highwaterUpdates.getTxId();
+                                        int total = highwaterUpdates.updates.get();
+                                        scan.row(-1, walKey(versionedPartitionName, ringMember), new WALValue(UIO.longBytes(txId), timestamp, false));
+                                        highwaterUpdates.update(txId, -total);
+                                    } catch (Exception x) {
+                                        throw new RuntimeException();
+                                    }
                                 }
-                            }
+                            });
                         });
-                    });
 
-                }, walUpdated);
+                    }, walUpdated);
+                LOG.info("Flushed HIGHWATERS");
+                updatesSinceLastFlush.addAndGet(-flushedUpdates);
+            }
         } finally {
             bigBird.release(numPermits);
         }

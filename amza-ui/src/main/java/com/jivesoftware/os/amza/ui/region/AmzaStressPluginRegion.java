@@ -245,13 +245,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
         PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
-
-        AmzaService.AmzaPartitionRoute regionRoute = amzaService.getPartitionRoute(partitionName);
-        while (regionRoute.orderedPartitionHosts.isEmpty()) {
-            Thread.sleep(1000);
-            regionRoute = amzaService.getPartitionRoute(partitionName);
-        }
-
+        amzaService.awaitOnline(partitionName, 10_000);
         return amzaService.getPartition(partitionName);
     }
 

@@ -98,6 +98,7 @@ public class AmzaServiceInitializer {
         public int awaitOnlineStripingLevel = 1024;
 
         public boolean hardFsync = false;
+        public long flushHighwatersAfterNUpdates = 10_000;
 
         public boolean useMemMap = false;
 
@@ -193,7 +194,8 @@ public class AmzaServiceInitializer {
                     }
                     return false;
                 });
-            highwaterStorages[i] = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemWALStorage, walUpdated);
+            highwaterStorages[i] = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemWALStorage, walUpdated,
+                config.flushHighwatersAfterNUpdates);
         }
 
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(partitionStripes, highwaterStorages);
@@ -252,7 +254,8 @@ public class AmzaServiceInitializer {
         amzaRingWriter.register(ringMember, ringHost);
         amzaRingWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
 
-        PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemWALStorage, walUpdated);
+        PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemWALStorage, walUpdated,
+            config.flushHighwatersAfterNUpdates);
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             amzaRingReader,
             ringHost,

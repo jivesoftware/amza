@@ -1,14 +1,13 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
+import com.jivesoftware.os.amza.shared.stats.IoStats;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 /**
- *
  * @author jonathan.colt
  */
 public class BinaryRowIOProvider implements RowIOProvider {

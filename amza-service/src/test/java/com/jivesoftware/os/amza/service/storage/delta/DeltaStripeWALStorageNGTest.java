@@ -78,7 +78,7 @@ public class DeltaStripeWALStorageNGTest {
             }
         });
 
-        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, false);
+        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, null, false);
 
         PartitionProvider partitionProvider = new PartitionProvider(ids,
             partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, partitionIndex);

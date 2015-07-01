@@ -3,17 +3,16 @@ package com.jivesoftware.os.amza.shared.partition;
 import java.util.Arrays;
 
 /**
- *
  * @author jonathan.colt
  */
 public interface TxPartitionStatus {
 
-    public static enum Status {
+    enum Status {
 
-        EXPUNGE(new byte[]{2}),
-        ONLINE(new byte[]{1}),
-        KETCHUP(new byte[]{0});
-        
+        EXPUNGE(new byte[] { 2 }),
+        ONLINE(new byte[] { 1 }),
+        KETCHUP(new byte[] { 0 });
+
         private final byte[] serializedForm;
 
         private Status(byte[] serializedForm) {

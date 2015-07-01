@@ -105,12 +105,21 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     @Override
-    public PartitionProperties getProperties(PartitionName partitionName) {
+    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
 
         PartitionProperties properties = partitionProperties.get(partitionName);
-        if (properties == null && partitionName.isSystemPartition()) {
-            properties = coldstartSystemPartitionProperties(partitionName);
-            partitionProperties.put(partitionName, properties);
+        if (properties == null) {
+            if (partitionName.isSystemPartition()) {
+                properties = coldstartSystemPartitionProperties(partitionName);
+                partitionProperties.put(partitionName, properties);
+            } else {
+                WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(new WALKey(partitionName.toBytes()));
+                if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
+                    return null;
+                }
+                properties = partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
+                partitionProperties.put(partitionName, properties);
+            }
         }
         return properties;
     }
@@ -125,21 +134,14 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
             }
         }
 
-        WALKey partitionNameKey = new WALKey(partitionName.toBytes());
-        if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
-            if (!getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(partitionNameKey)) {
-                return null;
-            }
+        if (!versionedPartitionName.getPartitionName().isSystemPartition() &&
+            !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(new WALKey(partitionName.toBytes()))) {
+            return null;
         }
 
         PartitionProperties properties = getProperties(partitionName);
         if (properties == null) {
-            WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(partitionNameKey);
-            if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
-                return null;
-            }
-            properties = partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
-            partitionProperties.put(partitionName, properties);
+            return null;
         }
         return open(versionedPartitionName, properties);
     }

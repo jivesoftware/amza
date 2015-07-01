@@ -15,17 +15,15 @@
  */
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.jivesoftware.os.amza.service.storage.binary.BinaryRowReader;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryRowWriter;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
+import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
+import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
-import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
-import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
-import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;

@@ -19,7 +19,7 @@ import javax.ws.rs.core.Response;
  */
 @Singleton
 @Path("/amza/ui/metrics")
-public class MetricsPluginEndpoints{
+public class MetricsPluginEndpoints {
 
     private final SoyService soyService;
     private final MetricsPluginRegion pluginRegion;

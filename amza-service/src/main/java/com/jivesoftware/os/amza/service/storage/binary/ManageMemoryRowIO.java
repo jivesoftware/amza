@@ -1,10 +1,9 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 
 /**
- *
  * @author jonathan.colt
  */
 public class ManageMemoryRowIO implements ManageRowIO<MemoryBackedWALFiler> {

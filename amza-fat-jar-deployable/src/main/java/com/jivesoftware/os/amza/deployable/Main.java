@@ -100,7 +100,7 @@ public class Main {
                 return mapper.writeValueAsBytes(partitionProperties);
             }
         };
-        
+
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             ringMember,
@@ -109,7 +109,7 @@ public class Main {
             idPacker,
             partitionPropertyMarshaller,
             indexProviderRegistry,
-            taker, 
+            taker,
             Optional.<TakeFailureListener>absent(),
             (RowsChanged changes) -> {
             });

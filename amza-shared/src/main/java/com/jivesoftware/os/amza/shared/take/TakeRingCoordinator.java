@@ -32,6 +32,7 @@ public class TakeRingCoordinator {
     private final IdPacker idPacker;
     private final VersionedPartitionProvider versionedPartitionProvider;
     private final long slowTakeInMillis;
+    private final long reofferDeltaMillis;
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
@@ -40,52 +41,55 @@ public class TakeRingCoordinator {
         IdPacker idPacker,
         VersionedPartitionProvider versionedPartitionProvider,
         long slowTakeInMillis,
-        List<Entry<RingMember, RingHost>> neighbors) {
+        long reofferDeltaMillis, List<Entry<RingMember, RingHost>> neighbors) {
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.idPacker = idPacker;
         this.versionedPartitionProvider = versionedPartitionProvider;
         this.slowTakeInMillis = slowTakeInMillis;
+        this.reofferDeltaMillis = reofferDeltaMillis;
         //LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
         this.versionedRing.compareAndSet(null, new VersionedRing(timestampedOrderIdProvider.nextId(), neighbors));
     }
 
-    void cya(List<Entry<RingMember, RingHost>> neighbors, Set<VersionedPartitionName> retain) {
+    boolean cya(List<Entry<RingMember, RingHost>> neighbors, Set<VersionedPartitionName> retain) {
         ConcurrentHashMap.KeySetView<VersionedPartitionName, TakeVersionedPartitionCoordinator> keySet = partitionCoordinators.keySet();
         keySet.removeAll(Sets.difference(keySet, retain));
-        ensureVersionedRing(neighbors);
+        VersionedRing existingRing = this.versionedRing.get();
+        VersionedRing updatedRing = ensureVersionedRing(neighbors);
+        return existingRing != updatedRing; // reference equality is OK
     }
 
-    void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) {
+    void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception {
         VersionedRing ring = ensureVersionedRing(neighbors);
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName,
-            (key) -> {
-                PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-                return new TakeVersionedPartitionCoordinator(properties,
-                    versionedPartitionName,
-                    status,
-                    new AtomicLong(txId),
-                    slowTakeInMillis,
-                    idPacker.pack(slowTakeInMillis, 0, 0)); //TODO need orderIdProvider.deltaMillisToIds()
-            });
-        coordinator.updateTxId(ring, status, txId);
+            key -> new TakeVersionedPartitionCoordinator(versionedPartitionName,
+                timestampedOrderIdProvider,
+                status,
+                new AtomicLong(txId),
+                slowTakeInMillis,
+                idPacker.pack(slowTakeInMillis, 0, 0), //TODO need orderIdProvider.deltaMillisToIds()
+                reofferDeltaMillis));
+        PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
+        coordinator.updateTxId(ring, status, txId, properties.takeFromFactor);
     }
 
     long availableRowsStream(RingMember ringMember, long takeSessionId, AvailableStream availableStream) throws Exception {
         long suggestedWaitInMillis = Long.MAX_VALUE;
         VersionedRing ring = versionedRing.get();
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
+            PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
             suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
-                coordinator.availableRowsStream(takeSessionId, ring, ringMember, timestampedOrderIdProvider, availableStream)
-            );
+                coordinator.availableRowsStream(takeSessionId, ring, ringMember, properties.takeFromFactor, availableStream));
         }
         return suggestedWaitInMillis;
     }
 
-    void rowsTaken(RingMember remoteRingMember, VersionedPartitionName localVersionedPartitionName, long localTxId) {
+    void rowsTaken(RingMember remoteRingMember, VersionedPartitionName localVersionedPartitionName, long localTxId) throws Exception {
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(localVersionedPartitionName);
         if (coordinator != null) {
-            coordinator.rowsTaken(versionedRing.get(), remoteRingMember, localTxId);
+            PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
+            coordinator.rowsTaken(versionedRing.get(), remoteRingMember, localTxId, properties.takeFromFactor);
         }
     }
 

@@ -6,7 +6,7 @@ package com.jivesoftware.os.amza.shared.partition;
  */
 public interface VersionedPartitionProvider {
 
-    PartitionProperties getProperties(PartitionName partitionName);
+    PartitionProperties getProperties(PartitionName partitionName) throws Exception;
 
     Iterable<VersionedPartitionName> getAllPartitions();
 }

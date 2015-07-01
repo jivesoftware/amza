@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.service.storage.FileBackedWALIndex;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;

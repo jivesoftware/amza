@@ -1,13 +1,8 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
-import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.service.storage.IndexedWAL;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -18,7 +13,6 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
-import com.jivesoftware.os.amza.service.storage.IndexedWAL;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;

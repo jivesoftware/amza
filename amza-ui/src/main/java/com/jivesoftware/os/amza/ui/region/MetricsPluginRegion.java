@@ -115,7 +115,7 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
                 regionTotals.add(regionTotals(partitionName, totals));
             }
             data.put("regionTotals", regionTotals);
-        
+
         } catch (Exception e) {
             log.error("Unable to retrieve data", e);
         }
@@ -265,7 +265,7 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

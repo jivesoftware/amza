@@ -81,7 +81,7 @@ public class PartitionProvider {
         return false;
     }
 
-    public void createPartitionStoreIfAbsent(VersionedPartitionName versionedPartitionName,
+    public boolean createPartitionStoreIfAbsent(VersionedPartitionName versionedPartitionName,
         PartitionProperties properties) throws Exception {
 
         PartitionName partitionName = versionedPartitionName.getPartitionName();
@@ -100,6 +100,9 @@ public class PartitionProvider {
                 rowChanges.changes(changed);
             }
             partitionIndex.get(versionedPartitionName);
+            return true;
+        } else {
+            return false;
         }
     }
 

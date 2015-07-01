@@ -444,7 +444,6 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
     @Override
     public void rowsTaken(RingMember remoteRingMember,
-        RingHost remoteRingHost,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId) throws Exception {
         ackWaters.set(remoteRingMember, localVersionedPartitionName, localTxId);
@@ -464,11 +463,14 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
             if (versionedPartitionName == null) {
                 VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
                 versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
+                partitionStatus = versionedStatus.status;
                 if (properties.takeFromFactor == 0) {
                     partitionStatusStorage.markAsOnline(versionedPartitionName);
                 }
             }
-            partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
+            if (partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
+                takeCoordinator.updated(ringStoreReader, versionedPartitionName, partitionStatus, 0);
+            }
             return null;
         });
 

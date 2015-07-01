@@ -167,15 +167,12 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @Path("/rows/taken/{memberName}/{host}/{port}/{versionedPartitionName}/{txId}")
+    @Path("/rows/taken/{memberName}/{versionedPartitionName}/{txId}")
     public Response rowsTaken(@PathParam("memberName") String ringMemberName,
-        @PathParam("host") String ringHostName,
-        @PathParam("port") int ringHostPort,
         @PathParam("versionedPartitionName") String versionedPartitionName,
         @PathParam("txId") long txId) {
         try {
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
-                new RingHost(ringHostName, ringHostPort),
                 VersionedPartitionName.fromBase64(versionedPartitionName),
                 txId);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);

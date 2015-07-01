@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -58,11 +59,12 @@ public class AmzaEndpoints {
     @GET
     @Consumes("application/json")
     @Path("/set")
-    public Response set(@QueryParam("partition") String partition,
+    public Response set(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("partition") String partition,
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             String[] keys = key.split(",");
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
@@ -80,9 +82,11 @@ public class AmzaEndpoints {
     @POST
     @Consumes("application/json")
     @Path("/multiSet/{partition}")
-    public Response multiSet(@PathParam("partition") String partition, Map<String, String> values) {
+    public Response multiSet(@QueryParam("ring") @DefaultValue("default") String ring,
+        @PathParam("partition") String partition,
+        Map<String, String> values) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()),
@@ -99,7 +103,8 @@ public class AmzaEndpoints {
     @GET
     @Consumes("application/json")
     @Path("/get")
-    public Response get(@QueryParam("partition") String partition,
+    public Response get(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("partition") String partition,
         @QueryParam("key") String key) {
         try {
             String[] keys = key.split(",");
@@ -108,7 +113,7 @@ public class AmzaEndpoints {
                 rawKeys.add(new WALKey(k.getBytes()));
             }
 
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             List<byte[]> got = new ArrayList<>();
             partitionAPI.get(rawKeys, (rowTxId, key1, scanned) -> {
                 got.add(scanned.getValue());
@@ -124,10 +129,11 @@ public class AmzaEndpoints {
     @GET
     @Consumes("application/json")
     @Path("/remove")
-    public Response remove(@QueryParam("partition") String partition,
+    public Response remove(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("partition") String partition,
         @QueryParam("key") String key) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             updates.remove(new WALKey(key.getBytes()), -1);
             partitionAPI.commit(updates, 1, 30000);
@@ -138,20 +144,20 @@ public class AmzaEndpoints {
         }
     }
 
-    AmzaPartitionAPI createPartitionIfAbsent(String simplePartitionName) throws Exception {
+    AmzaPartitionAPI createPartitionIfAbsent(String ringName, String simplePartitionName) throws Exception {
 
-        int ringSize = amzaService.getRingReader().getRingSize("default");
+        int ringSize = amzaService.getRingReader().getRingSize(ringName);
         int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
         if (ringSize < systemRingSize) {
-            amzaService.getRingWriter().buildRandomSubRing("default", systemRingSize);
+            amzaService.getRingWriter().buildRandomSubRing(ringName, systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
-        PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
+        PartitionName partitionName = new PartitionName(false, ringName, simplePartitionName);
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, false));
-        amzaService.awaitOnline(partitionName, 10_000);
+        amzaService.awaitOnline(partitionName, 30_000);
 
         AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
         long start = System.currentTimeMillis();

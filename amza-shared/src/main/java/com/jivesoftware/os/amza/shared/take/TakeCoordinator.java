@@ -42,19 +42,22 @@ public class TakeCoordinator {
     private final AtomicLong cyaLock = new AtomicLong();
     private final long cyaIntervalMillis;
     private final long slowTakeInMillis;
+    private final long reofferDeltaMillis;
 
     public TakeCoordinator(AmzaStats amzaStats,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
         VersionedPartitionProvider versionedPartitionProvider,
         long cyaIntervalMillis,
-        long slowTakeInMillis) {
+        long slowTakeInMillis,
+        long reofferDeltaMillis) {
         this.amzaStats = amzaStats;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.idPacker = idPacker;
         this.versionedPartitionProvider = versionedPartitionProvider;
         this.cyaIntervalMillis = cyaIntervalMillis;
         this.slowTakeInMillis = slowTakeInMillis;
+        this.reofferDeltaMillis = reofferDeltaMillis;
     }
 
     //TODO bueller?
@@ -81,10 +84,14 @@ public class TakeCoordinator {
                     for (String ringName : desired.keySet()) {
                         TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
                         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
+                        boolean neighborsChanged;
                         if (takeRingCoordinator != null) {
-                            takeRingCoordinator.cya(neighbors, desired.get(ringName));
+                            neighborsChanged = takeRingCoordinator.cya(neighbors, desired.get(ringName));
                         } else {
                             ensureRingCoodinator(ringName, neighbors);
+                            neighborsChanged = true;
+                        }
+                        if (neighborsChanged) {
                             awakeRemoteTakers(neighbors);
                         }
                     }
@@ -119,7 +126,8 @@ public class TakeCoordinator {
 
     private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
         return takeRingCoordinators.computeIfAbsent(ringName,
-            key -> new TakeRingCoordinator(ringName, timestampedOrderIdProvider, idPacker, versionedPartitionProvider, slowTakeInMillis, neighbors));
+            key -> new TakeRingCoordinator(ringName, timestampedOrderIdProvider, idPacker, versionedPartitionProvider, slowTakeInMillis, reofferDeltaMillis,
+                neighbors));
     }
 
     private void awakeRemoteTakers(List<Entry<RingMember, RingHost>> neighbors) {
@@ -184,7 +192,7 @@ public class TakeCoordinator {
 
     public void rowsTaken(RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
-        long localTxId) {
+        long localTxId) throws Exception {
 
         //LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
         //    remoteRingMember, null, localTxId, localVersionedPartitionName);

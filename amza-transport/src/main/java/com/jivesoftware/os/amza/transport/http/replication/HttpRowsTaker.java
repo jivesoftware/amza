@@ -105,18 +105,21 @@ public class HttpRowsTaker implements RowsTaker {
     }
 
     @Override
-    public boolean rowsTaken(RingMember ringMember, RingHost ringHost, VersionedPartitionName versionedPartitionName, long txId) {
+    public boolean rowsTaken(RingMember localRingMember,
+        RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        VersionedPartitionName versionedPartitionName,
+        long txId) {
         try {
-            return getRequestHelper(ringHost).executeRequest(null,
+            return getRequestHelper(remoteRingHost).executeRequest(null,
                 "/amza/rows/taken/"
-                + ringMember.getMember() + "/"
-                + ringHost.getHost() + "/" + ringHost.getPort() + "/"
-                + versionedPartitionName.toBase64() + "/"
-                + txId,
+                    + localRingMember.getMember() + "/"
+                    + versionedPartitionName.toBase64() + "/"
+                    + txId,
                 Boolean.class, false);
         } catch (Exception x) {
-            LOG.warn("Failed to deliver acks for member:{} host:{} partition:{} tx:{}",
-                new Object[]{ringMember, ringHost, versionedPartitionName, txId}, x);
+            LOG.warn("Failed to deliver acks for local:{} remote:{} partition:{} tx:{}",
+                new Object[] { localRingMember, remoteRingHost, versionedPartitionName, txId }, x);
             return false;
         }
     }

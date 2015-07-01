@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentMap;
 
 public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
 
-    public static enum Status {
+    public enum Status {
 
         online((byte) 2), joining((byte) 1), off((byte) 0), leaving((byte) -1), offline((byte) -2);
 

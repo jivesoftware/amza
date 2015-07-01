@@ -18,12 +18,14 @@ package com.jivesoftware.os.amza.service;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AmzaPartitionWatcher implements RowChanges {
 
     private final RowChanges rowChanges;
-    private final ConcurrentHashMap<PartitionName, RowChanges> watchers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<PartitionName, List<RowChanges>> watchers = new ConcurrentHashMap<>();
 
     public AmzaPartitionWatcher(RowChanges rowChanges) {
         this.rowChanges = rowChanges;
@@ -32,17 +34,25 @@ public class AmzaPartitionWatcher implements RowChanges {
     @Override
     public void changes(RowsChanged changes) throws Exception {
         rowChanges.changes(changes);
-        RowChanges watcher = watchers.get(changes.getVersionedPartitionName());
-        if (watcher != null) {
-            watcher.changes(changes);
+        List<RowChanges> changeWatchers = watchers.get(changes.getVersionedPartitionName().getPartitionName());
+        if (changeWatchers != null) {
+            for (RowChanges watcher : changeWatchers) {
+                watcher.changes(changes);
+            }
         }
     }
 
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
-        watchers.put(partitionName, rowChanges);
+        watchers.compute(partitionName, (key, value) -> {
+            if (value == null) {
+                value = new ArrayList<>();
+            }
+            value.add(rowChanges);
+            return value;
+        });
     }
 
     public RowChanges unwatch(PartitionName partitionName) throws Exception {
-        return watchers.remove(partitionName);
+        throw new UnsupportedOperationException("Need to figure out watcher removal");
     }
 }

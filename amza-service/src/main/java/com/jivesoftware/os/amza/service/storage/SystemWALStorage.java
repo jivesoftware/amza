@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
@@ -28,10 +29,12 @@ public class SystemWALStorage {
     private static final Predicate<VersionedPartitionName> IS_SYSTEM_PREDICATE = input -> input.getPartitionName().isSystemPartition();
 
     private final PartitionIndex partitionIndex;
+    private final RowChanges allRowChanges;
     private final boolean hardFlush;
 
-    public SystemWALStorage(PartitionIndex partitionIndex, boolean hardFlush) {
+    public SystemWALStorage(PartitionIndex partitionIndex, RowChanges allRowChanges, boolean hardFlush) {
         this.partitionIndex = partitionIndex;
+        this.allRowChanges = allRowChanges;
         this.hardFlush = hardFlush;
     }
 
@@ -40,6 +43,9 @@ public class SystemWALStorage {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         RowsChanged changed = partitionStore.getWalStorage().update(false, updates);
+        if (allRowChanges != null && !changed.isEmpty()) {
+            allRowChanges.changes(changed);
+        }
         if (!changed.getApply().isEmpty()) {
             //LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
             updated.updated(versionedPartitionName, Status.ONLINE, changed.getLargestCommittedTxId());

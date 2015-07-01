@@ -17,7 +17,6 @@ package com.jivesoftware.os.amza.shared;
 
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import java.io.DataOutputStream;
 import java.util.Set;
@@ -41,7 +40,6 @@ public interface AmzaInstance {
         long localTxId) throws Exception;
 
     void rowsTaken(RingMember remoteRingMember,
-        RingHost remoteRingHost,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId) throws Exception;
 

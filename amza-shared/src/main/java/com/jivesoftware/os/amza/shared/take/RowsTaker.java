@@ -58,6 +58,10 @@ public interface RowsTaker {
         }
     }
 
-    boolean rowsTaken(RingMember remoteRingMember, RingHost remoteRingHost, VersionedPartitionName remoteVersionedPartitionName, long remoteTxId);
+    boolean rowsTaken(RingMember localRingMember,
+        RingMember remoteRingMember,
+        RingHost remoteRingHost,
+        VersionedPartitionName versionedPartitionName,
+        long txId);
 
 }

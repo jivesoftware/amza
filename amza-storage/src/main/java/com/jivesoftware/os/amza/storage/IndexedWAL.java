@@ -56,6 +56,7 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -219,12 +220,16 @@ public class IndexedWAL implements WALStorage {
 
             final MutableLong lastTxId = new MutableLong(0);
             final AtomicLong rowsVisited = new AtomicLong(maxUpdatesBetweenCompactionHintMarker.get());
+            final AtomicBoolean gotCompactionHints = new AtomicBoolean(false);
+            final AtomicBoolean gotHighestTxId = new AtomicBoolean(false);
+
             walTx.read((WALReader rowReader) -> {
-                rowReader.reverseScan((long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
+                rowReader.reverseScan((rowPointer, rowTxId, rowType, row) -> {
                     if (rowTxId > lastTxId.longValue()) {
                         lastTxId.setValue(rowTxId);
+                        gotHighestTxId.set(true);
                     }
-                    if (rowType == RowType.system) {
+                    if (!gotCompactionHints.get() && rowType == RowType.system) {
                         ByteBuffer buf = ByteBuffer.wrap(row);
                         byte[] keyBytes = new byte[8];
                         buf.get(keyBytes);
@@ -236,10 +241,10 @@ public class IndexedWAL implements WALStorage {
                             buf.get(clobberCountBytes);
                             newCount.set(UIO.bytesLong(newCountBytes));
                             clobberCount.set(UIO.bytesLong(clobberCountBytes));
-                            return false;
+                            gotCompactionHints.set(true);
                         }
                     }
-                    return rowsVisited.decrementAndGet() >= 0;
+                    return !gotHighestTxId.get() || (rowsVisited.decrementAndGet() >= 0 && !gotCompactionHints.get());
                 });
                 return null;
             });
@@ -267,7 +272,7 @@ public class IndexedWAL implements WALStorage {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
@@ -278,9 +283,9 @@ public class IndexedWAL implements WALStorage {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId}));
+                indexCommitedUpToTxId }));
         }
     }
 

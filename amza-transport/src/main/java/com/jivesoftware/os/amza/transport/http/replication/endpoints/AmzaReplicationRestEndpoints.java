@@ -69,7 +69,7 @@ public class AmzaReplicationRestEndpoints {
             ringWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
-            LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
+            LOG.warn("Failed to add {}/{}/{} ", new Object[] { logicalName, host, port }, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to add system member: " + logicalName, x);
         }
     }
@@ -130,7 +130,7 @@ public class AmzaReplicationRestEndpoints {
             };
             return Response.ok(stream).build();
         } catch (Exception x) {
-            Object[] vals = new Object[]{ringMemberString, versionedPartitionName, txId};
+            Object[] vals = new Object[] { ringMemberString, versionedPartitionName, txId };
             LOG.warn("Failed to rowsStream {} {} {}. ", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to rowsStream " + Arrays.toString(vals), x);
         }
@@ -181,7 +181,7 @@ public class AmzaReplicationRestEndpoints {
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to ack for member:{} partition:{} txId:{}",
-                new Object[]{ringMemberName, versionedPartitionName, txId}, x);
+                new Object[] { ringMemberName, versionedPartitionName, txId }, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to ack.", x);
         }
     }

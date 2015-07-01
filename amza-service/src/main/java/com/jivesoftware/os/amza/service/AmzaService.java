@@ -313,7 +313,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     @Override
     public void availableRowsStream(DataOutputStream dos, RingMember remoteRingMember, long takeSessionId, long timeoutMillis) throws Exception {
         takeCoordinator.availableRowsStream(ringStoreReader, remoteRingMember, takeSessionId, timeoutMillis, (partitionName, status, txId) -> {
-            if (partitionName == null && status == null && txId == 0) {
+            if (partitionName == null || status == null) {
                 dos.write(0);
                 dos.flush();
             } else {

@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -213,9 +214,11 @@ public class PartitionStatusStorage implements TxPartitionStatus {
                 });
                 LOG.info("STATUS {}: {} versionedPartitionName:{} was updated to {}",
                     rootRingMember, ringMember, versionedPartitionName, commitableVersionStatus);
-                localStatusCache.put(currentVersionedPartitionName, commitableVersionStatus);
                 takeCoordinator.updated(amzaRingReader, versionedPartitionName, commitableVersionStatus.status, 0);
                 takeCoordinator.awakeCya();
+            }
+            if (returnableStatus != null) {
+                localStatusCache.put(currentVersionedPartitionName, returnableStatus);
             }
             return returnableStatus;
         });
@@ -292,6 +295,32 @@ public class PartitionStatusStorage implements TxPartitionStatus {
             Preconditions.checkNotNull(status, "Status cannot be null");
             this.status = status;
             this.version = version;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 3;
+            hash = 89 * hash + Objects.hashCode(this.status);
+            hash = 89 * hash + (int) (this.version ^ (this.version >>> 32));
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final VersionedStatus other = (VersionedStatus) obj;
+            if (this.status != other.status) {
+                return false;
+            }
+            if (this.version != other.version) {
+                return false;
+            }
+            return true;
         }
 
         @Override

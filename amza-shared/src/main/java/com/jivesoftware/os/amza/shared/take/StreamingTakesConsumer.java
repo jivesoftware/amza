@@ -1,8 +1,11 @@
 package com.jivesoftware.os.amza.shared.take;
 
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
 import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -12,6 +15,20 @@ import java.util.Map;
  *
  */
 public class StreamingTakesConsumer {
+
+    public void consume(InputStream bis, AvailableStream updatedPartitionsStream) throws Exception {
+        try (DataInputStream dis = new DataInputStream(bis)) {
+            while (dis.read() == 1) {
+                byte[] versionedPartitionNameBytes = new byte[dis.readInt()];
+                dis.readFully(versionedPartitionNameBytes);
+                byte[] statusBytes = new byte[1];
+                dis.readFully(statusBytes);
+                Status status = Status.fromSerializedForm(statusBytes);
+                long txId = dis.readLong();
+                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), status, txId);
+            }
+        }
+    }
 
     public StreamingTakeConsumed consume(InputStream bis, RowStream tookRowUpdates) throws Exception {
         Map<RingMember, Long> neighborsHighwaterMarks = new HashMap<>();
@@ -43,6 +60,7 @@ public class StreamingTakesConsumer {
     }
 
     public static class StreamingTakeConsumed {
+
         public final long partitionVersion;
         public final boolean isOnline;
         public final Map<RingMember, Long> neighborsHighwaterMarks;

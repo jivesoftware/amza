@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.91</version>
+        <version>0.92</version>
         <relativePath>../global-repo-management/pom.xml</relativePath>
     </parent>
     <artifactId>global-version-management</artifactId>
@@ -14,7 +14,7 @@
         <jive.utils.version>0.93</jive.utils.version>
         <mlogger.version>0.10</mlogger.version>
         <filer.version>0.72</filer.version>
-        <routing.bird.version>0.5</routing.bird.version>
+        <routing.bird.version>0.14</routing.bird.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>
@@ -46,9 +46,13 @@
             </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.routing.bird</groupId>
+                <artifactId>deployable-reporter-service</artifactId>
+                <version>${routing.bird.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jivesoftware.os.routing.bird</groupId>
                 <artifactId>deployable</artifactId>
                 <version>${routing.bird.version}</version>
-                <type>jar</type>
             </dependency>
             <dependency>
                 <groupId>de.ruedigermoeller</groupId>

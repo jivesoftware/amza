@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.storage.WALRow;
+import com.jivesoftware.os.amza.shared.wal.WALRow;
 
 /**
  *

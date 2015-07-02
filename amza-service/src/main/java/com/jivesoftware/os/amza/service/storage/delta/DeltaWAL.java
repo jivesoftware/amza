@@ -2,20 +2,20 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Table;
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALReader;
+import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
-import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.WALRow;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -158,7 +158,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     }
 
     @Override
-    public WALRow hydrate(final long fp) throws Exception {
+    public WALRow hydrate(long fp) throws Exception {
         try {
             byte[] row = wal.read((WALReader rowReader) -> rowReader.read(fp));
             final WALRow walRow = primaryRowMarshaller.fromRow(row);

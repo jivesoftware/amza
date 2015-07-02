@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
+import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;
+import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
-import com.jivesoftware.os.amza.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.storage.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.storage.binary.BinaryWALTx;
-import com.jivesoftware.os.amza.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -15,7 +15,6 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- *
  * @author jonathan.colt
  */
 public class DeltaWALFactory {

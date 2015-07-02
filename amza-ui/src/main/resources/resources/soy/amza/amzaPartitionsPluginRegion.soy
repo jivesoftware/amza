@@ -1,0 +1,95 @@
+{namespace soy.page}
+
+/**
+ * 
+ * @param? partitions
+ */
+{template .amzaPartitionsPluginRegion}
+    {if $partitions}
+        <div class="panel panel-default">
+            <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Partitions</div>
+                <div class="panel-body">
+                    
+                    <table class="table table-condensed">
+                        <thead>
+                            <tr>
+                                <th>Action</th>
+                                <th>Type</th>
+                                <th>Name</th>
+                                <th>RingName</th>
+                                <th>Disabled</th>
+                                <th>Index</th>
+                                <th>TakeFromFactor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
+                                method="get" name="addRingHost">
+                                <tr style="background-color:#ddd;">
+                                    <td>
+                                        <button title="Add" type="submit" name="action" value="add" class="btn btn-default"><span class="glyphicon glyphicon-plus"></span></button>
+                                    </td>
+                                    <td></td>
+                                    <td>
+                                        <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                        class="form-control" placeholder="Name" value=""
+                                        name="name" id="hostPicker"  title="">
+                                    </td>
+                                    <td>
+                                        <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                        class="form-control" placeholder="RingName" value=""
+                                        name="ringName" id="hostPicker" title="">
+                                    </td>
+                                    <td>
+                                        <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                        class="form-control" placeholder="Name" value=""
+                                        name="name" id="hostPicker"  title="">
+                                    </td>
+                                    <td>TODO</td>
+                                    <td>
+                                        <input type="number" name="takeFromFactor" min="0" max="65536" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
+                                        class="form-control" placeholder="takeFromFactor" value=""   title="">
+                                    </td>
+                                </tr>
+                            </form>
+
+                            {foreach $r in $partitions}
+                                <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
+                                    method="get" name="removeRingHost">
+                                    <tr>    
+                                        <td>
+                                            <input type="hidden" name="ringName" value="{$r.ringName}">
+                                            <input type="hidden" name="partitionName" value="{$r.name}">
+                                            <div class="btn-group" role="group" aria-label="...">
+                                            <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default"><span class="glyphicon glyphicon-trash"></span></button>
+                                            </div>
+                                        </td>
+                                        <td>{$r.type}</td>
+                                        <td>
+                                            <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                            placeholder="name" value="{$r.name}" name="name"  class="form-control">
+                                        </td>
+                                        <td>
+                                            <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                            placeholder="ringName" value="{$r.ringName}" name="ringName"  class="form-control">
+                                        </td>
+                                        <td>
+                                            <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                            class="form-control" placeholder="Name" value="{$r.disabled}"
+                                            name="name" id="hostPicker"  title="{$r.disabled}">
+                                        </td>
+                                        <td>TODO</td>
+                                        <td>
+                                            <input type="number" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
+                                            placeholder="takeFromFactor" value="{$r.takeFromFactor}" name="takeFromFactor" class="form-control">
+                                        </td>
+                                    </tr>
+                                </form>
+                            {/foreach}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {/if}
+{/template}

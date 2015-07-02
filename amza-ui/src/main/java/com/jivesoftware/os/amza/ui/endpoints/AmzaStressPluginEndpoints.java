@@ -48,11 +48,11 @@ public class AmzaStressPluginEndpoints {
         @FormParam("regionPrefix") @DefaultValue("") String regionPrefix,
         @FormParam("numBatches") @DefaultValue("1") int numBatches,
         @FormParam("batchSize") @DefaultValue("1") int batchSize,
-        @FormParam("numRegions") @DefaultValue("1") int numRegions,
+        @FormParam("numPartitions") @DefaultValue("1") int numPartitions,
         @FormParam("numThreadsPerRegion") @DefaultValue("1") int numThreadsPerRegion,
         @FormParam("action") @DefaultValue("") String action) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaStressPluginRegionInput(name.trim(), regionPrefix.trim(), numBatches, batchSize, numRegions, numThreadsPerRegion, action)));
+            Optional.of(new AmzaStressPluginRegionInput(name.trim(), regionPrefix.trim(), numBatches, batchSize, numPartitions, numThreadsPerRegion, action)));
         return Response.ok(rendered).build();
     }
 }

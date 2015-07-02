@@ -46,10 +46,10 @@ public class AmzaServiceTest {
         File createTempDir = Files.createTempDir();
         final AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
 
-        for (int i = 0; i < maxNumberOfServices; i++) {
-            cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i));
-        }
         final PartitionName partitionName = new PartitionName(false, "test", "partition1");
+        for (int i = 0; i < maxNumberOfServices; i++) {
+            cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i), partitionName);
+        }
         final CountDownLatch latch = new CountDownLatch(1);
         Executors.newCachedThreadPool().submit(new Runnable() {
             int removeService = maxRemovedServices;
@@ -66,7 +66,7 @@ public class AmzaServiceTest {
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
                             WALKey indexKey = new WALKey(key.getBytes());
-                            node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), AmzaTestCluster.ORDER_ID_PROVIDER.nextId(), tombstone);
+                            node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
                             node.get(partitionName, indexKey);
                         }
@@ -95,7 +95,7 @@ public class AmzaServiceTest {
                             RingMember key = new RingMember("localhost-" + port);
                             AmzaNode node = cluster.get(key);
                             if (node == null) {
-                                cluster.newNode(new RingMember("localhost-" + port), new RingHost("localhost", port));
+                                cluster.newNode(new RingMember("localhost-" + port), new RingHost("localhost", port), partitionName);
                                 addService--;
                             }
                         }

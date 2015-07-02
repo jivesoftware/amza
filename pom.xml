@@ -4,12 +4,12 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.jivesoftware.os</groupId>
     <artifactId>amza</artifactId>
-    <version>0.91</version>
+    <version>0.92</version>
     <packaging>pom</packaging>
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.91</version>
+        <version>0.92</version>
         <relativePath>inheritance-poms/global-repo-management/pom.xml</relativePath>
     </parent>
     <modules>
@@ -19,7 +19,6 @@
         <module>amza-transport</module>
         <module>amza-shared</module>
         <module>amza-client</module>
-        <module>amza-storage</module>
         <module>amza-berkeleydb-storage</module>
         <module>amza-ui</module>
         <module>amza-fat-jar-deployable</module>

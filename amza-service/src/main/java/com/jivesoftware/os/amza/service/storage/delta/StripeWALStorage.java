@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
@@ -8,9 +9,11 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorage;
+import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 
 /**
@@ -22,11 +25,17 @@ public interface StripeWALStorage {
 
     void flush(boolean fsync) throws Exception;
 
-    void compact(PartitionIndex partitionIndex) throws Exception;
+    void compact(PartitionIndex partitionIndex, boolean force) throws Exception;
 
-    RowsChanged update(VersionedPartitionName versionedPartitionName,
+    RowsChanged update(HighwaterStorage highwaterStorage,
+        VersionedPartitionName versionedPartitionName,
+        Status partitionStatus,
         WALStorage storage,
-        Commitable<WALValue> updates) throws Exception;
+        Commitable<WALValue> updates,
+        WALUpdated updated) throws Exception;
+
+    long getHighestTxId(VersionedPartitionName versionedPartitionName,
+        WALStorage storage) throws Exception;
 
     WALValue get(VersionedPartitionName versionedPartitionName,
         WALStorage storage,

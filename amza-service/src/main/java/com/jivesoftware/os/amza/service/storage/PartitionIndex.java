@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -31,7 +32,7 @@ import static com.jivesoftware.os.amza.service.storage.PartitionProvider.REGION_
 /**
  * @author jonathan.colt
  */
-public class PartitionIndex implements RowChanges {
+public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -64,6 +65,12 @@ public class PartitionIndex implements RowChanges {
     public void open(TxPartitionStatus txPartitionState) throws Exception {
 
         PartitionStore partitionIndexStore = get(PartitionProvider.REGION_INDEX);
+        get(PartitionProvider.RING_INDEX);
+        get(PartitionProvider.NODE_INDEX);
+        get(PartitionProvider.HIGHWATER_MARK_INDEX);
+        get(PartitionProvider.REGION_ONLINE_INDEX);
+        get(PartitionProvider.REGION_PROPERTIES);
+
         final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
@@ -75,7 +82,9 @@ public class PartitionIndex implements RowChanges {
                 openExecutor.submit(() -> {
                     try {
                         txPartitionState.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-                            get(versionedPartitionName);
+                            if (versionedPartitionName != null) {
+                                get(versionedPartitionName);
+                            }
                             return null;
                         });
                         numOpened.incrementAndGet();
@@ -93,20 +102,24 @@ public class PartitionIndex implements RowChanges {
         while (!openExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
             LOG.info("Still opening partitions: opened={} failed={} total={}", numOpened.get(), numFailed.get(), total.get());
         }
-
-        get(PartitionProvider.RING_INDEX);
-        get(PartitionProvider.NODE_INDEX);
-        get(PartitionProvider.HIGHWATER_MARK_INDEX);
-        get(PartitionProvider.REGION_ONLINE_INDEX);
-        get(PartitionProvider.REGION_PROPERTIES);
     }
 
-    public PartitionProperties getProperties(PartitionName partitionName) {
+    @Override
+    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
 
         PartitionProperties properties = partitionProperties.get(partitionName);
-        if (properties == null && partitionName.isSystemPartition()) {
-            properties = coldstartSystemPartitionProperties(partitionName);
-            partitionProperties.put(partitionName, properties);
+        if (properties == null) {
+            if (partitionName.isSystemPartition()) {
+                properties = coldstartSystemPartitionProperties(partitionName);
+                partitionProperties.put(partitionName, properties);
+            } else {
+                WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(new WALKey(partitionName.toBytes()));
+                if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
+                    return null;
+                }
+                properties = partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
+                partitionProperties.put(partitionName, properties);
+            }
         }
         return properties;
     }
@@ -121,21 +134,14 @@ public class PartitionIndex implements RowChanges {
             }
         }
 
-        WALKey partitionNameKey = new WALKey(partitionName.toBytes());
-        if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
-            if (!getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(partitionNameKey)) {
-                return null;
-            }
+        if (!versionedPartitionName.getPartitionName().isSystemPartition() &&
+            !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(new WALKey(partitionName.toBytes()))) {
+            return null;
         }
 
         PartitionProperties properties = getProperties(partitionName);
         if (properties == null) {
-            WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(partitionNameKey);
-            if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
-                return null;
-            }
-            properties = partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
-            partitionProperties.put(partitionName, properties);
+            return null;
         }
         return open(versionedPartitionName, properties);
     }
@@ -161,7 +167,7 @@ public class PartitionIndex implements RowChanges {
     private PartitionStore open(VersionedPartitionName versionedPartitionName, PartitionProperties properties) throws Exception {
         synchronized (locksProvider.lock(versionedPartitionName, 1234)) {
             ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.computeIfAbsent(versionedPartitionName.getPartitionName(),
-                (partitionName) -> new ConcurrentHashMap<>());
+                (key) -> new ConcurrentHashMap<>());
 
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
@@ -175,6 +181,7 @@ public class PartitionIndex implements RowChanges {
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
             LOG.info("Opened partition:" + versionedPartitionName);
+
             return partitionStore;
         }
     }
@@ -191,6 +198,7 @@ public class PartitionIndex implements RowChanges {
         return get(versionedPartitionName) != null;
     }
 
+    @Override
     public Iterable<VersionedPartitionName> getAllPartitions() {
         return Iterables.concat(Iterables.transform(partitionStores.entrySet(), (partitionVersions) -> {
             return Iterables.transform(partitionVersions.getValue().keySet(), (partitionVersion) -> {
@@ -204,11 +212,11 @@ public class PartitionIndex implements RowChanges {
         if (partitionName.equals(HIGHWATER_MARK_INDEX.getPartitionName())) {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new PartitionProperties(storageDescriptor, 0, 0, false);
+            properties = new PartitionProperties(storageDescriptor, 0, false);
         } else {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new PartitionProperties(storageDescriptor, 2, 2, false);
+            properties = new PartitionProperties(storageDescriptor, 2, false);
         }
         return properties;
     }

@@ -2,7 +2,8 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.shared.ring.AmzaRing;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
@@ -23,14 +24,17 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
 
     private final String template;
     private final SoyRenderer renderer;
-    private final AmzaRing amzaRing;
+    private final AmzaRingWriter ringWriter;
+    private final AmzaRingReader ringReader;
 
     public AmzaRingsPluginRegion(String template,
         SoyRenderer renderer,
-        AmzaRing amzaRing) {
+        AmzaRingWriter ringWriter,
+        AmzaRingReader ringReader) {
         this.template = template;
         this.renderer = renderer;
-        this.amzaRing = amzaRing;
+        this.ringWriter = ringWriter;
+        this.ringReader = ringReader;
     }
 
     public static class AmzaRingsPluginRegionInput {
@@ -58,13 +62,13 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
                 final AmzaRingsPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
-                    amzaRing.addRingMember(input.ringName, new RingMember(input.member));
+                    ringWriter.addRingMember(input.ringName, new RingMember(input.member));
                 } else if (input.action.equals("remove")) {
-                    amzaRing.removeRingMember(input.ringName, new RingMember(input.member));
+                    ringWriter.removeRingMember(input.ringName, new RingMember(input.member));
                 }
 
                 final List<Map<String, String>> rows = new ArrayList<>();
-                amzaRing.allRings((String ringName, RingMember ringMember, RingHost ringHost) -> {
+                ringReader.allRings((String ringName, RingMember ringMember, RingHost ringHost) -> {
                     if ((input.ringName.isEmpty() || ringName.contains(input.ringName))
                         && (input.member.isEmpty() || "".contains(input.member))
                         && (input.status.isEmpty() || "".contains(input.status))) {

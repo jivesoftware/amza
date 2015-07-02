@@ -25,7 +25,6 @@ import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
-import com.jivesoftware.os.amza.service.replication.SendFailureListener;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
@@ -34,13 +33,14 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.UpdatesTaker;
-import com.jivesoftware.os.amza.transport.http.replication.HttpUpdatesTaker;
+import com.jivesoftware.os.amza.shared.take.RowsTaker;
+import com.jivesoftware.os.amza.transport.http.replication.HttpRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.server.InitializeRestfulServer;
 import com.jivesoftware.os.routing.bird.server.JerseyEndpoints;
@@ -67,7 +67,10 @@ public class Main {
 
         // todo need a better way to create writter id.
         int writerId = Integer.parseInt(System.getProperty("amza.id", String.valueOf(new Random().nextInt(512))));
-        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(writerId));
+        SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
+        final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(writerId),
+            idPacker,
+            new JiveEpochTimestampProvider());
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -83,7 +86,7 @@ public class Main {
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
         indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
 
-        UpdatesTaker taker = new HttpUpdatesTaker(amzaStats);
+        RowsTaker taker = new HttpRowsTaker(amzaStats);
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
@@ -103,10 +106,10 @@ public class Main {
             ringMember,
             ringHost,
             orderIdProvider,
+            idPacker,
             partitionPropertyMarshaller,
             indexProviderRegistry,
             taker,
-            Optional.<SendFailureListener>absent(),
             Optional.<TakeFailureListener>absent(),
             (RowsChanged changes) -> {
             });
@@ -115,8 +118,7 @@ public class Main {
             .addEndpoint(AmzaEndpoints.class)
             .addInjectable(AmzaService.class, amzaService)
             .addEndpoint(AmzaReplicationRestEndpoints.class)
-            .addInjectable(AmzaInstance.class, amzaService)
-            .addInjectable(HighwaterStorage.class, amzaService.getHighwaterMarks());
+            .addInjectable(AmzaInstance.class, amzaService);
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, amzaStats, new AmzaUIInitializer.InjectionCallback() {
 
@@ -150,7 +152,11 @@ public class Main {
         System.out.println("-----------------------------------------------------------------------");
 
         if (clusterName != null) {
-            AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getAmzaHostRing(), clusterName, multicastGroup, multicastPort);
+            AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getRingReader(),
+                amzaService.getRingWriter(),
+                clusterName,
+                multicastGroup,
+                multicastPort);
             amzaDiscovery.start();
             System.out.println("-----------------------------------------------------------------------");
             System.out.println("|      Amza Service Discovery Online");

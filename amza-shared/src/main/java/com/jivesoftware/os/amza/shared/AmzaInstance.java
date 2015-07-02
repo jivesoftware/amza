@@ -17,7 +17,6 @@ package com.jivesoftware.os.amza.shared;
 
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import java.io.DataOutputStream;
 import java.util.Set;
@@ -30,21 +29,18 @@ public interface AmzaInstance {
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
 
-    void streamingTakeFromPartition(DataOutputStream dos,
-        RingMember ringMember,
-        RingHost ringHost,
-        PartitionName partitionName,
-        long highestTransactionId) throws Exception;
+    void availableRowsStream(DataOutputStream dos,
+        RingMember remoteRingMember,
+        long takeSessionId,
+        long timeoutMillis) throws Exception;
 
-    void takeAcks(RingMember ringMember, RingHost ringHost, StreamableAcks acks) throws Exception;
+    void rowsStream(DataOutputStream dos,
+        RingMember remoteRingMember,
+        VersionedPartitionName localVersionedPartitionName,
+        long localTxId) throws Exception;
 
-    interface StreamableAcks {
-        void stream(AcksStream acksStream) throws Exception;
-    }
-
-    interface AcksStream {
-
-        void stream(VersionedPartitionName versionedPartitionName, long txId) throws Exception;
-    }
+    void rowsTaken(RingMember remoteRingMember,
+        VersionedPartitionName localVersionedPartitionName,
+        long localTxId) throws Exception;
 
 }

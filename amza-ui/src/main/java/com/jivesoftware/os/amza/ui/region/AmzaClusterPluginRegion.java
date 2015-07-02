@@ -2,7 +2,8 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.shared.ring.AmzaRing;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
@@ -24,14 +25,17 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
 
     private final String template;
     private final SoyRenderer renderer;
-    private final AmzaRing amzaRing;
+    private final AmzaRingWriter ringWriter;
+    private final AmzaRingReader ringReader;
 
     public AmzaClusterPluginRegion(String template,
         SoyRenderer renderer,
-        AmzaRing amzaRing) {
+        AmzaRingWriter ringWriter,
+        AmzaRingReader ringReader) {
         this.template = template;
         this.renderer = renderer;
-        this.amzaRing = amzaRing;
+        this.ringWriter = ringWriter;
+        this.ringReader = ringReader;
     }
 
     public static class AmzaClusterPluginRegionInput {
@@ -59,15 +63,15 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
                 AmzaClusterPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
-                    amzaRing.register(new RingMember(input.member), new RingHost(input.host, input.port));
-                    amzaRing.addRingMember("system", new RingMember(input.member));
+                    ringWriter.register(new RingMember(input.member), new RingHost(input.host, input.port));
+                    ringWriter.addRingMember(AmzaRingReader.SYSTEM_RING, new RingMember(input.member));
                 } else if (input.action.equals("remove")) {
-                    amzaRing.removeRingMember("system", new RingMember(input.member));
-                    amzaRing.deregister(new RingMember(input.member));
+                    ringWriter.removeRingMember(AmzaRingReader.SYSTEM_RING, new RingMember(input.member));
+                    ringWriter.deregister(new RingMember(input.member));
                 }
 
                 List<Map<String, String>> rows = new ArrayList<>();
-                for (Entry<RingMember, RingHost> node : amzaRing.getRing("system").entrySet()) {
+                for (Entry<RingMember, RingHost> node : ringReader.getRing(AmzaRingReader.SYSTEM_RING).entrySet()) {
 
                     Map<String, String> row = new HashMap<>();
                     row.put("member", node.getKey().getMember());

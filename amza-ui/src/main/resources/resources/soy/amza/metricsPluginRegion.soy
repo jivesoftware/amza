@@ -1,0 +1,117 @@
+{namespace soy.page}
+
+/**
+ * @param availableRowsStream
+ * @param rowsStream
+ * @param rowsTaken
+ * @param addMember
+ * @param removeMember
+ * @param getRing
+ * @param longPolled
+ * @param grandTotals
+ * @param regionTotals
+ */
+{template .metricsPluginRegion}
+
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-road"></span>{sp}Running</div>
+        <div class="panel-body">
+            <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <td>availableRowsStream{sp}
+                        <td>rowsStream{sp}
+                        <td>rowsTaken{sp}
+                        <td>addMember{sp}
+                        <td>removeMember{sp}
+                        <td>getRing{sp}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{$availableRowsStream}</td>
+                        <td>{$rowsStream}</td>
+                        <td>{$rowsTaken}</td>
+                        <td>{$addMember}</td>
+                        <td>{$removeMember}</td>
+                        <td>{$getRing}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-grain"></span>{sp}Polling</div>
+        <div class="panel-body">
+            
+            <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th><span class="glyphicon glyphicon-open"></span>{sp}Member</th>
+                        <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Polled</th>
+                        <th><span class="glyphicon glyphicon-save"></span>{sp}Available</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {foreach $l in $longPolled}
+                        <tr>
+                            <td>{$l.member}</td>
+                            <td>{$l.longPolled}</td>
+                            <td>{$l.longPollAvailables}</td>
+                        </tr>
+                    {/foreach}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>{sp}Metrics</div>
+        <div class="panel-body">
+             <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Ring</th>
+                        <th>Count</th>
+                        <th><span class="glyphicon glyphicon-open"></span>{sp}Get</th>
+                        <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Scan</th>
+                        <th><span class="glyphicon glyphicon-save"></span>{sp}Direct Applied</th>
+                        <th><span class="glyphicon glyphicon-edit"></span>{sp}Updates</th>
+                        <th><span class="glyphicon glyphicon-share"></span>{sp}Offered</th>
+                        <th><span class="glyphicon glyphicon-upload"></span>{sp}Took</th>
+                        <th><span class="glyphicon glyphicon-import"></span>{sp}Took Applied</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td><b>{$grandTotals.gets}</b>{sp}<i>{$grandTotals.getsLag}millis lag</i></td>
+                        <td><b>{$grandTotals.scans}</b>{sp}<i>{$grandTotals.scansLag}millis lag</i></td>
+                        <td><b>{$grandTotals.directApplies}</b>{sp}<i>{$grandTotals.directAppliesLag}millis lag</i></td>
+                        <td><b>{$grandTotals.updates}</b>{sp}<i>{$grandTotals.updatesLag}millis lag</i></td>
+                        <td><b>{$grandTotals.offers}</b>{sp}<i>{$grandTotals.offersLag}millis lag</i></td>
+                        <td><b>{$grandTotals.takes}</b>{sp}<i>{$grandTotals.takesLag}millis lag</i></td>
+                        <td><b>{$grandTotals.takeApplies}</b>{sp}<i>{$grandTotals.takeAppliesLag}millis lag</i></td>
+                    </tr>
+                    {foreach $r in $regionTotals}
+                        <tr>
+                            <td><a href="/amza/ui/metrics?partitionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-sunglasses">{$r.name}</a></td>
+                            <td>{$r.ringName}</td>
+                            <td><b>{$r.count}</b></td>
+                            <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag}millis lag</i></td>
+                            <td><b>{$r.scans}</b>{sp}<i>{$r.scansLag}millis lag</i></td>
+                            <td><b>{$r.directApplies}</b><i>{sp}{$r.directAppliesLag}millis lag</i></td>
+                            <td><b>{$r.updates}</b>{sp}<i>{$r.updatesLag}millis lag</i></td>
+                            <td><b>{$r.offers}</b>{sp}<i>{$r.offersLag}millis lag</i></td>
+                            <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
+                            <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
+                        </tr>
+                    {/foreach}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{/template}

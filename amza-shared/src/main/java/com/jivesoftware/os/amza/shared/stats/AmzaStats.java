@@ -3,8 +3,6 @@ package com.jivesoftware.os.amza.shared.stats;
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -21,7 +19,6 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaStats {
@@ -31,20 +28,27 @@ public class AmzaStats {
     private static final JiveEpochTimestampProvider jiveEpochTimestampProvider = new JiveEpochTimestampProvider();
 
     private final Map<RingMember, AtomicLong> took = new ConcurrentSkipListMap<>();
-    private final Map<RingMember, AtomicLong> offered = new ConcurrentHashMap<>();
 
     private final Map<String, Long> ongoingCompaction = new ConcurrentHashMap<>();
     private final List<Entry<String, Long>> recentCompaction = new ArrayList<>();
     private final AtomicLong totalCompactions = new AtomicLong();
+    public final Map<RingMember, AtomicLong> longPolled = new ConcurrentSkipListMap<>();
+    public final Map<RingMember, AtomicLong> longPollAvailables = new ConcurrentSkipListMap<>();
 
     private final Totals grandTotals = new Totals();
     private final Map<PartitionName, Totals> partitionTotals = new ConcurrentHashMap<>();
 
     public final Multiset<RingMember> takeErrors = ConcurrentHashMultiset.create();
-    public final Multiset<RingMember> replicateErrors = ConcurrentHashMultiset.create();
 
     public final IoStats ioStats = new IoStats();
     public final NetStats netStats = new NetStats();
+
+    public final AtomicLong addMember = new AtomicLong();
+    public final AtomicLong removeMember = new AtomicLong();
+    public final AtomicLong getRing = new AtomicLong();
+    public final AtomicLong rowsStream = new AtomicLong();
+    public final AtomicLong availableRowsStream = new AtomicLong();
+    public final AtomicLong rowsTaken = new AtomicLong();
 
     public AmzaStats() {
     }
@@ -55,48 +59,32 @@ public class AmzaStats {
         public final AtomicLong getsLag = new AtomicLong();
         public final AtomicLong scans = new AtomicLong();
         public final AtomicLong scansLag = new AtomicLong();
+        public final AtomicLong updates = new AtomicLong();
+        public final AtomicLong updatesLag = new AtomicLong();
+        public final AtomicLong offers = new AtomicLong();
+        public final AtomicLong offersLag = new AtomicLong();
         public final AtomicLong takes = new AtomicLong();
         public final AtomicLong takesLag = new AtomicLong();
         public final AtomicLong takeApplies = new AtomicLong();
         public final AtomicLong takeAppliesLag = new AtomicLong();
-        public final AtomicLong replicates = new AtomicLong();
-        public final AtomicLong replicatesLag = new AtomicLong();
-        public final AtomicLong received = new AtomicLong();
-        public final AtomicLong receivedLag = new AtomicLong();
-        public final AtomicLong receivedApplies = new AtomicLong();
-        public final AtomicLong receivedAppliesLag = new AtomicLong();
         public final AtomicLong directApplies = new AtomicLong();
         public final AtomicLong directAppliesLag = new AtomicLong();
     }
 
+    public void longPolled(RingMember member) {
+        longPolled.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
+    }
+
+    public void longPollAvailables(RingMember member) {
+        longPollAvailables.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
+    }
+
     public void took(RingMember member) {
-        AtomicLong got = took.get(member);
-        if (got == null) {
-            got = new AtomicLong();
-            took.put(member, got);
-        }
-        got.incrementAndGet();
+        took.computeIfAbsent(member, (key) -> new AtomicLong()).incrementAndGet();
     }
 
     public long getTotalTakes(RingMember member) {
         AtomicLong got = took.get(member);
-        if (got == null) {
-            return 0;
-        }
-        return got.get();
-    }
-
-    public void offered(Entry<RingMember, RingHost> node) {
-        AtomicLong got = offered.get(node.getKey());
-        if (got == null) {
-            got = new AtomicLong();
-            offered.put(node.getKey(), got);
-        }
-        got.incrementAndGet();
-    }
-
-    public long getTotalOffered(RingMember member) {
-        AtomicLong got = offered.get(member);
         if (got == null) {
             return 0;
         }
@@ -138,6 +126,24 @@ public class AmzaStats {
         return grandTotals;
     }
 
+    public void updates(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
+        grandTotals.updates.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.updates.addAndGet(count);
+        long lag = lag(smallestTxId);
+        totals.updatesLag.set(lag);
+        grandTotals.updatesLag.set((grandTotals.updatesLag.get() + lag) / 2);
+    }
+
+    public void offers(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
+        grandTotals.offers.addAndGet(count);
+        Totals totals = partitionTotals(partitionName);
+        totals.offers.addAndGet(count);
+        long lag = lag(smallestTxId);
+        totals.offersLag.set(lag);
+        grandTotals.offersLag.set((grandTotals.offersLag.get() + lag) / 2);
+    }
+
     public void took(RingMember from, PartitionName partitionName, int count, long smallestTxId) {
         grandTotals.takes.addAndGet(count);
         Totals totals = partitionTotals(partitionName);
@@ -165,33 +171,6 @@ public class AmzaStats {
         grandTotals.directAppliesLag.set((grandTotals.directAppliesLag.get() + lag) / 2);
     }
 
-    public void replicated(RingMember to, PartitionName partitionName, int count, long smallestTxId) {
-        grandTotals.replicates.addAndGet(count);
-        Totals totals = partitionTotals(partitionName);
-        totals.replicates.addAndGet(count);
-        long lag = lag(smallestTxId);
-        totals.replicatesLag.set(lag);
-        grandTotals.replicatesLag.set((grandTotals.replicatesLag.get() + lag) / 2);
-    }
-
-    public void received(PartitionName versionedPartitionName, int count, long smallestTxId) {
-        grandTotals.received.addAndGet(count);
-        Totals totals = partitionTotals(versionedPartitionName);
-        totals.received.addAndGet(count);
-        long lag = lag(smallestTxId);
-        totals.receivedLag.set(lag);
-        grandTotals.receivedLag.set((grandTotals.receivedLag.get() + lag) / 2);
-    }
-
-    public void receivedApplied(PartitionName partitionName, int count, long smallestTxId) {
-        grandTotals.receivedApplies.addAndGet(count);
-        Totals totals = partitionTotals(partitionName);
-        totals.receivedApplies.addAndGet(count);
-        long lag = lag(smallestTxId);
-        totals.receivedAppliesLag.set(lag);
-        grandTotals.receivedAppliesLag.set((grandTotals.receivedAppliesLag.get() + lag) / 2);
-    }
-
     private Totals partitionTotals(PartitionName versionedPartitionName) {
         Totals got = partitionTotals.get(versionedPartitionName);
         if (got == null) {
@@ -203,19 +182,6 @@ public class AmzaStats {
 
     public Map<PartitionName, Totals> getPartitionTotals() {
         return partitionTotals;
-    }
-
-    private void logChanges(String name, RowsChanged changed) {
-        if (!changed.isEmpty()) {
-            VersionedPartitionName versionedPartitionName = changed.getVersionedPartitionName();
-            PartitionName partitionName = versionedPartitionName.getPartitionName();
-
-            LOG.debug("{} {} to partition: {}:{} lag:{}", new Object[]{name,
-                changed.getApply().size(),
-                partitionName.getPartitionName(),
-                partitionName.getRingName(),
-                lag(changed)});
-        }
     }
 
     long lag(RowsChanged changed) {

@@ -15,13 +15,13 @@
  */
 package com.jivesoftware.os.amza.service.replication;
 
-import com.google.common.collect.ListMultimap;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class MemoryBackedHighwaterStorage implements HighwaterStorage {
@@ -100,7 +100,10 @@ public class MemoryBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public void flush(ListMultimap<RingMember, VersionedPartitionName> flush) throws Exception {
+    public void flush(Callable<Void> preFlush) throws Exception {
+        if (preFlush != null) {
+            preFlush.call();
+        }
     }
 
 }

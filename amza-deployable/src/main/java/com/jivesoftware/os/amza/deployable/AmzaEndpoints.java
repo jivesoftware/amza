@@ -16,12 +16,13 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.collect.Iterables;
-import com.jivesoftware.os.amza.service.AmzaPartition;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -61,14 +62,14 @@ public class AmzaEndpoints {
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
             String[] keys = key.split(",");
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
                 updates.set(new WALKey(keys[i].getBytes()), values[i].getBytes(), -1);
             }
-            amzaPartition.commit(updates, 1, 30000);
+            partitionAPI.commit(updates, 1, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
@@ -81,12 +82,12 @@ public class AmzaEndpoints {
     @Path("/multiSet/{partition}")
     public Response multiSet(@PathParam("partition") String partition, Map<String, String> values) {
         try {
-            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()),
                 input.getValue().getBytes())), -1);
-            amzaPartition.commit(updates, 1, 30000);
+            partitionAPI.commit(updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -107,9 +108,9 @@ public class AmzaEndpoints {
                 rawKeys.add(new WALKey(k.getBytes()));
             }
 
-            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
             List<byte[]> got = new ArrayList<>();
-            amzaPartition.get(rawKeys, (rowTxId, key1, scanned) -> {
+            partitionAPI.get(rawKeys, (rowTxId, key1, scanned) -> {
                 got.add(scanned.getValue());
                 return true;
             });
@@ -126,10 +127,10 @@ public class AmzaEndpoints {
     public Response remove(@QueryParam("partition") String partition,
         @QueryParam("key") String key) {
         try {
-            AmzaPartition amzaPartition = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             updates.remove(new WALKey(key.getBytes()), -1);
-            amzaPartition.commit(updates, 1, 30000);
+            partitionAPI.commit(updates, 1, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove partition:" + partition + " key:" + key, x);
@@ -137,19 +138,19 @@ public class AmzaEndpoints {
         }
     }
 
-    AmzaPartition createPartitionIfAbsent(String simplePartitionName) throws Exception {
+    AmzaPartitionAPI createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
-        int ringSize = amzaService.getAmzaHostRing().getRingSize("default");
-        int systemRingSize = amzaService.getAmzaHostRing().getRingSize("system");
+        int ringSize = amzaService.getRingReader().getRingSize("default");
+        int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
         if (ringSize < systemRingSize) {
-            amzaService.getAmzaHostRing().buildRandomSubRing("default", systemRingSize);
+            amzaService.getRingWriter().buildRandomSubRing("default", systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, 1, false));
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, false));
 
         AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
         long start = System.currentTimeMillis();

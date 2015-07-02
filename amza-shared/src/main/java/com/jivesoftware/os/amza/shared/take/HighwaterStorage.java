@@ -15,10 +15,10 @@
  */
 package com.jivesoftware.os.amza.shared.take;
 
-import com.google.common.collect.ListMultimap;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import java.util.concurrent.Callable;
 
 public interface HighwaterStorage {
 
@@ -32,7 +32,7 @@ public interface HighwaterStorage {
 
     WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception;
 
-    void flush(ListMultimap<RingMember, VersionedPartitionName> flush) throws Exception;
+    void flush(Callable<Void> preFlush) throws Exception;
 
     boolean expunge(VersionedPartitionName versionedPartitionName) throws Exception;
 

@@ -10,28 +10,26 @@
         <td></td>
         <td></td>
         <td></td>
-        <td>{$grandTotals.gets}{sp}{$grandTotals.getsLag}millis lag</td>
-        <td>{$grandTotals.scans}{sp}{$grandTotals.scansLag}millis lag</td>
-        <td>{$grandTotals.takes}{sp}{$grandTotals.takesLag}millis lag</td>
-        <td>{$grandTotals.takeApplies}{sp}{$grandTotals.takeAppliesLag}millis lag</td>
-        <td>{$grandTotals.received}{sp}{$grandTotals.receivedLag}millis lag</td>
-        <td>{$grandTotals.applies}{sp}{$grandTotals.appliesLag}millis lag</td>
-        <td>{$grandTotals.directApplies}{sp}{$grandTotals.directAppliesLag}millis lag</td>
-        <td>{$grandTotals.replicates}{sp}{$grandTotals.replicatesLag}millis lag</td>
+        <td><b>{$grandTotals.gets}</b>{sp}<i>{$grandTotals.getsLag}millis lag</i></td>
+        <td><b>{$grandTotals.scans}</b>{sp}<i>{$grandTotals.scansLag}millis lag</i></td>
+        <td><b>{$grandTotals.directApplies}</b>{sp}<i>{$grandTotals.directAppliesLag}millis lag</i></td>
+        <td><b>{$grandTotals.updates}</b>{sp}<i>{$grandTotals.updatesLag}millis lag</i></td>
+        <td><b>{$grandTotals.offers}</b>{sp}<i>{$grandTotals.offersLag}millis lag</i></td>
+        <td><b>{$grandTotals.takes}</b>{sp}<i>{$grandTotals.takesLag}millis lag</i></td>
+        <td><b>{$grandTotals.takeApplies}</b>{sp}<i>{$grandTotals.takeAppliesLag}millis lag</i></td>
     </tr>
     {foreach $r in $regionTotals}
         <tr>
             <td>{$r.name}</td>
             <td>{$r.ringName}</td>
-            <td>{$r.count}</td>
-            <td>{$r.gets}{sp}{$r.getsLag}millis lag</td>
-            <td>{$r.scans}{sp}{$r.scansLag}millis lag</td>
-            <td>{$r.takes}{sp}{$r.takesLag}millis lag</td>
-            <td>{$r.takeApplies}{sp}{$r.takeAppliesLag}millis lag</td>
-            <td>{$r.received}{sp}{$r.receivedLag}millis lag</td>
-            <td>{$r.applies}{sp}{$r.appliesLag}millis lag</td>
-            <td>{$r.directApplies}{sp}{$r.directAppliesLag}millis lag</td>
-            <td>{$r.replicates}{sp}{$grandTotals.replicatesLag}millis lag</td>
+            <td><b>{$r.count}</b></td>
+            <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag}millis lag</i></td>
+            <td><b>{$r.scans}</b>{sp}<i>{$r.scansLag}millis lag</i></td>
+            <td><b>{$r.directApplies}</b><i>{sp}{$r.directAppliesLag}millis lag</i></td>
+            <td><b>{$r.updates}</b>{sp}<i>{$r.updatesLag}millis lag</i></td>
+            <td><b>{$r.offers}</b>{sp}<i>{$r.offersLag}millis lag</i></td>
+            <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
+            <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
         </tr>
     {/foreach}
                 

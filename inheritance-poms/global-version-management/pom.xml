@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.92</version>
+        <version>0.93</version>
         <relativePath>../global-repo-management/pom.xml</relativePath>
     </parent>
     <artifactId>global-version-management</artifactId>
@@ -200,6 +200,12 @@
                 <groupId>commons-exec</groupId>
                 <artifactId>commons-exec</artifactId>
                 <version>1.1</version>
+                <type>jar</type>
+            </dependency>
+            <dependency>
+                <groupId>javax.inject</groupId>
+                <artifactId>javax.inject</artifactId>
+                <version>1</version>
                 <type>jar</type>
             </dependency>
             <dependency>

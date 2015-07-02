@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.region;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -40,11 +39,12 @@ import javax.management.ReflectionException;
  *
  */
 // soy.page.healthPluginRegion
-public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginRegion.MetricsPluginRegionInput>> {
+public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.MetricsPluginRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
     private final String template;
+    private final String partitionMetricsTemplate;
     private final String statsTemplate;
     private final SoyRenderer renderer;
     private final AmzaRingReader ringReader;
@@ -56,12 +56,14 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
     private final RuntimeMXBean runtimeBean;
 
     public MetricsPluginRegion(String template,
+        String partitionMetricsTemplate,
         String statsTemplate,
         SoyRenderer renderer,
         AmzaRingReader ringReader,
         AmzaService amzaService,
         AmzaStats amzaStats) {
         this.template = template;
+        this.partitionMetricsTemplate = partitionMetricsTemplate;
         this.statsTemplate = statsTemplate;
         this.renderer = renderer;
         this.ringReader = ringReader;
@@ -76,54 +78,56 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
 
     public static class MetricsPluginRegionInput {
 
-        final String cluster;
-        final String host;
-        final String service;
+        final String partitionName;
 
-        public MetricsPluginRegionInput(String cluster, String host, String service) {
-            this.cluster = cluster;
-            this.host = host;
-            this.service = service;
+        public MetricsPluginRegionInput(String partitionName) {
+            this.partitionName = partitionName;
         }
     }
 
     @Override
-    public String render(Optional<MetricsPluginRegionInput> optionalInput) {
+    public String render(MetricsPluginRegionInput input) {
         Map<String, Object> data = Maps.newHashMap();
 
         try {
-            MetricsPluginRegionInput input = optionalInput.get();
-            List<Map<String, String>> longPolled = new ArrayList<>();
-            for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
-                AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
-                longPolled.add(ImmutableMap.of("member", polled.getKey().getMember(),
-                    "longPolled", String.valueOf(polled.getValue().get()),
-                    "longPollAvailables", String.valueOf(longPollAvailables == null ? "-1" : longPollAvailables.get())));
-            }
 
-            data.put("longPolled", longPolled);
+            if (input.partitionName.length() > 0) {
+                data.put("partitionName", input.partitionName);
+                return renderer.render(partitionMetricsTemplate, data);
+            } else {
 
-            data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
-            List<Map<String, Object>> regionTotals = new ArrayList<>();
-            ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
-            Collections.sort(partitionNames);
-            for (PartitionName partitionName : partitionNames) {
-                Totals totals = amzaStats.getPartitionTotals().get(partitionName);
-                if (totals == null) {
-                    totals = new Totals();
+                List<Map<String, String>> longPolled = new ArrayList<>();
+                for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
+                    AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
+                    longPolled.add(ImmutableMap.of("member", polled.getKey().getMember(),
+                        "longPolled", String.valueOf(polled.getValue().get()),
+                        "longPollAvailables", String.valueOf(longPollAvailables == null ? "-1" : longPollAvailables.get())));
                 }
-                regionTotals.add(regionTotals(partitionName, totals));
-            }
-            data.put("regionTotals", regionTotals);
 
+                data.put("longPolled", longPolled);
+
+                data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
+                List<Map<String, Object>> regionTotals = new ArrayList<>();
+                ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
+                Collections.sort(partitionNames);
+                for (PartitionName partitionName : partitionNames) {
+                    Totals totals = amzaStats.getPartitionTotals().get(partitionName);
+                    if (totals == null) {
+                        totals = new Totals();
+                    }
+                    regionTotals.add(regionTotals(partitionName, totals));
+                }
+                data.put("regionTotals", regionTotals);
+            }
+            return renderer.render(template, data);
         } catch (Exception e) {
             log.error("Unable to retrieve data", e);
+            return "Error";
         }
 
-        return renderer.render(template, data);
     }
 
-    public String renderStats() {
+    public String renderStats(String filter) {
         Map<String, Object> data = Maps.newHashMap();
         try {
             data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
@@ -131,11 +135,13 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
             ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
             Collections.sort(partitionNames);
             for (PartitionName partitionName : partitionNames) {
-                Totals totals = amzaStats.getPartitionTotals().get(partitionName);
-                if (totals == null) {
-                    totals = new Totals();
+                if (partitionName.getName().contains(filter)) {
+                    Totals totals = amzaStats.getPartitionTotals().get(partitionName);
+                    if (totals == null) {
+                        totals = new Totals();
+                    }
+                    regionTotals.add(regionTotals(partitionName, totals));
                 }
-                regionTotals.add(regionTotals(partitionName, totals));
             }
             data.put("regionTotals", regionTotals);
         } catch (Exception e) {
@@ -265,7 +271,7 @@ public class MetricsPluginRegion implements PageRegion<Optional<MetricsPluginReg
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;

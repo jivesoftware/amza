@@ -1,0 +1,31 @@
+{namespace soy.page}
+
+/**
+ * @param partitionName
+ */
+{template .partitionMetricsPluginRegion}
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>Partition{sp}{$partitionName}{sp}Metrics</div>
+        <div class="panel-body">
+             <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Ring</th>
+                        <th>Count</th>
+                        <th><span class="glyphicon glyphicon-open"></span>{sp}Get</th>
+                        <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Scan</th>
+                        <th><span class="glyphicon glyphicon-save"></span>{sp}Direct Applied</th>
+                        <th><span class="glyphicon glyphicon-edit"></span>{sp}Updates</th>
+                        <th><span class="glyphicon glyphicon-share"></span>{sp}Offered</th>
+                        <th><span class="glyphicon glyphicon-upload"></span>{sp}Took</th>
+                        <th><span class="glyphicon glyphicon-import"></span>{sp}Took Applied</th>
+                    </tr>
+                </thead>
+                <tbody id="stats" data-partition-name="{$partitionName}">
+                    
+                </tbody>
+            </table>
+        </div>
+    </div>
+{/template}

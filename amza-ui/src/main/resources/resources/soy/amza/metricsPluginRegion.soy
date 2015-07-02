@@ -62,7 +62,7 @@
                     </tr>
                     {foreach $r in $regionTotals}
                         <tr>
-                            <td>{$r.name}</td>
+                            <td><a href="/amza/ui/metrics?partitionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-sunglasses">{$r.name}</a></td>
                             <td>{$r.ringName}</td>
                             <td><b>{$r.count}</b></td>
                             <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag}millis lag</i></td>

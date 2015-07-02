@@ -23,10 +23,10 @@ amza.stats = {
     poll: function () {
         $.ajax({
             type: "GET",
-            url: "/amza/ui/metrics/stats",
+            url: "/amza/ui/metrics/stats/",
             dataType: "html",
             data: {
-                name: ""
+                partitionName: $('#stats').data('partition-name')
             },
             //contentType: "application/json",
             success: function (data) {

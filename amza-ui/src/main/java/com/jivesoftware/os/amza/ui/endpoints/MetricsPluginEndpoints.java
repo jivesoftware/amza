@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
-import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.MetricsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
@@ -32,19 +31,17 @@ public class MetricsPluginEndpoints {
     @GET
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
-    public Response filter(@QueryParam("cluster") @DefaultValue("") String cluster,
-        @QueryParam("host") @DefaultValue("") String host,
-        @QueryParam("service") @DefaultValue("") String service) {
+    public Response filter(@QueryParam("partitionName") @DefaultValue("") String partitionName) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new MetricsPluginRegionInput(cluster, host, service)));
+            new MetricsPluginRegionInput(partitionName));
         return Response.ok(rendered).build();
     }
 
     @GET
     @Produces(MediaType.TEXT_HTML)
-    @Path("/stats")
-    public Response stats() {
-        return Response.ok(pluginRegion.renderStats()).build();
+    @Path("/stats/")
+    public Response stats(@QueryParam("partitionName") String partitionName) {
+        return Response.ok(pluginRegion.renderStats(partitionName)).build();
     }
 
     @GET

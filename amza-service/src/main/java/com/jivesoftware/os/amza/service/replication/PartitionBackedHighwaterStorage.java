@@ -198,7 +198,6 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             return;
         }
         bigBird.acquire(numPermits);
-        LOG.info("Flushing HIGHWATERS");
         try {
             long flushedUpdates = updatesSinceLastFlush.get();
             if (flushedUpdates > flushHighwatersAfterNUpdates) {
@@ -226,7 +225,6 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                         });
 
                     }, walUpdated);
-                LOG.info("Flushed HIGHWATERS");
                 updatesSinceLastFlush.addAndGet(-flushedUpdates);
             }
         } finally {

@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
@@ -44,13 +45,16 @@ import javax.ws.rs.core.StreamingOutput;
 public class AmzaReplicationRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private final AmzaStats amzaStats;
     private final AmzaRingWriter ringWriter;
     private final AmzaRingReader ringReader;
     private final AmzaInstance amzaInstance;
 
-    public AmzaReplicationRestEndpoints(@Context AmzaRingWriter ringWriter,
+    public AmzaReplicationRestEndpoints(@Context AmzaStats amzaStats,
+        @Context AmzaRingWriter ringWriter,
         @Context AmzaRingReader ringReader,
         @Context AmzaInstance amzaInstance) {
+        this.amzaStats = amzaStats;
         this.ringWriter = ringWriter;
         this.ringReader = ringReader;
         this.amzaInstance = amzaInstance;
@@ -63,14 +67,17 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("host") String host,
         @PathParam("port") int port) {
         try {
+            amzaStats.addMember.incrementAndGet();
             LOG.info("Attempting to add {}/{}/{} ", logicalName, host, port);
             RingMember ringMember = new RingMember(logicalName);
             ringWriter.register(ringMember, new RingHost(host, port));
             ringWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
-            LOG.warn("Failed to add {}/{}/{} ", new Object[] { logicalName, host, port }, x);
+            LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to add system member: " + logicalName, x);
+        } finally {
+            amzaStats.addMember.decrementAndGet();
         }
     }
 
@@ -79,12 +86,15 @@ public class AmzaReplicationRestEndpoints {
     @Path("/ring/remove/{logicalName}")
     public Response removeMember(@PathParam("logicalName") String logicalName) {
         try {
+            amzaStats.removeMember.incrementAndGet();
             LOG.info("Attempting to remove RingHost: " + logicalName);
             ringWriter.removeRingMember(AmzaRingReader.SYSTEM_RING, new RingMember(logicalName));
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to add RingHost: " + logicalName, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to remove RingHost: " + logicalName, x);
+        } finally {
+            amzaStats.removeMember.decrementAndGet();
         }
     }
 
@@ -93,12 +103,15 @@ public class AmzaReplicationRestEndpoints {
     @Path("/ring")
     public Response getRing() {
         try {
+            amzaStats.getRing.incrementAndGet();
             LOG.info("Attempting to get amza ring.");
             NavigableMap<RingMember, RingHost> ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
             return ResponseHelper.INSTANCE.jsonResponse(ring);
         } catch (Exception x) {
             LOG.warn("Failed to get amza ring.", x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to get amza ring.", x);
+        } finally {
+            amzaStats.getRing.decrementAndGet();
         }
     }
 
@@ -111,6 +124,7 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("txId") long txId) {
 
         try {
+            amzaStats.rowsStream.incrementAndGet();
 
             StreamingOutput stream = (OutputStream os) -> {
                 os.flush();
@@ -130,9 +144,11 @@ public class AmzaReplicationRestEndpoints {
             };
             return Response.ok(stream).build();
         } catch (Exception x) {
-            Object[] vals = new Object[] { ringMemberString, versionedPartitionName, txId };
+            Object[] vals = new Object[]{ringMemberString, versionedPartitionName, txId};
             LOG.warn("Failed to rowsStream {} {} {}. ", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to rowsStream " + Arrays.toString(vals), x);
+        } finally {
+            amzaStats.rowsStream.decrementAndGet();
         }
     }
 
@@ -144,6 +160,7 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
         try {
+            amzaStats.availableRowsStream.incrementAndGet();
 
             StreamingOutput stream = (OutputStream os) -> {
                 os.flush();
@@ -161,6 +178,8 @@ public class AmzaReplicationRestEndpoints {
         } catch (Exception x) {
             LOG.warn("Failed to stream partition updates. ", x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to stream partition updates.", x);
+        } finally {
+            amzaStats.availableRowsStream.decrementAndGet();
         }
     }
 
@@ -172,14 +191,17 @@ public class AmzaReplicationRestEndpoints {
         @PathParam("versionedPartitionName") String versionedPartitionName,
         @PathParam("txId") long txId) {
         try {
+            amzaStats.rowsTaken.incrementAndGet();
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
                 VersionedPartitionName.fromBase64(versionedPartitionName),
                 txId);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to ack for member:{} partition:{} txId:{}",
-                new Object[] { ringMemberName, versionedPartitionName, txId }, x);
+                new Object[]{ringMemberName, versionedPartitionName, txId}, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to ack.", x);
+        } finally {
+            amzaStats.rowsTaken.decrementAndGet();
         }
     }
 

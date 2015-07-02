@@ -96,6 +96,14 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 return renderer.render(partitionMetricsTemplate, data);
             } else {
 
+                data.put("addMember", String.valueOf(amzaStats.addMember.get()));
+                data.put("removeMember", String.valueOf(amzaStats.removeMember.get()));
+                data.put("getRing", String.valueOf(amzaStats.getRing.get()));
+                data.put("rowsStream", String.valueOf(amzaStats.rowsStream.get()));
+                data.put("availableRowsStream", String.valueOf(amzaStats.availableRowsStream.get()));
+                data.put("rowsTaken", String.valueOf(amzaStats.rowsTaken.get()));
+
+
                 List<Map<String, String>> longPolled = new ArrayList<>();
                 for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
                     AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());

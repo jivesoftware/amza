@@ -85,7 +85,14 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             UIO.writeByteArray(filer, member.toBytes(), "member");
         }
         return new WALKey(filer.getBytes());
+    }
 
+    RingMember getMember(WALKey walKey) throws IOException {
+        HeapFiler filer = new HeapFiler(walKey.getKey());
+        UIO.readByte(filer, "version");
+        UIO.readByteArray(filer, "partition");
+        UIO.readByteArray(filer, "rootMember");
+        return RingMember.fromBytes(UIO.readByteArray(filer, "member"));
     }
 
     @Override
@@ -165,7 +172,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         WALKey to = from.prefixUpperExclusive();
         List<RingMemberHighwater> highwaters = new ArrayList<>();
         systemWALStorage.rangeScan(PartitionProvider.HIGHWATER_MARK_INDEX, from, to, (long rowTxId, WALKey key, WALValue value) -> {
-            highwaters.add(new RingMemberHighwater(RingMember.fromBytes(key.getKey()), UIO.bytesLong(value.getValue())));
+            highwaters.add(new RingMemberHighwater(getMember(key), UIO.bytesLong(value.getValue())));
             return true;
         });
         return new WALHighwater(highwaters);

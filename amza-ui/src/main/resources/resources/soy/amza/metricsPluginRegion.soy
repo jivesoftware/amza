@@ -1,14 +1,50 @@
 {namespace soy.page}
 
 /**
+ * @param availableRowsStream
+ * @param rowsStream
+ * @param rowsTaken
+ * @param addMember
+ * @param removeMember
+ * @param getRing
  * @param longPolled
  * @param grandTotals
  * @param regionTotals
  */
 {template .metricsPluginRegion}
+
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-road"></span>{sp}Running</div>
+        <div class="panel-body">
+            <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <td>availableRowsStream{sp}
+                        <td>rowsStream{sp}
+                        <td>rowsTaken{sp}
+                        <td>addMember{sp}
+                        <td>removeMember{sp}
+                        <td>getRing{sp}
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{$availableRowsStream}</td>
+                        <td>{$rowsStream}</td>
+                        <td>{$rowsTaken}</td>
+                        <td>{$addMember}</td>
+                        <td>{$removeMember}</td>
+                        <td>{$getRing}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
     <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-grain"></span>{sp}Polling</div>
         <div class="panel-body">
+            
             <table class="table table-condensed">
                 <thead>
                     <tr>

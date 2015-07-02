@@ -43,6 +43,13 @@ public class AmzaStats {
     public final IoStats ioStats = new IoStats();
     public final NetStats netStats = new NetStats();
 
+    public final AtomicLong addMember = new AtomicLong();
+    public final AtomicLong removeMember = new AtomicLong();
+    public final AtomicLong getRing = new AtomicLong();
+    public final AtomicLong rowsStream = new AtomicLong();
+    public final AtomicLong availableRowsStream = new AtomicLong();
+    public final AtomicLong rowsTaken = new AtomicLong();
+
     public AmzaStats() {
     }
 

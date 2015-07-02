@@ -110,6 +110,7 @@ public class AmzaDiscovery {
                                 } else if (!ringHost.equals(anotherRingHost)) {
                                     LOG.info("Updating ringMember:" + ringMember + " on host:" + anotherRingHost + " for cluster:" + clusterName);
                                     ringStoreWriter.register(ringMember, anotherRingHost);
+                                    allMemberSeen.add(ringMember);
                                 }
                             }
                             long elapse = System.currentTimeMillis() - startTime;

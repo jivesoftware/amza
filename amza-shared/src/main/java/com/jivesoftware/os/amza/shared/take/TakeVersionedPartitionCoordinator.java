@@ -29,6 +29,7 @@ public class TakeVersionedPartitionCoordinator {
     final AtomicLong txId;
     final long slowTakeMillis;
     final long slowTakeId;
+    final long systemReofferDeltaMillis;
     final long reofferDeltaMillis;
     final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
     final AtomicInteger currentCategory;
@@ -39,10 +40,12 @@ public class TakeVersionedPartitionCoordinator {
         AtomicLong txId,
         long slowTakeMillis,
         long slowTakeId,
+        long systemReofferDeltaMillis,
         long reofferDeltaMillis) {
 
         this.versionedPartitionName = versionedPartitionName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
+        this.systemReofferDeltaMillis = systemReofferDeltaMillis;
         this.reofferDeltaMillis = reofferDeltaMillis;
         this.status = new AtomicReference<>(status);
         this.txId = txId;
@@ -73,9 +76,11 @@ public class TakeVersionedPartitionCoordinator {
             Integer category = versionedRing.getCategory(ringMember);
             if (status.get() == Status.KETCHUP || (category != null && category <= currentCategory.get())) {
                 AtomicBoolean available = new AtomicBoolean(false);
+                long reofferDelta = ((versionedPartitionName.getPartitionName().isSystemPartition()) ? systemReofferDeltaMillis : reofferDeltaMillis);
+                long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;
+
                 took.compute(ringMember, (RingMember t, SessionedTxId u) -> {
                     try {
-                        long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDeltaMillis;
                         if (u == null) {
                             //LOG.info("NEW (MISSING): candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} status:{} txId:{}",
                             //    category, currentCategory.get(), ringMember, versionedPartitionName, currentStatus, offerTxId);
@@ -84,12 +89,12 @@ public class TakeVersionedPartitionCoordinator {
                         } else {
                             if (u.sessionId != takeSessionId) {
                                 /*
-                                LOG.info(
-                                    "NEW (SESSION): oldSession:{} newSession:{} " +
-                                        "candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} status:{} txId:{}",
-                                    u.sessionId, takeSessionId,
-                                    category, currentCategory.get(), ringMember, versionedPartitionName, currentStatus, offerTxId);
-                                */
+                                 LOG.info(
+                                 "NEW (SESSION): oldSession:{} newSession:{} " +
+                                 "candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} status:{} txId:{}",
+                                 u.sessionId, takeSessionId,
+                                 category, currentCategory.get(), ringMember, versionedPartitionName, currentStatus, offerTxId);
+                                 */
                                 available.set(true);
                                 return new SessionedTxId(takeSessionId, offerTxId, reofferAfterTimeInMillis, -1);
                             } else {
@@ -109,8 +114,10 @@ public class TakeVersionedPartitionCoordinator {
                 });
                 if (available.get()) {
                     availableStream.available(versionedPartitionName, currentStatus, offerTxId);
+                    return reofferDelta;
+                } else {
+                    return Long.MAX_VALUE;
                 }
-                return Long.MAX_VALUE;
             }
             if (category == null) {
                 return Long.MAX_VALUE;

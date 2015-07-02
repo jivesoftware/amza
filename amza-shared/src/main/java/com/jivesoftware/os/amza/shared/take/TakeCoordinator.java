@@ -42,6 +42,7 @@ public class TakeCoordinator {
     private final AtomicLong cyaLock = new AtomicLong();
     private final long cyaIntervalMillis;
     private final long slowTakeInMillis;
+    private final long systemReofferDeltaMillis;
     private final long reofferDeltaMillis;
 
     public TakeCoordinator(AmzaStats amzaStats,
@@ -50,6 +51,7 @@ public class TakeCoordinator {
         VersionedPartitionProvider versionedPartitionProvider,
         long cyaIntervalMillis,
         long slowTakeInMillis,
+        long systemReofferDeltaMillis,
         long reofferDeltaMillis) {
         this.amzaStats = amzaStats;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
@@ -57,6 +59,7 @@ public class TakeCoordinator {
         this.versionedPartitionProvider = versionedPartitionProvider;
         this.cyaIntervalMillis = cyaIntervalMillis;
         this.slowTakeInMillis = slowTakeInMillis;
+        this.systemReofferDeltaMillis = systemReofferDeltaMillis;
         this.reofferDeltaMillis = reofferDeltaMillis;
     }
 
@@ -126,7 +129,13 @@ public class TakeCoordinator {
 
     private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
         return takeRingCoordinators.computeIfAbsent(ringName,
-            key -> new TakeRingCoordinator(ringName, timestampedOrderIdProvider, idPacker, versionedPartitionProvider, slowTakeInMillis, reofferDeltaMillis,
+            key -> new TakeRingCoordinator(ringName,
+                timestampedOrderIdProvider,
+                idPacker,
+                versionedPartitionProvider,
+                slowTakeInMillis,
+                systemReofferDeltaMillis,
+                reofferDeltaMillis,
                 neighbors));
     }
 

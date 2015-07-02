@@ -104,6 +104,7 @@ public class AmzaServiceInitializer {
         public long takeCyaIntervalInMillis = 1_000;
         public long takeSlowThresholdInMillis = 1_000 * 60;
         public long takeLongPollTimeoutMillis = 10_000;
+        public long takeSystemReofferDeltaMillis = 100;
         public long takeReofferDeltaMillis = 1_000;
     }
 
@@ -134,6 +135,7 @@ public class AmzaServiceInitializer {
             partitionIndex,
             config.takeCyaIntervalInMillis,
             config.takeSlowThresholdInMillis,
+            config.takeSystemReofferDeltaMillis,
             config.takeReofferDeltaMillis);
 
         PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);

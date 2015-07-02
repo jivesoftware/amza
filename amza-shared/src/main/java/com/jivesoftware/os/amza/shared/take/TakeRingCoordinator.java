@@ -32,6 +32,7 @@ public class TakeRingCoordinator {
     private final IdPacker idPacker;
     private final VersionedPartitionProvider versionedPartitionProvider;
     private final long slowTakeInMillis;
+    private final long systemReofferDeltaMillis;
     private final long reofferDeltaMillis;
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
@@ -40,6 +41,7 @@ public class TakeRingCoordinator {
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
         VersionedPartitionProvider versionedPartitionProvider,
+        long systemReofferDeltaMillis,
         long slowTakeInMillis,
         long reofferDeltaMillis, List<Entry<RingMember, RingHost>> neighbors) {
         this.ringName = ringName;
@@ -47,6 +49,7 @@ public class TakeRingCoordinator {
         this.idPacker = idPacker;
         this.versionedPartitionProvider = versionedPartitionProvider;
         this.slowTakeInMillis = slowTakeInMillis;
+        this.systemReofferDeltaMillis = systemReofferDeltaMillis;
         this.reofferDeltaMillis = reofferDeltaMillis;
         //LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
         this.versionedRing.compareAndSet(null, new VersionedRing(timestampedOrderIdProvider.nextId(), neighbors));
@@ -69,6 +72,7 @@ public class TakeRingCoordinator {
                 new AtomicLong(txId),
                 slowTakeInMillis,
                 idPacker.pack(slowTakeInMillis, 0, 0), //TODO need orderIdProvider.deltaMillisToIds()
+                systemReofferDeltaMillis,
                 reofferDeltaMillis));
         PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
         coordinator.updateTxId(ring, status, txId, properties.takeFromFactor);

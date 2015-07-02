@@ -1,15 +1,16 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
-import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.ui.region.CompactionsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.CompactionsPluginRegion.CompactionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
 import javax.inject.Singleton;
+import javax.ws.rs.Consumes;
 import javax.ws.rs.DefaultValue;
+import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -32,13 +33,18 @@ public class CompactionsPluginEndpoints {
     @GET
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
-    public Response filter(@QueryParam("cluster") @DefaultValue("") String cluster,
-        @QueryParam("host") @DefaultValue("") String host,
-        @QueryParam("service") @DefaultValue("") String service) {
-        String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new CompactionsPluginRegionInput(cluster, host, service)));
+    public Response compactions() {
+        String rendered = soyService.renderPlugin(pluginRegion, new CompactionsPluginRegionInput(""));
         return Response.ok(rendered).build();
     }
 
+    @POST
+    @Path("/")
+    @Produces(MediaType.TEXT_HTML)
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public Response filter(@FormParam("action") @DefaultValue("") String action) {
+        String rendered = soyService.renderPlugin(pluginRegion, new CompactionsPluginRegionInput(action));
+        return Response.ok(rendered).build();
+    }
 
 }

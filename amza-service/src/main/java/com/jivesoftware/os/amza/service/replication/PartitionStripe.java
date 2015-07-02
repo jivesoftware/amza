@@ -264,9 +264,9 @@ public class PartitionStripe {
         storage.load(partitionIndex);
     }
 
-    public void compact() {
+    public void compact(boolean force) {
         try {
-            storage.compact(partitionIndex);
+            storage.compact(partitionIndex, force);
         } catch (Throwable x) {
             LOG.error("Compactor failed.", x);
         }

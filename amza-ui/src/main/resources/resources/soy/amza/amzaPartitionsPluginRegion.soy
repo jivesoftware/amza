@@ -58,9 +58,9 @@
                                     method="get" name="removeRingHost">
                                     <tr>    
                                         <td>
+                                            <input type="hidden" name="ringName" value="{$r.ringName}">
+                                            <input type="hidden" name="partitionName" value="{$r.name}">
                                             <div class="btn-group" role="group" aria-label="...">
-                                            <button title="Update" type="submit" name="action" value="update" class="btn btn-default"><span class="glyphicon glyphicon-save"></span></button>
-                                            <button title="Compact" type="submit" name="action" value="compact" class="btn btn-default"><span class="glyphicon glyphicon-compressed"></span></button>
                                             <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default"><span class="glyphicon glyphicon-trash"></span></button>
                                             </div>
                                         </td>
@@ -72,16 +72,6 @@
                                         <td>
                                             <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
                                             placeholder="ringName" value="{$r.ringName}" name="ringName"  class="form-control">
-                                            <div class="btn-group">
-                                                <button aria-expanded="false" type="button" data-toggle="dropdown" class="btn btn-default btn-sm dropdown-toggle">
-                                                   <span class="caret"></span></button>
-                                                <ul class="dropdown-menu">
-                                                    {foreach $ring in $r.ring}
-                                                        <li><a target="ui_iframe" href="http://{$ring.host}:{$ring.port}/">
-                                                            {$ring.host}:{$ring.port}</a></li>
-                                                    {/foreach}
-                                                </ul>
-                                            </div>
                                         </td>
                                         <td>
                                             <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"

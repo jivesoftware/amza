@@ -272,6 +272,10 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         }
     }
 
+    public void compactAll(boolean force) {
+        partitionStripeProvider.compactAll(force);
+    }
+
     public boolean hasPartition(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return true;

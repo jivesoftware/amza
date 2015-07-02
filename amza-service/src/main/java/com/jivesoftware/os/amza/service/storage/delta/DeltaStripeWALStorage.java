@@ -222,8 +222,8 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     }
 
     @Override
-    public void compact(final PartitionIndex partitionIndex) throws Exception {
-        if (updateSinceLastCompaction.get() < compactAfterNUpdates) { // TODO or some memory pressure BS!
+    public void compact(PartitionIndex partitionIndex, boolean force) throws Exception {
+        if (!force && updateSinceLastCompaction.get() < compactAfterNUpdates) { // TODO or some memory pressure BS!
             return;
         }
 

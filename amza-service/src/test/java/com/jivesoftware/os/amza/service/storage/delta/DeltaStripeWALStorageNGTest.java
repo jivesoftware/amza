@@ -112,7 +112,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(0, storage.count());
         Assert.assertNull(storage.get(key(1)));
 
-        deltaStripeWALStorage.compact(partitionIndex);
+        deltaStripeWALStorage.compact(partitionIndex, false);
 
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
         Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
@@ -125,7 +125,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
         Assert.assertEquals(1, storage.count());
 
-        deltaStripeWALStorage.compact(partitionIndex);
+        deltaStripeWALStorage.compact(partitionIndex, false);
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 2, true), updated);
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
@@ -133,7 +133,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
         Assert.assertEquals(1, storage.count());
 
-        deltaStripeWALStorage.compact(partitionIndex);
+        deltaStripeWALStorage.compact(partitionIndex, false);
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
         Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
         Assert.assertNull(storage.get(key(1)));

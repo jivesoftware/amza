@@ -25,7 +25,7 @@ public interface StripeWALStorage {
 
     void flush(boolean fsync) throws Exception;
 
-    void compact(PartitionIndex partitionIndex) throws Exception;
+    void compact(PartitionIndex partitionIndex, boolean force) throws Exception;
 
     RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,

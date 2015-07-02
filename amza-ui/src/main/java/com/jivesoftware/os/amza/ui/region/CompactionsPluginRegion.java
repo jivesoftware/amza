@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.region;
 
-import com.google.common.base.Optional;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -18,7 +17,7 @@ import java.util.Map;
  *
  */
 // soy.page.compactionsPluginRegion
-public class CompactionsPluginRegion implements PageRegion<Optional<CompactionsPluginRegion.CompactionsPluginRegionInput>> {
+public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegion.CompactionsPluginRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
@@ -43,23 +42,21 @@ public class CompactionsPluginRegion implements PageRegion<Optional<CompactionsP
 
     public static class CompactionsPluginRegionInput {
 
-        final String cluster;
-        final String host;
-        final String service;
+        final String action;
 
-        public CompactionsPluginRegionInput(String cluster, String host, String service) {
-            this.cluster = cluster;
-            this.host = host;
-            this.service = service;
+        public CompactionsPluginRegionInput(String action) {
+            this.action = action;
         }
     }
 
     @Override
-    public String render(Optional<CompactionsPluginRegionInput> optionalInput) {
+    public String render(CompactionsPluginRegionInput input) {
         Map<String, Object> data = Maps.newHashMap();
 
         try {
-            CompactionsPluginRegionInput input = optionalInput.get();
+            if (input.action.equals("forceCompaction")) {
+                amzaService.compactAll(true);
+            }
 
             List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();
             data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),

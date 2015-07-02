@@ -23,12 +23,18 @@ public class PartitionStripeProvider {
         return tx.tx(deltaStripes[stripeIndex], highwaterStorages[stripeIndex]);
     }
 
-    void flush(PartitionName partitionName, boolean hardFlush) throws Exception {
+    public void flush(PartitionName partitionName, boolean hardFlush) throws Exception {
         int stripeIndex = Math.abs(partitionName.hashCode()) % deltaStripes.length;
         highwaterStorages[stripeIndex].flush(() -> {
             deltaStripes[stripeIndex].flush(hardFlush);
             return null;
         });
+    }
+
+    public void compactAll(boolean force) {
+        for (PartitionStripe stripe : deltaStripes) {
+            stripe.compact(force);
+        }
     }
 
     public interface StripeTx<R> {

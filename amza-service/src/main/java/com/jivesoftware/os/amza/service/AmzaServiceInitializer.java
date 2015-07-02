@@ -236,7 +236,7 @@ public class AmzaServiceInitializer {
         for (final PartitionStripe partitionStripe : partitionStripes) {
             compactDeltasThreadPool.scheduleAtFixedRate(() -> {
                 try {
-                    partitionStripe.compact();
+                    partitionStripe.compact(false);
                 } catch (Throwable x) {
                     LOG.error("Compactor failed.", x);
                 }

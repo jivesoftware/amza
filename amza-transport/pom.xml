@@ -48,5 +48,9 @@
             <artifactId>amza-shared</artifactId>
             <version>0.93-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>javax.inject</groupId>
+            <artifactId>javax.inject</artifactId>
+        </dependency>
     </dependencies>
 </project>

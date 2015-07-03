@@ -118,7 +118,8 @@ public class Main {
             .addEndpoint(AmzaEndpoints.class)
             .addInjectable(AmzaService.class, amzaService)
             .addEndpoint(AmzaReplicationRestEndpoints.class)
-            .addInjectable(AmzaInstance.class, amzaService);
+            .addInjectable(AmzaInstance.class, amzaService)
+            .addInjectable(AmzaStats.class, amzaStats);
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, amzaStats, new AmzaUIInitializer.InjectionCallback() {
 

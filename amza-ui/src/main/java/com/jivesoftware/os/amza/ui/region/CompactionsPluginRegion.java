@@ -12,6 +12,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 /**
  *
@@ -54,8 +55,22 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
         Map<String, Object> data = Maps.newHashMap();
 
         try {
-            if (input.action.equals("forceCompaction")) {
-                amzaService.compactAll(true);
+            if (input.action.equals("forceCompactionDeltas")) {
+                Executors.callable(() -> {
+                    amzaService.compactAllDeltas(true);
+                });
+            }
+            if (input.action.equals("forceCompactionTombstones")) {
+                Executors.newSingleThreadExecutor().submit(() -> {
+                    amzaService.compactAllTombstones();
+                    return null;
+                });
+            }
+            if (input.action.equals("forceExpunge")) {
+                Executors.newSingleThreadExecutor().submit(() -> {
+                    amzaService.expunge();
+                    return null;
+                });
             }
 
             List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();

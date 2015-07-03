@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
@@ -67,18 +68,19 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             if (input.action.equals("add")) {
 
             } else if (input.action.equals("remove")) {
-
-                amzaService.getPartitionProvider().destroyPartition(new PartitionName(false, input.ringName, input.partitionName));
-
-            } else if (input.action.equals("update")) {
-
+                PartitionName partitionName = new PartitionName(false, input.ringName, input.partitionName);
+                log.info("Removing {}", partitionName);
+                amzaService.destroyPartition(partitionName);
             }
-
             List<Map<String, Object>> rows = new ArrayList<>();
             Set<PartitionName> partitionNames = amzaService.getPartitionNames();
             for (PartitionName partitionName : partitionNames) {
 
                 Map<String, Object> row = new HashMap<>();
+                PartitionStatusStorage.VersionedStatus status = amzaService.getPartitionStatusStorage().getStatus(amzaService.getRingReader().getRingMember(),
+                    partitionName);
+                row.put("status", status == null ? "unknown" : status.status.toString());
+                row.put("version", status == null ? "unknown" : String.valueOf(status.version));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                 row.put("name", partitionName.getName());
                 row.put("ringName", partitionName.getRingName());

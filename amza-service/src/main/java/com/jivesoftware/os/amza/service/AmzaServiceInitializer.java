@@ -19,11 +19,11 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
-import com.jivesoftware.os.amza.service.replication.PartitionCompactor;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.replication.StripedPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.SystemPartitionCommitChanges;
@@ -158,6 +158,9 @@ public class AmzaServiceInitializer {
             takeCoordinator,
             config.awaitOnlineStripingLevel);
 
+         amzaPartitionWatcher.watch(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), partitionStatusStorage);
+
+
         partitionIndex.open(partitionStatusStorage);
         // cold start
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
@@ -182,6 +185,7 @@ public class AmzaServiceInitializer {
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
                 i,
+                amzaStats,
                 primaryRowMarshaller,
                 highwaterRowMarshaller,
                 deltaWALFactory,
@@ -272,14 +276,14 @@ public class AmzaServiceInitializer {
             config.numberOfTakerThreads,
             config.takeLongPollTimeoutMillis);
 
-        PartitionCompactor partitionCompactor = new PartitionCompactor(amzaStats,
+        PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(amzaStats,
             partitionIndex,
             orderIdProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
             config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
-        PartitionComposter partitionComposter = new PartitionComposter(partitionIndex, partitionProvider, amzaRingReader, partitionStatusStorage,
+        PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionProvider, amzaRingReader, partitionStatusStorage,
             partitionStripeProvider);
 
         AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);

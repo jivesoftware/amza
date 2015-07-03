@@ -59,6 +59,10 @@ public class PartitionStore implements RangeScannable<WALValue> {
         walStorage.rangeScan(from, to, scan);
     }
 
+    public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {
+        return walStorage.compactableTombstone(removeTombstonedOlderTimestampId, ttlTimestampId);
+    }
+    
     public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
     }

@@ -118,7 +118,7 @@ public class PartitionProvider {
 
     public void destroyPartition(PartitionName partitionName) throws Exception {
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot destroy a system partition");
-
+        
         systemWALStorage.update(REGION_INDEX, (highwaters, scan) -> {
             scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         }, walUpdated);
@@ -126,5 +126,6 @@ public class PartitionProvider {
         systemWALStorage.update(REGION_PROPERTIES, (highwaters, scan) -> {
             scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
         }, walUpdated);
+
     }
 }

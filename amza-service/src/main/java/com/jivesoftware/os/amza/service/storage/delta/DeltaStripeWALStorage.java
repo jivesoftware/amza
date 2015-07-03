@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
@@ -55,6 +56,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
     private final int index;
+    private final AmzaStats amzaStats;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final DeltaWALFactory deltaWALFactory;
@@ -77,6 +79,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     };
 
     public DeltaStripeWALStorage(int index,
+        AmzaStats amzaStats,
         PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         DeltaWALFactory deltaWALFactory,
@@ -84,6 +87,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         long compactAfterNUpdates) {
 
         this.index = index;
+        this.amzaStats = amzaStats;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.deltaWALFactory = deltaWALFactory;
@@ -156,7 +160,9 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(partitionNameBytes);
                             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                             if (partitionStore == null) {
-                                LOG.error("Should be impossible must fix! Your it :) partitionName:" + versionedPartitionName);
+                                LOG.warn("Dropping values on the floor for versionedPartitionName:{} "
+                                    + " this is typical when loading an expunged partition", versionedPartitionName);
+                                // TODO ensure partitionIsExpunged?
                             } else {
                                 acquireOne();
                                 try {
@@ -203,7 +209,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         return storage.highestTxId();
     }
 
-
     // todo any one call this should have atleast 1 numTickleMeElmaphore
     private PartitionDelta getPartitionDeltas(VersionedPartitionName versionedPartitionName) {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
@@ -231,11 +236,13 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             LOG.warn("Trying to compact DeltaStripe:" + partitionIndex + " while another compaction is already in progress.");
             return;
         }
+        amzaStats.beginCompaction("Compacting Delta Stripe:" + index);
         try {
             updateSinceLastCompaction.set(0);
             compactDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create);
         } finally {
             compacting.set(false);
+            amzaStats.endCompaction("Compacting Delta Stripe:" + index);
         }
     }
 

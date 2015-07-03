@@ -166,15 +166,12 @@ public class IndexedWAL implements WALStorage {
     }
 
     @Override
-    public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-
-        if ((clobberCount.get() + 1) / (newCount.get() + 1) > tombstoneCompactionFactor) {
-            return compact(removeTombstonedOlderThanTimestampId, ttlTimestampId);
-        }
-        return -1;
+    public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {
+        return (clobberCount.get() + 1) / (newCount.get() + 1) > tombstoneCompactionFactor;
     }
 
-    private long compact(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
+    @Override
+    public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName().getName()
             + ">ring>" + versionedPartitionName.getPartitionName().getRingName() + ">";
         Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());

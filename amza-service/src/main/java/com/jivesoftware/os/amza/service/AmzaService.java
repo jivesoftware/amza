@@ -18,12 +18,12 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.replication.PartitionCompactor;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage.VersionedStatus;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -78,7 +78,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     private final TakeCoordinator takeCoordinator;
     private final PartitionStatusStorage partitionStatusStorage;
     private final RowChangeTaker changeTaker;
-    private final PartitionCompactor partitionCompactor;
+    private final PartitionTombstoneCompactor partitionTombstoneCompactor;
     private final PartitionComposter partitionComposter;
     private final PartitionIndex partitionIndex;
     private final PartitionProvider partitionProvider;
@@ -96,7 +96,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         TakeCoordinator takeCoordinator,
         PartitionStatusStorage partitionStatusStorage,
         RowChangeTaker changeTaker,
-        PartitionCompactor partitionCompactor,
+        PartitionTombstoneCompactor partitionTombstoneCompactor,
         PartitionComposter partitionComposter,
         PartitionIndex partitionIndex,
         PartitionProvider partitionProvider,
@@ -113,7 +113,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         this.takeCoordinator = takeCoordinator;
         this.partitionStatusStorage = partitionStatusStorage;
         this.changeTaker = changeTaker;
-        this.partitionCompactor = partitionCompactor;
+        this.partitionTombstoneCompactor = partitionTombstoneCompactor;
         this.partitionComposter = partitionComposter;
         this.partitionIndex = partitionIndex;
         this.partitionProvider = partitionProvider;
@@ -148,12 +148,12 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
     synchronized public void start() throws Exception {
         changeTaker.start();
-        partitionCompactor.start();
+        partitionTombstoneCompactor.start();
     }
 
     synchronized public void stop() throws Exception {
         changeTaker.stop();
-        partitionCompactor.stop();
+        partitionTombstoneCompactor.stop();
     }
 
     @Override
@@ -223,6 +223,14 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
             missingRingMembers);
     }
 
+    public void compactAllTombstones() throws Exception {
+        partitionTombstoneCompactor.compactTombstone(1, 1, partitionTombstoneCompactor.removeIfOlderThanTimestmapId());
+    }
+
+    public void expunge() throws Exception {
+        partitionComposter.compost();
+    }
+
     public static class AmzaPartitionRoute {
 
         public List<RingHost> uninitializedHosts;
@@ -272,7 +280,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         }
     }
 
-    public void compactAll(boolean force) {
+    public void compactAllDeltas(boolean force) {
         partitionStripeProvider.compactAll(force);
     }
 
@@ -302,8 +310,20 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     @Override
-    public void destroyPartition(final PartitionName partitionName) throws Exception {
-        partitionProvider.destroyPartition(partitionName);
+    public void destroyPartition(PartitionName partitionName) throws Exception {
+
+        NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
+        if (ring != null && ring.containsKey(ringStoreReader.getRingMember())) {
+            VersionedStatus status = partitionStatusStorage.getStatus(ringStoreReader.getRingMember(), partitionName);
+            if (status != null) {
+                LOG.info("Handling request to destroy partitionName:{}", partitionName);
+                for (RingMember ringMember : ring.keySet()) {
+                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, status.version);
+                    VersionedStatus versionedStatus = partitionStatusStorage.markForDisposal(versionedPartitionName, ringMember);
+                    LOG.info("Destroyed partitionName:{} versionedStatus:{} for ringMember:{}", versionedPartitionName, versionedStatus, ringMember);
+                }
+            }
+        }
     }
 
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {

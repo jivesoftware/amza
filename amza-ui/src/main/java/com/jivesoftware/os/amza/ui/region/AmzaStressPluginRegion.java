@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.ui.region;
 
-import com.google.common.base.Optional;
+import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  */
 // soy.page.amzaStressPluginRegion
-public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPluginRegion.AmzaStressPluginRegionInput>> {
+public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion.AmzaStressPluginRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
 
@@ -62,6 +62,8 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         final int batchSize;
         final int numPartitions;
         final int numThreadsPerPartition;
+        final int desiredQuorm;
+        final boolean orderedInsertion;
         final String action;
 
         public AmzaStressPluginRegionInput(String name,
@@ -70,6 +72,8 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             int batchSize,
             int numPartitions,
             int numThreadsPerRegion,
+            int desiredQuorm,
+            boolean orderedInsertion,
             String action) {
             this.name = name;
             this.regionPrefix = regionPrefix;
@@ -77,16 +81,17 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             this.batchSize = batchSize;
             this.numPartitions = numPartitions;
             this.numThreadsPerPartition = numThreadsPerRegion;
+            this.desiredQuorm = desiredQuorm;
+            this.orderedInsertion = orderedInsertion;
             this.action = action;
         }
     }
 
     @Override
-    public String render(Optional<AmzaStressPluginRegionInput> optionalInput) {
+    public String render(AmzaStressPluginRegionInput input) {
         Map<String, Object> data = Maps.newHashMap();
 
         try {
-            AmzaStressPluginRegionInput input = optionalInput.orNull();
             if (input != null && !input.name.isEmpty() && !input.regionPrefix.isEmpty()) {
 
                 if (input.action.equals("start") || input.action.equals("stop")) {
@@ -125,6 +130,8 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
                 row.put("batchSize", String.valueOf(stress.input.batchSize));
                 row.put("numPartitions", String.valueOf(stress.input.numPartitions));
                 row.put("numThreadsPerRegion", String.valueOf(stress.input.numThreadsPerPartition));
+                row.put("desiredQuorm", String.valueOf(stress.input.desiredQuorm));
+                row.put("orderedInsertion", String.valueOf(stress.input.orderedInsertion));
 
                 row.put("elapsed", MetricsPluginRegion.getDurationBreakdown(elapsed));
                 row.put("added", String.valueOf(added));
@@ -162,8 +169,9 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
 
             for (int i = 0; i < input.numPartitions; i++) {
                 String regionName = input.regionPrefix + i;
-                for (int j = 0; j < input.numThreadsPerPartition; j++) {
-                    executor.submit(new Feeder(regionName, j));
+                int numThread = input.orderedInsertion ? 1 : input.numThreadsPerPartition;
+                for (int j = 0; j < numThread; j++) {
+                    executor.submit(new Feeder(regionName, j, input.orderedInsertion));
                 }
             }
         }
@@ -173,10 +181,12 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             AtomicInteger batch = new AtomicInteger();
             private final String regionName;
             private final int threadIndex;
+            private final boolean orderedInsertion;
 
-            public Feeder(String regionName, int threadIndex) {
+            public Feeder(String regionName, int threadIndex, boolean orderedInsertion) {
                 this.regionName = regionName;
                 this.threadIndex = threadIndex;
+                this.orderedInsertion = orderedInsertion;
             }
 
             @Override
@@ -196,8 +206,7 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
         }
 
         private void completed() {
-            int completed = this.completed.incrementAndGet();
-            if (completed == input.numPartitions * input.numThreadsPerPartition) {
+            if (this.completed.incrementAndGet() == input.numPartitions * input.numThreadsPerPartition) {
                 endTimeMillis.set(System.currentTimeMillis());
             }
         }
@@ -212,24 +221,35 @@ public class AmzaStressPluginRegion implements PageRegion<Optional<AmzaStressPlu
             AmzaPartitionAPI partition = createPartitionIfAbsent(regionName);
 
             Map<String, String> values = new LinkedHashMap<>();
-            int bStart = threadIndex * input.batchSize;
-            int bEnd = bStart + input.batchSize;
-            for (int b = bStart; b < bEnd; b++) {
-                values.put(b + "k" + batch, b + "v" + batch);
+            if (input.orderedInsertion) {
+                String max = String.valueOf(input.numBatches * input.batchSize);
+                int bStart = batch * input.batchSize;
+                for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
+                    String k = "k" + Strings.padEnd(String.valueOf(b), max.length(), '0');
+                    values.put(k, "v" + batch);
+                }
+            } else {
+                int bStart = threadIndex * input.batchSize;
+                int bEnd = bStart + input.batchSize;
+                for (int b = bStart; b < bEnd; b++) {
+                    String k = b + "k" + batch;
+                    values.put(k, b + "v" + batch);
+                }
             }
 
-            try {
-                AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-                updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(new WALKey(input1.getKey().getBytes()),
-                    input1.getValue().getBytes())), -1);
-                partition.commit(updates, 1, 30_000); // TODO expose to UI
+            while (true) {
+                try {
+                    AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
+                    updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(new WALKey(input1.getKey().getBytes()),
+                        input1.getValue().getBytes())), -1);
+                    partition.commit(updates, input.desiredQuorm, 30_000);
+                    break;
 
-            } catch (Exception x) {
-                log.warn("Failed to set region:" + regionName + " values:" + values, x);
+                } catch (Exception x) {
+                    log.warn("Failed to set region:" + regionName + " values:" + values, x);
+                }
             }
-
             added.addAndGet(input.batchSize);
-
         }
     }
 

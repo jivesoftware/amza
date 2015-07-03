@@ -63,6 +63,8 @@ public interface WALStorage extends RangeScannable<WALValue> {
      */
     boolean takeFromTransactionId(long transactionId, Highwaters watermarks, Scan<WALValue> scan) throws Exception;
 
+    boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
+
     long compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 
     void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception;

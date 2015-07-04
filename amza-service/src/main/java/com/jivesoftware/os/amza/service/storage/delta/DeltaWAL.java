@@ -212,6 +212,28 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         return Long.compare(id, o.id);
     }
 
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 59 * hash + (int) (this.id ^ (this.id >>> 32));
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final DeltaWAL other = (DeltaWAL) obj;
+        if (this.id != other.id) {
+            return false;
+        }
+        return true;
+    }
+
     public static class DeltaWALApplied {
 
         public final Map<WALKey, Long> keyToRowPointer;

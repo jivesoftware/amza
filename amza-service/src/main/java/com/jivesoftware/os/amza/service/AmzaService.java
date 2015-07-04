@@ -313,7 +313,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     public void destroyPartition(PartitionName partitionName) throws Exception {
 
         NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
-        if (ring != null && ring.containsKey(ringStoreReader.getRingMember())) {
+        if (ring.containsKey(ringStoreReader.getRingMember())) {
             VersionedStatus status = partitionStatusStorage.getStatus(ringStoreReader.getRingMember(), partitionName);
             if (status != null) {
                 LOG.info("Handling request to destroy partitionName:{}", partitionName);

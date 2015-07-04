@@ -84,7 +84,6 @@ public class BinaryRowReaderWriterTest {
 
     @Test
     public void testMemoryBackedRead() throws Exception {
-        File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
         WALFiler filer = new MemoryBackedWALFiler(new HeapFiler());
         read(filer, ioStats);

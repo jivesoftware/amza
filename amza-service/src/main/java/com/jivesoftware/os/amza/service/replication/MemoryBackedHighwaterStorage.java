@@ -55,22 +55,13 @@ public class MemoryBackedHighwaterStorage implements HighwaterStorage {
 
     @Override
     public void setIfLarger(RingMember ringMember, VersionedPartitionName versionedPartitionName, int update, long highWatermark) {
-        ConcurrentHashMap<VersionedPartitionName, Long> lastPartitionTransactionIds = lastTransactionIds.get(ringMember);
-        if (lastPartitionTransactionIds == null) {
-            lastPartitionTransactionIds = new ConcurrentHashMap<>();
-            lastTransactionIds.put(ringMember, lastPartitionTransactionIds);
-        }
-        Long got = lastPartitionTransactionIds.get(versionedPartitionName);
-        if (got == null) {
-            Long had = lastPartitionTransactionIds.putIfAbsent(versionedPartitionName, highWatermark);
-            if (had < highWatermark) {
-                lastPartitionTransactionIds.put(versionedPartitionName, had);
-            }
-        } else {
-            if (got < highWatermark) {
-                lastPartitionTransactionIds.put(versionedPartitionName, highWatermark);
-            }
-        }
+        ConcurrentHashMap<VersionedPartitionName, Long> lastPartitionTransactionIds = lastTransactionIds.computeIfAbsent(ringMember, (RingMember t) -> {
+            return new ConcurrentHashMap<>();
+        });
+
+        lastPartitionTransactionIds.merge(versionedPartitionName, highWatermark, (current, candidate) -> {
+            return current == null ? update: Math.max(current, candidate);
+        });
     }
 
     @Override

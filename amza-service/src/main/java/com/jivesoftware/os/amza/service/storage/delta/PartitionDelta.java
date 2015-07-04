@@ -114,7 +114,7 @@ class PartitionDelta {
         for (WALKey key : keys) {
             Optional<WALValue> got = get(key);
             if (got == null) {
-                missed |= (got == null);
+                missed |= true;
                 result.add(null);
             } else {
                 result.add(got.orNull());
@@ -133,7 +133,6 @@ class PartitionDelta {
             return partitionDelta.containsKey(key);
         }
         return null;
-
     }
 
     DeltaResult<List<Boolean>> containsKey(List<WALKey> keys) {

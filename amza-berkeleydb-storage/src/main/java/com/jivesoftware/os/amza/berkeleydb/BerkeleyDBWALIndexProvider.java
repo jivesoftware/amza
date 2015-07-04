@@ -22,7 +22,9 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
                     new File(baseDirs[i % baseDirs.length], AmzaVersionConstants.LATEST_VERSION),
                     "berkeleydb"),
                 String.valueOf(i));
-            active.mkdirs();
+            if (!active.exists() && !active.mkdirs()) {
+                throw new RuntimeException("Failed while trying to mkdirs for " + active);
+            }
 
             // Open the environment, creating one if it does not exist
             EnvironmentConfig envConfig = new EnvironmentConfig()

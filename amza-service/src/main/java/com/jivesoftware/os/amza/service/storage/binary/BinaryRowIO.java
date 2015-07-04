@@ -250,39 +250,11 @@ public class BinaryRowIO<K> implements RowIO<K> {
         return new Leaps(lastTransactionId, fpIndex, transactionIds);
     }
 
-    static private double dumb(long[] a, long[] b) {
-        double d = 0;
-        for (int i = 0; i < a.length; i++) {
-            d += Math.abs(a[i] - b[i]);
-        }
-        return d;
-    }
-
     static private double euclidean(long[] a, long[] b) {
         double v = 0;
         for (int i = 0; i < a.length; i++) {
             long d = a[i] - b[i];
             v += d * d;
-        }
-        return Math.sqrt(v);
-    }
-
-    static private double acos(long[] a1, long[] b1) {
-        double[] a = new double[a1.length];
-        double[] b = new double[b1.length];
-        for (int i = 0; i < a1.length; i++) {
-            a[i] = (double) a1[i] / (double) a1[a1.length - 1];
-            b[i] = (double) b1[i] / (double) b1[b1.length - 1];
-        }
-        double la = length(a);
-        double lb = length(b);
-        return Math.acos(dotProduct(a, b) / (la * lb));
-    }
-
-    static private double length(double... vs) {
-        double v = 0;
-        for (double a : vs) {
-            v += a;
         }
         return Math.sqrt(v);
     }
@@ -336,7 +308,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
         }
 
         private static Leaps fromByteBuffer(ByteBuffer buf) {
-            long key = buf.getLong(); // just read over 8 bytes
+            buf.getLong(); // just read over 8 bytes
             long lastTransactionId = buf.getLong();
             int length = buf.getInt();
             long[] fpIndex = new long[length];

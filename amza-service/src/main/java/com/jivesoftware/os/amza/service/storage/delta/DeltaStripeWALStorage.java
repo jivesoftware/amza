@@ -6,6 +6,7 @@ import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.IndexedWAL;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
@@ -25,7 +26,6 @@ import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
-import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -70,13 +70,15 @@ public class DeltaStripeWALStorage {
     private final AtomicLong updateSinceLastCompaction = new AtomicLong();
     private final AtomicBoolean compacting = new AtomicBoolean(false);
 
-    private final ThreadLocal<Integer> reentrant = new ThreadLocal<Integer>() {
+    private final Reentrant reentrant = new Reentrant();
+
+    static class Reentrant extends ThreadLocal<Integer> {
 
         @Override
         protected Integer initialValue() {
             return 0;
         }
-    };
+    }
 
     public DeltaStripeWALStorage(int index,
         AmzaStats amzaStats,
@@ -122,7 +124,7 @@ public class DeltaStripeWALStorage {
         tickleMeElmophore.release(numTickleMeElmaphore);
     }
 
-    public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
+    public boolean expunge(VersionedPartitionName versionedPartitionName, IndexedWAL walStorage) throws Exception {
         acquireAll();
         try {
             partitionDeltas.remove(versionedPartitionName);
@@ -197,7 +199,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
+    public long getHighestTxId(VersionedPartitionName versionedPartitionName, IndexedWAL storage) throws Exception {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
         if (partitionDelta != null) {
             return partitionDelta.highestTxId();
@@ -298,7 +300,7 @@ public class DeltaStripeWALStorage {
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
         Status partitionStatus,
-        WALStorage storage,
+        IndexedWAL storage,
         Commitable<WALValue> updates,
         WALUpdated updated) throws Exception {
 
@@ -386,7 +388,7 @@ public class DeltaStripeWALStorage {
     }
 
     public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
-        WALStorage storage,
+        IndexedWAL storage,
         long transactionId,
         RowStream rowStream) throws Exception {
         if (!storage.takeRowUpdatesSince(transactionId, rowStream)) {
@@ -402,7 +404,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, Highwaters highwaters,
+    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, IndexedWAL storage, long transactionId, Highwaters highwaters,
         Scan<WALValue> scan)
         throws Exception {
 
@@ -419,7 +421,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
+    public WALValue get(VersionedPartitionName versionedPartitionName, IndexedWAL storage, WALKey key) throws Exception {
         acquireOne();
         try {
             Optional<WALValue> deltaGot = getPartitionDeltas(versionedPartitionName).get(key);
@@ -433,7 +435,7 @@ public class DeltaStripeWALStorage {
 
     }
 
-    public boolean containsKey(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
+    public boolean containsKey(VersionedPartitionName versionedPartitionName, IndexedWAL storage, WALKey key) throws Exception {
         acquireOne();
         try {
             Boolean contained = getPartitionDeltas(versionedPartitionName).containsKey(key);
@@ -446,7 +448,7 @@ public class DeltaStripeWALStorage {
         return storage.containsKey(key);
     }
 
-    private WALTimestampId[] getTimestamps(VersionedPartitionName versionedPartitionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws
+    private WALTimestampId[] getTimestamps(VersionedPartitionName versionedPartitionName, IndexedWAL storage, List<WALKey> keys, List<WALValue> values) throws
         Exception {
         WALKey[] consumableKeys = keys.toArray(new WALKey[keys.size()]);
         DeltaResult<WALTimestampId[]> deltas = getPartitionDeltas(versionedPartitionName).getTimestampIds(consumableKeys);
@@ -471,38 +473,7 @@ public class DeltaStripeWALStorage {
         try {
             PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
             final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
-            rangeScannable.rangeScan(from, to, new Scan<WALValue>() {
-                Map.Entry<WALKey, WALValue> d;
-
-                @Override
-                public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                    if (d == null && iterator.hasNext()) {
-                        d = iterator.next();
-                    }
-                    boolean needsKey = true;
-                    while (d != null && d.getKey().compareTo(key) <= 0) {
-                        WALValue got = d.getValue();
-                        if (d.getKey().equals(key)) {
-                            needsKey = false;
-                        }
-                        if (!scan.row(-1, d.getKey(), got)) {
-                            return false;
-                        }
-                        if (iterator.hasNext()) {
-                            d = iterator.next();
-                        } else {
-                            iterator.eos();
-                            d = null;
-                            break;
-                        }
-                    }
-                    if (needsKey) {
-                        return scan.row(-1, key, value);
-                    } else {
-                        return true;
-                    }
-                }
-            });
+            rangeScannable.rangeScan(from, to, new Dupinator(iterator, scan));
 
             Map.Entry<WALKey, WALValue> d = iterator.last();
             if (d != null || iterator.hasNext()) {
@@ -528,38 +499,7 @@ public class DeltaStripeWALStorage {
         try {
             PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
             final DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
-            scanable.rowScan(new Scan<WALValue>() {
-                Map.Entry<WALKey, WALValue> d;
-
-                @Override
-                public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                    if (d == null && iterator.hasNext()) {
-                        d = iterator.next();
-                    }
-                    boolean needsKey = true;
-                    while (d != null && d.getKey().compareTo(key) <= 0) {
-                        WALValue got = d.getValue();
-                        if (d.getKey().equals(key)) {
-                            needsKey = false;
-                        }
-                        if (!scan.row(-1, d.getKey(), got)) {
-                            return false;
-                        }
-                        if (iterator.hasNext()) {
-                            d = iterator.next();
-                        } else {
-                            iterator.eos();
-                            d = null;
-                            break;
-                        }
-                    }
-                    if (needsKey) {
-                        return scan.row(-1, key, value);
-                    } else {
-                        return true;
-                    }
-                }
-            });
+            scanable.rowScan(new Dupinator(iterator, scan));
 
             Map.Entry<WALKey, WALValue> d = iterator.last();
             if (d != null || iterator.hasNext()) {
@@ -583,7 +523,7 @@ public class DeltaStripeWALStorage {
     /**
      * Stupid expensive!!!!
      */
-    public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
+    public long count(VersionedPartitionName versionedPartitionName, IndexedWAL storage) throws Exception {
         int count = 0;
         acquireOne();
         try {
@@ -594,6 +534,47 @@ public class DeltaStripeWALStorage {
             releaseOne();
         }
         return count + storage.count();
+    }
+
+    static class Dupinator implements Scan<WALValue> {
+
+        private final DeltaPeekableElmoIterator iterator;
+        private final Scan<WALValue> scan;
+        private Map.Entry<WALKey, WALValue> d;
+
+        public Dupinator(DeltaPeekableElmoIterator iterator, Scan<WALValue> scan) {
+            this.iterator = iterator;
+            this.scan = scan;
+        }
+
+        @Override
+        public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
+            if (d == null && iterator.hasNext()) {
+                d = iterator.next();
+            }
+            boolean needsKey = true;
+            while (d != null && d.getKey().compareTo(key) <= 0) {
+                WALValue got = d.getValue();
+                if (d.getKey().equals(key)) {
+                    needsKey = false;
+                }
+                if (!scan.row(-1, d.getKey(), got)) {
+                    return false;
+                }
+                if (iterator.hasNext()) {
+                    d = iterator.next();
+                } else {
+                    iterator.eos();
+                    d = null;
+                    break;
+                }
+            }
+            if (needsKey) {
+                return scan.row(-1, key, value);
+            } else {
+                return true;
+            }
+        }
     }
 
 }

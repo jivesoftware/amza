@@ -90,7 +90,7 @@ public class PartitionTombstoneCompactor {
     public void compactTombstone(int stripe, int numberOfStripes, long removeTombstonedOlderThanTimestampId) throws Exception {
 
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
-            if (Math.abs(versionedPartitionName.getPartitionName().hashCode()) % numberOfStripes == stripe) {
+            if ((int)Math.abs((long)versionedPartitionName.getPartitionName().hashCode()) % numberOfStripes == stripe) {
 
                 long ttlTimestampId = 0;
                 PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());

@@ -16,13 +16,13 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.collect.ImmutableSet;
+import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.wal.WALStorage;
-import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -34,15 +34,15 @@ public class WALs {
 
     private final String[] workingDirectories;
     private final String storeName;
-    private final WALStorageProvider walStorageProvider;
-    private final ConcurrentHashMap<VersionedPartitionName, WALStorage> walStores = new ConcurrentHashMap<>();
-    private final StripingLocksProvider locksProvider = new StripingLocksProvider(1024); // TODO expose to config
+    private final IndexedWALStorageProvider walStorageProvider;
+    private final ConcurrentHashMap<VersionedPartitionName, IndexedWAL> walStores = new ConcurrentHashMap<>();
+    private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
     private final Semaphore[] semaphores = new Semaphore[1024];
 
     public WALs(String[] workingDirectories,
         String storeName,
-        WALStorageProvider rowStorageProvider) {
-        this.workingDirectories = workingDirectories;
+        IndexedWALStorageProvider rowStorageProvider) {
+        this.workingDirectories = Arrays.copyOf(workingDirectories, workingDirectories.length);
         this.storeName = storeName;
         this.walStorageProvider = rowStorageProvider;
         for (int i = 0; i < semaphores.length; i++) {
@@ -55,7 +55,7 @@ public class WALs {
     }
 
     private Semaphore getSemaphore(VersionedPartitionName versionedPartitionName) {
-        return semaphores[Math.abs(versionedPartitionName.hashCode()) % semaphores.length];
+        return semaphores[(int) Math.abs((long) versionedPartitionName.hashCode()) % semaphores.length];
     }
 
     public void load() throws Exception {
@@ -79,16 +79,18 @@ public class WALs {
         }
     }
 
-    private WALStorage getStorage(VersionedPartitionName versionedPartitionName) throws Exception {
+    private IndexedWAL getStorage(VersionedPartitionName versionedPartitionName) throws Exception {
         synchronized (locksProvider.lock(versionedPartitionName, 1234)) {
-            WALStorage storage = walStores.get(versionedPartitionName);
-            if (storage == null) {
-                File workingDirectory = new File(workingDirectories[Math.abs(versionedPartitionName.hashCode()) % workingDirectories.length]);
-                storage = walStorageProvider.create(workingDirectory, storeName, versionedPartitionName, null);
-                storage.load();
-                walStores.put(versionedPartitionName, storage);
-            }
-            return storage;
+            return walStores.computeIfAbsent(versionedPartitionName, (key) -> {
+                try {
+                    File workingDirectory = new File(workingDirectories[(int) Math.abs((long) key.hashCode()) % workingDirectories.length]);
+                    IndexedWAL storage = walStorageProvider.create(workingDirectory, storeName, key, null);
+                    storage.load();
+                    return storage;
+                } catch (Exception x) {
+                    throw new RuntimeException(x);
+                }
+            });
         }
     }
 
@@ -96,7 +98,7 @@ public class WALs {
         Semaphore semaphore = getSemaphore(versionedPartitionName);
         semaphore.acquire(SEMAPHORE_PERMITS);
         try {
-            WALStorage storage = walStores.get(versionedPartitionName);
+            IndexedWAL storage = walStores.get(versionedPartitionName);
             if (storage != null && storage.delete(true)) {
                 walStores.remove(versionedPartitionName);
             }
@@ -111,6 +113,6 @@ public class WALs {
 
     public interface Tx<R> {
 
-        R execute(WALStorage storage) throws Exception;
+        R execute(IndexedWAL storage) throws Exception;
     }
 }

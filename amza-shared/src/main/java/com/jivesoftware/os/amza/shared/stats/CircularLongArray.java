@@ -6,7 +6,6 @@ class CircularLongArray {
     int p;
     double[] rate;
     long[] signal;
-    long currentCount = 0;
     double ratePerSec = 0;
     long lastTime = 0;
     long lastV = Long.MAX_VALUE;
@@ -38,7 +37,6 @@ class CircularLongArray {
 
     public void push(long time, long v) {
         signal[p] = v;
-        currentCount = v;
         if (lastV == Long.MAX_VALUE) {
             lastTime = time;
             lastV = v;

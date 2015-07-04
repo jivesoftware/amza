@@ -8,7 +8,7 @@ import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
  */
 public interface PartitionPropertyMarshaller {
 
-    PartitionProperties fromBytes(byte[] bytes) throws Exception;
+    PartitionProperties fromBytes(byte[] bytes);
 
-    byte[] toBytes(PartitionProperties partitionProperties) throws Exception;
+    byte[] toBytes(PartitionProperties partitionProperties);
 }

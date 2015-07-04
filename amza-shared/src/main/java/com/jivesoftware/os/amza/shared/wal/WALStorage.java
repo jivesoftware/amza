@@ -33,7 +33,7 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     RowsChanged update(boolean useUpdateTxId, Commitable<WALValue> rowUpdates) throws Exception;
 
-    WALValue get(WALKey key) throws Exception;
+    WALValue get(WALKey key);
 
     WALValue[] get(WALKey[] keys) throws Exception;
 

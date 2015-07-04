@@ -30,6 +30,7 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.NavigableMap;
@@ -91,7 +92,7 @@ public class AmzaDiscovery {
                                 LOG.warn("No data.");
                                 continue;
                             }
-                            String received = new String(packet.getData(), 0, packet.getLength());
+                            String received = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
                             List<String> clusterMemberHostPort = Lists.newArrayList(Splitter.on('|').split(received));
                             if (clusterMemberHostPort.size() == 4 && clusterMemberHostPort.get(0) != null && clusterMemberHostPort.get(0).equals(clusterName)) {
                                 LOG.debug("received:" + clusterMemberHostPort);
@@ -145,7 +146,7 @@ public class AmzaDiscovery {
                 if (ringHost != RingHost.UNKNOWN_RING_HOST) {
                     message = (clusterName + "|" + ringMember.getMember() + "|" + ringHost.getHost() + "|" + ringHost.getPort());
                     byte[] buf = new byte[512];
-                    byte[] rawMessage = message.getBytes();
+                    byte[] rawMessage = message.getBytes(StandardCharsets.UTF_8);
                     System.arraycopy(rawMessage, 0, buf, 0, rawMessage.length);
                     DatagramPacket packet = new DatagramPacket(buf, buf.length, multicastGroup, multicastPort);
                     socket.send(packet);

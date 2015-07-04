@@ -30,24 +30,32 @@ public class PartitionName implements Comparable<PartitionName> {
     private final String name;
     private transient int hash = 0;
 
-    public byte[] toBytes() throws IOException {
-        HeapFiler memoryFiler = new HeapFiler();
-        UIO.writeByte(memoryFiler, 0, "version");
-        UIO.writeBoolean(memoryFiler, systemPartition, "systemPartition");
-        UIO.writeString(memoryFiler, ringName, "ringName");
-        UIO.writeString(memoryFiler, name, "name");
-        return memoryFiler.getBytes();
+    public byte[] toBytes() {
+        try {
+            HeapFiler memoryFiler = new HeapFiler();
+            UIO.writeByte(memoryFiler, 0, "version");
+            UIO.writeBoolean(memoryFiler, systemPartition, "systemPartition");
+            UIO.writeString(memoryFiler, ringName, "ringName");
+            UIO.writeString(memoryFiler, name, "name");
+            return memoryFiler.getBytes();
+        } catch (IOException ioe) {
+            throw new RuntimeException(ioe);
+        }
     }
 
-    public static PartitionName fromBytes(byte[] bytes) throws IOException {
-        HeapFiler memoryFiler = new HeapFiler(bytes);
-        if (UIO.readByte(memoryFiler, "version") == 0) {
-            return new PartitionName(
-                UIO.readBoolean(memoryFiler, "systemPartition"),
-                UIO.readString(memoryFiler, "ringName"),
-                UIO.readString(memoryFiler, "name"));
+    public static PartitionName fromBytes(byte[] bytes) {
+        try {
+            HeapFiler memoryFiler = new HeapFiler(bytes);
+            if (UIO.readByte(memoryFiler, "version") == 0) {
+                return new PartitionName(
+                    UIO.readBoolean(memoryFiler, "systemPartition"),
+                    UIO.readString(memoryFiler, "ringName"),
+                    UIO.readString(memoryFiler, "name"));
+            }
+            throw new RuntimeException("Invalid version:" + bytes[0]);
+        } catch (IOException ioe) {
+            throw new RuntimeException(ioe);
         }
-        throw new IOException("Invalid version:" + bytes[0]);
     }
 
     @JsonCreator

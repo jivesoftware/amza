@@ -17,7 +17,6 @@ import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
-import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
@@ -36,7 +35,6 @@ public class PartitionStripe {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final String name;
-    private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
     private final DeltaStripeWALStorage storage;
     private final TxPartitionStatus txPartitionStatus;
@@ -44,14 +42,12 @@ public class PartitionStripe {
     private final Predicate<VersionedPartitionName> predicate;
 
     public PartitionStripe(String name,
-        AmzaStats amzaStats,
         PartitionIndex partitionIndex,
         DeltaStripeWALStorage storage,
         TxPartitionStatus txPartitionStatus,
         RowChanges allRowChanges,
         Predicate<VersionedPartitionName> stripingPredicate) {
         this.name = name;
-        this.amzaStats = amzaStats;
         this.partitionIndex = partitionIndex;
         this.storage = storage;
         this.txPartitionStatus = txPartitionStatus;

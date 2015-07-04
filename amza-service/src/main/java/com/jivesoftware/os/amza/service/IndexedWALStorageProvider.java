@@ -8,9 +8,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
 import java.io.IOException;
@@ -19,7 +17,7 @@ import java.util.Set;
 /**
  * @author jonathan.colt
  */
-public class IndexedWALStorageProvider implements WALStorageProvider {
+public class IndexedWALStorageProvider {
 
     private final WALIndexProviderRegistry indexProviderRegistry;
     private final RowIOProvider rowIOProvider;
@@ -46,14 +44,15 @@ public class IndexedWALStorageProvider implements WALStorageProvider {
         this.compactAfterGrowthFactor = compactAfterGrowthFactor;
     }
 
-    @Override
-    public WALStorage create(File workingDirectory,
+    public IndexedWAL create(File workingDirectory,
         String domain,
         VersionedPartitionName versionedPartitionName,
         WALStorageDescriptor storageDescriptor) throws Exception {
         WALIndexProvider walIndexProvider = indexProviderRegistry.getWALIndexProvider(storageDescriptor);
-        final File directory = new File(workingDirectory, domain);
-        directory.mkdirs();
+        File directory = new File(workingDirectory, domain);
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw new IOException("Failed trying to mkdirs for " + directory);
+        }
         BinaryWALTx binaryWALTx = new BinaryWALTx(directory, versionedPartitionName.toBase64(), rowIOProvider, primaryRowMarshaller, walIndexProvider,
             compactAfterGrowthFactor);
         return new IndexedWAL(versionedPartitionName,
@@ -66,7 +65,6 @@ public class IndexedWALStorageProvider implements WALStorageProvider {
             tombstoneCompactionFactor);
     }
 
-    @Override
     public Set<VersionedPartitionName> listExisting(String[] workingDirectories, String domain) throws IOException {
         Set<VersionedPartitionName> versionedPartitionNames = Sets.newHashSet();
         for (String workingDirectory : workingDirectories) {

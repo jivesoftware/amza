@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * @author jonathan.colt
  */
-public class DeltaStripeWALStorage implements StripeWALStorage {
+public class DeltaStripeWALStorage {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
@@ -122,7 +122,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         tickleMeElmophore.release(numTickleMeElmaphore);
     }
 
-    @Override
     public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
         acquireAll();
         try {
@@ -133,7 +132,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public void load(final PartitionIndex partitionIndex) throws Exception {
         LOG.info("Reloading deltas...");
         long start = System.currentTimeMillis();
@@ -192,7 +190,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         LOG.info("Reloaded deltas stripe:{} in {} ms", index, (System.currentTimeMillis() - start));
     }
 
-    @Override
     public void flush(boolean fsync) throws Exception {
         DeltaWAL wal = deltaWAL.get();
         if (wal != null) {
@@ -200,7 +197,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
         if (partitionDelta != null) {
@@ -226,7 +222,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         return partitionDelta;
     }
 
-    @Override
     public void compact(PartitionIndex partitionIndex, boolean force) throws Exception {
         if (!force && updateSinceLastCompaction.get() < compactAfterNUpdates) { // TODO or some memory pressure BS!
             return;
@@ -300,7 +295,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
         Status partitionStatus,
@@ -391,7 +385,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         long transactionId,
@@ -409,7 +402,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, Highwaters highwaters,
         Scan<WALValue> scan)
         throws Exception {
@@ -427,7 +419,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         acquireOne();
         try {
@@ -442,7 +433,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
     }
 
-    @Override
     public boolean containsKey(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         acquireOne();
         try {
@@ -474,7 +464,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public void rangeScan(final VersionedPartitionName versionedPartitionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to,
         final Scan<WALValue> scan)
         throws Exception {
@@ -534,7 +523,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public void rowScan(final VersionedPartitionName versionedPartitionName, Scannable<WALValue> scanable, final Scan<WALValue> scan) throws Exception {
         acquireOne();
         try {
@@ -595,7 +583,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     /**
      * Stupid expensive!!!!
      */
-    @Override
     public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         int count = 0;
         acquireOne();

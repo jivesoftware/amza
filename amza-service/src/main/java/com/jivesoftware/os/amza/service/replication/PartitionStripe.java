@@ -6,7 +6,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.service.storage.delta.StripeWALStorage;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionTx;
@@ -38,7 +38,7 @@ public class PartitionStripe {
     private final String name;
     private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
-    private final StripeWALStorage storage;
+    private final DeltaStripeWALStorage storage;
     private final TxPartitionStatus txPartitionStatus;
     private final RowChanges allRowChanges;
     private final Predicate<VersionedPartitionName> predicate;
@@ -46,7 +46,7 @@ public class PartitionStripe {
     public PartitionStripe(String name,
         AmzaStats amzaStats,
         PartitionIndex partitionIndex,
-        StripeWALStorage storage,
+        DeltaStripeWALStorage storage,
         TxPartitionStatus txPartitionStatus,
         RowChanges allRowChanges,
         Predicate<VersionedPartitionName> stripingPredicate) {

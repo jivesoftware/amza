@@ -193,6 +193,14 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         return map;
     }
 
+    public Map<String,Object> renderPartition(PartitionName partitionName,long startFp,long endFp) {
+        Map<String,Object> partitionViz = new HashMap<>();
+        //amzaService.getPartitionProvider().
+
+        return partitionViz;
+    }
+
+
     public String renderOverview() throws Exception {
 
         StringBuilder sb = new StringBuilder();

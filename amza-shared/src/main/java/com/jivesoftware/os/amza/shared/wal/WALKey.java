@@ -16,11 +16,10 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.google.common.primitives.UnsignedBytes;
-import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-public class WALKey implements Comparable<WALKey>, Serializable {
+public class WALKey implements Comparable<WALKey> {
 
     private final byte[] key;
     private transient int hashCode = 0;

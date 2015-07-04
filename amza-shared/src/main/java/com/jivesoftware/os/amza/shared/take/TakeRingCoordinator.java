@@ -52,7 +52,7 @@ public class TakeRingCoordinator {
         this.systemReofferDeltaMillis = systemReofferDeltaMillis;
         this.reofferDeltaMillis = reofferDeltaMillis;
         //LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
-        this.versionedRing.compareAndSet(null, new VersionedRing(timestampedOrderIdProvider.nextId(), neighbors));
+        this.versionedRing.compareAndSet(null, new VersionedRing(neighbors));
     }
 
     boolean cya(List<Entry<RingMember, RingHost>> neighbors, Set<VersionedPartitionName> retain) {
@@ -103,20 +103,18 @@ public class TakeRingCoordinator {
                 return existing;
             } else {
                 //LOG.info("RESIZED RING:" + ringName + " size:" + neighbors.size() + " " + this + " " + existing);
-                return new VersionedRing(timestampedOrderIdProvider.nextId(), neighbors);
+                return new VersionedRing(neighbors);
             }
         });
     }
 
     static public class VersionedRing {
 
-        final long version;
         final int takeFromFactor;
         final LinkedHashMap<RingMember, Integer> members;
 
-        public VersionedRing(long version, List<Entry<RingMember, RingHost>> neighbors) {
-            this.version = version;
-
+        public VersionedRing(List<Entry<RingMember, RingHost>> neighbors) {
+            
             Entry<RingMember, RingHost>[] ringMembers = neighbors.toArray(new Entry[neighbors.size()]);
             members = new LinkedHashMap<>();
             takeFromFactor = 1 + (int) Math.sqrt(ringMembers.length);

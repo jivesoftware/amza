@@ -24,7 +24,7 @@ public class AwaitNotify<K> {
     }
 
     private AtomicLong getChangedLock(K key) {
-        return changedLocks[Math.abs(key.hashCode()) % changedLocks.length];
+        return changedLocks[(int)Math.abs((long)key.hashCode()) % changedLocks.length];
     }
 
     public <R> R awaitChange(K key, Callable<Optional<R>> awaiter, long timeoutMillis) throws Exception {

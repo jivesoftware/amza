@@ -77,21 +77,23 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public CompactionWALIndex startCompaction() throws Exception {
-        return new CompactionWALIndex() {
+        return new NoOpCompactionWALIndex();
+    }
 
-            @Override
-            public void put(
-                Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception {
-            }
+    static class NoOpCompactionWALIndex implements CompactionWALIndex {
 
-            @Override
-            public void abort() throws Exception {
-            }
+        @Override
+        public void put(
+            Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception {
+        }
 
-            @Override
-            public void commit() throws Exception {
-            }
-        };
+        @Override
+        public void abort() throws Exception {
+        }
+
+        @Override
+        public void commit() throws Exception {
+        }
     }
 
     @Override

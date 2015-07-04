@@ -5,7 +5,7 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.MemoryBackedHighwaterStorage;
-import com.jivesoftware.os.amza.service.storage.IndexedWAL;
+import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -98,7 +98,7 @@ public class DeltaStripeWALStorageNGTest {
             1, new AmzaStats(), primaryRowMarshaller, highwaterRowMarshaller, deltaWALFactory, updated, 0);
         deltaStripeWALStorage.load(partitionIndex);
 
-        IndexedWAL storage = partitionStore.getWalStorage();
+        WALStorage storage = partitionStore.getWalStorage();
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
         Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
         Assert.assertEquals(0, storage.count());

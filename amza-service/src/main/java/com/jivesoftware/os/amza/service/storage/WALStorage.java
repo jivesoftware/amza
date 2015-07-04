@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableLong;
 
-public class IndexedWAL implements RangeScannable<WALValue> {
+public class WALStorage implements RangeScannable<WALValue> {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
@@ -98,7 +98,7 @@ public class IndexedWAL implements RangeScannable<WALValue> {
         }
     }
 
-    public IndexedWAL(VersionedPartitionName versionedPartitionName,
+    public WALStorage(VersionedPartitionName versionedPartitionName,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,

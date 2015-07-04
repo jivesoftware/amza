@@ -167,7 +167,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
             }
 
             File workingDirectory = new File(workingDirectories[(int) Math.abs((long) versionedPartitionName.hashCode()) % workingDirectories.length]);
-            IndexedWAL walStorage = walStorageProvider.create(workingDirectory, domain, versionedPartitionName, properties.walStorageDescriptor);
+            WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, versionedPartitionName, properties.walStorageDescriptor);
             partitionStore = new PartitionStore(walStorage, hardFlush);
             partitionStore.load();
 

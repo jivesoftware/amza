@@ -6,7 +6,7 @@ import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.IndexedWAL;
+import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
@@ -124,7 +124,7 @@ public class DeltaStripeWALStorage {
         tickleMeElmophore.release(numTickleMeElmaphore);
     }
 
-    public boolean expunge(VersionedPartitionName versionedPartitionName, IndexedWAL walStorage) throws Exception {
+    public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
         acquireAll();
         try {
             partitionDeltas.remove(versionedPartitionName);
@@ -199,7 +199,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public long getHighestTxId(VersionedPartitionName versionedPartitionName, IndexedWAL storage) throws Exception {
+    public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
         if (partitionDelta != null) {
             return partitionDelta.highestTxId();
@@ -300,7 +300,7 @@ public class DeltaStripeWALStorage {
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
         Status partitionStatus,
-        IndexedWAL storage,
+        WALStorage storage,
         Commitable<WALValue> updates,
         WALUpdated updated) throws Exception {
 
@@ -388,7 +388,7 @@ public class DeltaStripeWALStorage {
     }
 
     public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
-        IndexedWAL storage,
+        WALStorage storage,
         long transactionId,
         RowStream rowStream) throws Exception {
         if (!storage.takeRowUpdatesSince(transactionId, rowStream)) {
@@ -404,7 +404,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, IndexedWAL storage, long transactionId, Highwaters highwaters,
+    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, Highwaters highwaters,
         Scan<WALValue> scan)
         throws Exception {
 
@@ -421,7 +421,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public WALValue get(VersionedPartitionName versionedPartitionName, IndexedWAL storage, WALKey key) throws Exception {
+    public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         acquireOne();
         try {
             Optional<WALValue> deltaGot = getPartitionDeltas(versionedPartitionName).get(key);
@@ -435,7 +435,7 @@ public class DeltaStripeWALStorage {
 
     }
 
-    public boolean containsKey(VersionedPartitionName versionedPartitionName, IndexedWAL storage, WALKey key) throws Exception {
+    public boolean containsKey(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         acquireOne();
         try {
             Boolean contained = getPartitionDeltas(versionedPartitionName).containsKey(key);
@@ -448,7 +448,7 @@ public class DeltaStripeWALStorage {
         return storage.containsKey(key);
     }
 
-    private WALTimestampId[] getTimestamps(VersionedPartitionName versionedPartitionName, IndexedWAL storage, List<WALKey> keys, List<WALValue> values) throws
+    private WALTimestampId[] getTimestamps(VersionedPartitionName versionedPartitionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws
         Exception {
         WALKey[] consumableKeys = keys.toArray(new WALKey[keys.size()]);
         DeltaResult<WALTimestampId[]> deltas = getPartitionDeltas(versionedPartitionName).getTimestampIds(consumableKeys);
@@ -523,7 +523,7 @@ public class DeltaStripeWALStorage {
     /**
      * Stupid expensive!!!!
      */
-    public long count(VersionedPartitionName versionedPartitionName, IndexedWAL storage) throws Exception {
+    public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         int count = 0;
         acquireOne();
         try {

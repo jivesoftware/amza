@@ -26,17 +26,17 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 
 public class PartitionStore implements RangeScannable<WALValue> {
 
-    private final IndexedWAL walStorage;
+    private final WALStorage walStorage;
     private final boolean hardFlush;
 
-    public PartitionStore(IndexedWAL walStorage,
+    public PartitionStore(WALStorage walStorage,
         boolean hardFlush) {
 
         this.walStorage = walStorage;
         this.hardFlush = hardFlush;
     }
 
-    public IndexedWAL getWalStorage() {
+    public WALStorage getWalStorage() {
         return walStorage;
     }
 

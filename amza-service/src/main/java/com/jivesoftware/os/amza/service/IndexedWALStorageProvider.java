@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.storage.IndexedWAL;
+import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
@@ -44,7 +44,7 @@ public class IndexedWALStorageProvider {
         this.compactAfterGrowthFactor = compactAfterGrowthFactor;
     }
 
-    public IndexedWAL create(File workingDirectory,
+    public WALStorage create(File workingDirectory,
         String domain,
         VersionedPartitionName versionedPartitionName,
         WALStorageDescriptor storageDescriptor) throws Exception {
@@ -55,7 +55,7 @@ public class IndexedWALStorageProvider {
         }
         BinaryWALTx binaryWALTx = new BinaryWALTx(directory, versionedPartitionName.toBase64(), rowIOProvider, primaryRowMarshaller, walIndexProvider,
             compactAfterGrowthFactor);
-        return new IndexedWAL(versionedPartitionName,
+        return new WALStorage(versionedPartitionName,
             orderIdProvider,
             primaryRowMarshaller,
             highwaterRowMarshaller,

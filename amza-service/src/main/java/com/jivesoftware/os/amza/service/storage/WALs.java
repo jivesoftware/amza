@@ -35,7 +35,7 @@ public class WALs {
     private final String[] workingDirectories;
     private final String storeName;
     private final IndexedWALStorageProvider walStorageProvider;
-    private final ConcurrentHashMap<VersionedPartitionName, IndexedWAL> walStores = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<VersionedPartitionName, WALStorage> walStores = new ConcurrentHashMap<>();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
     private final Semaphore[] semaphores = new Semaphore[1024];
 
@@ -79,12 +79,12 @@ public class WALs {
         }
     }
 
-    private IndexedWAL getStorage(VersionedPartitionName versionedPartitionName) throws Exception {
+    private WALStorage getStorage(VersionedPartitionName versionedPartitionName) throws Exception {
         synchronized (locksProvider.lock(versionedPartitionName, 1234)) {
             return walStores.computeIfAbsent(versionedPartitionName, (key) -> {
                 try {
                     File workingDirectory = new File(workingDirectories[(int) Math.abs((long) key.hashCode()) % workingDirectories.length]);
-                    IndexedWAL storage = walStorageProvider.create(workingDirectory, storeName, key, null);
+                    WALStorage storage = walStorageProvider.create(workingDirectory, storeName, key, null);
                     storage.load();
                     return storage;
                 } catch (Exception x) {
@@ -98,7 +98,7 @@ public class WALs {
         Semaphore semaphore = getSemaphore(versionedPartitionName);
         semaphore.acquire(SEMAPHORE_PERMITS);
         try {
-            IndexedWAL storage = walStores.get(versionedPartitionName);
+            WALStorage storage = walStores.get(versionedPartitionName);
             if (storage != null && storage.delete(true)) {
                 walStores.remove(versionedPartitionName);
             }
@@ -113,6 +113,6 @@ public class WALs {
 
     public interface Tx<R> {
 
-        R execute(IndexedWAL storage) throws Exception;
+        R execute(WALStorage storage) throws Exception;
     }
 }

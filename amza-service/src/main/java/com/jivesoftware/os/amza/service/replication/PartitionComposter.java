@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -7,13 +8,22 @@ import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author jonathan.colt
  */
 public class PartitionComposter {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
+    private ScheduledExecutorService scheduledThreadPool;
 
     private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
@@ -35,6 +45,25 @@ public class PartitionComposter {
         this.amzaRingReader = amzaRingReader;
         this.partitionStatusStorage = partitionMemberStatusStorage;
         this.partitionStripeProvider = partitionStripeProvider;
+    }
+
+    public void start() throws Exception {
+
+        scheduledThreadPool = Executors.newScheduledThreadPool(1,
+            new ThreadFactoryBuilder().setNameFormat("partition-composter-%d").build());
+        scheduledThreadPool.scheduleWithFixedDelay(() -> {
+            try {
+                compost();
+            } catch (Exception x) {
+                LOG.debug("Failing to compact tombstones.", x);
+
+            }
+        }, 0, 1, TimeUnit.MINUTES);// TODO config
+    }
+
+    public void stop() throws Exception {
+        this.scheduledThreadPool.shutdownNow();
+        this.scheduledThreadPool = null;
     }
 
     public void compost() throws Exception {

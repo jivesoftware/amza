@@ -23,6 +23,7 @@ public class PartitionTombstoneCompactor {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private ScheduledExecutorService scheduledThreadPool;
+    
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
@@ -46,41 +47,37 @@ public class PartitionTombstoneCompactor {
         this.numberOfCompactorThreads = numberOfCompactorThreads;
     }
 
-    synchronized public void start() throws Exception {
+    public void start() throws Exception {
 
         final int silenceBackToBackErrors = 100;
-        if (scheduledThreadPool == null) {
-            scheduledThreadPool = Executors.newScheduledThreadPool(numberOfCompactorThreads,
-                new ThreadFactoryBuilder().setNameFormat("partition-compactor-%d").build());
-            for (int i = 0; i < numberOfCompactorThreads; i++) {
-                final int stripe = i;
-                scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
-                    int failedToCompact = 0;
+        scheduledThreadPool = Executors.newScheduledThreadPool(numberOfCompactorThreads,
+            new ThreadFactoryBuilder().setNameFormat("partition-tombstone-compactor-%d").build());
+        for (int i = 0; i < numberOfCompactorThreads; i++) {
+            final int stripe = i;
+            scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
+                int failedToCompact = 0;
 
-                    @Override
-                    public void run() {
-                        try {
-                            failedToCompact = 0;
-                            long removeIfOlderThanTimestmapId = removeIfOlderThanTimestmapId();
-                            compactTombstone(stripe, numberOfCompactorThreads, removeIfOlderThanTimestmapId);
-                        } catch (Exception x) {
-                            LOG.debug("Failing to compact tombstones.", x);
-                            if (failedToCompact % silenceBackToBackErrors == 0) {
-                                failedToCompact++;
-                                LOG.error("Failing to compact tombstones.");
-                            }
+                @Override
+                public void run() {
+                    try {
+                        failedToCompact = 0;
+                        long removeIfOlderThanTimestmapId = removeIfOlderThanTimestmapId();
+                        compactTombstone(stripe, numberOfCompactorThreads, removeIfOlderThanTimestmapId);
+                    } catch (Exception x) {
+                        LOG.debug("Failing to compact tombstones.", x);
+                        if (failedToCompact % silenceBackToBackErrors == 0) {
+                            failedToCompact++;
+                            LOG.error("Failing to compact tombstones.");
                         }
                     }
-                }, checkIfTombstoneCompactionIsNeededIntervalInMillis, checkIfTombstoneCompactionIsNeededIntervalInMillis, TimeUnit.MILLISECONDS);
-            }
+                }
+            }, checkIfTombstoneCompactionIsNeededIntervalInMillis, checkIfTombstoneCompactionIsNeededIntervalInMillis, TimeUnit.MILLISECONDS);
         }
     }
 
-    synchronized public void stop() throws Exception {
-        if (scheduledThreadPool != null) {
-            this.scheduledThreadPool.shutdownNow();
-            this.scheduledThreadPool = null;
-        }
+     public void stop() throws Exception {
+        this.scheduledThreadPool.shutdownNow();
+        this.scheduledThreadPool = null;
     }
 
     public long removeIfOlderThanTimestmapId() {

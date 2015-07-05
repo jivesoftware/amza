@@ -4,6 +4,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
@@ -15,12 +16,15 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -39,6 +43,8 @@ public class PartitionStripe {
     private final DeltaStripeWALStorage storage;
     private final TxPartitionStatus txPartitionStatus;
     private final RowChanges allRowChanges;
+    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
+    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final Predicate<VersionedPartitionName> predicate;
 
     public PartitionStripe(String name,
@@ -46,12 +52,16 @@ public class PartitionStripe {
         DeltaStripeWALStorage storage,
         TxPartitionStatus txPartitionStatus,
         RowChanges allRowChanges,
+        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
+        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         Predicate<VersionedPartitionName> stripingPredicate) {
         this.name = name;
         this.partitionIndex = partitionIndex;
         this.storage = storage;
         this.txPartitionStatus = txPartitionStatus;
         this.allRowChanges = allRowChanges;
+        this.primaryRowMarshaller = primaryRowMarshaller;
+        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.predicate = stripingPredicate;
     }
 
@@ -219,7 +229,16 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    if (storage.takeFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, highwaters, scan)) {
+                    RowStream stream = (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+                        if (rowType == RowType.primary) {
+                            WALRow walRow = primaryRowMarshaller.fromRow(row);
+                            return scan.row(rowTxId, walRow.key, walRow.value);
+                        } else if (rowType == RowType.highwater) {
+                            highwaters.highwater(highwaterRowMarshaller.fromBytes(row));
+                        }
+                        return true;
+                    };
+                    if (storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, stream)) {
                         return partitionHighwater;
                     } else {
                         return null;
@@ -257,7 +276,7 @@ public class PartitionStripe {
     }
 
     public void load() throws Exception {
-        storage.load(partitionIndex);
+        storage.load(partitionIndex, primaryRowMarshaller);
     }
 
     public void compact(boolean force) {

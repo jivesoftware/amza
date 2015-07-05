@@ -5,12 +5,12 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.MemoryBackedHighwaterStorage;
-import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
@@ -95,8 +95,8 @@ public class DeltaStripeWALStorageNGTest {
         File tmp = Files.createTempDir();
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
         DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(
-            1, new AmzaStats(), primaryRowMarshaller, highwaterRowMarshaller, deltaWALFactory, updated, 0);
-        deltaStripeWALStorage.load(partitionIndex);
+            1, new AmzaStats(), deltaWALFactory, updated, 0);
+        deltaStripeWALStorage.load(partitionIndex, primaryRowMarshaller);
 
         WALStorage storage = partitionStore.getWalStorage();
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));

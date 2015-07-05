@@ -235,7 +235,6 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
                 if (rootRingMember.equals(ringMember)) {
                     takeCoordinator.updated(amzaRingReader, versionedPartitionName, commitableVersionStatus.status, 0);
                     takeCoordinator.awakeCya();
-                    returnableStatus = null;
                 }
             }
             if (rootRingMember.equals(ringMember)) {

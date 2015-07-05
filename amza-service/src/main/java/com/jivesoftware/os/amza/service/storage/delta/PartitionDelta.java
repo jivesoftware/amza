@@ -3,19 +3,13 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
-import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.scan.Scan;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
-import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -44,8 +38,6 @@ class PartitionDelta {
 
     private final VersionedPartitionName versionedPartitionName;
     private final DeltaWAL deltaWAL;
-    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
-    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     final AtomicReference<PartitionDelta> compacting;
 
     private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>();
@@ -56,13 +48,9 @@ class PartitionDelta {
     PartitionDelta(VersionedPartitionName versionedPartitionName,
         DeltaWAL deltaWAL,
         WALUpdated walUpdated,
-        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
-        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         PartitionDelta compacting) {
         this.versionedPartitionName = versionedPartitionName;
         this.deltaWAL = deltaWAL;
-        this.primaryRowMarshaller = primaryRowMarshaller;
-        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.compacting = new AtomicReference<>(compacting);
     }
 
@@ -239,10 +227,10 @@ class PartitionDelta {
         return deltaWAL.takeRows(tailMap, rowStream);
     }
 
-    public boolean takeFromTransactionId(final long transactionId, Highwaters highwaters, final Scan<WALValue> scan) throws Exception {
+    public boolean takeRowsFromTransactionId(final long transactionId, RowStream rowStream) throws Exception {
         PartitionDelta partitionDelta = compacting.get();
         if (partitionDelta != null) {
-            if (!partitionDelta.takeFromTransactionId(transactionId, highwaters, scan)) {
+            if (!partitionDelta.takeRowsFromTransactionId(transactionId, rowStream)) {
                 return false;
             }
         }
@@ -252,15 +240,7 @@ class PartitionDelta {
         }
 
         ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
-        return deltaWAL.takeRows(tailMap, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
-            if (rowType == RowType.primary) {
-                WALRow walRow = primaryRowMarshaller.fromRow(row);
-                return scan.row(rowTxId, walRow.key, walRow.value);
-            } else if (rowType == RowType.highwater) {
-                highwaters.highwater(highwaterRowMarshaller.fromBytes(row));
-            }
-            return true;
-        });
+        return deltaWAL.takeRows(tailMap, rowStream);
     }
 
     void compact(PartitionIndex partitionIndex) throws Exception {

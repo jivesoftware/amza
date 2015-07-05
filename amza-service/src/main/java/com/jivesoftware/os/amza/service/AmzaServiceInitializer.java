@@ -182,13 +182,12 @@ public class AmzaServiceInitializer {
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
                 i,
                 amzaStats,
-                primaryRowMarshaller,
-                highwaterRowMarshaller,
                 deltaWALFactory,
                 walUpdated,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
             partitionStripes[i] = new PartitionStripe("stripe-" + i, partitionIndex, deltaWALStorage, partitionStatusStorage, amzaPartitionWatcher,
+                primaryRowMarshaller, highwaterRowMarshaller,
                 (versionedPartitionName) -> {
                     if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
                         return Math.abs((long)versionedPartitionName.getPartitionName().hashCode()) % deltaStorageStripes == stripeId;

@@ -653,6 +653,17 @@ public class WALStorage implements RangeScannable<WALValue> {
         }
     }
 
+     public boolean takeRowsFromTransactionId(long sinceTransactionId, RowStream rowStream) throws Exception {
+        acquireOne();
+        try {
+            return walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader reader) -> {
+                return reader.scan(offset, false, rowStream);
+            });
+        } finally {
+            releaseOne();
+        }
+    }
+
     public void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception {
         maxUpdatesBetweenCompactionHintMarker.set(walStorageDescriptor.maxUpdatesBetweenCompactionHintMarker);
         maxUpdatesBetweenIndexCommitMarker.set(walStorageDescriptor.maxUpdatesBetweenIndexCommitMarker);

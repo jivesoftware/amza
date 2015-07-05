@@ -141,7 +141,7 @@ public class StripedPartition implements AmzaPartitionAPI {
     @Override
     public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            final MutableLong lastTxId = new MutableLong(-1);
+            MutableLong lastTxId = new MutableLong(-1);
             WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters,
                 (rowTxId, key, value) -> {
                     if (value.getTombstoned() || scan.row(rowTxId, key, value.toTimestampedValue())) {
@@ -153,6 +153,21 @@ public class StripedPartition implements AmzaPartitionAPI {
                     return false;
                 });
             return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd);
+        });
+    }
+
+    public WALHighwater takeAllFromTransactionId(PartitionName partitionName,
+        long transactionId,
+        Highwaters highwaters,
+        Scan<WALValue> scan) throws Exception {
+
+        return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
+            WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters,
+                (rowTxId, key, value) -> {
+                    scan.row(rowTxId, key, value);
+                    return true;
+                });
+            return tookToEnd;
         });
     }
 

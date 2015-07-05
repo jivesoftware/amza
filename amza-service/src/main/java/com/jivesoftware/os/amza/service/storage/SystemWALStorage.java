@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
@@ -81,6 +82,12 @@ public class SystemWALStorage {
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         return partitionIndex.get(versionedPartitionName).getWalStorage().takeFromTransactionId(transactionId, highwaters, scan);
+    }
+
+    public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName, long transactionId, RowStream rowStream)
+        throws Exception {
+        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
+        return partitionIndex.get(versionedPartitionName).getWalStorage().takeRowsFromTransactionId(transactionId, rowStream);
     }
 
     public void rowScan(VersionedPartitionName versionedPartitionName, Scan<WALValue> scan) throws Exception {

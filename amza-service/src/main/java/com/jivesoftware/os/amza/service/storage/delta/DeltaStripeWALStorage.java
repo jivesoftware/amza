@@ -5,10 +5,9 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
@@ -20,7 +19,6 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -57,8 +55,6 @@ public class DeltaStripeWALStorage {
 
     private final int index;
     private final AmzaStats amzaStats;
-    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
-    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
     private final WALUpdated walUpdated;
@@ -82,16 +78,12 @@ public class DeltaStripeWALStorage {
 
     public DeltaStripeWALStorage(int index,
         AmzaStats amzaStats,
-        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
-        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         DeltaWALFactory deltaWALFactory,
         WALUpdated walUpdated,
         long compactAfterNUpdates) {
 
         this.index = index;
         this.amzaStats = amzaStats;
-        this.primaryRowMarshaller = primaryRowMarshaller;
-        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.deltaWALFactory = deltaWALFactory;
         this.walUpdated = walUpdated;
         this.compactAfterNUpdates = compactAfterNUpdates;
@@ -134,7 +126,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public void load(final PartitionIndex partitionIndex) throws Exception {
+    public void load(PartitionIndex partitionIndex, PrimaryRowMarshaller<byte[]> primaryRowMarshaller) throws Exception {
         LOG.info("Reloading deltas...");
         long start = System.currentTimeMillis();
         synchronized (oneWriterAtATimeLock) {
@@ -215,7 +207,7 @@ public class DeltaStripeWALStorage {
             if (wal == null) {
                 throw new IllegalStateException("Delta WAL is currently unavailable.");
             }
-            partitionDelta = new PartitionDelta(versionedPartitionName, wal, walUpdated, primaryRowMarshaller, highwaterRowMarshaller, null);
+            partitionDelta = new PartitionDelta(versionedPartitionName, wal, walUpdated, null);
             PartitionDelta had = partitionDeltas.putIfAbsent(versionedPartitionName, partitionDelta);
             if (had != null) {
                 partitionDelta = had;
@@ -260,8 +252,6 @@ public class DeltaStripeWALStorage {
                 PartitionDelta partitionDelta = new PartitionDelta(e.getKey(),
                     newDeltaWAL,
                     walUpdated,
-                    primaryRowMarshaller,
-                    highwaterRowMarshaller,
                     e.getValue());
                 partitionDeltas.put(e.getKey(), partitionDelta);
                 futures.add(compactionThreads.submit(() -> {
@@ -404,18 +394,17 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, Highwaters highwaters,
-        Scan<WALValue> scan)
+    public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, RowStream rowStream)
         throws Exception {
 
-        if (!storage.takeFromTransactionId(transactionId, highwaters, scan)) {
+        if (!storage.takeRowsFromTransactionId(transactionId, rowStream)) {
             return false;
         }
 
         acquireOne();
         try {
             PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
-            return delta.takeFromTransactionId(transactionId, highwaters, scan);
+            return delta.takeRowsFromTransactionId(transactionId, rowStream);
         } finally {
             releaseOne();
         }

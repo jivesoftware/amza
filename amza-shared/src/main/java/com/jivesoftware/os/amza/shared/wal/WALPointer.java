@@ -17,9 +17,8 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.io.Serializable;
 
-public class WALPointer implements Serializable {
+public class WALPointer {
 
     private final long timestamp;
     private final boolean tombstoned;

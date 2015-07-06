@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Table;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
@@ -15,6 +16,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -33,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * @author jonathan.colt
  */
-public class PartitionStatusStorage implements TxPartitionStatus {
+public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -74,6 +76,22 @@ public class PartitionStatusStorage implements TxPartitionStatus {
             UIO.writeByteArray(filer, partitionName.toBytes(), "partition");
         }
         return new WALKey(filer.getBytes());
+    }
+
+    void clearCache(WALKey walKey, WALValue walValue) throws IOException {
+        HeapFiler filer = new HeapFiler(walKey.getKey());
+        UIO.readByte(filer, "serializationVersion");
+        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member"));
+        PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition"));
+        VersionedStatus versionedStatus = VersionedStatus.fromBytes(walValue.getValue());
+        if (ringMember.equals(rootRingMember)) {
+            localStatusCache.remove(new VersionedPartitionName(partitionName, versionedStatus.version));
+        } else {
+            remoteStatusCache.computeIfPresent(partitionName, (PartitionName key, ConcurrentHashMap<RingMember, VersionedStatus> cache) -> {
+                cache.remove(ringMember);
+                return cache;
+            });
+        }
     }
 
     @Override
@@ -148,11 +166,11 @@ public class PartitionStatusStorage implements TxPartitionStatus {
         set(rootRingMember, versionedPartitionName.getPartitionName(), new VersionedStatus(Status.ONLINE, versionedPartitionName.getPartitionVersion()));
     }
 
-    public void markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
+    public VersionedStatus markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return;
+            return new VersionedStatus(Status.ONLINE, 0);
         }
-        set(ringMember, versionedPartitionName.getPartitionName(), new VersionedStatus(Status.EXPUNGE, versionedPartitionName.getPartitionVersion()));
+        return set(ringMember, versionedPartitionName.getPartitionName(), new VersionedStatus(Status.EXPUNGE, versionedPartitionName.getPartitionVersion()));
     }
 
     public void streamLocalState(PartitionMemberStatusStream stream) throws Exception {
@@ -184,7 +202,7 @@ public class PartitionStatusStorage implements TxPartitionStatus {
 
         return transactor.doWithAll(versionedPartitionName, versionedStatus.status, (currentVersionedPartitionName, status) -> {
 
-            WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
+            WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
             VersionedStatus commitableVersionStatus = null;
             VersionedStatus returnableStatus = null;
 
@@ -214,11 +232,17 @@ public class PartitionStatusStorage implements TxPartitionStatus {
                 });
                 LOG.info("STATUS {}: {} versionedPartitionName:{} was updated to {}",
                     rootRingMember, ringMember, versionedPartitionName, commitableVersionStatus);
-                takeCoordinator.updated(amzaRingReader, versionedPartitionName, commitableVersionStatus.status, 0);
-                takeCoordinator.awakeCya();
+                if (rootRingMember.equals(ringMember)) {
+                    takeCoordinator.updated(amzaRingReader, versionedPartitionName, commitableVersionStatus.status, 0);
+                    takeCoordinator.awakeCya();
+                }
             }
-            if (returnableStatus != null) {
-                localStatusCache.put(currentVersionedPartitionName, returnableStatus);
+            if (rootRingMember.equals(ringMember)) {
+                if (returnableStatus != null) {
+                    localStatusCache.put(currentVersionedPartitionName, returnableStatus);
+                } else {
+                    localStatusCache.remove(versionedPartitionName);
+                }
             }
             return returnableStatus;
         });
@@ -260,6 +284,15 @@ public class PartitionStatusStorage implements TxPartitionStatus {
             }
             return null;
         }, timeoutMillis);
+    }
+
+    @Override
+    public void changes(RowsChanged changes) throws Exception {
+        if (PartitionProvider.REGION_ONLINE_INDEX.equals(changes.getVersionedPartitionName())) {
+            for (Table.Cell<Long, WALKey, WALValue> change : changes.getApply().cellSet()) {
+                clearCache(change.getColumnKey(), change.getValue());
+            }
+        }
     }
 
     public interface PartitionMemberStatusStream {

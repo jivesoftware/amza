@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
-import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.ui.region.AmzaStressPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaStressPluginRegion.AmzaStressPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
@@ -36,7 +35,7 @@ public class AmzaStressPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaStressPluginRegionInput("", "", 0, 0, 0, 0, "")));
+            new AmzaStressPluginRegionInput("", "", 0, 0, 0, 0, 1, false, ""));
         return Response.ok(rendered).build();
     }
 
@@ -50,9 +49,12 @@ public class AmzaStressPluginEndpoints {
         @FormParam("batchSize") @DefaultValue("1") int batchSize,
         @FormParam("numPartitions") @DefaultValue("1") int numPartitions,
         @FormParam("numThreadsPerRegion") @DefaultValue("1") int numThreadsPerRegion,
+        @FormParam("desiredQuorm") @DefaultValue("1") int desiredQuorm,
+        @FormParam("orderedInsertion") @DefaultValue("false") boolean orderedInsertion,
         @FormParam("action") @DefaultValue("") String action) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            Optional.of(new AmzaStressPluginRegionInput(name.trim(), regionPrefix.trim(), numBatches, batchSize, numPartitions, numThreadsPerRegion, action)));
+            new AmzaStressPluginRegionInput(name.trim(), regionPrefix.trim(), numBatches, batchSize, numPartitions, numThreadsPerRegion,
+                    desiredQuorm, orderedInsertion, action));
         return Response.ok(rendered).build();
     }
 }

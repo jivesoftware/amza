@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
@@ -162,9 +161,6 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         });
 
         NavigableMap<RingMember, RingHost> existingRing = ringStoreReader.getRing(ringName);
-        if (existingRing == null) {
-            existingRing = new TreeMap<>();
-        }
         setInternal(ringName, Iterables.concat(existingRing.keySet(), Iterables.limit(ringAsList, desiredRingSize)));
     }
 

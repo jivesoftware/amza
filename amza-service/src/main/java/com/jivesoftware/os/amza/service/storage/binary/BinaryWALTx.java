@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
+import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -50,7 +51,7 @@ public class BinaryWALTx implements WALTx {
     private final AtomicLong lastEndOfLastRow = new AtomicLong(-1);
 
     private final RowIOProvider ioProvider;
-    private RowIO io;
+    private RowIO<File> io;
 
     public BinaryWALTx(File baseDir,
         String prefix,
@@ -219,7 +220,7 @@ public class BinaryWALTx implements WALTx {
                 try {
                     io.close();
                 } catch (Exception x) {
-                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[] { dir.getAbsolutePath() }, x);
+                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[]{dir.getAbsolutePath()}, x);
                 }
                 io.delete();
                 return true;
@@ -285,11 +286,15 @@ public class BinaryWALTx implements WALTx {
                 compactionIO.close();
                 File backup = new File(dir, "bkp");
                 backup.delete();
-                backup.mkdirs();
+                if (!backup.exists() && !backup.mkdirs()) {
+                    throw new IOException("Failed trying to mkdirs for " + backup);
+                }
                 long sizeBeforeCompaction = io.sizeInBytes();
                 io.close();
                 io.move(backup);
-                dir.mkdirs();
+                if (!dir.exists() && !dir.mkdirs()) {
+                    throw new IOException("Failed trying to mkdirs for " + dir);
+                }
                 compactionIO.move(dir);
                 // Reopen the world
                 io = ioProvider.create(dir, name);

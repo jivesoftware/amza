@@ -11,6 +11,7 @@ import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -33,9 +34,14 @@ public class AmzaInspectPluginEndpoints {
     @GET
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
-    public Response ring() {
+    public Response ring(@QueryParam("regionType") @DefaultValue("USER") String type,
+        @QueryParam("ringName") @DefaultValue("") String ringName,
+        @QueryParam("regionName") @DefaultValue("") String regionName,
+        @QueryParam("key") @DefaultValue("") String key,
+        @QueryParam("offset") @DefaultValue("0") int offset,
+        @QueryParam("batchSize") @DefaultValue("100") int batchSize) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new AmzaInspectPluginRegionInput(false, "", "", "", 0, 100, ""));
+            new AmzaInspectPluginRegionInput(type.equals("SYSTEM"), ringName, regionName, key, offset, batchSize, ""));
         return Response.ok(rendered).build();
     }
 

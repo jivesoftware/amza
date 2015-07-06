@@ -18,8 +18,6 @@ package com.jivesoftware.os.amza.service.storage.filer;
 import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
 import com.jivesoftware.os.amza.shared.filer.IFiler;
 import com.jivesoftware.os.amza.shared.filer.IReadable;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
@@ -27,15 +25,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IFiler {
-
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-
-    public static long totalFilesOpenCount;
-    public static long totalReadByteCount;
-    public static long totalWriteByteCount;
-    public static long totalSeeksCount;
-    public long readByteCount;
-    public long writeByteCount;
 
     private final String fileName;
     private final boolean useMemMap;
@@ -65,7 +54,7 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
         if (size <= memMapFilerLength.get()) {
             return memMapFiler.get().duplicate();
         }
-        synchronized (memMapFiler) {
+        synchronized (this) {
             if (size <= memMapFilerLength.get()) {
                 return memMapFiler.get().duplicate();
             }
@@ -84,11 +73,13 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
 
     @Override
     public String toString() {
-        try {
-            return "R:" + (readByteCount / 1024) + "kb W:" + (writeByteCount / 1024) + "kb " + fileName + " " + (length() / 1024) + "kb";
-        } catch (IOException x) {
-            return "R:" + (readByteCount / 1024) + "kb W:" + (writeByteCount / 1024) + "kb " + fileName;
-        }
+        return "DiskBackedWALFiler{"
+            + "fileName=" + fileName
+            + ", useMemMap=" + useMemMap
+            + ", size=" + size
+            + ", memMapFiler=" + memMapFiler
+            + ", memMapFilerLength=" + memMapFilerLength
+            + '}';
     }
 
     @Override
@@ -108,7 +99,6 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
 
     @Override
     public void seek(long _fp) throws IOException {
-        totalSeeksCount++;
         super.seek(_fp);
     }
 
@@ -134,28 +124,22 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
 
     @Override
     public void write(int b) throws IOException {
-        writeByteCount++;
-        totalWriteByteCount++;
         size.incrementAndGet();
         super.write(b);
     }
 
     @Override
-    public void write(byte b[]) throws IOException {
+    public void write(byte[] b) throws IOException {
         if (b != null) {
-            writeByteCount += b.length;
-            totalWriteByteCount += b.length;
+            super.write(b);
+            size.addAndGet(b.length);
         }
-        super.write(b);
-        size.addAndGet(b.length);
     }
 
     @Override
-    public void write(byte b[], int _offset, int _len) throws IOException {
+    public void write(byte[] b, int _offset, int _len) throws IOException {
         super.write(b, _offset, _len);
         size.addAndGet(_len);
-        writeByteCount += _len;
-        totalWriteByteCount += _len;
     }
 
     @Override

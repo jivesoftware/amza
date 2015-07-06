@@ -112,8 +112,12 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public WALPointer getPointer(WALKey key) throws Exception {
-        lock.acquire();
+    public WALPointer getPointer(WALKey key) {
+        try {
+            lock.acquire();
+        } catch (InterruptedException ie) {
+            throw new RuntimeException(ie);
+        }
         try {
             DatabaseEntry value = new DatabaseEntry();
             OperationStatus status = database.get(null, new DatabaseEntry(key.getKey()), value, LockMode.READ_UNCOMMITTED);

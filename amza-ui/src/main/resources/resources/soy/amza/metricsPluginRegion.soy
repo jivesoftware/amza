@@ -1,12 +1,6 @@
 {namespace soy.page}
 
 /**
- * @param availableRowsStream
- * @param rowsStream
- * @param rowsTaken
- * @param addMember
- * @param removeMember
- * @param getRing
  * @param longPolled
  * @param grandTotals
  * @param regionTotals
@@ -14,33 +8,6 @@
 {template .metricsPluginRegion}
 
 
-    <div class="panel panel-default">
-        <div class="panel-heading"><span class="glyphicon glyphicon-road"></span>{sp}Running</div>
-        <div class="panel-body">
-            <table class="table table-condensed">
-                <thead>
-                    <tr>
-                        <td>availableRowsStream{sp}
-                        <td>rowsStream{sp}
-                        <td>rowsTaken{sp}
-                        <td>addMember{sp}
-                        <td>removeMember{sp}
-                        <td>getRing{sp}
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>{$availableRowsStream}</td>
-                        <td>{$rowsStream}</td>
-                        <td>{$rowsTaken}</td>
-                        <td>{$addMember}</td>
-                        <td>{$removeMember}</td>
-                        <td>{$getRing}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
     <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-grain"></span>{sp}Polling</div>
         <div class="panel-body">
@@ -71,8 +38,9 @@
              <table class="table table-condensed">
                 <thead>
                     <tr>
-                        <th>Name</th>
+                        <th>Action</th>
                         <th>Ring</th>
+                        <th>Name</th>
                         <th>Count</th>
                         <th><span class="glyphicon glyphicon-open"></span>{sp}Get</th>
                         <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Scan</th>
@@ -88,6 +56,7 @@
                         <td></td>
                         <td></td>
                         <td></td>
+                        <td></td>
                         <td><b>{$grandTotals.gets}</b>{sp}<i>{$grandTotals.getsLag}millis lag</i></td>
                         <td><b>{$grandTotals.scans}</b>{sp}<i>{$grandTotals.scansLag}millis lag</i></td>
                         <td><b>{$grandTotals.directApplies}</b>{sp}<i>{$grandTotals.directAppliesLag}millis lag</i></td>
@@ -98,8 +67,12 @@
                     </tr>
                     {foreach $r in $regionTotals}
                         <tr>
-                            <td><a href="/amza/ui/metrics?partitionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-sunglasses">{$r.name}</a></td>
+                            <td>
+                                <a href="/amza/ui/inspect?regionType={$r.type}&ringName={$r.ringName}&regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search">Inspect</a>
+                                <a href="/amza/ui/metrics?partitionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-sunglasses">Watch</a>
+                            </td>
                             <td>{$r.ringName}</td>
+                            <td>{$r.name}</td>
                             <td><b>{$r.count}</b></td>
                             <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag}millis lag</i></td>
                             <td><b>{$r.scans}</b>{sp}<i>{$r.scansLag}millis lag</i></td>

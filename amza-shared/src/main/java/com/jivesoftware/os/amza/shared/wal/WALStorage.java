@@ -33,7 +33,7 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     RowsChanged update(boolean useUpdateTxId, Commitable<WALValue> rowUpdates) throws Exception;
 
-    WALValue get(WALKey key) throws Exception;
+    WALValue get(WALKey key);
 
     WALValue[] get(WALKey[] keys) throws Exception;
 
@@ -62,6 +62,8 @@ public interface WALStorage extends RangeScannable<WALValue> {
      * @throws Exception if an error occurred
      */
     boolean takeFromTransactionId(long transactionId, Highwaters watermarks, Scan<WALValue> scan) throws Exception;
+
+    boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 
     long compactTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception;
 

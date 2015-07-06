@@ -103,7 +103,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 data.put("availableRowsStream", String.valueOf(amzaStats.availableRowsStream.get()));
                 data.put("rowsTaken", String.valueOf(amzaStats.rowsTaken.get()));
 
-
                 List<Map<String, String>> longPolled = new ArrayList<>();
                 for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
                     AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
@@ -161,6 +160,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     public Map<String, Object> regionTotals(PartitionName name, AmzaStats.Totals totals) throws Exception {
         Map<String, Object> map = new HashMap<>();
         if (name != null) {
+            map.put("type", name.isSystemPartition() ? "SYSTEM" : "USER");
             map.put("name", name.getName());
             map.put("ringName", name.getRingName());
             NavigableMap<RingMember, RingHost> ring = ringReader.getRing(name.getRingName());
@@ -192,6 +192,14 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         return map;
     }
+
+    public Map<String,Object> renderPartition(PartitionName partitionName,long startFp,long endFp) {
+        Map<String,Object> partitionViz = new HashMap<>();
+        //amzaService.getPartitionProvider().
+
+        return partitionViz;
+    }
+
 
     public String renderOverview() throws Exception {
 
@@ -251,6 +259,15 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Took (" + grandTotal.takes + ")",
             (int) (((double) grandTotal.takesLag.longValue() / 10000d) * 100),
             String.valueOf(getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag"));
+
+        sb.append(progress("Active Long Polls (" + amzaStats.availableRowsStream.get() + ")",
+            (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100),""));
+
+        sb.append(progress("Active Row Streaming (" + amzaStats.rowsStream.get() + ")",
+            (int) (((double) amzaStats.rowsStream.get() / 100d) * 100),""));
+
+        sb.append(progress("Active Row Acknowledging (" + amzaStats.rowsTaken.get() + ")",
+            (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100),""));
 
         sb.append("<p><pre>");
         for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {

@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.service.storage.IndexedWAL;
+import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -46,7 +46,7 @@ public class RowPartitionNGTest {
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        IndexedWAL indexedWAL = new IndexedWAL(
+        WALStorage indexedWAL = new WALStorage(
             partitionName,
             idProvider,
             primaryRowMarshaller,
@@ -106,7 +106,7 @@ public class RowPartitionNGTest {
 //        });
     }
 
-    private void addBatch(Random r, OrderIdProviderImpl idProvider, IndexedWAL indexedWAL, int range, int start, int length) throws Exception {
+    private void addBatch(Random r, OrderIdProviderImpl idProvider, WALStorage indexedWAL, int range, int start, int length) throws Exception {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         for (int i = start; i < start + length; i++) {
             WALKey key = new WALKey(UIO.intBytes(r.nextInt(range)));
@@ -149,7 +149,7 @@ public class RowPartitionNGTest {
 
     private void testEventualConsitency(VersionedPartitionName versionedPartitionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
         throws Exception {
-        IndexedWAL indexedWAL = new IndexedWAL(
+        WALStorage indexedWAL = new WALStorage(
             versionedPartitionName,
             idProvider,
             primaryRowMarshaller,
@@ -223,7 +223,7 @@ public class RowPartitionNGTest {
         return value.getBytes();
     }
 
-    private void update(IndexedWAL indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
+    private void update(WALStorage indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         Map<WALKey, WALValue> updates = Maps.newHashMap();
         updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
         indexedWAL.update(false, new MemoryWALUpdates(updates, null));

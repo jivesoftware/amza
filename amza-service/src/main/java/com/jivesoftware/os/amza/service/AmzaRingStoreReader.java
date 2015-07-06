@@ -12,11 +12,13 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
@@ -52,7 +54,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
 
     WALKey key(String ringName, RingMember ringMember) throws IOException {
         HeapFiler filer = new HeapFiler();
-        UIO.writeString(filer, ringName.toUpperCase(), "ringName");
+        UIO.writeString(filer, ringName.toUpperCase(Locale.US), "ringName");
         UIO.writeByte(filer, 0, "seperator");
         if (ringMember != null) {
             UIO.writeByteArray(filer, ringMember.toBytes(), "ringMember");
@@ -79,8 +81,12 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             return Collections.emptyList();
         } else {
             List<Entry<RingMember, RingHost>> neighbors = new ArrayList<>(ring.size() - 1);
-            neighbors.addAll(ring.tailMap(rootRingMember, false).entrySet());
-            neighbors.addAll(ring.headMap(rootRingMember, false).entrySet());
+            ring.tailMap(rootRingMember, false).forEach((RingMember k, RingHost v) -> {
+                neighbors.add(new SimpleEntry<>(k,v));
+            });
+            ring.headMap(rootRingMember, false).forEach((RingMember k, RingHost v) -> {
+                neighbors.add(new SimpleEntry<>(k,v));
+            });
             return neighbors;
         }
 

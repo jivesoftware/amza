@@ -13,7 +13,6 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
-import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 
@@ -41,7 +40,7 @@ public class EmbeddedAmzaServiceInitializer {
         int tombstoneCompactionFactor = 2; // TODO expose to config;
         int compactAfterGrowthFactor = 2; // TODO expose to config;
 
-        WALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
+        IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
             rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, orderIdProvider, tombstoneCompactionFactor, compactAfterGrowthFactor);
 
 

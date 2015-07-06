@@ -41,7 +41,7 @@ public class RingHost {
     public static RingHost fromBytes(byte[] bytes) throws IOException {
         if (bytes[0] == 0) {
             int port = UIO.bytesInt(bytes, 1);
-            String host = new String(bytes, 1 + 4, bytes.length - (1 + 4));
+            String host = new String(bytes, 1 + 4, bytes.length - (1 + 4), StandardCharsets.UTF_8);
             return new RingHost(host, port);
         }
         return null; // Sorry caller

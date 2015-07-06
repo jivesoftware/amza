@@ -106,7 +106,7 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public WALPointer getPointer(WALKey key) throws Exception {
+    public WALPointer getPointer(WALKey key) {
         return index.get(key);
     }
 

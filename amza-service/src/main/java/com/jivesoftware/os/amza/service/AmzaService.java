@@ -18,12 +18,12 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.replication.PartitionCompactor;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage.VersionedStatus;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -78,7 +78,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     private final TakeCoordinator takeCoordinator;
     private final PartitionStatusStorage partitionStatusStorage;
     private final RowChangeTaker changeTaker;
-    private final PartitionCompactor partitionCompactor;
+    private final PartitionTombstoneCompactor partitionTombstoneCompactor;
     private final PartitionComposter partitionComposter;
     private final PartitionIndex partitionIndex;
     private final PartitionProvider partitionProvider;
@@ -96,7 +96,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         TakeCoordinator takeCoordinator,
         PartitionStatusStorage partitionStatusStorage,
         RowChangeTaker changeTaker,
-        PartitionCompactor partitionCompactor,
+        PartitionTombstoneCompactor partitionTombstoneCompactor,
         PartitionComposter partitionComposter,
         PartitionIndex partitionIndex,
         PartitionProvider partitionProvider,
@@ -113,7 +113,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         this.takeCoordinator = takeCoordinator;
         this.partitionStatusStorage = partitionStatusStorage;
         this.changeTaker = changeTaker;
-        this.partitionCompactor = partitionCompactor;
+        this.partitionTombstoneCompactor = partitionTombstoneCompactor;
         this.partitionComposter = partitionComposter;
         this.partitionIndex = partitionIndex;
         this.partitionProvider = partitionProvider;
@@ -146,14 +146,16 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         return partitionProvider;
     }
 
-    synchronized public void start() throws Exception {
+    public void start() throws Exception {
         changeTaker.start();
-        partitionCompactor.start();
+        partitionTombstoneCompactor.start();
+        partitionComposter.start();
     }
 
-    synchronized public void stop() throws Exception {
+    public void stop() throws Exception {
         changeTaker.stop();
-        partitionCompactor.stop();
+        partitionTombstoneCompactor.stop();
+        partitionComposter.stop();
     }
 
     @Override
@@ -171,16 +173,36 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         }
     }
 
+    public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
+        if (!ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
+            throw new IllegalStateException("Not a member of the ring: " + partitionName.getRingName());
+        }
+
+        PartitionProperties properties = partitionIndex.getProperties(partitionName);
+        if (properties == null) {
+            throw new IllegalStateException("No properties for partition: " + partitionName);
+        }
+        partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+            if (versionedPartitionName == null) {
+                VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
+                versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
+                partitionStatus = versionedStatus.status;
+                if (properties.takeFromFactor == 0) {
+                    partitionStatusStorage.markAsOnline(versionedPartitionName);
+                }
+            }
+            if (partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
+                takeCoordinator.updated(ringStoreReader, versionedPartitionName, partitionStatus, 0);
+            }
+            return null;
+        });
+
+        partitionStatusStorage.awaitOnline(partitionName, timeoutMillis);
+    }
+
     public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName) throws Exception {
 
-        List<RingHost> orderedPartitionHosts = new ArrayList<>();
-        List<RingMember> unregisteredRingMembers = new ArrayList<>();
-        List<RingMember> ketchupRingMembers = new ArrayList<>();
-        List<RingMember> expungedRingMembers = new ArrayList<>();
-        List<RingMember> missingRingMembers = new ArrayList<>();
-
         NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
-
         PartitionProperties properties = partitionIndex.getProperties(partitionName);
         if (properties == null) {
             return new AmzaPartitionRoute(new ArrayList<>(ring.values()),
@@ -190,6 +212,14 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                 Collections.emptyList(),
                 Collections.emptyList());
         }
+
+        List<RingHost> orderedPartitionHosts = new ArrayList<>();
+        List<RingMember> unregisteredRingMembers = new ArrayList<>();
+        List<RingMember> ketchupRingMembers = new ArrayList<>();
+        List<RingMember> expungedRingMembers = new ArrayList<>();
+        List<RingMember> missingRingMembers = new ArrayList<>();
+
+        // TODO do we still need to do this?
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
                 if (versionedPartitionName == null) {
@@ -272,10 +302,6 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         }
     }
 
-    public void compactAll(boolean force) {
-        partitionStripeProvider.compactAll(force);
-    }
-
     public boolean hasPartition(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return true;
@@ -302,8 +328,20 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     @Override
-    public void destroyPartition(final PartitionName partitionName) throws Exception {
-        partitionProvider.destroyPartition(partitionName);
+    public void destroyPartition(PartitionName partitionName) throws Exception {
+
+        NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
+        if (ring.containsKey(ringStoreReader.getRingMember())) {
+            VersionedStatus status = partitionStatusStorage.getStatus(ringStoreReader.getRingMember(), partitionName);
+            if (status != null) {
+                LOG.info("Handling request to destroy partitionName:{}", partitionName);
+                for (RingMember ringMember : ring.keySet()) {
+                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, status.version);
+                    VersionedStatus versionedStatus = partitionStatusStorage.markForDisposal(versionedPartitionName, ringMember);
+                    LOG.info("Destroyed partitionName:{} versionedStatus:{} for ringMember:{}", versionedPartitionName, versionedStatus, ringMember);
+                }
+            }
+        }
     }
 
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
@@ -454,30 +492,15 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         takeCoordinator.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId);
     }
 
-    public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
-        if (!ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
-            throw new IllegalStateException("Not a member of the ring: " + partitionName.getRingName());
-        }
+    public void compactAllTombstones() throws Exception {
+        partitionTombstoneCompactor.compactTombstone(1, 1, partitionTombstoneCompactor.removeIfOlderThanTimestmapId());
+    }
 
-        PartitionProperties properties = partitionIndex.getProperties(partitionName);
-        if (properties == null) {
-            throw new IllegalStateException("No properties for partition: " + partitionName);
-        }
-        partitionStatusStorage.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
-            if (versionedPartitionName == null) {
-                VersionedStatus versionedStatus = partitionStatusStorage.markAsKetchup(partitionName);
-                versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
-                partitionStatus = versionedStatus.status;
-                if (properties.takeFromFactor == 0) {
-                    partitionStatusStorage.markAsOnline(versionedPartitionName);
-                }
-            }
-            if (partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
-                takeCoordinator.updated(ringStoreReader, versionedPartitionName, partitionStatus, 0);
-            }
-            return null;
-        });
+    public void compactAllDeltas(boolean force) {
+        partitionStripeProvider.compactAll(force);
+    }
 
-        partitionStatusStorage.awaitOnline(partitionName, timeoutMillis);
+    public void expunge() throws Exception {
+        partitionComposter.compost();
     }
 }

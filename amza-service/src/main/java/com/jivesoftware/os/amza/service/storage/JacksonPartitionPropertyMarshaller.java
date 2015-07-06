@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import java.io.IOException;
 
 /**
  *
@@ -16,13 +17,21 @@ public class JacksonPartitionPropertyMarshaller implements PartitionPropertyMars
     }
 
     @Override
-    public PartitionProperties fromBytes(byte[] bytes) throws Exception {
-        return mapper.readValue(bytes, PartitionProperties.class);
+    public PartitionProperties fromBytes(byte[] bytes) {
+        try {
+            return mapper.readValue(bytes, PartitionProperties.class);
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     @Override
-    public byte[] toBytes(PartitionProperties partitionProperties) throws Exception {
-        return mapper.writeValueAsBytes(partitionProperties);
+    public byte[] toBytes(PartitionProperties partitionProperties) {
+        try {
+            return mapper.writeValueAsBytes(partitionProperties);
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
 }

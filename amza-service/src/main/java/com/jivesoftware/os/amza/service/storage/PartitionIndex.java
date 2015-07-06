@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
@@ -10,16 +11,14 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.wal.WALStorageProvider;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,22 +39,19 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     private final ConcurrentHashMap<PartitionName, PartitionProperties> partitionProperties = new ConcurrentHashMap<>();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
 
-    private final AmzaStats amzaStats;
     private final String[] workingDirectories;
     private final String domain;
-    private final WALStorageProvider walStorageProvider;
+    private final IndexedWALStorageProvider walStorageProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;
     private final boolean hardFlush;
 
-    public PartitionIndex(AmzaStats amzaStats,
-        String[] workingDirectories,
+    public PartitionIndex(String[] workingDirectories,
         String domain,
-        WALStorageProvider walStorageProvider,
+        IndexedWALStorageProvider walStorageProvider,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         boolean hardFlush) {
 
-        this.amzaStats = amzaStats;
-        this.workingDirectories = workingDirectories;
+        this.workingDirectories = Arrays.copyOf(workingDirectories, workingDirectories.length);
         this.domain = domain;
         this.walStorageProvider = walStorageProvider;
         this.partitionPropertyMarshaller = partitionPropertyMarshaller;
@@ -105,23 +101,19 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     @Override
-    public PartitionProperties getProperties(PartitionName partitionName) throws Exception {
+    public PartitionProperties getProperties(PartitionName partitionName) {
 
-        PartitionProperties properties = partitionProperties.get(partitionName);
-        if (properties == null) {
+        return partitionProperties.computeIfAbsent(partitionName, (key) -> {
             if (partitionName.isSystemPartition()) {
-                properties = coldstartSystemPartitionProperties(partitionName);
-                partitionProperties.put(partitionName, properties);
+                return coldstartSystemPartitionProperties(partitionName);
             } else {
                 WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(new WALKey(partitionName.toBytes()));
                 if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
                     return null;
                 }
-                properties = partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
-                partitionProperties.put(partitionName, properties);
+                return partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
             }
-        }
-        return properties;
+        });
     }
 
     public PartitionStore get(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -134,8 +126,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
             }
         }
 
-        if (!versionedPartitionName.getPartitionName().isSystemPartition() &&
-            !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(new WALKey(partitionName.toBytes()))) {
+        if (!versionedPartitionName.getPartitionName().isSystemPartition()
+            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(new WALKey(partitionName.toBytes()))) {
             return null;
         }
 
@@ -174,7 +166,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 return partitionStore;
             }
 
-            File workingDirectory = new File(workingDirectories[Math.abs(versionedPartitionName.hashCode()) % workingDirectories.length]);
+            File workingDirectory = new File(workingDirectories[(int) Math.abs((long) versionedPartitionName.hashCode()) % workingDirectories.length]);
             WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, versionedPartitionName, properties.walStorageDescriptor);
             partitionStore = new PartitionStore(walStorage, hardFlush);
             partitionStore.load();

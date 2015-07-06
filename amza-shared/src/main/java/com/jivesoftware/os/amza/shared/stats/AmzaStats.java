@@ -31,6 +31,7 @@ public class AmzaStats {
 
     private final Map<String, Long> ongoingCompaction = new ConcurrentHashMap<>();
     private final List<Entry<String, Long>> recentCompaction = new ArrayList<>();
+
     private final AtomicLong totalCompactions = new AtomicLong();
     public final Map<RingMember, AtomicLong> longPolled = new ConcurrentSkipListMap<>();
     public final Map<RingMember, AtomicLong> longPollAvailables = new ConcurrentSkipListMap<>();

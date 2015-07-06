@@ -10,6 +10,7 @@
         <td></td>
         <td></td>
         <td></td>
+        <td></td>
         <td><b>{$grandTotals.gets}</b>{sp}<i>{$grandTotals.getsLag}millis lag</i></td>
         <td><b>{$grandTotals.scans}</b>{sp}<i>{$grandTotals.scansLag}millis lag</i></td>
         <td><b>{$grandTotals.directApplies}</b>{sp}<i>{$grandTotals.directAppliesLag}millis lag</i></td>
@@ -20,8 +21,11 @@
     </tr>
     {foreach $r in $regionTotals}
         <tr>
-            <td>{$r.name}</td>
+            <td>
+                <a href="/amza/ui/inspect?regionType={$r.type}&ringName={$r.ringName}&regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search">Inspect</a>
+            </td>
             <td>{$r.ringName}</td>
+            <td>{$r.name}</td>
             <td><b>{$r.count}</b></td>
             <td><b>{$r.gets}</b>{sp}<i>{$r.getsLag}millis lag</i></td>
             <td><b>{$r.scans}</b>{sp}<i>{$r.scansLag}millis lag</i></td>

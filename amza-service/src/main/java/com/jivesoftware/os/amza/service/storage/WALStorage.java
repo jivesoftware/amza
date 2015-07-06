@@ -21,6 +21,7 @@ import com.google.common.collect.TreeBasedTable;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -33,7 +34,6 @@ import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
-import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableLong;
 
-public class IndexedWAL implements WALStorage {
+public class WALStorage implements RangeScannable<WALValue> {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
@@ -88,15 +88,17 @@ public class IndexedWAL implements WALStorage {
     private final AtomicLong highestTxId = new AtomicLong(0);
     private final int tombstoneCompactionFactor;
 
-    private final ThreadLocal<Integer> reentrant = new ThreadLocal<Integer>() {
+    private final ThreadLocal<Integer> reentrant = new ReentrantTheadLocal();
+
+    static class ReentrantTheadLocal extends ThreadLocal<Integer> {
 
         @Override
         protected Integer initialValue() {
             return 0;
         }
-    };
+    }
 
-    public IndexedWAL(VersionedPartitionName versionedPartitionName,
+    public WALStorage(VersionedPartitionName versionedPartitionName,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
@@ -121,12 +123,16 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    private void acquireOne() throws InterruptedException {
-        int enters = reentrant.get();
-        if (enters == 0) {
-            tickleMeElmophore.acquire();
+    private void acquireOne() {
+        try {
+            int enters = reentrant.get();
+            if (enters == 0) {
+                tickleMeElmophore.acquire();
+            }
+            reentrant.set(enters + 1);
+        } catch (InterruptedException ex) {
+            throw new RuntimeException(ex);
         }
-        reentrant.set(enters + 1);
     }
 
     private void releaseOne() {
@@ -149,7 +155,6 @@ public class IndexedWAL implements WALStorage {
         return versionedPartitionName;
     }
 
-    @Override
     public boolean expunge() throws Exception {
         boolean expunged = true;
         acquireAll();
@@ -165,16 +170,11 @@ public class IndexedWAL implements WALStorage {
         return expunged;
     }
 
-    @Override
-    public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-
-        if ((clobberCount.get() + 1) / (newCount.get() + 1) > tombstoneCompactionFactor) {
-            return compact(removeTombstonedOlderThanTimestampId, ttlTimestampId);
-        }
-        return -1;
+    public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {
+        return (clobberCount.get() + 1) / (newCount.get() + 1) > tombstoneCompactionFactor;
     }
 
-    private long compact(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
+    public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName().getName()
             + ">ring>" + versionedPartitionName.getPartitionName().getRingName() + ">";
         Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
@@ -211,7 +211,6 @@ public class IndexedWAL implements WALStorage {
         return -1;
     }
 
-    @Override
     public void load() throws Exception {
         acquireAll();
         try {
@@ -260,19 +259,17 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
     public void flush(boolean fsync) throws Exception {
         walTx.flush(fsync);
     }
 
-    @Override
     public boolean delete(boolean ifEmpty) throws Exception {
         throw new UnsupportedOperationException("Not yet!");
     }
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[] {
+            rowWriter.writeSystem(UIO.longsBytes(new long[]{
                 RowType.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
@@ -283,9 +280,9 @@ public class IndexedWAL implements WALStorage {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[] {
+            rowWriter.writeSystem(UIO.longsBytes(new long[]{
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId }));
+                indexCommitedUpToTxId}));
         }
     }
 
@@ -307,7 +304,6 @@ public class IndexedWAL implements WALStorage {
      }
      }
      */
-    @Override
     public RowsChanged update(boolean useUpdateTxId,
         Commitable<WALValue> updates) throws Exception {
 
@@ -436,7 +432,7 @@ public class IndexedWAL implements WALStorage {
                             iter.remove();
                         }
 
-                        int highwaterTimestampIndex = Math.abs(key.hashCode()) % stripedKeyHighwaterTimestamps.length;
+                        int highwaterTimestampIndex = (int) Math.abs((long) key.hashCode()) % stripedKeyHighwaterTimestamps.length;
                         stripedKeyHighwaterTimestamps[highwaterTimestampIndex].setValue(Math.max(
                             stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue(),
                             value.getTimestampId()));
@@ -523,8 +519,7 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
-    public WALValue get(WALKey key) throws Exception {
+        public WALValue get(WALKey key) {
         acquireOne();
         try {
             WALPointer got = walIndex.get().getPointer(key);
@@ -537,7 +532,6 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
     public WALValue[] get(WALKey[] keys) throws Exception {
         acquireOne();
         try {
@@ -554,7 +548,6 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
     public WALPointer[] getPointers(WALKey[] consumableKeys, List<WALValue> values) throws Exception {
         acquireOne();
         try {
@@ -575,12 +568,10 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
     public boolean containsKey(WALKey key) throws Exception {
         return containsKey(Collections.singletonList(key)).get(0);
     }
 
-    @Override
     public List<Boolean> containsKey(List<WALKey> keys) throws Exception {
         acquireOne();
         try {
@@ -591,7 +582,7 @@ public class IndexedWAL implements WALStorage {
     }
 
     private long getLargestTimestampForKeyStripe(WALKey key) {
-        int highwaterTimestampIndex = Math.abs(key.hashCode()) % stripedKeyHighwaterTimestamps.length;
+        int highwaterTimestampIndex = (int) Math.abs((long) key.hashCode()) % stripedKeyHighwaterTimestamps.length;
         return stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue();
     }
 
@@ -621,7 +612,6 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
     public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
         acquireOne();
         try {
@@ -644,7 +634,6 @@ public class IndexedWAL implements WALStorage {
      * @return
      * @throws Exception
      */
-    @Override
     public boolean takeFromTransactionId(final long sinceTransactionId, Highwaters highwaters, Scan<WALValue> scan) throws Exception {
         acquireOne();
         try {
@@ -664,7 +653,17 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
+     public boolean takeRowsFromTransactionId(long sinceTransactionId, RowStream rowStream) throws Exception {
+        acquireOne();
+        try {
+            return walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader reader) -> {
+                return reader.scan(offset, false, rowStream);
+            });
+        } finally {
+            releaseOne();
+        }
+    }
+
     public void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception {
         maxUpdatesBetweenCompactionHintMarker.set(walStorageDescriptor.maxUpdatesBetweenCompactionHintMarker);
         maxUpdatesBetweenIndexCommitMarker.set(walStorageDescriptor.maxUpdatesBetweenIndexCommitMarker);
@@ -677,7 +676,6 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
     public long count() throws Exception {
         acquireOne();
         try {
@@ -688,7 +686,6 @@ public class IndexedWAL implements WALStorage {
         }
     }
 
-    @Override
     public long highestTxId() {
         return highestTxId.get();
     }

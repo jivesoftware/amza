@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.deployable;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -50,6 +51,7 @@ import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
+import java.io.IOException;
 import java.util.Arrays;
 
 public class AmzaMain {
@@ -95,7 +97,6 @@ public class AmzaMain {
             amzaServiceConfig.compactTombstoneIfOlderThanNMillis = amzaConfig.getCompactTombstoneIfOlderThanNMillis();
             amzaServiceConfig.numberOfCompactorThreads = amzaConfig.getNumberOfCompactorThreads();
             amzaServiceConfig.numberOfTakerThreads = amzaConfig.getNumberOfTakerThreads();
-            amzaServiceConfig.takeFromNeighborsIntervalInMillis = amzaConfig.getTakeFromNeighborsIntervalInMillis();
             amzaServiceConfig.workingDirectories = workingDirs;
 
             final AmzaStats amzaStats = new AmzaStats();
@@ -111,13 +112,21 @@ public class AmzaMain {
             PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 
                 @Override
-                public PartitionProperties fromBytes(byte[] bytes) throws Exception {
-                    return mapper.readValue(bytes, PartitionProperties.class);
+                public PartitionProperties fromBytes(byte[] bytes) {
+                    try {
+                        return mapper.readValue(bytes, PartitionProperties.class);
+                    } catch (IOException ex) {
+                        throw new RuntimeException(ex);
+                    }
                 }
 
                 @Override
-                public byte[] toBytes(PartitionProperties partitionProperties) throws Exception {
-                    return mapper.writeValueAsBytes(partitionProperties);
+                public byte[] toBytes(PartitionProperties partitionProperties) {
+                    try {
+                        return mapper.writeValueAsBytes(partitionProperties);
+                    } catch (JsonProcessingException ex) {
+                        throw new RuntimeException(ex);
+                    }
                 }
             };
 

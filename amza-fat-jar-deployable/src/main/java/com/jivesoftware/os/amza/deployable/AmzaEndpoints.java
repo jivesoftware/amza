@@ -157,18 +157,8 @@ public class AmzaEndpoints {
 
         PartitionName partitionName = new PartitionName(false, ringName, simplePartitionName);
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, false));
-        amzaService.awaitOnline(partitionName, 30_000);
-
-        AmzaService.AmzaPartitionRoute partitionRoute = amzaService.getPartitionRoute(partitionName);
-        long start = System.currentTimeMillis();
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
-        while (partitionRoute.orderedPartitionHosts.isEmpty() && (System.currentTimeMillis() - start) > maxSleep) {
-            Thread.sleep(1000); // Sorry calling thread.
-            partitionRoute = amzaService.getPartitionRoute(partitionName);
-        }
-        if (partitionRoute.orderedPartitionHosts.isEmpty()) {
-            throw new RuntimeException("Partition failed to come ONLINE in " + maxSleep);
-        }
+        amzaService.awaitOnline(partitionName, maxSleep);
         return amzaService.getPartition(partitionName);
     }
 }

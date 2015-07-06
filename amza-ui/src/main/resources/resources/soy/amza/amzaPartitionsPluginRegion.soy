@@ -14,6 +14,8 @@
                         <thead>
                             <tr>
                                 <th>Action</th>
+                                <th>Status</th>
+                                <th>Version</th>
                                 <th>Type</th>
                                 <th>Name</th>
                                 <th>RingName</th>
@@ -29,6 +31,8 @@
                                     <td>
                                         <button title="Add" type="submit" name="action" value="add" class="btn btn-default"><span class="glyphicon glyphicon-plus"></span></button>
                                     </td>
+                                    <td></td>
+                                    <td></td>
                                     <td></td>
                                     <td>
                                         <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
@@ -54,16 +58,19 @@
                             </form>
 
                             {foreach $r in $partitions}
-                                <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
-                                    method="get" name="removeRingHost">
+                                <form id="add-ring-host" class="j-form" data-active-class="btn-default"
+                                    method="post" name="removeRingHost">
                                     <tr>    
                                         <td>
+                                            <a href="/amza/ui/inspect?regionType={$r.type}&ringName={$r.ringName}&regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search">Inspect</a>
                                             <input type="hidden" name="ringName" value="{$r.ringName}">
                                             <input type="hidden" name="partitionName" value="{$r.name}">
                                             <div class="btn-group" role="group" aria-label="...">
-                                            <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default"><span class="glyphicon glyphicon-trash"></span></button>
+                                                <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default"><span class="glyphicon glyphicon-trash"></span></button>
                                             </div>
                                         </td>
+                                        <td>{$r.status}</td>
+                                        <td>{$r.version}</td>
                                         <td>{$r.type}</td>
                                         <td>
                                             <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"

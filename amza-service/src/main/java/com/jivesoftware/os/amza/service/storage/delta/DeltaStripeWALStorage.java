@@ -5,9 +5,9 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
@@ -17,14 +17,13 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
-import com.jivesoftware.os.amza.shared.wal.WALStorage;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -49,14 +48,13 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * @author jonathan.colt
  */
-public class DeltaStripeWALStorage implements StripeWALStorage {
+public class DeltaStripeWALStorage {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
 
     private final int index;
-    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
-    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
+    private final AmzaStats amzaStats;
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
     private final WALUpdated walUpdated;
@@ -68,24 +66,24 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     private final AtomicLong updateSinceLastCompaction = new AtomicLong();
     private final AtomicBoolean compacting = new AtomicBoolean(false);
 
-    private final ThreadLocal<Integer> reentrant = new ThreadLocal<Integer>() {
+    private final Reentrant reentrant = new Reentrant();
+
+    static class Reentrant extends ThreadLocal<Integer> {
 
         @Override
         protected Integer initialValue() {
             return 0;
         }
-    };
+    }
 
     public DeltaStripeWALStorage(int index,
-        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
-        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
+        AmzaStats amzaStats,
         DeltaWALFactory deltaWALFactory,
         WALUpdated walUpdated,
         long compactAfterNUpdates) {
 
         this.index = index;
-        this.primaryRowMarshaller = primaryRowMarshaller;
-        this.highwaterRowMarshaller = highwaterRowMarshaller;
+        this.amzaStats = amzaStats;
         this.deltaWALFactory = deltaWALFactory;
         this.walUpdated = walUpdated;
         this.compactAfterNUpdates = compactAfterNUpdates;
@@ -118,7 +116,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         tickleMeElmophore.release(numTickleMeElmaphore);
     }
 
-    @Override
     public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
         acquireAll();
         try {
@@ -129,8 +126,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
-    public void load(final PartitionIndex partitionIndex) throws Exception {
+    public void load(PartitionIndex partitionIndex, PrimaryRowMarshaller<byte[]> primaryRowMarshaller) throws Exception {
         LOG.info("Reloading deltas...");
         long start = System.currentTimeMillis();
         synchronized (oneWriterAtATimeLock) {
@@ -156,7 +152,9 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                             VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(partitionNameBytes);
                             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                             if (partitionStore == null) {
-                                LOG.error("Should be impossible must fix! Your it :) partitionName:" + versionedPartitionName);
+                                LOG.warn("Dropping values on the floor for versionedPartitionName:{} "
+                                    + " this is typical when loading an expunged partition", versionedPartitionName);
+                                // TODO ensure partitionIsExpunged?
                             } else {
                                 acquireOne();
                                 try {
@@ -186,7 +184,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         LOG.info("Reloaded deltas stripe:{} in {} ms", index, (System.currentTimeMillis() - start));
     }
 
-    @Override
     public void flush(boolean fsync) throws Exception {
         DeltaWAL wal = deltaWAL.get();
         if (wal != null) {
@@ -194,7 +191,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
         if (partitionDelta != null) {
@@ -202,7 +198,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
         return storage.highestTxId();
     }
-
 
     // todo any one call this should have atleast 1 numTickleMeElmaphore
     private PartitionDelta getPartitionDeltas(VersionedPartitionName versionedPartitionName) {
@@ -212,7 +207,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             if (wal == null) {
                 throw new IllegalStateException("Delta WAL is currently unavailable.");
             }
-            partitionDelta = new PartitionDelta(versionedPartitionName, wal, walUpdated, primaryRowMarshaller, highwaterRowMarshaller, null);
+            partitionDelta = new PartitionDelta(versionedPartitionName, wal, walUpdated, null);
             PartitionDelta had = partitionDeltas.putIfAbsent(versionedPartitionName, partitionDelta);
             if (had != null) {
                 partitionDelta = had;
@@ -221,7 +216,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         return partitionDelta;
     }
 
-    @Override
     public void compact(PartitionIndex partitionIndex, boolean force) throws Exception {
         if (!force && updateSinceLastCompaction.get() < compactAfterNUpdates) { // TODO or some memory pressure BS!
             return;
@@ -231,11 +225,13 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             LOG.warn("Trying to compact DeltaStripe:" + partitionIndex + " while another compaction is already in progress.");
             return;
         }
+        amzaStats.beginCompaction("Compacting Delta Stripe:" + index);
         try {
             updateSinceLastCompaction.set(0);
             compactDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create);
         } finally {
             compacting.set(false);
+            amzaStats.endCompaction("Compacting Delta Stripe:" + index);
         }
     }
 
@@ -256,8 +252,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
                 PartitionDelta partitionDelta = new PartitionDelta(e.getKey(),
                     newDeltaWAL,
                     walUpdated,
-                    primaryRowMarshaller,
-                    highwaterRowMarshaller,
                     e.getValue());
                 partitionDeltas.put(e.getKey(), partitionDelta);
                 futures.add(compactionThreads.submit(() -> {
@@ -293,7 +287,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
         Status partitionStatus,
@@ -384,7 +377,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         long transactionId,
@@ -402,25 +394,22 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
-    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, Highwaters highwaters,
-        Scan<WALValue> scan)
+    public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName, WALStorage storage, long transactionId, RowStream rowStream)
         throws Exception {
 
-        if (!storage.takeFromTransactionId(transactionId, highwaters, scan)) {
+        if (!storage.takeRowsFromTransactionId(transactionId, rowStream)) {
             return false;
         }
 
         acquireOne();
         try {
             PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
-            return delta.takeFromTransactionId(transactionId, highwaters, scan);
+            return delta.takeRowsFromTransactionId(transactionId, rowStream);
         } finally {
             releaseOne();
         }
     }
 
-    @Override
     public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         acquireOne();
         try {
@@ -435,7 +424,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
 
     }
 
-    @Override
     public boolean containsKey(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {
         acquireOne();
         try {
@@ -467,7 +455,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public void rangeScan(final VersionedPartitionName versionedPartitionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to,
         final Scan<WALValue> scan)
         throws Exception {
@@ -475,38 +462,7 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         try {
             PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
             final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
-            rangeScannable.rangeScan(from, to, new Scan<WALValue>() {
-                Map.Entry<WALKey, WALValue> d;
-
-                @Override
-                public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                    if (d == null && iterator.hasNext()) {
-                        d = iterator.next();
-                    }
-                    boolean needsKey = true;
-                    while (d != null && d.getKey().compareTo(key) <= 0) {
-                        WALValue got = d.getValue();
-                        if (d.getKey().equals(key)) {
-                            needsKey = false;
-                        }
-                        if (!scan.row(-1, d.getKey(), got)) {
-                            return false;
-                        }
-                        if (iterator.hasNext()) {
-                            d = iterator.next();
-                        } else {
-                            iterator.eos();
-                            d = null;
-                            break;
-                        }
-                    }
-                    if (needsKey) {
-                        return scan.row(-1, key, value);
-                    } else {
-                        return true;
-                    }
-                }
-            });
+            rangeScannable.rangeScan(from, to, new Dupinator(iterator, scan));
 
             Map.Entry<WALKey, WALValue> d = iterator.last();
             if (d != null || iterator.hasNext()) {
@@ -527,44 +483,12 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
         }
     }
 
-    @Override
     public void rowScan(final VersionedPartitionName versionedPartitionName, Scannable<WALValue> scanable, final Scan<WALValue> scan) throws Exception {
         acquireOne();
         try {
             PartitionDelta delta = getPartitionDeltas(versionedPartitionName);
             final DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
-            scanable.rowScan(new Scan<WALValue>() {
-                Map.Entry<WALKey, WALValue> d;
-
-                @Override
-                public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
-                    if (d == null && iterator.hasNext()) {
-                        d = iterator.next();
-                    }
-                    boolean needsKey = true;
-                    while (d != null && d.getKey().compareTo(key) <= 0) {
-                        WALValue got = d.getValue();
-                        if (d.getKey().equals(key)) {
-                            needsKey = false;
-                        }
-                        if (!scan.row(-1, d.getKey(), got)) {
-                            return false;
-                        }
-                        if (iterator.hasNext()) {
-                            d = iterator.next();
-                        } else {
-                            iterator.eos();
-                            d = null;
-                            break;
-                        }
-                    }
-                    if (needsKey) {
-                        return scan.row(-1, key, value);
-                    } else {
-                        return true;
-                    }
-                }
-            });
+            scanable.rowScan(new Dupinator(iterator, scan));
 
             Map.Entry<WALKey, WALValue> d = iterator.last();
             if (d != null || iterator.hasNext()) {
@@ -588,7 +512,6 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
     /**
      * Stupid expensive!!!!
      */
-    @Override
     public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         int count = 0;
         acquireOne();
@@ -600,6 +523,47 @@ public class DeltaStripeWALStorage implements StripeWALStorage {
             releaseOne();
         }
         return count + storage.count();
+    }
+
+    static class Dupinator implements Scan<WALValue> {
+
+        private final DeltaPeekableElmoIterator iterator;
+        private final Scan<WALValue> scan;
+        private Map.Entry<WALKey, WALValue> d;
+
+        public Dupinator(DeltaPeekableElmoIterator iterator, Scan<WALValue> scan) {
+            this.iterator = iterator;
+            this.scan = scan;
+        }
+
+        @Override
+        public boolean row(long rowTxId, WALKey key, WALValue value) throws Exception {
+            if (d == null && iterator.hasNext()) {
+                d = iterator.next();
+            }
+            boolean needsKey = true;
+            while (d != null && d.getKey().compareTo(key) <= 0) {
+                WALValue got = d.getValue();
+                if (d.getKey().equals(key)) {
+                    needsKey = false;
+                }
+                if (!scan.row(-1, d.getKey(), got)) {
+                    return false;
+                }
+                if (iterator.hasNext()) {
+                    d = iterator.next();
+                } else {
+                    iterator.eos();
+                    d = null;
+                    break;
+                }
+            }
+            if (needsKey) {
+                return scan.row(-1, key, value);
+            } else {
+                return true;
+            }
+        }
     }
 
 }

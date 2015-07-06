@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage.binary;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -24,7 +25,9 @@ public class BinaryRowIOProvider implements RowIOProvider {
 
     @Override
     public RowIO<File> create(File dir, String name) throws Exception {
-        dir.mkdirs();
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("Failed trying to mkdirs for " + dir);
+        }
         File file = new File(dir, name);
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);

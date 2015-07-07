@@ -381,7 +381,7 @@ public class DeltaStripeWALStorage {
                             apply.remove(-1L, key);
                         }
                     }
-                    delta.appendTxFps(updateApplied.txId, Longs.asList(updateApplied.fps));
+                    delta.appendTxFps(updateApplied.txId, updateApplied.fps);
                     rowsChanged = new RowsChanged(versionedPartitionName,
                         oldestAppliedTimestamp.get(),
                         apply,

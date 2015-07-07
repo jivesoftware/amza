@@ -1,11 +1,12 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaValueCache.DeltaRow;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
+import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -14,9 +15,7 @@ import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -43,8 +42,8 @@ class PartitionDelta {
 
     private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>();
     private final ConcurrentNavigableMap<WALKey, WALPointer> orderedIndex = new ConcurrentSkipListMap<>();
-    private final ConcurrentSkipListMap<Long, List<Long>> txIdWAL = new ConcurrentSkipListMap<>();
-    private final ConcurrentHashMap<Long, DeltaValueCache.DeltaRow> deltaValueMap = new ConcurrentHashMap<>();
+    private final ConcurrentSkipListMap<Long, long[]> txIdWAL = new ConcurrentSkipListMap<>();
+    private final StripedTLongObjectMap<DeltaRow> deltaValueMap = new StripedTLongObjectMap<>(8);
     private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
 
     PartitionDelta(VersionedPartitionName versionedPartitionName,
@@ -216,21 +215,23 @@ class PartitionDelta {
     }
 
     void appendTxFps(long rowTxId, long rowFP) {
-        List<Long> fps = txIdWAL.get(rowTxId);
+        long[] fps = txIdWAL.get(rowTxId);
         if (fps == null) {
-            fps = new ArrayList<>();
+            fps = new long[] { rowFP };
             txIdWAL.put(rowTxId, fps);
+        } else {
+            long[] swap = new long[fps.length + 1];
+            System.arraycopy(fps, 0, swap, 0, fps.length);
+            swap[swap.length - 1] = rowFP;
         }
-        fps.add(rowFP);
     }
 
-    void appendTxFps(long rowTxId, Collection<Long> rowFPs) {
-        List<Long> fps = txIdWAL.get(rowTxId);
-        if (fps != null) {
+    void appendTxFps(long rowTxId, long[] rowFPs) {
+        long[] existing = txIdWAL.putIfAbsent(rowTxId, rowFPs);
+        if (existing != null) {
             throw new IllegalStateException("Already appended this txId: " + rowTxId);
         }
-        txIdWAL.put(rowTxId, ImmutableList.copyOf(rowFPs));
-        updatesSinceLastHighwaterFlush.addAndGet(rowFPs.size());
+        updatesSinceLastHighwaterFlush.addAndGet(rowFPs.length);
     }
 
     boolean takeRowUpdatesSince(long transactionId, final RowStream rowStream) throws Exception {
@@ -245,7 +246,7 @@ class PartitionDelta {
             return true;
         }
 
-        ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
+        ConcurrentNavigableMap<Long, long[]> tailMap = txIdWAL.tailMap(transactionId, false);
         return deltaWAL.takeRows(tailMap, rowStream, deltaValueCache, deltaValueMap);
     }
 
@@ -261,7 +262,7 @@ class PartitionDelta {
             return true;
         }
 
-        ConcurrentNavigableMap<Long, List<Long>> tailMap = txIdWAL.tailMap(transactionId, false);
+        ConcurrentNavigableMap<Long, long[]> tailMap = txIdWAL.tailMap(transactionId, false);
         return deltaWAL.takeRows(tailMap, rowStream, deltaValueCache, deltaValueMap);
     }
 
@@ -275,7 +276,7 @@ class PartitionDelta {
                     LOG.info("Merging ({}) deltas for partition: {} from tx: {}", compact.orderedIndex.size(), compact.versionedPartitionName, highestTxId);
                     LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
                     MutableBoolean eos = new MutableBoolean(false);
-                    for (Map.Entry<Long, List<Long>> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
+                    for (Map.Entry<Long, long[]> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
                         long txId = e.getKey();
                         partitionStore.directCommit(true, (highwater, scan) -> {
                             for (long fp : e.getValue()) {
@@ -299,7 +300,7 @@ class PartitionDelta {
                             break;
                         }
                     }
-                    LOG.info("Merged deltas for " + compact.versionedPartitionName);
+                    LOG.info("Merged deltas for {}", compact.versionedPartitionName);
                 } catch (Throwable ex) {
                     throw new RuntimeException("Error while streaming entry set.", ex);
                 }
@@ -309,7 +310,7 @@ class PartitionDelta {
     }
 
     private KeyValueHighwater valueForFp(long fp) throws Exception {
-        DeltaValueCache.DeltaRow deltaRow = deltaValueCache.get(fp, deltaValueMap);
+        DeltaRow deltaRow = deltaValueCache.get(fp, deltaValueMap);
         if (deltaRow != null) {
             return deltaRow.keyValueHighwater;
         } else {

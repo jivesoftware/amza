@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
+import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -29,7 +30,7 @@ public class DeltaValueCache {
         this.maxValueCacheSizeInBytes = maxValueCacheSizeInBytes;
     }
 
-    public void put(long fp, KeyValueHighwater keyValueHighwater, ConcurrentHashMap<Long, DeltaRow> rowMap) {
+    public void put(long fp, KeyValueHighwater keyValueHighwater, StripedTLongObjectMap<DeltaRow> rowMap) {
         WALKey key = keyValueHighwater.key;
         WALValue value = keyValueHighwater.value;
         long rowSize = rowSize(key, value);
@@ -56,7 +57,7 @@ public class DeltaValueCache {
         return (long) (key.getKey().length) + (long) (value.getValue() != null ? value.getValue().length : 0);
     }
 
-    public DeltaRow get(long fp, ConcurrentHashMap<Long, DeltaRow> rowMap) {
+    public DeltaRow get(long fp, StripedTLongObjectMap<DeltaRow> rowMap) {
         DeltaRow got = rowMap.get(fp);
         if (got == null) {
             amzaStats.deltaValueCacheMisses.incrementAndGet();
@@ -70,18 +71,18 @@ public class DeltaValueCache {
 
         public final long fp;
         public final KeyValueHighwater keyValueHighwater;
-        public final WeakReference<ConcurrentHashMap<Long, DeltaRow>> rowMapRef;
+        public final WeakReference<StripedTLongObjectMap<DeltaRow>> rowMapRef;
 
         public DeltaRow(long fp,
             KeyValueHighwater keyValueHighwater,
-            ConcurrentHashMap<Long, DeltaRow> rowMap) {
+            StripedTLongObjectMap<DeltaRow> rowMap) {
             this.fp = fp;
             this.keyValueHighwater = keyValueHighwater;
             this.rowMapRef = new WeakReference<>(rowMap);
         }
 
         public void remove() {
-            ConcurrentHashMap<Long, DeltaRow> rowMap = rowMapRef.get();
+            StripedTLongObjectMap<DeltaRow> rowMap = rowMapRef.get();
             if (rowMap != null) {
                 rowMap.remove(fp);
             }

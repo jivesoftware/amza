@@ -2,6 +2,8 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaValueCache.DeltaRow;
+import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -119,16 +121,15 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
 
     }
 
-    boolean takeRows(final NavigableMap<Long, List<Long>> tailMap,
+    boolean takeRows(final NavigableMap<Long, long[]> tailMap,
         RowStream rowStream,
         DeltaValueCache deltaValueCache,
-        ConcurrentHashMap<Long, DeltaValueCache.DeltaRow> rowMap) throws Exception {
+        StripedTLongObjectMap<DeltaRow> rowMap) throws Exception {
         return wal.read((WALReader reader) -> {
-            // reverse everything so highest FP is first, helps minimize mmap extensions
             for (Long txId : tailMap.keySet()) {
-                List<Long> rowFPs = Lists.reverse(tailMap.get(txId));
+                long[] rowFPs = tailMap.get(txId);
                 for (long fp : rowFPs) {
-                    DeltaValueCache.DeltaRow deltaRow = deltaValueCache.get(fp, rowMap);
+                    DeltaRow deltaRow = deltaValueCache.get(fp, rowMap);
                     if (deltaRow != null) {
                         WALKey key = deltaRow.keyValueHighwater.key;
                         WALValue value = deltaRow.keyValueHighwater.value;

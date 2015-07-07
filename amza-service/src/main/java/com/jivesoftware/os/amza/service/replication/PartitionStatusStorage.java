@@ -48,7 +48,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
 
-    private final Map<VersionedPartitionName, VersionedStatus> localStatusCache = Maps.newConcurrentMap();
+    private final Map<PartitionName, VersionedStatus> localStatusCache = Maps.newConcurrentMap();
     private final ConcurrentHashMap<PartitionName, ConcurrentHashMap<RingMember, VersionedStatus>> remoteStatusCache = new ConcurrentHashMap<>();
 
     public PartitionStatusStorage(OrderIdProvider orderIdProvider,
@@ -85,7 +85,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition"));
         VersionedStatus versionedStatus = VersionedStatus.fromBytes(walValue.getValue());
         if (ringMember.equals(rootRingMember)) {
-            localStatusCache.remove(new VersionedPartitionName(partitionName, versionedStatus.version));
+            invalidateLocalStatusCache(new VersionedPartitionName(partitionName, versionedStatus.version));
         } else {
             remoteStatusCache.computeIfPresent(partitionName, (PartitionName key, ConcurrentHashMap<RingMember, VersionedStatus> cache) -> {
                 cache.remove(ringMember);
@@ -100,11 +100,10 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             return tx.tx(new VersionedPartitionName(partitionName, 0), Status.ONLINE);
         }
 
-        WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
-        if (rawStatus == null) {
+        VersionedStatus versionedStatus = getLocalStatus(partitionName);
+        if (versionedStatus == null) {
             return tx.tx(null, null);
         } else {
-            VersionedStatus versionedStatus = VersionedStatus.fromBytes(rawStatus.getValue());
             return transactor.doWithOne(new VersionedPartitionName(partitionName, versionedStatus.version), versionedStatus.status, tx);
         }
     }
@@ -130,7 +129,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             for (RingMember ringMember : remoteRingMembers) {
                 VersionedStatus remoteRingMemberStatus = ringMemberStatus.get(ringMember);
                 if (remoteRingMemberStatus == null) {
-                    remoteRingMemberStatus = getStatus(ringMember, localVersionedPartitionName.getPartitionName());
+                    remoteRingMemberStatus = getRemoteStatus(ringMember, localVersionedPartitionName.getPartitionName());
                 }
                 if (remoteRingMemberStatus != null && Status.KETCHUP == remoteRingMemberStatus.status) {
                     inKetchup++;
@@ -143,7 +142,29 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         }
     }
 
-    public VersionedStatus getStatus(RingMember ringMember, PartitionName partitionName) throws Exception {
+    public VersionedStatus getLocalStatus(PartitionName partitionName) throws Exception {
+        if (partitionName.isSystemPartition()) {
+            return new VersionedStatus(Status.ONLINE, 0);
+        }
+
+        VersionedStatus versionedStatus = localStatusCache.get(partitionName);
+        if (versionedStatus != null) {
+            return versionedStatus;
+        }
+
+        WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
+        if (rawStatus == null || rawStatus.getTombstoned()) {
+            return null;
+        }
+        return VersionedStatus.fromBytes(rawStatus.getValue());
+    }
+
+    public VersionedStatus getRemoteStatus(RingMember ringMember, PartitionName partitionName) throws Exception {
+        if (partitionName.isSystemPartition()) {
+            return new VersionedStatus(Status.ONLINE, 0);
+        }
+
+        //TODO consider wiring in remote status cache, for now it's racy
         WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
         if (rawStatus == null || rawStatus.getTombstoned()) {
             return null;
@@ -195,7 +216,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         VersionedStatus versionedStatus) throws Exception {
 
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
-        VersionedStatus cachedStatus = localStatusCache.get(versionedPartitionName);
+        VersionedStatus cachedStatus = localStatusCache.get(partitionName);
         if (cachedStatus != null && cachedStatus.equals(versionedStatus)) {
             return versionedStatus;
         }
@@ -233,15 +254,15 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
                 LOG.info("STATUS {}: {} versionedPartitionName:{} was updated to {}",
                     rootRingMember, ringMember, versionedPartitionName, commitableVersionStatus);
                 if (rootRingMember.equals(ringMember)) {
-                    takeCoordinator.updated(amzaRingReader, versionedPartitionName, commitableVersionStatus.status, 0);
+                    takeCoordinator.statusChanged(amzaRingReader, versionedPartitionName, commitableVersionStatus.status);
                     takeCoordinator.awakeCya();
                 }
             }
             if (rootRingMember.equals(ringMember)) {
                 if (returnableStatus != null) {
-                    localStatusCache.put(currentVersionedPartitionName, returnableStatus);
+                    localStatusCache.put(partitionName, returnableStatus);
                 } else {
-                    localStatusCache.remove(versionedPartitionName);
+                    localStatusCache.remove(partitionName);
                 }
             }
             return returnableStatus;
@@ -266,15 +287,26 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
                         }, walUpdated);
                     return !rowsChanged.isEmpty();
                 });
-                localStatusCache.remove(compost);
+                invalidateLocalStatusCache(compost);
                 return null;
             });
         }
+        takeCoordinator.expunged(composted);
+    }
+
+    private void invalidateLocalStatusCache(VersionedPartitionName versionedPartitionName) {
+        localStatusCache.computeIfPresent(versionedPartitionName.getPartitionName(), (partitionName, versionedStatus) -> {
+            if (versionedStatus.version == versionedPartitionName.getPartitionVersion()) {
+                return null;
+            } else {
+                return versionedStatus;
+            }
+        });
     }
 
     public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
         awaitNotify.awaitChange(partitionName, () -> {
-            PartitionStatusStorage.VersionedStatus versionedStatus = getStatus(rootRingMember, partitionName);
+            PartitionStatusStorage.VersionedStatus versionedStatus = getLocalStatus(partitionName);
             if (versionedStatus != null) {
                 if (versionedStatus.status == TxPartitionStatus.Status.EXPUNGE) {
                     throw new IllegalStateException("Partition is being expunged");

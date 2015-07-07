@@ -269,7 +269,7 @@ public class WALStorage implements RangeScannable<WALValue> {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
@@ -280,9 +280,9 @@ public class WALStorage implements RangeScannable<WALValue> {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId}));
+                indexCommitedUpToTxId }));
         }
     }
 
@@ -519,7 +519,7 @@ public class WALStorage implements RangeScannable<WALValue> {
         }
     }
 
-        public WALValue get(WALKey key) {
+    public WALValue get(WALKey key) {
         acquireOne();
         try {
             WALPointer got = walIndex.get().getPointer(key);
@@ -653,7 +653,7 @@ public class WALStorage implements RangeScannable<WALValue> {
         }
     }
 
-     public boolean takeRowsFromTransactionId(long sinceTransactionId, RowStream rowStream) throws Exception {
+    public boolean takeRowsFromTransactionId(long sinceTransactionId, RowStream rowStream) throws Exception {
         acquireOne();
         try {
             return walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader reader) -> {

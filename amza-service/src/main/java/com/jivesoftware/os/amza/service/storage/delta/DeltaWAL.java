@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Table;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
@@ -21,11 +20,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableLong;
 
@@ -88,25 +86,24 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     }
 
     public DeltaWALApplied update(final VersionedPartitionName versionedPartitionName,
-        final Table<Long, WALKey, WALValue> apply,
+        Map<WALKey, WALValue> apply,
         WALHighwater highwaterHint) throws Exception {
-        final Map<WALKey, Long> keyToRowPointer = new HashMap<>();
 
-        final MutableLong txId = new MutableLong();
-        wal.write((WALWriter rowWriter) -> {
-            List<WALKey> keys = new ArrayList<>();
+        MutableLong txId = new MutableLong();
+        int numApplies = apply.size();
+        KeyValueHighwater[] keyValueHighwaters = new KeyValueHighwater[numApplies];
+        long[] fps = wal.write((WALWriter rowWriter) -> {
+            int index = 0;
             List<byte[]> rawRows = new ArrayList<>();
-            Set<Table.Cell<Long, WALKey, WALValue>> applies = apply.cellSet();
-            int count = applies.size();
-            for (Table.Cell<Long, WALKey, WALValue> cell : applies) {
-                count--;
-                WALKey key = cell.getColumnKey();
-                WALValue value = cell.getValue();
-                keys.add(key);
+            for (Map.Entry<WALKey, WALValue> entry : apply.entrySet()) {
+                WALKey key = entry.getKey();
+                WALValue value = entry.getValue();
+                WALHighwater highwater = (index == numApplies - 1) ? highwaterHint : null;
+                keyValueHighwaters[index] = new KeyValueHighwater(key, value, highwater);
                 key = partitionPrefixedKey(versionedPartitionName, key);
-                value = appendHighwaterHints(value, count == 0 ? highwaterHint : null);
+                value = appendHighwaterHints(value, highwater);
                 rawRows.add(primaryRowMarshaller.toRow(key, value));
-
+                index++;
             }
             long transactionId;
             long[] rowPointers;
@@ -115,39 +112,52 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                 rowPointers = rowWriter.writePrimary(Collections.nCopies(rawRows.size(), transactionId), rawRows);
             }
             txId.setValue(transactionId);
-            for (int i = 0; i < rowPointers.length; i++) {
-                keyToRowPointer.put(keys.get(i), rowPointers[i]);
-            }
-            return null;
+            return rowPointers;
         });
-        updateCount.addAndGet(apply.size());
-        return new DeltaWALApplied(keyToRowPointer, txId.longValue());
+        updateCount.addAndGet(numApplies);
+        return new DeltaWALApplied(txId.longValue(), keyValueHighwaters, fps);
 
     }
 
-    boolean takeRows(final NavigableMap<Long, List<Long>> tailMap, RowStream rowStream) throws Exception {
+    boolean takeRows(final NavigableMap<Long, List<Long>> tailMap,
+        RowStream rowStream,
+        DeltaValueCache deltaValueCache,
+        ConcurrentHashMap<Long, DeltaValueCache.DeltaRow> rowMap) throws Exception {
         return wal.read((WALReader reader) -> {
             // reverse everything so highest FP is first, helps minimize mmap extensions
-            for (Long key : tailMap.descendingKeySet()) {
-                List<Long> rowFPs = Lists.reverse(tailMap.get(key));
+            for (Long txId : tailMap.keySet()) {
+                List<Long> rowFPs = Lists.reverse(tailMap.get(txId));
                 for (long fp : rowFPs) {
-                    byte[] rawRow = reader.read(fp);
-                    WALRow row = primaryRowMarshaller.fromRow(rawRow);
-                    ByteBuffer bb = ByteBuffer.wrap(row.key.getKey());
-                    byte[] partitionNameBytes = new byte[bb.getShort()];
-                    bb.get(partitionNameBytes);
-                    byte[] keyBytes = new byte[bb.getInt()];
-                    bb.get(keyBytes);
-
-                    WALValue value = row.value;
-                    HeapFiler filer = new HeapFiler(value.getValue());
-                    value = new WALValue(UIO.readByteArray(filer, "value"), value.getTimestampId(), value.getTombstoned());
-                    if (!rowStream.row(fp, key, RowType.primary, primaryRowMarshaller.toRow(new WALKey(keyBytes), value))) {
-                        return false;
-                    }
-                    if (UIO.readBoolean(filer, "hasHighwaterHints")) {
-                        if (!rowStream.row(-1, -1, RowType.highwater, UIO.readByteArray(filer, "highwaterHints"))) {
+                    DeltaValueCache.DeltaRow deltaRow = deltaValueCache.get(fp, rowMap);
+                    if (deltaRow != null) {
+                        WALKey key = deltaRow.keyValueHighwater.key;
+                        WALValue value = deltaRow.keyValueHighwater.value;
+                        WALHighwater highwater = deltaRow.keyValueHighwater.highwater;
+                        if (!rowStream.row(fp, txId, RowType.primary, primaryRowMarshaller.toRow(key, value))) {
                             return false;
+                        }
+                        if (highwater != null && !rowStream.row(-1, -1, RowType.highwater, highwaterRowMarshaller.toBytes(highwater))) {
+                            return false;
+                        }
+                    } else {
+                        byte[] rawRow = reader.read(fp);
+                        WALRow row = primaryRowMarshaller.fromRow(rawRow);
+                        ByteBuffer bb = ByteBuffer.wrap(row.key.getKey());
+                        byte[] partitionNameBytes = new byte[bb.getShort()];
+                        bb.get(partitionNameBytes);
+                        byte[] keyBytes = new byte[bb.getInt()];
+                        bb.get(keyBytes);
+
+                        WALValue value = row.value;
+                        HeapFiler filer = new HeapFiler(value.getValue());
+                        value = new WALValue(UIO.readByteArray(filer, "value"), value.getTimestampId(), value.getTombstoned());
+                        if (!rowStream.row(fp, txId, RowType.primary, primaryRowMarshaller.toRow(new WALKey(keyBytes), value))) {
+                            return false;
+                        }
+                        if (UIO.readBoolean(filer, "hasHighwaterHints")) {
+                            if (!rowStream.row(-1, -1, RowType.highwater, UIO.readByteArray(filer, "highwaterHints"))) {
+                                return false;
+                            }
                         }
                     }
                 }
@@ -175,30 +185,26 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         try {
             byte[] row = wal.read((WALReader rowReader) -> rowReader.read(fp));
             WALRow walRow = primaryRowMarshaller.fromRow(row);
-            HeapFiler filer = new HeapFiler(walRow.value.getValue());
-            WALValue value = new WALValue(UIO.readByteArray(filer, "value"), walRow.value.getTimestampId(), walRow.value.getTombstoned());
-            WALHighwater highwater = null;
-            if (UIO.readBoolean(filer, "hasHighwaterHint")) {
-                highwater = highwaterRowMarshaller.fromBytes(UIO.readByteArray(filer, "highwaters"));
-            }
-            return new KeyValueHighwater(walRow.key, value, highwater);
+            return hydrateKeyValueHighwater(walRow);
         } catch (Exception x) {
             throw new RuntimeException("Failed to hydrate fp:" + fp + " length:" + wal.length(), x);
         }
     }
 
-    public static class KeyValueHighwater {
+    public KeyValueHighwater hydrateKeyValueHighwater(WALRow walRow) throws Exception {
+        ByteBuffer bb = ByteBuffer.wrap(walRow.key.getKey());
+        byte[] partitionNameBytes = new byte[bb.getShort()];
+        bb.get(partitionNameBytes);
+        final byte[] keyBytes = new byte[bb.getInt()];
+        bb.get(keyBytes);
 
-        public final WALKey key;
-        public final WALValue value;
-        public final WALHighwater highwater;
-
-        public KeyValueHighwater(WALKey key, WALValue value, WALHighwater highwater) {
-            this.key = key;
-            this.value = value;
-            this.highwater = highwater;
+        HeapFiler filer = new HeapFiler(walRow.value.getValue());
+        WALValue value = new WALValue(UIO.readByteArray(filer, "value"), walRow.value.getTimestampId(), walRow.value.getTombstoned());
+        WALHighwater highwater = null;
+        if (UIO.readBoolean(filer, "hasHighwaterHint")) {
+            highwater = highwaterRowMarshaller.fromBytes(UIO.readByteArray(filer, "highwaters"));
         }
-
+        return new KeyValueHighwater(new WALKey(keyBytes), value, highwater);
     }
 
     void destroy() throws Exception {
@@ -234,14 +240,29 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         return true;
     }
 
+    public static class KeyValueHighwater {
+
+        public final WALKey key;
+        public final WALValue value;
+        public final WALHighwater highwater;
+
+        public KeyValueHighwater(WALKey key, WALValue value, WALHighwater highwater) {
+            this.key = key;
+            this.value = value;
+            this.highwater = highwater;
+        }
+    }
+
     public static class DeltaWALApplied {
 
-        public final Map<WALKey, Long> keyToRowPointer;
         public final long txId;
+        public final KeyValueHighwater[] keyValueHighwaters;
+        public final long[] fps;
 
-        public DeltaWALApplied(Map<WALKey, Long> keyToRowPointer, long txId) {
-            this.keyToRowPointer = keyToRowPointer;
+        public DeltaWALApplied(long txId, KeyValueHighwater[] keyValueHighwaters, long[] fps) {
             this.txId = txId;
+            this.keyValueHighwaters = keyValueHighwaters;
+            this.fps = fps;
         }
     }
 }

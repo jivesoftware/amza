@@ -228,11 +228,11 @@ public class AmzaTestCluster {
 
         amzaService.watch(partitionName,
             (RowsChanged changes) -> {
-                if (changes.getApply().size() > 0) {
+                /*if (changes.getApply().size() > 0) {
                     System.out.println("Service:" + localRingMember
                         + " Partition:" + partitionName.getName()
                         + " Changed:" + changes.getApply().size());
-                }
+                }*/
             }
         );
 

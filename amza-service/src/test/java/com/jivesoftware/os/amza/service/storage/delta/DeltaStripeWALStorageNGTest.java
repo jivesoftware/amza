@@ -63,7 +63,7 @@ public class DeltaStripeWALStorageNGTest {
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
             walIndexProviderRegistry, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, ids, -1, -1);
         PartitionIndex partitionIndex = new PartitionIndex(
-            new String[]{partitionTmpDir.getAbsolutePath()},
+            new String[] { partitionTmpDir.getAbsolutePath() },
             "domain",
             indexedWALStorageProvider,
             partitionPropertyMarshaller,
@@ -94,8 +94,8 @@ public class DeltaStripeWALStorageNGTest {
 
         File tmp = Files.createTempDir();
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
-        DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(
-            1, new AmzaStats(), deltaWALFactory, updated, 0);
+        DeltaValueCache deltaValueCache = new DeltaValueCache(1_000);
+        DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(1, new AmzaStats(), deltaWALFactory, deltaValueCache, 0);
         deltaStripeWALStorage.load(partitionIndex, primaryRowMarshaller);
 
         WALStorage storage = partitionStore.getWalStorage();

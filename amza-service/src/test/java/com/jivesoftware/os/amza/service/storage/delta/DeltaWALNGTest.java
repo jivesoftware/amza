@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.google.common.collect.Table;
-import com.google.common.collect.TreeBasedTable;
+import com.google.common.collect.Maps;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
@@ -22,7 +21,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
 import java.nio.ByteBuffer;
-import java.util.Map.Entry;
+import java.util.Map;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -42,22 +41,22 @@ public class DeltaWALNGTest {
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         DeltaWAL deltaWAL = new DeltaWAL(0, ids, primaryRowMarshaller, highwaterRowMarshaller, walTX);
 
-        Table<Long, WALKey, WALValue> apply1 = TreeBasedTable.create();
+        Map<WALKey, WALValue> apply1 = Maps.newLinkedHashMap();
         for (int i = 0; i < 10; i++) {
-            apply1.put(-1L, new WALKey((i + "k").getBytes()), new WALValue((i + "v").getBytes(), ids.nextId(), false));
+            apply1.put(new WALKey((i + "k").getBytes()), new WALValue((i + "v").getBytes(), ids.nextId(), false));
         }
         DeltaWAL.DeltaWALApplied update1 = deltaWAL.update(versionedPartitionName, apply1, null);
-        for (Entry<WALKey, Long> e : update1.keyToRowPointer.entrySet()) {
-            System.out.println("update1 k=" + new String(e.getKey().getKey()) + " fp=" + e.getValue());
+        for (DeltaWAL.KeyValueHighwater kvh : update1.keyValueHighwaters) {
+            System.out.println("update1 k=" + new String(kvh.key.getKey()) + " v=" + kvh.value);
         }
 
-        Table<Long, WALKey, WALValue> apply2 = TreeBasedTable.create();
+        Map<WALKey, WALValue> apply2 = Maps.newLinkedHashMap();
         for (int i = 0; i < 10; i++) {
-            apply2.put(-1L, new WALKey((i + "k").getBytes()), new WALValue((i + "v").getBytes(), ids.nextId(), false));
+            apply2.put(new WALKey((i + "k").getBytes()), new WALValue((i + "v").getBytes(), ids.nextId(), false));
         }
         DeltaWAL.DeltaWALApplied update2 = deltaWAL.update(versionedPartitionName, apply1, null);
-        for (Entry<WALKey, Long> e : update2.keyToRowPointer.entrySet()) {
-            System.out.println("update2 k=" + new String(e.getKey().getKey()) + " fp=" + e.getValue());
+        for (DeltaWAL.KeyValueHighwater kvh : update2.keyValueHighwaters) {
+            System.out.println("update2 k=" + new String(kvh.key.getKey()) + " v=" + kvh.value);
         }
 
         deltaWAL.load((long rowFP, long rowTxId, RowType rowType, byte[] rawRow) -> {
@@ -76,18 +75,20 @@ public class DeltaWALNGTest {
             return true;
         });
 
-        for (Entry<WALKey, Long> e : update1.keyToRowPointer.entrySet()) {
-            System.out.println("hydrate:" + new String(e.getKey().getKey()) + " @ fp=" + e.getValue());
-            WALValue hydrate = deltaWAL.hydrate(e.getValue()).value;
+        for (int i = 0; i < update1.fps.length; i++) {
+            DeltaWAL.KeyValueHighwater kvh = update1.keyValueHighwaters[i];
+            System.out.println("hydrate k=" + new String(kvh.key.getKey()) + " v=" + kvh.value);
+            WALValue hydrate = deltaWAL.hydrate(update1.fps[i]).value;
             System.out.println(new String(hydrate.getValue()));
-            Assert.assertEquals(hydrate.getValue(), apply1.get(-1L, e.getKey()).getValue());
+            Assert.assertEquals(hydrate.getValue(), apply1.get(kvh.key).getValue());
         }
 
-        for (Entry<WALKey, Long> e : update2.keyToRowPointer.entrySet()) {
-            System.out.println("hydrate:" + new String(e.getKey().getKey()) + " @ fp=" + e.getValue());
-            WALValue hydrate = deltaWAL.hydrate(e.getValue()).value;
+        for (int i = 0; i < update2.fps.length; i++) {
+            DeltaWAL.KeyValueHighwater kvh = update2.keyValueHighwaters[i];
+            System.out.println("hydrate k=" + new String(kvh.key.getKey()) + " v=" + kvh.value);
+            WALValue hydrate = deltaWAL.hydrate(update2.fps[i]).value;
             System.out.println(new String(hydrate.getValue()));
-            Assert.assertEquals(hydrate.getValue(), apply2.get(-1L, e.getKey()).getValue());
+            Assert.assertEquals(hydrate.getValue(), apply2.get(kvh.key).getValue());
         }
     }
 }

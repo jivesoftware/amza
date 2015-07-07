@@ -192,7 +192,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                 }
             }
             if (partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
-                takeCoordinator.updated(ringStoreReader, versionedPartitionName, partitionStatus, 0);
+                takeCoordinator.statusChanged(ringStoreReader, versionedPartitionName, partitionStatus);
             }
             return null;
         });
@@ -238,7 +238,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
             if (e.getValue() == RingHost.UNKNOWN_RING_HOST) {
                 unregisteredRingMembers.add(e.getKey());
             }
-            PartitionStatusStorage.VersionedStatus versionedStatus = partitionStatusStorage.getStatus(e.getKey(), partitionName);
+            PartitionStatusStorage.VersionedStatus versionedStatus = partitionStatusStorage.getRemoteStatus(e.getKey(), partitionName);
             if (versionedStatus == null) {
                 missingRingMembers.add(e.getKey());
             } else if (versionedStatus.status == TxPartitionStatus.Status.EXPUNGE) {
@@ -332,7 +332,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
         NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
         if (ring.containsKey(ringStoreReader.getRingMember())) {
-            VersionedStatus status = partitionStatusStorage.getStatus(ringStoreReader.getRingMember(), partitionName);
+            VersionedStatus status = partitionStatusStorage.getRemoteStatus(ringStoreReader.getRingMember(), partitionName);
             if (status != null) {
                 LOG.info("Handling request to destroy partitionName:{}", partitionName);
                 for (RingMember ringMember : ring.keySet()) {

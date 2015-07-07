@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.shared.take;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -24,7 +23,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- *
  * @author jonathan.colt
  */
 public class TakeCoordinator {
@@ -77,19 +75,12 @@ public class TakeCoordinator {
             while (true) {
                 long updates = cyaLock.get();
                 try {
-                    SetMultimap<String, VersionedPartitionName> desired = HashMultimap.create();
-
-                    for (VersionedPartitionName versionedPartitionName : versionedPartitionProvider.getAllPartitions()) {
-                        desired.put(versionedPartitionName.getPartitionName().getRingName(), versionedPartitionName);
-                    }
-
-                    takeRingCoordinators.keySet().removeAll(Sets.difference(takeRingCoordinators.keySet(), desired.keySet()));
-                    for (String ringName : desired.keySet()) {
+                    for (String ringName : takeRingCoordinators.keySet()) {
                         TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
                         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
                         boolean neighborsChanged;
                         if (takeRingCoordinator != null) {
-                            neighborsChanged = takeRingCoordinator.cya(neighbors, desired.get(ringName));
+                            neighborsChanged = takeRingCoordinator.cya(neighbors);
                         } else {
                             ensureRingCoodinator(ringName, neighbors);
                             neighborsChanged = true;
@@ -117,6 +108,21 @@ public class TakeCoordinator {
         });
     }
 
+    public void expunged(List<VersionedPartitionName> versionedPartitionNames) {
+        SetMultimap<String, VersionedPartitionName> expunged = HashMultimap.create();
+
+        for (VersionedPartitionName versionedPartitionName : versionedPartitionNames) {
+            expunged.put(versionedPartitionName.getPartitionName().getRingName(), versionedPartitionName);
+        }
+
+        for (String ringName : expunged.keySet()) {
+            TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
+            if (takeRingCoordinator != null) {
+                takeRingCoordinator.expunged(expunged.get(ringName));
+            }
+        }
+    }
+
     public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception {
         updates.incrementAndGet();
         String ringName = versionedPartitionName.getPartitionName().getRingName();
@@ -125,6 +131,10 @@ public class TakeCoordinator {
         ring.update(neighbors, versionedPartitionName, status, txId);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(neighbors);
+    }
+
+    public void statusChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, Status status) throws Exception {
+        updated(ringReader, versionedPartitionName, status, 0);
     }
 
     private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
@@ -167,7 +177,7 @@ public class TakeCoordinator {
             long start = updates.get();
             //LOG.info("CHECKING: remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
 
-            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
+            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
                 if (ring != null) {

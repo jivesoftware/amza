@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.shared.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
+import com.google.common.util.concurrent.AtomicDouble;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -50,6 +51,14 @@ public class AmzaStats {
     public final AtomicLong rowsStream = new AtomicLong();
     public final AtomicLong availableRowsStream = new AtomicLong();
     public final AtomicLong rowsTaken = new AtomicLong();
+
+
+    public final AtomicLong deltaValueCacheHits = new AtomicLong();
+    public final AtomicLong deltaValueCacheMisses = new AtomicLong();
+    public final AtomicDouble deltaValueCacheUtilization = new AtomicDouble();
+    public final AtomicLong deltaValueCacheAdds = new AtomicLong();
+    public final AtomicLong deltaValueCacheRemoves = new AtomicLong();
+
 
     public AmzaStats() {
     }

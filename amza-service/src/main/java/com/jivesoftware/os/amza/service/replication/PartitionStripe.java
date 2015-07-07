@@ -46,7 +46,7 @@ public class PartitionStripe {
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final Predicate<VersionedPartitionName> predicate;
-
+    
     public PartitionStripe(String name,
         PartitionIndex partitionIndex,
         DeltaStripeWALStorage storage,
@@ -67,6 +67,10 @@ public class PartitionStripe {
 
     public String getName() {
         return name;
+    }
+
+    public Object getAwakeCompactionLock() {
+        return storage.getAwakeCompactionLock();
     }
 
     boolean expungePartition(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -277,6 +281,10 @@ public class PartitionStripe {
 
     public void load() throws Exception {
         storage.load(partitionIndex, primaryRowMarshaller);
+    }
+
+    public boolean compactable() {
+        return storage.compactable();
     }
 
     public void compact(boolean force) {

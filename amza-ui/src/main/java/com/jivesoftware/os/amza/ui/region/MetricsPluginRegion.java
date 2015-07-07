@@ -193,13 +193,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         return map;
     }
 
-    public Map<String,Object> renderPartition(PartitionName partitionName,long startFp,long endFp) {
-        Map<String,Object> partitionViz = new HashMap<>();
+    public Map<String, Object> renderPartition(PartitionName partitionName, long startFp, long endFp) {
+        Map<String, Object> partitionViz = new HashMap<>();
         //amzaService.getPartitionProvider().
 
         return partitionViz;
     }
-
 
     public String renderOverview() throws Exception {
 
@@ -260,14 +259,32 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) (((double) grandTotal.takesLag.longValue() / 10000d) * 100),
             String.valueOf(getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag"));
 
+        long hits = amzaStats.deltaValueCacheHits.get();
+        long misses = amzaStats.deltaValueCacheMisses.get();
+
+        double hitRatio = ((double) hits / (double) misses) * 100;
+        sb.append(progress("Delta Value Cache Hit/Miss (" + hits + "/" + misses + ")",
+            (int) (hitRatio),
+            String.valueOf(hitRatio) + " ratio"));
+
+        sb.append(progress("Delta Value Cache Utilization (" + amzaStats.deltaValueCacheUtilization.get() + ")",
+            (int) (((double) amzaStats.deltaValueCacheUtilization.get()) * 100), ""));
+
+
+        long cacheAdds = amzaStats.deltaValueCacheAdds.get();
+        long cacheRemoves = amzaStats.deltaValueCacheRemoves.get();
+        double addRemoveRatio = ((double) cacheAdds / (double) cacheRemoves) * 100;
+        sb.append(progress("Delta Value Cache Add/Remove (" + cacheAdds+"/"+cacheRemoves + ")",
+            (int) (addRemoveRatio), String.valueOf(addRemoveRatio) + " ratio"));
+
         sb.append(progress("Active Long Polls (" + amzaStats.availableRowsStream.get() + ")",
-            (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100),""));
+            (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100), ""));
 
         sb.append(progress("Active Row Streaming (" + amzaStats.rowsStream.get() + ")",
-            (int) (((double) amzaStats.rowsStream.get() / 100d) * 100),""));
+            (int) (((double) amzaStats.rowsStream.get() / 100d) * 100), ""));
 
         sb.append(progress("Active Row Acknowledging (" + amzaStats.rowsTaken.get() + ")",
-            (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100),""));
+            (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100), ""));
 
         sb.append("<p><pre>");
         for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {

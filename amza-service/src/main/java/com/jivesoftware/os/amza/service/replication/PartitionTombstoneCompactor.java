@@ -53,7 +53,7 @@ public class PartitionTombstoneCompactor {
         scheduledThreadPool = Executors.newScheduledThreadPool(numberOfCompactorThreads,
             new ThreadFactoryBuilder().setNameFormat("partition-tombstone-compactor-%d").build());
         for (int i = 0; i < numberOfCompactorThreads; i++) {
-            final int stripe = i;
+            int stripe = i;
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
                 int failedToCompact = 0;
 
@@ -98,9 +98,7 @@ public class PartitionTombstoneCompactor {
                     }
                 }
 
-                if (compacting.computeIfAbsent(versionedPartitionName, (key) -> {
-                    return true;
-                }) == null) {
+                if (compacting.putIfAbsent(versionedPartitionName, Boolean.TRUE) == null) {
                     try {
                         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                         if (partitionStore.compactableTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId)) {
@@ -117,7 +115,7 @@ public class PartitionTombstoneCompactor {
                         compacting.remove(versionedPartitionName);
                     }
                 } else {
-                    LOG.warn("Tried to compact tombostones for {} but there was already a compaction underway.", versionedPartitionName);
+                    LOG.warn("Tried to compact tombstones for {} but there was already a compaction underway.", versionedPartitionName);
                 }
             }
         }

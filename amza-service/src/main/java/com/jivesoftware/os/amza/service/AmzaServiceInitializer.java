@@ -68,7 +68,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class AmzaServiceInitializer {
 
@@ -156,8 +155,7 @@ public class AmzaServiceInitializer {
             takeCoordinator,
             config.awaitOnlineStripingLevel);
 
-         amzaPartitionWatcher.watch(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), partitionStatusStorage);
-
+        amzaPartitionWatcher.watch(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), partitionStatusStorage);
 
         partitionIndex.open(partitionStatusStorage);
         // cold start
@@ -176,7 +174,7 @@ public class AmzaServiceInitializer {
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
-        DeltaValueCache deltaValueCache = new DeltaValueCache(config.maxDeltaValueCacheSizeInBytes);
+        DeltaValueCache deltaValueCache = new DeltaValueCache(amzaStats, config.maxDeltaValueCacheSizeInBytes);
         PartitionStripe[] partitionStripes = new PartitionStripe[deltaStorageStripes];
         HighwaterStorage[] highwaterStorages = new HighwaterStorage[deltaStorageStripes];
         for (int i = 0; i < deltaStorageStripes; i++) {
@@ -193,7 +191,7 @@ public class AmzaServiceInitializer {
                 primaryRowMarshaller, highwaterRowMarshaller,
                 (versionedPartitionName) -> {
                     if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
-                        return Math.abs((long)versionedPartitionName.getPartitionName().hashCode()) % deltaStorageStripes == stripeId;
+                        return Math.abs((long) versionedPartitionName.getPartitionName().hashCode()) % deltaStorageStripes == stripeId;
                     }
                     return false;
                 });
@@ -237,14 +235,23 @@ public class AmzaServiceInitializer {
 
         ScheduledExecutorService compactDeltasThreadPool = Executors.newScheduledThreadPool(config.numberOfCompactorThreads,
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
-        for (final PartitionStripe partitionStripe : partitionStripes) {
-            compactDeltasThreadPool.scheduleAtFixedRate(() -> {
-                try {
-                    partitionStripe.compact(false);
-                } catch (Throwable x) {
-                    LOG.error("Compactor failed.", x);
+        for (PartitionStripe partitionStripe : partitionStripes) {
+            compactDeltasThreadPool.submit(() -> {
+                while (true) {
+                    try {
+                        if (partitionStripe.compactable()) {
+                            partitionStripe.compact(false);
+                        }
+                        Object awakeCompactionLock = partitionStripe.getAwakeCompactionLock();
+                        synchronized(awakeCompactionLock) {
+                            awakeCompactionLock.wait(config.deltaStripeCompactionIntervalInMillis);
+                        }
+                        
+                    } catch (Throwable x) {
+                        LOG.error("Compactor failed.", x);
+                    }
                 }
-            }, config.deltaStripeCompactionIntervalInMillis, config.deltaStripeCompactionIntervalInMillis, TimeUnit.MILLISECONDS);
+            });
         }
 
         AmzaRingStoreWriter amzaRingWriter = new AmzaRingStoreWriter(amzaRingReader,

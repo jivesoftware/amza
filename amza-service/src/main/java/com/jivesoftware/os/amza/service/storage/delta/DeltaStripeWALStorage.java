@@ -61,6 +61,7 @@ public class DeltaStripeWALStorage {
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
     private final DeltaValueCache deltaValueCache;
+    private final Object awakeCompactionsLock = new Object();
     private final long compactAfterNUpdates;
     private final ConcurrentHashMap<VersionedPartitionName, PartitionDelta> partitionDeltas = new ConcurrentHashMap<>();
     private final Object oneWriterAtATimeLock = new Object();
@@ -117,6 +118,10 @@ public class DeltaStripeWALStorage {
 
     private void releaseAll() {
         tickleMeElmophore.release(numTickleMeElmaphore);
+    }
+
+    public Object getAwakeCompactionLock() {
+        return awakeCompactionsLock;
     }
 
     public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
@@ -184,6 +189,11 @@ public class DeltaStripeWALStorage {
                 }
             }
         }
+        if (updateSinceLastCompaction.get() > compactAfterNUpdates) {
+            synchronized (awakeCompactionsLock) {
+                awakeCompactionsLock.notifyAll();
+            }
+        }
         LOG.info("Reloaded deltas stripe:{} in {} ms", index, (System.currentTimeMillis() - start));
     }
 
@@ -219,8 +229,12 @@ public class DeltaStripeWALStorage {
         return partitionDelta;
     }
 
+    public boolean compactable() {
+        return updateSinceLastCompaction.get() > compactAfterNUpdates;
+    }
+
     public void compact(PartitionIndex partitionIndex, boolean force) throws Exception {
-        if (!force && updateSinceLastCompaction.get() < compactAfterNUpdates) { // TODO or some memory pressure BS!
+        if (!force && !compactable()) {
             return;
         }
 
@@ -324,7 +338,7 @@ public class DeltaStripeWALStorage {
                 WALTimestampId currentTimestamp = currentTimestamps[i];
                 WALValue update = values.get(i);
                 if (currentTimestamp == null) {
-                    apply.put(-1L,  key, update);
+                    apply.put(-1L, key, update);
                     if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
                         oldestAppliedTimestamp.set(update.getTimestampId());
                     }
@@ -378,7 +392,12 @@ public class DeltaStripeWALStorage {
                 updated.updated(versionedPartitionName, partitionStatus, updateApplied.txId);
             }
 
-            updateSinceLastCompaction.addAndGet(apply.size());
+            long uncompactedUpdates = updateSinceLastCompaction.addAndGet(apply.size());
+            if (uncompactedUpdates > compactAfterNUpdates) {
+                synchronized (awakeCompactionsLock) {
+                    awakeCompactionsLock.notifyAll();
+                }
+            }
             return rowsChanged;
         } finally {
             releaseOne();

@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.jivesoftware.os.mlogger.core.ValueType;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -18,12 +18,14 @@ public class DeltaValueCache {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final AmzaStats amzaStats;
     private final long maxValueCacheSizeInBytes;
 
     private final ConcurrentLinkedQueue<DeltaRow> rowQueue = new ConcurrentLinkedQueue<>();
     private final AtomicLong valueCacheSize = new AtomicLong(0);
 
-    public DeltaValueCache(long maxValueCacheSizeInBytes) {
+    public DeltaValueCache(AmzaStats amzaStats, long maxValueCacheSizeInBytes) {
+        this.amzaStats = amzaStats;
         this.maxValueCacheSizeInBytes = maxValueCacheSizeInBytes;
     }
 
@@ -40,12 +42,14 @@ public class DeltaValueCache {
             poll.remove();
             long pollSize = rowSize(poll.keyValueHighwater.key, poll.keyValueHighwater.value);
             cacheSize = valueCacheSize.addAndGet(-pollSize);
-            LOG.set(ValueType.COUNT, "deltaValueCache>size", cacheSize);
+            amzaStats.deltaValueCacheRemoves.incrementAndGet();
         }
+        amzaStats.deltaValueCacheUtilization.set((double) cacheSize / (double) maxValueCacheSizeInBytes);
 
         DeltaRow deltaRow = new DeltaRow(fp, keyValueHighwater, rowMap);
         rowMap.put(fp, deltaRow);
         rowQueue.add(deltaRow);
+        amzaStats.deltaValueCacheAdds.incrementAndGet();
     }
 
     private long rowSize(WALKey key, WALValue value) {
@@ -53,10 +57,17 @@ public class DeltaValueCache {
     }
 
     public DeltaRow get(long fp, ConcurrentHashMap<Long, DeltaRow> rowMap) {
-        return rowMap.get(fp);
+        DeltaRow got = rowMap.get(fp);
+        if (got == null) {
+            amzaStats.deltaValueCacheMisses.incrementAndGet();
+        } else {
+            amzaStats.deltaValueCacheHits.incrementAndGet();
+        }
+        return got;
     }
 
     public static class DeltaRow {
+
         public final long fp;
         public final KeyValueHighwater keyValueHighwater;
         public final WeakReference<ConcurrentHashMap<Long, DeltaRow>> rowMapRef;

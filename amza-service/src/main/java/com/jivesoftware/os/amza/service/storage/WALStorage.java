@@ -550,23 +550,17 @@ public class WALStorage implements RangeScannable<WALValue> {
         }
     }
 
-    public WALValue[] get(WALKey[] keys) throws Exception {
+    public void get(KeyValues keyValues, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
         try {
-            WALValue[] values = new WALValue[keys.length];
-            MutableInt i = new MutableInt();
-            walIndex.get().getPointers((KeyValueStream stream) -> {
-                for (WALKey key : keys) {
-                    stream.stream(key, null);
-                }
-            }, (WALKey key, WALValue value, long timestamp, boolean tombstoned, long fp) -> {
+            walIndex.get().getPointers(keyValues, (WALKey key, WALValue value, long timestamp, boolean tombstoned, long fp) -> {
                 if (fp != -1 && !tombstoned) {
-                    values[i.intValue()] = hydrateRowIndexValue(timestamp, tombstoned, fp);
+                    keyValueStream.stream(key, hydrateRowIndexValue(timestamp, tombstoned, fp));
+                } else {
+                    keyValueStream.stream(key, null);
                 }
-                i.increment();
                 return true;
             });
-            return values;
         } finally {
             releaseOne();
         }

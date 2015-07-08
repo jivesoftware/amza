@@ -338,8 +338,8 @@ public class AmzaTestCluster {
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(Collections.singletonList(key), (rowTxId, key1, timestampedValue) -> {
-                got.add(timestampedValue != null ? timestampedValue.getValue() : null);
+            clientProvider.getClient(partitionName).get(Collections.singletonList(key), (WALKey key1, byte[] value, long timestamp) -> {
+                got.add(value);
                 return true;
             });
             return got.get(0);
@@ -456,8 +456,8 @@ public class AmzaTestCluster {
                 try {
                     compared.increment();
                     TimestampedValue[] bValues = new TimestampedValue[1];
-                    b.get(Collections.singletonList(key), (rowTxId, key1, scanned) -> {
-                        bValues[0] = scanned;
+                    b.get(Collections.singletonList(key), (WALKey key1, byte[] value, long timestamp) -> {
+                        bValues[0] = new TimestampedValue(timestamp, value);
                         return true;
                     });
 

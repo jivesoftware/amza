@@ -4,6 +4,7 @@ import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Arrays;
@@ -18,7 +19,7 @@ public interface AmzaPartitionAPI {
         int desiredQuorum,
         long timeoutInMillis) throws Exception;
 
-    void get(Iterable<WALKey> keys, Scan<TimestampedValue> valuesStream) throws Exception;
+    void get(Iterable<WALKey> keys, TimestampKeyValueStream valuesStream) throws Exception;
 
     /**
 

@@ -24,9 +24,11 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -171,7 +173,7 @@ public class DeltaStripeWALStorage {
                                     WALKey key = new WALKey(keyBytes);
                                     WALValue partitionValue = partitionStore.get(key);
                                     if (partitionValue == null || partitionValue.getTimestampId() < row.value.getTimestampId()) {
-                                        WALTimestampId got = delta.getPointer(key);
+                                        WALPointer got = delta.getPointer(key);
                                         if (got == null || got.getTimestampId() < row.value.getTimestampId()) {
                                             delta.put(rowFP, wal.hydrateKeyValueHighwater(row));
                                             //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
@@ -379,7 +381,7 @@ public class DeltaStripeWALStorage {
                         WALKey key = keyValueHighwater.key;
                         WALValue value = keyValueHighwater.value;
 
-                        WALTimestampId got = delta.getPointer(key);
+                        WALPointer got = delta.getPointer(key);
                         if (got == null || got.getTimestampId() < value.getTimestampId()) {
                             delta.put(fp, keyValueHighwater);
                         } else {
@@ -473,6 +475,36 @@ public class DeltaStripeWALStorage {
         }
         return storage.get(key);
 
+    }
+
+    public void get(VersionedPartitionName versionedPartitionName, WALStorage storage, KeyValues keyValues, TimestampKeyValueStream stream) throws Exception {
+        acquireOne();
+        try {
+            PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
+            storage.get((KeyValueStream storageStream) -> {
+
+                partitionDelta.get(keyValues, (WALKey key, WALValue value) -> {
+                    if (value == null) {
+                        return storageStream.stream(key, null);
+                    } else {
+                        if (value.getTombstoned()) {
+                            return stream.stream(key, null, -1);
+                        } else {
+                            return stream.stream(key, value.getValue(), value.getTimestampId());
+                        }
+                    }
+                });
+
+            }, (WALKey key, WALValue value) -> {
+                if (value.getTombstoned()) {
+                    return stream.stream(key, null, -1);
+                } else {
+                    return stream.stream(key, value.getValue(), value.getTimestampId());
+                }
+            });
+        } finally {
+            releaseOne();
+        }
     }
 
     public boolean containsKey(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKey key) throws Exception {

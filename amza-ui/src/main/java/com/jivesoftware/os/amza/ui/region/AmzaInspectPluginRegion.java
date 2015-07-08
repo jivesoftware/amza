@@ -110,14 +110,13 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        partition.get(rawKeys, (rowTxId, key, value) -> {
+                        partition.get(rawKeys, (WALKey key, byte[] value, long timestamp) -> {
                             Map<String, String> row = new HashMap<>();
-                            row.put("rowTxId", String.valueOf(rowTxId));
                             row.put("keyAsHex", bytesToHex(key.getKey()));
                             row.put("keyAsString", new String(key.getKey(), StandardCharsets.US_ASCII));
-                            row.put("valueAsHex", bytesToHex(value.getValue()));
-                            row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
-                            row.put("timestamp", String.valueOf(value.getTimestampId()));
+                            row.put("valueAsHex", bytesToHex(value));
+                            row.put("valueAsString", new String(value, StandardCharsets.US_ASCII));
+                            row.put("timestamp", String.valueOf(timestamp));
                             row.put("tombstone", "false");
                             rows.add(row);
                             return true;
@@ -134,14 +133,13 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         updates.removeAll(rawKeys, -1);
                         partition.commit(updates, 1, 30_000); // TODO expose to UI
-                        partition.get(rawKeys, (rowTxId, key, value) -> {
+                        partition.get(rawKeys, (WALKey key, byte[] value, long timestamp) -> {
                             Map<String, String> row = new HashMap<>();
-                            row.put("rowTxId", String.valueOf(rowTxId));
                             row.put("keyAsHex", bytesToHex(key.getKey()));
                             row.put("keyAsString", new String(key.getKey(), StandardCharsets.US_ASCII));
-                            row.put("valueAsHex", bytesToHex(value.getValue()));
-                            row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
-                            row.put("timestamp", String.valueOf(value.getTimestampId()));
+                            row.put("valueAsHex", bytesToHex(value));
+                            row.put("valueAsString", new String(value, StandardCharsets.US_ASCII));
+                            row.put("timestamp", String.valueOf(timestamp));
                             row.put("tombstone", "false");
                             rows.add(row);
                             return true;

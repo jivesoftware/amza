@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -82,10 +83,10 @@ public class AmzaRingStoreReader implements AmzaRingReader {
         } else {
             List<Entry<RingMember, RingHost>> neighbors = new ArrayList<>(ring.size() - 1);
             ring.tailMap(rootRingMember, false).forEach((RingMember k, RingHost v) -> {
-                neighbors.add(new SimpleEntry<>(k,v));
+                neighbors.add(new SimpleEntry<>(k, v));
             });
             ring.headMap(rootRingMember, false).forEach((RingMember k, RingHost v) -> {
-                neighbors.add(new SimpleEntry<>(k,v));
+                neighbors.add(new SimpleEntry<>(k, v));
             });
             return neighbors;
         }
@@ -98,33 +99,28 @@ public class AmzaRingStoreReader implements AmzaRingReader {
 
     @Override
     public NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception {
+
+        NavigableMap<RingMember, RingHost> orderedRing = new TreeMap<>();
         WALKey from = key(ringName, null);
-        List<RingMember> ring = new ArrayList<>();
-        ringIndex.rangeScan(from, from.prefixUpperExclusive(), (long orderId, WALKey key, WALValue value) -> {
-            ring.add(keyToRingMember(key));
+        nodeIndex.get((KeyValueStream stream) -> {
+            ringIndex.rangeScan(from, from.prefixUpperExclusive(), (long orderId, WALKey key, WALValue value) -> {
+                RingMember ringMember = keyToRingMember(key);
+                return stream.stream(new WALKey(ringMember.toBytes()), null);
+            });
+        }, (WALKey key, WALValue value) -> {
+            if (value != null && !value.getTombstoned()) {
+                orderedRing.put(RingMember.fromBytes(key.getKey()), RingHost.fromBytes(value.getValue()));
+            } else {
+                orderedRing.put(RingMember.fromBytes(key.getKey()), RingHost.UNKNOWN_RING_HOST);
+            }
             return true;
         });
-
-        WALKey[] memberKeys = new WALKey[ring.size()];
-        for (int i = 0; i < memberKeys.length; i++) {
-            memberKeys[i] = new WALKey(ring.get(i).toBytes());
-        }
-        WALValue[] rawRingHosts = nodeIndex.get(memberKeys);
-        NavigableMap<RingMember, RingHost> orderedRing = new TreeMap<>();
-        for (int i = 0; i < rawRingHosts.length; i++) {
-            WALValue rawRingHost = rawRingHosts[i];
-            if (rawRingHost != null && !rawRingHost.getTombstoned()) {
-                orderedRing.put(ring.get(i), RingHost.fromBytes(rawRingHost.getValue()));
-            } else {
-                orderedRing.put(ring.get(i), RingHost.UNKNOWN_RING_HOST);
-            }
-        }
         return orderedRing;
     }
 
     public RingHost getRingHost(RingMember ringMember) throws Exception {
-        WALValue[] rawRingHosts = nodeIndex.get(new WALKey[]{new WALKey(ringMember.toBytes())});
-        return rawRingHosts[0] == null || rawRingHosts[0].getTombstoned() ? null : RingHost.fromBytes(rawRingHosts[0].getValue());
+        WALValue rawRingHost = nodeIndex.get(new WALKey(ringMember.toBytes()));
+        return rawRingHost == null || rawRingHost.getTombstoned() ? null : RingHost.fromBytes(rawRingHost.getValue());
     }
 
     public Set<RingMember> getNeighboringRingMembers(String ringName) throws Exception {

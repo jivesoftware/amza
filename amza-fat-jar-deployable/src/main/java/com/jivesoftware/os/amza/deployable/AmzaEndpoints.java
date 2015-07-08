@@ -115,8 +115,8 @@ public class AmzaEndpoints {
 
             AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             List<byte[]> got = new ArrayList<>();
-            partitionAPI.get(rawKeys, (rowTxId, key1, scanned) -> {
-                got.add(scanned.getValue());
+            partitionAPI.get(rawKeys, (key1, value, timestamp) -> {
+                got.add(value);
                 return true;
             });
             return ResponseHelper.INSTANCE.jsonResponse(got);

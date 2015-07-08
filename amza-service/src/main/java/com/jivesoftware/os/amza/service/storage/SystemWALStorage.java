@@ -14,6 +14,8 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyValues;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -58,6 +60,17 @@ public class SystemWALStorage {
     public WALValue get(VersionedPartitionName versionedPartitionName, WALKey key) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         return partitionIndex.get(versionedPartitionName).get(key);
+    }
+
+    public void get(VersionedPartitionName versionedPartitionName, KeyValues keyValues, TimestampKeyValueStream stream) throws Exception {
+        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
+        partitionIndex.get(versionedPartitionName).get(keyValues, (WALKey key, WALValue value) -> {
+            if (value == null || value.getTombstoned()) {
+                return stream.stream(key, null, -1);
+            } else {
+                return stream.stream(key, value.getValue(), value.getTimestampId());
+            }
+        });
     }
 
     public boolean containsKey(VersionedPartitionName versionedPartitionName, WALKey key) throws Exception {

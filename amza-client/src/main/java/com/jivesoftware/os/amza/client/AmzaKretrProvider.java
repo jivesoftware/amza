@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.TakeCursors;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -55,7 +56,7 @@ public class AmzaKretrProvider { // Aka Partition Client Provider
             partition.commit(commitable, desiredTakeQuorum, timeUnit.toMillis(timeout));
         }
 
-        public void get(Iterable<WALKey> keys, Scan<TimestampedValue> valuesStream) throws Exception {
+        public void get(Iterable<WALKey> keys, TimestampKeyValueStream valuesStream) throws Exception {
             // TODO impl quorum reads?
             partitionAPIProvider.getPartition(partitionName).get(keys, valuesStream);
         }
@@ -67,8 +68,8 @@ public class AmzaKretrProvider { // Aka Partition Client Provider
 
         public TimestampedValue getTimestampedValue(WALKey key) throws Exception {
             final TimestampedValue[] r = new TimestampedValue[1];
-            get(Collections.singletonList(key), (rowTxId, key1, scanned) -> {
-                r[0] = scanned;
+            get(Collections.singletonList(key), (key1, value, timestamp) -> {
+                r[0] = new TimestampedValue(timestamp, value);
                 return true;
             });
             return r[0];

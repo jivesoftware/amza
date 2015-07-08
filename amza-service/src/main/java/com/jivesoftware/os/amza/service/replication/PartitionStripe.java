@@ -21,7 +21,9 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
@@ -46,7 +48,7 @@ public class PartitionStripe {
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final Predicate<VersionedPartitionName> predicate;
-    
+
     public PartitionStripe(String name,
         PartitionIndex partitionIndex,
         DeltaStripeWALStorage storage,
@@ -150,6 +152,22 @@ public class PartitionStripe {
                 } else {
                     return storage.get(versionedPartitionName, partitionStore.getWalStorage(), key);
                 }
+            });
+    }
+
+    public void get(PartitionName partitionName, KeyValues keyValues, TimestampKeyValueStream stream) throws Exception {
+        txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
+                    partitionStatus);
+
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                } else {
+                    storage.get(versionedPartitionName, partitionStore.getWalStorage(), keyValues, stream);
+                }
+                return null;
             });
     }
 

@@ -28,6 +28,8 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -112,12 +114,15 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void get(Iterable<WALKey> keys, Scan<TimestampedValue> valuesStream) throws Exception {
+    public void get(Iterable<WALKey> keys, TimestampKeyValueStream valuesStream) throws Exception {
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            for (WALKey walKey : keys) {
-                WALValue got = stripe.get(partitionName, walKey); // TODO Hmmm add a multi get?
-                valuesStream.row(-1, walKey, got == null || got.getTombstoned() ? null : got.toTimestampedValue());
-            }
+            stripe.get(partitionName, (KeyValueStream stream) -> {
+                for (WALKey key : keys) {
+                    if (!stream.stream(key, null)) {
+                        break;
+                    }
+                }
+            }, valuesStream);
             return null;
         });
     }

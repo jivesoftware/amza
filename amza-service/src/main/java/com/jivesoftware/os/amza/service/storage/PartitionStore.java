@@ -20,6 +20,8 @@ import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -61,7 +63,7 @@ public class PartitionStore implements RangeScannable<WALValue> {
     public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {
         return walStorage.compactableTombstone(removeTombstonedOlderTimestampId, ttlTimestampId);
     }
-    
+
     public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
         walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
     }
@@ -70,8 +72,8 @@ public class PartitionStore implements RangeScannable<WALValue> {
         return walStorage.get(key);
     }
 
-    public WALValue[] get(WALKey[] keys) throws Exception {
-        return walStorage.get(keys);
+    public void get(KeyValues keyValues, KeyValueStream stream) throws Exception {
+        walStorage.get(keyValues, stream);
     }
 
     public boolean containsKey(WALKey key) throws Exception {

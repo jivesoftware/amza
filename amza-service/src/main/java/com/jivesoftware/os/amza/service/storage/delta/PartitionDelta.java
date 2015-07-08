@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater
 import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
@@ -67,6 +68,25 @@ class PartitionDelta {
             return null;
         }
         return Optional.fromNullable(got.getTombstoned() ? null : deltaWAL.hydrate(got.getFp()).value);
+    }
+    
+    private WALValue getRawValue(WALKey key) throws Exception {
+        WALPointer got = pointerIndex.get(key);
+        if (got == null) {
+            PartitionDelta partitionDelta = compacting.get();
+            if (partitionDelta != null) {
+                return partitionDelta.getRawValue(key);
+            }
+            return null;
+        }
+        return deltaWAL.hydrate(got.getFp()).value;
+    }
+
+
+    void get(KeyValues keyValues, KeyValueStream stream) throws Exception {
+        keyValues.consume((WALKey key, WALValue value) -> {
+            return stream.stream(key, getRawValue(key));
+        });
     }
 
     WALPointer getPointer(WALKey key) throws Exception {

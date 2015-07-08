@@ -81,7 +81,6 @@
                 <table class="table table-condensed">
                     <thead>
                         <tr>
-                            <th>rowTxId</th>
                             <th>key</th>
                             <th>value</th>
                             <th>timestamp</th>
@@ -92,7 +91,6 @@
                         {if $rows}
                             {foreach $r in $rows}
                                 <tr>
-                                    <td>{$r.rowTxId?:''}</td>
                                     <td>
                                         <p>{$r.keyAsHex?:''}</p>
                                         <p>{$r.keyAsString?:''}</p>

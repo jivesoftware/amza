@@ -17,11 +17,9 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.scan.Scan;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -31,7 +29,7 @@ public class MemoryWALIndex implements WALIndex {
     private final NavigableMap<WALKey, WALPointer> index;
 
     public MemoryWALIndex() {
-        this(new ConcurrentSkipListMap<WALKey, WALPointer>());
+        this(new ConcurrentSkipListMap<>());
     }
 
     public MemoryWALIndex(NavigableMap<WALKey, WALPointer> index) {
@@ -54,23 +52,23 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(Scan<WALPointer> scan) throws Exception {
+    public void rowScan(WALKeyPointerStream stream) throws Exception {
         for (Entry<WALKey, WALPointer> e : index.entrySet()) {
             WALKey key = e.getKey();
             WALPointer rowPointer = e.getValue();
-            if (!scan.row(-1, key, rowPointer)) {
+            if (!stream.stream(key, rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
                 break;
             }
         }
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, Scan<WALPointer> scan) throws Exception {
+    public void rangeScan(WALKey from, WALKey to, WALKeyPointerStream stream) throws Exception {
         if (to == null) {
-             for (Entry<WALKey, WALPointer> e : index.tailMap(from, true).entrySet()) {
+            for (Entry<WALKey, WALPointer> e : index.tailMap(from, true).entrySet()) {
                 WALKey key = e.getKey();
                 WALPointer rowPointer = e.getValue();
-                if (!scan.row(-1, key, rowPointer)) {
+                if (!stream.stream(key, rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
                     break;
                 }
             }
@@ -78,7 +76,7 @@ public class MemoryWALIndex implements WALIndex {
             for (Entry<WALKey, WALPointer> e : index.subMap(from, to).entrySet()) {
                 WALKey key = e.getKey();
                 WALPointer rowPointer = e.getValue();
-                if (!scan.row(-1, key, rowPointer)) {
+                if (!stream.stream(key, rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
                     break;
                 }
             }
@@ -106,29 +104,60 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public WALPointer getPointer(WALKey key) {
-        return index.get(key);
+    public void getPointer(WALKey key, WALKeyPointerStream stream) throws Exception {
+        stream(key, index.get(key), stream);
+    }
+
+    private void stream(WALKey key, WALPointer pointer, WALKeyPointerStream stream) throws Exception {
+        if (pointer == null) {
+            stream.stream(key, -1, false, -1);
+        } else {
+            stream.stream(key, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
+        }
+    }
+
+    private void stream(WALKey key, WALValue value, WALPointer pointer, WALKeyValuePointerStream stream) throws Exception {
+        if (pointer == null) {
+            stream.stream(key, value, -1, false, -1);
+        } else {
+            stream.stream(key, value, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
+        }
     }
 
     @Override
-    public WALPointer[] getPointers(WALKey[] consumableKeys) {
-        WALPointer[] gots = new WALPointer[consumableKeys.length];
-        for (int i = 0; i < consumableKeys.length; i++) {
-            if (consumableKeys[i] != null) {
-                gots[i] = index.get(consumableKeys[i]);
-                if (gots[i] != null) {
-                    consumableKeys[i] = null;
-                }
+    public void getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
+        keyValues.consume((WALKey key, WALValue value) -> {
+            WALPointer pointer = index.get(key);
+            if (pointer != null) {
+                stream(key, value, pointer, stream);
+            } else {
+                stream(key, value, null, stream);
             }
-        }
-        return gots;
+            return true;
+        });
     }
 
     @Override
-    public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entrys) {
-        for (Map.Entry<WALKey, WALPointer> entry : entrys) {
-            index.put(entry.getKey(), entry.getValue());
-        }
+    public void merge(WALKeyPointers pointers, WALMergeKeyPointerStream stream) throws Exception {
+        pointers.consume((WALKey key, long timestamp, boolean tombstoned, long fp) -> {
+            merge(key, timestamp, tombstoned, fp, stream);
+            return true;
+        });
+    }
+
+    private void merge(WALKey key, long timestamp, boolean tombstoned, long fp, WALMergeKeyPointerStream stream) throws Exception {
+        byte[] mode = new byte[1];
+        WALPointer compute = index.compute(key, (WALKey existingKey, WALPointer existingPointer) -> {
+            if (existingPointer == null || timestamp > existingPointer.getTimestampId()) {
+                mode[0] = (existingPointer == null) ? WALMergeKeyPointerStream.added : WALMergeKeyPointerStream.clobbered;
+                return new WALPointer(fp, timestamp, tombstoned);
+            } else {
+                mode[0] = WALMergeKeyPointerStream.ignored;
+                return existingPointer;
+            }
+        });
+        stream.stream(mode[0], key, compute.getTimestampId(), compute.getTombstoned(), compute.getFp());
+
     }
 
     @Override
@@ -145,8 +174,8 @@ public class MemoryWALIndex implements WALIndex {
         return new CompactionWALIndex() {
 
             @Override
-            public void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entries) {
-                rowsIndex.put(entries);
+            public void merge(WALKeyPointers pointers) throws Exception {
+                rowsIndex.merge(pointers, null);
             }
 
             @Override

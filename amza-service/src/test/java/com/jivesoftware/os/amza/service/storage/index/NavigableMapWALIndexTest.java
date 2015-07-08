@@ -18,9 +18,7 @@ package com.jivesoftware.os.amza.service.storage.index;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALPointer;
-import java.util.AbstractMap;
-import java.util.Collections;
+import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
 import org.testng.annotations.Test;
 
 public class NavigableMapWALIndexTest {
@@ -31,15 +29,15 @@ public class NavigableMapWALIndexTest {
 
         MemoryWALIndex instance = new MemoryWALIndex();
 
-        for (long i = 0; i < 200000000; i++) {
-            instance.put(Collections.singletonList(new AbstractMap.SimpleEntry<>(
-                new WALKey(UIO.longBytes(i)),
-                new WALPointer(i, i, false))));
-            if (i % 1000000 == 0) {
-                System.out.println("Size:" + i + " Heap:" + Runtime.getRuntime().totalMemory());
-                instance.commit();
+        instance.merge((WALKeyPointerStream stream) -> {
+            for (long i = 0; i < 200000000; i++) {
+                stream.stream(new WALKey(UIO.longBytes(i)), i, false, i);
+                if (i % 1000000 == 0) {
+                    System.out.println("Size:" + i + " Heap:" + Runtime.getRuntime().totalMemory());
+                    instance.commit();
+                }
             }
-        }
+        }, null);
         instance.commit();
 
         System.out.println("Heap:" + Runtime.getRuntime().totalMemory());

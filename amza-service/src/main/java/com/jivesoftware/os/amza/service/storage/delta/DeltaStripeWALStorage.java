@@ -5,7 +5,6 @@ import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Table;
 import com.google.common.collect.Tables;
-import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
@@ -22,10 +21,12 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALPointer;
+import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -170,7 +171,7 @@ public class DeltaStripeWALStorage {
                                     WALKey key = new WALKey(keyBytes);
                                     WALValue partitionValue = partitionStore.get(key);
                                     if (partitionValue == null || partitionValue.getTimestampId() < row.value.getTimestampId()) {
-                                        WALTimestampId got = delta.getTimestampId(key);
+                                        WALTimestampId got = delta.getPointer(key);
                                         if (got == null || got.getTimestampId() < row.value.getTimestampId()) {
                                             delta.put(rowFP, wal.hydrateKeyValueHighwater(row));
                                             //TODO this makes the txId partially visible to takes, need to prevent operations until fully loaded
@@ -331,28 +332,32 @@ public class DeltaStripeWALStorage {
             DeltaWAL wal = deltaWAL.get();
             RowsChanged rowsChanged;
 
-            // only grabbing pointers means our removes and clobbers don't include the old values, but for now this is more efficient.
-            WALTimestampId[] currentTimestamps = getTimestamps(versionedPartitionName, storage, keys, values);
-            for (int i = 0; i < keys.size(); i++) {
-                WALKey key = keys.get(i);
-                WALTimestampId currentTimestamp = currentTimestamps[i];
-                WALValue update = values.get(i);
-                if (currentTimestamp == null) {
-                    apply.put(-1L, key, update);
-                    if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
-                        oldestAppliedTimestamp.set(update.getTimestampId());
+            getTimestamps(versionedPartitionName, storage, (KeyValueStream stream) -> {
+                for (int i = 0; i < keys.size(); i++) {
+                    WALKey key = keys.get(i);
+                    WALValue update = values.get(i);
+                    stream.stream(key, update);
+                }
+            }, (WALKey key, WALValue value, long currentTimestamp, boolean currentTombstoned, long currentFp) -> {
+
+                if (currentFp == -1) {
+                    apply.put(-1L, key, value);
+                    if (oldestAppliedTimestamp.get() > value.getTimestampId()) {
+                        oldestAppliedTimestamp.set(value.getTimestampId());
                     }
-                } else if (currentTimestamp.getTimestampId() < update.getTimestampId()) {
-                    apply.put(-1L, key, update);
-                    if (oldestAppliedTimestamp.get() > update.getTimestampId()) {
-                        oldestAppliedTimestamp.set(update.getTimestampId());
+                } else if (currentTimestamp < value.getTimestampId()) {
+                    apply.put(-1L, key, value);
+                    if (oldestAppliedTimestamp.get() > value.getTimestampId()) {
+                        oldestAppliedTimestamp.set(value.getTimestampId());
                     }
-                    clobbers.put(key, currentTimestamp);
-                    if (update.getTombstoned() && !currentTimestamp.getTombstoned()) {
-                        removes.put(key, currentTimestamp);
+                    WALTimestampId walTimestampId = new WALTimestampId(currentTimestamp, currentTombstoned);
+                    clobbers.put(key, walTimestampId);
+                    if (value.getTombstoned() && !currentTombstoned) {
+                        removes.put(key, walTimestampId);
                     }
                 }
-            }
+                return true;
+            });
 
             if (apply.isEmpty()) {
                 rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), HashBasedTable.create(), removes, clobbers, -1);
@@ -374,7 +379,7 @@ public class DeltaStripeWALStorage {
                         WALKey key = keyValueHighwater.key;
                         WALValue value = keyValueHighwater.value;
 
-                        WALTimestampId got = delta.getTimestampId(key);
+                        WALTimestampId got = delta.getPointer(key);
                         if (got == null || got.getTimestampId() < value.getTimestampId()) {
                             delta.put(fp, keyValueHighwater);
                         } else {
@@ -483,22 +488,30 @@ public class DeltaStripeWALStorage {
         return storage.containsKey(key);
     }
 
-    private WALTimestampId[] getTimestamps(VersionedPartitionName versionedPartitionName, WALStorage storage, List<WALKey> keys, List<WALValue> values) throws
-        Exception {
-        WALKey[] consumableKeys = keys.toArray(new WALKey[keys.size()]);
-        DeltaResult<WALTimestampId[]> deltas = getPartitionDelta(versionedPartitionName).getTimestampIds(consumableKeys);
-        if (deltas.missed) {
-            WALTimestampId[] timestamps = deltas.result;
-            WALPointer[] got = storage.getPointers(consumableKeys, values);
-            for (int i = 0; i < timestamps.length; i++) {
-                if (timestamps[i] == null && got[i] != null) {
-                    timestamps[i] = new WALTimestampId(got[i].getTimestampId(), got[i].getTombstoned());
+    private void getTimestamps(VersionedPartitionName versionedPartitionName,
+        WALStorage storage,
+        KeyValues keyValues,
+        WALKeyValuePointerStream stream) throws Exception {
+
+        storage.streamWALPointers((KeyValueStream storageStream) -> {
+            PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
+            partitionDelta.getPointers(keyValues, (WALKey key, WALValue value, long timestamp, boolean tombstoned, long fp) -> {
+                if (fp == -1) {
+                    storageStream.stream(key, value);
+                } else {
+                    stream.stream(key, value, timestamp, tombstoned, fp);
                 }
+                return true;
+            });
+        }, (WALKey key, WALValue value, long timestamp, boolean tombstoned, long fp) -> {
+            if (fp == -1) {
+                stream.stream(key, value, -1, false, -1);
+            } else {
+                stream.stream(key, value, timestamp, tombstoned, fp);
             }
-            return timestamps;
-        } else {
-            return deltas.result;
-        }
+            return true;
+        });
+
     }
 
     public void rangeScan(final VersionedPartitionName versionedPartitionName, RangeScannable<WALValue> rangeScannable, WALKey from, WALKey to,

@@ -17,18 +17,17 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.scan.RangeScannable;
+import com.jivesoftware.os.amza.shared.scan.RangeScannablePointers;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
-public interface WALIndex extends RangeScannable<WALPointer> {
+public interface WALIndex extends RangeScannablePointers {
 
-    void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception;
+    void merge(WALKeyPointers pointers, WALMergeKeyPointerStream stream) throws Exception;
 
-    WALPointer getPointer(WALKey key);
+    void getPointer(WALKey key, WALKeyPointerStream stream) throws Exception;
 
-    WALPointer[] getPointers(WALKey[] keys) throws Exception;
+    void getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception;
 
     List<Boolean> containsKey(List<WALKey> key) throws Exception;
 
@@ -54,7 +53,7 @@ public interface WALIndex extends RangeScannable<WALPointer> {
 
     interface CompactionWALIndex {
 
-        void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception;
+        void merge(WALKeyPointers pointers) throws Exception;
 
         void abort() throws Exception;
 

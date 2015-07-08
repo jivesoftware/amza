@@ -104,14 +104,18 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     public PartitionProperties getProperties(PartitionName partitionName) {
 
         return partitionProperties.computeIfAbsent(partitionName, (key) -> {
-            if (partitionName.isSystemPartition()) {
-                return coldstartSystemPartitionProperties(partitionName);
-            } else {
-                WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(new WALKey(partitionName.toBytes()));
-                if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
-                    return null;
+            try {
+                if (partitionName.isSystemPartition()) {
+                    return coldstartSystemPartitionProperties(partitionName);
+                } else {
+                    WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(new WALKey(partitionName.toBytes()));
+                    if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
+                        return null;
+                    }
+                    return partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
                 }
-                return partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         });
     }

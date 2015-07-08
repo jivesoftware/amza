@@ -17,11 +17,9 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.scan.Scan;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
  * @author jonathan.colt
@@ -29,18 +27,27 @@ import java.util.Map;
 public class NoOpWALIndex implements WALIndex {
 
     @Override
-    public void put(
-        Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception {
+    public void merge(WALKeyPointers pointers, WALMergeKeyPointerStream stream) throws Exception {
+        pointers.consume((WALKey key, long timestamp, boolean tombstoned, long fp) -> {
+            if (stream != null) {
+                if (!stream.stream(WALMergeKeyPointerStream.ignored, key, timestamp, tombstoned, fp)) {
+                    return false;
+                }
+            }
+            return true;
+        });
     }
 
     @Override
-    public WALPointer getPointer(WALKey key) {
-        return null;
+    public void getPointer(WALKey key, WALKeyPointerStream stream) throws Exception {
+        stream.stream(key, -1, false, -1);
     }
 
     @Override
-    public WALPointer[] getPointers(WALKey[] keys) throws Exception {
-        return new WALPointer[keys.length];
+    public void getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
+        keyValues.consume((WALKey key, WALValue value) -> {
+            return stream.stream(key, value, -1, false, -1);
+        });
     }
 
     @Override
@@ -83,8 +90,7 @@ public class NoOpWALIndex implements WALIndex {
     static class NoOpCompactionWALIndex implements CompactionWALIndex {
 
         @Override
-        public void put(
-            Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception {
+        public void merge(WALKeyPointers pointers) throws Exception {
         }
 
         @Override
@@ -97,11 +103,11 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(Scan<WALPointer> scan) throws Exception {
+    public void rowScan(WALKeyPointerStream stream) throws Exception {
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, Scan<WALPointer> scan) throws Exception {
+    public void rangeScan(WALKey from, WALKey to, WALKeyPointerStream stream) throws Exception {
     }
 
     @Override

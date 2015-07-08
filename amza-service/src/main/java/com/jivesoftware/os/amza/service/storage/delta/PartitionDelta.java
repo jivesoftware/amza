@@ -9,9 +9,10 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater
 import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
-import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -68,34 +69,28 @@ class PartitionDelta {
         return Optional.fromNullable(got.getTombstoned() ? null : deltaWAL.hydrate(got.getFp()).value);
     }
 
-    WALTimestampId getTimestampId(WALKey key) throws Exception {
+    WALPointer getPointer(WALKey key) throws Exception {
         WALPointer got = pointerIndex.get(key);
         if (got != null) {
-            return new WALTimestampId(got.getTimestampId(), got.getTombstoned());
+            return got;
         }
         PartitionDelta partitionDelta = compacting.get();
         if (partitionDelta != null) {
-            return partitionDelta.getTimestampId(key);
+            return partitionDelta.getPointer(key);
         }
         return null;
     }
 
-    DeltaResult<WALTimestampId[]> getTimestampIds(WALKey[] consumableKeys) throws Exception {
-        boolean missed = false;
-        WALTimestampId[] result = new WALTimestampId[consumableKeys.length];
-        for (int i = 0; i < consumableKeys.length; i++) {
-            WALKey key = consumableKeys[i];
-            if (key != null) {
-                WALTimestampId got = getTimestampId(key);
-                if (got != null) {
-                    result[i] = got;
-                    consumableKeys[i] = null;
-                } else {
-                    missed = true;
-                }
+    void getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
+        keyValues.consume((WALKey key, WALValue value) -> {
+            WALPointer got = getPointer(key);
+            if (got != null) {
+                stream.stream(key, value, got.getTimestampId(), got.getTombstoned(), got.getFp());
+            } else {
+                stream.stream(key, value, -1, false, -1);
             }
-        }
-        return new DeltaResult<>(missed, result);
+            return true;
+        });
     }
 
     DeltaResult<List<WALValue>> get(List<WALKey> keys) throws Exception {
@@ -217,7 +212,7 @@ class PartitionDelta {
     void appendTxFps(long rowTxId, long rowFP) {
         long[] fps = txIdWAL.get(rowTxId);
         if (fps == null) {
-            fps = new long[] { rowFP };
+            fps = new long[]{rowFP};
             txIdWAL.put(rowTxId, fps);
         } else {
             long[] swap = new long[fps.length + 1];
@@ -271,8 +266,8 @@ class PartitionDelta {
         if (compact != null) {
             if (!compact.txIdWAL.isEmpty()) {
                 try {
-                    final PartitionStore partitionStore = partitionIndex.get(compact.versionedPartitionName);
-                    final long highestTxId = partitionStore.highestTxId();
+                    PartitionStore partitionStore = partitionIndex.get(compact.versionedPartitionName);
+                    long highestTxId = partitionStore.highestTxId();
                     LOG.info("Merging ({}) deltas for partition: {} from tx: {}", compact.orderedIndex.size(), compact.versionedPartitionName, highestTxId);
                     LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
                     MutableBoolean eos = new MutableBoolean(false);

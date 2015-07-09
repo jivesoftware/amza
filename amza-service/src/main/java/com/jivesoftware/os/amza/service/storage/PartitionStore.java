@@ -20,8 +20,8 @@ import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 
@@ -72,8 +72,8 @@ public class PartitionStore implements RangeScannable {
     }
 
     // TODO keyValues sucks need Keys and KeyStream
-    public boolean get(KeyValues keyValues, KeyValueStream stream) throws Exception {
-        return walStorage.get(keyValues, stream);
+    public boolean get(WALKeys keys, KeyValueStream stream) throws Exception {
+        return walStorage.get(keys, stream);
     }
 
     public boolean containsKey(WALKey key) throws Exception {

@@ -30,10 +30,10 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeyStream;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -112,9 +112,9 @@ public class SystemPartition implements AmzaPartitionAPI {
     @Override
     public boolean get(Iterable<WALKey> keys, TimestampKeyValueStream valuesStream) throws Exception {
 
-        return systemWALStorage.get(versionedPartitionName, (KeyValueStream stream) -> {
+        return systemWALStorage.get(versionedPartitionName, (WALKeyStream stream) -> {
             for (WALKey key : keys) {
-                if (!stream.stream(key.getKey(), null, -1, false)) {
+                if (!stream.stream(key.getKey())) {
                     return false;
                 }
             }

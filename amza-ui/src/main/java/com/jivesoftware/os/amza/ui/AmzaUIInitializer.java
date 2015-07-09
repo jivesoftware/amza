@@ -72,7 +72,7 @@ public class AmzaUIInitializer {
                 new AmzaInspectPluginRegion("soy.page.amzaInspectPluginRegion", renderer, amzaService)),
             new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
                 MetricsPluginEndpoints.class,
-                new MetricsPluginRegion("soy.page.metricsPluginRegion","soy.page.partitionMetricsPluginRegion",
+                new MetricsPluginRegion("soy.page.metricsPluginRegion", "soy.page.partitionMetricsPluginRegion",
                     "soy.page.amzaStats", renderer, amzaService.getRingReader(), amzaService, amzaStats)),
             new ManagePlugin("compressed", "Compactions", "/amza/ui/compactions",
                 CompactionsPluginEndpoints.class,

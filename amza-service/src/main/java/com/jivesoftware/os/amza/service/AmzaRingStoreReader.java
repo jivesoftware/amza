@@ -105,7 +105,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             return ringIndex.rangeScan(from, from.prefixUpperExclusive(), (key, value, valueTimestamp, valueTombstone) -> {
                 if (!valueTombstone) {
                     RingMember ringMember = keyToRingMember(key);
-                    return stream.stream(ringMember.toBytes(), null, -1, false);
+                    return stream.stream(ringMember.toBytes());
                 } else {
                     return true;
                 }

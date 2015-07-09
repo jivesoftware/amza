@@ -35,6 +35,7 @@ import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALMergeKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
@@ -273,7 +274,7 @@ public class WALStorage implements RangeScannable {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMPACTION_HINTS_KEY,
                 newCount.get(),
                 clobberCount.get()
@@ -284,9 +285,9 @@ public class WALStorage implements RangeScannable {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId}));
+                indexCommitedUpToTxId }));
         }
     }
 
@@ -558,11 +559,11 @@ public class WALStorage implements RangeScannable {
         }
     }
 
-    public boolean get(KeyValues keyValues, KeyValueStream keyValueStream) throws Exception {
+    public boolean get(WALKeys keys, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().getPointers(keyValues,
-                (key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+            return walIndex.get().getPointers(keys,
+                (key, pointerTimestamp, pointerTombstoned, pointerFp) -> {
                     if (pointerFp != -1 && !pointerTombstoned) {
                         return keyValueStream.stream(key, hydrateRowIndexValue(pointerFp), pointerTimestamp, pointerTombstoned);
                     } else {

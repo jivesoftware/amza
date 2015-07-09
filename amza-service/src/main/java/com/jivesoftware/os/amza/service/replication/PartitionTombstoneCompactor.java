@@ -23,7 +23,7 @@ public class PartitionTombstoneCompactor {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private ScheduledExecutorService scheduledThreadPool;
-    
+
     private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
@@ -75,7 +75,7 @@ public class PartitionTombstoneCompactor {
         }
     }
 
-     public void stop() throws Exception {
+    public void stop() throws Exception {
         this.scheduledThreadPool.shutdownNow();
         this.scheduledThreadPool = null;
     }
@@ -87,7 +87,7 @@ public class PartitionTombstoneCompactor {
     public void compactTombstone(int stripe, int numberOfStripes, long removeTombstonedOlderThanTimestampId) throws Exception {
 
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
-            if ((int)Math.abs((long)versionedPartitionName.getPartitionName().hashCode()) % numberOfStripes == stripe) {
+            if (Math.abs(versionedPartitionName.getPartitionName().hashCode() % numberOfStripes) == stripe) {
 
                 long ttlTimestampId = 0;
                 PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());

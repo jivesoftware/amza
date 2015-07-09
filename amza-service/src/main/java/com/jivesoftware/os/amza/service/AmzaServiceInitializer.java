@@ -75,7 +75,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[]{"./var/data/"};
+        public String[] workingDirectories = new String[] { "./var/data/" };
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -191,7 +191,7 @@ public class AmzaServiceInitializer {
                 primaryRowMarshaller, highwaterRowMarshaller,
                 (versionedPartitionName) -> {
                     if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
-                        return Math.abs((long) versionedPartitionName.getPartitionName().hashCode()) % deltaStorageStripes == stripeId;
+                        return Math.abs(versionedPartitionName.getPartitionName().hashCode() % deltaStorageStripes) == stripeId;
                     }
                     return false;
                 });
@@ -243,10 +243,10 @@ public class AmzaServiceInitializer {
                             partitionStripe.compact(false);
                         }
                         Object awakeCompactionLock = partitionStripe.getAwakeCompactionLock();
-                        synchronized(awakeCompactionLock) {
+                        synchronized (awakeCompactionLock) {
                             awakeCompactionLock.wait(config.deltaStripeCompactionIntervalInMillis);
                         }
-                        
+
                     } catch (Throwable x) {
                         LOG.error("Compactor failed.", x);
                     }

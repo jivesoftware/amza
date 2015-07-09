@@ -100,7 +100,7 @@ public class MemoryWALIndex implements WALIndex {
         List<Boolean> contains = new ArrayList<>(keys.size());
         for (WALKey key : keys) {
             WALPointer got = index.get(key);
-            contains.add(got == null ? false : !got.getTombstoned());
+            contains.add(got != null && !got.getTombstoned());
         }
         return contains;
     }
@@ -126,6 +126,11 @@ public class MemoryWALIndex implements WALIndex {
         } else {
             return stream.stream(key, value, valueTimestamp, valueTombstoned, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
         }
+    }
+
+    @Override
+    public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
+        return keys.consume(key -> stream(key, index.get(new WALKey(key)), stream));
     }
 
     @Override

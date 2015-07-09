@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeyPointers;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALMergeKeyPointerStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -160,6 +161,27 @@ public class BerkeleyDBWALIndex implements WALIndex {
             } else {
                 return stream.stream(key, -1, false, -1);
             }
+        } finally {
+            lock.release();
+        }
+    }
+
+    @Override
+    public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
+        lock.acquire();
+        try {
+            DatabaseEntry dbKey = new DatabaseEntry();
+            DatabaseEntry dpPointerValue = new DatabaseEntry();
+
+            return keys.consume((byte[] key) -> {
+                dbKey.setData(key);
+                OperationStatus status = database.get(null, dbKey, dpPointerValue, LockMode.READ_UNCOMMITTED);
+                if (status == OperationStatus.SUCCESS) {
+                    return entryToWALPointer(key, dpPointerValue.getData(), stream);
+                } else {
+                    return stream.stream(key, -1, false, -1);
+                }
+            });
         } finally {
             lock.release();
         }
@@ -319,7 +341,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     if (!entryToWALPointer(keyEntry.getData(), valueEntry.getData(), stream)) {
                         return false;
                     }
-                } while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                }
+                while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
             }
             return true;
         } finally {

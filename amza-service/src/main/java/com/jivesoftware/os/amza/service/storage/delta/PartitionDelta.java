@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -69,12 +70,10 @@ class PartitionDelta {
         return deltaWAL.hydrate(got.getFp(), stream);
     }
 
-    boolean get(KeyValues keyValues, KeyValueStream stream) throws Exception {
-        return keyValues.consume((key, value, valueTimestamp, valueTombstone) -> {
-            return getRawValue(key, (fp, key1, value1, valueTimestamp1, valueTombstone1, highwater) -> {
-                return stream.stream(key, value1, valueTimestamp1, valueTombstone1);
-            });
-        });
+    boolean get(WALKeys keys, KeyValueStream stream) throws Exception {
+        return keys.consume((key) ->
+            getRawValue(key, (fp, key1, value1, valueTimestamp1, valueTombstone1, highwater) ->
+                stream.stream(key, value1, valueTimestamp1, valueTombstone1)));
     }
 
     WALPointer getPointer(byte[] key) throws Exception {

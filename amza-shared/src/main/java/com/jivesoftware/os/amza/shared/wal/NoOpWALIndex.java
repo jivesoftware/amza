@@ -1,18 +1,3 @@
-/*
- * Copyright 2015 jonathan.colt.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
@@ -44,10 +29,14 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
+    public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
+        return keys.consume(key -> stream.stream(key, -1, false, -1));
+    }
+
+    @Override
     public boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) -> {
-            return stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1);
-        });
+        return keyValues.consume((key, value, valueTimestamp, valueTombstoned) ->
+            stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1));
     }
 
     @Override

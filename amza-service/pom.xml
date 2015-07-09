@@ -52,10 +52,6 @@
             <artifactId>io</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.jivesoftware.os.filer</groupId>
-            <artifactId>map-store</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>

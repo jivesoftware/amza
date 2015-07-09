@@ -274,7 +274,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         long cacheAdds = amzaStats.deltaValueCacheAdds.get();
         long cacheRemoves = amzaStats.deltaValueCacheRemoves.get();
         double addRemoveRatio = ((double) cacheAdds / (double) cacheRemoves) * 100;
-        sb.append(progress("Delta Value Cache Add/Remove (" + cacheAdds+"/"+cacheRemoves + ")",
+        sb.append(progress("Delta Value Cache Add/Remove (" + cacheAdds + "/" + cacheRemoves + ")",
             (int) (addRemoveRatio), String.valueOf(addRemoveRatio) + " ratio"));
 
         sb.append(progress("Active Long Polls (" + amzaStats.availableRowsStream.get() + ")",
@@ -313,7 +313,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

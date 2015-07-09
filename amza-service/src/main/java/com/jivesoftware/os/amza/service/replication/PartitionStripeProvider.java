@@ -20,12 +20,12 @@ public class PartitionStripeProvider {
 
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "No systems allowed.");
-        int stripeIndex = (int)Math.abs((long)partitionName.hashCode()) % deltaStripes.length;
+        int stripeIndex = Math.abs(partitionName.hashCode() % deltaStripes.length);
         return tx.tx(deltaStripes[stripeIndex], highwaterStorages[stripeIndex]);
     }
 
     public void flush(PartitionName partitionName, boolean hardFlush) throws Exception {
-        int stripeIndex = (int)Math.abs((long)partitionName.hashCode()) % deltaStripes.length;
+        int stripeIndex = Math.abs(partitionName.hashCode() % deltaStripes.length);
         highwaterStorages[stripeIndex].flush(() -> {
             deltaStripes[stripeIndex].flush(hardFlush);
             return null;

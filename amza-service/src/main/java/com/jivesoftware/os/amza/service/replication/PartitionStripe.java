@@ -22,11 +22,11 @@ import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -150,13 +150,13 @@ public class PartitionStripe {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
                     return storage.get(versionedPartitionName, partitionStore.getWalStorage(), (stream) -> {
-                        return stream.stream(key, null, -1, false);
+                        return stream.stream(key);
                     }, keyValueStream);
                 }
             });
     }
 
-    public boolean get(PartitionName partitionName, KeyValues keyValues, TimestampKeyValueStream stream) throws Exception {
+    public boolean get(PartitionName partitionName, WALKeys keys, TimestampKeyValueStream stream) throws Exception {
         return txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -166,7 +166,7 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    return storage.get(versionedPartitionName, partitionStore.getWalStorage(), keyValues, stream);
+                    return storage.get(versionedPartitionName, partitionStore.getWalStorage(), keys, stream);
                 }
             });
     }

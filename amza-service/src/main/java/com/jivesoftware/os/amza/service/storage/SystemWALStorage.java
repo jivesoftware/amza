@@ -15,9 +15,9 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 
@@ -61,9 +61,9 @@ public class SystemWALStorage {
         return partitionIndex.get(versionedPartitionName).get(key);
     }
 
-    public boolean get(VersionedPartitionName versionedPartitionName, KeyValues keyValues, TimestampKeyValueStream stream) throws Exception {
+    public boolean get(VersionedPartitionName versionedPartitionName, WALKeys keys, TimestampKeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).get(keyValues, (key, value, valueTimestamp, valueTombstone) -> {
+        return partitionIndex.get(versionedPartitionName).get(keys, (key, value, valueTimestamp, valueTombstone) -> {
             if (value == null || valueTombstone) {
                 return stream.stream(key, null, -1);
             } else {

@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -473,7 +474,7 @@ public class DeltaStripeWALStorage {
     public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, byte[] key) throws Exception {
         WALValue[] walValue = new WALValue[1];
         get(versionedPartitionName, storage, (stream) -> {
-            return stream.stream(key, null, -1, false);
+            return stream.stream(key);
         }, (byte[] key1, byte[] value, long timestamp) -> {
             if (value != null) {
                 walValue[0] = new WALValue(value, timestamp, false);
@@ -483,31 +484,30 @@ public class DeltaStripeWALStorage {
         return walValue[0];
     }
 
-    public boolean get(VersionedPartitionName versionedPartitionName, WALStorage storage, KeyValues keyValues, TimestampKeyValueStream stream) throws Exception {
+    public boolean get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKeys keys, TimestampKeyValueStream stream) throws Exception {
         acquireOne();
         try {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
-            return storage.get((storageStream) -> {
-
-                return partitionDelta.get(keyValues, (key, value, valueTimestamp, valueTombstoned) -> {
-                    if (value == null) {
-                        return storageStream.stream(key, null, -1, false);
-                    } else {
-                        if (valueTombstoned) {
-                            return stream.stream(key, null, -1);
+            return storage.get(
+                (storageStream) ->
+                    partitionDelta.get(keys, (key, value, valueTimestamp, valueTombstoned) -> {
+                        if (value == null) {
+                            return storageStream.stream(key);
                         } else {
-                            return stream.stream(key, value, valueTimestamp);
+                            if (valueTombstoned) {
+                                return stream.stream(key, null, -1);
+                            } else {
+                                return stream.stream(key, value, valueTimestamp);
+                            }
                         }
+                    }),
+                (key, value, valueTimestamp, valueTombstoned) -> {
+                    if (valueTombstoned) {
+                        return stream.stream(key, null, -1);
+                    } else {
+                        return stream.stream(key, value, valueTimestamp);
                     }
                 });
-
-            }, (key, value, valueTimestamp, valueTombstoned) -> {
-                if (valueTombstoned) {
-                    return stream.stream(key, null, -1);
-                } else {
-                    return stream.stream(key, value, valueTimestamp);
-                }
-            });
         } finally {
             releaseOne();
         }
@@ -535,12 +535,12 @@ public class DeltaStripeWALStorage {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
             return partitionDelta.getPointers(keyValues, (key, value, valueTimestamp, valueTombstoned,
                 pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                    if (pointerFp == -1) {
-                        return storageStream.stream(key, value, valueTimestamp, valueTombstoned);
-                    } else {
-                        return stream.stream(key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp);
-                    }
-                });
+                if (pointerFp == -1) {
+                    return storageStream.stream(key, value, valueTimestamp, valueTombstoned);
+                } else {
+                    return stream.stream(key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp);
+                }
+            });
         }, (key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp) -> {
             if (pointerFp == -1) {
                 return stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1);

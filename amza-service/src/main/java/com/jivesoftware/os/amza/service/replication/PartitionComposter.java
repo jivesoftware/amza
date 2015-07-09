@@ -58,7 +58,7 @@ public class PartitionComposter {
                 LOG.debug("Failing to compact tombstones.", x);
 
             }
-        }, 0, 1, TimeUnit.MINUTES);// TODO config
+        }, 0, 1, TimeUnit.MINUTES); // TODO config
     }
 
     public void stop() throws Exception {

@@ -27,6 +27,8 @@ public interface WALIndex extends RangeScannablePointers {
 
     boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception;
 
+    boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception;
+
     boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception;
 
     List<Boolean> containsKey(List<WALKey> key) throws Exception;

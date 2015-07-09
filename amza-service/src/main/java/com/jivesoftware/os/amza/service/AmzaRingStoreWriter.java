@@ -92,20 +92,20 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (PartitionProvider.RING_INDEX.equals(changes.getVersionedPartitionName())) {
             for (WALKey key : changes.getApply().columnKeySet()) {
                 ringSizes.remove(ringStoreReader.keyToRingName(key));
-                ringMemberRingNamesCache.remove(ringStoreReader.keyToRingMember(key));
+                ringMemberRingNamesCache.remove(ringStoreReader.keyToRingMember(key.getKey()));
             }
         }
     }
 
     @Override
     public void register(RingMember ringMember, RingHost ringHost) throws Exception {
-        WALValue registeredHost = systemWALStorage.get(PartitionProvider.NODE_INDEX, new WALKey(ringMember.toBytes()));
+        WALValue registeredHost = systemWALStorage.get(PartitionProvider.NODE_INDEX, ringMember.toBytes());
         if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
             return;
         }
         systemWALStorage.update(PartitionProvider.NODE_INDEX,
             (highwater, scan) -> {
-                scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(ringHost.toBytes(), orderIdProvider.nextId(), false));
+                return scan.row(-1, ringMember.toBytes(), ringHost.toBytes(), orderIdProvider.nextId(), false);
             }, walUpdated);
         LOG.info("register ringMember:{} as ringHost:{}", ringMember, ringHost);
     }
@@ -114,13 +114,13 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     public void deregister(RingMember ringMember) throws Exception {
         systemWALStorage.update(PartitionProvider.NODE_INDEX,
             (highwater, scan) -> {
-                scan.row(-1, new WALKey(ringMember.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
+                return scan.row(-1, ringMember.toBytes(), null, orderIdProvider.nextId(), true);
             }, walUpdated);
         LOG.info("deregister ringMember:{}");
     }
 
     public RingHost getRingHost() throws Exception {
-        WALValue registeredHost = systemWALStorage.get(PartitionProvider.NODE_INDEX, new WALKey(ringStoreReader.getRingMember().toBytes()));
+        WALValue registeredHost = systemWALStorage.get(PartitionProvider.NODE_INDEX, ringStoreReader.getRingMember().toBytes());
         if (registeredHost != null) {
             return RingHost.fromBytes(registeredHost.getValue());
         } else {
@@ -168,7 +168,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     public void addRingMember(String ringName, RingMember ringMember) throws Exception {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
-        final WALKey key = ringStoreReader.key(ringName, ringMember);
+        byte[] key = ringStoreReader.key(ringName, ringMember);
         WALValue had = systemWALStorage.get(PartitionProvider.RING_INDEX, key);
         if (had == null || had.getTombstoned()) {
             NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(ringName);
@@ -185,8 +185,11 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
             (highwater, scan) -> {
                 long timestamp = orderIdProvider.nextId();
                 for (RingMember member : members) {
-                    scan.row(-1, ringStoreReader.key(ringName, member), new WALValue(new byte[0], timestamp, false));
+                    if (!scan.row(-1, ringStoreReader.key(ringName, member), new byte[0], timestamp, false)) {
+                        return false;
+                    }
                 }
+                return true;
             }, walUpdated);
         ringSizes.remove(ringName);
 
@@ -197,12 +200,12 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     public void removeRingMember(String ringName, RingMember ringMember) throws Exception {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
-        final WALKey key = ringStoreReader.key(ringName, ringMember);
+        byte[] key = ringStoreReader.key(ringName, ringMember);
         WALValue had = systemWALStorage.get(PartitionProvider.RING_INDEX, key);
         if (had != null) {
             systemWALStorage.update(PartitionProvider.RING_INDEX,
                 (highwater, scan) -> {
-                    scan.row(-1, key, new WALValue(null, orderIdProvider.nextId(), true));
+                    return scan.row(-1, key, null, orderIdProvider.nextId(), true);
                 }, walUpdated);
         }
     }

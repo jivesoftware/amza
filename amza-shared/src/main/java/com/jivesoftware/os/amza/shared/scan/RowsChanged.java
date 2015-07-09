@@ -23,7 +23,7 @@ import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Map;
 
-public class RowsChanged implements Commitable<WALValue> {
+public class RowsChanged implements Commitable {
 
     private final VersionedPartitionName versionedPartitionName;
     private final long oldestApply;
@@ -77,16 +77,18 @@ public class RowsChanged implements Commitable<WALValue> {
     }
 
     @Override
-    public void commitable(Highwaters highwaters, Scan<WALValue> scan) {
+    public boolean commitable(Highwaters highwaters, TxKeyValueStream scan) {
         for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {
             try {
-                if (!scan.row(cell.getRowKey(), cell.getColumnKey(), cell.getValue())) {
-                    break;
+                WALValue value = cell.getValue();
+                if (!scan.row(cell.getRowKey(), cell.getColumnKey().getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+                    return false;
                 }
             } catch (Throwable ex) {
                 throw new RuntimeException("Error while streaming entry set.", ex);
             }
         }
+        return true;
     }
 
     public long getLargestCommittedTxId() {

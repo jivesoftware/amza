@@ -52,35 +52,37 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(WALKeyPointerStream stream) throws Exception {
+    public boolean rowScan(WALKeyPointerStream stream) throws Exception {
         for (Entry<WALKey, WALPointer> e : index.entrySet()) {
             WALKey key = e.getKey();
             WALPointer rowPointer = e.getValue();
-            if (!stream.stream(key, rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
-                break;
+            if (!stream.stream(key.getKey(), rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
+                return false;
             }
         }
+        return true;
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, WALKeyPointerStream stream) throws Exception {
+    public boolean rangeScan(WALKey from, WALKey to, WALKeyPointerStream stream) throws Exception {
         if (to == null) {
             for (Entry<WALKey, WALPointer> e : index.tailMap(from, true).entrySet()) {
                 WALKey key = e.getKey();
                 WALPointer rowPointer = e.getValue();
-                if (!stream.stream(key, rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
-                    break;
+                if (!stream.stream(key.getKey(), rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
+                    return false;
                 }
             }
         } else {
             for (Entry<WALKey, WALPointer> e : index.subMap(from, to).entrySet()) {
                 WALKey key = e.getKey();
                 WALPointer rowPointer = e.getValue();
-                if (!stream.stream(key, rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
-                    break;
+                if (!stream.stream(key.getKey(), rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getFp())) {
+                    return false;
                 }
             }
         }
+        return true;
     }
 
     @Override
@@ -104,50 +106,51 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void getPointer(WALKey key, WALKeyPointerStream stream) throws Exception {
-        stream(key, index.get(key), stream);
+    public boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception {
+        WALPointer got = index.get(new WALKey(key));
+        return stream(key, got, stream);
     }
 
-    private void stream(WALKey key, WALPointer pointer, WALKeyPointerStream stream) throws Exception {
+    private boolean stream(byte[] key, WALPointer pointer, WALKeyPointerStream stream) throws Exception {
         if (pointer == null) {
-            stream.stream(key, -1, false, -1);
+            return stream.stream(key, -1, false, -1);
         } else {
-            stream.stream(key, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
+            return stream.stream(key, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
         }
     }
 
-    private void stream(WALKey key, WALValue value, WALPointer pointer, WALKeyValuePointerStream stream) throws Exception {
+    private boolean stream(byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, WALPointer pointer, WALKeyValuePointerStream stream) throws
+        Exception {
         if (pointer == null) {
-            stream.stream(key, value, -1, false, -1);
+            return stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1);
         } else {
-            stream.stream(key, value, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
+            return stream.stream(key, value, valueTimestamp, valueTombstoned, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
         }
     }
 
     @Override
-    public void getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
-        keyValues.consume((WALKey key, WALValue value) -> {
-            WALPointer pointer = index.get(key);
+    public boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
+        return keyValues.consume((byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) -> {
+            WALPointer pointer = index.get(new WALKey(key));
             if (pointer != null) {
-                stream(key, value, pointer, stream);
+                return stream(key, value, valueTimestamp, valueTombstoned, pointer, stream);
             } else {
-                stream(key, value, null, stream);
+                return stream(key, value, valueTimestamp, valueTombstoned, null, stream);
             }
-            return true;
         });
     }
 
     @Override
     public void merge(WALKeyPointers pointers, WALMergeKeyPointerStream stream) throws Exception {
-        pointers.consume((WALKey key, long timestamp, boolean tombstoned, long fp) -> {
+        pointers.consume((byte[] key, long timestamp, boolean tombstoned, long fp) -> {
             merge(key, timestamp, tombstoned, fp, stream);
             return true;
         });
     }
 
-    private void merge(WALKey key, long timestamp, boolean tombstoned, long fp, WALMergeKeyPointerStream stream) throws Exception {
+    private void merge(byte[] key, long timestamp, boolean tombstoned, long fp, WALMergeKeyPointerStream stream) throws Exception {
         byte[] mode = new byte[1];
-        WALPointer compute = index.compute(key, (WALKey existingKey, WALPointer existingPointer) -> {
+        WALPointer compute = index.compute(new WALKey(key), (WALKey existingKey, WALPointer existingPointer) -> {
             if (existingPointer == null || timestamp > existingPointer.getTimestampId()) {
                 mode[0] = (existingPointer == null) ? WALMergeKeyPointerStream.added : WALMergeKeyPointerStream.clobbered;
                 return new WALPointer(fp, timestamp, tombstoned);

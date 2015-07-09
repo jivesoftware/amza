@@ -6,6 +6,6 @@ package com.jivesoftware.os.amza.shared.wal;
  */
 public interface KeyValues {
 
-    void consume(KeyValueStream stream) throws Exception;
+    boolean consume(KeyValueStream stream) throws Exception;
 
 }

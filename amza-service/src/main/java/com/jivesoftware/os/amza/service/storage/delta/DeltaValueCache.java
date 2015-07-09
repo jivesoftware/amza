@@ -1,14 +1,9 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
 import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import java.lang.ref.WeakReference;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -16,8 +11,6 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  */
 public class DeltaValueCache {
-
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaStats amzaStats;
     private final long maxValueCacheSizeInBytes;
@@ -30,9 +23,14 @@ public class DeltaValueCache {
         this.maxValueCacheSizeInBytes = maxValueCacheSizeInBytes;
     }
 
-    public void put(long fp, KeyValueHighwater keyValueHighwater, StripedTLongObjectMap<DeltaRow> rowMap) {
-        WALKey key = keyValueHighwater.key;
-        WALValue value = keyValueHighwater.value;
+    public void put(long fp,
+        byte[] key,
+        byte[] value,
+        long valueTimestamp,
+        boolean valueTombstone,
+        WALHighwater highwater,
+        StripedTLongObjectMap<DeltaRow> rowMap) {
+
         long rowSize = rowSize(key, value);
         long cacheSize = valueCacheSize.addAndGet(rowSize);
         while (cacheSize > maxValueCacheSizeInBytes) {
@@ -41,20 +39,20 @@ public class DeltaValueCache {
                 throw new IllegalStateException("Failed to evict from delta value cache, maths are hard");
             }
             poll.remove();
-            long pollSize = rowSize(poll.keyValueHighwater.key, poll.keyValueHighwater.value);
+            long pollSize = rowSize(poll.key, poll.value);
             cacheSize = valueCacheSize.addAndGet(-pollSize);
             amzaStats.deltaValueCacheRemoves.incrementAndGet();
         }
         amzaStats.deltaValueCacheUtilization.set((double) cacheSize / (double) maxValueCacheSizeInBytes);
 
-        DeltaRow deltaRow = new DeltaRow(fp, keyValueHighwater, rowMap);
+        DeltaRow deltaRow = new DeltaRow(fp, key, value, valueTimestamp, valueTombstone, highwater, new WeakReference<>(rowMap));
         rowMap.put(fp, deltaRow);
         rowQueue.add(deltaRow);
         amzaStats.deltaValueCacheAdds.incrementAndGet();
     }
 
-    private long rowSize(WALKey key, WALValue value) {
-        return (long) (key.getKey().length) + (long) (value.getValue() != null ? value.getValue().length : 0);
+    private long rowSize(byte[] key, byte[] value) {
+        return (long) (key.length) + (long) (value != null ? value.length : 0);
     }
 
     public DeltaRow get(long fp, StripedTLongObjectMap<DeltaRow> rowMap) {
@@ -70,15 +68,22 @@ public class DeltaValueCache {
     public static class DeltaRow {
 
         public final long fp;
-        public final KeyValueHighwater keyValueHighwater;
+        public final byte[] key;
+        public final byte[] value;
+        public final long valueTimestamp;
+        public final boolean valueTombstone;
+        public final WALHighwater highwater;
         public final WeakReference<StripedTLongObjectMap<DeltaRow>> rowMapRef;
 
-        public DeltaRow(long fp,
-            KeyValueHighwater keyValueHighwater,
-            StripedTLongObjectMap<DeltaRow> rowMap) {
+        public DeltaRow(long fp, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstone, WALHighwater highwater,
+            WeakReference<StripedTLongObjectMap<DeltaRow>> rowMapRef) {
             this.fp = fp;
-            this.keyValueHighwater = keyValueHighwater;
-            this.rowMapRef = new WeakReference<>(rowMap);
+            this.key = key;
+            this.value = value;
+            this.valueTimestamp = valueTimestamp;
+            this.valueTombstone = valueTombstone;
+            this.highwater = highwater;
+            this.rowMapRef = rowMapRef;
         }
 
         public void remove() {

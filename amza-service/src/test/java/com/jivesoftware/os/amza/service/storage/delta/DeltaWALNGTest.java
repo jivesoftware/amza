@@ -13,8 +13,8 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -47,48 +47,55 @@ public class DeltaWALNGTest {
         }
         DeltaWAL.DeltaWALApplied update1 = deltaWAL.update(versionedPartitionName, apply1, null);
         for (DeltaWAL.KeyValueHighwater kvh : update1.keyValueHighwaters) {
-            System.out.println("update1 k=" + new String(kvh.key.getKey()) + " v=" + kvh.value);
+            System.out.println("update1 k=" + new String(kvh.key) + " v=" + new WALValue(kvh.value, kvh.valueTimestamp, kvh.valueTombstone));
         }
 
         Map<WALKey, WALValue> apply2 = Maps.newLinkedHashMap();
         for (int i = 0; i < 10; i++) {
             apply2.put(new WALKey((i + "k").getBytes()), new WALValue((i + "v").getBytes(), ids.nextId(), false));
         }
-        DeltaWAL.DeltaWALApplied update2 = deltaWAL.update(versionedPartitionName, apply1, null);
+        DeltaWAL.DeltaWALApplied update2 = deltaWAL.update(versionedPartitionName, apply2, null);
         for (DeltaWAL.KeyValueHighwater kvh : update2.keyValueHighwaters) {
-            System.out.println("update2 k=" + new String(kvh.key.getKey()) + " v=" + kvh.value);
+            System.out.println("update2 k=" + new String(kvh.key) + " v=" + new WALValue(kvh.value, kvh.valueTimestamp, kvh.valueTombstone));
         }
 
         deltaWAL.load((long rowFP, long rowTxId, RowType rowType, byte[] rawRow) -> {
             if (rowType == RowType.primary) {
-                WALRow row = primaryRowMarshaller.fromRow(rawRow);
-                ByteBuffer bb = ByteBuffer.wrap(row.key.getKey());
-                byte[] partitionNameBytes = new byte[bb.getShort()];
-                bb.get(partitionNameBytes);
-                byte[] keyBytes = new byte[bb.getInt()];
-                bb.get(keyBytes);
+                primaryRowMarshaller.fromRow(rawRow, (key, value, valueTimestamp, valueTombstoned) -> {
+                    ByteBuffer bb = ByteBuffer.wrap(key);
+                    byte[] partitionNameBytes = new byte[bb.getShort()];
+                    bb.get(partitionNameBytes);
+                    byte[] keyBytes = new byte[bb.getInt()];
+                    bb.get(keyBytes);
 
-                System.out.println("rfp=" + rowFP + " rid" + rowTxId + " rt=" + rowType
-                    + " key=" + new String(keyBytes) + " value=" + new String(row.value.getValue())
-                    + " ts=" + row.value.getTimestampId() + " tombstone=" + row.value.getTombstoned());
+                    System.out.println("rfp=" + rowFP + " rid" + rowTxId + " rt=" + rowType
+                        + " key=" + new String(keyBytes) + " value=" + new String(value)
+                        + " ts=" + valueTimestamp + " tombstone=" + valueTombstoned);
+                    return true;
+                });
             }
             return true;
         });
 
         for (int i = 0; i < update1.fps.length; i++) {
             DeltaWAL.KeyValueHighwater kvh = update1.keyValueHighwaters[i];
-            System.out.println("hydrate k=" + new String(kvh.key.getKey()) + " v=" + kvh.value);
-            WALValue hydrate = deltaWAL.hydrate(update1.fps[i]).value;
-            System.out.println(new String(hydrate.getValue()));
-            Assert.assertEquals(hydrate.getValue(), apply1.get(kvh.key).getValue());
+            System.out.println(update1.fps[i] + " hydrate k=" + new String(kvh.key) + " v=" + new WALValue(kvh.value, kvh.valueTimestamp, kvh.valueTombstone));
+            deltaWAL.hydrate(update1.fps[i], (long fp, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstone, WALHighwater highwater) -> {
+                System.out.println(fp + " hydrated:" + new WALValue(value, valueTimestamp, valueTombstone));
+                Assert.assertEquals(new WALValue(value, valueTimestamp, valueTombstone), apply1.get(new WALKey(kvh.key)));
+                return true;
+            });
         }
 
         for (int i = 0; i < update2.fps.length; i++) {
             DeltaWAL.KeyValueHighwater kvh = update2.keyValueHighwaters[i];
-            System.out.println("hydrate k=" + new String(kvh.key.getKey()) + " v=" + kvh.value);
-            WALValue hydrate = deltaWAL.hydrate(update2.fps[i]).value;
-            System.out.println(new String(hydrate.getValue()));
-            Assert.assertEquals(hydrate.getValue(), apply2.get(kvh.key).getValue());
+            System.out.println(update2.fps[i] + " hydrate k=" + new String(kvh.key) + " v=" + new WALValue(kvh.value, kvh.valueTimestamp, kvh.valueTombstone));
+            deltaWAL.hydrate(update2.fps[i], (long fp, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstone, WALHighwater highwater) -> {
+                System.out.println(fp + " hydrated:" + new WALValue(value, valueTimestamp, valueTombstone));
+                Assert.assertEquals(new WALValue(value, valueTimestamp, valueTombstone), apply2.get(new WALKey(kvh.key)));
+                return true;
+            });
+
         }
     }
 }

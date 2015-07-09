@@ -19,14 +19,13 @@ import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 
-public class PartitionStore implements RangeScannable<WALValue> {
+public class PartitionStore implements RangeScannable {
 
     private final WALStorage walStorage;
     private final boolean hardFlush;
@@ -51,13 +50,13 @@ public class PartitionStore implements RangeScannable<WALValue> {
     }
 
     @Override
-    public void rowScan(Scan<WALValue> scan) throws Exception {
-        walStorage.rowScan(scan);
+    public boolean rowScan(KeyValueStream txKeyValueStream) throws Exception {
+        return walStorage.rowScan(txKeyValueStream);
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, Scan<WALValue> scan) throws Exception {
-        walStorage.rangeScan(from, to, scan);
+    public boolean rangeScan(WALKey from, WALKey to, KeyValueStream txKeyValueStream) throws Exception {
+        return walStorage.rangeScan(from, to, txKeyValueStream);
     }
 
     public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {
@@ -68,12 +67,13 @@ public class PartitionStore implements RangeScannable<WALValue> {
         walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
     }
 
-    public WALValue get(WALKey key) throws Exception {
+    public WALValue get(byte[] key) throws Exception {
         return walStorage.get(key);
     }
 
-    public void get(KeyValues keyValues, KeyValueStream stream) throws Exception {
-        walStorage.get(keyValues, stream);
+    // TODO keyValues sucks need Keys and KeyStream
+    public boolean get(KeyValues keyValues, KeyValueStream stream) throws Exception {
+        return walStorage.get(keyValues, stream);
     }
 
     public boolean containsKey(WALKey key) throws Exception {
@@ -84,7 +84,7 @@ public class PartitionStore implements RangeScannable<WALValue> {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged directCommit(boolean useUpdateTxId, Commitable<WALValue> updates) throws Exception {
+    public RowsChanged directCommit(boolean useUpdateTxId, Commitable updates) throws Exception {
         RowsChanged changes = walStorage.update(useUpdateTxId, updates);
         walStorage.flush(hardFlush);
         return changes;

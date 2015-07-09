@@ -13,7 +13,6 @@ import com.jivesoftware.os.amza.shared.take.TakeResult;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -47,7 +46,7 @@ public class AmzaKretrProvider { // Aka Partition Client Provider
             this.partitionName = partitionName;
         }
 
-        public void commit(Commitable<WALValue> commitable,
+        public void commit(Commitable commitable,
             int desiredTakeQuorum,
             long timeout,
             TimeUnit timeUnit) throws Exception {

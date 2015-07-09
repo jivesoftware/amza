@@ -19,6 +19,6 @@ import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
 
 public interface ScannablePointers {
 
-    void rowScan(WALKeyPointerStream stream) throws Exception;
+    boolean rowScan(WALKeyPointerStream stream) throws Exception;
 
 }

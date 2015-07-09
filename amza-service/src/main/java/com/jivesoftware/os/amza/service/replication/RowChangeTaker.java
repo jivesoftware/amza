@@ -29,7 +29,6 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -546,23 +545,21 @@ public class RowChangeTaker implements RowChanges {
                     oldestTxId.setValue(Long.MAX_VALUE);
                 }
 
-                WALRow walr = primaryRowMarshaller.fromRow(row);
-                streamed.incrementAndGet();
-                if (highWaterMark.longValue() < txId) {
-                    highWaterMark.setValue(txId);
-                }
-                if (oldestTxId.longValue() > txId) {
-                    oldestTxId.setValue(txId);
-                }
-                WALValue got = batch.get(walr.key);
-                //LOG.info("ROW: From {} took {} {}", ringMember, walr.key, walr.value);
-                if (got == null) {
-                    batch.put(walr.key, walr.value);
-                } else {
-                    if (got.getTimestampId() < walr.value.getTimestampId()) {
-                        batch.put(walr.key, walr.value);
+                primaryRowMarshaller.fromRow(row, txId, (rowTxId, key, value, valueTimestamp, valueTombstoned) -> {
+                    streamed.incrementAndGet();
+                    if (highWaterMark.longValue() < txId) {
+                        highWaterMark.setValue(txId);
                     }
-                }
+                    if (oldestTxId.longValue() > txId) {
+                        oldestTxId.setValue(txId);
+                    }
+                    WALKey walKey = new WALKey(key);
+                    WALValue got = batch.get(walKey); // TODO doe we need to do this get ts merge
+                    if (got == null || got.getTimestampId() < valueTimestamp) {
+                        batch.put(walKey, new WALValue(value, valueTimestamp, valueTombstoned));
+                    }
+                    return true;
+                });
 
             } else if (rowType == RowType.highwater) {
                 highwater.set(binaryHighwaterRowMarshaller.fromBytes(row));

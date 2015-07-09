@@ -71,8 +71,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);
-        partitionIndexStore.rowScan((long rowTxId, WALKey key, WALValue value) -> {
-            final PartitionName partitionName = PartitionName.fromBytes(key.getKey());
+        partitionIndexStore.rowScan((key, value, valueTimestamp, valueTombstone) -> {
+            final PartitionName partitionName = PartitionName.fromBytes(key);
             try {
                 total.incrementAndGet();
                 openExecutor.submit(() -> {
@@ -108,7 +108,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 if (partitionName.isSystemPartition()) {
                     return coldstartSystemPartitionProperties(partitionName);
                 } else {
-                    WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(new WALKey(partitionName.toBytes()));
+                    WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(partitionName.toBytes());
                     if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
                         return null;
                     }
@@ -221,8 +221,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     @Override
     public void changes(final RowsChanged changes) throws Exception {
         if (changes.getVersionedPartitionName().getPartitionName().equals(REGION_PROPERTIES.getPartitionName())) {
-            changes.commitable(null, (long rowTxId, WALKey key, WALValue scanned) -> {
-                PartitionName partitionName = PartitionName.fromBytes(key.getKey());
+            changes.commitable(null, (long rowTxId, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstone) -> {
+                PartitionName partitionName = PartitionName.fromBytes(key);
                 removeProperties(partitionName);
 
                 ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(partitionName);

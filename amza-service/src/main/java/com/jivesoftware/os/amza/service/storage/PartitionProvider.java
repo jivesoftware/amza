@@ -22,7 +22,6 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -70,10 +69,9 @@ public class PartitionProvider {
         }
 
         byte[] rawPartitionName = partitionName.toBytes();
-        WALKey partitionKey = new WALKey(rawPartitionName);
-        WALValue propertiesValue = systemWALStorage.get(REGION_PROPERTIES, partitionKey);
+        WALValue propertiesValue = systemWALStorage.get(REGION_PROPERTIES, rawPartitionName);
         if (propertiesValue != null && !propertiesValue.getTombstoned()) {
-            WALValue indexValue = systemWALStorage.get(REGION_INDEX, partitionKey);
+            WALValue indexValue = systemWALStorage.get(REGION_INDEX, rawPartitionName);
             if (indexValue != null && !indexValue.getTombstoned()) {
                 return true;
             }
@@ -92,9 +90,8 @@ public class PartitionProvider {
             updatePartitionProperties(partitionName, properties);
 
             byte[] rawPartitionName = partitionName.toBytes();
-            WALKey partitionKey = new WALKey(rawPartitionName);
             RowsChanged changed = systemWALStorage.update(REGION_INDEX, (highwater, scan) -> {
-                scan.row(-1, partitionKey, new WALValue(rawPartitionName, orderIdProvider.nextId(), false));
+                return scan.row(-1, rawPartitionName, rawPartitionName, orderIdProvider.nextId(), false);
             }, walUpdated);
             if (!changed.isEmpty()) {
                 rowChanges.changes(changed);
@@ -108,7 +105,7 @@ public class PartitionProvider {
 
     public void updatePartitionProperties(PartitionName partitionName, PartitionProperties properties) throws Exception {
         RowsChanged changed = systemWALStorage.update(REGION_PROPERTIES, (highwater, scan) -> {
-            scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(partitionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false));
+            return scan.row(-1, partitionName.toBytes(), partitionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false);
         }, walUpdated);
         if (!changed.isEmpty()) {
             rowChanges.changes(changed);
@@ -118,13 +115,13 @@ public class PartitionProvider {
 
     public void destroyPartition(PartitionName partitionName) throws Exception {
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot destroy a system partition");
-        
+
         systemWALStorage.update(REGION_INDEX, (highwaters, scan) -> {
-            scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
+            return scan.row(-1, partitionName.toBytes(), null, orderIdProvider.nextId(), true);
         }, walUpdated);
 
         systemWALStorage.update(REGION_PROPERTIES, (highwaters, scan) -> {
-            scan.row(-1, new WALKey(partitionName.toBytes()), new WALValue(null, orderIdProvider.nextId(), true));
+            return scan.row(-1, partitionName.toBytes(), null, orderIdProvider.nextId(), true);
         }, walUpdated);
 
     }

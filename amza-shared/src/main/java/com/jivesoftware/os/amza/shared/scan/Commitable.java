@@ -6,8 +6,8 @@ import com.jivesoftware.os.amza.shared.take.Highwaters;
  *
  * @author jonathan.colt
  */
-public interface Commitable<S> {
+public interface Commitable {
 
-    void commitable(Highwaters highwaters, Scan<S> scan) throws Exception;
+    boolean commitable(Highwaters highwaters, TxKeyValueStream txKeyValueStream) throws Exception;
 
 }

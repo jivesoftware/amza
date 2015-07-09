@@ -19,7 +19,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.primitives.SignedBytes;
 import com.jivesoftware.os.amza.shared.filer.UIO;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -32,7 +31,7 @@ public class RingMember implements Comparable<RingMember> {
         return bytes;
     }
 
-    public static RingMember fromBytes(byte[] bytes) throws IOException {
+    public static RingMember fromBytes(byte[] bytes) throws Exception {
         if (bytes[0] == 0) {
             String member = new String(bytes, 1, bytes.length - 1, StandardCharsets.UTF_8);
             return new RingMember(member);

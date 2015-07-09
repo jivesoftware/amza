@@ -44,7 +44,6 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -308,8 +307,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         } else {
             PartitionStore store = partitionIndex.get(PartitionProvider.REGION_INDEX);
             if (store != null) {
-                byte[] rawPartitionName = partitionName.toBytes();
-                WALValue timestampedKeyValueStoreName = store.get(new WALKey(rawPartitionName));
+                WALValue timestampedKeyValueStoreName = store.get(partitionName.toBytes());
                 if (timestampedKeyValueStoreName != null && !timestampedKeyValueStoreName.getTombstoned()) {
                     return true;
                 }

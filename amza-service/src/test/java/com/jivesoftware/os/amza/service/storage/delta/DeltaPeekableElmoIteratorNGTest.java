@@ -4,6 +4,7 @@ import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.wal.FpKeyValueHighwaterStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
@@ -36,26 +37,29 @@ public class DeltaPeekableElmoIteratorNGTest {
             for (int i = 0; i < 128; i++) {
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
-                    WALKey key = new WALKey(new byte[] { (byte) i });
+                    WALKey key = new WALKey(new byte[]{(byte) i});
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     wal.put(key, pointer);
-                    fpRows.put((long) i, new WALRow(key, value));
+                    fpRows.put((long) i, new WALRow(key.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned()));
                     expected.add((byte) i);
                     expectedBoth.add((byte) i);
                 }
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
-                    WALKey key = new WALKey(new byte[] { (byte) i });
+                    WALKey key = new WALKey(new byte[]{(byte) i});
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     other.put(key, pointer);
-                    fpRows.put((long) i, new WALRow(key, value));
+                    fpRows.put((long) i, new WALRow(key.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned()));
                     expectedBoth.add((byte) i);
                 }
             }
 
-            WALRowHydrator hydrator = fpRows::get;
+            WALRowHydrator hydrator = (long fp, FpKeyValueHighwaterStream stream) -> {
+                WALRow row = fpRows.get(fp);
+                return stream.stream(fp, row.key, row.value, row.timestamp, row.tombstoned, null);
+            };
             DeltaPeekableElmoIterator deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(
                 wal.entrySet().iterator(),
                 Iterators.<Map.Entry<WALKey, WALPointer>>emptyIterator(),

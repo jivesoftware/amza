@@ -16,14 +16,14 @@
 package com.jivesoftware.os.amza.shared;
 
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
 
-public class AmzaPartitionUpdates implements Commitable<WALValue> {
+public class AmzaPartitionUpdates implements Commitable {
 
     private final ConcurrentSkipListMap<WALKey, WALValue> changes;
 
@@ -87,13 +87,14 @@ public class AmzaPartitionUpdates implements Commitable<WALValue> {
     }
 
     @Override
-    public void commitable(Highwaters highwaters, Scan<WALValue> scan) throws Exception {
+    public boolean commitable(Highwaters highwaters, TxKeyValueStream txKeyValueStream) throws Exception {
         for (Entry<WALKey, WALValue> e : changes.entrySet()) {
             WALValue value = e.getValue();
-            if (!scan.row(value.getTimestampId(), e.getKey(), value)) {
-                return;
+            if (!txKeyValueStream.row(-1, e.getKey().getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+                return false;
             }
         }
+        return true;
     }
 
 }

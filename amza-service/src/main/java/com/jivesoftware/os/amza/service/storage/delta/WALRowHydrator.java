@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.shared.wal.WALRow;
+import com.jivesoftware.os.amza.shared.wal.FpKeyValueHighwaterStream;
 
 /**
  *
  */
 public interface WALRowHydrator {
 
-    WALRow hydrate(long fp) throws Exception;
+    boolean hydrate(long fp, FpKeyValueHighwaterStream stream) throws Exception;
 }

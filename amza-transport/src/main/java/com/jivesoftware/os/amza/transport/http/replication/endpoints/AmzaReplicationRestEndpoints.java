@@ -17,8 +17,6 @@ package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -46,68 +44,13 @@ public class AmzaReplicationRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaStats amzaStats;
-    private final AmzaRingWriter ringWriter;
-    private final AmzaRingReader ringReader;
     private final AmzaInstance amzaInstance;
 
     public AmzaReplicationRestEndpoints(@Context AmzaStats amzaStats,
-        @Context AmzaRingWriter ringWriter,
-        @Context AmzaRingReader ringReader,
         @Context AmzaInstance amzaInstance) {
         this.amzaStats = amzaStats;
-        this.ringWriter = ringWriter;
-        this.ringReader = ringReader;
         this.amzaInstance = amzaInstance;
     }
-    /*
-    @POST
-    @Consumes("application/json")
-    @Path("/ring/add/{logicalName}/{host}/{port}")
-    public Response addMember(@PathParam("logicalName") String logicalName,
-        @PathParam("host") String host,
-        @PathParam("port") int port) {
-        try {
-            LOG.info("Attempting to add {}/{}/{} ", logicalName, host, port);
-            RingMember ringMember = new RingMember(logicalName);
-            ringWriter.register(ringMember, new RingHost(host, port));
-            ringWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
-            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
-        } catch (Exception x) {
-            LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to add system member: " + logicalName, x);
-        }
-    }
-
-    @POST
-    @Consumes("application/json")
-    @Path("/ring/remove/{logicalName}")
-    public Response removeMember(@PathParam("logicalName") String logicalName) {
-        try {
-            LOG.info("Attempting to remove RingHost: " + logicalName);
-            ringWriter.removeRingMember(AmzaRingReader.SYSTEM_RING, new RingMember(logicalName));
-            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
-        } catch (Exception x) {
-            LOG.warn("Failed to add RingHost: " + logicalName, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to remove RingHost: " + logicalName, x);
-        }
-    }
-
-    @POST
-    @Consumes("application/json")
-    @Path("/ring")
-    public Response getRing() {
-        try {
-            amzaStats.getRing.incrementAndGet();
-            LOG.info("Attempting to get amza ring.");
-            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
-            return ResponseHelper.INSTANCE.jsonResponse(ring);
-        } catch (Exception x) {
-            LOG.warn("Failed to get amza ring.", x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to get amza ring.", x);
-        } finally {
-            amzaStats.getRing.decrementAndGet();
-        }
-    }*/
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)

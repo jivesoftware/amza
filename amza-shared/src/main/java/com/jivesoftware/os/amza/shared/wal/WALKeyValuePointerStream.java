@@ -6,6 +6,7 @@ package com.jivesoftware.os.amza.shared.wal;
  */
 public interface WALKeyValuePointerStream {
 
-    boolean stream(WALKey key, WALValue value, long timestamp, boolean tombstoned, long fp) throws Exception;
+    boolean stream(byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned,
+        long pointerTimestamp, boolean pointerTombstoned, long pointerFp) throws Exception;
 
 }

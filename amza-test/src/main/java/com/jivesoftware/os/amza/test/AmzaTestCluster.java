@@ -19,12 +19,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.client.AmzaKretrProvider;
-import com.jivesoftware.os.amza.service.AmzaChangeIdPacker;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
-import com.jivesoftware.os.amza.service.replication.MemoryBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -41,7 +39,6 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer.StreamingTakeConsumed;
@@ -50,6 +47,7 @@ import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -117,10 +115,8 @@ public class AmzaTestCluster {
         config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
-
-        AmzaChangeIdPacker idPacker = new AmzaChangeIdPacker();
-        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()),
-            idPacker,
+        SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
+        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()), idPacker,
             new JiveEpochTimestampProvider());
 
         RowsTaker updateTaker = new RowsTaker() {
@@ -208,7 +204,6 @@ public class AmzaTestCluster {
         };
 
         AmzaStats amzaStats = new AmzaStats();
-        HighwaterStorage highWaterMarks = new MemoryBackedHighwaterStorage();
         Optional<TakeFailureListener> absent = Optional.<TakeFailureListener>absent();
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
@@ -255,7 +250,7 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(localRingMember, localRingHost, amzaService, highWaterMarks, orderIdProvider);
+        service = new AmzaNode(localRingMember, localRingHost, amzaService, orderIdProvider);
 
         cluster.put(localRingMember, service);
 
@@ -269,7 +264,6 @@ public class AmzaTestCluster {
         private final RingMember ringMember;
         private final RingHost ringHost;
         private final AmzaService amzaService;
-        private final HighwaterStorage highWaterMarks;
         private final TimestampedOrderIdProvider orderIdProvider;
         private boolean off = false;
         private int flapped = 0;
@@ -279,13 +273,11 @@ public class AmzaTestCluster {
         public AmzaNode(RingMember ringMember,
             RingHost ringHost,
             AmzaService amzaService,
-            HighwaterStorage highWaterMarks,
             TimestampedOrderIdProvider orderIdProvider) {
 
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
-            this.highWaterMarks = highWaterMarks;
             this.clientProvider = new AmzaKretrProvider(amzaService);
             this.orderIdProvider = orderIdProvider;
         }
@@ -338,7 +330,7 @@ public class AmzaTestCluster {
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(Collections.singletonList(key), (WALKey key1, byte[] value, long timestamp) -> {
+            clientProvider.getClient(partitionName).get(Collections.singletonList(key), (byte[] key1, byte[] value, long timestamp) -> {
                 got.add(value);
                 return true;
             });
@@ -422,7 +414,6 @@ public class AmzaTestCluster {
                     return false;
                 }
                 if (!compare(partitionName, a, b)) {
-                    System.out.println(highWaterMarks + " -vs- " + service.highWaterMarks);
                     return false;
                 }
             }
@@ -456,7 +447,7 @@ public class AmzaTestCluster {
                 try {
                     compared.increment();
                     TimestampedValue[] bValues = new TimestampedValue[1];
-                    b.get(Collections.singletonList(key), (WALKey key1, byte[] value, long timestamp) -> {
+                    b.get(Collections.singletonList(new WALKey(key)), (byte[] key1, byte[] value, long timestamp) -> {
                         bValues[0] = new TimestampedValue(timestamp, value);
                         return true;
                     });

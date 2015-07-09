@@ -160,52 +160,52 @@ public class RowPartitionNGTest {
             2);
 
         indexedWAL.load();
-        WALValue value = indexedWAL.get(rk(1));
+        WALValue value = indexedWAL.get(rk(1).getKey());
         Assert.assertNull(value);
 
         int t = 10;
         update(indexedWAL, k(1), v("hello"), t, false);
 
-        value = indexedWAL.get(rk(1));
+        value = indexedWAL.get(rk(1).getKey());
         Assert.assertFalse(value.getTombstoned());
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello");
 
         t++;
         update(indexedWAL, k(1), v("hello2"), t, false);
-        value = indexedWAL.get(rk(1));
+        value = indexedWAL.get(rk(1).getKey());
         Assert.assertFalse(value.getTombstoned());
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         update(indexedWAL, k(1), v("hello3"), t, false);
-        value = indexedWAL.get(rk(1));
+        value = indexedWAL.get(rk(1).getKey());
         Assert.assertFalse(value.getTombstoned());
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         update(indexedWAL, k(1), v("fail"), t - 1, false);
-        value = indexedWAL.get(rk(1));
+        value = indexedWAL.get(rk(1).getKey());
         Assert.assertFalse(value.getTombstoned());
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         t++;
         update(indexedWAL, k(1), v("deleted"), t, false);
-        value = indexedWAL.get(rk(1));
+        value = indexedWAL.get(rk(1).getKey());
         Assert.assertFalse(value.getTombstoned());
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "deleted");
 
         update(indexedWAL, k(1), v("fail"), t - 1, false);
-        value = indexedWAL.get(rk(1));
+        value = indexedWAL.get(rk(1).getKey());
         Assert.assertFalse(value.getTombstoned());
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "deleted");
 
         t++;
         update(indexedWAL, k(1), v("hello4"), t, false);
-        value = indexedWAL.get(rk(1));
+        value = indexedWAL.get(rk(1).getKey());
         Assert.assertFalse(value.getTombstoned());
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello4");

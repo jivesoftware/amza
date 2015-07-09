@@ -15,11 +15,15 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
+
 public interface PrimaryRowMarshaller<R> {
 
-    R toRow(WALKey key, WALValue value) throws Exception;
+    R toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned) throws Exception;
 
-    WALRow fromRow(R row) throws Exception;
+    boolean fromRow(R row, KeyValueStream keyValueStream) throws Exception;
+
+    boolean fromRow(R row, long txId, TxKeyValueStream keyValueStream) throws Exception;
 
     byte[] valueFromRow(R row) throws Exception;
 }

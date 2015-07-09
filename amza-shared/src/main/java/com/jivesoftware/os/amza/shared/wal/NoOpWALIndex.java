@@ -28,7 +28,7 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public void merge(WALKeyPointers pointers, WALMergeKeyPointerStream stream) throws Exception {
-        pointers.consume((WALKey key, long timestamp, boolean tombstoned, long fp) -> {
+        pointers.consume((byte[] key, long timestamp, boolean tombstoned, long fp) -> {
             if (stream != null) {
                 if (!stream.stream(WALMergeKeyPointerStream.ignored, key, timestamp, tombstoned, fp)) {
                     return false;
@@ -39,14 +39,14 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public void getPointer(WALKey key, WALKeyPointerStream stream) throws Exception {
-        stream.stream(key, -1, false, -1);
+    public boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception {
+        return stream.stream(key, -1, false, -1);
     }
 
     @Override
-    public void getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
-        keyValues.consume((WALKey key, WALValue value) -> {
-            return stream.stream(key, value, -1, false, -1);
+    public boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
+        return keyValues.consume((byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) -> {
+            return stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1);
         });
     }
 
@@ -103,11 +103,13 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(WALKeyPointerStream stream) throws Exception {
+    public boolean rowScan(WALKeyPointerStream stream) throws Exception {
+        return true;
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, WALKeyPointerStream stream) throws Exception {
+    public boolean rangeScan(WALKey from, WALKey to, WALKeyPointerStream stream) throws Exception {
+        return true;
     }
 
     @Override

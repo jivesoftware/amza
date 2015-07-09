@@ -1,20 +1,19 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.Iterators;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaValueCache.DeltaRow;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
 import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.wal.FpKeyValueHighwaterStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -58,39 +57,28 @@ class PartitionDelta {
         this.compacting = new AtomicReference<>(compacting);
     }
 
-    Optional<WALValue> get(WALKey key) throws Exception {
-        WALPointer got = pointerIndex.get(key);
+    private boolean getRawValue(byte[] key, FpKeyValueHighwaterStream stream) throws Exception {
+        WALPointer got = pointerIndex.get(new WALKey(key));
         if (got == null) {
             PartitionDelta partitionDelta = compacting.get();
             if (partitionDelta != null) {
-                return partitionDelta.get(key);
+                return partitionDelta.getRawValue(key, stream);
             }
-            return null;
+            return stream.stream(-1, key, null, -1, false, null);
         }
-        return Optional.fromNullable(got.getTombstoned() ? null : deltaWAL.hydrate(got.getFp()).value);
-    }
-    
-    private WALValue getRawValue(WALKey key) throws Exception {
-        WALPointer got = pointerIndex.get(key);
-        if (got == null) {
-            PartitionDelta partitionDelta = compacting.get();
-            if (partitionDelta != null) {
-                return partitionDelta.getRawValue(key);
-            }
-            return null;
-        }
-        return deltaWAL.hydrate(got.getFp()).value;
+        return deltaWAL.hydrate(got.getFp(), stream);
     }
 
-
-    void get(KeyValues keyValues, KeyValueStream stream) throws Exception {
-        keyValues.consume((WALKey key, WALValue value) -> {
-            return stream.stream(key, getRawValue(key));
+    boolean get(KeyValues keyValues, KeyValueStream stream) throws Exception {
+        return keyValues.consume((key, value, valueTimestamp, valueTombstone) -> {
+            return getRawValue(key, (fp, key1, value1, valueTimestamp1, valueTombstone1, highwater) -> {
+                return stream.stream(key, value1, valueTimestamp1, valueTombstone1);
+            });
         });
     }
 
-    WALPointer getPointer(WALKey key) throws Exception {
-        WALPointer got = pointerIndex.get(key);
+    WALPointer getPointer(byte[] key) throws Exception {
+        WALPointer got = pointerIndex.get(new WALKey(key));
         if (got != null) {
             return got;
         }
@@ -101,31 +89,15 @@ class PartitionDelta {
         return null;
     }
 
-    void getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
-        keyValues.consume((WALKey key, WALValue value) -> {
-            WALPointer got = getPointer(key);
-            if (got != null) {
-                stream.stream(key, value, got.getTimestampId(), got.getTombstoned(), got.getFp());
+    boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
+        return keyValues.consume((key, value, valueTimestamp, valueTombstone) -> {
+            WALPointer pointer = getPointer(key);
+            if (pointer != null) {
+                return stream.stream(key, value, valueTimestamp, valueTombstone, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
             } else {
-                stream.stream(key, value, -1, false, -1);
+                return stream.stream(key, value, valueTimestamp, valueTombstone, -1, false, -1);
             }
-            return true;
         });
-    }
-
-    DeltaResult<List<WALValue>> get(List<WALKey> keys) throws Exception {
-        boolean missed = false;
-        List<WALValue> result = new ArrayList<>(keys.size());
-        for (WALKey key : keys) {
-            Optional<WALValue> got = get(key);
-            if (got == null) {
-                missed |= true;
-                result.add(null);
-            } else {
-                result.add(got.orNull());
-            }
-        }
-        return new DeltaResult<>(missed, result);
     }
 
     Boolean containsKey(WALKey key) {
@@ -151,13 +123,18 @@ class PartitionDelta {
         return new DeltaResult<>(missed, result);
     }
 
-    void put(long fp, KeyValueHighwater keyValueHighwater) {
-        WALKey key = keyValueHighwater.key;
-        WALValue value = keyValueHighwater.value;
-        WALPointer pointer = new WALPointer(fp, value.getTimestampId(), value.getTombstoned());
-        pointerIndex.put(key, pointer);
-        orderedIndex.put(key, pointer);
-        deltaValueCache.put(fp, keyValueHighwater, deltaValueMap);
+    void put(long fp,
+        byte[] key,
+        byte[] value,
+        long valueTimestamp,
+        boolean valueTombstone,
+        WALHighwater highwater) {
+
+        WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone);
+        WALKey walKey = new WALKey(key);
+        pointerIndex.put(walKey, pointer);
+        orderedIndex.put(walKey, pointer);
+        deltaValueCache.put(fp, key, value, valueTimestamp, valueTombstone, highwater, deltaValueMap);
     }
 
     boolean shouldWriteHighwater() {
@@ -249,7 +226,7 @@ class PartitionDelta {
         updatesSinceLastHighwaterFlush.addAndGet(rowFPs.length);
     }
 
-    boolean takeRowUpdatesSince(long transactionId, final RowStream rowStream) throws Exception {
+    boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
         PartitionDelta partitionDelta = compacting.get();
         if (partitionDelta != null) {
             if (!partitionDelta.takeRowUpdatesSince(transactionId, rowStream)) {
@@ -293,23 +270,31 @@ class PartitionDelta {
                     MutableBoolean eos = new MutableBoolean(false);
                     for (Map.Entry<Long, long[]> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
                         long txId = e.getKey();
-                        partitionStore.directCommit(true, (highwater, scan) -> {
+                        partitionStore.directCommit(true, (highwaters, scan) -> {
                             for (long fp : e.getValue()) {
-                                KeyValueHighwater kvh = compact.valueForFp(fp);
-                                WALPointer pointer = compact.orderedIndex.get(kvh.key);
-                                if (pointer == null) {
-                                    throw new RuntimeException("Delta WAL missing key: " + kvh.key);
-                                }
-                                if (pointer.getFp() == fp) {
-                                    if (!scan.row(txId, kvh.key, kvh.value)) {
-                                        eos.setValue(true);
-                                        return;
-                                    }
-                                    if (kvh.highwater != null) {
-                                        highwater.highwater(kvh.highwater);
-                                    }
+                                boolean done = compact.valueForFp(fp,
+                                    (fp1, key, value, valueTimestamp, valueTombstone, walHighwater) -> {
+                                        WALKey walKey = new WALKey(key);
+                                        WALPointer pointer = compact.orderedIndex.get(walKey);
+                                        if (pointer == null) {
+                                            throw new RuntimeException("Delta WAL missing key: " + walKey);
+                                        }
+                                        if (pointer.getFp() == fp) {
+                                            if (!scan.row(txId, key, value, valueTimestamp, valueTombstone)) {
+                                                eos.setValue(true);
+                                                return false;
+                                            }
+                                            if (walHighwater != null) {
+                                                highwaters.highwater(walHighwater);
+                                            }
+                                        }
+                                        return true;
+                                    });
+                                if (!done) {
+                                    return false;
                                 }
                             }
+                            return true;
                         });
                         if (eos.booleanValue()) {
                             break;
@@ -324,12 +309,12 @@ class PartitionDelta {
         compacting.set(null);
     }
 
-    private KeyValueHighwater valueForFp(long fp) throws Exception {
+    private boolean valueForFp(long fp, FpKeyValueHighwaterStream stream) throws Exception {
         DeltaRow deltaRow = deltaValueCache.get(fp, deltaValueMap);
         if (deltaRow != null) {
-            return deltaRow.keyValueHighwater;
+            return stream.stream(deltaRow.fp, deltaRow.key, deltaRow.value, deltaRow.valueTimestamp, deltaRow.valueTombstone, deltaRow.highwater);
         } else {
-            return deltaWAL.hydrateKeyValueHighwater(fp);
+            return deltaWAL.hydrateKeyValueHighwater(fp, stream);
         }
     }
 }

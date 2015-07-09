@@ -13,9 +13,7 @@ import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALIndex.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -156,10 +154,11 @@ public class BinaryWALTx implements WALTx {
                 walIndex.merge((WALKeyPointerStream stream) -> {
                     io.scan(0, true, (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
                         if (rowType == RowType.primary) {
-                            WALRow walr = primaryRowMarshaller.fromRow(row);
-                            WALValue value = walr.value;
-                            stream.stream(walr.key, value.getTimestampId(), value.getTombstoned(), rowPointer);
-                            rebuilt.increment();
+                            primaryRowMarshaller.fromRow(row, (key, value, valueTimestamp, valueTombstoned) -> {
+                                stream.stream(key, valueTimestamp, valueTombstoned, rowPointer);
+                                rebuilt.increment();
+                                return true;
+                            });
                         }
                         return true;
                     });
@@ -178,11 +177,12 @@ public class BinaryWALTx implements WALTx {
                         @Override
                         public boolean row(long rowFP, long rowTxId, RowType rowType, byte[] row) throws Exception {
                             if (rowType == RowType.primary) {
-                                WALRow walr = primaryRowMarshaller.fromRow(row);
-                                WALKey key = walr.key;
-                                WALValue value = walr.value;
-                                stream.stream(key, value.getTimestampId(), value.getTombstoned(), rowFP);
-                                repair.add(1);
+                                primaryRowMarshaller.fromRow(row, (key, value, valueTimestamp, valueTombstoned) -> {
+                                    stream.stream(key, valueTimestamp, valueTombstoned, rowFP);
+                                    repair.add(1);
+                                    return true;
+                                });
+
                             }
                             if (rowType == RowType.system && commitedUpToTxId == Long.MIN_VALUE) {
                                 long[] key_CommitedUpToTxId = UIO.bytesLongs(row);
@@ -326,7 +326,8 @@ public class BinaryWALTx implements WALTx {
 
         Preconditions.checkNotNull(rowIndex, "If you don't have one use NOOpWALIndex.");
 
-        List<WALKey> rowKeys = new ArrayList<>();
+        // TODO replace with callback
+        List<byte[]> rowKeys = new ArrayList<>();
         List<WALValue> rowValues = new ArrayList<>();
         List<Long> rowTxIds = new ArrayList<>();
         List<RowType> rawRowTypes = new ArrayList<>();
@@ -342,30 +343,30 @@ public class BinaryWALTx implements WALTx {
             }
 
             if (rowType == RowType.primary) {
-                WALRow walr = primaryRowMarshaller.fromRow(row);
-                WALKey key = walr.key;
-                WALValue value = walr.value;
+                primaryRowMarshaller.fromRow(row, (key,  value,  valueTimestamp,  valueTombstoned) -> {
 
-                rowIndex.getPointer(key, (WALKeyPointerStream) (WALKey key1, long timestamp, boolean tombstoned, long fp) -> {
-                    if (fp == -1 || value.getTimestampId() >= timestamp) {
-                        if (value.getTombstoned() && value.getTimestampId() < removeTombstonedOlderThanTimestampId) {
-                            tombstoneCount.incrementAndGet();
-                        } else {
-                            if (value.getTimestampId() > ttlTimestampId) {
-                                rowKeys.add(key);
-                                rowValues.add(value);
-                                rowTxIds.add(rowTxId);
-                                rawRowTypes.add(rowType);
-                                rawRows.add(row);
-                                batchSizeInBytes.addAndGet(row.length);
-                                keyCount.incrementAndGet();
+                    rowIndex.getPointer(key, (key1,  pointerTimestamp,  pointerTombstoned,  pointerFp) -> {
+                        if (pointerFp == -1 || valueTimestamp >= pointerTimestamp) {
+                            if (valueTombstoned && valueTimestamp < removeTombstonedOlderThanTimestampId) {
+                                tombstoneCount.incrementAndGet();
                             } else {
-                                ttlCount.incrementAndGet();
+                                if (valueTimestamp > ttlTimestampId) {
+                                    rowKeys.add(key);
+                                    rowValues.add(new WALValue(value, valueTimestamp, valueTombstoned));
+                                    rowTxIds.add(rowTxId);
+                                    rawRowTypes.add(rowType);
+                                    rawRows.add(row);
+                                    batchSizeInBytes.addAndGet(row.length);
+                                    keyCount.incrementAndGet();
+                                } else {
+                                    ttlCount.incrementAndGet();
+                                }
                             }
+                        } else {
+                            removeCount.incrementAndGet();
                         }
-                    } else {
-                        removeCount.incrementAndGet();
-                    }
+                        return true;
+                    });
                     return true;
                 });
 
@@ -390,7 +391,7 @@ public class BinaryWALTx implements WALTx {
         List<Long> rowTxIds,
         List<RowType> rawRowTypes,
         List<byte[]> rawRows,
-        List<WALKey> rowKeys,
+        List<byte[]> rowKeys,
         List<WALValue> rowValues,
         AtomicLong batchSizeInBytes) throws Exception {
 

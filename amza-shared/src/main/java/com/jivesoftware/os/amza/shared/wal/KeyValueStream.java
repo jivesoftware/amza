@@ -6,6 +6,6 @@ package com.jivesoftware.os.amza.shared.wal;
  */
 public interface KeyValueStream {
 
-    boolean stream(WALKey key, WALValue value) throws Exception;
+    boolean stream(byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) throws Exception;
 
 }

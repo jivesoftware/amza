@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
@@ -14,9 +15,9 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -56,7 +57,7 @@ public class SystemWALStorage {
         return changed;
     }
 
-    public WALValue get(VersionedPartitionName versionedPartitionName, byte[] key) throws Exception {
+    public TimestampedValue get(VersionedPartitionName versionedPartitionName, byte[] key) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         return partitionIndex.get(versionedPartitionName).get(key);
     }
@@ -72,9 +73,9 @@ public class SystemWALStorage {
         });
     }
 
-    public boolean containsKey(VersionedPartitionName versionedPartitionName, WALKey key) throws Exception {
+    public boolean containsKeys(VersionedPartitionName versionedPartitionName, WALKeys keys, KeyContainedStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).containsKey(key);
+        return partitionIndex.get(versionedPartitionName).containsKeys(keys, stream);
     }
 
     public <R> R takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
@@ -115,8 +116,8 @@ public class SystemWALStorage {
     }
 
     public boolean rangeScan(VersionedPartitionName versionedPartitionName,
-        WALKey from,
-        WALKey to,
+        byte[] from,
+        byte[] to,
         KeyValueStream keyValueStream) throws Exception {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");

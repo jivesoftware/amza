@@ -9,5 +9,5 @@ import com.jivesoftware.os.amza.shared.wal.WALKey;
  */
 public interface RangeScannable extends Scannable {
 
-    boolean rangeScan(WALKey from, WALKey to, KeyValueStream scan) throws Exception;
+    boolean rangeScan(byte[] from, byte[] to, KeyValueStream scan) throws Exception;
 }

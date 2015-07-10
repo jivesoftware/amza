@@ -5,7 +5,7 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -106,11 +106,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             } else if (input.action.equals("get")) {
                 AmzaPartitionAPI partition = lookupPartition(input, msg);
                 if (partition != null) {
-                    List<WALKey> rawKeys = stringToWALKeys(input);
+                    List<byte[]> rawKeys = stringToWALKeys(input);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        partition.get(rawKeys, (byte[] key, byte[] value, long timestamp) -> {
+                        partition.get(walKeysFromList(rawKeys), (byte[] key, byte[] value, long timestamp) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("keyAsHex", bytesToHex(key));
                             row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
@@ -126,14 +126,14 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             } else if (input.action.equals("remove")) {
                 AmzaPartitionAPI partition = lookupPartition(input, msg);
                 if (partition != null) {
-                    List<WALKey> rawKeys = stringToWALKeys(input);
+                    List<byte[]> rawKeys = stringToWALKeys(input);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to remove. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         updates.removeAll(rawKeys, -1);
                         partition.commit(updates, 1, 30_000); // TODO expose to UI
-                        partition.get(rawKeys, (byte[] key, byte[] value, long timestamp) -> {
+                        partition.get(walKeysFromList(rawKeys), (byte[] key, byte[] value, long timestamp) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("keyAsHex", bytesToHex(key));
                             row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
@@ -159,12 +159,23 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
         return renderer.render(template, data);
     }
 
-    private List<WALKey> stringToWALKeys(AmzaInspectPluginRegionInput input) {
+    private WALKeys walKeysFromList(List<byte[]> rawKeys) {
+        return stream -> {
+            for (byte[] key : rawKeys) {
+                if (!stream.stream(key)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+    }
+
+    private List<byte[]> stringToWALKeys(AmzaInspectPluginRegionInput input) {
         String[] keys = input.key.split(",");
-        List<WALKey> walKeys = new ArrayList<>();
+        List<byte[]> walKeys = new ArrayList<>();
         for (String key : keys) {
             byte[] rawKey = hexStringToByteArray(key.trim());
-            walKeys.add(new WALKey(rawKey));
+            walKeys.add(rawKey);
         }
         return walKeys;
     }

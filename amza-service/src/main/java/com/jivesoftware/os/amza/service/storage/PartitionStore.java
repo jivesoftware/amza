@@ -15,15 +15,15 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 
 public class PartitionStore implements RangeScannable {
 
@@ -55,7 +55,7 @@ public class PartitionStore implements RangeScannable {
     }
 
     @Override
-    public boolean rangeScan(WALKey from, WALKey to, KeyValueStream txKeyValueStream) throws Exception {
+    public boolean rangeScan(byte[] from, byte[] to, KeyValueStream txKeyValueStream) throws Exception {
         return walStorage.rangeScan(from, to, txKeyValueStream);
     }
 
@@ -67,7 +67,7 @@ public class PartitionStore implements RangeScannable {
         walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
     }
 
-    public WALValue get(byte[] key) throws Exception {
+    public TimestampedValue get(byte[] key) throws Exception {
         return walStorage.get(key);
     }
 
@@ -76,8 +76,17 @@ public class PartitionStore implements RangeScannable {
         return walStorage.get(keys, stream);
     }
 
-    public boolean containsKey(WALKey key) throws Exception {
-        return walStorage.containsKey(key);
+    public boolean containsKey(byte[] key) throws Exception {
+        boolean[] result = new boolean[1];
+        walStorage.containsKeys(stream -> stream.stream(key), (_key, contained) -> {
+            result[0] = contained;
+            return true;
+        });
+        return result[0];
+    }
+
+    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
+        return walStorage.containsKeys(keys, stream);
     }
 
     public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {

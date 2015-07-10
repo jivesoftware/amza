@@ -31,32 +31,36 @@ public class WALKey implements Comparable<WALKey> {
     /**
      * Please don't mutate this array. Should hand out a copy but trying to make this as fast as possible.
      *
-     * @return
+     * @return the key!
      */
     final public byte[] getKey() {
         return key;
     }
 
-    public WALKey prefixUpperExclusive() {
-        byte[] raw = new byte[key.length];
-        System.arraycopy(key, 0, raw, 0, key.length);
+    public static byte[] prefixUpperExclusive(byte[] key) {
+        byte[] upper = new byte[key.length];
+        System.arraycopy(key, 0, upper, 0, key.length);
 
         // given: [64,72,96,127]
         // want: [64,72,97,-128]
-        for (int i = raw.length - 1; i >= 0; i--) {
-            if (raw[i] == Byte.MAX_VALUE) {
-                raw[i] = Byte.MIN_VALUE;
+        for (int i = upper.length - 1; i >= 0; i--) {
+            if (upper[i] == Byte.MAX_VALUE) {
+                upper[i] = Byte.MIN_VALUE;
             } else {
-                raw[i]++;
+                upper[i]++;
                 break;
             }
         }
-        return new WALKey(raw);
+        return upper;
     }
 
     @Override
     final public int compareTo(WALKey o) {
-        return UnsignedBytes.lexicographicalComparator().compare(key, o.key);
+        return compare(key, o.key);
+    }
+
+    public static int compare(byte[] keyA, byte[] keyB) {
+        return UnsignedBytes.lexicographicalComparator().compare(keyA, keyB);
     }
 
     @Override

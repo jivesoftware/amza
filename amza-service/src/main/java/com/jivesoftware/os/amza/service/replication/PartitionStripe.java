@@ -21,11 +21,11 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -187,7 +187,7 @@ public class PartitionStripe {
             });
     }
 
-    public void rangeScan(PartitionName partitionName, WALKey from, WALKey to, KeyValueStream keyValueStream) throws Exception {
+    public void rangeScan(PartitionName partitionName, byte[] from, byte[] to, KeyValueStream keyValueStream) throws Exception {
         txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -280,7 +280,7 @@ public class PartitionStripe {
             });
     }
 
-    public boolean containsKey(PartitionName partitionName, WALKey key) throws Exception {
+    public boolean containsKeys(PartitionName partitionName, WALKeys keys, KeyContainedStream stream) throws Exception {
         return txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -290,7 +290,7 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    return storage.containsKey(versionedPartitionName, partitionStore.getWalStorage(), key);
+                    return storage.containsKeys(versionedPartitionName, partitionStore.getWalStorage(), keys, stream);
                 }
             });
     }

@@ -33,6 +33,7 @@ import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
@@ -307,10 +308,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         } else {
             PartitionStore store = partitionIndex.get(PartitionProvider.REGION_INDEX);
             if (store != null) {
-                WALValue timestampedKeyValueStoreName = store.get(partitionName.toBytes());
-                if (timestampedKeyValueStoreName != null && !timestampedKeyValueStoreName.getTombstoned()) {
-                    return true;
-                }
+                return store.containsKey(partitionName.toBytes());
             }
             return false;
         }

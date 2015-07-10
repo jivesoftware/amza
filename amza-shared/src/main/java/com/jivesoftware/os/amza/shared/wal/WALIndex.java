@@ -18,12 +18,10 @@ package com.jivesoftware.os.amza.shared.wal;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.scan.RangeScannablePointers;
-import java.util.Collection;
-import java.util.List;
 
 public interface WALIndex extends RangeScannablePointers {
 
-    void merge(WALKeyPointers pointers, WALMergeKeyPointerStream stream) throws Exception;
+    boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception;
 
     boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception;
 
@@ -31,9 +29,9 @@ public interface WALIndex extends RangeScannablePointers {
 
     boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception;
 
-    List<Boolean> containsKey(List<WALKey> key) throws Exception;
+    boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception;
 
-    void remove(Collection<WALKey> key) throws Exception;
+    boolean remove(WALKeys keys) throws Exception;
 
     boolean isEmpty() throws Exception;
 
@@ -55,7 +53,7 @@ public interface WALIndex extends RangeScannablePointers {
 
     interface CompactionWALIndex {
 
-        void merge(WALKeyPointers pointers) throws Exception;
+        boolean merge(TxKeyPointers pointers) throws Exception;
 
         void abort() throws Exception;
 

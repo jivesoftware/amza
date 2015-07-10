@@ -6,6 +6,6 @@ package com.jivesoftware.os.amza.shared.wal;
  */
 public interface WALKeyPointers {
 
-    void consume(WALKeyPointerStream stream) throws Exception;
+    boolean consume(WALKeyPointerStream stream) throws Exception;
 
 }

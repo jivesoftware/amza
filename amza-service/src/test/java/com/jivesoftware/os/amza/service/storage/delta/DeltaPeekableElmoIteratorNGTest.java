@@ -12,7 +12,6 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.NavigableSet;
 import java.util.Random;
 import java.util.TreeSet;
@@ -28,8 +27,8 @@ public class DeltaPeekableElmoIteratorNGTest {
     @Test
     public void testSimple() {
         for (int r = 0; r < 10; r++) {
-            NavigableMap<WALKey, WALPointer> wal = new ConcurrentSkipListMap<>();
-            NavigableMap<WALKey, WALPointer> other = new ConcurrentSkipListMap<>();
+            ConcurrentSkipListMap<byte[], WALPointer> wal = new ConcurrentSkipListMap<>(WALKey::compare);
+            ConcurrentSkipListMap<byte[], WALPointer> other = new ConcurrentSkipListMap<>(WALKey::compare);
             Random rand = new Random();
             NavigableSet<Byte> expected = new TreeSet<>();
             NavigableSet<Byte> expectedBoth = new TreeSet<>();
@@ -37,21 +36,21 @@ public class DeltaPeekableElmoIteratorNGTest {
             for (int i = 0; i < 128; i++) {
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
-                    WALKey key = new WALKey(new byte[]{(byte) i});
+                    byte[] key = new byte[] { (byte) i };
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     wal.put(key, pointer);
-                    fpRows.put((long) i, new WALRow(key.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned()));
+                    fpRows.put((long) i, new WALRow(key, value.getValue(), value.getTimestampId(), value.getTombstoned()));
                     expected.add((byte) i);
                     expectedBoth.add((byte) i);
                 }
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
-                    WALKey key = new WALKey(new byte[]{(byte) i});
+                    byte[] key = new byte[] { (byte) i };
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     other.put(key, pointer);
-                    fpRows.put((long) i, new WALRow(key.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned()));
+                    fpRows.put((long) i, new WALRow(key, value.getValue(), value.getTimestampId(), value.getTombstoned()));
                     expectedBoth.add((byte) i);
                 }
             }
@@ -62,14 +61,14 @@ public class DeltaPeekableElmoIteratorNGTest {
             };
             DeltaPeekableElmoIterator deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(
                 wal.entrySet().iterator(),
-                Iterators.<Map.Entry<WALKey, WALPointer>>emptyIterator(),
+                Iterators.<Map.Entry<byte[], WALPointer>>emptyIterator(),
                 hydrator,
                 hydrator);
 
             List<Byte> had = new ArrayList<>();
             long lastV = -1;
             while (deltaPeekableElmoIterator.hasNext()) {
-                byte v = deltaPeekableElmoIterator.next().getKey().getKey()[0];
+                byte v = deltaPeekableElmoIterator.next().getKey()[0];
                 had.add(v);
                 Assert.assertTrue(lastV < v);
                 lastV = v;
@@ -85,7 +84,7 @@ public class DeltaPeekableElmoIteratorNGTest {
             had = new ArrayList<>();
             lastV = -1;
             while (deltaPeekableElmoIterator.hasNext()) {
-                byte v = deltaPeekableElmoIterator.next().getKey().getKey()[0];
+                byte v = deltaPeekableElmoIterator.next().getKey()[0];
                 had.add(v);
                 Assert.assertTrue(lastV < v);
                 lastV = v;

@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
@@ -31,8 +32,7 @@ import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALKeyStream;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -114,29 +114,20 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public boolean get(Iterable<WALKey> keys, TimestampKeyValueStream valuesStream) throws Exception {
-        return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            return stripe.get(partitionName, (WALKeyStream stream) -> {
-                for (WALKey key : keys) {
-                    if (!stream.stream(key.getKey())) {
-                        return false;
-                    }
-                }
-                return true;
-            }, valuesStream);
-
-        });
+    public boolean get(WALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
+        return partitionStripeProvider.txPartition(partitionName,
+            (stripe, highwaterStorage) -> stripe.get(partitionName, keys, valuesStream));
     }
 
     @Override
-    public void scan(WALKey from, WALKey to, Scan<TimestampedValue> scan) throws Exception {
+    public void scan(byte[] from, byte[] to, Scan<TimestampedValue> scan) throws Exception {
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             if (from == null && to == null) {
                 stripe.rowScan(partitionName, (key, value, valueTimestamp, valueTombstone) -> valueTombstone || scan.row(-1, key,
                     new TimestampedValue(valueTimestamp, value)));
             } else {
                 stripe.rangeScan(partitionName,
-                    from == null ? new WALKey(new byte[0]) : from,
+                    from == null ? new byte[0] : from,
                     to,
                     (key, value, valueTimestamp, valueTombstone) -> valueTombstone || scan.row(-1, key,
                         new TimestampedValue(valueTimestamp, value)));

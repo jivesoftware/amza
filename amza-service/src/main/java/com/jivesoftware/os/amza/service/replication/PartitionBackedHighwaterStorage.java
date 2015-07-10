@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -11,7 +12,6 @@ import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -62,8 +62,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             for (ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> got : hostToPartitionToHighwaterUpdates.values()) {
                 got.remove(versionedPartitionName);
             }
-            WALKey from = new WALKey(walKey(versionedPartitionName, null));
-            WALKey to = from.prefixUpperExclusive();
+            byte[] from = walKey(versionedPartitionName, null);
+            byte[] to = WALKey.prefixUpperExclusive(from);
             long removeTimestamp = orderIdProvider.nextId();
             systemWALStorage.rangeScan(PartitionProvider.HIGHWATER_MARK_INDEX, from, to,
                 (key, value, valueTimestamp, valueTombstone) -> {
@@ -153,7 +153,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         }
         HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.get(versionedPartitionName);
         if (highwaterUpdates == null) {
-            WALValue got = systemWALStorage.get(PartitionProvider.HIGHWATER_MARK_INDEX, walKey(versionedPartitionName, member));
+            TimestampedValue got = systemWALStorage.get(PartitionProvider.HIGHWATER_MARK_INDEX, walKey(versionedPartitionName, member));
             long txtId = -1L;
             if (got != null) {
                 txtId = UIO.bytesLong(got.getValue());
@@ -171,8 +171,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     @Override
     public WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception {
-        WALKey from = new WALKey(walKey(versionedPartitionName, null));
-        WALKey to = from.prefixUpperExclusive();
+        byte[] from = walKey(versionedPartitionName, null);
+        byte[] to = WALKey.prefixUpperExclusive(from);
         List<RingMemberHighwater> highwaters = new ArrayList<>();
         systemWALStorage.rangeScan(PartitionProvider.HIGHWATER_MARK_INDEX, from, to, (key, value, valueTimestamp, valueTombstone) -> {
             highwaters.add(new RingMemberHighwater(getMember(key), UIO.bytesLong(value)));
@@ -223,7 +223,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
                         long timestamp = orderIdProvider.nextId();
                         for (Entry<RingMember, ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates>> ringEntry
-                        : hostToPartitionToHighwaterUpdates.entrySet()) {
+                            : hostToPartitionToHighwaterUpdates.entrySet()) {
                             RingMember ringMember = ringEntry.getKey();
                             for (Map.Entry<VersionedPartitionName, HighwaterUpdates> partitionEntry : ringEntry.getValue().entrySet()) {
                                 HighwaterUpdates highwaterUpdates = partitionEntry.getValue();

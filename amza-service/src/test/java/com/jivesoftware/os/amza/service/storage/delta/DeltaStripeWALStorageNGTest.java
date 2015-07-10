@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
@@ -30,7 +31,9 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -64,7 +67,7 @@ public class DeltaStripeWALStorageNGTest {
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
             walIndexProviderRegistry, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, ids, -1, -1);
         PartitionIndex partitionIndex = new PartitionIndex(
-            new String[]{partitionTmpDir.getAbsolutePath()},
+            new String[] { partitionTmpDir.getAbsolutePath() },
             "domain",
             indexedWALStorageProvider,
             partitionPropertyMarshaller,
@@ -101,41 +104,41 @@ public class DeltaStripeWALStorageNGTest {
 
         WALStorage storage = partitionStore.getWalStorage();
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(false));
         Assert.assertEquals(0, storage.count());
         Assert.assertNull(storage.get(key(1).getKey()));
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 1, false), updated);
 
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(true));
         Assert.assertEquals(0, storage.count());
         Assert.assertNull(storage.get(key(1).getKey()));
 
         deltaStripeWALStorage.compact(partitionIndex, false);
 
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(true));
+        Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 0, false), updated);
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(true));
+        Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
         deltaStripeWALStorage.compact(partitionIndex, false);
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 2, true), updated);
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(false));
+        Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
         deltaStripeWALStorage.compact(partitionIndex, false);
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(false));
         Assert.assertNull(storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
@@ -146,8 +149,26 @@ public class DeltaStripeWALStorageNGTest {
 
     }
 
+    private KeyContainedStream keyIsContained(boolean shouldBeContained) {
+        return (key, contained) -> {
+            Assert.assertEquals(contained, shouldBeContained);
+            return true;
+        };
+    }
+
     private WALKey key(int i) {
         return new WALKey(UIO.intBytes(i));
+    }
+
+    private WALKeys keys(int... lotsOfIs) {
+        return stream -> {
+            for (int i : lotsOfIs) {
+                if (!stream.stream(UIO.intBytes(i))) {
+                    return false;
+                }
+            }
+            return true;
+        };
     }
 
     static class IntUpdate implements Commitable {

@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.service.storage;
 import com.google.common.base.Optional;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeBasedTable;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
@@ -27,13 +28,15 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.shared.wal.TxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
+import com.jivesoftware.os.amza.shared.wal.WALIndexable;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALMergeKeyPointerStream;
@@ -43,6 +46,9 @@ import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
+import com.jivesoftware.os.amza.shared.wal.WALWriter.IndexableKeys;
+import com.jivesoftware.os.amza.shared.wal.WALWriter.RawRows;
+import com.jivesoftware.os.amza.shared.wal.WALWriter.TxKeyPointerFpStream;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -51,14 +57,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -83,7 +85,7 @@ public class WALStorage implements RangeScannable {
     private final MutableLong[] stripedKeyHighwaterTimestamps;
 
     private final AtomicReference<WALIndex> walIndex = new AtomicReference<>(null);
-    private final Object oneWriterAtATimeLock = new Object();
+    private final Object oneIndexerAtATimeLock = new Object();
     private final Object oneTransactionAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
     private final AtomicLong updateCount = new AtomicLong(0);
@@ -341,8 +343,8 @@ public class WALStorage implements RangeScannable {
         try {
             WALIndex wali = walIndex.get();
             RowsChanged rowsChanged;
-            final MutableBoolean flushCompactionHint = new MutableBoolean(false);
-            final MutableLong indexCommitedUpToTxId = new MutableLong();
+            MutableBoolean flushCompactionHint = new MutableBoolean(false);
+            MutableLong indexCommitedUpToTxId = new MutableLong();
 
             MutableInt i = new MutableInt(0);
             wali.getPointers((KeyValueStream stream) -> {
@@ -378,80 +380,67 @@ public class WALStorage implements RangeScannable {
                 return true;
             });
 
-            NavigableMap<WALKey, Long> keyToRowPointer = new TreeMap<>();
-
             if (apply.isEmpty()) {
                 rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers, -1);
             } else {
+                List<WALIndexable> indexables = new ArrayList<>(apply.size());
                 walTx.write((WALWriter rowWriter) -> {
-                    List<Long> rawTransactionIds = useUpdateTxId ? new ArrayList<>() : null;
-                    List<WALKey> rawKeys = new ArrayList<>();
-                    List<byte[]> rawRows = new ArrayList<>();
-
                     for (Long txId : apply.rowKeySet()) {
-                        for (Entry<WALKey, WALValue> row : apply.row(txId).entrySet()) {
-                            if (useUpdateTxId) {
-                                rawTransactionIds.add(txId);
-                            }
-                            rawKeys.add(row.getKey());
-                            WALValue value = row.getValue();
-                            rawRows.add(rowMarshaller.toRow(row.getKey().getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned()));
-                        }
-
-                        WALHighwater highwater = txIdToHighwater.get(txId);
-                        if (highwater != null) {
-                            flush(useUpdateTxId,
-                                indexCommitedUpToTxId,
-                                rawTransactionIds, rawKeys,
-                                rawRows,
-                                rowWriter,
-                                highwater,
-                                keyToRowPointer,
-                                flushCompactionHint);
-
-                            if (useUpdateTxId) {
-                                rawTransactionIds.clear();
-                            }
-                            rawKeys.clear();
-                            rawRows.clear();
-                        }
-                    }
-                    if (!rawKeys.isEmpty()) {
-                        flush(useUpdateTxId,
+                        Map<WALKey, WALValue> txRow = apply.row(txId);
+                        flush(useUpdateTxId ? txId : -1,
+                            rowStream -> {
+                                for (Entry<WALKey, WALValue> row : txRow.entrySet()) {
+                                    WALValue value = row.getValue();
+                                    if (!rowStream.stream(rowMarshaller.toRow(row.getKey().getKey(),
+                                        value.getValue(),
+                                        value.getTimestampId(),
+                                        value.getTombstoned()))) {
+                                        return false;
+                                    }
+                                }
+                                return true;
+                            },
+                            indexableKeyStream -> {
+                                for (Entry<WALKey, WALValue> row : apply.row(txId).entrySet()) {
+                                    WALValue value = row.getValue();
+                                    if (!indexableKeyStream.stream(row.getKey().getKey(), value.getTimestampId(), value.getTombstoned())) {
+                                        return false;
+                                    }
+                                }
+                                return true;
+                            },
                             indexCommitedUpToTxId,
-                            rawTransactionIds, rawKeys,
-                            rawRows,
                             rowWriter,
-                            null,
-                            keyToRowPointer,
-                            flushCompactionHint);
+                            txIdToHighwater.get(txId),
+                            flushCompactionHint,
+                            (rowTxId, key, valueTimestamp, valueTombstoned, fp) -> {
+                                indexables.add(new WALIndexable(rowTxId, key, valueTimestamp, valueTombstoned, fp));
+                                return true;
+                            });
                     }
 
                     return null;
                 });
-                synchronized (oneWriterAtATimeLock) {
-                    Iterator<Table.Cell<Long, WALKey, WALValue>> iter = apply.cellSet().iterator();
+                synchronized (oneIndexerAtATimeLock) {
+                    wali.merge((TxKeyPointerStream stream) -> {
+                        for (WALIndexable indexable : indexables) {
+                            if (!stream.stream(indexable.txId, indexable.key, indexable.valueTimestamp, indexable.valueTombstoned, indexable.fp)) {
+                                return false;
+                            }
 
-                    wali.merge((WALKeyPointerStream stream) -> {
-                        while (iter.hasNext()) {
-                            Table.Cell<Long, WALKey, WALValue> cell = iter.next();
-                            WALKey key = cell.getColumnKey();
-                            WALValue value = cell.getValue();
-                            long rowPointer = keyToRowPointer.get(key);
-                            stream.stream(key.getKey(), value.getTimestampId(), value.getTombstoned(), rowPointer);
-
-                            int highwaterTimestampIndex = Math.abs(Arrays.hashCode(key.getKey()) % stripedKeyHighwaterTimestamps.length);
+                            int highwaterTimestampIndex = Math.abs(Arrays.hashCode(indexable.key) % stripedKeyHighwaterTimestamps.length);
                             stripedKeyHighwaterTimestamps[highwaterTimestampIndex].setValue(Math.max(
                                 stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue(),
-                                value.getTimestampId()));
+                                indexable.valueTimestamp));
                         }
-                    }, (mode, key, timestamp, tombstoned, fp) -> {
+                        return true;
+                    }, (mode, txId, key, timestamp, tombstoned, fp) -> {
                         if (mode == WALMergeKeyPointerStream.added) {
                             newCount.incrementAndGet();
                         } else if (mode == WALMergeKeyPointerStream.clobbered) {
                             clobberCount.incrementAndGet();
                         } else {
-                            iter.remove();
+                            apply.remove(useUpdateTxId ? txId : -1L, new WALKey(key)); //TODO NOT THIS
                         }
                         return true;
                     });
@@ -483,35 +472,28 @@ public class WALStorage implements RangeScannable {
         }
     }
 
-    private void flush(boolean useUpdateTxId,
+    private void flush(long txId,
+        RawRows rows,
+        IndexableKeys indexableKeys,
         MutableLong indexCommitedUpToTxId,
-        List<Long> rawTransactionIds,
-        List<WALKey> rawKeys,
-        List<byte[]> rawRows,
         WALWriter rowWriter,
         WALHighwater highwater,
-        NavigableMap<WALKey, Long> keyToRowPointer,
-        MutableBoolean flushCompactionHint) throws Exception {
+        MutableBoolean flushCompactionHint,
+        TxKeyPointerFpStream stream) throws Exception {
 
-        long[] rowPointers;
+        int count;
         synchronized (oneTransactionAtATimeLock) {
-            if (useUpdateTxId) {
-                indexCommitedUpToTxId.setValue(rawTransactionIds.get(rawTransactionIds.size() - 1));
-            } else {
-                long transactionId = orderIdProvider.nextId();
-                rawTransactionIds = Collections.nCopies(rawRows.size(), transactionId);
-                indexCommitedUpToTxId.setValue(transactionId);
+            if (txId == -1) {
+                txId = orderIdProvider.nextId();
             }
-            rowPointers = rowWriter.writePrimary(rawTransactionIds, rawRows);
+            indexCommitedUpToTxId.setValue(txId);
+            count = rowWriter.write(txId, RowType.primary, rows, indexableKeys, stream);
             if (highwater != null) {
                 writeHighwaterMarker(rowWriter, highwater);
             }
             highestTxId.set(indexCommitedUpToTxId.longValue());
         }
-        for (int i = 0; i < rowPointers.length; i++) {
-            keyToRowPointer.put(rawKeys.get(i), rowPointers[i]);
-        }
-        if (updateCount.addAndGet(rawKeys.size()) > maxUpdatesBetweenCompactionHintMarker.get()) {
+        if (updateCount.addAndGet(count) > maxUpdatesBetweenCompactionHintMarker.get()) {
             flushCompactionHint.setValue(true);
         }
     }
@@ -530,26 +512,26 @@ public class WALStorage implements RangeScannable {
     }
 
     @Override
-    public boolean rangeScan(WALKey from, WALKey to, KeyValueStream keyValueStream) throws Exception {
+    public boolean rangeScan(byte[] from, byte[] to, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
-            return wali.rangeScan(from, to, (key, timestamp, tombstoned, fp) -> {
-                return keyValueStream.stream(key, hydrateRowIndexValue(fp), timestamp, tombstoned);
-            });
+            return wali.rangeScan(from,
+                to,
+                (key, timestamp, tombstoned, fp) -> keyValueStream.stream(key, hydrateRowIndexValue(fp), timestamp, tombstoned));
         } finally {
             releaseOne();
         }
     }
 
     // TODO fix barf
-    public WALValue get(byte[] key) throws Exception {
+    public TimestampedValue get(byte[] key) throws Exception {
         acquireOne();
         try {
-            WALValue[] values = new WALValue[1];
+            TimestampedValue[] values = new TimestampedValue[1];
             walIndex.get().getPointer(key, (key1, timestamp, tombstoned, fp) -> {
                 if (fp != -1 && !tombstoned) {
-                    values[0] = new WALValue(hydrateRowIndexValue(fp), timestamp, tombstoned);
+                    values[0] = new TimestampedValue(timestamp, hydrateRowIndexValue(fp));
                 }
                 return true;
             });
@@ -578,31 +560,25 @@ public class WALStorage implements RangeScannable {
     public boolean streamWALPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().getPointers((KeyValueStream indexStream) -> {
-                return keyValues.consume((key, value, valueTimestamp, valueTombstone) -> {
-                    if (valueTimestamp > getLargestTimestampForKeyStripe(key)) {
-                        return stream.stream(key, value, valueTimestamp, valueTombstone, -1, false, -1);
-                    } else {
-                        return indexStream.stream(key, value, valueTimestamp, valueTombstone);
-                    }
-                });
-            }, (key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                return stream.stream(key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp);
-            });
-
+            return walIndex.get().getPointers(
+                indexStream -> keyValues.consume(
+                    (key, value, valueTimestamp, valueTombstone) -> {
+                        if (valueTimestamp > getLargestTimestampForKeyStripe(key)) {
+                            return stream.stream(key, value, valueTimestamp, valueTombstone, -1, false, -1);
+                        } else {
+                            return indexStream.stream(key, value, valueTimestamp, valueTombstone);
+                        }
+                    }),
+                stream);
         } finally {
             releaseOne();
         }
     }
 
-    public boolean containsKey(WALKey key) throws Exception {
-        return containsKey(Collections.singletonList(key)).get(0);
-    }
-
-    public List<Boolean> containsKey(List<WALKey> keys) throws Exception {
+    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().containsKey(keys);
+            return walIndex.get().containsKeys(keys, stream);
         } finally {
             releaseOne();
         }

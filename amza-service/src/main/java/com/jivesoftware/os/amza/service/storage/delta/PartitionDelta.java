@@ -12,15 +12,15 @@ import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeyStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,8 +42,8 @@ class PartitionDelta {
     private final DeltaValueCache deltaValueCache;
     final AtomicReference<PartitionDelta> compacting;
 
-    private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>();
-    private final ConcurrentNavigableMap<WALKey, WALPointer> orderedIndex = new ConcurrentSkipListMap<>();
+    private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>(); //TODO replace with concurrent byte[] map
+    private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(WALKey::compare);
     private final ConcurrentSkipListMap<Long, long[]> txIdWAL = new ConcurrentSkipListMap<>();
     private final StripedTLongObjectMap<DeltaRow> deltaValueMap = new StripedTLongObjectMap<>(8);
     private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
@@ -99,8 +99,8 @@ class PartitionDelta {
         });
     }
 
-    Boolean containsKey(WALKey key) {
-        WALPointer got = pointerIndex.get(key);
+    Boolean containsKey(byte[] key) {
+        WALPointer got = pointerIndex.get(new WALKey(key));
         if (got != null) {
             return !got.getTombstoned();
         }
@@ -111,15 +111,16 @@ class PartitionDelta {
         return null;
     }
 
-    DeltaResult<List<Boolean>> containsKey(List<WALKey> keys) {
-        boolean missed = false;
-        List<Boolean> result = new ArrayList<>(keys.size());
-        for (WALKey key : keys) {
-            boolean got = containsKey(key);
-            missed |= got;
-            result.add(got);
-        }
-        return new DeltaResult<>(missed, result);
+    boolean containsKeys(WALKeys keys, KeyTombstoneExistsStream stream) throws Exception {
+        return keys.consume(key -> {
+            Boolean got = containsKey(key);
+            return stream.stream(key, got != null && !got, got != null);
+        });
+    }
+
+    interface KeyTombstoneExistsStream {
+
+        boolean stream(byte[] key, boolean tombstoned, boolean exists) throws Exception;
     }
 
     void put(long fp,
@@ -132,7 +133,7 @@ class PartitionDelta {
         WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone);
         WALKey walKey = new WALKey(key);
         pointerIndex.put(walKey, pointer);
-        orderedIndex.put(walKey, pointer);
+        orderedIndex.put(key, pointer);
         deltaValueCache.put(fp, key, value, valueTimestamp, valueTombstone, highwater, deltaValueMap);
     }
 
@@ -148,20 +149,18 @@ class PartitionDelta {
         return should;
     }
 
-    Set<WALKey> keySet() {
-        Set<WALKey> keySet = pointerIndex.keySet();
-        PartitionDelta partitionDelta = compacting.get();
-        if (partitionDelta != null) {
-            HashSet<WALKey> all = new HashSet<>(keySet);
-            all.addAll(partitionDelta.keySet());
-            return all;
+    boolean keys(WALKeyStream stream) throws Exception {
+        for (byte[] key : orderedIndex.keySet()) {
+            if (!stream.stream(key)) {
+                return false;
+            }
         }
-        return keySet;
+        return true;
     }
 
-    DeltaPeekableElmoIterator rangeScanIterator(WALKey from, WALKey to) {
-        Iterator<Map.Entry<WALKey, WALPointer>> iterator = orderedIndex.subMap(from, to).entrySet().iterator();
-        Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
+    DeltaPeekableElmoIterator rangeScanIterator(byte[] from, byte[] to) {
+        Iterator<Map.Entry<byte[], WALPointer>> iterator = orderedIndex.subMap(from, to).entrySet().iterator();
+        Iterator<Map.Entry<byte[], WALPointer>> compactingIterator = Iterators.emptyIterator();
         PartitionDelta compactingPartitionDelta = compacting.get();
         DeltaWAL compactingDeltaWAL = null;
         if (compactingPartitionDelta != null) {
@@ -172,8 +171,8 @@ class PartitionDelta {
     }
 
     DeltaPeekableElmoIterator rowScanIterator() {
-        Iterator<Map.Entry<WALKey, WALPointer>> iterator = orderedIndex.entrySet().iterator();
-        Iterator<Map.Entry<WALKey, WALPointer>> compactingIterator = Iterators.emptyIterator();
+        Iterator<Map.Entry<byte[], WALPointer>> iterator = orderedIndex.entrySet().iterator();
+        Iterator<Map.Entry<byte[], WALPointer>> compactingIterator = Iterators.emptyIterator();
         PartitionDelta compactingPartitionDelta = compacting.get();
         DeltaWAL compactingDeltaWAL = null;
         if (compactingPartitionDelta != null) {
@@ -272,11 +271,10 @@ class PartitionDelta {
                         partitionStore.directCommit(true, (highwaters, scan) -> {
                             for (long fp : e.getValue()) {
                                 boolean done = compact.valueForFp(fp,
-                                    (fp1, key, value, valueTimestamp, valueTombstone, walHighwater) -> {
-                                        WALKey walKey = new WALKey(key);
-                                        WALPointer pointer = compact.orderedIndex.get(walKey);
+                                    (_fp, key, value, valueTimestamp, valueTombstone, walHighwater) -> {
+                                        WALPointer pointer = compact.orderedIndex.get(key);
                                         if (pointer == null) {
-                                            throw new RuntimeException("Delta WAL missing key: " + walKey);
+                                            throw new RuntimeException("Delta WAL missing key: " + Arrays.toString(key));
                                         }
                                         if (pointer.getFp() == fp) {
                                             if (!scan.row(txId, key, value, valueTimestamp, valueTombstone)) {

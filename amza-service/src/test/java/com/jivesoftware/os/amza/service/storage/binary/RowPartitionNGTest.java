@@ -1,8 +1,9 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.google.common.collect.Maps;
+import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -11,12 +12,11 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
+import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
-import java.util.Map;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -107,10 +107,11 @@ public class RowPartitionNGTest {
     }
 
     private void addBatch(Random r, OrderIdProviderImpl idProvider, WALStorage indexedWAL, int range, int start, int length) throws Exception {
-        Map<WALKey, WALValue> updates = Maps.newHashMap();
+        List<WALRow> updates = Lists.newArrayList();
         for (int i = start; i < start + length; i++) {
-            WALKey key = new WALKey(UIO.intBytes(r.nextInt(range)));
-            updates.put(key, new WALValue(UIO.intBytes(i), idProvider.nextId(), false));
+            byte[] key = UIO.intBytes(r.nextInt(range));
+            byte[] value = UIO.intBytes(i);
+            updates.add(new WALRow(key, value, idProvider.nextId(), false));
         }
         indexedWAL.update(false, new MemoryWALUpdates(updates, null));
     }
@@ -160,59 +161,48 @@ public class RowPartitionNGTest {
             2);
 
         indexedWAL.load();
-        WALValue value = indexedWAL.get(rk(1).getKey());
+        TimestampedValue value = indexedWAL.get(k(1));
         Assert.assertNull(value);
 
         int t = 10;
         update(indexedWAL, k(1), v("hello"), t, false);
 
-        value = indexedWAL.get(rk(1).getKey());
-        Assert.assertFalse(value.getTombstoned());
+        value = indexedWAL.get(k(1));
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello");
 
         t++;
         update(indexedWAL, k(1), v("hello2"), t, false);
-        value = indexedWAL.get(rk(1).getKey());
-        Assert.assertFalse(value.getTombstoned());
+        value = indexedWAL.get(k(1));
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         update(indexedWAL, k(1), v("hello3"), t, false);
-        value = indexedWAL.get(rk(1).getKey());
-        Assert.assertFalse(value.getTombstoned());
+        value = indexedWAL.get(k(1));
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         update(indexedWAL, k(1), v("fail"), t - 1, false);
-        value = indexedWAL.get(rk(1).getKey());
-        Assert.assertFalse(value.getTombstoned());
+        value = indexedWAL.get(k(1));
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         t++;
         update(indexedWAL, k(1), v("deleted"), t, false);
-        value = indexedWAL.get(rk(1).getKey());
-        Assert.assertFalse(value.getTombstoned());
+        value = indexedWAL.get(k(1));
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "deleted");
 
         update(indexedWAL, k(1), v("fail"), t - 1, false);
-        value = indexedWAL.get(rk(1).getKey());
-        Assert.assertFalse(value.getTombstoned());
+        value = indexedWAL.get(k(1));
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "deleted");
 
         t++;
         update(indexedWAL, k(1), v("hello4"), t, false);
-        value = indexedWAL.get(rk(1).getKey());
-        Assert.assertFalse(value.getTombstoned());
+        value = indexedWAL.get(k(1));
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello4");
-    }
-
-    public WALKey rk(int key) {
-        return new WALKey(k(key));
     }
 
     public byte[] k(int key) {
@@ -224,8 +214,8 @@ public class RowPartitionNGTest {
     }
 
     private void update(WALStorage indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
-        Map<WALKey, WALValue> updates = Maps.newHashMap();
-        updates.put(new WALKey(key), new WALValue(value, timestamp, remove));
+        List<WALRow> updates = Lists.newArrayList();
+        updates.add(new WALRow(key, value, timestamp, remove));
         indexedWAL.update(false, new MemoryWALUpdates(updates, null));
     }
 }

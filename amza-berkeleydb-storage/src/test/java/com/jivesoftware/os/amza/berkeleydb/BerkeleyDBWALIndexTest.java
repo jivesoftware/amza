@@ -4,9 +4,10 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.wal.TxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
 import java.io.File;
+import java.util.Arrays;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
@@ -21,11 +22,11 @@ public class BerkeleyDBWALIndexTest {
         File dir0 = Files.createTempDir();
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1", "t1"), 0);
         BerkeleyDBWALIndex index = getIndex(dir0, partitionName);
-        index.merge((WALKeyPointerStream stream) -> {
-            stream.stream(UIO.intBytes(1), System.currentTimeMillis(), false, 1L);
+        index.merge((TxKeyPointerStream stream) -> {
+            return stream.stream(1L, UIO.longBytes(1), System.currentTimeMillis(), false, 1L);
         }, null);
 
-        index.getPointer(UIO.intBytes(1), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+        index.getPointer(UIO.longBytes(1), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
             assertEquals(fp, 1);
             return true;
         });
@@ -34,23 +35,26 @@ public class BerkeleyDBWALIndexTest {
 
         // reopen
         index = getIndex(dir0, partitionName);
-        index.merge((WALKeyPointerStream stream) -> {
-            stream.stream(UIO.intBytes(2), System.currentTimeMillis(), false, 2L);
+        index.merge((TxKeyPointerStream stream) -> {
+            return stream.stream(2L, UIO.longBytes(2), System.currentTimeMillis(), false, 2L);
         }, null);
-        index.getPointer(UIO.intBytes(2), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+        index.getPointer(UIO.longBytes(2), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
             assertEquals(fp, 2);
             return true;
         });
 
-        index.merge((WALKeyPointerStream stream) -> {
-            for (int i = 0; i < 100; i++) {
-                stream.stream(UIO.intBytes(i), System.currentTimeMillis(), false, i);
+        index.merge((TxKeyPointerStream stream) -> {
+            for (long i = 0; i < 100; i++) {
+                if (!stream.stream(i, UIO.longBytes(i), System.currentTimeMillis(), false, i)) {
+                    return false;
+                }
             }
+            return true;
         }, null);
 
-        for (int i = 0; i < 100; i++) {
-            int expected = i;
-            index.getPointer(UIO.intBytes(i), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+        for (long i = 0; i < 100; i++) {
+            long expected = i;
+            index.getPointer(UIO.longBytes(i), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
                 assertEquals(fp, expected);
                 return true;
             });
@@ -65,33 +69,39 @@ public class BerkeleyDBWALIndexTest {
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1", "t1"), 0);
         BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
 
-        index.merge((WALKeyPointerStream stream) -> {
-            for (int i = 0; i < 50; i++) {
-                stream.stream(UIO.intBytes(i), System.currentTimeMillis(), false, i);
+        index.merge((TxKeyPointerStream stream) -> {
+            for (long i = 0; i < 50; i++) {
+                if (!stream.stream(i, UIO.longBytes(i), System.currentTimeMillis(), false, i)) {
+                    return false;
+                }
             }
+            return true;
         }, null);
 
-        for (int i = 0; i < 50; i++) {
-            int expected = i;
-            index.getPointer(UIO.intBytes(i), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+        for (long i = 0; i < 50; i++) {
+            long expected = i;
+            index.getPointer(UIO.longBytes(i), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
                 assertEquals(fp, expected);
                 return true;
             });
         }
 
         WALIndex.CompactionWALIndex compactionWALIndex = index.startCompaction();
-        compactionWALIndex.merge((WALKeyPointerStream stream) -> {
-            for (int i = 100; i < 200; i++) {
-                stream.stream(UIO.intBytes(i), System.currentTimeMillis(), false, i);
+        compactionWALIndex.merge((TxKeyPointerStream stream) -> {
+            for (long i = 100; i < 200; i++) {
+                if (!stream.stream(i, UIO.longBytes(i), System.currentTimeMillis(), false, i)) {
+                    return false;
+                }
             }
+            return true;
         });
         compactionWALIndex.commit();
 
-        for (int i = 100; i < 200; i++) {
-            int expected = i;
-            index.getPointer(UIO.intBytes(i), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
-                System.out.println(key + " " + timestamp + " " + tombstoned + " " + fp);
-                //assertEquals(fp, (long) expected);
+        for (long i = 100; i < 200; i++) {
+            long expected = i;
+            index.getPointer(UIO.longBytes(i), (byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+                System.out.println(Arrays.toString(key) + " " + timestamp + " " + tombstoned + " " + fp);
+                assertEquals(fp, expected);
                 return true;
             });
 
@@ -99,7 +109,7 @@ public class BerkeleyDBWALIndexTest {
     }
 
     private BerkeleyDBWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
+        return new BerkeleyDBWALIndexProvider(new String[] { dir0.getAbsolutePath() }, 1).createIndex(partitionName);
     }
 
 }

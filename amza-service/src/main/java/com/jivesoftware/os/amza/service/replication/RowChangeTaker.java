@@ -29,11 +29,14 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -508,7 +511,7 @@ public class RowChangeTaker implements RowChanges {
         private final CommitTo commitTo;
         private final RingMember ringMember;
         private final MutableLong highWaterMark;
-        private final Map<WALKey, WALValue> batch = new HashMap<>();
+        private final List<WALRow> batch = new ArrayList<>();
         private final MutableLong oldestTxId = new MutableLong(Long.MAX_VALUE);
         private final MutableLong lastTxId;
         private final MutableLong flushedTxId;
@@ -553,11 +556,7 @@ public class RowChangeTaker implements RowChanges {
                     if (oldestTxId.longValue() > txId) {
                         oldestTxId.setValue(txId);
                     }
-                    WALKey walKey = new WALKey(key);
-                    WALValue got = batch.get(walKey); // TODO doe we need to do this get ts merge
-                    if (got == null || got.getTimestampId() < valueTimestamp) {
-                        batch.put(walKey, new WALValue(value, valueTimestamp, valueTombstoned));
-                    }
+                    batch.add(new WALRow(key, value, valueTimestamp, valueTombstoned));
                     return true;
                 });
 

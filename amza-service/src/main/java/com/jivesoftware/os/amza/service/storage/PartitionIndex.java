@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
@@ -11,9 +12,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -108,8 +107,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 if (partitionName.isSystemPartition()) {
                     return coldstartSystemPartitionProperties(partitionName);
                 } else {
-                    WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(partitionName.toBytes());
-                    if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
+                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(partitionName.toBytes());
+                    if (rawPartitionProperties == null) {
                         return null;
                     }
                     return partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
@@ -131,7 +130,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
 
         if (!versionedPartitionName.getPartitionName().isSystemPartition()
-            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(new WALKey(partitionName.toBytes()))) {
+            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(partitionName.toBytes())) {
             return null;
         }
 

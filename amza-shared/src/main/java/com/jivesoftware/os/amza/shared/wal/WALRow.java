@@ -19,14 +19,6 @@ public class WALRow {
         this.tombstoned = tombstoned;
     }
 
-    public WALKey walKey() {
-        return new WALKey(key);
-    }
-
-    public WALValue walValue() {
-        return new WALValue(value, timestamp, tombstoned);
-    }
-
     @Override
     public String toString() {
         return "WALRow{"

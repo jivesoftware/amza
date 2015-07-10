@@ -25,29 +25,25 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 public class AmzaPartitionUpdates implements Commitable {
 
-    private final ConcurrentSkipListMap<WALKey, WALValue> changes;
+    private final ConcurrentSkipListMap<byte[], WALValue> changes = new ConcurrentSkipListMap<>(WALKey::compare);
 
-    public AmzaPartitionUpdates() {
-        this.changes = new ConcurrentSkipListMap<>();
-    }
-
-    public AmzaPartitionUpdates setAll(Iterable<Entry<WALKey, byte[]>> updates) throws Exception {
+    public AmzaPartitionUpdates setAll(Iterable<Entry<byte[], byte[]>> updates) throws Exception {
         setAll(updates, -1);
         return this;
     }
 
-    public AmzaPartitionUpdates setAll(Iterable<Entry<WALKey, byte[]>> updates, long timestampId) throws Exception {
-        for (Entry<WALKey, byte[]> update : updates) {
+    public AmzaPartitionUpdates setAll(Iterable<Entry<byte[], byte[]>> updates, long timestampId) throws Exception {
+        for (Entry<byte[], byte[]> update : updates) {
             set(update.getKey(), update.getValue(), timestampId);
         }
         return this;
     }
 
-    public AmzaPartitionUpdates set(WALKey key, byte[] value) throws Exception {
+    public AmzaPartitionUpdates set(byte[] key, byte[] value) throws Exception {
         return set(key, value, -1);
     }
 
-    public AmzaPartitionUpdates set(WALKey key, byte[] value, long timestampId) throws Exception {
+    public AmzaPartitionUpdates set(byte[] key, byte[] value, long timestampId) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
@@ -61,18 +57,18 @@ public class AmzaPartitionUpdates implements Commitable {
         return this;
     }
 
-    public AmzaPartitionUpdates removeAll(Iterable<WALKey> keys, long timestampId) throws Exception {
-        for (WALKey key : keys) {
+    public AmzaPartitionUpdates removeAll(Iterable<byte[]> keys, long timestampId) throws Exception {
+        for (byte[] key : keys) {
             remove(key, timestampId);
         }
         return this;
     }
 
-    public AmzaPartitionUpdates remove(WALKey key) throws Exception {
+    public AmzaPartitionUpdates remove(byte[] key) throws Exception {
         return remove(key, -1);
     }
 
-    public AmzaPartitionUpdates remove(WALKey key, long timestamp) throws Exception {
+    public AmzaPartitionUpdates remove(byte[] key, long timestamp) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
@@ -88,9 +84,9 @@ public class AmzaPartitionUpdates implements Commitable {
 
     @Override
     public boolean commitable(Highwaters highwaters, TxKeyValueStream txKeyValueStream) throws Exception {
-        for (Entry<WALKey, WALValue> e : changes.entrySet()) {
+        for (Entry<byte[], WALValue> e : changes.entrySet()) {
             WALValue value = e.getValue();
-            if (!txKeyValueStream.row(-1, e.getKey().getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+            if (!txKeyValueStream.row(-1, e.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
                 return false;
             }
         }

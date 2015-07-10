@@ -19,12 +19,10 @@ import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
@@ -63,27 +61,27 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         wal.flush(fsync);
     }
 
-    WALKey partitionPrefixedKey(VersionedPartitionName versionedPartitionName, WALKey key) throws IOException {
+    byte[] partitionPrefixedKey(VersionedPartitionName versionedPartitionName, byte[] key) throws IOException {
         byte[] partitionNameBytes = versionedPartitionName.toBytes();
-        ByteBuffer bb = ByteBuffer.allocate(2 + partitionNameBytes.length + 4 + key.getKey().length);
+        ByteBuffer bb = ByteBuffer.allocate(2 + partitionNameBytes.length + 4 + key.length);
         bb.putShort((short) partitionNameBytes.length);
         bb.put(partitionNameBytes);
-        bb.putInt(key.getKey().length);
-        bb.put(key.getKey());
-        return new WALKey(bb.array());
+        bb.putInt(key.length);
+        bb.put(key);
+        return bb.array();
     }
 
     // TODO IOC shift to using callback
-    WALValue appendHighwaterHints(WALValue value, WALHighwater hints) throws Exception {
+    byte[] appendHighwaterHints(byte[] value, WALHighwater hints) throws Exception {
         HeapFiler filer = new HeapFiler();
-        UIO.writeByteArray(filer, value.getValue(), "value");
+        UIO.writeByteArray(filer, value, "value");
         if (hints != null) {
             UIO.writeBoolean(filer, true, "hasHighwaterHints");
             UIO.writeByteArray(filer, highwaterRowMarshaller.toBytes(hints), "highwaterHints");
         } else {
             UIO.writeBoolean(filer, false, "hasHighwaterHints");
         }
-        return new WALValue(filer.getBytes(), value.getTimestampId(), value.getTombstoned());
+        return filer.getBytes();
     }
 
     public DeltaWALApplied update(final VersionedPartitionName versionedPartitionName,
@@ -93,31 +91,52 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         MutableLong txId = new MutableLong();
         int numApplies = apply.size();
         KeyValueHighwater[] keyValueHighwaters = new KeyValueHighwater[numApplies];
-        long[] fps = wal.write((WALWriter rowWriter) -> {
-            int index = 0;
-            List<byte[]> rawRows = new ArrayList<>();
-            for (Map.Entry<WALKey, WALValue> entry : apply.entrySet()) {
-                WALKey key = entry.getKey();
-                WALValue value = entry.getValue();
-                WALHighwater highwater = (index == numApplies - 1) ? highwaterHint : null;
-                keyValueHighwaters[index] = new KeyValueHighwater(key.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned(), highwater);
-                key = partitionPrefixedKey(versionedPartitionName, key);
-                value = appendHighwaterHints(value, highwater);
-                rawRows.add(primaryRowMarshaller.toRow(key.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned()));
-                index++;
-            }
+        long[] fps = new long[numApplies];
+        int index = 0;
+        for (Map.Entry<WALKey, WALValue> entry : apply.entrySet()) {
+            byte[] key = entry.getKey().getKey();
+            WALValue value = entry.getValue();
+            WALHighwater highwater = (index == numApplies - 1) ? highwaterHint : null;
+            keyValueHighwaters[index] = new KeyValueHighwater(key, value.getValue(), value.getTimestampId(), value.getTombstoned(), highwater);
+            index++;
+        }
+        wal.write((WALWriter rowWriter) -> {
             long transactionId;
-            long[] rowPointers;
+            MutableInt fpIndex = new MutableInt(0);
             synchronized (oneTxAtATimeLock) {
                 transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
-                rowPointers = rowWriter.writePrimary(Collections.nCopies(rawRows.size(), transactionId), rawRows);
+                rowWriter.write(transactionId,
+                    RowType.primary,
+                    rowStream -> {
+                        for (KeyValueHighwater keyValueHighwater : keyValueHighwaters) {
+                            byte[] key = partitionPrefixedKey(versionedPartitionName, keyValueHighwater.key);
+                            byte[] value = appendHighwaterHints(keyValueHighwater.value, keyValueHighwater.highwater);
+                            byte[] row = primaryRowMarshaller.toRow(key, value, keyValueHighwater.valueTimestamp, keyValueHighwater.valueTombstone);
+                            if (!rowStream.stream(row)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    },
+                    indexKeyStream -> {
+                        for (KeyValueHighwater keyValueHighwater : keyValueHighwaters) {
+                            if (!indexKeyStream.stream(keyValueHighwater.key, keyValueHighwater.valueTimestamp, keyValueHighwater.valueTombstone)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    },
+                    (rowTxId, key, valueTimestamp, valueTombstoned, fp) -> {
+                        fps[fpIndex.intValue()] = fp;
+                        fpIndex.increment();
+                        return true;
+                    });
             }
             txId.setValue(transactionId);
-            return rowPointers;
+            return null;
         });
         updateCount.addAndGet(numApplies);
         return new DeltaWALApplied(txId.longValue(), keyValueHighwaters, fps);
-
     }
 
     boolean takeRows(final NavigableMap<Long, long[]> tailMap,

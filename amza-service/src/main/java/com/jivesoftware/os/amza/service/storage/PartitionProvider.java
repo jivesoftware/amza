@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -69,10 +70,10 @@ public class PartitionProvider {
         }
 
         byte[] rawPartitionName = partitionName.toBytes();
-        WALValue propertiesValue = systemWALStorage.get(REGION_PROPERTIES, rawPartitionName);
-        if (propertiesValue != null && !propertiesValue.getTombstoned()) {
-            WALValue indexValue = systemWALStorage.get(REGION_INDEX, rawPartitionName);
-            if (indexValue != null && !indexValue.getTombstoned()) {
+        TimestampedValue propertiesValue = systemWALStorage.get(REGION_PROPERTIES, rawPartitionName);
+        if (propertiesValue != null) {
+            TimestampedValue indexValue = systemWALStorage.get(REGION_INDEX, rawPartitionName);
+            if (indexValue != null) {
                 return true;
             }
         }

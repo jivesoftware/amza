@@ -24,11 +24,11 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
+import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Random;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -37,6 +37,9 @@ import org.testng.annotations.Test;
  * @author jonathan
  */
 public class BinaryRowReaderWriterTest {
+
+    private final WALWriter.IndexableKeys indexableKeys = stream -> true;
+    private final WALWriter.TxKeyPointerFpStream txKeyPointerFpStream = (txId, key, valueTimestamp, valueTombstoned, fp) -> true;
 
     @Test
     public void testValidateDiskBacked() throws Exception {
@@ -61,9 +64,9 @@ public class BinaryRowReaderWriterTest {
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 3);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 0L), Collections.singletonList(new byte[] { 1, 2, 3, 4 }));
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 1L), Collections.singletonList(new byte[] { 1, 2, 3, 5 }));
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 2L), Collections.singletonList(new byte[] { 1, 2, 3, 6 }));
+        binaryRowWriter.write(0L, RowType.primary, stream -> stream.stream(new byte[] { 1, 2, 3, 4 }), indexableKeys, txKeyPointerFpStream);
+        binaryRowWriter.write(1L, RowType.primary, stream -> stream.stream(new byte[] { 1, 2, 3, 5 }), indexableKeys, txKeyPointerFpStream);
+        binaryRowWriter.write(2L, RowType.primary, stream -> stream.stream(new byte[] { 1, 2, 3, 6 }), indexableKeys, txKeyPointerFpStream);
 
         Assert.assertTrue(binaryRowReader.validate());
 
@@ -103,7 +106,7 @@ public class BinaryRowReaderWriterTest {
         Assert.assertTrue(readStream.rows.isEmpty());
         readStream.clear();
 
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 0L), Collections.singletonList(new byte[] { 1, 2, 3, 4 }));
+        binaryRowWriter.write(0L, RowType.primary, stream -> stream.stream(new byte[] { 1, 2, 3, 4 }), indexableKeys, txKeyPointerFpStream);
         binaryRowReader.scan(0, false, readStream);
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
@@ -112,7 +115,7 @@ public class BinaryRowReaderWriterTest {
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
 
-        binaryRowWriter.writePrimary(Collections.nCopies(1, 2L), Collections.singletonList(new byte[] { 2, 3, 4, 5 }));
+        binaryRowWriter.write(2L, RowType.primary, stream -> stream.stream(new byte[] { 2, 3, 4, 5 }), indexableKeys, txKeyPointerFpStream);
         binaryRowReader.scan(0, false, readStream);
         Assert.assertEquals(readStream.rows.size(), 2);
         readStream.clear();
@@ -138,8 +141,9 @@ public class BinaryRowReaderWriterTest {
         readStream.clear();
 
         int numEntries = 1_000_000;
-        for (int i = 0; i < numEntries; i++) {
-            binaryRowWriter.writePrimary(Collections.nCopies(1, (long) i), Collections.singletonList((String.valueOf(i) + "k" + (i % 1000)).getBytes()));
+        for (long i = 0; i < numEntries; i++) {
+            byte[] row = (String.valueOf(i) + "k" + (i % 1000)).getBytes();
+            binaryRowWriter.write(i, RowType.primary, stream -> stream.stream(row), indexableKeys, txKeyPointerFpStream);
         }
 
         for (int i = 0; i < 10; i++) {
@@ -163,7 +167,7 @@ public class BinaryRowReaderWriterTest {
 
         IoStats ioStats = new IoStats();
         Random rand = new Random();
-        for (int i = 0; i < 1000; i++) {
+        for (long i = 0; i < 1000; i++) {
             DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "foo").getAbsolutePath(), "rw", false);
             BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
             BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
@@ -178,7 +182,7 @@ public class BinaryRowReaderWriterTest {
 
             byte[] row = new byte[4];
             rand.nextBytes(row);
-            binaryRowWriter.writePrimary(Collections.nCopies(1, (long) i), Arrays.asList(row));
+            binaryRowWriter.write(i, RowType.primary, stream -> stream.stream(row), indexableKeys, txKeyPointerFpStream);
             filer.close();
         }
 

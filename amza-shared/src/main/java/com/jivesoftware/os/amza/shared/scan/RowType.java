@@ -1,13 +1,11 @@
 package com.jivesoftware.os.amza.shared.scan;
 
 /**
- *
  * @author jonathan.colt
  */
 public enum RowType {
 
     // when advancing a version, preserve old versions as legacy
-// when advancing a version, preserve old versions as legacy
     system((byte) -1, true),
     highwater((byte) 0, false),
     primary((byte) 1, false);

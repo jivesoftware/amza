@@ -27,7 +27,7 @@ import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TimestampedValue;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
@@ -42,7 +42,6 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer.StreamingTakeConsumed;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -59,7 +58,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -112,7 +110,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
@@ -308,7 +306,7 @@ public class AmzaTestCluster {
             amzaService.awaitOnline(partitionName, 10_000);
         }
 
-        public void update(PartitionName partitionName, WALKey k, byte[] v, boolean tombstone) throws Exception {
+        public void update(PartitionName partitionName, byte[] k, byte[] v, boolean tombstone) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
@@ -324,16 +322,17 @@ public class AmzaTestCluster {
 
         }
 
-        public byte[] get(PartitionName partitionName, WALKey key) throws Exception {
+        public byte[] get(PartitionName partitionName, byte[] key) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(Collections.singletonList(key), (byte[] key1, byte[] value, long timestamp) -> {
-                got.add(value);
-                return true;
-            });
+            clientProvider.getClient(partitionName).get(stream -> stream.stream(key),
+                (key1, value, timestamp) -> {
+                    got.add(value);
+                    return true;
+                });
             return got.get(0);
         }
 
@@ -362,9 +361,7 @@ public class AmzaTestCluster {
                 });
                 submit.get();
                 StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
-                StreamingTakesConsumer.StreamingTakeConsumed consumed = streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()),
-                    rowStream);
-                return consumed;
+                return streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()), rowStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -447,10 +444,11 @@ public class AmzaTestCluster {
                 try {
                     compared.increment();
                     TimestampedValue[] bValues = new TimestampedValue[1];
-                    b.get(Collections.singletonList(new WALKey(key)), (byte[] key1, byte[] value, long timestamp) -> {
-                        bValues[0] = new TimestampedValue(timestamp, value);
-                        return true;
-                    });
+                    b.get(stream -> stream.stream(key),
+                        (_key, value, timestamp) -> {
+                            bValues[0] = new TimestampedValue(timestamp, value);
+                            return true;
+                        });
 
                     TimestampedValue bValue = bValues[0];
                     String comparing = partitionName.getRingName() + ":" + partitionName.getName()

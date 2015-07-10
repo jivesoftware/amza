@@ -2,9 +2,6 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * @author jonathan.colt
@@ -12,10 +9,10 @@ import java.util.List;
 public class NoOpWALIndex implements WALIndex {
 
     @Override
-    public void merge(WALKeyPointers pointers, WALMergeKeyPointerStream stream) throws Exception {
-        pointers.consume((byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+    public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {
+        return pointers.consume((long txId, byte[] key, long timestamp, boolean tombstoned, long fp) -> {
             if (stream != null) {
-                if (!stream.stream(WALMergeKeyPointerStream.ignored, key, timestamp, tombstoned, fp)) {
+                if (!stream.stream(WALMergeKeyPointerStream.ignored, txId, key, timestamp, tombstoned, fp)) {
                     return false;
                 }
             }
@@ -40,12 +37,13 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public List<Boolean> containsKey(List<WALKey> key) throws Exception {
-        return Collections.nCopies(key.size(), Boolean.FALSE);
+    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
+        return keys.consume(key -> stream.stream(key, false));
     }
 
     @Override
-    public void remove(Collection<WALKey> key) throws Exception {
+    public boolean remove(WALKeys keys) throws Exception {
+        return keys.consume(key -> true);
     }
 
     @Override
@@ -79,7 +77,8 @@ public class NoOpWALIndex implements WALIndex {
     static class NoOpCompactionWALIndex implements CompactionWALIndex {
 
         @Override
-        public void merge(WALKeyPointers pointers) throws Exception {
+        public boolean merge(TxKeyPointers pointers) throws Exception {
+            return true;
         }
 
         @Override
@@ -97,7 +96,7 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rangeScan(WALKey from, WALKey to, WALKeyPointerStream stream) throws Exception {
+    public boolean rangeScan(byte[] from, byte[] to, WALKeyPointerStream stream) throws Exception {
         return true;
     }
 

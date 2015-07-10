@@ -5,11 +5,9 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import java.util.Arrays;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 
 /**
- *
  * @author jonathan.colt
  */
 public interface AmzaPartitionAPI {
@@ -18,45 +16,17 @@ public interface AmzaPartitionAPI {
         int desiredQuorum,
         long timeoutInMillis) throws Exception;
 
-    boolean get(Iterable<WALKey> keys, TimestampKeyValueStream valuesStream) throws Exception;
+    boolean get(WALKeys keys, TimestampKeyValueStream valuesStream) throws Exception;
 
     /**
-
-     @param from nullable (inclusive)
-     @param to nullable (exclusive)
-     @param stream
-     @throws Exception
+     * @param from   nullable (inclusive)
+     * @param to     nullable (exclusive)
+     * @param stream
+     * @throws Exception
      */
-    void scan(WALKey from, WALKey to, Scan<TimestampedValue> stream) throws Exception;
+    void scan(byte[] from, byte[] to, Scan<TimestampedValue> stream) throws Exception;
 
     TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception;
-
-    class TimestampedValue {
-
-        private final long timestampId;
-        private final byte[] value;
-
-        public TimestampedValue(long timestampId, byte[] value) {
-            this.timestampId = timestampId;
-            this.value = value;
-        }
-
-        public long getTimestampId() {
-            return timestampId;
-        }
-
-        public byte[] getValue() {
-            return value;
-        }
-
-        @Override
-        public String toString() {
-            return "TimestampedValue{"
-                + "timestampId=" + timestampId
-                + ", value=" + Arrays.toString(value)
-                + '}';
-        }
-    }
 
     long count() throws Exception;
 

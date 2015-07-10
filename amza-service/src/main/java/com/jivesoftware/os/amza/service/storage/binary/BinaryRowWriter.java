@@ -21,9 +21,10 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
+import gnu.trove.iterator.TLongIterator;
+import gnu.trove.list.array.TLongArrayList;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 
 public class BinaryRowWriter implements WALWriter {
 
@@ -36,20 +37,20 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
-    public long[] write(List<Long> rowTxIds, List<RowType> rowType, List<byte[]> rows) throws Exception {
-        long[] offsets = new long[rows.size()];
+    public int write(long txId, RowType rowType, RawRows rows, IndexableKeys indexableKeys, TxKeyPointerFpStream stream) throws Exception {
         HeapFiler memoryFiler = new HeapFiler();
-        int i = 0;
-        for (byte[] row : rows) {
-            offsets[i] = memoryFiler.getFilePointer();
+        TLongArrayList offsets = new TLongArrayList();
+        rows.consume(row -> {
+            offsets.add(memoryFiler.getFilePointer());
             int length = (1 + 8) + row.length;
             UIO.writeInt(memoryFiler, length, "length");
-            UIO.writeByte(memoryFiler, rowType.get(i).toByte(), "rowType");
-            UIO.writeLong(memoryFiler, rowTxIds.get(i), "txId");
+            UIO.writeByte(memoryFiler, rowType.toByte(), "rowType");
+            UIO.writeLong(memoryFiler, txId, "txId");
             memoryFiler.write(row);
             UIO.writeInt(memoryFiler, length, "length");
-            i++;
-        }
+            return true;
+        });
+
         byte[] bytes = memoryFiler.getBytes();
         long startFp;
         ioStats.wrote.addAndGet(bytes.length);
@@ -59,35 +60,33 @@ public class BinaryRowWriter implements WALWriter {
             filer.write(bytes);
             filer.flush(false); // TODO expose to config
         }
-        long[] rowPointers = new long[offsets.length];
-        for (int j = 0; j < offsets.length; j++) {
-            rowPointers[j] = startFp + offsets[j];
-        }
-        return rowPointers;
-    }
 
-    @Override
-    public long[] writePrimary(List<Long> txId, List<byte[]> rows) throws Exception {
-        long[] rowPointers = write(txId,
-            Collections.nCopies(txId.size(), RowType.primary),
-            rows);
-        return rowPointers;
+        TLongIterator iter = offsets.iterator();
+        indexableKeys.consume((key, valueTimestamp, valueTombstones) -> stream.stream(txId, key, valueTimestamp, valueTombstones, startFp + iter.next()));
+        return offsets.size();
     }
 
     @Override
     public long writeHighwater(byte[] row) throws Exception {
-        long[] rowPointers = write(Collections.singletonList(-1L),
-            Collections.singletonList(RowType.highwater),
-            Collections.singletonList(row));
-        return rowPointers[0];
+        return writeRowInternal(row, RowType.highwater);
     }
 
     @Override
     public long writeSystem(byte[] row) throws Exception {
-        long[] rowPointers = write(Collections.singletonList(-1L),
-            Collections.singletonList(RowType.system),
-            Collections.singletonList(row));
-        return rowPointers[0];
+        return writeRowInternal(row, RowType.system);
+    }
+
+    private long writeRowInternal(byte[] row, RowType type) throws Exception {
+        long[] fps = new long[1];
+        write(-1L,
+            type,
+            stream -> stream.stream(row),
+            stream -> stream.stream(null, -1, false),
+            (txId, key, valueTimestamp, valueTombstoned, fp) -> {
+                fps[0] = fp;
+                return true;
+            });
+        return fps[0];
     }
 
     @Override

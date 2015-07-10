@@ -30,7 +30,7 @@ public interface WALReader {
      */
     boolean scan(long offsetFp, boolean allowRepairs, RowStream rowStream) throws Exception;
 
-    void reverseScan(RowStream rowStream) throws Exception;
+    boolean reverseScan(RowStream rowStream) throws Exception;
 
     byte[] read(long position) throws Exception;
 }

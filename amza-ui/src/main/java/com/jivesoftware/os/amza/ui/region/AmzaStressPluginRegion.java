@@ -12,12 +12,11 @@ import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.AbstractMap;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -240,8 +239,9 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             while (true) {
                 try {
                     AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-                    updates.setAll(Iterables.transform(values.entrySet(), (input1) -> new AbstractMap.SimpleEntry<>(new WALKey(input1.getKey().getBytes()),
-                        input1.getValue().getBytes())), -1);
+                    updates.setAll(
+                        Iterables.transform(values.entrySet(), input1 -> new SimpleEntry<>(input1.getKey().getBytes(), input1.getValue().getBytes())),
+                        -1);
                     partition.commit(updates, input.desiredQuorm, 30_000);
                     break;
 

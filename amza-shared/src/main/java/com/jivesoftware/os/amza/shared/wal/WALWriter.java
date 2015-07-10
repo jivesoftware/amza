@@ -16,17 +16,34 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.scan.RowType;
-import java.util.List;
 
 public interface WALWriter {
 
-    long[] write(List<Long> txId, List<RowType> rowType, List<byte[]> rows) throws Exception;
-
-    long[] writePrimary(List<Long> txId, List<byte[]> rows) throws Exception;
+    int write(long txId, RowType rowType, RawRows rows, IndexableKeys indexableKeys, TxKeyPointerFpStream stream) throws Exception;
 
     long writeSystem(byte[] row) throws Exception;
 
     long writeHighwater(byte[] row) throws Exception;
 
     long getEndOfLastRow() throws Exception;
+
+    interface RawRows {
+        boolean consume(RawRowStream stream) throws Exception;
+    }
+
+    interface RawRowStream {
+        boolean stream(byte[] row) throws Exception;
+    }
+
+    interface IndexableKeys {
+        boolean consume(IndexableKeyStream stream) throws Exception;
+    }
+
+    interface IndexableKeyStream {
+        boolean stream(byte[] key, long valueTimestamp, boolean valueTombstoned) throws Exception;
+    }
+
+    interface TxKeyPointerFpStream {
+        boolean stream(long txId, byte[] key, long valueTimestamp, boolean valueTombstoned, long fp) throws Exception;
+    }
 }

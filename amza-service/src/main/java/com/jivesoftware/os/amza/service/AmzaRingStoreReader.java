@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -93,43 +94,51 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     }
 
     public boolean isMemberOfRing(String ringName) throws Exception {
-        return ringIndex.containsKey(new WALKey(key(ringName, rootRingMember)));
+        boolean[] isMember = new boolean[1];
+        ringIndex.containsKeys(stream -> stream.stream(key(ringName, rootRingMember)),
+            (key, contained) -> {
+                isMember[0] = contained;
+                return true;
+            });
+        return isMember[0];
     }
 
     @Override
     public NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception {
 
         NavigableMap<RingMember, RingHost> orderedRing = new TreeMap<>();
-        WALKey from = new WALKey(key(ringName, null));
-        nodeIndex.get((stream) -> {
-            return ringIndex.rangeScan(from, from.prefixUpperExclusive(), (key, value, valueTimestamp, valueTombstone) -> {
-                if (!valueTombstone) {
-                    RingMember ringMember = keyToRingMember(key);
-                    return stream.stream(ringMember.toBytes());
+        byte[] from = key(ringName, null);
+        nodeIndex.get(
+            stream -> ringIndex.rangeScan(from,
+                WALKey.prefixUpperExclusive(from),
+                (key, value, valueTimestamp, valueTombstone) -> {
+                    if (!valueTombstone) {
+                        RingMember ringMember = keyToRingMember(key);
+                        return stream.stream(ringMember.toBytes());
+                    } else {
+                        return true;
+                    }
+                }),
+            (key, value, valueTimestamp, valueTombstone) -> {
+                if (value != null && !valueTombstone) {
+                    orderedRing.put(RingMember.fromBytes(key), RingHost.fromBytes(value));
                 } else {
-                    return true;
+                    orderedRing.put(RingMember.fromBytes(key), RingHost.UNKNOWN_RING_HOST);
                 }
+                return true;
             });
-        }, (key, value, valueTimestamp, valueTombstone) -> {
-            if (value != null && !valueTombstone) {
-                orderedRing.put(RingMember.fromBytes(key), RingHost.fromBytes(value));
-            } else {
-                orderedRing.put(RingMember.fromBytes(key), RingHost.UNKNOWN_RING_HOST);
-            }
-            return true;
-        });
         return orderedRing;
     }
 
     public RingHost getRingHost(RingMember ringMember) throws Exception {
-        WALValue rawRingHost = nodeIndex.get(ringMember.toBytes());
-        return rawRingHost == null || rawRingHost.getTombstoned() ? null : RingHost.fromBytes(rawRingHost.getValue());
+        TimestampedValue rawRingHost = nodeIndex.get(ringMember.toBytes());
+        return rawRingHost == null ? null : RingHost.fromBytes(rawRingHost.getValue());
     }
 
     public Set<RingMember> getNeighboringRingMembers(String ringName) throws Exception {
-        WALKey from = new WALKey(key(ringName, null));
+        byte[] from = key(ringName, null);
         Set<RingMember> ring = Sets.newHashSet();
-        ringIndex.rangeScan(from, from.prefixUpperExclusive(), (key, value, valueTimestamp, valueTombstone) -> {
+        ringIndex.rangeScan(from, WALKey.prefixUpperExclusive(from), (key, value, valueTimestamp, valueTombstone) -> {
             if (!valueTombstone) {
                 RingMember ringMember = keyToRingMember(key);
                 if (!ringMember.equals(rootRingMember)) {

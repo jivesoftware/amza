@@ -4,11 +4,13 @@ import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Prefix;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
+import com.jivesoftware.os.amza.shared.wal.MergeTxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.wal.TxKeyPointers;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointers;
 import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALMergeKeyPointerStream;
@@ -24,9 +26,6 @@ import com.sleepycat.je.Environment;
 import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -115,7 +114,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public void merge(WALKeyPointers pointers, WALMergeKeyPointerStream stream) throws Exception {
+    public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {
         try {
             lock.acquire();
         } catch (InterruptedException ie) {
@@ -123,7 +122,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
         }
         try {
             DatabaseEntry dbValue = new DatabaseEntry();
-            pointers.consume((byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+            return pointers.consume((txId, key, timestamp, tombstoned, fp) -> {
                 OperationStatus status = database.get(null, new DatabaseEntry(key), dbValue, LockMode.READ_UNCOMMITTED);
                 byte mode;
                 if (status == OperationStatus.SUCCESS) {
@@ -136,7 +135,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     database.put(null, new DatabaseEntry(key), dbValue);
                 }
                 if (stream != null) {
-                    stream.stream(mode, key, timestamp, tombstoned, fp);
+                    stream.stream(mode, txId, key, timestamp, tombstoned, fp);
                 }
                 return true;
             });
@@ -209,29 +208,27 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public List<Boolean> containsKey(List<WALKey> keys) throws Exception {
+    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
         lock.acquire();
         try {
-            List<Boolean> contains = new ArrayList<>(keys.size());
-            for (WALKey key : keys) { // TODO: Batch contains call?
-                getPointer(key.getKey(), (key1, timestamp, tombstoned, fp) -> {
-                    contains.add(fp == -1 ? Boolean.FALSE : !tombstoned);
+            return keys.consume(key -> getPointer(key,
+                (_key, timestamp, tombstoned, fp) -> {
+                    stream.stream(key, fp != -1 && !tombstoned);
                     return true;
-                });
-            }
-            return contains;
+                }));
         } finally {
             lock.release();
         }
     }
 
     @Override
-    public void remove(Collection<WALKey> keys) throws Exception {
+    public boolean remove(WALKeys keys) throws Exception {
         lock.acquire();
         try {
-            for (WALKey key : keys) {
-                database.delete(null, new DatabaseEntry(key.getKey()));
-            }
+            return keys.consume(key -> {
+                database.delete(null, new DatabaseEntry(key));
+                return true;
+            });
         } finally {
             lock.release();
         }
@@ -325,17 +322,16 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rangeScan(WALKey from, WALKey to, WALKeyPointerStream stream) throws Exception {
+    public boolean rangeScan(byte[] from, byte[] to, WALKeyPointerStream stream) throws Exception {
         lock.acquire();
         Cursor cursor = null;
         try {
             cursor = database.openCursor(null, null);
-            DatabaseEntry keyEntry = new DatabaseEntry(from.getKey());
+            DatabaseEntry keyEntry = new DatabaseEntry(from);
             DatabaseEntry valueEntry = new DatabaseEntry();
             if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
                 do {
-                    WALKey key = new WALKey(keyEntry.getData());
-                    if (to != null && key.compareTo(to) >= 0) {
+                    if (to != null && WALKey.compare(keyEntry.getData(), to) >= 0) {
                         return false;
                     }
                     if (!entryToWALPointer(keyEntry.getData(), valueEntry.getData(), stream)) {
@@ -376,8 +372,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
             return new CompactionWALIndex() {
 
                 @Override
-                public void merge(WALKeyPointers pointers) throws Exception {
-                    compactingWALIndex.merge(pointers, null);
+                public boolean merge(TxKeyPointers pointers) throws Exception {
+                    return compactingWALIndex.merge(pointers, null);
                 }
 
                 @Override

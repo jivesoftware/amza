@@ -19,6 +19,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
@@ -99,7 +100,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
 
     @Override
     public void register(RingMember ringMember, RingHost ringHost) throws Exception {
-        WALValue registeredHost = systemWALStorage.get(PartitionProvider.NODE_INDEX, ringMember.toBytes());
+        TimestampedValue registeredHost = systemWALStorage.get(PartitionProvider.NODE_INDEX, ringMember.toBytes());
         if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
             return;
         }
@@ -120,7 +121,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     }
 
     public RingHost getRingHost() throws Exception {
-        WALValue registeredHost = systemWALStorage.get(PartitionProvider.NODE_INDEX, ringStoreReader.getRingMember().toBytes());
+        TimestampedValue registeredHost = systemWALStorage.get(PartitionProvider.NODE_INDEX, ringStoreReader.getRingMember().toBytes());
         if (registeredHost != null) {
             return RingHost.fromBytes(registeredHost.getValue());
         } else {
@@ -169,8 +170,8 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         byte[] key = ringStoreReader.key(ringName, ringMember);
-        WALValue had = systemWALStorage.get(PartitionProvider.RING_INDEX, key);
-        if (had == null || had.getTombstoned()) {
+        TimestampedValue had = systemWALStorage.get(PartitionProvider.RING_INDEX, key);
+        if (had == null) {
             NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(ringName);
             setInternal(ringName, Iterables.concat(ring.keySet(), Collections.singleton(ringMember)));
         }
@@ -201,7 +202,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         byte[] key = ringStoreReader.key(ringName, ringMember);
-        WALValue had = systemWALStorage.get(PartitionProvider.RING_INDEX, key);
+        TimestampedValue had = systemWALStorage.get(PartitionProvider.RING_INDEX, key);
         if (had != null) {
             systemWALStorage.update(PartitionProvider.RING_INDEX,
                 (highwater, scan) -> {

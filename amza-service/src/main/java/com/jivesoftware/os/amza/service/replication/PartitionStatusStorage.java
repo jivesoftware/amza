@@ -7,6 +7,7 @@ import com.google.common.collect.Table;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
@@ -152,8 +153,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             return versionedStatus;
         }
 
-        WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
-        if (rawStatus == null || rawStatus.getTombstoned()) {
+        TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
+        if (rawStatus == null) {
             return null;
         }
         return VersionedStatus.fromBytes(rawStatus.getValue());
@@ -165,8 +166,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         }
 
         //TODO consider wiring in remote status cache, for now it's racy
-        WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
-        if (rawStatus == null || rawStatus.getTombstoned()) {
+        TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
+        if (rawStatus == null) {
             return null;
         }
         return VersionedStatus.fromBytes(rawStatus.getValue());
@@ -195,8 +196,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     }
 
     public void streamLocalState(PartitionMemberStatusStream stream) throws Exception {
-        WALKey from = new WALKey(walKey(rootRingMember, null));
-        WALKey to = from.prefixUpperExclusive();
+        byte[] from = walKey(rootRingMember, null);
+        byte[] to = WALKey.prefixUpperExclusive(from);
         systemWALStorage.rangeScan(PartitionProvider.REGION_ONLINE_INDEX, from, to, (key, value, valueTimestamp, valueTombstone) -> {
             HeapFiler filer = new HeapFiler(key);
             UIO.readByte(filer, "serializationVersion");
@@ -223,11 +224,11 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
 
         return transactor.doWithAll(versionedPartitionName, versionedStatus.status, (currentVersionedPartitionName, status) -> {
 
-            WALValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
+            TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
             VersionedStatus commitableVersionStatus = null;
             VersionedStatus returnableStatus = null;
 
-            if ((rawStatus == null || rawStatus.getTombstoned())) {
+            if (rawStatus == null) {
                 if (versionedStatus.status == Status.KETCHUP) {
                     commitableVersionStatus = versionedStatus;
                     returnableStatus = versionedStatus;

@@ -27,8 +27,8 @@ import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
@@ -64,6 +64,7 @@ import java.util.List;
 import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -131,11 +132,22 @@ public class AmzaTestCluster {
                 if (amzaNode == null) {
                     throw new IllegalStateException("Service doesn't exists for " + remoteRingMember);
                 } else {
-                    amzaNode.takePartitionUpdates(localRingMember, takeSessionId, timeoutMillis, (versionedPartitionName, status, txId) -> {
-                        if (versionedPartitionName != null) {
-                            updatedPartitionsStream.available(versionedPartitionName, status, txId);
-                        }
-                    });
+                    amzaNode.takePartitionUpdates(localRingMember,
+                        takeSessionId,
+                        timeoutMillis,
+                        (versionedPartitionName, status, txId) -> {
+                            if (versionedPartitionName != null) {
+                                updatedPartitionsStream.available(versionedPartitionName, status, txId);
+                            }
+                        },
+                        () -> {
+                            LOG.debug("Special delivery! Special delivery!");
+                            return null;
+                        },
+                        () -> {
+                            LOG.debug("Ping pong!");
+                            return null;
+                        });
                 }
             }
 
@@ -420,7 +432,9 @@ public class AmzaTestCluster {
         private void takePartitionUpdates(RingMember ringMember,
             long sessionId,
             long timeoutMillis,
-            RowsTaker.AvailableStream updatedPartitionsStream) {
+            RowsTaker.AvailableStream updatedPartitionsStream,
+            Callable<Void> deliverCallback,
+            Callable<Void> pingCallback) {
 
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
@@ -430,7 +444,7 @@ public class AmzaTestCluster {
             }
 
             try {
-                amzaService.availableRowsStream(ringMember, sessionId, timeoutMillis, updatedPartitionsStream);
+                amzaService.availableRowsStream(ringMember, sessionId, timeoutMillis, updatedPartitionsStream, deliverCallback, pingCallback);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

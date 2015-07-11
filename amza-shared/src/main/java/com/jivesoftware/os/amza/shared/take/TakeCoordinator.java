@@ -17,6 +17,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -161,8 +162,10 @@ public class TakeCoordinator {
     public void availableRowsStream(AmzaRingReader ringReader,
         RingMember remoteRingMember,
         long takeSessionId,
-        long timeoutMillis,
-        AvailableStream availableStream) throws Exception {
+        long heartbeatIntervalMillis,
+        AvailableStream availableStream,
+        Callable<Void> deliverCallback,
+        Callable<Void> pingCallback) throws Exception {
 
         AtomicLong offered = new AtomicLong();
         AvailableStream watchAvailableStream = (versionedPartitionName, status, txId) -> {
@@ -187,25 +190,29 @@ public class TakeCoordinator {
                 return true;
             });
             if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
-                suggestedWaitInMillis[0] = timeoutMillis; // Hmmm
-            }
-
-            if (offered.get() != 0) {
-                return;
+                suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
             }
 
             Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, (key) -> new Object());
             synchronized (lock) {
-                if (start == updates.get()) {
-                    //LOG.info("PARKED LONG POLL:remote:{} for {}millis on local:{}",
+                long time = System.currentTimeMillis();
+                long timeRemaining = suggestedWaitInMillis[0];
+                while (start == updates.get() && System.currentTimeMillis() - time < suggestedWaitInMillis[0]) {
+                    long timeToWait = Math.min(timeRemaining, heartbeatIntervalMillis);
+                    //LOG.info("PARKED:remote:{} for {}millis on local:{}",
                     //    remoteRingMember, wait, ringReader.getRingMember());
-                    lock.wait(Math.min(suggestedWaitInMillis[0], timeoutMillis));
-                    if (start == updates.get()) {
-                        return; // Long poll is over
+                    if (offered.get() == 0) {
+                        pingCallback.call(); // Ping aka keep the socket alive
+                    } else {
+                        deliverCallback.call();
+                    }
+                    lock.wait(timeToWait);
+                    timeRemaining -= heartbeatIntervalMillis;
+                    if (timeRemaining < 0) {
+                        break;
                     }
                 }
             }
-
         }
     }
 

@@ -37,6 +37,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
+import org.glassfish.jersey.server.ChunkedOutput;
 
 @Singleton
 @Path("/amza")
@@ -81,7 +82,7 @@ public class AmzaReplicationRestEndpoints {
             };
             return Response.ok(stream).build();
         } catch (Exception x) {
-            Object[] vals = new Object[]{ringMemberString, versionedPartitionName, txId};
+            Object[] vals = new Object[] { ringMemberString, versionedPartitionName, txId };
             LOG.warn("Failed to rowsStream {} {} {}. ", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to rowsStream " + Arrays.toString(vals), x);
         } finally {
@@ -93,28 +94,32 @@ public class AmzaReplicationRestEndpoints {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/rows/available/{ringMember}/{takeSessionId}/{timeoutMillis}")
-    public Response availableRowsStream(@PathParam("ringMember") String ringMemberString,
+    public ChunkedOutput<byte[]> availableRowsStream(@PathParam("ringMember") String ringMemberString,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
         try {
             amzaStats.availableRowsStream.incrementAndGet();
+            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
 
-            StreamingOutput stream = (OutputStream os) -> {
-                os.flush();
-                final DataOutputStream dos = new DataOutputStream(os);
+            new Thread(() -> {
                 try {
-                    amzaInstance.availableRowsStream(dos, new RingMember(ringMemberString), takeSessionId, timeoutMillis);
+                    amzaInstance.availableRowsStream(
+                        chunkedOutput::write,
+                        new RingMember(ringMemberString),
+                        takeSessionId,
+                        timeoutMillis);
                 } catch (Exception x) {
-                    LOG.error("Failed to stream takes.", x);
-                    throw new IOException("Failed to stream takes.", x);
+                    LOG.warn("Failed to stream available rows", x);
                 } finally {
-                    dos.flush();
+                    try {
+                        chunkedOutput.close();
+                    } catch (IOException x) {
+                        LOG.warn("Failed to close stream for available rows", x);
+                    }
                 }
-            };
-            return Response.ok(stream).build();
-        } catch (Exception x) {
-            LOG.warn("Failed to stream partition updates. ", x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to stream partition updates.", x);
+            }, "available-" + ringMemberString).start();
+
+            return chunkedOutput;
         } finally {
             amzaStats.availableRowsStream.decrementAndGet();
         }
@@ -135,7 +140,7 @@ public class AmzaReplicationRestEndpoints {
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to ack for member:{} partition:{} txId:{}",
-                new Object[]{ringMemberName, versionedPartitionName, txId}, x);
+                new Object[] { ringMemberName, versionedPartitionName, txId }, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to ack.", x);
         } finally {
             amzaStats.rowsTaken.decrementAndGet();

@@ -29,7 +29,7 @@ public interface AmzaInstance {
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;
 
-    void availableRowsStream(DataOutputStream dos,
+    void availableRowsStream(ChunkWriteable writeable,
         RingMember remoteRingMember,
         long takeSessionId,
         long timeoutMillis) throws Exception;

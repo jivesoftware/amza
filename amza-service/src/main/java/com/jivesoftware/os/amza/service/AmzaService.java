@@ -33,7 +33,7 @@ import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
+import com.jivesoftware.os.amza.shared.ChunkWriteable;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
@@ -43,13 +43,13 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.RowsTaker;
+import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -58,6 +58,8 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import javafx.util.Callback;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
@@ -349,23 +351,41 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     @Override
-    public void availableRowsStream(DataOutputStream dos, RingMember remoteRingMember, long takeSessionId, long timeoutMillis) throws Exception {
-        takeCoordinator.availableRowsStream(ringStoreReader, remoteRingMember, takeSessionId, timeoutMillis, (partitionName, status, txId) -> {
+    public void availableRowsStream(ChunkWriteable writeable, RingMember remoteRingMember, long takeSessionId, long heartbeatIntervalMillis) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(out);
+        takeCoordinator.availableRowsStream(ringStoreReader, remoteRingMember, takeSessionId, heartbeatIntervalMillis, (partitionName, status, txId) -> {
             dos.write(1);
             byte[] bytes = partitionName.toBytes();
             dos.writeInt(bytes.length);
             dos.write(bytes);
             dos.write(status.getSerializedForm());
             dos.writeLong(txId);
+        }, () -> {
+            if (out.size() > 0) {
+                writeable.write(out.toByteArray());
+                out.reset();
+            }
+            return null;
+        }, () -> {
+            dos.write(1);
+            dos.writeInt(0);
+            writeable.write(out.toByteArray());
+            out.reset();
+            return null;
         });
         dos.write(0);
-        dos.flush();
+        writeable.write(out.toByteArray());
     }
 
-    // for testing online
-    public void availableRowsStream(RingMember remoteRingMember, long takeSessionId, long timeoutMillis,
-        RowsTaker.AvailableStream availableStream) throws Exception {
-        takeCoordinator.availableRowsStream(ringStoreReader, remoteRingMember, takeSessionId, timeoutMillis, availableStream);
+    // for testing only
+    public void availableRowsStream(RingMember remoteRingMember,
+        long takeSessionId,
+        long timeoutMillis,
+        AvailableStream availableStream,
+        Callable<Void> deliverCallback,
+        Callable<Void> pingCallback) throws Exception {
+        takeCoordinator.availableRowsStream(ringStoreReader, remoteRingMember, takeSessionId, timeoutMillis, availableStream, deliverCallback, pingCallback);
     }
 
     @Override
@@ -415,7 +435,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                     partitionStatusStorage.markAsKetchup(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
             }
         }
     }

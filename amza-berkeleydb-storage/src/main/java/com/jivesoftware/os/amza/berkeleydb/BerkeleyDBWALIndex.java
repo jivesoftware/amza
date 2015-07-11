@@ -135,9 +135,10 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     database.put(null, new DatabaseEntry(key), dbValue);
                 }
                 if (stream != null) {
-                    stream.stream(mode, txId, key, timestamp, tombstoned, fp);
+                    return stream.stream(mode, txId, key, timestamp, tombstoned, fp);
+                } else {
+                    return true;
                 }
-                return true;
             });
 
         } finally {

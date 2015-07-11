@@ -152,8 +152,8 @@ public class BinaryWALTx implements WALTx {
                 LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedPartitionName);
 
                 MutableLong rebuilt = new MutableLong();
-                walIndex.merge((TxKeyPointerStream stream) -> {
-                    return io.scan(0, true, (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
+                walIndex.merge(
+                    stream -> io.scan(0, true, (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
                         if (rowType == RowType.primary) {
                             primaryRowMarshaller.fromRow(row, (key, value, valueTimestamp, valueTombstoned) -> {
                                 stream.stream(rowTxId, key, valueTimestamp, valueTombstoned, rowPointer);
@@ -162,8 +162,8 @@ public class BinaryWALTx implements WALTx {
                             });
                         }
                         return true;
-                    });
-                }, null);
+                    }),
+                    (mode, txId, key1, timestamp, tombstoned, fp) -> true);
 
                 LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
                 walIndex.commit();
@@ -171,8 +171,8 @@ public class BinaryWALTx implements WALTx {
                 LOG.info("Checking {} for {}.", walIndex.getClass().getSimpleName(), versionedPartitionName);
 
                 final MutableLong repair = new MutableLong();
-                walIndex.merge((TxKeyPointerStream stream) -> {
-                    return io.reverseScan(new RowStream() {
+                walIndex.merge(
+                    stream -> io.reverseScan(new RowStream() {
                         long commitedUpToTxId = Long.MIN_VALUE;
 
                         @Override
@@ -195,8 +195,8 @@ public class BinaryWALTx implements WALTx {
                                 return rowTxId >= commitedUpToTxId;
                             }
                         }
-                    });
-                }, null);
+                    }),
+                    (mode, txId, key, timestamp, tombstoned, fp) -> true);
 
                 LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
                 walIndex.commit();

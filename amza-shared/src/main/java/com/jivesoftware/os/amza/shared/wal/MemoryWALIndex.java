@@ -146,7 +146,11 @@ public class MemoryWALIndex implements WALIndex {
                 return existingPointer;
             }
         });
-        return stream.stream(mode[0], txId, key, compute.getTimestampId(), compute.getTombstoned(), compute.getFp());
+        if (stream != null) {
+            return stream.stream(mode[0], txId, key, compute.getTimestampId(), compute.getTombstoned(), compute.getFp());
+        } else {
+            return true;
+        }
     }
 
     @Override

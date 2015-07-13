@@ -40,6 +40,10 @@
             <groupId>net.sf.trove4j</groupId>
             <artifactId>trove4j</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.filer</groupId>
+            <artifactId>io</artifactId>
+        </dependency>
     </dependencies>
     <name>amza-shared</name>
 </project>

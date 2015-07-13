@@ -142,7 +142,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
             Collections.sort(partitionNames);
             for (PartitionName partitionName : partitionNames) {
-                if (partitionName.getName().contains(filter)) {
+                if (new String(partitionName.getName()).contains(filter)) {
                     Totals totals = amzaStats.getPartitionTotals().get(partitionName);
                     if (totals == null) {
                         totals = new Totals();
@@ -161,8 +161,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         Map<String, Object> map = new HashMap<>();
         if (name != null) {
             map.put("type", name.isSystemPartition() ? "SYSTEM" : "USER");
-            map.put("name", name.getName());
-            map.put("ringName", name.getRingName());
+            map.put("name", new String(name.getName()));
+            map.put("ringName", new String(name.getRingName()));
             NavigableMap<RingMember, RingHost> ring = ringReader.getRing(name.getRingName());
             List<Map<String, String>> ringMaps = new ArrayList<>();
             for (Entry<RingMember, RingHost> r : ring.entrySet()) {

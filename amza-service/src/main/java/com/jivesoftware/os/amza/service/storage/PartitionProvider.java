@@ -24,23 +24,22 @@ import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 
 public class PartitionProvider {
 
     public static final VersionedPartitionName NODE_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "NODE_INDEX"), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "NODE_INDEX".getBytes()), 0);
     public static final VersionedPartitionName RING_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "RING_INDEX"), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "RING_INDEX".getBytes()), 0);
     public static final VersionedPartitionName REGION_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_INDEX"), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_INDEX".getBytes()), 0);
     public static final VersionedPartitionName REGION_PROPERTIES = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_PROPERTIES"), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_PROPERTIES".getBytes()), 0);
     public static final VersionedPartitionName HIGHWATER_MARK_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "HIGHWATER_MARK_INDEX"), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "HIGHWATER_MARK_INDEX".getBytes()), 0);
     public static final VersionedPartitionName REGION_ONLINE_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_ONLINE_INDEX"), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_ONLINE_INDEX".getBytes()), 0);
 
     private final OrderIdProvider orderIdProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;

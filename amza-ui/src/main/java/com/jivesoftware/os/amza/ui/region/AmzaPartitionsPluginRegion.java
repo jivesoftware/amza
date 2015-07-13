@@ -68,7 +68,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             if (input.action.equals("add")) {
 
             } else if (input.action.equals("remove")) {
-                PartitionName partitionName = new PartitionName(false, input.ringName, input.partitionName);
+                PartitionName partitionName = new PartitionName(false, input.ringName.getBytes(), input.partitionName.getBytes());
                 log.info("Removing {}", partitionName);
                 amzaService.destroyPartition(partitionName);
             }
@@ -81,8 +81,8 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 row.put("status", status == null ? "unknown" : status.status.toString());
                 row.put("version", status == null ? "unknown" : String.valueOf(status.version));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
-                row.put("name", partitionName.getName());
-                row.put("ringName", partitionName.getRingName());
+                row.put("name", new String(partitionName.getName()));
+                row.put("ringName", new String(partitionName.getRingName()));
 
                 NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
                 List<Map<String, Object>> ringHosts = new ArrayList<>();

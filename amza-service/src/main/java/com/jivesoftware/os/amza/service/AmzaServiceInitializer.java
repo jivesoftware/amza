@@ -51,6 +51,7 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -135,8 +136,8 @@ public class AmzaServiceInitializer {
 
         PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
         PartitionStore nodeIndex = partitionIndex.get(PartitionProvider.NODE_INDEX);
-        ConcurrentMap<String, Integer> ringSizesCache = new ConcurrentHashMap<>();
-        ConcurrentMap<RingMember, Set<String>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
+        ConcurrentMap<IBA, Integer> ringSizesCache = new ConcurrentHashMap<>();
+        ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
         AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
 
         WALUpdated walUpdated = (versionedPartitionName, status, txId) -> {

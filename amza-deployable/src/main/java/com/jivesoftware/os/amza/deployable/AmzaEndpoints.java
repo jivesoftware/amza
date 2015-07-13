@@ -171,16 +171,16 @@ public class AmzaEndpoints {
 
     AmzaPartitionAPI createPartitionIfAbsent(String ringName, String simplePartitionName) throws Exception {
 
-        int ringSize = amzaService.getRingReader().getRingSize("default");
+        int ringSize = amzaService.getRingReader().getRingSize("default".getBytes());
         int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
         if (ringSize < systemRingSize) {
-            amzaService.getRingWriter().buildRandomSubRing("default", systemRingSize);
+            amzaService.getRingWriter().buildRandomSubRing("default".getBytes(), systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
-        PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
+        PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, false));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);

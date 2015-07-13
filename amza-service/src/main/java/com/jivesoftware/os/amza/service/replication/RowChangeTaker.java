@@ -464,7 +464,7 @@ public class RowChangeTaker implements RowChanges {
                                 }
                                 partitionStatusStorage.markAsOnline(localVersionedPartitionName);
                             } else if (rowsResult.error == null) {
-                                String ringName = localVersionedPartitionName.getPartitionName().getRingName();
+                                byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
                                 Set<RingMember> remoteRingMembers = amzaRingReader.getNeighboringRingMembers(ringName);
                                 partitionStatusStorage.elect(remoteRingMembers, localVersionedPartitionName);
                             }

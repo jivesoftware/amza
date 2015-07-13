@@ -181,7 +181,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
     }
 
     private AmzaPartitionAPI lookupPartition(AmzaInspectPluginRegionInput input, List<String> msg) throws Exception {
-        AmzaPartitionAPI partition = amzaService.getPartition(new PartitionName(input.systemRegion, input.ringName, input.regionName));
+        AmzaPartitionAPI partition = amzaService.getPartition(new PartitionName(input.systemRegion, input.ringName.getBytes(), input.regionName.getBytes()));
         if (partition == null) {
             msg.add("No region for ringName:" + input.ringName + " regionName:" + input.regionName + " isSystem:" + input.systemRegion);
         }

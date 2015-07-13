@@ -26,7 +26,7 @@ public class TakeRingCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final String ringName;
+    private final byte[] ringName;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
     private final IdPacker idPacker;
     private final VersionedPartitionProvider versionedPartitionProvider;
@@ -36,7 +36,7 @@ public class TakeRingCoordinator {
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
-    public TakeRingCoordinator(String ringName,
+    public TakeRingCoordinator(byte[] ringName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
         VersionedPartitionProvider versionedPartitionProvider,
@@ -164,7 +164,7 @@ public class TakeRingCoordinator {
     @Override
     public String toString() {
         return "TakeRingCoordinator{"
-            + "ringName='" + ringName + '\''
+            + "ringName='" + new String(ringName) + '\''
             + '}';
     }
 }

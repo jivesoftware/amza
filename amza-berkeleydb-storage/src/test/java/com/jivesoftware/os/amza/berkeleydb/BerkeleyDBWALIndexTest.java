@@ -20,7 +20,7 @@ public class BerkeleyDBWALIndexTest {
     @Test
     public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
-        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1", "t1"), 0);
+        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
         BerkeleyDBWALIndex index = getIndex(dir0, partitionName);
         index.merge((TxKeyPointerStream stream) -> {
             return stream.stream(1L, UIO.longBytes(1), System.currentTimeMillis(), false, 1L);
@@ -66,7 +66,7 @@ public class BerkeleyDBWALIndexTest {
     public void testCompact() throws Exception {
 
         File dir0 = Files.createTempDir();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1", "t1"), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
         BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {
@@ -109,7 +109,7 @@ public class BerkeleyDBWALIndexTest {
     }
 
     private BerkeleyDBWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider(new String[] { dir0.getAbsolutePath() }, 1).createIndex(partitionName);
+        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
     }
 
 }

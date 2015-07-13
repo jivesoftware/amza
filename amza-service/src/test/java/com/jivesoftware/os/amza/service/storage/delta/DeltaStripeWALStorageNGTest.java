@@ -86,7 +86,7 @@ public class DeltaStripeWALStorageNGTest {
         PartitionProvider partitionProvider = new PartitionProvider(ids,
             partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, partitionIndex);
 
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring", "partitionName"), 1);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "partitionName".getBytes()), 1);
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
             new PrimaryIndexDescriptor("memory", 0, false, null), null, 100, 100);
 

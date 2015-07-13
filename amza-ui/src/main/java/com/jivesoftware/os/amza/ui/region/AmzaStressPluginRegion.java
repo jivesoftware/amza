@@ -255,15 +255,15 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
     private AmzaPartitionAPI createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
-        NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default");
+        NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default".getBytes());
         if (ring.isEmpty()) {
-            amzaService.getRingWriter().buildRandomSubRing("default", amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING));
+            amzaService.getRingWriter().buildRandomSubRing("default".getBytes(), amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING));
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
-        PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
+        PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
         amzaService.awaitOnline(partitionName, 10_000);
         return amzaService.getPartition(partitionName);

@@ -45,7 +45,7 @@ public class AmzaServiceTest {
         File createTempDir = Files.createTempDir();
         final AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
 
-        final PartitionName partitionName = new PartitionName(false, "test", "partition1");
+        final PartitionName partitionName = new PartitionName(false, "test".getBytes(), "partition1".getBytes());
         for (int i = 0; i < maxNumberOfServices; i++) {
             cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i), partitionName);
         }

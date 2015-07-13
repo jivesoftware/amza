@@ -10,27 +10,27 @@ import java.util.NavigableMap;
  */
 public interface AmzaRingReader {
 
-    String SYSTEM_RING = "system";
+    byte[] SYSTEM_RING = "system".getBytes();
 
     RingMember getRingMember();
 
-    List<Entry<RingMember, RingHost>> getNeighbors(String ringName) throws Exception;
+    List<Entry<RingMember, RingHost>> getNeighbors(byte[] ringName) throws Exception;
 
-    NavigableMap<RingMember, RingHost> getRing(String ringName) throws Exception;
+    NavigableMap<RingMember, RingHost> getRing(byte[] ringName) throws Exception;
 
-    int getRingSize(String ringName) throws Exception;
+    int getRingSize(byte[] ringName) throws Exception;
 
     void allRings(RingStream ringStream) throws Exception;
 
     interface RingStream {
 
-        boolean stream(String ringName, RingMember ringMember, RingHost ringHost) throws Exception;
+        boolean stream(byte[] ringName, RingMember ringMember, RingHost ringHost) throws Exception;
     }
 
     void getRingNames(RingMember ringMember, RingNameStream ringNameStream) throws Exception;
 
     interface RingNameStream {
 
-        boolean stream(String ringName) throws Exception;
+        boolean stream(byte[] ringName) throws Exception;
     }
 }

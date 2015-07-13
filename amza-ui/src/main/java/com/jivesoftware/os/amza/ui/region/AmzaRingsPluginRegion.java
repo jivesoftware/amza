@@ -62,19 +62,19 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
                 final AmzaRingsPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
-                    ringWriter.addRingMember(input.ringName, new RingMember(input.member));
+                    ringWriter.addRingMember(input.ringName.getBytes(), new RingMember(input.member));
                 } else if (input.action.equals("remove")) {
-                    ringWriter.removeRingMember(input.ringName, new RingMember(input.member));
+                    ringWriter.removeRingMember(input.ringName.getBytes(), new RingMember(input.member));
                 }
 
                 final List<Map<String, String>> rows = new ArrayList<>();
-                ringReader.allRings((String ringName, RingMember ringMember, RingHost ringHost) -> {
-                    if ((input.ringName.isEmpty() || ringName.contains(input.ringName))
+                ringReader.allRings((byte[] ringName, RingMember ringMember, RingHost ringHost) -> {
+                    if ((input.ringName.isEmpty() || new String(ringName).contains(input.ringName))
                         && (input.member.isEmpty() || "".contains(input.member))
                         && (input.status.isEmpty() || "".contains(input.status))) {
 
                         Map<String, String> row = new HashMap<>();
-                        row.put("ringName", ringName);
+                        row.put("ringName", new String(ringName));
                         row.put("status", "online");
                         row.put("member", ringMember.getMember());
                         row.put("host", ringHost.getHost());

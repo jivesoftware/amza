@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
+import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -35,7 +36,7 @@ public class TakeCoordinator {
     private final VersionedPartitionProvider versionedPartitionProvider;
     private final IdPacker idPacker;
 
-    private final ConcurrentHashMap<String, TakeRingCoordinator> takeRingCoordinators = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<IBA, TakeRingCoordinator> takeRingCoordinators = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Object> ringMembersLocks = new ConcurrentHashMap<>();
     private final AtomicLong updates = new AtomicLong();
     private final AtomicLong cyaLock = new AtomicLong();
@@ -76,14 +77,14 @@ public class TakeCoordinator {
             while (true) {
                 long updates = cyaLock.get();
                 try {
-                    for (String ringName : takeRingCoordinators.keySet()) {
+                    for (IBA ringName : takeRingCoordinators.keySet()) {
                         TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
-                        List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
+                        List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName.getBytes());
                         boolean neighborsChanged;
                         if (takeRingCoordinator != null) {
                             neighborsChanged = takeRingCoordinator.cya(neighbors);
                         } else {
-                            ensureRingCoodinator(ringName, neighbors);
+                            ensureRingCoodinator(ringName.getBytes(), neighbors);
                             neighborsChanged = true;
                         }
                         if (neighborsChanged) {
@@ -110,13 +111,13 @@ public class TakeCoordinator {
     }
 
     public void expunged(List<VersionedPartitionName> versionedPartitionNames) {
-        SetMultimap<String, VersionedPartitionName> expunged = HashMultimap.create();
+        SetMultimap<IBA, VersionedPartitionName> expunged = HashMultimap.create();
 
         for (VersionedPartitionName versionedPartitionName : versionedPartitionNames) {
-            expunged.put(versionedPartitionName.getPartitionName().getRingName(), versionedPartitionName);
+            expunged.put(new IBA(versionedPartitionName.getPartitionName().getRingName()), versionedPartitionName);
         }
 
-        for (String ringName : expunged.keySet()) {
+        for (IBA ringName : expunged.keySet()) {
             TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
             if (takeRingCoordinator != null) {
                 takeRingCoordinator.expunged(expunged.get(ringName));
@@ -126,7 +127,7 @@ public class TakeCoordinator {
 
     public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception {
         updates.incrementAndGet();
-        String ringName = versionedPartitionName.getPartitionName().getRingName();
+        byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
         TakeRingCoordinator ring = ensureRingCoodinator(ringName, neighbors);
         ring.update(neighbors, versionedPartitionName, status, txId);
@@ -138,8 +139,8 @@ public class TakeCoordinator {
         updated(ringReader, versionedPartitionName, status, 0);
     }
 
-    private TakeRingCoordinator ensureRingCoodinator(String ringName, List<Entry<RingMember, RingHost>> neighbors) {
-        return takeRingCoordinators.computeIfAbsent(ringName,
+    private TakeRingCoordinator ensureRingCoodinator(byte[] ringName, List<Entry<RingMember, RingHost>> neighbors) {
+        return takeRingCoordinators.computeIfAbsent(new IBA(ringName),
             key -> new TakeRingCoordinator(ringName,
                 timestampedOrderIdProvider,
                 idPacker,
@@ -182,7 +183,7 @@ public class TakeCoordinator {
 
             long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
-                TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
+                TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
                         ring.availableRowsStream(remoteRingMember, takeSessionId, watchAvailableStream));
@@ -222,8 +223,8 @@ public class TakeCoordinator {
 
         //LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
         //    remoteRingMember, null, localTxId, localVersionedPartitionName);
-        String ringName = localVersionedPartitionName.getPartitionName().getRingName();
-        TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
+        byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
+        TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
         ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId);
     }
 

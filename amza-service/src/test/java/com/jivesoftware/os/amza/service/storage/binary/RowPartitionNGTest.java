@@ -41,7 +41,7 @@ public class RowPartitionNGTest {
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring", "booya"), 0);
+        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
@@ -124,7 +124,7 @@ public class RowPartitionNGTest {
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring", "booya"), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
@@ -140,7 +140,7 @@ public class RowPartitionNGTest {
         RowIOProvider binaryRowIOProvider = new MemoryBackedRowIOProvider(ioStats, 1);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring", "booya"), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
 
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 

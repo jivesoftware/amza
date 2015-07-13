@@ -374,8 +374,6 @@ public class DeltaStripeWALStorage {
                 WALHighwater partitionHighwater = null;
                 if (delta.shouldWriteHighwater()) {
                     partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-                    LOG.inc("highwaterHint", 1);
-                    LOG.inc("highwaterHint", 1, versionedPartitionName.getPartitionName().getName());
                 }
                 DeltaWAL.DeltaWALApplied updateApplied;
                 synchronized (oneWriterAtATimeLock) {

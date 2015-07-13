@@ -32,10 +32,6 @@ public class BinaryRowIOProvider implements RowIOProvider {
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-
-        System.out.println("Created: filer:" + dir + " " + name);
-        new RuntimeException().printStackTrace();
-
         return new BinaryRowIO<>(new ManageFileRowIO(), file, rowReader, rowWriter);
     }
 

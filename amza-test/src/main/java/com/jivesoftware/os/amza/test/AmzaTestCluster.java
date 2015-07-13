@@ -243,15 +243,15 @@ public class AmzaTestCluster {
 
         try {
             amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, localRingMember); // ?? Hacky
-            amzaService.getRingWriter().addRingMember("test", localRingMember); // ?? Hacky
+            amzaService.getRingWriter().addRingMember("test".getBytes(), localRingMember); // ?? Hacky
             if (lastAmzaService != null) {
                 amzaService.getRingWriter().register(lastAmzaService.getRingReader().getRingMember(), lastAmzaService.getRingWriter().getRingHost());
                 amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
-                amzaService.getRingWriter().addRingMember("test", lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
+                amzaService.getRingWriter().addRingMember("test".getBytes(), lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
 
                 lastAmzaService.getRingWriter().register(localRingMember, localRingHost);
                 lastAmzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, localRingMember); // ?? Hacky
-                lastAmzaService.getRingWriter().addRingMember("test", localRingMember); // ?? Hacky
+                lastAmzaService.getRingWriter().addRingMember("test".getBytes(), localRingMember); // ?? Hacky
             }
             lastAmzaService = amzaService;
         } catch (Exception x) {

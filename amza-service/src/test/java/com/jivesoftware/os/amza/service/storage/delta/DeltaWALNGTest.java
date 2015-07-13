@@ -32,7 +32,7 @@ public class DeltaWALNGTest {
 
     @Test
     public void testLoad() throws Exception {
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(true, "test", "test"), 1);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(true, "test".getBytes(), "test".getBytes()), 1);
         File tmp = Files.createTempDir();
         final PrimaryRowMarshaller<byte[]> primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();

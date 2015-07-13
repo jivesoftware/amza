@@ -28,6 +28,7 @@ import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -69,16 +70,16 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     private final AmzaRingStoreReader ringStoreReader;
     private final SystemWALStorage systemWALStorage;
     private final TimestampedOrderIdProvider orderIdProvider;
-    private final ConcurrentMap<String, Integer> ringSizes;
-    private final ConcurrentMap<RingMember, Set<String>> ringMemberRingNamesCache;
+    private final ConcurrentMap<IBA, Integer> ringSizes;
+    private final ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache;
     private final WALUpdated walUpdated;
 
     public AmzaRingStoreWriter(AmzaRingStoreReader ringStoreReader,
         SystemWALStorage systemWALStorage,
         TimestampedOrderIdProvider orderIdProvider,
         WALUpdated walUpdated,
-        ConcurrentMap<String, Integer> ringSizes,
-        ConcurrentMap<RingMember, Set<String>> ringMemberRingNamesCache) {
+        ConcurrentMap<IBA, Integer> ringSizes,
+        ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache) {
         this.ringStoreReader = ringStoreReader;
         this.systemWALStorage = systemWALStorage;
         this.orderIdProvider = orderIdProvider;
@@ -91,7 +92,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     public void changes(RowsChanged changes) throws Exception {
         if (PartitionProvider.RING_INDEX.equals(changes.getVersionedPartitionName())) {
             for (WALKey key : changes.getApply().keySet()) {
-                ringSizes.remove(ringStoreReader.keyToRingName(key));
+                ringSizes.remove(new IBA(ringStoreReader.keyToRingName(key)));
                 ringMemberRingNamesCache.remove(ringStoreReader.keyToRingMember(key.getKey()));
             }
         }
@@ -128,15 +129,15 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         }
     }
 
-    public boolean isMemberOfRing(String ringName) throws Exception {
+    public boolean isMemberOfRing(byte[] ringName) throws Exception {
         return ringStoreReader.isMemberOfRing(ringName);
     }
 
-    public void ensureMaximalSubRing(String ringName) throws Exception {
+    public void ensureMaximalSubRing(byte[] ringName) throws Exception {
         ensureSubRing(ringName, ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING));
     }
 
-    public void ensureSubRing(String ringName, int desiredRingSize) throws Exception {
+    public void ensureSubRing(byte[] ringName, int desiredRingSize) throws Exception {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }
@@ -147,7 +148,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         }
     }
 
-    public void buildRandomSubRing(String ringName, int desiredRingSize) throws Exception {
+    public void buildRandomSubRing(byte[] ringName, int desiredRingSize) throws Exception {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }
@@ -165,7 +166,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     }
 
     @Override
-    public void addRingMember(String ringName, RingMember ringMember) throws Exception {
+    public void addRingMember(byte[] ringName, RingMember ringMember) throws Exception {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         byte[] key = ringStoreReader.key(ringName, ringMember);
@@ -176,7 +177,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         }
     }
 
-    private void setInternal(String ringName, Iterable<RingMember> members) throws Exception {
+    private void setInternal(byte[] ringName, Iterable<RingMember> members) throws Exception {
         /*
          We deliberatly do a slab update of rings to ensure "all at once" ring visibility.
          */
@@ -191,13 +192,13 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
                 }
                 return true;
             }, walUpdated);
-        ringSizes.remove(ringName);
+        ringSizes.remove(new IBA(ringName));
 
         LOG.info("Ring update:{} -> {}", ringName, members);
     }
 
     @Override
-    public void removeRingMember(String ringName, RingMember ringMember) throws Exception {
+    public void removeRingMember(byte[] ringName, RingMember ringMember) throws Exception {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         byte[] key = ringStoreReader.key(ringName, ringMember);

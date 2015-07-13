@@ -38,7 +38,6 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshalle
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaValueCache;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
@@ -87,7 +86,6 @@ public class AmzaServiceInitializer {
 
         public int numberOfDeltaStripes = 4;
         public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
-        public long maxDeltaValueCacheSizeInBytes = 100_000_000L;
         public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
 
         public int ackWatersStripingLevel = 1024;
@@ -174,7 +172,6 @@ public class AmzaServiceInitializer {
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
-        DeltaValueCache deltaValueCache = new DeltaValueCache(amzaStats, config.maxDeltaValueCacheSizeInBytes);
         PartitionStripe[] partitionStripes = new PartitionStripe[deltaStorageStripes];
         HighwaterStorage[] highwaterStorages = new HighwaterStorage[deltaStorageStripes];
         for (int i = 0; i < deltaStorageStripes; i++) {
@@ -184,7 +181,6 @@ public class AmzaServiceInitializer {
                 i,
                 amzaStats,
                 deltaWALFactory,
-                deltaValueCache,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
             partitionStripes[i] = new PartitionStripe("stripe-" + i, partitionIndex, deltaWALStorage, partitionStatusStorage, amzaPartitionWatcher,

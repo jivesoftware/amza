@@ -28,7 +28,6 @@ import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -91,7 +90,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     @Override
     public void changes(RowsChanged changes) throws Exception {
         if (PartitionProvider.RING_INDEX.equals(changes.getVersionedPartitionName())) {
-            for (WALKey key : changes.getApply().columnKeySet()) {
+            for (WALKey key : changes.getApply().keySet()) {
                 ringSizes.remove(ringStoreReader.keyToRingName(key));
                 ringMemberRingNamesCache.remove(ringStoreReader.keyToRingMember(key.getKey()));
             }

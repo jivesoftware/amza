@@ -24,7 +24,6 @@ import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import gnu.trove.iterator.TLongIterator;
 import gnu.trove.list.array.TLongArrayList;
 import java.io.IOException;
-import java.util.Collections;
 
 public class BinaryRowWriter implements WALWriter {
 
@@ -56,9 +55,11 @@ public class BinaryRowWriter implements WALWriter {
         ioStats.wrote.addAndGet(bytes.length);
         synchronized (filer.lock()) {
             startFp = filer.length();
+            System.out.println("PRE-WRITE: filer:" + filer + " length:" + filer.length() + " wrote:" + bytes.length);
             filer.seek(startFp); // seek to end of file.
             filer.write(bytes);
             filer.flush(false); // TODO expose to config
+            System.out.println("POST-WRITE: filer:" + filer + " length:" + filer.length());
         }
 
         TLongIterator iter = offsets.iterator();
@@ -97,6 +98,7 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     public long length() throws IOException {
+        System.out.println("LENGTH: filer:" + filer + " length:" + filer.length());
         return filer.length();
     }
 

@@ -1,8 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaValueCache.DeltaRow;
-import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
@@ -140,44 +138,32 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     }
 
     boolean takeRows(final NavigableMap<Long, long[]> tailMap,
-        RowStream rowStream,
-        DeltaValueCache deltaValueCache,
-        StripedTLongObjectMap<DeltaRow> rowMap) throws Exception {
+        RowStream rowStream) throws Exception {
         return wal.read((WALReader reader) -> {
             for (Long txId : tailMap.keySet()) {
                 long[] rowFPs = tailMap.get(txId);
                 for (long fp : rowFPs) {
-                    DeltaRow deltaRow = deltaValueCache.get(fp, rowMap);
-                    if (deltaRow != null) {
-                        if (!rowStream.row(fp, txId, RowType.primary,
-                            primaryRowMarshaller.toRow(deltaRow.key, deltaRow.value, deltaRow.valueTimestamp, deltaRow.valueTombstone))) {
-                            return false;
-                        }
-                        if (deltaRow.highwater != null && !rowStream.row(-1, -1, RowType.highwater, highwaterRowMarshaller.toBytes(deltaRow.highwater))) {
-                            return false;
-                        }
-                    } else {
-                        byte[] rawRow = reader.read(fp);
-                        primaryRowMarshaller.fromRow(rawRow, (key, value, valueTimestamp, valueTombstoned) -> {
-                            ByteBuffer bb = ByteBuffer.wrap(key);
-                            byte[] partitionNameBytes = new byte[bb.getShort()];
-                            bb.get(partitionNameBytes);
-                            byte[] keyBytes = new byte[bb.getInt()];
-                            bb.get(keyBytes);
 
-                            HeapFiler filer = new HeapFiler(value);
-                            if (!rowStream.row(fp, txId, RowType.primary, primaryRowMarshaller.toRow(keyBytes,
-                                UIO.readByteArray(filer, "value"), valueTimestamp, valueTombstoned))) {
+                    byte[] rawRow = reader.read(fp);
+                    primaryRowMarshaller.fromRow(rawRow, (key, value, valueTimestamp, valueTombstoned) -> {
+                        ByteBuffer bb = ByteBuffer.wrap(key);
+                        byte[] partitionNameBytes = new byte[bb.getShort()];
+                        bb.get(partitionNameBytes);
+                        byte[] keyBytes = new byte[bb.getInt()];
+                        bb.get(keyBytes);
+
+                        HeapFiler filer = new HeapFiler(value);
+                        if (!rowStream.row(fp, txId, RowType.primary, primaryRowMarshaller.toRow(keyBytes,
+                            UIO.readByteArray(filer, "value"), valueTimestamp, valueTombstoned))) {
+                            return false;
+                        }
+                        if (UIO.readBoolean(filer, "hasHighwaterHints")) {
+                            if (!rowStream.row(-1, -1, RowType.highwater, UIO.readByteArray(filer, "highwaterHints"))) {
                                 return false;
                             }
-                            if (UIO.readBoolean(filer, "hasHighwaterHints")) {
-                                if (!rowStream.row(-1, -1, RowType.highwater, UIO.readByteArray(filer, "highwaterHints"))) {
-                                    return false;
-                                }
-                            }
-                            return true;
-                        });
-                    }
+                        }
+                        return true;
+                    });
                 }
             }
             return true;

@@ -1,8 +1,5 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.Table;
-import com.google.common.collect.Tables;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
@@ -22,6 +19,7 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
+import com.jivesoftware.os.amza.shared.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
@@ -37,7 +35,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +62,6 @@ public class DeltaStripeWALStorage {
     private final AmzaStats amzaStats;
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
-    private final DeltaValueCache deltaValueCache;
     private final Object awakeCompactionsLock = new Object();
     private final long compactAfterNUpdates;
     private final ConcurrentHashMap<VersionedPartitionName, PartitionDelta> partitionDeltas = new ConcurrentHashMap<>();
@@ -87,13 +84,11 @@ public class DeltaStripeWALStorage {
     public DeltaStripeWALStorage(int index,
         AmzaStats amzaStats,
         DeltaWALFactory deltaWALFactory,
-        DeltaValueCache deltaValueCache,
         long compactAfterNUpdates) {
 
         this.index = index;
         this.amzaStats = amzaStats;
         this.deltaWALFactory = deltaWALFactory;
-        this.deltaValueCache = deltaValueCache;
         this.compactAfterNUpdates = compactAfterNUpdates;
         int numberOfCompactorThreads = 1; // TODO expose to config;
         this.compactionThreads = Executors.newFixedThreadPool(numberOfCompactorThreads,
@@ -230,7 +225,7 @@ public class DeltaStripeWALStorage {
             if (wal == null) {
                 throw new IllegalStateException("Delta WAL is currently unavailable.");
             }
-            partitionDelta = new PartitionDelta(versionedPartitionName, wal, deltaValueCache, null);
+            partitionDelta = new PartitionDelta(versionedPartitionName, wal, null);
             PartitionDelta had = partitionDeltas.putIfAbsent(versionedPartitionName, partitionDelta);
             if (had != null) {
                 partitionDelta = had;
@@ -278,7 +273,6 @@ public class DeltaStripeWALStorage {
             for (Map.Entry<VersionedPartitionName, PartitionDelta> e : partitionDeltas.entrySet()) {
                 PartitionDelta partitionDelta = new PartitionDelta(e.getKey(),
                     newDeltaWAL,
-                    deltaValueCache,
                     e.getValue());
                 partitionDeltas.put(e.getKey(), partitionDelta);
                 futures.add(compactionThreads.submit(() -> {
@@ -323,10 +317,10 @@ public class DeltaStripeWALStorage {
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
 
-        final Table<Long, WALKey, WALValue> apply = Tables.newCustomTable(new LinkedHashMap<>(), LinkedHashMap::new);
+        final Map<WALKey, WALValue> apply = new LinkedHashMap<>();
 
-        final Map<WALKey, WALTimestampId> removes = new HashMap<>();
-        final Map<WALKey, WALTimestampId> clobbers = new HashMap<>();
+        final List<KeyedTimestampId> removes = new ArrayList<>();
+        final List<KeyedTimestampId> clobbers = new ArrayList<>();
 
         final List<byte[]> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
@@ -354,26 +348,27 @@ public class DeltaStripeWALStorage {
                 WALKey walKey = new WALKey(key);
                 WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone);
                 if (pointerFp == -1) {
-                    apply.put(-1L, walKey, walValue);
+                    apply.put(walKey, walValue);
                     if (oldestAppliedTimestamp.get() > valueTimestamp) {
                         oldestAppliedTimestamp.set(valueTimestamp);
                     }
                 } else if (pointerTimestamp < valueTimestamp) {
-                    apply.put(-1L, walKey, walValue);
+                    apply.put(walKey, walValue);
                     if (oldestAppliedTimestamp.get() > valueTimestamp) {
                         oldestAppliedTimestamp.set(valueTimestamp);
                     }
                     WALTimestampId walTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
-                    clobbers.put(walKey, walTimestampId);
+                    KeyedTimestampId keyedTimestampId = new KeyedTimestampId(walKey.getKey(), walTimestampId.getTimestampId(), walTimestampId.getTombstoned());
+                    clobbers.add(keyedTimestampId);
                     if (valueTombstone && !pointerTombstoned) {
-                        removes.put(walKey, walTimestampId);
+                        removes.add(keyedTimestampId);
                     }
                 }
                 return true;
             });
 
             if (apply.isEmpty()) {
-                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), HashBasedTable.create(), removes, clobbers, -1);
+                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), Collections.emptyMap(), removes, clobbers, -1);
             } else {
                 PartitionDelta delta = getPartitionDelta(versionedPartitionName);
                 WALHighwater partitionHighwater = null;
@@ -384,7 +379,7 @@ public class DeltaStripeWALStorage {
                 }
                 DeltaWAL.DeltaWALApplied updateApplied;
                 synchronized (oneWriterAtATimeLock) {
-                    updateApplied = wal.update(versionedPartitionName, apply.row(-1L), partitionHighwater);
+                    updateApplied = wal.update(versionedPartitionName, apply, partitionHighwater);
 
                     for (int i = 0; i < updateApplied.fps.length; i++) {
                         KeyValueHighwater keyValueHighwater = updateApplied.keyValueHighwaters[i];
@@ -394,7 +389,7 @@ public class DeltaStripeWALStorage {
                             delta.put(fp, keyValueHighwater.key, keyValueHighwater.value, keyValueHighwater.valueTimestamp, keyValueHighwater.valueTombstone,
                                 keyValueHighwater.highwater);
                         } else {
-                            apply.remove(-1L, keyValueHighwater.key);
+                            apply.remove(new WALKey(keyValueHighwater.key));
                         }
                     }
                     delta.appendTxFps(updateApplied.txId, updateApplied.fps);
@@ -627,7 +622,7 @@ public class DeltaStripeWALStorage {
         try {
             storage.containsKeys(stream -> getPartitionDelta(versionedPartitionName).keys(stream::stream),
                 (key, contained) -> {
-                    if (contained) {
+                    if (!contained) {
                         count.increment();
                     }
                     return true;

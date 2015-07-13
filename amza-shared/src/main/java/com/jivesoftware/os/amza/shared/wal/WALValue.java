@@ -16,13 +16,10 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import java.io.Serializable;
 import java.util.Arrays;
 
-public class WALValue implements Serializable {
+public class WALValue {
 
     private final long timestamp;
     private final boolean tombstoned;

@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Table;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
@@ -30,6 +29,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -322,8 +322,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     @Override
     public void changes(RowsChanged changes) throws Exception {
         if (PartitionProvider.REGION_ONLINE_INDEX.equals(changes.getVersionedPartitionName())) {
-            for (Table.Cell<Long, WALKey, WALValue> change : changes.getApply().cellSet()) {
-                clearCache(change.getColumnKey().getKey(), change.getValue().getValue());
+            for (Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
+                clearCache(change.getKey().getKey(), change.getValue().getValue());
             }
         }
     }

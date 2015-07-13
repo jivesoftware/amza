@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 
 /**
  * @author jonathan.colt
@@ -45,7 +44,7 @@ public class SystemWALStorage {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-        RowsChanged changed = partitionStore.getWalStorage().update(false, updates);
+        RowsChanged changed = partitionStore.getWalStorage().update(-1, updates);
         if (allRowChanges != null && !changed.isEmpty()) {
             allRowChanges.changes(changed);
         }

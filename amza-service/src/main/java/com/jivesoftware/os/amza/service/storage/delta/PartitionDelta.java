@@ -3,8 +3,6 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.collect.Iterators;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaValueCache.DeltaRow;
-import com.jivesoftware.os.amza.shared.StripedTLongObjectMap;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.wal.FpKeyValueHighwaterStream;
@@ -19,10 +17,8 @@ import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -39,22 +35,18 @@ class PartitionDelta {
 
     private final VersionedPartitionName versionedPartitionName;
     private final DeltaWAL deltaWAL;
-    private final DeltaValueCache deltaValueCache;
     final AtomicReference<PartitionDelta> compacting;
 
     private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>(); //TODO replace with concurrent byte[] map
     private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(WALKey::compare);
     private final ConcurrentSkipListMap<Long, long[]> txIdWAL = new ConcurrentSkipListMap<>();
-    private final StripedTLongObjectMap<DeltaRow> deltaValueMap = new StripedTLongObjectMap<>(8);
     private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
 
     PartitionDelta(VersionedPartitionName versionedPartitionName,
         DeltaWAL deltaWAL,
-        DeltaValueCache deltaValueCache,
         PartitionDelta compacting) {
         this.versionedPartitionName = versionedPartitionName;
         this.deltaWAL = deltaWAL;
-        this.deltaValueCache = deltaValueCache;
         this.compacting = new AtomicReference<>(compacting);
     }
 
@@ -134,7 +126,6 @@ class PartitionDelta {
         WALKey walKey = new WALKey(key);
         pointerIndex.put(walKey, pointer);
         orderedIndex.put(key, pointer);
-        deltaValueCache.put(fp, key, value, valueTimestamp, valueTombstone, highwater, deltaValueMap);
     }
 
     boolean shouldWriteHighwater() {
@@ -237,7 +228,7 @@ class PartitionDelta {
         }
 
         ConcurrentNavigableMap<Long, long[]> tailMap = txIdWAL.tailMap(transactionId, false);
-        return deltaWAL.takeRows(tailMap, rowStream, deltaValueCache, deltaValueMap);
+        return deltaWAL.takeRows(tailMap, rowStream);
     }
 
     public boolean takeRowsFromTransactionId(final long transactionId, RowStream rowStream) throws Exception {
@@ -253,7 +244,7 @@ class PartitionDelta {
         }
 
         ConcurrentNavigableMap<Long, long[]> tailMap = txIdWAL.tailMap(transactionId, false);
-        return deltaWAL.takeRows(tailMap, rowStream, deltaValueCache, deltaValueMap);
+        return deltaWAL.takeRows(tailMap, rowStream);
     }
 
     void compact(PartitionIndex partitionIndex) throws Exception {
@@ -268,9 +259,9 @@ class PartitionDelta {
                     MutableBoolean eos = new MutableBoolean(false);
                     for (Map.Entry<Long, long[]> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
                         long txId = e.getKey();
-                        partitionStore.directCommit(true, (highwaters, scan) -> {
+                        partitionStore.directCommit(txId, (highwaters, scan) -> {
                             for (long fp : e.getValue()) {
-                                boolean done = compact.valueForFp(fp,
+                                boolean done = compact.deltaWAL.hydrateKeyValueHighwater(fp,
                                     (_fp, key, value, valueTimestamp, valueTombstone, walHighwater) -> {
                                         WALPointer pointer = compact.orderedIndex.get(key);
                                         if (pointer == null) {
@@ -304,14 +295,5 @@ class PartitionDelta {
             }
         }
         compacting.set(null);
-    }
-
-    private boolean valueForFp(long fp, FpKeyValueHighwaterStream stream) throws Exception {
-        DeltaRow deltaRow = deltaValueCache.get(fp, deltaValueMap);
-        if (deltaRow != null) {
-            return stream.stream(deltaRow.fp, deltaRow.key, deltaRow.value, deltaRow.valueTimestamp, deltaRow.valueTombstone, deltaRow.highwater);
-        } else {
-            return deltaWAL.hydrateKeyValueHighwater(fp, stream);
-        }
     }
 }

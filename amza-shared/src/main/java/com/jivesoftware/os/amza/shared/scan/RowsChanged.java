@@ -15,28 +15,29 @@
  */
 package com.jivesoftware.os.amza.shared.scan;
 
-import com.google.common.collect.Table;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 public class RowsChanged implements Commitable {
 
     private final VersionedPartitionName versionedPartitionName;
     private final long oldestApply;
-    private final Table<Long, WALKey, WALValue> apply;
-    private final Map<WALKey, WALTimestampId> remove;
-    private final Map<WALKey, WALTimestampId> clobber;
+    private final Map<WALKey, WALValue> apply;
+    private final List<KeyedTimestampId> remove;
+    private final List<KeyedTimestampId> clobber;
     private final long largestCommittedTxId;
 
     public RowsChanged(VersionedPartitionName versionedPartitionName,
         long oldestApply,
-        Table<Long, WALKey, WALValue> apply,
-        Map<WALKey, WALTimestampId> remove,
-        Map<WALKey, WALTimestampId> clobber,
+        Map<WALKey, WALValue> apply,
+        List<KeyedTimestampId> remove,
+        List<KeyedTimestampId> clobber,
         long largestCommittedTxId) {
         this.versionedPartitionName = versionedPartitionName;
         this.oldestApply = oldestApply;
@@ -54,15 +55,15 @@ public class RowsChanged implements Commitable {
         return oldestApply;
     }
 
-    public Table<Long, WALKey, WALValue> getApply() {
+    public Map<WALKey, WALValue> getApply() {
         return apply;
     }
 
-    public Map<WALKey, WALTimestampId> getRemove() {
+    public List<KeyedTimestampId> getRemove() {
         return remove;
     }
 
-    public Map<WALKey, WALTimestampId> getClobbered() {
+    public List<KeyedTimestampId> getClobbered() {
         return clobber;
     }
 
@@ -78,10 +79,10 @@ public class RowsChanged implements Commitable {
 
     @Override
     public boolean commitable(Highwaters highwaters, TxKeyValueStream scan) {
-        for (Table.Cell<Long, WALKey, WALValue> cell : apply.cellSet()) {
+        for (Entry<WALKey, WALValue> cell : apply.entrySet()) {
             try {
                 WALValue value = cell.getValue();
-                if (!scan.row(cell.getRowKey(), cell.getColumnKey().getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+                if (!scan.row(-1L, cell.getKey().getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
                     return false;
                 }
             } catch (Throwable ex) {

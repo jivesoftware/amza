@@ -98,33 +98,32 @@ public class DeltaStripeWALStorageNGTest {
 
         File tmp = Files.createTempDir();
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
-        DeltaValueCache deltaValueCache = new DeltaValueCache(new AmzaStats(), 1_000);
-        DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(1, new AmzaStats(), deltaWALFactory, deltaValueCache, 0);
+        DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(1, new AmzaStats(), deltaWALFactory, 0);
         deltaStripeWALStorage.load(partitionIndex, primaryRowMarshaller);
 
         WALStorage storage = partitionStore.getWalStorage();
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(false));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(false));
         Assert.assertEquals(0, storage.count());
         Assert.assertNull(storage.get(key(1).getKey()));
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 1, false), updated);
 
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(true));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(0, storage.count());
         Assert.assertNull(storage.get(key(1).getKey()));
 
         deltaStripeWALStorage.compact(partitionIndex, false);
 
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(true));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 0, false), updated);
         Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(true));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
@@ -132,13 +131,13 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 2, true), updated);
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(false));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(false));
         Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
         deltaStripeWALStorage.compact(partitionIndex, false);
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
-        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), keyIsContained(false));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(false));
         Assert.assertNull(storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
@@ -149,7 +148,7 @@ public class DeltaStripeWALStorageNGTest {
 
     }
 
-    private KeyContainedStream keyIsContained(boolean shouldBeContained) {
+    private KeyContainedStream assertKeyIsContained(boolean shouldBeContained) {
         return (key, contained) -> {
             Assert.assertEquals(contained, shouldBeContained);
             return true;

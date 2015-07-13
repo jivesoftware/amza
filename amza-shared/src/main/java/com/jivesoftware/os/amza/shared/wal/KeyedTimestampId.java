@@ -17,17 +17,25 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Arrays;
 
-public class WALTimestampId {
+public class KeyedTimestampId {
 
+    private final byte[] key;
     private final long timestamp;
     private final boolean tombstoned;
 
     @JsonCreator
-    public WALTimestampId(@JsonProperty("timestamp") long timestamp,
+    public KeyedTimestampId(@JsonProperty("key") byte[] key,
+        @JsonProperty("timestamp") long timestamp,
         @JsonProperty("tombstoned") boolean tombstoned) {
+        this.key = key;
         this.timestamp = timestamp;
         this.tombstoned = tombstoned;
+    }
+
+    public byte[] getKey() {
+        return key;
     }
 
     public long getTimestampId() {
@@ -40,34 +48,37 @@ public class WALTimestampId {
 
     @Override
     public String toString() {
-        return "WALTimestampId{" + "timestamp=" + timestamp + ", tombstoned=" + tombstoned + '}';
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-
-        WALTimestampId that = (WALTimestampId) o;
-
-        if (timestamp != that.timestamp) {
-            return false;
-        }
-        if (tombstoned != that.tombstoned) {
-            return false;
-        }
-
-        return true;
+        return "KeyedTimestampId{" + "key=" + key + ", timestamp=" + timestamp + ", tombstoned=" + tombstoned + '}';
     }
 
     @Override
     public int hashCode() {
-        int result = (int) (timestamp ^ (timestamp >>> 32));
-        result = 31 * result + (tombstoned ? 1 : 0);
-        return result;
+        int hash = 7;
+        hash = 17 * hash + Arrays.hashCode(this.key);
+        hash = 17 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
+        hash = 17 * hash + (this.tombstoned ? 1 : 0);
+        return hash;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final KeyedTimestampId other = (KeyedTimestampId) obj;
+        if (!Arrays.equals(this.key, other.key)) {
+            return false;
+        }
+        if (this.timestamp != other.timestamp) {
+            return false;
+        }
+        if (this.tombstoned != other.tombstoned) {
+            return false;
+        }
+        return true;
+    }
+
 }

@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.storage.binary;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
@@ -174,7 +173,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
             fpIndex[numLeaps - 1] = latest.fp;
             transactionIds[numLeaps - 1] = latest.leaps.lastTransactionId;
         } else {
-            fpIndex = null;
+            fpIndex = new long[0];
             transactionIds = new long[MAX_LEAPS];
 
             long[] idealFpIndex = new long[MAX_LEAPS];

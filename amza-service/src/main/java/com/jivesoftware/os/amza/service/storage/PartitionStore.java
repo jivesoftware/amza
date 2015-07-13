@@ -93,8 +93,8 @@ public class PartitionStore implements RangeScannable {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged directCommit(boolean useUpdateTxId, Commitable updates) throws Exception {
-        RowsChanged changes = walStorage.update(useUpdateTxId, updates);
+    public RowsChanged directCommit(long forceTxId, Commitable updates) throws Exception {
+        RowsChanged changes = walStorage.update(forceTxId, updates);
         walStorage.flush(hardFlush);
         return changes;
     }

@@ -382,7 +382,7 @@ public class RowChangeTaker implements RowChanges {
             }
             long currentVersion = version.get();
             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
-            String metricName = partitionName.getName() + "-" + partitionName.getRingName();
+            String metricName = new String(partitionName.getName()) + "-" + new String(partitionName.getRingName());
             try {
                 //LOG.info("TAKE: local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                 CommitChanges commitChanges = partitionName.isSystemPartition() ? systemPartitionCommitChanges : stripedPartitionCommitChanges;

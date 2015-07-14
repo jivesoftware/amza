@@ -63,13 +63,13 @@ public class DeltaStripeWALStorage {
     private final DeltaWALFactory deltaWALFactory;
     private final AtomicReference<DeltaWAL> deltaWAL = new AtomicReference<>();
     private final Object awakeCompactionsLock = new Object();
-    private final long compactAfterNUpdates;
+    private final long mergeAfterNUpdates;
     private final ConcurrentHashMap<VersionedPartitionName, PartitionDelta> partitionDeltas = new ConcurrentHashMap<>();
     private final Object oneWriterAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
-    private final ExecutorService compactionThreads;
-    private final AtomicLong updateSinceLastCompaction = new AtomicLong();
-    private final AtomicBoolean compacting = new AtomicBoolean(false);
+    private final ExecutorService mergeDeltaThreads;
+    private final AtomicLong updateSinceLastMerge = new AtomicLong();
+    private final AtomicBoolean merging = new AtomicBoolean(false);
 
     private final Reentrant reentrant = new Reentrant();
 
@@ -84,15 +84,14 @@ public class DeltaStripeWALStorage {
     public DeltaStripeWALStorage(int index,
         AmzaStats amzaStats,
         DeltaWALFactory deltaWALFactory,
-        long compactAfterNUpdates) {
+        long mergeAfterNUpdates) {
 
         this.index = index;
         this.amzaStats = amzaStats;
         this.deltaWALFactory = deltaWALFactory;
-        this.compactAfterNUpdates = compactAfterNUpdates;
-        int numberOfCompactorThreads = 1; // TODO expose to config;
-        this.compactionThreads = Executors.newFixedThreadPool(numberOfCompactorThreads,
-            new ThreadFactoryBuilder().setNameFormat("compact-deltas-" + index + "-%d").build());
+        this.mergeAfterNUpdates = mergeAfterNUpdates;
+        this.mergeDeltaThreads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), // TODO expose to config;
+            new ThreadFactoryBuilder().setNameFormat("merge-deltas-" + index + "-%d").build());
     }
 
     private void acquireOne() throws InterruptedException {
@@ -144,7 +143,7 @@ public class DeltaStripeWALStorage {
                 for (int i = 0; i < deltaWALs.size(); i++) {
                     final DeltaWAL wal = deltaWALs.get(i);
                     if (i > 0) {
-                        compactDelta(partitionIndex, deltaWAL.get(), () -> wal);
+                        mergeDelta(partitionIndex, deltaWAL.get(), () -> wal);
                     }
                     deltaWAL.set(wal);
                     wal.load((long rowFP, final long rowTxId, RowType rowType, byte[] rawRow) -> {
@@ -183,7 +182,7 @@ public class DeltaStripeWALStorage {
                                         releaseOne();
                                     }
                                 }
-                                updateSinceLastCompaction.incrementAndGet();
+                                updateSinceLastMerge.incrementAndGet();
                                 return true;
                             });
 
@@ -194,7 +193,7 @@ public class DeltaStripeWALStorage {
                 }
             }
         }
-        if (updateSinceLastCompaction.get() > compactAfterNUpdates) {
+        if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
             synchronized (awakeCompactionsLock) {
                 awakeCompactionsLock.notifyAll();
             }
@@ -234,40 +233,40 @@ public class DeltaStripeWALStorage {
         return partitionDelta;
     }
 
-    public boolean compactable() {
-        return updateSinceLastCompaction.get() > compactAfterNUpdates;
+    public boolean mergeable() {
+        return updateSinceLastMerge.get() > mergeAfterNUpdates;
     }
 
-    public void compact(PartitionIndex partitionIndex, boolean force) throws Exception {
-        if (!force && !compactable()) {
+    public void merge(PartitionIndex partitionIndex, boolean force) throws Exception {
+        if (!force && !mergeable()) {
             return;
         }
 
-        if (!compacting.compareAndSet(false, true)) {
-            LOG.warn("Trying to compact DeltaStripe:" + partitionIndex + " while another compaction is already in progress.");
+        if (!merging.compareAndSet(false, true)) {
+            LOG.warn("Trying to merge DeltaStripe:" + partitionIndex + " while another merge is already in progress.");
             return;
         }
-        amzaStats.beginCompaction("Compacting Delta Stripe:" + index);
+        amzaStats.beginCompaction("Merging Delta Stripe:" + index);
         try {
-            updateSinceLastCompaction.set(0);
-            compactDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create);
+            updateSinceLastMerge.set(0);
+            mergeDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create);
         } finally {
-            compacting.set(false);
-            amzaStats.endCompaction("Compacting Delta Stripe:" + index);
+            merging.set(false);
+            amzaStats.endCompaction("Merging Delta Stripe:" + index);
         }
     }
 
-    private void compactDelta(final PartitionIndex partitionIndex, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
+    private void mergeDelta(final PartitionIndex partitionIndex, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
         final List<Future<Boolean>> futures = new ArrayList<>();
         acquireAll();
         try {
             for (Map.Entry<VersionedPartitionName, PartitionDelta> e : partitionDeltas.entrySet()) {
-                if (e.getValue().compacting.get() != null) {
-                    LOG.warn("Ingress is faster than we can compact!");
+                if (e.getValue().merging.get() != null) {
+                    LOG.warn("Ingress is faster than we can merge!");
                     return;
                 }
             }
-            LOG.info("Compacting delta partitions...");
+            LOG.info("Merging delta partitions...");
             DeltaWAL newDeltaWAL = newWAL.call();
             deltaWAL.set(newDeltaWAL);
             for (Map.Entry<VersionedPartitionName, PartitionDelta> e : partitionDeltas.entrySet()) {
@@ -275,12 +274,12 @@ public class DeltaStripeWALStorage {
                     newDeltaWAL,
                     e.getValue());
                 partitionDeltas.put(e.getKey(), partitionDelta);
-                futures.add(compactionThreads.submit(() -> {
+                futures.add(mergeDeltaThreads.submit(() -> {
                     try {
-                        partitionDelta.compact(partitionIndex);
+                        partitionDelta.merge(partitionIndex);
                         return true;
                     } catch (Exception x) {
-                        LOG.error("Failed to compact:" + partitionDelta, x);
+                        LOG.error("Failed to merge:" + partitionDelta, x);
                         return false;
                     }
                 }));
@@ -401,8 +400,8 @@ public class DeltaStripeWALStorage {
                 updated.updated(versionedPartitionName, partitionStatus, updateApplied.txId);
             }
 
-            long uncompactedUpdates = updateSinceLastCompaction.addAndGet(apply.size());
-            if (uncompactedUpdates > compactAfterNUpdates) {
+            long unmergedUpdates = updateSinceLastMerge.addAndGet(apply.size());
+            if (unmergedUpdates > mergeAfterNUpdates) {
                 synchronized (awakeCompactionsLock) {
                     awakeCompactionsLock.notifyAll();
                 }

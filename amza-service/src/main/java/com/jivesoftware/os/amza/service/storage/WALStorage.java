@@ -181,8 +181,8 @@ public class WALStorage implements RangeScannable {
     }
 
     public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-        final String metricPrefix = "partition>" + versionedPartitionName.getPartitionName().getName()
-            + ">ring>" + versionedPartitionName.getPartitionName().getRingName() + ">";
+        final String metricPrefix = "partition>" + new String(versionedPartitionName.getPartitionName().getName())
+            + ">ring>" + new String(versionedPartitionName.getPartitionName().getRingName()) + ">";
         Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
         if (compact.isPresent()) {
             acquireAll();
@@ -310,7 +310,7 @@ public class WALStorage implements RangeScannable {
      }
      }
      */
-    public RowsChanged update(long forceTxId, Commitable updates) throws Exception {
+    public RowsChanged update(long forceTxId, boolean forceApply, Commitable updates) throws Exception {
 
         AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         Map<WALKey, WALValue> apply = new LinkedHashMap<>();
@@ -325,8 +325,13 @@ public class WALStorage implements RangeScannable {
             highwater[0] = _highwater;
 
         }, (transactionId, key, value, valueTimestamp, valueTombstoned) -> {
-            keys.add(key);
-            values.add(new WALValue(value, valueTimestamp, valueTombstoned));
+            WALValue walValue = new WALValue(value, valueTimestamp, valueTombstoned);
+            if (!forceApply) {
+                keys.add(key);
+                values.add(walValue);
+            } else {
+                apply.put(new WALKey(key), walValue);
+            }
             return true;
         });
 
@@ -337,41 +342,43 @@ public class WALStorage implements RangeScannable {
             MutableBoolean flushCompactionHint = new MutableBoolean(false);
             MutableLong indexCommitedUpToTxId = new MutableLong();
 
-            MutableInt i = new MutableInt(0);
-            wali.getPointers((KeyValueStream stream) -> {
-                for (int k = 0; k < keys.size(); k++) {
-                    WALValue value = values.get(k);
-                    if (!stream.stream(keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
-                        return false;
+            if (!forceApply) {
+                MutableInt i = new MutableInt(0);
+                wali.getPointers((KeyValueStream stream) -> {
+                    for (int k = 0; k < keys.size(); k++) {
+                        WALValue value = values.get(k);
+                        if (!stream.stream(keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+                            return false;
+                        }
                     }
-                }
-                return true;
-            }, (key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                WALKey walKey = new WALKey(key);
-                WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone);
-                if (pointerFp == -1) {
-                    apply.put(walKey, walValue);
-                    if (oldestAppliedTimestamp.get() > valueTimestamp) {
-                        oldestAppliedTimestamp.set(valueTimestamp);
+                    return true;
+                }, (key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+                    WALKey walKey = new WALKey(key);
+                    WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone);
+                    if (pointerFp == -1) {
+                        apply.put(walKey, walValue);
+                        if (oldestAppliedTimestamp.get() > valueTimestamp) {
+                            oldestAppliedTimestamp.set(valueTimestamp);
+                        }
+                    } else if (pointerTimestamp < valueTimestamp) {
+                        apply.put(walKey, walValue);
+                        if (oldestAppliedTimestamp.get() > valueTimestamp) {
+                            oldestAppliedTimestamp.set(valueTimestamp);
+                        }
+                        //TODO do we REALLY need the old value? WALValue value = hydrateRowIndexValue(currentPointer);
+                        WALTimestampId currentTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
+                        KeyedTimestampId keyedTimestampId = new KeyedTimestampId(walKey.getKey(),
+                            currentTimestampId.getTimestampId(),
+                            currentTimestampId.getTombstoned());
+                        clobbers.add(keyedTimestampId);
+                        if (valueTombstone && !pointerTombstoned) {
+                            removes.add(keyedTimestampId);
+                        }
                     }
-                } else if (pointerTimestamp < valueTimestamp) {
-                    apply.put(walKey, walValue);
-                    if (oldestAppliedTimestamp.get() > valueTimestamp) {
-                        oldestAppliedTimestamp.set(valueTimestamp);
-                    }
-                    //TODO do we REALLY need the old value? WALValue value = hydrateRowIndexValue(currentPointer);
-                    WALTimestampId currentTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
-                    KeyedTimestampId keyedTimestampId = new KeyedTimestampId(walKey.getKey(),
-                        currentTimestampId.getTimestampId(),
-                        currentTimestampId.getTombstoned());
-                    clobbers.add(keyedTimestampId);
-                    if (valueTombstone && !pointerTombstoned) {
-                        removes.add(keyedTimestampId);
-                    }
-                }
-                i.increment();
-                return true;
-            });
+                    i.increment();
+                    return true;
+                });
+            }
 
             if (apply.isEmpty()) {
                 rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers, -1);
@@ -435,7 +442,11 @@ public class WALStorage implements RangeScannable {
                         return true;
                     });
 
-                    rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers,
+                    rowsChanged = new RowsChanged(versionedPartitionName, 
+                        oldestAppliedTimestamp.get(),
+                        apply,
+                        removes,
+                        clobbers,
                         indexCommitedUpToTxId.longValue());
                 }
             }

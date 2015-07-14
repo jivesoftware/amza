@@ -1,25 +1,23 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Strings;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -219,34 +217,30 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         private void feed(String regionName, int batch, int threadIndex) throws Exception {
             AmzaPartitionAPI partition = createPartitionIfAbsent(regionName);
 
-            Map<String, String> values = new LinkedHashMap<>();
-            if (input.orderedInsertion) {
-                String max = String.valueOf(input.numBatches * input.batchSize);
-                int bStart = batch * input.batchSize;
-                for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
-                    String k = "k" + Strings.padEnd(String.valueOf(b), max.length(), '0');
-                    values.put(k, "v" + batch);
-                }
-            } else {
-                int bStart = threadIndex * input.batchSize;
-                int bEnd = bStart + input.batchSize;
-                for (int b = bStart; b < bEnd; b++) {
-                    String k = b + "k" + batch;
-                    values.put(k, b + "v" + batch);
-                }
-            }
-
             while (true) {
                 try {
-                    AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-                    updates.setAll(
-                        Iterables.transform(values.entrySet(), input1 -> new SimpleEntry<>(input1.getKey().getBytes(), input1.getValue().getBytes())),
-                        -1);
-                    partition.commit(updates, input.desiredQuorm, 30_000);
+                    partition.commit((Highwaters highwaters, TxKeyValueStream txKeyValueStream) -> {
+                        if (input.orderedInsertion) {
+                            String max = String.valueOf(input.numBatches * input.batchSize);
+                            int bStart = batch * input.batchSize;
+                            for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
+                                String k = "k" + Strings.padEnd(String.valueOf(b), max.length(), '0');
+                                txKeyValueStream.row(-1, k.getBytes(), ("v" + batch).getBytes(), -1, false);
+                            }
+                        } else {
+                            int bStart = threadIndex * input.batchSize;
+                            int bEnd = bStart + input.batchSize;
+                            for (int b = bStart; b < bEnd; b++) {
+                                String k = b + "k" + batch;
+                                txKeyValueStream.row(-1, k.getBytes(), (b + "v" + batch).getBytes(), -1, false);
+                            }
+                        }
+                        return true;
+                    }, input.desiredQuorm, 30_000);
                     break;
 
                 } catch (Exception x) {
-                    log.warn("Failed to set region:" + regionName + " values:" + values, x);
+                    log.warn("Failed to set region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex}, x);
                 }
             }
             added.addAndGet(input.batchSize);

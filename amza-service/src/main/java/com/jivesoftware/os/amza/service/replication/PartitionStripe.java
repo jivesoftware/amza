@@ -300,12 +300,12 @@ public class PartitionStripe {
     }
 
     public boolean compactable() {
-        return storage.compactable();
+        return storage.mergeable();
     }
 
     public void compact(boolean force) {
         try {
-            storage.compact(partitionIndex, force);
+            storage.merge(partitionIndex, force);
         } catch (Throwable x) {
             LOG.error("Compactor failed.", x);
         }

@@ -113,7 +113,7 @@ public class RowPartitionNGTest {
             byte[] value = UIO.intBytes(i);
             updates.add(new WALRow(key, value, idProvider.nextId(), false));
         }
-        indexedWAL.update(-1, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(-1, false, new MemoryWALUpdates(updates, null));
     }
 
     @Test
@@ -216,6 +216,6 @@ public class RowPartitionNGTest {
     private void update(WALStorage indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         List<WALRow> updates = Lists.newArrayList();
         updates.add(new WALRow(key, value, timestamp, remove));
-        indexedWAL.update(-1, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(-1, false, new MemoryWALUpdates(updates, null));
     }
 }

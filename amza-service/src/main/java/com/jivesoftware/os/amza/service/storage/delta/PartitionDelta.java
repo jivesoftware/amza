@@ -35,7 +35,7 @@ class PartitionDelta {
 
     private final VersionedPartitionName versionedPartitionName;
     private final DeltaWAL deltaWAL;
-    final AtomicReference<PartitionDelta> compacting;
+    final AtomicReference<PartitionDelta> merging;
 
     private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>(); //TODO replace with concurrent byte[] map
     private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(WALKey::compare);
@@ -44,16 +44,16 @@ class PartitionDelta {
 
     PartitionDelta(VersionedPartitionName versionedPartitionName,
         DeltaWAL deltaWAL,
-        PartitionDelta compacting) {
+        PartitionDelta merging) {
         this.versionedPartitionName = versionedPartitionName;
         this.deltaWAL = deltaWAL;
-        this.compacting = new AtomicReference<>(compacting);
+        this.merging = new AtomicReference<>(merging);
     }
 
     private boolean getRawValue(byte[] key, FpKeyValueHighwaterStream stream) throws Exception {
         WALPointer got = pointerIndex.get(new WALKey(key));
         if (got == null) {
-            PartitionDelta partitionDelta = compacting.get();
+            PartitionDelta partitionDelta = merging.get();
             if (partitionDelta != null) {
                 return partitionDelta.getRawValue(key, stream);
             }
@@ -73,7 +73,7 @@ class PartitionDelta {
         if (got != null) {
             return got;
         }
-        PartitionDelta partitionDelta = compacting.get();
+        PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {
             return partitionDelta.getPointer(key);
         }
@@ -96,7 +96,7 @@ class PartitionDelta {
         if (got != null) {
             return !got.getTombstoned();
         }
-        PartitionDelta partitionDelta = compacting.get();
+        PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {
             return partitionDelta.containsKey(key);
         }
@@ -151,26 +151,26 @@ class PartitionDelta {
 
     DeltaPeekableElmoIterator rangeScanIterator(byte[] from, byte[] to) {
         Iterator<Map.Entry<byte[], WALPointer>> iterator = orderedIndex.subMap(from, to).entrySet().iterator();
-        Iterator<Map.Entry<byte[], WALPointer>> compactingIterator = Iterators.emptyIterator();
-        PartitionDelta compactingPartitionDelta = compacting.get();
-        DeltaWAL compactingDeltaWAL = null;
-        if (compactingPartitionDelta != null) {
-            compactingIterator = compactingPartitionDelta.orderedIndex.subMap(from, to).entrySet().iterator();
-            compactingDeltaWAL = compactingPartitionDelta.deltaWAL;
+        Iterator<Map.Entry<byte[], WALPointer>> mergingIterator = Iterators.emptyIterator();
+        PartitionDelta mergingPartitionDelta = merging.get();
+        DeltaWAL mergingDeltaWAL = null;
+        if (mergingPartitionDelta != null) {
+            mergingIterator = mergingPartitionDelta.orderedIndex.subMap(from, to).entrySet().iterator();
+            mergingDeltaWAL = mergingPartitionDelta.deltaWAL;
         }
-        return new DeltaPeekableElmoIterator(iterator, compactingIterator, deltaWAL, compactingDeltaWAL);
+        return new DeltaPeekableElmoIterator(iterator, mergingIterator, deltaWAL, mergingDeltaWAL);
     }
 
     DeltaPeekableElmoIterator rowScanIterator() {
         Iterator<Map.Entry<byte[], WALPointer>> iterator = orderedIndex.entrySet().iterator();
-        Iterator<Map.Entry<byte[], WALPointer>> compactingIterator = Iterators.emptyIterator();
-        PartitionDelta compactingPartitionDelta = compacting.get();
-        DeltaWAL compactingDeltaWAL = null;
-        if (compactingPartitionDelta != null) {
-            compactingIterator = compactingPartitionDelta.orderedIndex.entrySet().iterator();
-            compactingDeltaWAL = compactingPartitionDelta.deltaWAL;
+        Iterator<Map.Entry<byte[], WALPointer>> mergingIterator = Iterators.emptyIterator();
+        PartitionDelta mergingPartitionDelta = merging.get();
+        DeltaWAL mergingDeltaWAL = null;
+        if (mergingPartitionDelta != null) {
+            mergingIterator = mergingPartitionDelta.orderedIndex.entrySet().iterator();
+            mergingDeltaWAL = mergingPartitionDelta.deltaWAL;
         }
-        return new DeltaPeekableElmoIterator(iterator, compactingIterator, deltaWAL, compactingDeltaWAL);
+        return new DeltaPeekableElmoIterator(iterator, mergingIterator, deltaWAL, mergingDeltaWAL);
     }
 
     long highestTxId() {
@@ -181,7 +181,7 @@ class PartitionDelta {
     }
 
     public long lowestTxId() {
-        PartitionDelta partitionDelta = compacting.get();
+        PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {
             long lowestTxId = partitionDelta.lowestTxId();
             if (lowestTxId >= 0) {
@@ -216,7 +216,7 @@ class PartitionDelta {
     }
 
     boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        PartitionDelta partitionDelta = compacting.get();
+        PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {
             if (!partitionDelta.takeRowUpdatesSince(transactionId, rowStream)) {
                 return false;
@@ -232,7 +232,7 @@ class PartitionDelta {
     }
 
     public boolean takeRowsFromTransactionId(final long transactionId, RowStream rowStream) throws Exception {
-        PartitionDelta partitionDelta = compacting.get();
+        PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {
             if (!partitionDelta.takeRowsFromTransactionId(transactionId, rowStream)) {
                 return false;
@@ -247,23 +247,23 @@ class PartitionDelta {
         return deltaWAL.takeRows(tailMap, rowStream);
     }
 
-    void compact(PartitionIndex partitionIndex) throws Exception {
-        final PartitionDelta compact = compacting.get();
-        if (compact != null) {
-            if (!compact.txIdWAL.isEmpty()) {
+    void merge(PartitionIndex partitionIndex) throws Exception {
+        final PartitionDelta merge = merging.get();
+        if (merge != null) {
+            if (!merge.txIdWAL.isEmpty()) {
                 try {
-                    PartitionStore partitionStore = partitionIndex.get(compact.versionedPartitionName);
+                    PartitionStore partitionStore = partitionIndex.get(merge.versionedPartitionName);
                     long highestTxId = partitionStore.highestTxId();
-                    LOG.info("Merging ({}) deltas for partition: {} from tx: {}", compact.orderedIndex.size(), compact.versionedPartitionName, highestTxId);
-                    LOG.debug("Merging keys: {}", compact.orderedIndex.keySet());
+                    LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.orderedIndex.size(), merge.versionedPartitionName, highestTxId);
+                    LOG.debug("Merging keys: {}", merge.orderedIndex.keySet());
                     MutableBoolean eos = new MutableBoolean(false);
-                    for (Map.Entry<Long, long[]> e : compact.txIdWAL.tailMap(highestTxId, true).entrySet()) {
+                    for (Map.Entry<Long, long[]> e : merge.txIdWAL.tailMap(highestTxId, true).entrySet()) {
                         long txId = e.getKey();
-                        partitionStore.directCommit(txId, (highwaters, scan) -> {
+                        partitionStore.merge(txId, (highwaters, scan) -> {
                             for (long fp : e.getValue()) {
-                                boolean done = compact.deltaWAL.hydrateKeyValueHighwater(fp,
+                                boolean done = merge.deltaWAL.hydrateKeyValueHighwater(fp,
                                     (_fp, key, value, valueTimestamp, valueTombstone, walHighwater) -> {
-                                        WALPointer pointer = compact.orderedIndex.get(key);
+                                        WALPointer pointer = merge.orderedIndex.get(key);
                                         if (pointer == null) {
                                             throw new RuntimeException("Delta WAL missing key: " + Arrays.toString(key));
                                         }
@@ -288,12 +288,12 @@ class PartitionDelta {
                             break;
                         }
                     }
-                    LOG.info("Merged deltas for {}", compact.versionedPartitionName);
+                    LOG.info("Merged deltas for {}", merge.versionedPartitionName);
                 } catch (Throwable ex) {
                     throw new RuntimeException("Error while streaming entry set.", ex);
                 }
             }
         }
-        compacting.set(null);
+        merging.set(null);
     }
 }

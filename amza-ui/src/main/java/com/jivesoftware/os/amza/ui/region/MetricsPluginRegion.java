@@ -259,24 +259,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) (((double) grandTotal.takesLag.longValue() / 10000d) * 100),
             String.valueOf(getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag"));
 
-        long hits = amzaStats.deltaValueCacheHits.get();
-        long misses = amzaStats.deltaValueCacheMisses.get();
-
-        double hitRatio = ((double) hits / (double) misses) * 100;
-        sb.append(progress("Delta Value Cache Hit/Miss (" + hits + "/" + misses + ")",
-            (int) (hitRatio),
-            String.valueOf(hitRatio) + " ratio"));
-
-        sb.append(progress("Delta Value Cache Utilization (" + amzaStats.deltaValueCacheUtilization.get() + ")",
-            (int) (((double) amzaStats.deltaValueCacheUtilization.get()) * 100), ""));
-
-
-        long cacheAdds = amzaStats.deltaValueCacheAdds.get();
-        long cacheRemoves = amzaStats.deltaValueCacheRemoves.get();
-        double addRemoveRatio = ((double) cacheAdds / (double) cacheRemoves) * 100;
-        sb.append(progress("Delta Value Cache Add/Remove (" + cacheAdds + "/" + cacheRemoves + ")",
-            (int) (addRemoveRatio), String.valueOf(addRemoveRatio) + " ratio"));
-
         sb.append(progress("Active Long Polls (" + amzaStats.availableRowsStream.get() + ")",
             (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100), ""));
 

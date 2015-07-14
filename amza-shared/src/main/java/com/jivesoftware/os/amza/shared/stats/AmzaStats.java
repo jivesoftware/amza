@@ -2,14 +2,11 @@ package com.jivesoftware.os.amza.shared.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
-import com.google.common.util.concurrent.AtomicDouble;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +21,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class AmzaStats {
 
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final SnowflakeIdPacker snowflakeIdPacker = new SnowflakeIdPacker();
     private static final JiveEpochTimestampProvider jiveEpochTimestampProvider = new JiveEpochTimestampProvider();
 
@@ -51,14 +47,6 @@ public class AmzaStats {
     public final AtomicLong rowsStream = new AtomicLong();
     public final AtomicLong availableRowsStream = new AtomicLong();
     public final AtomicLong rowsTaken = new AtomicLong();
-
-
-    public final AtomicLong deltaValueCacheHits = new AtomicLong();
-    public final AtomicLong deltaValueCacheMisses = new AtomicLong();
-    public final AtomicDouble deltaValueCacheUtilization = new AtomicDouble();
-    public final AtomicLong deltaValueCacheAdds = new AtomicLong();
-    public final AtomicLong deltaValueCacheRemoves = new AtomicLong();
-
 
     public AmzaStats() {
     }

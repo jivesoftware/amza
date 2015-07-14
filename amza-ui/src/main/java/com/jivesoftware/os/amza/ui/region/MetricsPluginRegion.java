@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.AtomicDouble;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
@@ -268,8 +269,13 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Active Row Acknowledging (" + amzaStats.rowsTaken.get() + ")",
             (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100), ""));
 
-         sb.append(progress("Back Pressure (" + amzaStats.backPressure.get() + ")",
+        sb.append(progress("Back Pressure (" + amzaStats.backPressure.get() + ")",
             (int) (((double) amzaStats.backPressure.get() / 100d) * 100), ""));
+
+        AtomicDouble[] load = amzaStats.deltaStripeLoad;
+        for (int i = 0; i < load.length; i++) {
+            sb.append(progress("Stripe " + i + " (" + load[i].get() + ")", (int) (load[i].get() * 100), ""));
+        }
 
         sb.append("<p><pre>");
         for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {
@@ -298,7 +304,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;

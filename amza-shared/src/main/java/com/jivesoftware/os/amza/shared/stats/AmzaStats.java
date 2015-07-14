@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.shared.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
+import com.google.common.util.concurrent.AtomicDouble;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -48,8 +49,23 @@ public class AmzaStats {
     public final AtomicLong availableRowsStream = new AtomicLong();
     public final AtomicLong rowsTaken = new AtomicLong();
     public final AtomicLong backPressure = new AtomicLong();
+    public AtomicDouble[] deltaStripeLoad = new AtomicDouble[0];
 
     public AmzaStats() {
+    }
+
+    public void deltaStripeLoad(int index, double load) {
+        if (index >= deltaStripeLoad.length) {
+            AtomicDouble[] newDeltaStripeLoad = new AtomicDouble[index + 1];
+            System.arraycopy(deltaStripeLoad, 0, newDeltaStripeLoad, 0, deltaStripeLoad.length);
+            for (int i = 0; i < index + 1; i++) {
+                if (newDeltaStripeLoad[i] == null) {
+                    newDeltaStripeLoad[i] = new AtomicDouble();
+                }
+            }
+            deltaStripeLoad = newDeltaStripeLoad;
+        }
+        deltaStripeLoad[index].set(index);
     }
 
     static public class Totals {

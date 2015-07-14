@@ -193,6 +193,8 @@ public class DeltaStripeWALStorage {
                 }
             }
         }
+        amzaStats.deltaStripeLoad(index, (double) updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
+
         if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
             synchronized (awakeCompactionsLock) {
                 awakeCompactionsLock.notifyAll();
@@ -315,10 +317,9 @@ public class DeltaStripeWALStorage {
         Commitable updates,
         WALUpdated updated) throws Exception {
 
-        if(updateSinceLastMerge.get() > mergeAfterNUpdates) {
+        if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
             throw new DeltaOverCapacityException();
         }
-
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
 
@@ -488,18 +489,18 @@ public class DeltaStripeWALStorage {
         try {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
             return storage.get(
-                (storageStream) ->
-                    partitionDelta.get(keys, (key, value, valueTimestamp, valueTombstoned) -> {
-                        if (value == null) {
-                            return storageStream.stream(key);
+                (storageStream)
+                -> partitionDelta.get(keys, (key, value, valueTimestamp, valueTombstoned) -> {
+                    if (value == null) {
+                        return storageStream.stream(key);
+                    } else {
+                        if (valueTombstoned) {
+                            return stream.stream(key, null, -1);
                         } else {
-                            if (valueTombstoned) {
-                                return stream.stream(key, null, -1);
-                            } else {
-                                return stream.stream(key, value, valueTimestamp);
-                            }
+                            return stream.stream(key, value, valueTimestamp);
                         }
-                    }),
+                    }
+                }),
                 (key, value, valueTimestamp, valueTombstoned) -> {
                     if (valueTombstoned) {
                         return stream.stream(key, null, -1);
@@ -539,12 +540,12 @@ public class DeltaStripeWALStorage {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
             return partitionDelta.getPointers(keyValues, (key, value, valueTimestamp, valueTombstoned,
                 pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                if (pointerFp == -1) {
-                    return storageStream.stream(key, value, valueTimestamp, valueTombstoned);
-                } else {
-                    return stream.stream(key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp);
-                }
-            });
+                    if (pointerFp == -1) {
+                        return storageStream.stream(key, value, valueTimestamp, valueTombstoned);
+                    } else {
+                        return stream.stream(key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp);
+                    }
+                });
         }, (key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp) -> {
             if (pointerFp == -1) {
                 return stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1);

@@ -60,7 +60,13 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.DataInput;
+import java.io.DataInputStream;
+import java.io.DataOutput;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -149,12 +155,45 @@ public class AmzaServiceInitializer {
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, amzaPartitionWatcher, config.hardFsync);
 
+        final int deltaStorageStripes = config.numberOfDeltaStripes;
+        PartitionStripeProvider.PartitionStripeFunction stripeFunction = partitionName -> Math.abs(partitionName.hashCode() % deltaStorageStripes);
+
+        File[] walDirs = new File[deltaStorageStripes];
+        long[] stripeVersion = new long[deltaStorageStripes];
+        for (int i = 0; i < deltaStorageStripes; i++) {
+            walDirs[i] = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
+            if (!walDirs[i].exists()) {
+                if (!walDirs[i].mkdirs()) {
+                    throw new IllegalStateException("Please check your file permission. " + walDirs[i].getAbsolutePath());
+                }
+            }
+            File versionFile = new File(walDirs[i], "version");
+            if (versionFile.exists()) {
+                try (FileInputStream fileInputStream = new FileInputStream(versionFile)) {
+                    DataInput input = new DataInputStream(fileInputStream);
+                    stripeVersion[i] = input.readLong();
+                }
+            } else {
+                if (versionFile.createNewFile()) {
+                    try (FileOutputStream fileOutputStream = new FileOutputStream(versionFile)) {
+                        DataOutput output = new DataOutputStream(fileOutputStream);
+                        stripeVersion[i] = orderIdProvider.nextId();
+                        output.writeLong(stripeVersion[i]);
+                    }
+                } else {
+                    throw new IllegalStateException("Please check your file permission. " + versionFile.getAbsolutePath());
+                }
+            }
+        }
+
         PartitionStatusStorage partitionStatusStorage = new PartitionStatusStorage(orderIdProvider,
             ringMember,
             systemWALStorage,
             walUpdated,
             amzaRingReader,
             takeCoordinator,
+            stripeFunction,
+            stripeVersion,
             config.awaitOnlineStripingLevel);
 
         amzaPartitionWatcher.watch(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), partitionStatusStorage);
@@ -173,7 +212,6 @@ public class AmzaServiceInitializer {
 
         takeCoordinator.start(amzaRingReader);
 
-        final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
         ExecutorService[] rowTakerThreadPools = new ExecutorService[deltaStorageStripes];
@@ -186,8 +224,7 @@ public class AmzaServiceInitializer {
 
             rowsTakers[i] = rowsTakerFactory.create();
 
-            File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
-            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
+            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], ioProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
                 i,
                 amzaStats,
@@ -206,7 +243,8 @@ public class AmzaServiceInitializer {
                 config.flushHighwatersAfterNUpdates);
         }
 
-        PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(partitionStripes, highwaterStorages, rowTakerThreadPools, rowsTakers);
+        PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(stripeFunction,
+            partitionStripes, highwaterStorages, rowTakerThreadPools, rowsTakers);
 
         PartitionProvider partitionProvider = new PartitionProvider(
             orderIdProvider,

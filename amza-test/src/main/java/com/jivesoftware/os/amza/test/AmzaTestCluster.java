@@ -472,8 +472,8 @@ public class AmzaTestCluster {
                         });
 
                     TimestampedValue bValue = bValues[0];
-                    String comparing = partitionName.getRingName() + ":" + partitionName.getName()
-                        + " to " + partitionName.getRingName() + ":" + partitionName.getName() + "\n";
+                    String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
+                        + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                     if (bValue == null) {
                         System.out.println("INCONSISTENCY: " + comparing + " " + aValue.getTimestampId()
@@ -513,7 +513,8 @@ public class AmzaTestCluster {
                 }
             });
 
-            System.out.println("partition:" + partitionName.getName() + " vs:" + partitionName.getName() + " compared:" + compared + " keys");
+            System.out.println(
+                "partition:" + new String(partitionName.getName()) + " vs:" + new String(partitionName.getName()) + " compared:" + compared + " keys");
             return passed.booleanValue();
         }
     }

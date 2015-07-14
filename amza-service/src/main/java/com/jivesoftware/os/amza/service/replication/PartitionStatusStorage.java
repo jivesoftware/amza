@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider.PartitionStripeFunction;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
@@ -45,6 +46,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     private final SystemWALStorage systemWALStorage;
     private final AmzaRingReader amzaRingReader;
     private final TakeCoordinator takeCoordinator;
+    private final PartitionStripeFunction partitionStripeFunction;
+    private final long[] stripeVersions;
     private final WALUpdated walUpdated;
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
@@ -58,6 +61,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         WALUpdated walUpdated,
         AmzaRingReader amzaRingReader,
         TakeCoordinator takeCoordinator,
+        PartitionStripeFunction partitionStripeFunction,
+        long[] stripeVersions,
         int awaitOnlineStripingLevel) {
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
@@ -65,6 +70,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         this.walUpdated = walUpdated;
         this.amzaRingReader = amzaRingReader;
         this.takeCoordinator = takeCoordinator;
+        this.partitionStripeFunction = partitionStripeFunction;
+        this.stripeVersions = stripeVersions;
         this.transactor = new VersionedPartitionTransactor(1024, 1024); // TODO expose to config?
         this.awaitNotify = new AwaitNotify<>(awaitOnlineStripingLevel);
     }
@@ -154,7 +161,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         }
 
         TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
-        if (rawStatus == null) {
+        if (rawStatus == null || rawStatus.getTimestampId() != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
             return null;
         }
         return VersionedStatus.fromBytes(rawStatus.getValue());
@@ -185,7 +192,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
             return;
         }
-        set(rootRingMember, versionedPartitionName.getPartitionName(), new VersionedStatus(Status.ONLINE, versionedPartitionName.getPartitionVersion()));
+        set(rootRingMember, versionedPartitionName.getPartitionName(), new VersionedStatus(Status.ONLINE,
+            versionedPartitionName.getPartitionVersion()));
     }
 
     public VersionedStatus markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
@@ -204,11 +212,16 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member"));
             PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition"));
 
-            VersionedStatus versionStatus = VersionedStatus.fromBytes(value);
+            if (valueTimestamp == stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
 
-            return transactor.doWithOne(new VersionedPartitionName(partitionName, versionStatus.version),
-                versionStatus.status,
-                (versionedPartitionName, partitionStatus) -> stream.stream(partitionName, ringMember, versionStatus));
+                VersionedStatus versionStatus = VersionedStatus.fromBytes(value);
+                return transactor.doWithOne(new VersionedPartitionName(partitionName, versionStatus.version),
+                    versionStatus.status,
+                    (versionedPartitionName, partitionStatus) -> stream.stream(partitionName, ringMember, versionStatus));
+            } else {
+                return true;
+            }
+
         });
     }
 
@@ -227,8 +240,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
             VersionedStatus commitableVersionStatus = null;
             VersionedStatus returnableStatus = null;
-
-            if (rawStatus == null) {
+            long stripeVersion = stripeVersions[partitionStripeFunction.stripe(partitionName)];
+            if (rawStatus == null || rawStatus.getTimestampId() != stripeVersion) {
                 if (versionedStatus.status == Status.KETCHUP) {
                     commitableVersionStatus = versionedStatus;
                     returnableStatus = versionedStatus;
@@ -249,7 +262,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
                     RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
                         (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
                             walKey(ringMember, partitionName),
-                            versionedStatusBytes, orderIdProvider.nextId(), false), walUpdated);
+                            versionedStatusBytes, stripeVersion, false), walUpdated);
                     return !rowsChanged.isEmpty();
                 });
                 LOG.info("STATUS {}: {} versionedPartitionName:{} was updated to {}",

@@ -408,6 +408,7 @@ public class DeltaStripeWALStorage {
             }
 
             long unmergedUpdates = updateSinceLastMerge.addAndGet(apply.size());
+            amzaStats.deltaStripeLoad(index, (double) unmergedUpdates / (double) mergeAfterNUpdates);
             if (unmergedUpdates > mergeAfterNUpdates) {
                 synchronized (awakeCompactionsLock) {
                     awakeCompactionsLock.notifyAll();

@@ -55,17 +55,21 @@ public class AmzaStats {
     }
 
     public void deltaStripeLoad(int index, double load) {
-        if (index >= deltaStripeLoad.length) {
+        AtomicDouble[] stackCopy = deltaStripeLoad;
+        if (index >= stackCopy.length) {
             AtomicDouble[] newDeltaStripeLoad = new AtomicDouble[index + 1];
-            System.arraycopy(deltaStripeLoad, 0, newDeltaStripeLoad, 0, deltaStripeLoad.length);
+            System.arraycopy(stackCopy, 0, newDeltaStripeLoad, 0, stackCopy.length);
             for (int i = 0; i < index + 1; i++) {
                 if (newDeltaStripeLoad[i] == null) {
                     newDeltaStripeLoad[i] = new AtomicDouble();
                 }
             }
-            deltaStripeLoad = newDeltaStripeLoad;
+            stackCopy = newDeltaStripeLoad;
+            deltaStripeLoad = stackCopy;
         }
-        deltaStripeLoad[index].set(index);
+
+        stackCopy[index].set(load);
+
     }
 
     static public class Totals {

@@ -3,7 +3,9 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
 
 /**
  * @author jonathan.colt
@@ -12,10 +14,17 @@ public class PartitionStripeProvider {
 
     private final PartitionStripe[] deltaStripes;
     private final HighwaterStorage[] highwaterStorages;
+    private final ExecutorService[] rowTakerThreadPools;
+    private final RowsTaker[] rowsTakers;
 
-    public PartitionStripeProvider(PartitionStripe[] deltaStripes, HighwaterStorage[] highwaterStorages) {
+    public PartitionStripeProvider(PartitionStripe[] deltaStripes,
+        HighwaterStorage[] highwaterStorages,
+        ExecutorService[] rowTakerThreadPools,
+        RowsTaker[] rowsTakers) {
         this.deltaStripes = Arrays.copyOf(deltaStripes, deltaStripes.length);
         this.highwaterStorages = Arrays.copyOf(highwaterStorages, highwaterStorages.length);
+        this.rowTakerThreadPools = Arrays.copyOf(rowTakerThreadPools, rowTakerThreadPools.length);
+        this.rowsTakers = Arrays.copyOf(rowsTakers, rowsTakers.length);
     }
 
     public <R> R txPartition(PartitionName partitionName, StripeTx<R> tx) throws Exception {
@@ -32,9 +41,28 @@ public class PartitionStripeProvider {
         });
     }
 
-    public void compactAll(boolean force) {
+    ExecutorService getRowTakerThreadPool(PartitionName partitionName) {
+        int stripeIndex = Math.abs(partitionName.hashCode() % deltaStripes.length);
+        return rowTakerThreadPools[stripeIndex];
+    }
+
+    RowsTaker getRowsTaker(PartitionName partitionName) {
+        int stripeIndex = Math.abs(partitionName.hashCode() % deltaStripes.length);
+        return rowsTakers[stripeIndex];
+    }
+
+    public void mergeAll(boolean force) {
         for (PartitionStripe stripe : deltaStripes) {
-            stripe.compact(force);
+            stripe.merge(force);
+        }
+    }
+
+    public void start() {
+    }
+
+    public void stop() {
+        for (ExecutorService rowTakerThreadPool : rowTakerThreadPools) {
+            rowTakerThreadPool.shutdownNow();
         }
     }
 

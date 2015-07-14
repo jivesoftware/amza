@@ -288,6 +288,7 @@ class PartitionDelta {
                             break;
                         }
                     }
+                    partitionStore.getWalStorage().commitIndex();
                     LOG.info("Merged deltas for {}", merge.versionedPartitionName);
                 } catch (Throwable ex) {
                     throw new RuntimeException("Error while streaming entry set.", ex);

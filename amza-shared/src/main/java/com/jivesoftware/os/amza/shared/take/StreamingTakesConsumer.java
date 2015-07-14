@@ -5,7 +5,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.HashMap;

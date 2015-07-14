@@ -269,6 +269,15 @@ public class WALStorage implements RangeScannable {
         walTx.flush(fsync);
     }
 
+    public void commitIndex() throws Exception {
+        WALIndex wali = walIndex.get();
+        if (wali != null) {
+            wali.commit();
+        } else {
+            LOG.warn("Trying to commit a nonexistent index:{}.", versionedPartitionName);
+        }
+    }
+
     public boolean delete(boolean ifEmpty) throws Exception {
         throw new UnsupportedOperationException("Not yet!");
     }
@@ -442,7 +451,7 @@ public class WALStorage implements RangeScannable {
                         return true;
                     });
 
-                    rowsChanged = new RowsChanged(versionedPartitionName, 
+                    rowsChanged = new RowsChanged(versionedPartitionName,
                         oldestAppliedTimestamp.get(),
                         apply,
                         removes,

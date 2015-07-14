@@ -28,6 +28,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
 
             // Open the environment, creating one if it does not exist
             EnvironmentConfig envConfig = new EnvironmentConfig()
+                //.setConfigParam(EnvironmentConfig.ENV_RUN_CHECKPOINTER, "false")
                 .setAllowCreate(true)
                 .setSharedCache(true);
             envConfig.setCachePercentVoid(30);

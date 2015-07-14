@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
@@ -239,6 +240,9 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                     }, input.desiredQuorm, 30_000);
                     break;
 
+                } catch(DeltaOverCapacityException de) {
+                    Thread.sleep(100);
+                    log.warn("Slowing stress for region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex});
                 } catch (Exception x) {
                     log.warn("Failed to set region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex}, x);
                 }

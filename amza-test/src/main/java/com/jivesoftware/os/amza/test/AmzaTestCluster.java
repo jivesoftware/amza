@@ -39,6 +39,7 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer.StreamingTakeConsumed;
@@ -111,14 +112,14 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
         OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()), idPacker,
             new JiveEpochTimestampProvider());
 
-        RowsTaker updateTaker = new RowsTaker() {
+        AvailableRowsTaker availableRowsTaker = new AvailableRowsTaker() {
 
             @Override
             public void availableRowsStream(RingMember localRingMember,
@@ -126,7 +127,7 @@ public class AmzaTestCluster {
                 RingHost remoteRingHost,
                 long takeSessionId,
                 long timeoutMillis,
-                RowsTaker.AvailableStream updatedPartitionsStream) throws Exception {
+                AvailableRowsTaker.AvailableStream updatedPartitionsStream) throws Exception {
 
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
                 if (amzaNode == null) {
@@ -150,6 +151,10 @@ public class AmzaTestCluster {
                         });
                 }
             }
+
+        };
+
+        RowsTaker updateTaker = new RowsTaker() {
 
             @Override
             public RowsTaker.StreamingRowsResult rowsStream(RingMember localRingMember,
@@ -224,7 +229,9 @@ public class AmzaTestCluster {
             idPacker,
             partitionPropertyMarshaller,
             new WALIndexProviderRegistry(),
-            updateTaker,
+            availableRowsTaker, () -> {
+                return updateTaker;
+            },
             absent,
             (RowsChanged changes) -> {
             });
@@ -234,10 +241,10 @@ public class AmzaTestCluster {
         amzaService.watch(partitionName,
             (RowsChanged changes) -> {
                 /*if (changes.getApply().size() > 0) {
-                    System.out.println("Service:" + localRingMember
-                        + " Partition:" + partitionName.getName()
-                        + " Changed:" + changes.getApply().size());
-                }*/
+                 System.out.println("Service:" + localRingMember
+                 + " Partition:" + partitionName.getName()
+                 + " Changed:" + changes.getApply().size());
+                 }*/
             }
         );
 
@@ -432,7 +439,7 @@ public class AmzaTestCluster {
         private void takePartitionUpdates(RingMember ringMember,
             long sessionId,
             long timeoutMillis,
-            RowsTaker.AvailableStream updatedPartitionsStream,
+            AvailableRowsTaker.AvailableStream updatedPartitionsStream,
             Callable<Void> deliverCallback,
             Callable<Void> pingCallback) {
 

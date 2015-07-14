@@ -268,6 +268,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Active Row Acknowledging (" + amzaStats.rowsTaken.get() + ")",
             (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100), ""));
 
+         sb.append(progress("Back Pressure (" + amzaStats.backPressure.get() + ")",
+            (int) (((double) amzaStats.backPressure.get() / 100d) * 100), ""));
+
         sb.append("<p><pre>");
         for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {
             sb.append("ERROR ").append(l).append("\n");

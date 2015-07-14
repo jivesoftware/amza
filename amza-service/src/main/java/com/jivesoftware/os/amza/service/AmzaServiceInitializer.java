@@ -47,8 +47,10 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
+import com.jivesoftware.os.amza.shared.take.RowsTakerFactory;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.filer.io.IBA;
@@ -75,7 +77,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = new String[]{"./var/data/"};
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -114,7 +116,8 @@ public class AmzaServiceInitializer {
         IdPacker idPacker,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         IndexedWALStorageProvider partitionsWALStorageProvider,
-        RowsTaker rowsTaker,
+        AvailableRowsTaker availableRowsTaker,
+        RowsTakerFactory rowsTakerFactory,
         Optional<TakeFailureListener> takeFailureListener,
         RowChanges allRowChanges) throws Exception {
 
@@ -173,9 +176,16 @@ public class AmzaServiceInitializer {
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
+        ExecutorService[] rowTakerThreadPools = new ExecutorService[deltaStorageStripes];
+        RowsTaker[] rowsTakers = new RowsTaker[deltaStorageStripes];
         PartitionStripe[] partitionStripes = new PartitionStripe[deltaStorageStripes];
         HighwaterStorage[] highwaterStorages = new HighwaterStorage[deltaStorageStripes];
         for (int i = 0; i < deltaStorageStripes; i++) {
+            rowTakerThreadPools[i] = Executors.newFixedThreadPool(config.numberOfTakerThreads,
+                new ThreadFactoryBuilder().setNameFormat("stripe-" + i + "-rowTakerThreadPool-%d").build());
+
+            rowsTakers[i] = rowsTakerFactory.create();
+
             File walDir = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDir, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
@@ -196,7 +206,7 @@ public class AmzaServiceInitializer {
                 config.flushHighwatersAfterNUpdates);
         }
 
-        PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(partitionStripes, highwaterStorages);
+        PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(partitionStripes, highwaterStorages, rowTakerThreadPools, rowsTakers);
 
         PartitionProvider partitionProvider = new PartitionProvider(
             orderIdProvider,
@@ -236,8 +246,8 @@ public class AmzaServiceInitializer {
             compactDeltasThreadPool.submit(() -> {
                 while (true) {
                     try {
-                        if (partitionStripe.compactable()) {
-                            partitionStripe.compact(false);
+                        if (partitionStripe.mergeable()) {
+                            partitionStripe.merge(false);
                         }
                         Object awakeCompactionLock = partitionStripe.getAwakeCompactionLock();
                         synchronized (awakeCompactionLock) {
@@ -270,12 +280,11 @@ public class AmzaServiceInitializer {
             partitionIndex,
             partitionStripeProvider,
             partitionStatusStorage,
-            rowsTaker,
+            availableRowsTaker,
             new SystemPartitionCommitChanges(systemWALStorage, systemHighwaterStorage, walUpdated),
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
             new OrderIdProviderImpl(new ConstantWriterIdProvider(1)),
             takeFailureListener,
-            config.numberOfTakerThreads,
             config.takeLongPollTimeoutMillis);
 
         PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(amzaStats,

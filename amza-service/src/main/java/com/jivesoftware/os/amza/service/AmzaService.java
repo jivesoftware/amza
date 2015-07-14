@@ -42,8 +42,8 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -59,7 +59,6 @@ import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import javafx.util.Callback;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
@@ -149,12 +148,14 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     public void start() throws Exception {
+        partitionStripeProvider.start();
         changeTaker.start();
         partitionTombstoneCompactor.start();
         partitionComposter.start();
     }
 
     public void stop() throws Exception {
+        partitionStripeProvider.stop();
         changeTaker.stop();
         partitionTombstoneCompactor.stop();
         partitionComposter.stop();
@@ -512,8 +513,8 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         partitionTombstoneCompactor.compactTombstone(1, 1, partitionTombstoneCompactor.removeIfOlderThanTimestmapId());
     }
 
-    public void compactAllDeltas(boolean force) {
-        partitionStripeProvider.compactAll(force);
+    public void mergeAllDeltas(boolean force) {
+        partitionStripeProvider.mergeAll(force);
     }
 
     public void expunge() throws Exception {

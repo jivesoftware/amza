@@ -298,6 +298,7 @@ public class DeltaStripeWALStorage {
         try {
             if (!failed) {
                 wal.destroy();
+
                 LOG.info("Compacted delta partitions.");
             } else {
                 LOG.warn("Compaction of delta partition FAILED.");
@@ -313,6 +314,11 @@ public class DeltaStripeWALStorage {
         WALStorage storage,
         Commitable updates,
         WALUpdated updated) throws Exception {
+
+        if(updateSinceLastMerge.get() > mergeAfterNUpdates) {
+            throw new DeltaOverCapacityException();
+        }
+
 
         final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
 

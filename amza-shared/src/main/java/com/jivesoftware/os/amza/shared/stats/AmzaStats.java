@@ -47,6 +47,7 @@ public class AmzaStats {
     public final AtomicLong rowsStream = new AtomicLong();
     public final AtomicLong availableRowsStream = new AtomicLong();
     public final AtomicLong rowsTaken = new AtomicLong();
+    public final AtomicLong backPressure = new AtomicLong();
 
     public AmzaStats() {
     }

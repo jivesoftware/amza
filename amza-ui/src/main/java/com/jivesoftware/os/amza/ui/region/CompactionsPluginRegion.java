@@ -56,8 +56,8 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
 
         try {
             if (input.action.equals("forceCompactionDeltas")) {
-                Executors.callable(() -> {
-                    amzaService.compactAllDeltas(true);
+                Executors.newSingleThreadExecutor().submit(() -> {
+                    amzaService.mergeAllDeltas(true);
                 });
             }
             if (input.action.equals("forceCompactionTombstones")) {

@@ -299,11 +299,11 @@ public class PartitionStripe {
         storage.load(partitionIndex, primaryRowMarshaller);
     }
 
-    public boolean compactable() {
+    public boolean mergeable() {
         return storage.mergeable();
     }
 
-    public void compact(boolean force) {
+    public void merge(boolean force) {
         try {
             storage.merge(partitionIndex, force);
         } catch (Throwable x) {

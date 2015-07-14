@@ -22,6 +22,7 @@ import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.DatabaseEntry;
 import com.sleepycat.je.DatabaseNotFoundException;
 import com.sleepycat.je.DiskOrderedCursor;
+import com.sleepycat.je.DiskOrderedCursorConfig;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
@@ -53,10 +54,9 @@ public class BerkeleyDBWALIndex implements WALIndex {
     public BerkeleyDBWALIndex(Environment environment, BerkeleyDBWALIndexName name) throws Exception {
         this.environment = environment;
         this.name = name;
-
+        
         // Open the database, creating one if it does not exist
-        this.dbConfig = new DatabaseConfig()
-            .setAllowCreate(true);
+        this.dbConfig = new DatabaseConfig().setAllowCreate(true);
         this.database = environment.openDatabase(null, name.getName(), dbConfig);
     }
 
@@ -240,7 +240,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
         lock.acquire();
         DiskOrderedCursor cursor = null;
         try {
-            cursor = database.openCursor(null);
+            cursor = database.openCursor(new DiskOrderedCursorConfig().setKeysOnly(true).setQueueSize(1).setLSNBatchSize(1));
             return (cursor.getNext(new DatabaseEntry(), new DatabaseEntry(), LockMode.READ_UNCOMMITTED) != OperationStatus.SUCCESS);
         } finally {
             lock.release();

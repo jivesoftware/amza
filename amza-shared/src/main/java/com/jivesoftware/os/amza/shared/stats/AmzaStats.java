@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.shared.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
-import com.google.common.util.concurrent.AtomicDouble;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -49,27 +48,50 @@ public class AmzaStats {
     public final AtomicLong availableRowsStream = new AtomicLong();
     public final AtomicLong rowsTaken = new AtomicLong();
     public final AtomicLong backPressure = new AtomicLong();
-    public AtomicDouble[] deltaStripeLoad = new AtomicDouble[0];
+    public final AtomicLong pushBacks = new AtomicLong();
+
+    public long[] deltaStripeMergeLoaded = new long[0];
+    public double[] deltaStripeLoad = new double[0];
+
+    public long[] deltaStripeMergePending = new long[0];
+    public double[] deltaStripeMerge = new double[0];
 
     public AmzaStats() {
     }
 
-    public void deltaStripeLoad(int index, double load) {
-        AtomicDouble[] stackCopy = deltaStripeLoad;
-        if (index >= stackCopy.length) {
-            AtomicDouble[] newDeltaStripeLoad = new AtomicDouble[index + 1];
-            System.arraycopy(stackCopy, 0, newDeltaStripeLoad, 0, stackCopy.length);
-            for (int i = 0; i < index + 1; i++) {
-                if (newDeltaStripeLoad[i] == null) {
-                    newDeltaStripeLoad[i] = new AtomicDouble();
-                }
-            }
-            stackCopy = newDeltaStripeLoad;
-            deltaStripeLoad = stackCopy;
+    public void deltaStripeLoad(int index, long count, double load) {
+        long[] copyCount = deltaStripeMergeLoaded;
+        double[] copy = deltaStripeLoad;
+        if (index >= copy.length) {
+            long[] newArrayCount = new long[index + 1];
+            double[] newArray = new double[index + 1];
+            System.arraycopy(copyCount, 0, newArrayCount, 0, copyCount.length);
+            System.arraycopy(copy, 0, newArray, 0, copy.length);
+            copyCount = newArrayCount;
+            copy = newArray;
+            deltaStripeMergeLoaded = copyCount;
+            deltaStripeLoad = copy;
         }
+        copyCount[index] = count;
+        copy[index] = load;
 
-        stackCopy[index].set(load);
+    }
 
+    public void deltaStripeMerge(int index, long count, double load) {
+        long[] copyCount = deltaStripeMergePending;
+        double[] copy = deltaStripeMerge;
+        if (index >= copy.length) {
+            long[] newArrayCount = new long[index + 1];
+            double[] newArray = new double[index + 1];
+            System.arraycopy(copyCount, 0, newArrayCount, 0, copyCount.length);
+            System.arraycopy(copy, 0, newArray, 0, copy.length);
+            copyCount = newArrayCount;
+            copy = newArray;
+            deltaStripeMergePending = copyCount;
+            deltaStripeMerge = copy;
+        }
+        copyCount[index] = count;
+        copy[index] = load;
     }
 
     static public class Totals {

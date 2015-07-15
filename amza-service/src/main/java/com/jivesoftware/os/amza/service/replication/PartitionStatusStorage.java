@@ -145,7 +145,9 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             }
             if (inKetchup == remoteRingMembers.size()) {
                 markAsOnline(localVersionedPartitionName);
-                LOG.info("Resolving cold start stalemate. " + rootRingMember + " was elected as online for " + localVersionedPartitionName);
+                LOG.info(
+                    "Resolving cold start stalemate. " + rootRingMember + " was elected as online for " + localVersionedPartitionName
+                    + " ring size (" + remoteRingMembers.size() + ")");
             }
         }
     }

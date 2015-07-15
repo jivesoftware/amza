@@ -193,7 +193,7 @@ public class DeltaStripeWALStorage {
                 }
             }
         }
-        amzaStats.deltaStripeLoad(index, (double) updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
+        amzaStats.deltaStripeLoad(index, updateSinceLastMerge.get(), (double) updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
 
         if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
             synchronized (awakeCompactionsLock) {
@@ -271,21 +271,33 @@ public class DeltaStripeWALStorage {
             LOG.info("Merging delta partitions...");
             DeltaWAL newDeltaWAL = newWAL.call();
             deltaWAL.set(newDeltaWAL);
+
+            AtomicLong mergeable = new AtomicLong();
+            AtomicLong merged = new AtomicLong();
+            AtomicLong unmerged = new AtomicLong();
+
             for (Map.Entry<VersionedPartitionName, PartitionDelta> e : partitionDeltas.entrySet()) {
-                PartitionDelta partitionDelta = new PartitionDelta(e.getKey(),
-                    newDeltaWAL,
-                    e.getValue());
-                partitionDeltas.put(e.getKey(), partitionDelta);
+                PartitionDelta mergeableDelta = e.getValue();
+                unmerged.addAndGet(mergeableDelta.size());
+                mergeable.incrementAndGet();
+                PartitionDelta currentDelta = new PartitionDelta(e.getKey(),
+                    newDeltaWAL, mergeableDelta);
+                partitionDeltas.put(e.getKey(), currentDelta);
+
                 futures.add(mergeDeltaThreads.submit(() -> {
                     try {
-                        partitionDelta.merge(partitionIndex);
+                        long count = currentDelta.merge(partitionIndex);
+                        amzaStats.deltaStripeMerge(index,
+                            mergeable.decrementAndGet(),
+                            (double) (unmerged.get() - merged.addAndGet(count)) / (double) unmerged.get());
                         return true;
                     } catch (Exception x) {
-                        LOG.error("Failed to merge:" + partitionDelta, x);
+                        LOG.error("Failed to merge:" + currentDelta, x);
                         return false;
                     }
                 }));
             }
+            amzaStats.deltaStripeMerge(index, 0, 0);
         } finally {
             releaseAll();
         }
@@ -317,7 +329,7 @@ public class DeltaStripeWALStorage {
         Commitable updates,
         WALUpdated updated) throws Exception {
 
-        if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
+        if (merging.get() && updateSinceLastMerge.get() > mergeAfterNUpdates) {
             throw new DeltaOverCapacityException();
         }
 
@@ -408,7 +420,7 @@ public class DeltaStripeWALStorage {
             }
 
             long unmergedUpdates = updateSinceLastMerge.addAndGet(apply.size());
-            amzaStats.deltaStripeLoad(index, (double) unmergedUpdates / (double) mergeAfterNUpdates);
+            amzaStats.deltaStripeLoad(index, unmergedUpdates, (double) unmergedUpdates / (double) mergeAfterNUpdates);
             if (unmergedUpdates > mergeAfterNUpdates) {
                 synchronized (awakeCompactionsLock) {
                     awakeCompactionsLock.notifyAll();

@@ -2,15 +2,20 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.AtomicDouble;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -175,6 +180,22 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
             AmzaPartitionAPI partition = amzaService.getPartition(name);
             map.put("count", String.valueOf(partition.count()));
+
+            PartitionStatusStorage partitionStatusStorage = amzaService.getPartitionStatusStorage();
+            PartitionStatusStorage.VersionedStatus localStatus = partitionStatusStorage.getLocalStatus(name);
+
+            if (name.isSystemPartition()) {
+                HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
+                WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localStatus.version));
+                map.put("highwaters", renderHighwaters(partitionHighwater));
+            } else {
+                PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
+                partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
+                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localStatus.version));
+                    map.put("highwaters", renderHighwaters(partitionHighwater));
+                    return null;
+                });
+            }
         }
         map.put("gets", String.valueOf(totals.gets.get()));
         map.put("getsLag", String.valueOf(totals.getsLag.get()));
@@ -192,6 +213,16 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         map.put("takeAppliesLag", String.valueOf(totals.takeAppliesLag.get()));
 
         return map;
+    }
+
+    public String renderHighwaters(WALHighwater walHighwater) {
+        StringBuilder sb = new StringBuilder();
+        for (WALHighwater.RingMemberHighwater e : walHighwater.ringMemberHighwater) {
+            sb.append("<p>");
+            sb.append(e.ringMember.getMember()).append("=").append(e.transactionId).append("\n");
+            sb.append("</p>");
+        }
+        return sb.toString();
     }
 
     public Map<String, Object> renderPartition(PartitionName partitionName, long startFp, long endFp) {
@@ -270,11 +301,18 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100), ""));
 
         sb.append(progress("Back Pressure (" + amzaStats.backPressure.get() + ")",
-            (int) (((double) amzaStats.backPressure.get() / 100d) * 100), ""));
+            (int) (((double) amzaStats.backPressure.get() / 10000d) * 100), "" + amzaStats.pushBacks.get()));
 
-        AtomicDouble[] load = amzaStats.deltaStripeLoad;
+        long[] count = amzaStats.deltaStripeMergeLoaded;
+        double[] load = amzaStats.deltaStripeLoad;
         for (int i = 0; i < load.length; i++) {
-            sb.append(progress("Stripe " + i + " (" + load[i].get() + ")", (int) (load[i].get() * 100), ""));
+            sb.append(progress(" Delta Stripe " + i + " (" + load[i] + ")", (int) (load[i] * 100), "" + count[i]));
+        }
+
+        count = amzaStats.deltaStripeMergePending;
+        load = amzaStats.deltaStripeMerge;
+        for (int i = 0; i < load.length; i++) {
+            sb.append(progress("Merge Stripe " + i + " (" + load[i] + ")", (int) (load[i] * 100), "" + count[i]));
         }
 
         sb.append("<p><pre>");

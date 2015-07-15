@@ -597,6 +597,7 @@ public class RowChangeTaker implements RowChanges {
                     } catch(DeltaOverCapacityException x) {
                         Thread.sleep(100); // TODO cofig;
                         amzaStats.backPressure.incrementAndGet();
+                        amzaStats.pushBacks.incrementAndGet();
                     }
                 }
             }

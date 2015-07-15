@@ -50,6 +50,10 @@ class PartitionDelta {
         this.merging = new AtomicReference<>(merging);
     }
 
+    public long size() {
+        return pointerIndex.size();
+    }
+
     private boolean getRawValue(byte[] key, FpKeyValueHighwaterStream stream) throws Exception {
         WALPointer got = pointerIndex.get(new WALKey(key));
         if (got == null) {
@@ -247,10 +251,12 @@ class PartitionDelta {
         return deltaWAL.takeRows(tailMap, rowStream);
     }
 
-    void merge(PartitionIndex partitionIndex) throws Exception {
+    long merge(PartitionIndex partitionIndex) throws Exception {
         final PartitionDelta merge = merging.get();
+        long merged = 0;
         if (merge != null) {
             if (!merge.txIdWAL.isEmpty()) {
+                merged = merge.size();
                 try {
                     PartitionStore partitionStore = partitionIndex.get(merge.versionedPartitionName);
                     long highestTxId = partitionStore.highestTxId();
@@ -296,5 +302,6 @@ class PartitionDelta {
             }
         }
         merging.set(null);
+        return merged;
     }
 }

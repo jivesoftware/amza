@@ -147,6 +147,14 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         return partitionProvider;
     }
 
+    public PartitionStripeProvider getPartitionStripeProvider() {
+        return partitionStripeProvider;
+    }
+
+    public HighwaterStorage getSystemHighwaterStorage() {
+        return systemHighwaterStorage;
+    }
+
     public void start() throws Exception {
         partitionStripeProvider.start();
         changeTaker.start();
@@ -436,7 +444,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
                     partitionStatusStorage.markAsKetchup(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
             }
         }
     }

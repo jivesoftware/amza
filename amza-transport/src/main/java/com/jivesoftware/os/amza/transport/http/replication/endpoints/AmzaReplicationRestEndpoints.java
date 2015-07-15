@@ -78,6 +78,7 @@ public class AmzaReplicationRestEndpoints {
                     throw new IOException("Failed to stream takes.", x);
                 } finally {
                     dos.flush();
+                    amzaStats.rowsStream.decrementAndGet();
                 }
             };
             return Response.ok(stream).build();
@@ -85,8 +86,6 @@ public class AmzaReplicationRestEndpoints {
             Object[] vals = new Object[] { ringMemberString, versionedPartitionName, txId };
             LOG.warn("Failed to rowsStream {} {} {}. ", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to rowsStream " + Arrays.toString(vals), x);
-        } finally {
-            amzaStats.rowsStream.decrementAndGet();
         }
     }
 

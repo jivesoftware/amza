@@ -9,9 +9,9 @@ public interface TxPartitionStatus {
 
     enum Status {
 
-        EXPUNGE(new byte[] { 2 }),
-        ONLINE(new byte[] { 1 }),
-        KETCHUP(new byte[] { 0 });
+        EXPUNGE(new byte[]{2}),
+        ONLINE(new byte[]{1}),
+        KETCHUP(new byte[]{0});
 
         private final byte[] serializedForm;
 
@@ -34,5 +34,7 @@ public interface TxPartitionStatus {
     }
 
     <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception;
+
+    VersionedStatus getLocalStatus(PartitionName partitionName) throws Exception;
 
 }

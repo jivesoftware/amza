@@ -8,7 +8,9 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -24,6 +26,7 @@ import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.RuntimeMXBean;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -48,6 +51,7 @@ import javax.management.ReflectionException;
 public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.MetricsPluginRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private final NumberFormat numberFormat = NumberFormat.getInstance();
 
     private final String template;
     private final String partitionMetricsTemplate;
@@ -102,24 +106,24 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 return renderer.render(partitionMetricsTemplate, data);
             } else {
 
-                data.put("addMember", String.valueOf(amzaStats.addMember.get()));
-                data.put("removeMember", String.valueOf(amzaStats.removeMember.get()));
-                data.put("getRing", String.valueOf(amzaStats.getRing.get()));
-                data.put("rowsStream", String.valueOf(amzaStats.rowsStream.get()));
-                data.put("availableRowsStream", String.valueOf(amzaStats.availableRowsStream.get()));
-                data.put("rowsTaken", String.valueOf(amzaStats.rowsTaken.get()));
+                data.put("addMember", numberFormat.format(amzaStats.addMember.get()));
+                data.put("removeMember", numberFormat.format(amzaStats.removeMember.get()));
+                data.put("getRing", numberFormat.format(amzaStats.getRing.get()));
+                data.put("rowsStream", numberFormat.format(amzaStats.rowsStream.get()));
+                data.put("availableRowsStream", numberFormat.format(amzaStats.availableRowsStream.get()));
+                data.put("rowsTaken", numberFormat.format(amzaStats.rowsTaken.get()));
 
                 List<Map<String, String>> longPolled = new ArrayList<>();
                 for (Entry<RingMember, AtomicLong> polled : amzaStats.longPolled.entrySet()) {
                     AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
                     longPolled.add(ImmutableMap.of("member", polled.getKey().getMember(),
-                        "longPolled", String.valueOf(polled.getValue().get()),
-                        "longPollAvailables", String.valueOf(longPollAvailables == null ? "-1" : longPollAvailables.get())));
+                        "longPolled", numberFormat.format(polled.getValue().get()),
+                        "longPollAvailables", numberFormat.format(longPollAvailables == null ? "-1" : longPollAvailables.get())));
                 }
 
                 data.put("longPolled", longPolled);
 
-                data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
+                data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal(), false));
                 List<Map<String, Object>> regionTotals = new ArrayList<>();
                 ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
                 Collections.sort(partitionNames);
@@ -128,7 +132,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     if (totals == null) {
                         totals = new Totals();
                     }
-                    regionTotals.add(regionTotals(partitionName, totals));
+                    regionTotals.add(regionTotals(partitionName, totals, false));
                 }
                 data.put("regionTotals", regionTotals);
             }
@@ -143,7 +147,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     public String renderStats(String filter) {
         Map<String, Object> data = Maps.newHashMap();
         try {
-            data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal()));
+            data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal(), true));
             List<Map<String, Object>> regionTotals = new ArrayList<>();
             ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
             Collections.sort(partitionNames);
@@ -153,7 +157,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     if (totals == null) {
                         totals = new Totals();
                     }
-                    regionTotals.add(regionTotals(partitionName, totals));
+                    regionTotals.add(regionTotals(partitionName, totals, true));
                 }
             }
             data.put("regionTotals", regionTotals);
@@ -163,9 +167,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         return renderer.render(statsTemplate, data);
     }
 
-    public Map<String, Object> regionTotals(PartitionName name, AmzaStats.Totals totals) throws Exception {
+    public Map<String, Object> regionTotals(PartitionName name, AmzaStats.Totals totals, boolean includeCount) throws Exception {
         Map<String, Object> map = new HashMap<>();
         if (name != null) {
+
             map.put("type", name.isSystemPartition() ? "SYSTEM" : "USER");
             map.put("name", new String(name.getName()));
             map.put("ringName", new String(name.getRingName()));
@@ -179,10 +184,20 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             map.put("ring", ringMaps);
 
             AmzaPartitionAPI partition = amzaService.getPartition(name);
-            map.put("count", String.valueOf(partition.count()));
+            if (includeCount) {
+                map.put("count", numberFormat.format(partition.count()));
+            } else {
+                map.put("count", "disabled");
+            }
+
+            partition.highestTxId((VersionedPartitionName versionedPartitionName, TxPartitionStatus.Status partitionStatus, long highestTxId) -> {
+                map.put("version", numberFormat.format(versionedPartitionName.getPartitionVersion()));
+                map.put("status", partitionStatus.name());
+                map.put("highestTxId", numberFormat.format(highestTxId));
+            });
 
             PartitionStatusStorage partitionStatusStorage = amzaService.getPartitionStatusStorage();
-            PartitionStatusStorage.VersionedStatus localStatus = partitionStatusStorage.getLocalStatus(name);
+            VersionedStatus localStatus = partitionStatusStorage.getLocalStatus(name);
 
             if (name.isSystemPartition()) {
                 HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
@@ -197,20 +212,20 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 });
             }
         }
-        map.put("gets", String.valueOf(totals.gets.get()));
-        map.put("getsLag", String.valueOf(totals.getsLag.get()));
-        map.put("scans", String.valueOf(totals.scans.get()));
-        map.put("scansLag", String.valueOf(totals.scansLag.get()));
-        map.put("directApplies", String.valueOf(totals.directApplies.get()));
-        map.put("directAppliesLag", String.valueOf(totals.directAppliesLag.get()));
-        map.put("updates", String.valueOf(totals.updates.get()));
-        map.put("updatesLag", String.valueOf(totals.updatesLag.get()));
-        map.put("offers", String.valueOf(totals.offers.get()));
-        map.put("offersLag", String.valueOf(totals.offersLag.get()));
-        map.put("takes", String.valueOf(totals.takes.get()));
-        map.put("takesLag", String.valueOf(totals.takesLag.get()));
-        map.put("takeApplies", String.valueOf(totals.takeApplies.get()));
-        map.put("takeAppliesLag", String.valueOf(totals.takeAppliesLag.get()));
+        map.put("gets", numberFormat.format(totals.gets.get()));
+        map.put("getsLag", numberFormat.format(totals.getsLag.get()));
+        map.put("scans", numberFormat.format(totals.scans.get()));
+        map.put("scansLag", numberFormat.format(totals.scansLag.get()));
+        map.put("directApplies", numberFormat.format(totals.directApplies.get()));
+        map.put("directAppliesLag", numberFormat.format(totals.directAppliesLag.get()));
+        map.put("updates", numberFormat.format(totals.updates.get()));
+        map.put("updatesLag", numberFormat.format(totals.updatesLag.get()));
+        map.put("offers", numberFormat.format(totals.offers.get()));
+        map.put("offersLag", numberFormat.format(totals.offersLag.get()));
+        map.put("takes", numberFormat.format(totals.takes.get()));
+        map.put("takesLag", numberFormat.format(totals.takesLag.get()));
+        map.put("takeApplies", numberFormat.format(totals.takeApplies.get()));
+        map.put("takeAppliesLag", numberFormat.format(totals.takeAppliesLag.get()));
 
         return map;
     }
@@ -244,12 +259,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",
             (int) (processCpuLoad),
-            String.valueOf(processCpuLoad) + " cpu load"));
+            numberFormat.format(processCpuLoad) + " cpu load"));
 
         double memoryLoad = (double) memoryBean.getHeapMemoryUsage().getUsed() / (double) memoryBean.getHeapMemoryUsage().getMax();
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
-            String.valueOf(humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
+            numberFormat.format(humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
                 + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false))));
 
         long s = 0;
@@ -265,31 +280,31 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         sb.append(progress("Gets (" + grandTotal.gets + ")",
             (int) (((double) grandTotal.getsLag.longValue() / 1000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.getsLag.longValue())) + " lag"));
+            numberFormat.format(getDurationBreakdown(grandTotal.getsLag.longValue())) + " lag"));
 
         sb.append(progress("Scans (" + grandTotal.scans + ")",
             (int) (((double) grandTotal.scansLag.longValue() / 1000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.scansLag.longValue())) + " lag"));
+            numberFormat.format(getDurationBreakdown(grandTotal.scansLag.longValue())) + " lag"));
 
         sb.append(progress("Direct Applied (" + grandTotal.directApplies + ")",
             (int) (((double) grandTotal.directAppliesLag.longValue() / 1000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.directAppliesLag.longValue())) + " lag"));
+            numberFormat.format(getDurationBreakdown(grandTotal.directAppliesLag.longValue())) + " lag"));
 
         sb.append(progress("Updates (" + grandTotal.updates + ")",
             (int) (((double) grandTotal.updatesLag.longValue() / 10000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.updatesLag.longValue())) + " lag"));
+            numberFormat.format(getDurationBreakdown(grandTotal.updatesLag.longValue())) + " lag"));
 
         sb.append(progress("Offers (" + grandTotal.offers + ")",
             (int) (((double) grandTotal.offersLag.longValue() / 10000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.offersLag.longValue())) + " lag"));
-
-        sb.append(progress("Took Applied (" + grandTotal.takeApplies + ")",
-            (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.takeAppliesLag.longValue())) + " lag"));
+            numberFormat.format(getDurationBreakdown(grandTotal.offersLag.longValue())) + " lag"));
 
         sb.append(progress("Took (" + grandTotal.takes + ")",
             (int) (((double) grandTotal.takesLag.longValue() / 10000d) * 100),
-            String.valueOf(getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag"));
+            numberFormat.format(getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag"));
+
+        sb.append(progress("Took Applied (" + grandTotal.takeApplies + ")",
+            (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
+            numberFormat.format(getDurationBreakdown(grandTotal.takeAppliesLag.longValue())) + " lag"));
 
         sb.append(progress("Active Long Polls (" + amzaStats.availableRowsStream.get() + ")",
             (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100), ""));
@@ -305,14 +320,13 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         long[] count = amzaStats.deltaStripeMergeLoaded;
         double[] load = amzaStats.deltaStripeLoad;
+        long[] mergeCount = amzaStats.deltaStripeMergePending;
+        double[] mergeLoad = amzaStats.deltaStripeMerge;
         for (int i = 0; i < load.length; i++) {
             sb.append(progress(" Delta Stripe " + i + " (" + load[i] + ")", (int) (load[i] * 100), "" + count[i]));
-        }
-
-        count = amzaStats.deltaStripeMergePending;
-        load = amzaStats.deltaStripeMerge;
-        for (int i = 0; i < load.length; i++) {
-            sb.append(progress("Merge Stripe " + i + " (" + load[i] + ")", (int) (load[i] * 100), "" + count[i]));
+            if (mergeLoad.length > i && mergeCount.length > i) {
+                sb.append(progress("Merge Stripe " + i + " (" + mergeLoad[i] + ")", (int) (mergeLoad[i] * 100), mergeCount[i] + " partitions"));
+            }
         }
 
         sb.append("<p><pre>");

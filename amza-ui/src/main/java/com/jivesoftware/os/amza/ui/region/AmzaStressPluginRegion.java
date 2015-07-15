@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion.AmzaStressPluginRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private final NumberFormat numberFormat = NumberFormat.getInstance();
 
     private static final ConcurrentMap<String, Stress> STRESS_MAP = Maps.newConcurrentMap();
 
@@ -132,8 +134,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 row.put("orderedInsertion", String.valueOf(stress.input.orderedInsertion));
 
                 row.put("elapsed", MetricsPluginRegion.getDurationBreakdown(elapsed));
-                row.put("added", String.valueOf(added));
-                row.put("addedPerSecond", String.valueOf((double) added * 1000 / (double) elapsed));
+                row.put("added", numberFormat.format(added));
+                row.put("addedPerSecond", numberFormat.format((double) added * 1000 / (double) elapsed));
                 rows.add(row);
             }
 
@@ -240,7 +242,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                     }, input.desiredQuorm, 30_000);
                     break;
 
-                } catch(DeltaOverCapacityException de) {
+                } catch (DeltaOverCapacityException de) {
                     Thread.sleep(100);
                     log.warn("Slowing stress for region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex});
                 } catch (Exception x) {

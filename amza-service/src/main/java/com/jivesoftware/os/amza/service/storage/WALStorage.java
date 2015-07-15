@@ -253,7 +253,10 @@ public class WALStorage implements RangeScannable {
                 });
                 return null;
             });
-            highestTxId.set(lastTxId.longValue());
+            if (!highestTxId.compareAndSet(0, lastTxId.longValue())) {
+                throw new RuntimeException("Load should have completed before highestTxId:" + highestTxId.get() + " is modified.");
+            }
+            LOG.info("Loaded partition:{} with a highestTxId:{}", versionedPartitionName, lastTxId.longValue());
 
             walTx.write((WALWriter writer) -> {
                 writeCompactionHintMarker(writer);

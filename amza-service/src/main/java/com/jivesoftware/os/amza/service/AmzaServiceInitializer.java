@@ -42,6 +42,7 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -172,6 +173,7 @@ public class AmzaServiceInitializer {
                 try (FileInputStream fileInputStream = new FileInputStream(versionFile)) {
                     DataInput input = new DataInputStream(fileInputStream);
                     stripeVersion[i] = input.readLong();
+                    LOG.info("Loaded stripeVersion:" + stripeVersion[i] + " for stripe:" + i+ " from " + versionFile);
                 }
             } else {
                 if (versionFile.createNewFile()) {
@@ -179,6 +181,7 @@ public class AmzaServiceInitializer {
                         DataOutput output = new DataOutputStream(fileOutputStream);
                         stripeVersion[i] = orderIdProvider.nextId();
                         output.writeLong(stripeVersion[i]);
+                        LOG.info("Created stripeVersion:" + stripeVersion[i] + " for stripe:" + i + " to " + versionFile);
                     }
                 } else {
                     throw new IllegalStateException("Please check your file permission. " + versionFile.getAbsolutePath());
@@ -202,7 +205,7 @@ public class AmzaServiceInitializer {
         // cold start
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            PartitionStatusStorage.VersionedStatus status = partitionStatusStorage.getRemoteStatus(ringMember, versionedPartitionName.getPartitionName());
+            VersionedStatus status = partitionStatusStorage.getLocalStatus(versionedPartitionName.getPartitionName());
             if (status != null && status.version == versionedPartitionName.getPartitionVersion()) {
                 takeCoordinator.updated(amzaRingReader, versionedPartitionName, status.status, partitionStore.highestTxId());
             } else {
@@ -262,7 +265,7 @@ public class AmzaServiceInitializer {
         ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
         List<Future> futures = new ArrayList<>();
-        for (final PartitionStripe partitionStripe : partitionStripes) {
+        for (PartitionStripe partitionStripe : partitionStripes) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
                     partitionStripe.load();

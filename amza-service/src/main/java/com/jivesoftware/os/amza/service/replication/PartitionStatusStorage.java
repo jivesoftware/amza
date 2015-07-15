@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider.PartitionStripeFunction;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -12,9 +11,11 @@ import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionTx;
+import com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -26,12 +27,10 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -53,7 +52,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     private final AwaitNotify<PartitionName> awaitNotify;
 
     private final Map<PartitionName, VersionedStatus> localStatusCache = Maps.newConcurrentMap();
-    private final ConcurrentHashMap<PartitionName, ConcurrentHashMap<RingMember, VersionedStatus>> remoteStatusCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<PartitionName, ConcurrentHashMap<RingMember, RemoteVersionedStatus>> remoteStatusCache = new ConcurrentHashMap<>();
 
     public PartitionStatusStorage(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
@@ -95,7 +94,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         if (ringMember.equals(rootRingMember)) {
             invalidateLocalStatusCache(new VersionedPartitionName(partitionName, versionedStatus.version));
         } else {
-            remoteStatusCache.computeIfPresent(partitionName, (PartitionName key, ConcurrentHashMap<RingMember, VersionedStatus> cache) -> {
+            remoteStatusCache.computeIfPresent(partitionName, (PartitionName key, ConcurrentHashMap<RingMember, RemoteVersionedStatus> cache) -> {
                 cache.remove(ringMember);
                 return cache;
             });
@@ -116,14 +115,14 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         }
     }
 
-    public void remoteStatus(RingMember remoteRingMember, PartitionName partitionName, VersionedStatus remoteVersionedStatus) {
+    public void remoteStatus(RingMember remoteRingMember, PartitionName partitionName, RemoteVersionedStatus remoteVersionedStatus) {
 
-        ConcurrentHashMap<RingMember, VersionedStatus> ringMemberStatus = remoteStatusCache.computeIfAbsent(partitionName,
+        ConcurrentHashMap<RingMember, RemoteVersionedStatus> ringMemberStatus = remoteStatusCache.computeIfAbsent(partitionName,
             (key) -> {
                 return new ConcurrentHashMap<>();
             });
 
-        ringMemberStatus.merge(remoteRingMember, remoteVersionedStatus, (existing, updated) -> {
+        ringMemberStatus.merge(remoteRingMember, remoteVersionedStatus, (com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus existing, com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus updated) -> {
             return (updated.version > existing.version) ? updated : existing;
         });
 
@@ -131,11 +130,11 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
 
     public void elect(Collection<RingMember> remoteRingMembers, VersionedPartitionName localVersionedPartitionName) throws Exception {
 
-        ConcurrentHashMap<RingMember, VersionedStatus> ringMemberStatus = remoteStatusCache.get(localVersionedPartitionName.getPartitionName());
+        ConcurrentHashMap<RingMember, RemoteVersionedStatus> ringMemberStatus = remoteStatusCache.get(localVersionedPartitionName.getPartitionName());
         if (ringMemberStatus != null) {
             int inKetchup = 0;
             for (RingMember ringMember : remoteRingMembers) {
-                VersionedStatus remoteRingMemberStatus = ringMemberStatus.get(ringMember);
+                RemoteVersionedStatus remoteRingMemberStatus = ringMemberStatus.get(ringMember);
                 if (remoteRingMemberStatus == null) {
                     remoteRingMemberStatus = getRemoteStatus(ringMember, localVersionedPartitionName.getPartitionName());
                 }
@@ -152,9 +151,10 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         }
     }
 
+    @Override
     public VersionedStatus getLocalStatus(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            return new VersionedStatus(Status.ONLINE, 0);
+            return new VersionedStatus(Status.ONLINE, 0, 0);
         }
 
         VersionedStatus versionedStatus = localStatusCache.get(partitionName);
@@ -163,15 +163,16 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         }
 
         TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
-        if (rawStatus == null || rawStatus.getTimestampId() != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
+        versionedStatus = rawStatus == null ? null : VersionedStatus.fromBytes(rawStatus.getValue());
+        if (versionedStatus == null || versionedStatus.stripeVersion != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
             return null;
         }
-        return VersionedStatus.fromBytes(rawStatus.getValue());
+        return versionedStatus;
     }
 
-    public VersionedStatus getRemoteStatus(RingMember ringMember, PartitionName partitionName) throws Exception {
+    public RemoteVersionedStatus getRemoteStatus(RingMember ringMember, PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            return new VersionedStatus(Status.ONLINE, 0);
+            return new RemoteVersionedStatus(Status.ONLINE, 0);
         }
 
         //TODO consider wiring in remote status cache, for now it's racy
@@ -179,15 +180,18 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         if (rawStatus == null) {
             return null;
         }
-        return VersionedStatus.fromBytes(rawStatus.getValue());
+        VersionedStatus versionedStatus = VersionedStatus.fromBytes(rawStatus.getValue());
+        return new RemoteVersionedStatus(versionedStatus.status, versionedStatus.version);
     }
 
     public VersionedStatus markAsKetchup(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            return new VersionedStatus(Status.ONLINE, 0);
+            return new VersionedStatus(Status.ONLINE, 0, 0);
         }
         long partitionVersion = orderIdProvider.nextId();
-        return set(rootRingMember, partitionName, new VersionedStatus(Status.KETCHUP, partitionVersion));
+        return set(rootRingMember, partitionName, new VersionedStatus(Status.KETCHUP,
+            partitionVersion,
+            stripeVersions[partitionStripeFunction.stripe(partitionName)]));
     }
 
     public void markAsOnline(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -195,14 +199,17 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             return;
         }
         set(rootRingMember, versionedPartitionName.getPartitionName(), new VersionedStatus(Status.ONLINE,
-            versionedPartitionName.getPartitionVersion()));
+            versionedPartitionName.getPartitionVersion(),
+            stripeVersions[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())]));
     }
 
     public VersionedStatus markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return new VersionedStatus(Status.ONLINE, 0);
+            return new VersionedStatus(Status.ONLINE, 0, 0);
         }
-        return set(ringMember, versionedPartitionName.getPartitionName(), new VersionedStatus(Status.EXPUNGE, versionedPartitionName.getPartitionVersion()));
+        return set(ringMember, versionedPartitionName.getPartitionName(), new VersionedStatus(Status.EXPUNGE,
+            versionedPartitionName.getPartitionVersion(),
+            stripeVersions[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())]));
     }
 
     public void streamLocalState(PartitionMemberStatusStream stream) throws Exception {
@@ -213,10 +220,9 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             UIO.readByte(filer, "serializationVersion");
             RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member"));
             PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition"));
+            VersionedStatus versionStatus = VersionedStatus.fromBytes(value);
 
-            if (valueTimestamp == stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
-
-                VersionedStatus versionStatus = VersionedStatus.fromBytes(value);
+            if (versionStatus.stripeVersion == stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
                 return transactor.doWithOne(new VersionedPartitionName(partitionName, versionStatus.version),
                     versionStatus.status,
                     (versionedPartitionName, partitionStatus) -> stream.stream(partitionName, ringMember, versionStatus));
@@ -243,20 +249,19 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             VersionedStatus commitableVersionStatus = null;
             VersionedStatus returnableStatus = null;
             long stripeVersion = stripeVersions[partitionStripeFunction.stripe(partitionName)];
-            if (rawStatus == null || rawStatus.getTimestampId() != stripeVersion) {
+            VersionedStatus currentVersionedStatus = rawStatus == null ? null : VersionedStatus.fromBytes(rawStatus.getValue());
+            if (currentVersionedStatus == null || currentVersionedStatus.stripeVersion != stripeVersion) {
                 if (versionedStatus.status == Status.KETCHUP) {
                     commitableVersionStatus = versionedStatus;
                     returnableStatus = versionedStatus;
                 }
             } else {
-                VersionedStatus currentVersionedStatus = VersionedStatus.fromBytes(rawStatus.getValue());
                 if (currentVersionedStatus.version == versionedStatus.version && isValidTransition(currentVersionedStatus, versionedStatus)) {
                     commitableVersionStatus = versionedStatus;
                     returnableStatus = versionedStatus;
                 } else {
                     returnableStatus = currentVersionedStatus;
                 }
-
             }
             if (commitableVersionStatus != null) {
                 byte[] versionedStatusBytes = commitableVersionStatus.toBytes();
@@ -264,7 +269,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
                     RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
                         (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
                             walKey(ringMember, partitionName),
-                            versionedStatusBytes, stripeVersion, false), walUpdated);
+                            versionedStatusBytes, orderIdProvider.nextId(), false), walUpdated);
                     return !rowsChanged.isEmpty();
                 });
                 LOG.info("STATUS {}: {} versionedPartitionName:{} was updated to {}",
@@ -311,7 +316,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     }
 
     private void invalidateLocalStatusCache(VersionedPartitionName versionedPartitionName) {
-        localStatusCache.computeIfPresent(versionedPartitionName.getPartitionName(), (partitionName, versionedStatus) -> {
+        localStatusCache.computeIfPresent(versionedPartitionName.getPartitionName(), (partitionName,  versionedStatus) -> {
             if (versionedStatus.version == versionedPartitionName.getPartitionVersion()) {
                 return null;
             } else {
@@ -322,7 +327,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
 
     public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
         awaitNotify.awaitChange(partitionName, () -> {
-            PartitionStatusStorage.VersionedStatus versionedStatus = getLocalStatus(partitionName);
+            VersionedStatus versionedStatus = getLocalStatus(partitionName);
             if (versionedStatus != null) {
                 if (versionedStatus.status == TxPartitionStatus.Status.EXPUNGE) {
                     throw new IllegalStateException("Partition is being expunged");
@@ -348,68 +353,5 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         boolean stream(PartitionName partitionName, RingMember ringMember, VersionedStatus versionedStatus) throws Exception;
     }
 
-    static public class VersionedStatus {
 
-        public final Status status;
-        public final long version;
-
-        public byte[] toBytes() throws IOException {
-            HeapFiler filer = new HeapFiler();
-            UIO.writeByte(filer, 0, "serializationVersion");
-            UIO.writeByteArray(filer, status.getSerializedForm(), "status");
-            UIO.writeLong(filer, version, "version");
-            return filer.getBytes();
-        }
-
-        public static VersionedStatus fromBytes(byte[] bytes) throws IOException {
-            HeapFiler filer = new HeapFiler(bytes);
-            byte serializationVersion = UIO.readByte(filer, "serializationVersion");
-            if (serializationVersion != 0) {
-                throw new IllegalStateException("Failed to deserialize due to an unknown version:" + serializationVersion);
-            }
-            Status status = Status.fromSerializedForm(UIO.readByteArray(filer, "status"));
-            long version = UIO.readLong(filer, "version");
-            return new VersionedStatus(status, version);
-        }
-
-        VersionedStatus(Status status, long version) {
-            Preconditions.checkNotNull(status, "Status cannot be null");
-            this.status = status;
-            this.version = version;
-        }
-
-        @Override
-        public int hashCode() {
-            int hash = 3;
-            hash = 89 * hash + Objects.hashCode(this.status);
-            hash = 89 * hash + (int) (this.version ^ (this.version >>> 32));
-            return hash;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            final VersionedStatus other = (VersionedStatus) obj;
-            if (this.status != other.status) {
-                return false;
-            }
-            if (this.version != other.version) {
-                return false;
-            }
-            return true;
-        }
-
-        @Override
-        public String toString() {
-            return "VersionedStatus{"
-                + "status=" + status
-                + ", version=" + version
-                + '}';
-        }
-    }
 }

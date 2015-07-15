@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.text.NumberFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -21,6 +22,7 @@ import java.util.concurrent.Executors;
 public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegion.CompactionsPluginRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private final NumberFormat numberFormat = NumberFormat.getInstance();
 
     private final String template;
     private final SoyRenderer renderer;
@@ -76,13 +78,13 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
             List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();
             data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
                 (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
-                    input1.getKey(), "elapse", String.valueOf(input1.getValue()))));
+                    input1.getKey(), "elapse", numberFormat.format(input1.getValue()))));
 
             List<Map.Entry<String, Long>> recentCompaction = amzaStats.recentCompaction();
             data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
                 (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
-                    input1.getKey(), "elapse", String.valueOf(input1.getValue()))));
-            data.put("totalCompactions", String.valueOf(amzaStats.getTotalCompactions()));
+                    input1.getKey(), "elapse", numberFormat.format(input1.getValue()))));
+            data.put("totalCompactions", numberFormat.format(amzaStats.getTotalCompactions()));
 
         } catch (Exception e) {
             log.error("Unable to retrieve data", e);

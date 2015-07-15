@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.shared;
 
+import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
@@ -29,5 +30,7 @@ public interface AmzaPartitionAPI {
     TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception;
 
     long count() throws Exception;
+
+    void highestTxId(HighestPartitionTx highestPartitionTx) throws Exception;
 
 }

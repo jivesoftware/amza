@@ -1,10 +1,11 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus;
 import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage.VersionedStatus;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
@@ -207,8 +208,9 @@ public class RowChangeTaker implements RowChanges {
                             ExecutorService rowTakerThreadPool = partitionStripeProvider.getRowTakerThreadPool(partitionName);
                             RowsTaker rowsTaker = partitionStripeProvider.getRowsTaker(partitionName);
 
-                            partitionStatusStorage.remoteStatus(remoteRingMember, partitionName,
-                                new PartitionStatusStorage.VersionedStatus(remoteStatus, remoteVersionedPartitionName.getPartitionVersion()));
+                            partitionStatusStorage.remoteStatus(remoteRingMember,
+                                partitionName,
+                                new RemoteVersionedStatus(remoteStatus, remoteVersionedPartitionName.getPartitionVersion()));
 
                             AtomicLong tookToTxId = new AtomicLong(-1);
                             VersionedPartitionName currentLocalVersionedPartitionName = partitionStatusStorage.tx(partitionName,

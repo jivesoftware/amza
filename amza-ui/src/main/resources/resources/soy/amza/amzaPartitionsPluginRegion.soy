@@ -22,6 +22,7 @@
                                 <th>Disabled</th>
                                 <th>Index</th>
                                 <th>TakeFromFactor</th>
+                                <th>Highwaters</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -54,6 +55,7 @@
                                         <input type="number" name="takeFromFactor" min="0" max="65536" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
                                         class="form-control" placeholder="takeFromFactor" value=""   title="">
                                     </td>
+                                    <td></td>
                                 </tr>
                             </form>
 
@@ -90,6 +92,7 @@
                                             <input type="number" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
                                             placeholder="takeFromFactor" value="{$r.takeFromFactor}" name="takeFromFactor" class="form-control">
                                         </td>
+                                        <td>{$r.highwaters|noAutoescape}</td>
                                     </tr>
                                 </form>
                             {/foreach}

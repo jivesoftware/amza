@@ -100,6 +100,10 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
     @Override
     public void setIfLarger(final RingMember member, final VersionedPartitionName versionedPartitionName, int updates, long highwaterTxId) throws Exception {
+        if (member.equals(rootRingMember)) {
+            return;
+        }
+
         bigBird.acquire();
         updatesSinceLastFlush.addAndGet(updates);
         try {
@@ -223,7 +227,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
 
                         long timestamp = orderIdProvider.nextId();
                         for (Entry<RingMember, ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates>> ringEntry
-                            : hostToPartitionToHighwaterUpdates.entrySet()) {
+                        : hostToPartitionToHighwaterUpdates.entrySet()) {
                             RingMember ringMember = ringEntry.getKey();
                             for (Map.Entry<VersionedPartitionName, HighwaterUpdates> partitionEntry : ringEntry.getValue().entrySet()) {
                                 HighwaterUpdates highwaterUpdates = partitionEntry.getValue();

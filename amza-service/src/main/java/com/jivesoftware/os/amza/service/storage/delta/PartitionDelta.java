@@ -219,22 +219,6 @@ class PartitionDelta {
         updatesSinceLastHighwaterFlush.addAndGet(rowFPs.length);
     }
 
-    boolean takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
-        PartitionDelta partitionDelta = merging.get();
-        if (partitionDelta != null) {
-            if (!partitionDelta.takeRowUpdatesSince(transactionId, rowStream)) {
-                return false;
-            }
-        }
-
-        if (txIdWAL.isEmpty() || txIdWAL.lastEntry().getKey() < transactionId) {
-            return true;
-        }
-
-        ConcurrentNavigableMap<Long, long[]> tailMap = txIdWAL.tailMap(transactionId, false);
-        return deltaWAL.takeRows(tailMap, rowStream);
-    }
-
     public boolean takeRowsFromTransactionId(final long transactionId, RowStream rowStream) throws Exception {
         PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {

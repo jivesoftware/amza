@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
+import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
@@ -173,6 +174,14 @@ public class StripedPartition implements AmzaPartitionAPI {
     public long count() throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             return stripe.count(partitionName);
+        });
+    }
+
+    @Override
+    public void highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
+        partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
+            stripe.highestPartitionTxId(partitionName, highestPartitionTx);
+            return null;
         });
     }
 

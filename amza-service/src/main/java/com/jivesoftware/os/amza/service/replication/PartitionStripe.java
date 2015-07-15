@@ -98,6 +98,18 @@ public class PartitionStripe {
         }
     }
 
+    public void highestPartitionTxId(PartitionName partitionName, HighestPartitionTx tx) throws Exception {
+        txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore != null) {
+                    long highestTxId = storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
+                    tx.tx(versionedPartitionName, partitionStatus, highestTxId);
+                }
+                return null;
+            });
+    }
+
     public <R> R txPartition(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
         return txPartitionStatus.tx(partitionName, tx);
     }
@@ -226,7 +238,7 @@ public class PartitionStripe {
                 return takeRowUpdates.give(null, null, null);
             } else {
                 RowStreamer streamer = (partitionStatus == TxPartitionStatus.Status.ONLINE)
-                    ? rowStream -> storage.takeRowUpdatesSince(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
+                    ? rowStream -> storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
                     : null;
                 return takeRowUpdates.give(versionedPartitionName, partitionStatus, streamer);
             }
@@ -296,7 +308,7 @@ public class PartitionStripe {
     }
 
     public void load() throws Exception {
-        storage.load(partitionIndex, primaryRowMarshaller);
+        storage.load(txPartitionStatus, partitionIndex, primaryRowMarshaller);
     }
 
     public boolean mergeable() {

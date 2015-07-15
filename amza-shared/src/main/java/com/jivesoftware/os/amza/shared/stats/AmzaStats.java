@@ -63,14 +63,16 @@ public class AmzaStats {
         long[] copyCount = deltaStripeMergeLoaded;
         double[] copy = deltaStripeLoad;
         if (index >= copy.length) {
-            long[] newArrayCount = new long[index + 1];
             double[] newArray = new double[index + 1];
-            System.arraycopy(copyCount, 0, newArrayCount, 0, copyCount.length);
             System.arraycopy(copy, 0, newArray, 0, copy.length);
-            copyCount = newArrayCount;
             copy = newArray;
-            deltaStripeMergeLoaded = copyCount;
             deltaStripeLoad = copy;
+        }
+        if (index >= copyCount.length) {
+            long[] newArrayCount = new long[index + 1];
+            System.arraycopy(copyCount, 0, newArrayCount, 0, copyCount.length);
+            copyCount = newArrayCount;
+            deltaStripeMergeLoaded = copyCount;
         }
         copyCount[index] = count;
         copy[index] = load;

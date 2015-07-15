@@ -6,8 +6,10 @@ import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
+import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -132,7 +134,10 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public void load(PartitionIndex partitionIndex, PrimaryRowMarshaller<byte[]> primaryRowMarshaller) throws Exception {
+    public void load(TxPartitionStatus txPartitionStatus,
+        PartitionIndex partitionIndex,
+        PrimaryRowMarshaller<byte[]> primaryRowMarshaller) throws Exception {
+
         LOG.info("Reloading deltas...");
         long start = System.currentTimeMillis();
         synchronized (oneWriterAtATimeLock) {
@@ -156,33 +161,36 @@ public class DeltaStripeWALStorage {
                                 bb.get(keyBytes);
 
                                 VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(partitionNameBytes);
-                                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-                                if (partitionStore == null) {
-                                    LOG.warn("Dropping values on the floor for versionedPartitionName:{} "
-                                        + " this is typical when loading an expunged partition", versionedPartitionName);
-                                    // TODO ensure partitionIsExpunged?
-                                } else {
-                                    acquireOne();
-                                    try {
-                                        PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-                                        TimestampedValue partitionValue = partitionStore.get(keyBytes);
-                                        if (partitionValue == null || partitionValue.getTimestampId() < valueTimestamp) {
-                                            WALPointer got = delta.getPointer(keyBytes);
-                                            if (got == null || got.getTimestampId() < valueTimestamp) {
-                                                wal.hydrateKeyValueHighwater(rowFP,
-                                                    (fp, key1, value1, valueTimestamp1, valueTombstone, highwater) -> {
-                                                        delta.put(fp, key1, value1, valueTimestamp1, valueTombstone, highwater);
-                                                        delta.appendTxFps(rowTxId, fp);
-                                                        return true;
-                                                    });
+                                VersionedStatus localStatus = txPartitionStatus.getLocalStatus(versionedPartitionName.getPartitionName());
+                                if (localStatus != null && localStatus.version == versionedPartitionName.getPartitionVersion()) {
+                                    PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                                    if (partitionStore == null) {
+                                        LOG.warn("Dropping values on the floor for versionedPartitionName:{} "
+                                            + " this is typical when loading an expunged partition", versionedPartitionName);
+                                        // TODO ensure partitionIsExpunged?
+                                    } else {
+                                        acquireOne();
+                                        try {
+                                            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
+                                            TimestampedValue partitionValue = partitionStore.get(keyBytes);
+                                            if (partitionValue == null || partitionValue.getTimestampId() < valueTimestamp) {
+                                                WALPointer got = delta.getPointer(keyBytes);
+                                                if (got == null || got.getTimestampId() < valueTimestamp) {
+                                                    wal.hydrateKeyValueHighwater(rowFP,
+                                                        (fp, key1, value1, valueTimestamp1, valueTombstone, highwater) -> {
+                                                            delta.put(fp, key1, value1, valueTimestamp1, valueTombstone, highwater);
+                                                            delta.appendTxFps(rowTxId, fp);
+                                                            return true;
+                                                        });
 
+                                                }
                                             }
+                                        } finally {
+                                            releaseOne();
                                         }
-                                    } finally {
-                                        releaseOne();
                                     }
+                                    updateSinceLastMerge.incrementAndGet();
                                 }
-                                updateSinceLastMerge.incrementAndGet();
                                 return true;
                             });
 
@@ -213,7 +221,10 @@ public class DeltaStripeWALStorage {
     public long getHighestTxId(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
         PartitionDelta partitionDelta = partitionDeltas.get(versionedPartitionName);
         if (partitionDelta != null) {
-            return partitionDelta.highestTxId();
+            long highestTxId = partitionDelta.highestTxId();
+            if (highestTxId > -1) {
+                return highestTxId;
+            }
         }
         return storage.highestTxId();
     }
@@ -427,33 +438,6 @@ public class DeltaStripeWALStorage {
                 }
             }
             return rowsChanged;
-        } finally {
-            releaseOne();
-        }
-    }
-
-    public void takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
-        WALStorage storage,
-        long transactionId,
-        RowStream rowStream) throws Exception {
-
-        long lowestTxId;
-        acquireOne();
-        try {
-            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-            lowestTxId = delta.lowestTxId();
-        } finally {
-            releaseOne();
-        }
-
-        if ((lowestTxId == -1 || lowestTxId > transactionId) && !storage.takeRowsFromTransactionId(transactionId, rowStream)) {
-            return;
-        }
-
-        acquireOne();
-        try {
-            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-            delta.takeRowUpdatesSince(transactionId, rowStream);
         } finally {
             releaseOne();
         }

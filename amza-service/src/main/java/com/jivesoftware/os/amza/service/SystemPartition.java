@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.TimestampedValue;
+import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -147,6 +148,11 @@ public class SystemPartition implements AmzaPartitionAPI {
     @Override
     public long count() throws Exception {
         return systemWALStorage.count(versionedPartitionName);
+    }
+
+    @Override
+    public void highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
+        systemWALStorage.highestPartitionTxIds(highestPartitionTx);
     }
 
 }

@@ -24,6 +24,7 @@ import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
@@ -72,14 +73,20 @@ public class DeltaStripeWALStorageNGTest {
             indexedWALStorageProvider,
             partitionPropertyMarshaller,
             false);
-
-        partitionIndex.open(new TxPartitionStatus() {
+        TxPartitionStatus txPartitionStatus = new TxPartitionStatus() {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
                 return tx.tx(new VersionedPartitionName(partitionName, 0), TxPartitionStatus.Status.ONLINE);
             }
-        });
+
+            @Override
+            public VersionedStatus getLocalStatus(PartitionName partitionName) throws Exception {
+                return new VersionedStatus(Status.ONLINE, 0, 0);
+            }
+        };
+
+        partitionIndex.open(txPartitionStatus);
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, null, false);
 
@@ -99,7 +106,7 @@ public class DeltaStripeWALStorageNGTest {
         File tmp = Files.createTempDir();
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
         DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(1, new AmzaStats(), deltaWALFactory, 0);
-        deltaStripeWALStorage.load(partitionIndex, primaryRowMarshaller);
+        deltaStripeWALStorage.load(txPartitionStatus, partitionIndex, primaryRowMarshaller);
 
         WALStorage storage = partitionStore.getWalStorage();
         Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));

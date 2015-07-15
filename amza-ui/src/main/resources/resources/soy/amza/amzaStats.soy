@@ -19,6 +19,9 @@
         <td><b>{$grandTotals.takes}</b>{sp}<i>{$grandTotals.takesLag}millis lag</i></td>
         <td><b>{$grandTotals.takeApplies}</b>{sp}<i>{$grandTotals.takeAppliesLag}millis lag</i></td>
         <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
     </tr>
     {foreach $r in $regionTotals}
         <tr>
@@ -35,6 +38,9 @@
             <td><b>{$r.offers}</b>{sp}<i>{$r.offersLag}millis lag</i></td>
             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
+            <td>{$r.version}</td>
+            <td>{$r.status}</td>
+            <td>{$r.highestTxId}</td>
             <td>{$r.highwaters|noAutoescape}</td>
         </tr>
     {/foreach}

@@ -20,10 +20,12 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
-import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage.VersionedStatus;
+import com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
+import com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -249,12 +251,12 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
             if (e.getValue() == RingHost.UNKNOWN_RING_HOST) {
                 unregisteredRingMembers.add(e.getKey());
             }
-            PartitionStatusStorage.VersionedStatus versionedStatus = partitionStatusStorage.getRemoteStatus(e.getKey(), partitionName);
-            if (versionedStatus == null) {
+            RemoteVersionedStatus remoteVersionedStatus = partitionStatusStorage.getRemoteStatus(e.getKey(), partitionName);
+            if (remoteVersionedStatus == null) {
                 missingRingMembers.add(e.getKey());
-            } else if (versionedStatus.status == TxPartitionStatus.Status.EXPUNGE) {
+            } else if (remoteVersionedStatus.status == TxPartitionStatus.Status.EXPUNGE) {
                 expungedRingMembers.add(e.getKey());
-            } else if (versionedStatus.status == TxPartitionStatus.Status.KETCHUP) {
+            } else if (remoteVersionedStatus.status == TxPartitionStatus.Status.KETCHUP) {
                 ketchupRingMembers.add(e.getKey());
             } else {
                 orderedPartitionHosts.add(e.getValue());
@@ -339,11 +341,11 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
 
         NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
         if (ring.containsKey(ringStoreReader.getRingMember())) {
-            VersionedStatus status = partitionStatusStorage.getRemoteStatus(ringStoreReader.getRingMember(), partitionName);
-            if (status != null) {
+            RemoteVersionedStatus remoteVersionedStatus = partitionStatusStorage.getRemoteStatus(ringStoreReader.getRingMember(), partitionName);
+            if (remoteVersionedStatus != null) {
                 LOG.info("Handling request to destroy partitionName:{}", partitionName);
                 for (RingMember ringMember : ring.keySet()) {
-                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, status.version);
+                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, remoteVersionedStatus.version);
                     VersionedStatus versionedStatus = partitionStatusStorage.markForDisposal(versionedPartitionName, ringMember);
                     LOG.info("Destroyed partitionName:{} versionedStatus:{} for ringMember:{}", versionedPartitionName, versionedStatus, ringMember);
                 }

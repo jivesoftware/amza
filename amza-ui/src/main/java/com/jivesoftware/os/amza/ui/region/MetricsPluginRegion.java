@@ -123,13 +123,16 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     for (int i = 3; i < parts.length; i++) {
                         minMaxLong.value(parts[i]);
                     }
-                    subType = "compactionHint:  newCount=" + parts[1] + " clobberCount=" + parts[2] + " min:" + minMaxLong.min() + " max:" + minMaxLong.max();
+                    subType = "compactionHint:  newCount=" + parts[1]
+                        + " clobberCount=" + parts[2]
+                        + " min:" + Long.toHexString(minMaxLong.min())
+                        + " max:" + Long.toHexString(minMaxLong.max());
                 }
                 if (parts[0] == 1) {
-                    subType = "indexCommit: txId=" + parts[1];
+                    subType = "indexCommit: txId=" + Long.toHexString(parts[1]);
                 }
                 if (parts[0] == 2) {
-                    subType = "leaps: lastTx:" + parts[1];
+                    subType = "leaps: lastTx:" + Long.toHexString(parts[1]);
                 }
             }
             if (lastRun == null || lastRun.rowType != rowType || subType != null) {
@@ -156,7 +159,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 run.put("rowType", r.rowType.name());
                 run.put("subType", r.subType);
                 run.put("startFp", String.valueOf(r.startFp));
-                run.put("rowTxId", String.valueOf(r.rowTxId));
+                run.put("rowTxId", Long.toHexString(r.rowTxId));
                 run.put("bytes", numberFormat.format(r.bytes));
                 run.put("count", numberFormat.format(r.count));
                 runMaps.add(run);
@@ -288,9 +291,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
 
             partition.highestTxId((VersionedPartitionName versionedPartitionName, TxPartitionStatus.Status partitionStatus, long highestTxId) -> {
-                map.put("version", numberFormat.format(versionedPartitionName.getPartitionVersion()));
+                map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
                 map.put("status", partitionStatus.name());
-                map.put("highestTxId", numberFormat.format(highestTxId));
+                map.put("highestTxId", Long.toHexString(highestTxId));
             });
 
             PartitionStatusStorage partitionStatusStorage = amzaService.getPartitionStatusStorage();
@@ -331,7 +334,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         StringBuilder sb = new StringBuilder();
         for (WALHighwater.RingMemberHighwater e : walHighwater.ringMemberHighwater) {
             sb.append("<p>");
-            sb.append(e.ringMember.getMember()).append("=").append(e.transactionId).append("\n");
+            sb.append(e.ringMember.getMember()).append("=").append(Long.toHexString(e.transactionId)).append("\n");
             sb.append("</p>");
         }
         return sb.toString();

@@ -87,7 +87,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 Map<String, Object> row = new HashMap<>();
                 VersionedStatus status = amzaService.getPartitionStatusStorage().getLocalStatus(partitionName);
                 row.put("status", status == null ? "unknown" : status.status.toString());
-                row.put("version", status == null ? "unknown" : numberFormat.format(status.version));
+                row.put("version", status == null ? "unknown" : Long.toHexString(status.version));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                 row.put("name", new String(partitionName.getName()));
                 row.put("ringName", new String(partitionName.getRingName()));
@@ -151,7 +151,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
         StringBuilder sb = new StringBuilder();
         for (WALHighwater.RingMemberHighwater e : walHighwater.ringMemberHighwater) {
             sb.append("<p>");
-            sb.append(e.ringMember.getMember()).append("=").append(e.transactionId).append("\n");
+            sb.append(e.ringMember.getMember()).append("=").append(Long.toHexString(e.transactionId)).append("\n");
             sb.append("</p>");
         }
         return sb.toString();

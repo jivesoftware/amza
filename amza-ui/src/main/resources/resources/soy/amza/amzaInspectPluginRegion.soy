@@ -99,7 +99,10 @@
                                         <p>{$r.valueAsHex?:''}</p>
                                         <p>{$r.valueAsString?:''}</p>
                                     </td>
-                                    <td>{$r.timestamp?:''}</td>
+                                    <td>
+                                        <p>{$r.timestampAsHex?:''}</p>
+                                        <p>{$r.timestamp?:''}</p>
+                                    </td>
                                     <td>{$r.tombstone?:''}</td>
                                 </tr>
                             {/foreach}

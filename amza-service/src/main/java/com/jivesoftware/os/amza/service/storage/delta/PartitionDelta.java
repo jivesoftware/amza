@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang.mutable.MutableBoolean;
@@ -67,9 +68,9 @@ class PartitionDelta {
     }
 
     boolean get(WALKeys keys, KeyValueStream stream) throws Exception {
-        return keys.consume((key) ->
-            getRawValue(key, (fp, key1, value1, valueTimestamp1, valueTombstone1, highwater) ->
-                stream.stream(key, value1, valueTimestamp1, valueTombstone1)));
+        return keys.consume((key)
+            -> getRawValue(key, (fp, key1, value1, valueTimestamp1, valueTombstone1, highwater)
+                -> stream.stream(key, value1, valueTimestamp1, valueTombstone1)));
     }
 
     WALPointer getPointer(byte[] key) throws Exception {
@@ -132,16 +133,15 @@ class PartitionDelta {
         orderedIndex.put(key, pointer);
     }
 
+    private AtomicBoolean firstAndOnlyOnce = new AtomicBoolean(true);
     boolean shouldWriteHighwater() {
         long got = updatesSinceLastHighwaterFlush.get();
-        boolean should = false;
-        if (got == 0) {
-            should = true;
-        }
         if (got > 1000) { // TODO expose to partition config
             updatesSinceLastHighwaterFlush.set(0);
+            return true;
+        } else {
+            return firstAndOnlyOnce.compareAndSet(true, false);
         }
-        return should;
     }
 
     boolean keys(WALKeyStream stream) throws Exception {
@@ -219,7 +219,7 @@ class PartitionDelta {
         updatesSinceLastHighwaterFlush.addAndGet(rowFPs.length);
     }
 
-    public boolean takeRowsFromTransactionId(final long transactionId, RowStream rowStream) throws Exception {
+    public boolean takeRowsFromTransactionId(long transactionId, RowStream rowStream) throws Exception {
         PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {
             if (!partitionDelta.takeRowsFromTransactionId(transactionId, rowStream)) {

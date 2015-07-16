@@ -1,0 +1,39 @@
+{namespace soy.page}
+
+/**
+ * @param ringName
+ * @param partitionName
+ * @param rowCount
+ * @param runs
+ */
+{template .visualizePartitionPluginRegion}
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-dashboard"></span>Visualize Partition:{$ringName}-{$partitionName}{sp} rows={$rowCount}</div>
+        <div class="panel-body">
+             <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th>Row Type</th>
+                        <th>Sub Type</th>
+                        <th>Count</th>
+                        <th>Bytes</th>
+                        <th>Start FP</th>
+                        <th>TxId</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {foreach $r in $runs}
+                        <tr>
+                            <td>{$r.rowType}</td>
+                            <td>{$r.subType}</td>
+                            <td>{$r.count}</td>
+                            <td>{$r.bytes}</td>
+                            <td>{$r.startFp}</td>
+                            <td>{$r.rowTxId}</td>
+                        </tr>
+                    {/foreach}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{/template}

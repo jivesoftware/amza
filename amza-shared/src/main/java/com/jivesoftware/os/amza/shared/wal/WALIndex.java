@@ -21,9 +21,7 @@ import com.jivesoftware.os.amza.shared.scan.RangeScannablePointers;
 
 public interface WALIndex extends RangeScannablePointers {
 
-    boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception;
-
-    boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception;
+   
 
     boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception;
 
@@ -31,34 +29,17 @@ public interface WALIndex extends RangeScannablePointers {
 
     boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception;
 
-    boolean remove(WALKeys keys) throws Exception;
-
-    boolean isEmpty() throws Exception;
+   
 
     long size() throws Exception;
 
-    /**
-     * Force persistence of all changes
-     * @throws java.lang.Exception
-     */
-    void commit() throws Exception;
+   
 
     void close() throws Exception;
 
     void compact() throws Exception;
 
-    CompactionWALIndex startCompaction() throws Exception;
-
     boolean delete() throws Exception;
-
-    interface CompactionWALIndex {
-
-        boolean merge(TxKeyPointers pointers) throws Exception;
-
-        void abort() throws Exception;
-
-        void commit() throws Exception;
-    }
 
     void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors);
 

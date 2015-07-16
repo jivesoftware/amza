@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.wal.FpKeyValueHighwaterStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
@@ -26,13 +27,13 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
+public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<DeltaWAL> {
 
     private final long id;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
-    private final WALTx wal;
+    private final WALTx<I> wal;
     private final AtomicLong updateCount = new AtomicLong();
     private final Object oneTxAtATimeLock = new Object();
 
@@ -40,7 +41,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
-        WALTx wal) {
+        WALTx<I> wal) {
         this.id = id;
         this.orderIdProvider = orderIdProvider;
         this.primaryRowMarshaller = primaryRowMarshaller;

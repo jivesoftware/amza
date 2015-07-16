@@ -225,6 +225,20 @@ public class PartitionStripe {
         void stream(RowStream rowStream) throws Exception;
     }
 
+    public void takeAllRows(PartitionName partitionName, RowStream rowStream) throws Exception {
+        txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+            if (versionedPartitionName == null || partitionStatus == null) {
+                return true;
+            }
+            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            if (partitionStore == null) {
+                return true;
+            } else {
+                return storage.takeAllRows(versionedPartitionName, partitionStore.getWalStorage(), rowStream);
+            }
+        });
+    }
+
     public <R> R takeRowUpdatesSince(PartitionName partitionName,
         long transactionId,
         TakeRowUpdates<R> takeRowUpdates)

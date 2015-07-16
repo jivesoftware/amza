@@ -222,18 +222,6 @@ public class BerkeleyDBWALIndex implements WALIndex {
         }
     }
 
-    @Override
-    public boolean remove(WALKeys keys) throws Exception {
-        lock.acquire();
-        try {
-            return keys.consume(key -> {
-                database.delete(null, new DatabaseEntry(key));
-                return true;
-            });
-        } finally {
-            lock.release();
-        }
-    }
 
     @Override
     public boolean isEmpty() throws Exception {

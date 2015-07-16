@@ -152,8 +152,8 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNull(storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
-        storage.compactTombstone(10, Long.MAX_VALUE);
-        storage.compactTombstone(10, Long.MAX_VALUE); // Bla
+        storage.compactTombstone(10, Long.MAX_VALUE, false);
+        storage.compactTombstone(10, Long.MAX_VALUE, false); // Bla
 
         Assert.assertEquals(0, storage.count());
 

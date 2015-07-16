@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -37,7 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 // soy.page.amzaStressPluginRegion
 public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion.AmzaStressPluginRegionInput> {
 
-    private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final NumberFormat numberFormat = NumberFormat.getInstance();
 
     private static final ConcurrentMap<String, Stress> STRESS_MAP = Maps.newConcurrentMap();
@@ -96,7 +97,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
                 if (input.action.equals("start") || input.action.equals("stop")) {
                     Stress stress = STRESS_MAP.remove(input.name);
-                    log.info("Removed {}", input.name);
+                    LOG.info("Removed {}", input.name);
                     if (stress != null) {
                         boolean stopped = stress.stop(10, TimeUnit.SECONDS);
                         data.put("stopped", stopped);
@@ -106,7 +107,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                     ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 10);
                     Stress stress = new Stress(System.currentTimeMillis(), executor, new AtomicLong(0), input);
                     Stress existing = STRESS_MAP.putIfAbsent(input.name, stress);
-                    log.info("Added {}", input.name);
+                    LOG.info("Added {}", input.name);
                     if (existing == null) {
                         stress.start();
                     }
@@ -142,7 +143,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             data.put("stress", rows);
 
         } catch (Exception e) {
-            log.error("Unable to retrieve data", e);
+            LOG.error("Unable to retrieve data", e);
         }
 
         return renderer.render(template, data);
@@ -244,9 +245,9 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
                 } catch (DeltaOverCapacityException de) {
                     Thread.sleep(100);
-                    log.warn("Slowing stress for region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex});
+                    LOG.warn("Slowing stress for region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex});
                 } catch (Exception x) {
-                    log.warn("Failed to set region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex}, x);
+                    LOG.warn("Failed to set region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex}, x);
                 }
             }
             added.addAndGet(input.batchSize);
@@ -265,7 +266,16 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
         PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
-        amzaService.awaitOnline(partitionName, 10_000);
+
+        long timeoutMillis = 10_000;
+        while (true) {
+            try {
+                amzaService.awaitOnline(partitionName, timeoutMillis);
+                break;
+            } catch (TimeoutException te) {
+                LOG.warn("{} failed to come online in {}", partitionName, timeoutMillis);
+            }
+        }
         return amzaService.getPartition(partitionName);
     }
 

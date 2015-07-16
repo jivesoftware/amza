@@ -26,4 +26,6 @@ public interface PrimaryRowMarshaller<R> {
     boolean fromRow(R row, long txId, TxKeyValueStream keyValueStream) throws Exception;
 
     byte[] valueFromRow(R row) throws Exception;
+
+    long timestampFromRow(R row) throws Exception;
 }

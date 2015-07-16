@@ -154,14 +154,6 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean remove(WALKeys keys) throws Exception {
-        return keys.consume(key -> {
-            index.remove(key);
-            return true;
-        });
-    }
-
-    @Override
     public CompactionWALIndex startCompaction() throws Exception {
 
         final MemoryWALIndex rowsIndex = new MemoryWALIndex();

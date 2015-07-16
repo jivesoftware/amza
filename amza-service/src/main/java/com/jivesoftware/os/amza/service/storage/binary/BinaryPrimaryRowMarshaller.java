@@ -26,9 +26,9 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
     @Override
     public byte[] toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned) throws Exception {
         HeapFiler filer = new HeapFiler();
-        UIO.writeByteArray(filer, value, "value");
         UIO.writeLong(filer, timestamp, "timestamp");
         UIO.writeBoolean(filer, tombstoned, "tombstone");
+        UIO.writeByteArray(filer, value, "value");
         UIO.writeByteArray(filer, key, "key");
         return filer.getBytes();
     }
@@ -36,9 +36,9 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
     @Override
     public boolean fromRow(byte[] row, KeyValueStream keyValueStream) throws Exception {
         HeapFiler filer = new HeapFiler(row);
-        byte[] value = UIO.readByteArray(filer, "value");
         long timestamp = UIO.readLong(filer, "timestamp");
         boolean tombstone = UIO.readBoolean(filer, "tombstone");
+        byte[] value = UIO.readByteArray(filer, "value");
         byte[] key = UIO.readByteArray(filer, "key");
         return keyValueStream.stream(key, value, timestamp, tombstone);
     }
@@ -46,9 +46,9 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
     @Override
     public boolean fromRow(byte[] row, long txId, TxKeyValueStream keyValueStream) throws Exception {
         HeapFiler filer = new HeapFiler(row);
-        byte[] value = UIO.readByteArray(filer, "value");
         long timestamp = UIO.readLong(filer, "timestamp");
         boolean tombstone = UIO.readBoolean(filer, "tombstone");
+        byte[] value = UIO.readByteArray(filer, "value");
         byte[] key = UIO.readByteArray(filer, "key");
         return keyValueStream.row(txId, key, value, timestamp, tombstone);
     }
@@ -56,6 +56,12 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
     @Override
     public byte[] valueFromRow(byte[] row) throws Exception {
         HeapFiler filer = new HeapFiler(row);
+        filer.seek(8 + 1);
         return UIO.readByteArray(filer, "value");
+    }
+
+    @Override
+    public long timestampFromRow(byte[] row) throws Exception {
+        return UIO.bytesLong(row, 0);
     }
 }

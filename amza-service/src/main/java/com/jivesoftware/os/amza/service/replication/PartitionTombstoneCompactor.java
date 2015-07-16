@@ -61,8 +61,8 @@ public class PartitionTombstoneCompactor {
                 public void run() {
                     try {
                         failedToCompact = 0;
-                        long removeIfOlderThanTimestmapId = removeIfOlderThanTimestmapId();
-                        compactTombstone(stripe, numberOfCompactorThreads, removeIfOlderThanTimestmapId);
+                        long removeIfOlderThanTimestmapId = removeIfOlderThanTimestampId();
+                        compactTombstone(stripe, numberOfCompactorThreads, removeIfOlderThanTimestmapId, false);
                     } catch (Exception x) {
                         LOG.debug("Failing to compact tombstones.", x);
                         if (failedToCompact % silenceBackToBackErrors == 0) {
@@ -80,11 +80,11 @@ public class PartitionTombstoneCompactor {
         this.scheduledThreadPool = null;
     }
 
-    public long removeIfOlderThanTimestmapId() {
+    public long removeIfOlderThanTimestampId() {
         return orderIdProvider.getApproximateId(System.currentTimeMillis() - removeTombstonedOlderThanNMillis);
     }
 
-    public void compactTombstone(int stripe, int numberOfStripes, long removeTombstonedOlderThanTimestampId) throws Exception {
+    public void compactTombstone(int stripe, int numberOfStripes, long removeTombstonedOlderThanTimestampId, boolean force) throws Exception {
 
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
             if (Math.abs(versionedPartitionName.getPartitionName().hashCode() % numberOfStripes) == stripe) {
@@ -101,13 +101,18 @@ public class PartitionTombstoneCompactor {
                 if (compacting.putIfAbsent(versionedPartitionName, Boolean.TRUE) == null) {
                     try {
                         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-                        if (partitionStore.compactableTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId)) {
+                        if (force || partitionStore.compactableTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId)) {
                             amzaStats.beginCompaction("Compacting Tombstones:" + versionedPartitionName);
                             try {
-                                partitionStore.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
+                                LOG.info("Compacting removeTombstonedOlderThanTimestampId:{} ttlTimestampId:{} versionedPartitionName:{}",
+                                    removeTombstonedOlderThanTimestampId, ttlTimestampId, versionedPartitionName);
+                                partitionStore.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
                             } finally {
                                 amzaStats.endCompaction("Compacting Tombstones:" + versionedPartitionName);
                             }
+                        } else {
+                            LOG.info("Ignored removeTombstonedOlderThanTimestampId:{} ttlTimestampId:{} versionedPartitionName:{}",
+                                removeTombstonedOlderThanTimestampId, ttlTimestampId, versionedPartitionName);
                         }
                     } catch (Exception x) {
                         LOG.warn("Failed to compact tombstones partition:" + versionedPartitionName, x);

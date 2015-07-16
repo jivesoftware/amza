@@ -42,11 +42,6 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean remove(WALKeys keys) throws Exception {
-        return keys.consume(key -> true);
-    }
-
-    @Override
     public boolean isEmpty() throws Exception {
         return false;
     }

@@ -51,7 +51,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.mlogger.core.ValueType;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -59,7 +58,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -67,26 +65,27 @@ import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
-public class WALStorage implements RangeScannable {
+public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final int numTickleMeElmaphore = 1024; // TODO config
+    private static final int numKeyHighwaterStripes = 1024; // TODO expose to config
 
     private final VersionedPartitionName versionedPartitionName;
     private final OrderIdProvider orderIdProvider;
-    private final PrimaryRowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
-    private final WALTx walTx;
+    private final WALTx<I> walTx;
     private final AtomicInteger maxUpdatesBetweenCompactionHintMarker;
     private final AtomicInteger maxUpdatesBetweenIndexCommitMarker;
-    private final MutableLong[] stripedKeyHighwaterTimestamps;
+    private final long[] stripedKeyHighwaterTimestamps;
 
-    private final AtomicReference<WALIndex> walIndex = new AtomicReference<>(null);
+    private final AtomicReference<I> walIndex = new AtomicReference<>(null);
     private final Object oneIndexerAtATimeLock = new Object();
     private final Object oneTransactionAtATimeLock = new Object();
     private final Semaphore tickleMeElmophore = new Semaphore(numTickleMeElmaphore, true);
     private final AtomicLong updateCount = new AtomicLong(0);
-    private final AtomicLong newCount = new AtomicLong(0);
+    private final AtomicLong keyCount = new AtomicLong(0);
     private final AtomicLong clobberCount = new AtomicLong(0);
     private final AtomicLong indexUpdates = new AtomicLong(0);
     private final AtomicLong highestTxId = new AtomicLong(0);
@@ -106,25 +105,20 @@ public class WALStorage implements RangeScannable {
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
-        WALTx walTx,
+        WALTx<I> walTx,
         int maxUpdatesBetweenCompactionHintMarker,
         int maxUpdatesBetweenIndexCommitMarker,
         int tombstoneCompactionFactor) {
 
         this.versionedPartitionName = versionedPartitionName;
         this.orderIdProvider = orderIdProvider;
-        this.rowMarshaller = rowMarshaller;
+        this.primaryRowMarshaller = rowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.walTx = walTx;
         this.maxUpdatesBetweenCompactionHintMarker = new AtomicInteger(maxUpdatesBetweenCompactionHintMarker);
         this.maxUpdatesBetweenIndexCommitMarker = new AtomicInteger(maxUpdatesBetweenIndexCommitMarker);
         this.tombstoneCompactionFactor = tombstoneCompactionFactor;
-
-        int numKeyHighwaterStripes = 1024; // TODO expose to config
-        this.stripedKeyHighwaterTimestamps = new MutableLong[numKeyHighwaterStripes];
-        for (int i = 0; i < stripedKeyHighwaterTimestamps.length; i++) {
-            stripedKeyHighwaterTimestamps[i] = new MutableLong();
-        }
+        this.stripedKeyHighwaterTimestamps = new long[numKeyHighwaterStripes];
     }
 
     private void acquireOne() {
@@ -164,7 +158,7 @@ public class WALStorage implements RangeScannable {
         acquireAll();
         try {
             expunged &= walTx.delete(false);
-            WALIndex wali = walIndex.get();
+            I wali = walIndex.get();
             if (wali != null) {
                 expunged &= wali.delete();
             }
@@ -175,32 +169,38 @@ public class WALStorage implements RangeScannable {
     }
 
     public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {
-        return (clobberCount.get() + 1) / (newCount.get() + 1) > tombstoneCompactionFactor;
+        return (clobberCount.get() + 1) / (keyCount.get() + 1) > tombstoneCompactionFactor;
     }
 
-    public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
+    public long compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId, boolean force) throws Exception {
         final String metricPrefix = "partition>" + new String(versionedPartitionName.getPartitionName().getName())
             + ">ring>" + new String(versionedPartitionName.getPartitionName().getRingName()) + ">";
-        Optional<WALTx.Compacted> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get());
+        Optional<WALTx.Compacted<I>> compact = walTx.compact(removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get(), force);
         if (compact.isPresent()) {
             acquireAll();
             try {
-                WALTx.CommittedCompacted compacted = compact.get().commit();
+                WALTx.CommittedCompacted<I> compacted = compact.get().commit();
                 walIndex.set(compacted.index);
-                newCount.set(0);
+                keyCount.set(compacted.keyCount + compacted.catchupKeyCount);
                 clobberCount.set(0);
+                walTx.write((WALWriter writer) -> {
+
+                    writeCompactionHintMarker(writer);
+                    writeIndexCommitMarker(writer, highestTxId()); // Kevin said this would be ok!
+                    return null;
+                });
 
                 LOG.set(ValueType.COUNT, metricPrefix + "sizeBeforeCompaction", compacted.sizeBeforeCompaction);
                 LOG.set(ValueType.COUNT, metricPrefix + "sizeAfterCompaction", compacted.sizeAfterCompaction);
                 LOG.set(ValueType.COUNT, metricPrefix + "keeps", compacted.keyCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "removes", compacted.removeCount);
+                LOG.set(ValueType.COUNT, metricPrefix + "clobbers", compacted.clobberCount);
                 LOG.set(ValueType.COUNT, metricPrefix + "tombstones", compacted.tombstoneCount);
                 LOG.set(ValueType.COUNT, metricPrefix + "ttl", compacted.ttlCount);
                 LOG.set(ValueType.COUNT, metricPrefix + "duration", compacted.duration);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", compacted.catchupKeys);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupRemoves", compacted.catchupRemoves);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", compacted.catchupTombstones);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", compacted.catchupTTL);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", compacted.catchupKeyCount);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupClobbers", compacted.catchupClobberCount);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", compacted.catchupTombstoneCount);
+                LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", compacted.catchupTTLCount);
                 LOG.set(ValueType.COUNT, metricPrefix + "catchupDuration", compacted.catchupDuration);
                 LOG.inc(metricPrefix + "compacted");
 
@@ -221,33 +221,47 @@ public class WALStorage implements RangeScannable {
 
             walIndex.compareAndSet(null, walTx.load(versionedPartitionName));
 
-            final MutableLong lastTxId = new MutableLong(0);
-            final AtomicLong rowsVisited = new AtomicLong(maxUpdatesBetweenCompactionHintMarker.get());
-            final AtomicBoolean gotCompactionHints = new AtomicBoolean(false);
-            final AtomicBoolean gotHighestTxId = new AtomicBoolean(false);
+            MutableLong lastTxId = new MutableLong(0);
+            MutableLong rowsVisited = new MutableLong(maxUpdatesBetweenCompactionHintMarker.get());
+            MutableBoolean needCompactionHints = new MutableBoolean(true);
+            MutableBoolean needKeyHighwaterStripes = new MutableBoolean(true);
+            MutableBoolean needHighestTxId = new MutableBoolean(true);
+
+            KeyValueStream mergeStripedKeyHighwaters = (byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) -> {
+                mergeStripedKeyHighwaters(key, valueTimestamp);
+                return true;
+            };
 
             walTx.read((WALReader rowReader) -> {
                 rowReader.reverseScan((rowPointer, rowTxId, rowType, row) -> {
                     if (rowTxId > lastTxId.longValue()) {
                         lastTxId.setValue(rowTxId);
-                        gotHighestTxId.set(true);
+                        needHighestTxId.setValue(false);
                     }
-                    if (!gotCompactionHints.get() && rowType == RowType.system) {
-                        ByteBuffer buf = ByteBuffer.wrap(row);
-                        byte[] keyBytes = new byte[8];
-                        buf.get(keyBytes);
-                        long key = UIO.bytesLong(keyBytes);
+                    if ((needCompactionHints.booleanValue() || needKeyHighwaterStripes.booleanValue()) && rowType == RowType.system) {
+                        long key = UIO.bytesLong(row, 0);
                         if (key == RowType.COMPACTION_HINTS_KEY) {
-                            byte[] newCountBytes = new byte[8];
-                            byte[] clobberCountBytes = new byte[8];
-                            buf.get(newCountBytes);
-                            buf.get(clobberCountBytes);
-                            newCount.set(UIO.bytesLong(newCountBytes));
-                            clobberCount.set(UIO.bytesLong(clobberCountBytes));
-                            gotCompactionHints.set(true);
+                            long[] parts = UIO.bytesLongs(row);
+                            if (needCompactionHints.booleanValue()) {
+                                keyCount.set(parts[1]);
+                                clobberCount.set(parts[2]);
+                                needCompactionHints.setValue(false);
+                            }
+                            if (needKeyHighwaterStripes.booleanValue()) {
+                                if (parts.length - 3 == numKeyHighwaterStripes) {
+                                    for (int i = 0; i < numKeyHighwaterStripes; i++) {
+                                        stripedKeyHighwaterTimestamps[i] = Math.max(stripedKeyHighwaterTimestamps[i], parts[i + 3]);
+                                    }
+                                    needKeyHighwaterStripes.setValue(false);
+                                }
+                            }
                         }
                     }
-                    return !gotHighestTxId.get() || (rowsVisited.decrementAndGet() >= 0 && !gotCompactionHints.get());
+                    if (needKeyHighwaterStripes.booleanValue() && rowType == RowType.primary) {
+                        primaryRowMarshaller.fromRow(row, mergeStripedKeyHighwaters);
+                    }
+                    rowsVisited.decrement();
+                    return needHighestTxId.booleanValue() || needCompactionHints.booleanValue() || needKeyHighwaterStripes.booleanValue();
                 });
                 return null;
             });
@@ -264,6 +278,11 @@ public class WALStorage implements RangeScannable {
         } finally {
             releaseAll();
         }
+    }
+
+    private void mergeStripedKeyHighwaters(byte[] key, long valueTimestamp) {
+        int highwaterTimestampIndex = Math.abs(Arrays.hashCode(key) % stripedKeyHighwaterTimestamps.length);
+        stripedKeyHighwaterTimestamps[highwaterTimestampIndex] = Math.max(stripedKeyHighwaterTimestamps[highwaterTimestampIndex], valueTimestamp);
     }
 
     public void flush(boolean fsync) throws Exception {
@@ -285,11 +304,13 @@ public class WALStorage implements RangeScannable {
 
     private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
-                RowType.COMPACTION_HINTS_KEY,
-                newCount.get(),
-                clobberCount.get()
-            }));
+            long[] hints = new long[3 + numKeyHighwaterStripes];
+            hints[0] = RowType.COMPACTION_HINTS_KEY;
+            hints[1] = keyCount.get();
+            hints[2] = clobberCount.get();
+            System.arraycopy(stripedKeyHighwaterTimestamps, 0, hints, 3, numKeyHighwaterStripes);
+
+            rowWriter.writeSystem(UIO.longsBytes(hints));
             updateCount.set(0);
         }
     }
@@ -308,18 +329,6 @@ public class WALStorage implements RangeScannable {
         }
     }
 
-    /*TODO if we care, persist stripedKeyHighwaterTimestamps periodically as a cold start optimization for getLargestTimestampForKeyStripe()
-     private void writeStripedTimestamp(WALWriter rowWriter) throws Exception {
-     synchronized (oneTransactionAtATimeLock) {
-     rowWriter.write(
-     Collections.singletonList(-1L),
-     Collections.singletonList(WALWriter.SYSTEM_VERSION_1),
-     Collections.singletonList(UIO.longsBytes(new long[]{
-     WALWriter.STRIPE_TIME_MARKER,
-     stripedKeyHighwaterTimestamps})));
-     }
-     }
-     */
     public RowsChanged update(long forceTxId, boolean forceApply, Commitable updates) throws Exception {
 
         AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
@@ -399,7 +408,7 @@ public class WALStorage implements RangeScannable {
                         rowStream -> {
                             for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                                 WALValue value = row.getValue();
-                                if (!rowStream.stream(rowMarshaller.toRow(row.getKey().getKey(),
+                                if (!rowStream.stream(primaryRowMarshaller.toRow(row.getKey().getKey(),
                                         value.getValue(),
                                         value.getTimestampId(),
                                         value.getTombstoned()))) {
@@ -435,15 +444,13 @@ public class WALStorage implements RangeScannable {
                                 return false;
                             }
 
-                            int highwaterTimestampIndex = Math.abs(Arrays.hashCode(indexable.key) % stripedKeyHighwaterTimestamps.length);
-                            stripedKeyHighwaterTimestamps[highwaterTimestampIndex].setValue(Math.max(
-                                stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue(),
-                                indexable.valueTimestamp));
+                            mergeStripedKeyHighwaters(indexable.key, indexable.valueTimestamp);
+
                         }
                         return true;
                     }, (mode, txId, key, timestamp, tombstoned, fp) -> {
                         if (mode == WALMergeKeyPointerStream.added) {
-                            newCount.incrementAndGet();
+                            keyCount.incrementAndGet();
                         } else if (mode == WALMergeKeyPointerStream.clobbered) {
                             clobberCount.incrementAndGet();
                         } else {
@@ -598,13 +605,13 @@ public class WALStorage implements RangeScannable {
     // TODO fix instanciation to hashcode
     private long getLargestTimestampForKeyStripe(byte[] key) {
         int highwaterTimestampIndex = Math.abs(Arrays.hashCode(key) % stripedKeyHighwaterTimestamps.length);
-        return stripedKeyHighwaterTimestamps[highwaterTimestampIndex].longValue();
+        return stripedKeyHighwaterTimestamps[highwaterTimestampIndex];
     }
 
     private byte[] hydrateRowIndexValue(long indexFP) {
         try {
             byte[] row = walTx.read((WALReader rowReader) -> rowReader.read(indexFP));
-            return rowMarshaller.valueFromRow(row);
+            return primaryRowMarshaller.valueFromRow(row);
         } catch (Exception x) {
             String base64;
             try {
@@ -647,6 +654,18 @@ public class WALStorage implements RangeScannable {
         }
     }
 
+    public boolean takeAllRows(final RowStream rowStream) throws Exception {
+        acquireOne();
+        try {
+            return walTx.readFromTransactionId(0, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
+                (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
+                    return rowStream.row(rowPointer, rowTxId, rowType, row);
+                }));
+        } finally {
+            releaseOne();
+        }
+    }
+
     public void updatedStorageDescriptor(WALStorageDescriptor walStorageDescriptor) throws Exception {
         maxUpdatesBetweenCompactionHintMarker.set(walStorageDescriptor.maxUpdatesBetweenCompactionHintMarker);
         maxUpdatesBetweenIndexCommitMarker.set(walStorageDescriptor.maxUpdatesBetweenIndexCommitMarker);
@@ -660,13 +679,7 @@ public class WALStorage implements RangeScannable {
     }
 
     public long count() throws Exception {
-        acquireOne();
-        try {
-            WALIndex wali = this.walIndex.get();
-            return wali.size();
-        } finally {
-            releaseOne();
-        }
+        return keyCount.get();
     }
 
     public long highestTxId() {

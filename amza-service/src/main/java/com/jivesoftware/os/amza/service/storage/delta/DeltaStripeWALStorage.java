@@ -468,6 +468,22 @@ public class DeltaStripeWALStorage {
         }
     }
 
+    public boolean takeAllRows(VersionedPartitionName versionedPartitionName, WALStorage storage, RowStream rowStream)
+        throws Exception {
+
+        if (!storage.takeAllRows(rowStream)) {
+            return false;
+        }
+
+        acquireOne();
+        try {
+            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
+            return delta.takeRowsFromTransactionId(0, rowStream);
+        } finally {
+            releaseOne();
+        }
+    }
+
     public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, byte[] key) throws Exception {
         WALValue[] walValue = new WALValue[1];
         get(versionedPartitionName, storage, (stream) -> {

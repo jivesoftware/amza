@@ -51,6 +51,7 @@ public class AmzaUIInitializer {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/homeRegion.soy"), "home.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/metricsPluginRegion.soy"), "metrics.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/partitionMetricsPluginRegion.soy"), "pmetrics.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/visualizePartitionPluginRegion.soy"), "vmetrics.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/compactionsPluginRegion.soy"), "compactions.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaRingsPluginRegion.soy"), "amzaRings.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaClusterPluginRegion.soy"), "amzaCluster.soy");
@@ -73,7 +74,7 @@ public class AmzaUIInitializer {
             new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
                 MetricsPluginEndpoints.class,
                 new MetricsPluginRegion("soy.page.metricsPluginRegion", "soy.page.partitionMetricsPluginRegion",
-                    "soy.page.amzaStats", renderer, amzaService.getRingReader(), amzaService, amzaStats)),
+                    "soy.page.amzaStats", "soy.page.visualizePartitionPluginRegion", renderer, amzaService.getRingReader(), amzaService, amzaStats)),
             new ManagePlugin("compressed", "Compactions", "/amza/ui/compactions",
                 CompactionsPluginEndpoints.class,
                 new CompactionsPluginRegion("soy.page.compactionsPluginRegion", renderer, amzaService.getRingReader(), amzaService, amzaStats)),

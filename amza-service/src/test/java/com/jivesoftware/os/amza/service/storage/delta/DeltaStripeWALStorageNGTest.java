@@ -88,7 +88,11 @@ public class DeltaStripeWALStorageNGTest {
 
         partitionIndex.open(txPartitionStatus);
 
-        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, null, false);
+        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            null,
+            false);
 
         PartitionProvider partitionProvider = new PartitionProvider(ids,
             partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, partitionIndex);

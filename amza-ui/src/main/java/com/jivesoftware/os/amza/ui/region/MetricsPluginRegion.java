@@ -264,8 +264,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         double memoryLoad = (double) memoryBean.getHeapMemoryUsage().getUsed() / (double) memoryBean.getHeapMemoryUsage().getMax();
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
-            numberFormat.format(humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false))));
+            humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -280,31 +280,31 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         sb.append(progress("Gets (" + grandTotal.gets + ")",
             (int) (((double) grandTotal.getsLag.longValue() / 1000d) * 100),
-            numberFormat.format(getDurationBreakdown(grandTotal.getsLag.longValue())) + " lag"));
+            getDurationBreakdown(grandTotal.getsLag.longValue())) + " lag");
 
         sb.append(progress("Scans (" + grandTotal.scans + ")",
             (int) (((double) grandTotal.scansLag.longValue() / 1000d) * 100),
-            numberFormat.format(getDurationBreakdown(grandTotal.scansLag.longValue())) + " lag"));
+            getDurationBreakdown(grandTotal.scansLag.longValue())) + " lag");
 
         sb.append(progress("Direct Applied (" + grandTotal.directApplies + ")",
             (int) (((double) grandTotal.directAppliesLag.longValue() / 1000d) * 100),
-            numberFormat.format(getDurationBreakdown(grandTotal.directAppliesLag.longValue())) + " lag"));
+            getDurationBreakdown(grandTotal.directAppliesLag.longValue())) + " lag");
 
         sb.append(progress("Updates (" + grandTotal.updates + ")",
             (int) (((double) grandTotal.updatesLag.longValue() / 10000d) * 100),
-            numberFormat.format(getDurationBreakdown(grandTotal.updatesLag.longValue())) + " lag"));
+            getDurationBreakdown(grandTotal.updatesLag.longValue())) + " lag");
 
         sb.append(progress("Offers (" + grandTotal.offers + ")",
             (int) (((double) grandTotal.offersLag.longValue() / 10000d) * 100),
-            numberFormat.format(getDurationBreakdown(grandTotal.offersLag.longValue())) + " lag"));
+            getDurationBreakdown(grandTotal.offersLag.longValue())) + " lag");
 
         sb.append(progress("Took (" + grandTotal.takes + ")",
             (int) (((double) grandTotal.takesLag.longValue() / 10000d) * 100),
-            numberFormat.format(getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag"));
+            getDurationBreakdown(grandTotal.takesLag.longValue())) + " lag");
 
         sb.append(progress("Took Applied (" + grandTotal.takeApplies + ")",
             (int) (((double) grandTotal.takeAppliesLag.longValue() / 1000d) * 100),
-            numberFormat.format(getDurationBreakdown(grandTotal.takeAppliesLag.longValue())) + " lag"));
+            getDurationBreakdown(grandTotal.takeAppliesLag.longValue())) + " lag");
 
         sb.append(progress("Active Long Polls (" + amzaStats.availableRowsStream.get() + ")",
             (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100), ""));

@@ -455,7 +455,7 @@ public class DeltaStripeWALStorage {
             releaseOne();
         }
 
-        if ((lowestTxId == -1 || lowestTxId > transactionId) && !storage.takeRowsFromTransactionId(transactionId, rowStream)) {
+        if ((lowestTxId == -1 || lowestTxId > transactionId) && !storage.takeRowUpdatesSince(transactionId, rowStream)) {
             return false;
         }
 

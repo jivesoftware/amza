@@ -24,8 +24,6 @@ import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
@@ -627,51 +625,23 @@ public class WALStorage implements RangeScannable {
     }
 
     public boolean takeRowUpdatesSince(final long sinceTransactionId, final RowStream rowStream) throws Exception {
+        if (sinceTransactionId >= highestTxId.get()) {
+            return true;
+        }
         acquireOne();
         try {
-            return walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
+            long[] takeMetrics = new long[1];
+            Boolean readFromTransactionId = walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
                 (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
                     if (rowType != RowType.system && rowTxId > sinceTransactionId) {
                         return rowStream.row(rowPointer, rowTxId, rowType, row);
+                    } else {
+                        takeMetrics[0]++;
                     }
                     return true;
                 }));
-        } finally {
-            releaseOne();
-        }
-    }
-
-    /**
-     * @param sinceTransactionId
-     * @param highwaters         Nullable
-     * @param txKeyValueStream
-     * @return
-     * @throws Exception
-     */
-    public boolean takeFromTransactionId(long sinceTransactionId, Highwaters highwaters, TxKeyValueStream txKeyValueStream) throws Exception {
-        acquireOne();
-        try {
-            return walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
-                (rowPointer, rowTxId, rowType, row) -> {
-                    if (rowType == RowType.highwater && highwaters != null) {
-                        WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
-                        highwaters.highwater(highwater);
-                    } else if (rowType == RowType.primary && rowTxId > sinceTransactionId) {
-                        return rowMarshaller.fromRow(row, rowTxId, txKeyValueStream);
-                    }
-                    return true;
-                }));
-        } finally {
-            releaseOne();
-        }
-    }
-
-    public boolean takeRowsFromTransactionId(long sinceTransactionId, RowStream rowStream) throws Exception {
-        acquireOne();
-        try {
-            return walTx.readFromTransactionId(sinceTransactionId, (offset, reader) -> {
-                return reader.scan(offset, false, rowStream);
-            });
+            LOG.inc("excessTakes", takeMetrics[0]);
+            return readFromTransactionId;
         } finally {
             releaseOne();
         }

@@ -12,12 +12,15 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 
@@ -29,11 +32,19 @@ public class SystemWALStorage {
     private static final Predicate<VersionedPartitionName> IS_SYSTEM_PREDICATE = input -> input.getPartitionName().isSystemPartition();
 
     private final PartitionIndex partitionIndex;
+    private final PrimaryRowMarshaller<byte[]> rowMarshaller;
+    private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final RowChanges allRowChanges;
     private final boolean hardFlush;
 
-    public SystemWALStorage(PartitionIndex partitionIndex, RowChanges allRowChanges, boolean hardFlush) {
+    public SystemWALStorage(PartitionIndex partitionIndex,
+        PrimaryRowMarshaller<byte[]> rowMarshaller,
+        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
+        RowChanges allRowChanges,
+        boolean hardFlush) {
         this.partitionIndex = partitionIndex;
+        this.rowMarshaller = rowMarshaller;
+        this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.allRowChanges = allRowChanges;
         this.hardFlush = hardFlush;
     }
@@ -94,13 +105,21 @@ public class SystemWALStorage {
         TxKeyValueStream txKeyValueStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getWalStorage().takeFromTransactionId(transactionId, highwaters, txKeyValueStream);
+        return partitionIndex.get(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId, (rowFP, rowTxId, rowType, row) -> {
+            if (rowType == RowType.highwater && highwaters != null) {
+                WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
+                highwaters.highwater(highwater);
+            } else if (rowType == RowType.primary && rowTxId > transactionId) {
+                return rowMarshaller.fromRow(row, rowTxId, txKeyValueStream);
+            }
+            return true;
+        });
     }
 
     public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName, long transactionId, RowStream rowStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).getWalStorage().takeRowsFromTransactionId(transactionId, rowStream);
+        return partitionIndex.get(versionedPartitionName).getWalStorage().takeRowUpdatesSince(transactionId, rowStream);
     }
 
     public boolean rowScan(VersionedPartitionName versionedPartitionName, KeyValueStream keyValueStream) throws Exception {

@@ -154,7 +154,11 @@ public class AmzaServiceInitializer {
             takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), status, txId);
         };
 
-        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, amzaPartitionWatcher, config.hardFsync);
+        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            amzaPartitionWatcher,
+            config.hardFsync);
 
         final int deltaStorageStripes = config.numberOfDeltaStripes;
         PartitionStripeProvider.PartitionStripeFunction stripeFunction = partitionName -> Math.abs(partitionName.hashCode() % deltaStorageStripes);

@@ -97,8 +97,13 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public byte[] read(long pointer) throws Exception {
-        return rowReader.read(pointer);
+    public byte[] read(long fp) throws Exception {
+        return rowReader.read(fp);
+    }
+
+    @Override
+    public <R> R read(long fp, ReadTx<R> tx) throws Exception {
+        return rowReader.read(fp, tx);
     }
 
     @Override

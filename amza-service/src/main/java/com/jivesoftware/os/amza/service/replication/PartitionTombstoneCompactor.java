@@ -111,7 +111,7 @@ public class PartitionTombstoneCompactor {
                                 amzaStats.endCompaction("Compacting Tombstones:" + versionedPartitionName);
                             }
                         } else {
-                            LOG.info("Ignored removeTombstonedOlderThanTimestampId:{} ttlTimestampId:{} versionedPartitionName:{}",
+                            LOG.debug("Ignored removeTombstonedOlderThanTimestampId:{} ttlTimestampId:{} versionedPartitionName:{}",
                                 removeTombstonedOlderThanTimestampId, ttlTimestampId, versionedPartitionName);
                         }
                     } catch (Exception x) {

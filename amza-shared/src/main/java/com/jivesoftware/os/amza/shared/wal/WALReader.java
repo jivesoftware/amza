@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.filer.IReadable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 
 public interface WALReader {
@@ -32,5 +33,13 @@ public interface WALReader {
 
     boolean reverseScan(RowStream rowStream) throws Exception;
 
-    byte[] read(long position) throws Exception;
+    byte[] read(long fp) throws Exception;
+
+    interface ReadTx<R> {
+
+        R tx(IReadable readable) throws Exception;
+    }
+
+    <R> R read(long fp, ReadTx<R> tx) throws Exception;
+
 }

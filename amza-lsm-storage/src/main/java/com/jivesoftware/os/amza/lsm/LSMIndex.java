@@ -1,13 +1,11 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.MergeTxKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.TxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.TxKeyPointers;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
@@ -17,7 +15,6 @@ import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  *
@@ -26,19 +23,15 @@ import java.util.concurrent.atomic.AtomicReference;
 public class LSMIndex implements WALIndex {
 
     private final VersionedPartitionName versionedPartitionName;
-    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
-    private final WALTx<LSMIndexLink> wal;
+    private final WALTx<LSMIndex> wal;
 
-    private final AtomicReference<LSMIndexLink> index = new AtomicReference<>();
-
-    public LSMIndex(VersionedPartitionName versionedPartitionName, PrimaryRowMarshaller<byte[]> primaryRowMarshaller, WALTx<LSMIndexLink> wal) {
+    public LSMIndex(VersionedPartitionName versionedPartitionName, WALTx<LSMIndex> wal) {
         this.versionedPartitionName = versionedPartitionName;
-        this.primaryRowMarshaller = primaryRowMarshaller;
         this.wal = wal;
     }
 
-    public void open() throws Exception {
-        index.set(wal.load(versionedPartitionName));
+    public void load() throws Exception {
+
     }
 
     @Override
@@ -55,11 +48,7 @@ public class LSMIndex implements WALIndex {
 
     @Override
     public void compact() throws Exception {
-        Optional<WALTx.Compacted<LSMIndexLink>> compacted = wal.compact(0, 0, index.get(), false);
-        if (compacted.isPresent()) {
-            WALTx.CommittedCompacted<LSMIndexLink> commit = compacted.get().commit();
-            index.set(commit.index);
-        }
+
     }
 
     @Override
@@ -69,7 +58,6 @@ public class LSMIndex implements WALIndex {
 
     @Override
     public boolean delete() throws Exception {
-        index.set(null);
         return wal.delete(false);
     }
 
@@ -84,11 +72,8 @@ public class LSMIndex implements WALIndex {
 
         List<byte[]> rawWALPointerBlocksInitialKeys = new ArrayList<>();
         List<byte[]> rawWALPointerBlocks = new ArrayList<>();
-        
+
         long blockSize = 100;
-        
-
-
 
         pointers.consume(new TxKeyPointerStream() {
 
@@ -97,7 +82,6 @@ public class LSMIndex implements WALIndex {
                 throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
             }
         });
-        
 
 //        long txId = 0; // TODO
 //        wal.write((writer) -> {
@@ -106,95 +90,54 @@ public class LSMIndex implements WALIndex {
 //
 //            }, null, null);
 //        });
-
         return true;
     }
 
     // READ
     @Override
     public boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception {
-        LSMIndexLink got = index.get();
-        if (got != null) {
-            return got.getPointer(key, stream);
-        } else {
-            return stream.stream(key, -1, false, -1);
-        }
+        return true;
     }
 
     @Override
     public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
-        LSMIndexLink got = index.get();
-        if (got != null) {
-            return got.getPointers(keys, stream);
-        } else {
-            return keys.consume((key) -> {
-                return stream.stream(key, -1, false, -1);
-            });
-        }
+        return true;
+
     }
 
     @Override
     public boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
-        LSMIndexLink got = index.get();
-        if (got != null) {
-            return got.getPointers(keyValues, stream);
-        } else {
-            return keyValues.consume((byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) -> {
-                return stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1);
-            });
-        }
+        return true;
+
     }
 
     @Override
     public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
-        LSMIndexLink got = index.get();
-        if (got != null) {
-            return got.containsKeys(keys, stream);
-        } else {
-            return keys.consume((key) -> {
-                return stream.stream(key, false);
-            });
-        }
+        return true;
+
     }
 
     @Override
     public boolean isEmpty() throws Exception {
-        LSMIndexLink got = index.get();
-        if (got != null) {
-            return got.isEmpty();
-        } else {
-            return true;
-        }
+
+        return true;
     }
 
     @Override
     public long size() throws Exception {
-        LSMIndexLink got = index.get();
-        if (got != null) {
-            return got.size();
-        } else {
-            return 0;
-        }
+        return 0;
     }
 
     @Override
     public boolean rangeScan(byte[] from, byte[] to, WALKeyPointerStream stream) throws Exception {
-        LSMIndexLink got = index.get();
-        if (got != null) {
-            return got.rangeScan(from, to, stream);
-        } else {
-            return true;
-        }
+        return true;
+
     }
 
     @Override
     public boolean rowScan(WALKeyPointerStream stream) throws Exception {
-        LSMIndexLink got = index.get();
-        if (got != null) {
-            return got.rowScan(stream);
-        } else {
-            return true;
-        }
+        return true;
+
     }
 
 }

@@ -269,4 +269,12 @@ public class BinaryRowReader implements WALReader {
         }
     }
 
+    @Override
+    public <R> R read(long position, ReadTx<R> tx) throws Exception {
+        IReadable filer = parent.fileChannelMemMapFiler(position + 4);
+        if (filer == null) {
+            filer = parent.fileChannelFiler();
+        }
+        return tx.tx(filer);
+    }
 }

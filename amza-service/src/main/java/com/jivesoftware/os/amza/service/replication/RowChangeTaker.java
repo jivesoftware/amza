@@ -1,11 +1,9 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus;
 import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
@@ -13,8 +11,10 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshalle
 import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -578,7 +578,7 @@ public class RowChangeTaker implements RowChanges {
                 amzaStats.took(ringMember, versionedPartitionName.getPartitionName(), batch.size(), oldestTxId.longValue());
                 WALHighwater walh = highwater.get();
                 MemoryWALUpdates updates = new MemoryWALUpdates(batch, walh);
-                while(true) {
+                while (true) {
                     try {
                         RowsChanged changes = commitTo.commit(updates);
                         if (changes != null) {
@@ -596,10 +596,13 @@ public class RowChangeTaker implements RowChanges {
                         }
                         amzaStats.backPressure.set(0);
                         break;
-                    } catch(DeltaOverCapacityException x) {
+                    } catch (DeltaOverCapacityException x) {
                         Thread.sleep(100); // TODO cofig;
                         amzaStats.backPressure.incrementAndGet();
                         amzaStats.pushBacks.incrementAndGet();
+                    } catch (Exception x) {
+                        LOG.error("Failed while flushing.", x);
+                        throw x;
                     }
                 }
             }

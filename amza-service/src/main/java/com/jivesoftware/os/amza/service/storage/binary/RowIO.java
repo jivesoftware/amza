@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
-import java.util.List;
 
 /**
  *

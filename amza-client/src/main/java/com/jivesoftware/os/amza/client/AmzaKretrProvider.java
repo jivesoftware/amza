@@ -2,21 +2,20 @@ package com.jivesoftware.os.amza.client;
 
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TimestampedValue;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.TakeCursors;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -46,7 +45,7 @@ public class AmzaKretrProvider { // Aka Partition Client Provider
             this.partitionName = partitionName;
         }
 
-        public void commit(Commitable<WALValue> commitable,
+        public void commit(Commitable commitable,
             int desiredTakeQuorum,
             long timeout,
             TimeUnit timeUnit) throws Exception {
@@ -55,26 +54,27 @@ public class AmzaKretrProvider { // Aka Partition Client Provider
             partition.commit(commitable, desiredTakeQuorum, timeUnit.toMillis(timeout));
         }
 
-        public void get(Iterable<WALKey> keys, Scan<TimestampedValue> valuesStream) throws Exception {
+        public void get(WALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
             // TODO impl quorum reads?
             partitionAPIProvider.getPartition(partitionName).get(keys, valuesStream);
         }
 
-        public byte[] getValue(WALKey key) throws Exception {
+        public byte[] getValue(byte[] key) throws Exception {
             TimestampedValue timestampedValue = getTimestampedValue(key);
             return timestampedValue != null ? timestampedValue.getValue() : null;
         }
 
-        public TimestampedValue getTimestampedValue(WALKey key) throws Exception {
+        public TimestampedValue getTimestampedValue(byte[] key) throws Exception {
             final TimestampedValue[] r = new TimestampedValue[1];
-            get(Collections.singletonList(key), (rowTxId, key1, scanned) -> {
-                r[0] = scanned;
-                return true;
-            });
+            get(stream -> stream.stream(key),
+                (_key, value, timestamp) -> {
+                    r[0] = new TimestampedValue(timestamp, value);
+                    return true;
+                });
             return r[0];
         }
 
-        public void scan(WALKey from, WALKey to, Scan<TimestampedValue> stream) throws Exception {
+        public void scan(byte[] from, byte[] to, Scan<TimestampedValue> stream) throws Exception {
             // TODO impl WTF quorum scan? Really
             partitionAPIProvider.getPartition(partitionName).scan(from, to, stream);
         }

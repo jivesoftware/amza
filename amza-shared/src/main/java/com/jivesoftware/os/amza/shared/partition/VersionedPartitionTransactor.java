@@ -49,7 +49,7 @@ public class VersionedPartitionTransactor {
     }
 
     private Semaphore semaphore(VersionedPartitionName versionedPartitionName) {
-        return semaphores[Math.abs((versionedPartitionName.hashCode()) % semaphores.length)];
+        return semaphores[Math.abs(versionedPartitionName.hashCode() % semaphores.length)];
     }
 
 }

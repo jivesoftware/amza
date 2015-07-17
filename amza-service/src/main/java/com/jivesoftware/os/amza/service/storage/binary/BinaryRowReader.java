@@ -72,14 +72,14 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public void reverseScan(RowStream stream) throws Exception {
+    public boolean reverseScan(RowStream stream) throws Exception {
         long boundaryFp = parent.length();
         IReadable parentFiler = parent.fileChannelMemMapFiler(boundaryFp);
         if (parentFiler == null) {
             parentFiler = parent.fileChannelFiler();
         }
         if (boundaryFp == 0) {
-            return;
+            return true;
         }
         long read = 0;
         try {
@@ -126,7 +126,7 @@ public class BinaryRowReader implements WALReader {
                         read += (filer.getFilePointer() - seekTo);
                         if (rowType != null) {
                             if (!stream.row(rowFP, rowTxId, rowType, row)) {
-                                return;
+                                return false;
                             }
                         }
 
@@ -141,6 +141,7 @@ public class BinaryRowReader implements WALReader {
                     break;
                 }
             }
+            return true;
         } finally {
             ioStats.read.addAndGet(read);
         }
@@ -268,4 +269,12 @@ public class BinaryRowReader implements WALReader {
         }
     }
 
+    @Override
+    public <R> R read(long position, ReadTx<R> tx) throws Exception {
+        IReadable filer = parent.fileChannelMemMapFiler(position + 4);
+        if (filer == null) {
+            filer = parent.fileChannelFiler();
+        }
+        return tx.tx(filer);
+    }
 }

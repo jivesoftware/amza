@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
  *
  * @author jonathan.colt
  */
-public interface WALTx {
+public interface WALTx<I> {
 
     <R> R write(WALWrite<R> write) throws Exception;
 
@@ -17,7 +17,7 @@ public interface WALTx {
 
     void validateAndRepair() throws Exception;
 
-    WALIndex load(VersionedPartitionName partitionName) throws Exception;
+    I load(VersionedPartitionName partitionName) throws Exception;
 
     long length() throws Exception;
 
@@ -25,9 +25,10 @@ public interface WALTx {
 
     boolean delete(boolean ifEmpty) throws Exception;
 
-    Optional<Compacted> compact(long removeTombstonedOlderThanTimestampId,
+    Optional<Compacted<I>> compact(long removeTombstonedOlderThanTimestampId,
         long ttlTimestampId,
-        WALIndex rowIndex) throws Exception;
+        I rowIndex,
+        boolean force) throws Exception;
 
     interface WALWrite<R> {
 
@@ -44,42 +45,42 @@ public interface WALTx {
         R read(long offset, WALReader reader) throws Exception;
     }
 
-    interface Compacted {
+    interface Compacted<II> {
 
-        CommittedCompacted commit() throws Exception;
+        CommittedCompacted<II> commit() throws Exception;
     }
 
-    class CommittedCompacted {
+    class CommittedCompacted<III> {
 
-        public final WALIndex index;
+        public final III index;
         public final long sizeBeforeCompaction;
         public final long sizeAfterCompaction;
         public final long keyCount;
-        public final long removeCount;
+        public final long clobberCount;
         public final long tombstoneCount;
         public final long ttlCount;
         public final long duration;
-        public final long catchupKeys;
-        public final long catchupRemoves;
-        public final long catchupTombstones;
-        public final long catchupTTL;
+        public final long catchupKeyCount;
+        public final long catchupClobberCount;
+        public final long catchupTombstoneCount;
+        public final long catchupTTLCount;
         public final long catchupDuration;
 
-        public CommittedCompacted(WALIndex index, long sizeBeforeCompaction, long sizeAfterCompaction, long keyCount, long removeCount,
-            long tombstoneCount, long ttlCount, long duration, long catchupKeys, long catchupRemoves, long catchupTombstones, long catchupTTL,
+        public CommittedCompacted(III index, long sizeBeforeCompaction, long sizeAfterCompaction, long keyCount, long removeCount,
+            long tombstoneCount, long ttlCount, long duration, long catchupKeyCount, long catchupClobberCount, long catchupTombstoneCount, long catchupTTLCount,
             long catchupDuration) {
             this.index = index;
             this.sizeBeforeCompaction = sizeBeforeCompaction;
             this.sizeAfterCompaction = sizeAfterCompaction;
             this.keyCount = keyCount;
-            this.removeCount = removeCount;
+            this.clobberCount = removeCount;
             this.tombstoneCount = tombstoneCount;
             this.ttlCount = ttlCount;
             this.duration = duration;
-            this.catchupKeys = catchupKeys;
-            this.catchupRemoves = catchupRemoves;
-            this.catchupTombstones = catchupTombstones;
-            this.catchupTTL = catchupTTL;
+            this.catchupKeyCount = catchupKeyCount;
+            this.catchupClobberCount = catchupClobberCount;
+            this.catchupTombstoneCount = catchupTombstoneCount;
+            this.catchupTTLCount = catchupTTLCount;
             this.catchupDuration = catchupDuration;
         }
 

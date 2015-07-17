@@ -15,16 +15,17 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.Scan;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 
-public class PartitionStore implements RangeScannable<WALValue> {
+public class PartitionStore implements RangeScannable {
 
     private final WALStorage walStorage;
     private final boolean hardFlush;
@@ -49,41 +50,51 @@ public class PartitionStore implements RangeScannable<WALValue> {
     }
 
     @Override
-    public void rowScan(Scan<WALValue> scan) throws Exception {
-        walStorage.rowScan(scan);
+    public boolean rowScan(KeyValueStream txKeyValueStream) throws Exception {
+        return walStorage.rowScan(txKeyValueStream);
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, Scan<WALValue> scan) throws Exception {
-        walStorage.rangeScan(from, to, scan);
+    public boolean rangeScan(byte[] from, byte[] to, KeyValueStream txKeyValueStream) throws Exception {
+        return walStorage.rangeScan(from, to, txKeyValueStream);
     }
 
     public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {
         return walStorage.compactableTombstone(removeTombstonedOlderTimestampId, ttlTimestampId);
     }
-    
-    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId) throws Exception {
-        walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId);
+
+    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId, boolean force) throws Exception {
+        walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
     }
 
-    public WALValue get(WALKey key) {
+    public TimestampedValue get(byte[] key) throws Exception {
         return walStorage.get(key);
     }
 
-    public WALValue[] get(WALKey[] keys) throws Exception {
-        return walStorage.get(keys);
+    // TODO keyValues sucks need Keys and KeyStream
+    public boolean get(WALKeys keys, KeyValueStream stream) throws Exception {
+        return walStorage.get(keys, stream);
     }
 
-    public boolean containsKey(WALKey key) throws Exception {
-        return walStorage.containsKey(key);
+    public boolean containsKey(byte[] key) throws Exception {
+        boolean[] result = new boolean[1];
+        walStorage.containsKeys(stream -> stream.stream(key), (_key, contained) -> {
+            result[0] = contained;
+            return true;
+        });
+        return result[0];
+    }
+
+    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
+        return walStorage.containsKeys(keys, stream);
     }
 
     public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged directCommit(boolean useUpdateTxId, Commitable<WALValue> updates) throws Exception {
-        RowsChanged changes = walStorage.update(useUpdateTxId, updates);
+    public RowsChanged merge(long forceTxId, Commitable updates) throws Exception {
+        RowsChanged changes = walStorage.update(forceTxId, true, updates);
         walStorage.flush(hardFlush);
         return changes;
     }

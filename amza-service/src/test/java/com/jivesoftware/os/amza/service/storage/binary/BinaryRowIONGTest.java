@@ -9,7 +9,6 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import java.io.File;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
@@ -54,9 +53,9 @@ public class BinaryRowIONGTest {
             }
             rowTxIds.add(nextTxId);
             rows.add(UIO.longBytes(i));
+            byte[] row = UIO.longBytes(i);
+            rowIO.write(nextTxId, RowType.primary, stream -> stream.stream(row), stream -> true, (txId, key, valueTimestamp, valueTombstoned, fp) -> true);
         }
-
-        rowIO.writePrimary(rowTxIds, rows);
 
         rowIO = reopen.call();
 
@@ -108,7 +107,8 @@ public class BinaryRowIONGTest {
         int numRows = 10_000;
 
         for (long i = 0; i < numRows; i++) {
-            rowIO.writePrimary(Collections.singletonList(i), Collections.singletonList(UIO.longBytes(i)));
+            byte[] row = UIO.longBytes(i);
+            rowIO.write(i, RowType.primary, stream -> stream.stream(row), stream -> true, (txId, key, valueTimestamp, valueTombstoned, fp) -> true);
             /*if (i % 10_000 == 0) {
              System.out.println("Wrote " + i);
              }*/

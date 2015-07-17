@@ -15,10 +15,10 @@
  */
 package com.jivesoftware.os.amza.shared.scan;
 
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 
+// TODO kill <S>
 public interface Scan<S> {
 
-    boolean row(long rowTxId, WALKey key, S scanned) throws Exception;
+    boolean row(long rowTxId, byte[] key, S scanned) throws Exception;
 
 }

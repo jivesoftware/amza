@@ -5,8 +5,6 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -94,13 +92,18 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public void reverseScan(RowStream rowStream) throws Exception {
-        rowReader.reverseScan(rowStream);
+    public boolean reverseScan(RowStream rowStream) throws Exception {
+        return rowReader.reverseScan(rowStream);
     }
 
     @Override
-    public byte[] read(long pointer) throws Exception {
-        return rowReader.read(pointer);
+    public byte[] read(long fp) throws Exception {
+        return rowReader.read(fp);
+    }
+
+    @Override
+    public <R> R read(long fp, ReadTx<R> tx) throws Exception {
+        return rowReader.read(fp, tx);
     }
 
     @Override
@@ -114,53 +117,20 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public long[] writePrimary(List<Long> txId, List<byte[]> rows) throws Exception {
-        return write(txId, Collections.nCopies(txId.size(), RowType.primary), rows);
-    }
-
-    @Override
-    public long[] write(List<Long> rowTxIds, List<RowType> rowTypes, List<byte[]> rows) throws Exception {
-        long lastTxId = Long.MIN_VALUE;
-        long[] fps = new long[rows.size()];
-        int lastWriteIndex = 0;
-        for (int i = 0; i < rowTxIds.size(); i++) {
-            long currentTxId = rowTxIds.get(i);
-            if (lastTxId != Long.MIN_VALUE && lastTxId != currentTxId) {
-                writeToWAL(rowTxIds, rowTypes, rows, fps, lastWriteIndex, i, currentTxId);
-                lastWriteIndex = i;
-            }
-            lastTxId = currentTxId;
-        }
-        writeToWAL(rowTxIds, rowTypes, rows, fps, lastWriteIndex, rowTxIds.size(), lastTxId);
-        return fps;
-    }
-
-    private void writeToWAL(List<Long> rowTxIds,
-        List<RowType> rowTypes,
-        List<byte[]> rows,
-        long[] fps,
-        int fromIndex,
-        int toIndex,
-        long currentTxId) throws Exception {
-
-        if (toIndex == fromIndex) {
-            return;
-        }
-
-        long[] currentFps = rowWriter.write(rowTxIds.subList(fromIndex, toIndex),
-            rowTypes.subList(fromIndex, toIndex),
-            rows.subList(fromIndex, toIndex));
-        System.arraycopy(currentFps, 0, fps, fromIndex, currentFps.length);
-
-        if (updatesSinceLeap.addAndGet(currentFps.length) >= UPDATES_BETWEEN_LEAPS) {
+    public int write(long txId,
+        RowType rowType,
+        RawRows rows,
+        IndexableKeys indexableKeys,
+        TxKeyPointerFpStream stream) throws Exception {
+        int count = rowWriter.write(txId, rowType, rows, indexableKeys, stream);
+        if (updatesSinceLeap.addAndGet(count) >= UPDATES_BETWEEN_LEAPS) {
             LeapFrog latest = latestLeapFrog.get();
-
-            Leaps leaps = computeNextLeaps(currentTxId, latest);
+            Leaps leaps = computeNextLeaps(txId, latest);
             long leapFp = rowWriter.writeSystem(leaps.toBytes());
-
             latestLeapFrog.set(new LeapFrog(leapFp, leaps));
             updatesSinceLeap.set(0);
         }
+        return count;
     }
 
     @Override
@@ -208,7 +178,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
             fpIndex[numLeaps - 1] = latest.fp;
             transactionIds[numLeaps - 1] = latest.leaps.lastTransactionId;
         } else {
-            fpIndex = null;
+            fpIndex = new long[0];
             transactionIds = new long[MAX_LEAPS];
 
             long[] idealFpIndex = new long[MAX_LEAPS];

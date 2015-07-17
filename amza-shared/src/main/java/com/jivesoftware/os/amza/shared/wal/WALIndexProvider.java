@@ -17,7 +17,7 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 
-public interface WALIndexProvider<T extends WALIndex> {
+public interface WALIndexProvider<T> {
 
     T createIndex(VersionedPartitionName versionedPartitionName) throws Exception;
 

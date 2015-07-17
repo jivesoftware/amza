@@ -15,8 +15,10 @@
  */
 package com.jivesoftware.os.amza.shared.scan;
 
-public interface Scannable<S> {
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 
-    void rowScan(Scan<S> scan) throws Exception;
+public interface Scannable {
+
+    boolean rowScan(KeyValueStream scan) throws Exception;
 
 }

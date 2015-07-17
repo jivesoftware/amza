@@ -63,7 +63,6 @@ public class DeltaWALFactory {
             }
         }
         Collections.sort(deltaWALs);
-
         return deltaWALs;
     }
 }

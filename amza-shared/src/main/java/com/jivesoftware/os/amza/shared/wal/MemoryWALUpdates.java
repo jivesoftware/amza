@@ -16,32 +16,30 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.util.List;
 
-public class MemoryWALUpdates implements Commitable<WALValue> {
+public class MemoryWALUpdates implements Commitable {
 
-    private final Map<WALKey, WALValue> updates;
+    private final List<WALRow> updates;
     private final WALHighwater walHighwater;
 
-    public MemoryWALUpdates(Map<WALKey, WALValue> updates, WALHighwater walHighwater) {
+    public MemoryWALUpdates(List<WALRow> updates, WALHighwater walHighwater) {
         this.updates = updates;
         this.walHighwater = walHighwater;
     }
 
     @Override
-    public void commitable(Highwaters highwaters, Scan<WALValue> scan) throws Exception {
-        for (Entry<WALKey, WALValue> e : updates.entrySet()) {
-            WALKey key = e.getKey();
-            WALValue value = e.getValue();
-            if (!scan.row(-1, key, value)) {
-                return;
+    public boolean commitable(Highwaters highwaters, TxKeyValueStream txKeyValueStream) throws Exception {
+        for (WALRow update : updates) {
+            if (!txKeyValueStream.row(-1, update.key, update.value, update.timestamp, update.tombstoned)) {
+                return false;
             }
         }
         if (highwaters != null && walHighwater != null) {
             highwaters.highwater(walHighwater);
         }
+        return true;
     }
 }

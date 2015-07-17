@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.deployable;
 
+import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
@@ -23,7 +24,6 @@ import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -58,16 +59,17 @@ public class AmzaEndpoints {
     @GET
     @Consumes("application/json")
     @Path("/set")
-    public Response set(@QueryParam("partition") String partition,
+    public Response set(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("partition") String partition,
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             String[] keys = key.split(",");
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
-                updates.set(new WALKey(keys[i].getBytes()), values[i].getBytes(), -1);
+                updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
             }
             partitionAPI.commit(updates, 1, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
@@ -80,13 +82,37 @@ public class AmzaEndpoints {
     @POST
     @Consumes("application/json")
     @Path("/multiSet/{partition}")
-    public Response multiSet(@PathParam("partition") String partition, Map<String, String> values) {
+    public Response multiSet(@PathParam("partition") String partition,
+        Map<String, String> values) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent("default", partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
-            updates.setAll(Iterables.transform(values.entrySet(), (input) -> new AbstractMap.SimpleEntry<>(new WALKey(input.getKey().getBytes()),
-                input.getValue().getBytes())), -1);
+            updates.setAll(
+                Iterables.transform(values.entrySet(), input -> new AbstractMap.SimpleEntry<>(input.getKey().getBytes(), input.getValue().getBytes())),
+                -1);
+            partitionAPI.commit(updates, 1, 30000);
+
+            return Response.ok("ok", MediaType.TEXT_PLAIN).build();
+        } catch (Exception x) {
+            LOG.warn("Failed to set partition:" + partition + " values:" + values, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partition + " values:" + values, x);
+        }
+    }
+
+    @POST
+    @Consumes("application/json")
+    @Path("/multiSet/{ring}/{partition}")
+    public Response multiSet(@PathParam("ring") @DefaultValue("default") String ring,
+        @PathParam("partition") String partition,
+        Map<String, String> values) {
+        try {
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
+            AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
+
+            updates.setAll(
+                Iterables.transform(values.entrySet(), input -> new AbstractMap.SimpleEntry<>(input.getKey().getBytes(), input.getValue().getBytes())),
+                -1);
             partitionAPI.commit(updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
@@ -99,21 +125,25 @@ public class AmzaEndpoints {
     @GET
     @Consumes("application/json")
     @Path("/get")
-    public Response get(@QueryParam("partition") String partition,
+    public Response get(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("partition") String partition,
         @QueryParam("key") String key) {
         try {
-            String[] keys = key.split(",");
-            List<WALKey> rawKeys = new ArrayList<>();
-            for (String k : keys) {
-                rawKeys.add(new WALKey(k.getBytes()));
-            }
-
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             List<byte[]> got = new ArrayList<>();
-            partitionAPI.get(rawKeys, (rowTxId, key1, scanned) -> {
-                got.add(scanned.getValue());
-                return true;
-            });
+            partitionAPI.get(
+                stream -> {
+                    for (String s : Splitter.on(',').split(key)) {
+                        if (!stream.stream(s.getBytes())) {
+                            return false;
+                        }
+                    }
+                    return true;
+                },
+                (key1, value, timestamp) -> {
+                    got.add(value);
+                    return true;
+                });
             return ResponseHelper.INSTANCE.jsonResponse(got);
         } catch (Exception x) {
             LOG.warn("Failed to get partition:" + partition + " key:" + key, x);
@@ -124,12 +154,13 @@ public class AmzaEndpoints {
     @GET
     @Consumes("application/json")
     @Path("/remove")
-    public Response remove(@QueryParam("partition") String partition,
+    public Response remove(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("partition") String partition,
         @QueryParam("key") String key) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(partition);
+            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-            updates.remove(new WALKey(key.getBytes()), -1);
+            updates.remove(key.getBytes(), -1);
             partitionAPI.commit(updates, 1, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -138,18 +169,18 @@ public class AmzaEndpoints {
         }
     }
 
-    AmzaPartitionAPI createPartitionIfAbsent(String simplePartitionName) throws Exception {
+    AmzaPartitionAPI createPartitionIfAbsent(String ringName, String simplePartitionName) throws Exception {
 
-        int ringSize = amzaService.getRingReader().getRingSize("default");
+        int ringSize = amzaService.getRingReader().getRingSize("default".getBytes());
         int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
         if (ringSize < systemRingSize) {
-            amzaService.getRingWriter().buildRandomSubRing("default", systemRingSize);
+            amzaService.getRingWriter().buildRandomSubRing("default".getBytes(), systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
-        PartitionName partitionName = new PartitionName(false, "default", simplePartitionName);
+        PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, false));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);

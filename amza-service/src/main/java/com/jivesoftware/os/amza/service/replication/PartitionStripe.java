@@ -18,15 +18,16 @@ import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALRow;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Objects;
@@ -69,6 +70,10 @@ public class PartitionStripe {
         return name;
     }
 
+    public Object getAwakeCompactionLock() {
+        return storage.getAwakeCompactionLock();
+    }
+
     boolean expungePartition(VersionedPartitionName versionedPartitionName) throws Exception {
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         if (partitionStore != null) {
@@ -93,6 +98,18 @@ public class PartitionStripe {
         }
     }
 
+    public void highestPartitionTxId(PartitionName partitionName, HighestPartitionTx tx) throws Exception {
+        txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore != null) {
+                    long highestTxId = storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
+                    tx.tx(versionedPartitionName, partitionStatus, highestTxId);
+                }
+                return null;
+            });
+    }
+
     public <R> R txPartition(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
         return txPartitionStatus.tx(partitionName, tx);
     }
@@ -101,7 +118,7 @@ public class PartitionStripe {
         PartitionName partitionName,
         Optional<Long> specificVersion,
         boolean requiresOnline,
-        Commitable<WALValue> updates,
+        Commitable updates,
         WALUpdated updated) throws Exception {
 
         return txPartitionStatus.tx(partitionName,
@@ -134,7 +151,7 @@ public class PartitionStripe {
         storage.flush(fsync);
     }
 
-    public WALValue get(PartitionName partitionName, WALKey key) throws Exception {
+    public boolean get(PartitionName partitionName, byte[] key, TimestampKeyValueStream keyValueStream) throws Exception {
         return txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -144,12 +161,29 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    return storage.get(versionedPartitionName, partitionStore.getWalStorage(), key);
+                    return storage.get(versionedPartitionName, partitionStore.getWalStorage(), (stream) -> {
+                        return stream.stream(key);
+                    }, keyValueStream);
                 }
             });
     }
 
-    public void rowScan(PartitionName partitionName, Scan<WALValue> scan) throws Exception {
+    public boolean get(PartitionName partitionName, WALKeys keys, TimestampKeyValueStream stream) throws Exception {
+        return txPartitionStatus.tx(partitionName,
+            (versionedPartitionName, partitionStatus) -> {
+                Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
+                    partitionStatus);
+
+                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                if (partitionStore == null) {
+                    throw new IllegalStateException("No partition defined for " + versionedPartitionName);
+                } else {
+                    return storage.get(versionedPartitionName, partitionStore.getWalStorage(), keys, stream);
+                }
+            });
+    }
+
+    public void rowScan(PartitionName partitionName, KeyValueStream keyValueStream) throws Exception {
         txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -159,13 +193,13 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    storage.rowScan(versionedPartitionName, partitionStore, scan);
+                    storage.rowScan(versionedPartitionName, partitionStore, keyValueStream);
                 }
                 return null;
             });
     }
 
-    public void rangeScan(PartitionName partitionName, WALKey from, WALKey to, Scan<WALValue> stream) throws Exception {
+    public void rangeScan(PartitionName partitionName, byte[] from, byte[] to, KeyValueStream keyValueStream) throws Exception {
         txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -175,7 +209,7 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    storage.rangeScan(versionedPartitionName, partitionStore, from, to, stream);
+                    storage.rangeScan(versionedPartitionName, partitionStore, from, to, keyValueStream);
                 }
                 return null;
             });
@@ -191,32 +225,45 @@ public class PartitionStripe {
         void stream(RowStream rowStream) throws Exception;
     }
 
+    public void takeAllRows(PartitionName partitionName, RowStream rowStream) throws Exception {
+        txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+            if (versionedPartitionName == null || partitionStatus == null) {
+                return true;
+            }
+            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            if (partitionStore == null) {
+                return true;
+            } else {
+                return storage.takeAllRows(versionedPartitionName, partitionStore.getWalStorage(), rowStream);
+            }
+        });
+    }
+
     public <R> R takeRowUpdatesSince(PartitionName partitionName,
         long transactionId,
         TakeRowUpdates<R> takeRowUpdates)
         throws Exception {
-        return txPartitionStatus.tx(partitionName,
-            (versionedPartitionName, partitionStatus) -> {
-                if (versionedPartitionName == null || partitionStatus == null) {
-                    return takeRowUpdates.give(null, null, null);
-                }
-                PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-                if (partitionStore == null) {
-                    return takeRowUpdates.give(null, null, null);
-                } else {
-                    RowStreamer streamer = (partitionStatus == TxPartitionStatus.Status.ONLINE)
-                        ? rowStream -> storage.takeRowUpdatesSince(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
-                        : null;
-                    return takeRowUpdates.give(versionedPartitionName, partitionStatus, streamer);
-                }
-            });
+        return txPartitionStatus.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+            if (versionedPartitionName == null || partitionStatus == null) {
+                return takeRowUpdates.give(null, null, null);
+            }
+            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            if (partitionStore == null) {
+                return takeRowUpdates.give(null, null, null);
+            } else {
+                RowStreamer streamer = (partitionStatus == TxPartitionStatus.Status.ONLINE)
+                    ? rowStream -> storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
+                    : null;
+                return takeRowUpdates.give(versionedPartitionName, partitionStatus, streamer);
+            }
+        });
     }
 
     public WALHighwater takeFromTransactionId(PartitionName partitionName,
         long transactionId,
         HighwaterStorage highwaterStorage,
         Highwaters highwaters,
-        Scan<WALValue> scan) throws Exception {
+        TxKeyValueStream txKeyValueStream) throws Exception {
 
         return txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
@@ -231,8 +278,7 @@ public class PartitionStripe {
                 } else {
                     RowStream stream = (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
                         if (rowType == RowType.primary) {
-                            WALRow walRow = primaryRowMarshaller.fromRow(row);
-                            return scan.row(rowTxId, walRow.key, walRow.value);
+                            return primaryRowMarshaller.fromRow(row, rowTxId, txKeyValueStream);
                         } else if (rowType == RowType.highwater) {
                             highwaters.highwater(highwaterRowMarshaller.fromBytes(row));
                         }
@@ -260,7 +306,7 @@ public class PartitionStripe {
             });
     }
 
-    public boolean containsKey(PartitionName partitionName, WALKey key) throws Exception {
+    public boolean containsKeys(PartitionName partitionName, WALKeys keys, KeyContainedStream stream) throws Exception {
         return txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -270,18 +316,22 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    return storage.containsKey(versionedPartitionName, partitionStore.getWalStorage(), key);
+                    return storage.containsKeys(versionedPartitionName, partitionStore.getWalStorage(), keys, stream);
                 }
             });
     }
 
     public void load() throws Exception {
-        storage.load(partitionIndex, primaryRowMarshaller);
+        storage.load(txPartitionStatus, partitionIndex, primaryRowMarshaller);
     }
 
-    public void compact(boolean force) {
+    public boolean mergeable() {
+        return storage.mergeable();
+    }
+
+    public void merge(boolean force) {
         try {
-            storage.compact(partitionIndex, force);
+            storage.merge(partitionIndex, force);
         } catch (Throwable x) {
             LOG.error("Compactor failed.", x);
         }

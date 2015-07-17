@@ -1,27 +1,7 @@
-/*
- * Copyright 2015 jonathan.colt.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.scan.Scan;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author jonathan.colt
@@ -29,27 +9,36 @@ import java.util.Map;
 public class NoOpWALIndex implements WALIndex {
 
     @Override
-    public void put(
-        Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception {
+    public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {
+        return pointers.consume((long txId, byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+            if (stream != null) {
+                if (!stream.stream(WALMergeKeyPointerStream.ignored, txId, key, timestamp, tombstoned, fp)) {
+                    return false;
+                }
+            }
+            return true;
+        });
     }
 
     @Override
-    public WALPointer getPointer(WALKey key) {
-        return null;
+    public boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception {
+        return stream.stream(key, -1, false, -1);
     }
 
     @Override
-    public WALPointer[] getPointers(WALKey[] keys) throws Exception {
-        return new WALPointer[keys.length];
+    public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
+        return keys.consume(key -> stream.stream(key, -1, false, -1));
     }
 
     @Override
-    public List<Boolean> containsKey(List<WALKey> key) throws Exception {
-        return Collections.nCopies(key.size(), Boolean.FALSE);
+    public boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
+        return keyValues.consume((key, value, valueTimestamp, valueTombstoned) ->
+            stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1));
     }
 
     @Override
-    public void remove(Collection<WALKey> key) throws Exception {
+    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
+        return keys.consume(key -> stream.stream(key, false));
     }
 
     @Override
@@ -83,8 +72,8 @@ public class NoOpWALIndex implements WALIndex {
     static class NoOpCompactionWALIndex implements CompactionWALIndex {
 
         @Override
-        public void put(
-            Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception {
+        public boolean merge(TxKeyPointers pointers) throws Exception {
+            return true;
         }
 
         @Override
@@ -97,11 +86,13 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public void rowScan(Scan<WALPointer> scan) throws Exception {
+    public boolean rowScan(WALKeyPointerStream stream) throws Exception {
+        return true;
     }
 
     @Override
-    public void rangeScan(WALKey from, WALKey to, Scan<WALPointer> scan) throws Exception {
+    public boolean rangeScan(byte[] from, byte[] to, WALKeyPointerStream stream) throws Exception {
+        return true;
     }
 
     @Override

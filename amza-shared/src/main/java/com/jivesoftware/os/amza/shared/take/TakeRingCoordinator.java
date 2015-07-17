@@ -1,13 +1,12 @@
 package com.jivesoftware.os.amza.shared.take;
 
-import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -27,7 +26,7 @@ public class TakeRingCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final String ringName;
+    private final byte[] ringName;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
     private final IdPacker idPacker;
     private final VersionedPartitionProvider versionedPartitionProvider;
@@ -37,7 +36,7 @@ public class TakeRingCoordinator {
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
-    public TakeRingCoordinator(String ringName,
+    public TakeRingCoordinator(byte[] ringName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
         VersionedPartitionProvider versionedPartitionProvider,
@@ -55,12 +54,16 @@ public class TakeRingCoordinator {
         this.versionedRing.compareAndSet(null, new VersionedRing(neighbors));
     }
 
-    boolean cya(List<Entry<RingMember, RingHost>> neighbors, Set<VersionedPartitionName> retain) {
-        ConcurrentHashMap.KeySetView<VersionedPartitionName, TakeVersionedPartitionCoordinator> keySet = partitionCoordinators.keySet();
-        keySet.removeAll(Sets.difference(keySet, retain));
+    boolean cya(List<Entry<RingMember, RingHost>> neighbors) {
         VersionedRing existingRing = this.versionedRing.get();
         VersionedRing updatedRing = ensureVersionedRing(neighbors);
         return existingRing != updatedRing; // reference equality is OK
+    }
+
+    public void expunged(Set<VersionedPartitionName> versionedPartitionNames) {
+        for (VersionedPartitionName versionedPartitionName : versionedPartitionNames) {
+            partitionCoordinators.remove(versionedPartitionName);
+        }
     }
 
     void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception {
@@ -114,7 +117,7 @@ public class TakeRingCoordinator {
         final LinkedHashMap<RingMember, Integer> members;
 
         public VersionedRing(List<Entry<RingMember, RingHost>> neighbors) {
-            
+
             Entry<RingMember, RingHost>[] ringMembers = neighbors.toArray(new Entry[neighbors.size()]);
             members = new LinkedHashMap<>();
             takeFromFactor = 1 + (int) Math.sqrt(ringMembers.length);
@@ -161,7 +164,7 @@ public class TakeRingCoordinator {
     @Override
     public String toString() {
         return "TakeRingCoordinator{"
-            + "ringName='" + ringName + '\''
+            + "ringName='" + new String(ringName) + '\''
             + '}';
     }
 }

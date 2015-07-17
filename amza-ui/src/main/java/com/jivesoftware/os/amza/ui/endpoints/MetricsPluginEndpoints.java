@@ -31,9 +31,11 @@ public class MetricsPluginEndpoints {
     @GET
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
-    public Response filter(@QueryParam("partitionName") @DefaultValue("") String partitionName) {
+    public Response filter(@QueryParam("partitionName") @DefaultValue("") String partitionName,
+        @QueryParam("ringName") @DefaultValue("") String ringName,
+        @QueryParam("visualize") @DefaultValue("false") boolean visualize) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new MetricsPluginRegionInput(partitionName));
+            new MetricsPluginRegionInput(ringName, partitionName, visualize));
         return Response.ok(rendered).build();
     }
 

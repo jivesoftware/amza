@@ -24,7 +24,7 @@ public class AwaitNotify<K> {
     }
 
     private AtomicLong getChangedLock(K key) {
-        return changedLocks[(int)Math.abs((long)key.hashCode()) % changedLocks.length];
+        return changedLocks[Math.abs(key.hashCode() % changedLocks.length)];
     }
 
     public <R> R awaitChange(K key, Callable<Optional<R>> awaiter, long timeoutMillis) throws Exception {
@@ -46,7 +46,8 @@ public class AwaitNotify<K> {
                     }
                 }
             }
-        } while (timeoutMillis <= 0 || System.currentTimeMillis() - startTime < timeoutMillis);
+        }
+        while (timeoutMillis <= 0 || System.currentTimeMillis() - startTime < timeoutMillis);
 
         throw new TimeoutException("Timed out awaiting changes after ms: " + timeoutMillis);
     }

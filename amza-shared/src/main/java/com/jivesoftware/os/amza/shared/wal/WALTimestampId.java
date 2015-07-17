@@ -40,10 +40,7 @@ public class WALTimestampId {
 
     @Override
     public String toString() {
-        return "WALPointer{"
-            + "timestamp=" + timestamp
-            + ", tombstoned=" + tombstoned
-            + '}';
+        return "WALTimestampId{" + "timestamp=" + timestamp + ", tombstoned=" + tombstoned + '}';
     }
 
     @Override

@@ -9,8 +9,8 @@ public interface AmzaRingWriter {
 
     void register(RingMember ringMember, RingHost ringHost) throws Exception;
 
-    void addRingMember(String ringName, RingMember ringMember) throws Exception;
+    void addRingMember(byte[] ringName, RingMember ringMember) throws Exception;
 
-    void removeRingMember(String ringName, RingMember ringHost) throws Exception;
+    void removeRingMember(byte[] ringName, RingMember ringHost) throws Exception;
 
 }

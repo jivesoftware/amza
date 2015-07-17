@@ -4,7 +4,7 @@ import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.shared.take.TakeRingCoordinator.VersionedRing;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;

@@ -23,7 +23,7 @@ import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import java.util.List;
 
-public interface WALStorage extends RangeScannable<WALValue> {
+public interface WALStorage extends RangeScannable {
 
     void load() throws Exception;
 
@@ -31,7 +31,7 @@ public interface WALStorage extends RangeScannable<WALValue> {
 
     boolean delete(boolean ifEmpty) throws Exception;
 
-    RowsChanged update(boolean useUpdateTxId, Commitable<WALValue> rowUpdates) throws Exception;
+    RowsChanged update(boolean useUpdateTxId, Commitable rowUpdates) throws Exception;
 
     WALValue get(WALKey key);
 

@@ -20,18 +20,21 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
+import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
+import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -75,16 +78,16 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void commit(Commitable<WALValue> updates,
+    public void commit(Commitable updates,
         int takeQuorum,
         long timeoutInMillis) throws Exception {
 
         long timestampId = orderIdProvider.nextId();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, (highwaters, scan) -> {
-                updates.commitable(highwaters, (rowTxId, key, scanned) -> {
-                    WALValue value = scanned.getTimestampId() > 0 ? scanned : new WALValue(scanned.getValue(), timestampId, scanned.getTombstoned());
-                    return scan.row(rowTxId, key, value);
+                return updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
+                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
+                    return scan.row(rowTxId, key, value, timestamp, valueTombstone);
                 });
             }, walUpdated);
             amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
@@ -112,27 +115,23 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void get(Iterable<WALKey> keys, Scan<TimestampedValue> valuesStream) throws Exception {
-        partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            for (WALKey walKey : keys) {
-                WALValue got = stripe.get(partitionName, walKey); // TODO Hmmm add a multi get?
-                valuesStream.row(-1, walKey, got == null || got.getTombstoned() ? null : got.toTimestampedValue());
-            }
-            return null;
-        });
+    public boolean get(WALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
+        return partitionStripeProvider.txPartition(partitionName,
+            (stripe, highwaterStorage) -> stripe.get(partitionName, keys, valuesStream));
     }
 
     @Override
-    public void scan(WALKey from, WALKey to, Scan<TimestampedValue> scan) throws Exception {
+    public void scan(byte[] from, byte[] to, Scan<TimestampedValue> scan) throws Exception {
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             if (from == null && to == null) {
-                stripe.rowScan(partitionName, (rowTxId, key, scanned) -> scanned.getTombstoned() || scan.row(rowTxId, key, scanned
-                    .toTimestampedValue()));
+                stripe.rowScan(partitionName, (key, value, valueTimestamp, valueTombstone) -> valueTombstone || scan.row(-1, key,
+                    new TimestampedValue(valueTimestamp, value)));
             } else {
                 stripe.rangeScan(partitionName,
-                    from == null ? new WALKey(new byte[0]) : from,
+                    from == null ? new byte[0] : from,
                     to,
-                    (rowTxId, key, scanned) -> scanned.getTombstoned() || scan.row(rowTxId, key, scanned.toTimestampedValue()));
+                    (key, value, valueTimestamp, valueTombstone) -> valueTombstone || scan.row(-1, key,
+                        new TimestampedValue(valueTimestamp, value)));
             }
             return null;
         });
@@ -143,8 +142,8 @@ public class StripedPartition implements AmzaPartitionAPI {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             MutableLong lastTxId = new MutableLong(-1);
             WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters,
-                (rowTxId, key, value) -> {
-                    if (value.getTombstoned() || scan.row(rowTxId, key, value.toTimestampedValue())) {
+                (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
+                    if (valueTombstone || scan.row(rowTxId, key, new TimestampedValue(valueTimestamp, value))) {
                         if (rowTxId > lastTxId.longValue()) {
                             lastTxId.setValue(rowTxId);
                         }
@@ -159,12 +158,12 @@ public class StripedPartition implements AmzaPartitionAPI {
     public WALHighwater takeAllFromTransactionId(PartitionName partitionName,
         long transactionId,
         Highwaters highwaters,
-        Scan<WALValue> scan) throws Exception {
+        TxKeyValueStream txKeyValueStream) throws Exception {
 
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters,
-                (rowTxId, key, value) -> {
-                    scan.row(rowTxId, key, value);
+                (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
+                    txKeyValueStream.row(rowTxId, key, value, valueTimestamp, valueTombstone);
                     return true;
                 });
             return tookToEnd;
@@ -175,6 +174,14 @@ public class StripedPartition implements AmzaPartitionAPI {
     public long count() throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             return stripe.count(partitionName);
+        });
+    }
+
+    @Override
+    public void highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
+        partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
+            stripe.highestPartitionTxId(partitionName, highestPartitionTx);
+            return null;
         });
     }
 

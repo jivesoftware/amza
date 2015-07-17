@@ -35,6 +35,8 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
+import com.jivesoftware.os.amza.transport.http.replication.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
@@ -104,7 +106,7 @@ public class AmzaMain {
             WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
             indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
 
-            HttpRowsTaker taker = new HttpRowsTaker(amzaStats);
+            AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats);
 
             final ObjectMapper mapper = new ObjectMapper();
             mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -147,7 +149,10 @@ public class AmzaMain {
                 idPacker,
                 partitionPropertyMarshaller,
                 indexProviderRegistry,
-                taker,
+                availableRowsTaker,
+                () -> {
+                    return new HttpRowsTaker(amzaStats);
+                },
                 Optional.<TakeFailureListener>absent(),
                 (RowsChanged changes) -> {
                 });

@@ -3,18 +3,25 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,6 +36,7 @@ import java.util.Set;
 public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPluginRegionInput> {
 
     private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private final NumberFormat numberFormat = NumberFormat.getInstance();
 
     private final String template;
     private final SoyRenderer renderer;
@@ -68,7 +76,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             if (input.action.equals("add")) {
 
             } else if (input.action.equals("remove")) {
-                PartitionName partitionName = new PartitionName(false, input.ringName, input.partitionName);
+                PartitionName partitionName = new PartitionName(false, input.ringName.getBytes(), input.partitionName.getBytes());
                 log.info("Removing {}", partitionName);
                 amzaService.destroyPartition(partitionName);
             }
@@ -77,13 +85,12 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             for (PartitionName partitionName : partitionNames) {
 
                 Map<String, Object> row = new HashMap<>();
-                PartitionStatusStorage.VersionedStatus status = amzaService.getPartitionStatusStorage().getStatus(amzaService.getRingReader().getRingMember(),
-                    partitionName);
+                VersionedStatus status = amzaService.getPartitionStatusStorage().getLocalStatus(partitionName);
                 row.put("status", status == null ? "unknown" : status.status.toString());
-                row.put("version", status == null ? "unknown" : String.valueOf(status.version));
+                row.put("version", status == null ? "unknown" : Long.toHexString(status.version));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
-                row.put("name", partitionName.getName());
-                row.put("ringName", partitionName.getRingName());
+                row.put("name", new String(partitionName.getName()));
+                row.put("ringName", new String(partitionName.getRingName()));
 
                 NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
                 List<Map<String, Object>> ringHosts = new ArrayList<>();
@@ -111,6 +118,23 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
                 }
 
+                PartitionStatusStorage partitionStatusStorage = amzaService.getPartitionStatusStorage();
+                VersionedStatus localStatus = partitionStatusStorage.getLocalStatus(partitionName);
+                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, localStatus.version);
+
+                if (partitionName.isSystemPartition()) {
+                    HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
+                    WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
+                    row.put("highwaters", renderHighwaters(partitionHighwater));
+                } else {
+                    PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
+                    partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
+                        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                        row.put("highwaters", renderHighwaters(partitionHighwater));
+                        return null;
+                    });
+                }
+
                 rows.add(row);
             }
 
@@ -123,10 +147,20 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
         return renderer.render(template, data);
     }
 
+    public String renderHighwaters(WALHighwater walHighwater) {
+        StringBuilder sb = new StringBuilder();
+        for (WALHighwater.RingMemberHighwater e : walHighwater.ringMemberHighwater) {
+            sb.append("<p>");
+            sb.append(e.ringMember.getMember()).append("=").append(Long.toHexString(e.transactionId)).append("\n");
+            sb.append("</p>");
+        }
+        return sb.toString();
+    }
+
     Map<String, Object> walStorageDescriptor(WALStorageDescriptor storageDescriptor) {
         Map<String, Object> map = new HashMap<>();
-        map.put("maxUpdatesBetweenCompactionHintMarker", String.valueOf(storageDescriptor.maxUpdatesBetweenCompactionHintMarker));
-        map.put("maxUpdatesBetweenIndexCommitMarker", String.valueOf(storageDescriptor.maxUpdatesBetweenIndexCommitMarker));
+        map.put("maxUpdatesBetweenCompactionHintMarker", numberFormat.format(storageDescriptor.maxUpdatesBetweenCompactionHintMarker));
+        map.put("maxUpdatesBetweenIndexCommitMarker", numberFormat.format(storageDescriptor.maxUpdatesBetweenIndexCommitMarker));
         map.put("primaryIndexDescriptor", primaryIndexDescriptor(storageDescriptor.primaryIndexDescriptor));
 
         List<Map<String, Object>> secondary = new ArrayList<>();
@@ -143,7 +177,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
         Map<String, Object> map = new HashMap<>();
         map.put("className", primaryIndexDescriptor.className);
-        map.put("ttlInMillis", String.valueOf(primaryIndexDescriptor.ttlInMillis));
+        map.put("ttlInMillis", numberFormat.format(primaryIndexDescriptor.ttlInMillis));
         map.put("forceCompactionOnStartup", primaryIndexDescriptor.forceCompactionOnStartup);
         //public Map<String, String> properties; //TODO
         return map;

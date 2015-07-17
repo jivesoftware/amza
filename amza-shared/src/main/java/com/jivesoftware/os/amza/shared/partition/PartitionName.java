@@ -18,16 +18,17 @@ package com.jivesoftware.os.amza.shared.partition;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
+import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
-import java.util.Objects;
+import java.util.Arrays;
 
 public class PartitionName implements Comparable<PartitionName> {
 
     private final boolean systemPartition;
-    private final String ringName;
-    private final String name;
+    private final byte[] ringName;
+    private final byte[] name;
     private transient int hash = 0;
 
     public byte[] toBytes() {
@@ -35,8 +36,8 @@ public class PartitionName implements Comparable<PartitionName> {
             HeapFiler memoryFiler = new HeapFiler();
             UIO.writeByte(memoryFiler, 0, "version");
             UIO.writeBoolean(memoryFiler, systemPartition, "systemPartition");
-            UIO.writeString(memoryFiler, ringName, "ringName");
-            UIO.writeString(memoryFiler, name, "name");
+            UIO.writeByteArray(memoryFiler, ringName, "ringName");
+            UIO.writeByteArray(memoryFiler, name, "name");
             return memoryFiler.getBytes();
         } catch (IOException ioe) {
             throw new RuntimeException(ioe);
@@ -49,8 +50,8 @@ public class PartitionName implements Comparable<PartitionName> {
             if (UIO.readByte(memoryFiler, "version") == 0) {
                 return new PartitionName(
                     UIO.readBoolean(memoryFiler, "systemPartition"),
-                    UIO.readString(memoryFiler, "ringName"),
-                    UIO.readString(memoryFiler, "name"));
+                    UIO.readByteArray(memoryFiler, "ringName"),
+                    UIO.readByteArray(memoryFiler, "name"));
             }
             throw new RuntimeException("Invalid version:" + bytes[0]);
         } catch (IOException ioe) {
@@ -60,10 +61,10 @@ public class PartitionName implements Comparable<PartitionName> {
 
     @JsonCreator
     public PartitionName(@JsonProperty("systemPartition") boolean systemPartition,
-        @JsonProperty("ringName") String ringName,
-        @JsonProperty("name") String name) {
+        @JsonProperty("ringName") byte[] ringName,
+        @JsonProperty("name") byte[] name) {
         this.systemPartition = systemPartition;
-        this.ringName = ringName.toUpperCase(); // I love this!!! NOT
+        this.ringName = ringName;
         this.name = name;
     }
 
@@ -79,11 +80,11 @@ public class PartitionName implements Comparable<PartitionName> {
         return systemPartition;
     }
 
-    public String getRingName() {
+    public byte[] getRingName() {
         return ringName;
     }
 
-    public String getName() {
+    public byte[] getName() {
         return name;
     }
 
@@ -91,21 +92,18 @@ public class PartitionName implements Comparable<PartitionName> {
     public String toString() {
         return "Partition{"
             + "systemPartition=" + systemPartition
-            + ", name=" + name
-            + ", ring=" + ringName
+            + ", name=" + new String(name)
+            + ", ring=" + new String(ringName)
             + '}';
     }
 
     @Override
     public int hashCode() {
-        int hash = this.hash;
-        if (hash == 0) {
-            hash = 7;
-            hash = 29 * hash + (this.systemPartition ? 1 : 0);
-            hash = 29 * hash + Objects.hashCode(this.ringName);
-            hash = 29 * hash + Objects.hashCode(this.name);
-            this.hash = hash;
-        }
+        int hash = 3;
+        hash = 59 * hash + (this.systemPartition ? 1 : 0);
+        hash = 59 * hash + Arrays.hashCode(this.ringName);
+        hash = 59 * hash + Arrays.hashCode(this.name);
+        hash = 59 * hash + this.hash;
         return hash;
     }
 
@@ -121,10 +119,13 @@ public class PartitionName implements Comparable<PartitionName> {
         if (this.systemPartition != other.systemPartition) {
             return false;
         }
-        if (!Objects.equals(this.ringName, other.ringName)) {
+        if (!Arrays.equals(this.ringName, other.ringName)) {
             return false;
         }
-        if (!Objects.equals(this.name, other.name)) {
+        if (!Arrays.equals(this.name, other.name)) {
+            return false;
+        }
+        if (this.hash != other.hash) {
             return false;
         }
         return true;
@@ -136,11 +137,11 @@ public class PartitionName implements Comparable<PartitionName> {
         if (i != 0) {
             return i;
         }
-        i = ringName.compareTo(o.ringName);
+        i = UnsignedBytes.lexicographicalComparator().compare(ringName, o.ringName);
         if (i != 0) {
             return i;
         }
-        i = name.compareTo(o.name);
+        i = UnsignedBytes.lexicographicalComparator().compare(name, o.name);
         if (i != 0) {
             return i;
         }

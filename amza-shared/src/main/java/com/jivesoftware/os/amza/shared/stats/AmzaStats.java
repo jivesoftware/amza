@@ -7,8 +7,6 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
-import com.jivesoftware.os.mlogger.core.MetricLogger;
-import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +21,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class AmzaStats {
 
-    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private static final SnowflakeIdPacker snowflakeIdPacker = new SnowflakeIdPacker();
     private static final JiveEpochTimestampProvider jiveEpochTimestampProvider = new JiveEpochTimestampProvider();
 
@@ -50,8 +47,53 @@ public class AmzaStats {
     public final AtomicLong rowsStream = new AtomicLong();
     public final AtomicLong availableRowsStream = new AtomicLong();
     public final AtomicLong rowsTaken = new AtomicLong();
+    public final AtomicLong backPressure = new AtomicLong();
+    public final AtomicLong pushBacks = new AtomicLong();
+
+    public long[] deltaStripeMergeLoaded = new long[0];
+    public double[] deltaStripeLoad = new double[0];
+
+    public long[] deltaStripeMergePending = new long[0];
+    public double[] deltaStripeMerge = new double[0];
 
     public AmzaStats() {
+    }
+
+    public void deltaStripeLoad(int index, long count, double load) {
+        long[] copyCount = deltaStripeMergeLoaded;
+        double[] copy = deltaStripeLoad;
+        if (index >= copy.length) {
+            double[] newArray = new double[index + 1];
+            System.arraycopy(copy, 0, newArray, 0, copy.length);
+            copy = newArray;
+            deltaStripeLoad = copy;
+        }
+        if (index >= copyCount.length) {
+            long[] newArrayCount = new long[index + 1];
+            System.arraycopy(copyCount, 0, newArrayCount, 0, copyCount.length);
+            copyCount = newArrayCount;
+            deltaStripeMergeLoaded = copyCount;
+        }
+        copyCount[index] = count;
+        copy[index] = load;
+
+    }
+
+    public void deltaStripeMerge(int index, long count, double load) {
+        long[] copyCount = deltaStripeMergePending;
+        double[] copy = deltaStripeMerge;
+        if (index >= copy.length) {
+            long[] newArrayCount = new long[index + 1];
+            double[] newArray = new double[index + 1];
+            System.arraycopy(copyCount, 0, newArrayCount, 0, copyCount.length);
+            System.arraycopy(copy, 0, newArray, 0, copy.length);
+            copyCount = newArrayCount;
+            copy = newArray;
+            deltaStripeMergePending = copyCount;
+            deltaStripeMerge = copy;
+        }
+        copyCount[index] = count;
+        copy[index] = load;
     }
 
     static public class Totals {

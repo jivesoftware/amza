@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
@@ -11,9 +12,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -71,8 +70,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);
-        partitionIndexStore.rowScan((long rowTxId, WALKey key, WALValue value) -> {
-            final PartitionName partitionName = PartitionName.fromBytes(key.getKey());
+        partitionIndexStore.rowScan((key, value, valueTimestamp, valueTombstone) -> {
+            final PartitionName partitionName = PartitionName.fromBytes(key);
             try {
                 total.incrementAndGet();
                 openExecutor.submit(() -> {
@@ -104,14 +103,18 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     public PartitionProperties getProperties(PartitionName partitionName) {
 
         return partitionProperties.computeIfAbsent(partitionName, (key) -> {
-            if (partitionName.isSystemPartition()) {
-                return coldstartSystemPartitionProperties(partitionName);
-            } else {
-                WALValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(new WALKey(partitionName.toBytes()));
-                if (rawPartitionProperties == null || rawPartitionProperties.getTombstoned()) {
-                    return null;
+            try {
+                if (partitionName.isSystemPartition()) {
+                    return coldstartSystemPartitionProperties(partitionName);
+                } else {
+                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(partitionName.toBytes());
+                    if (rawPartitionProperties == null) {
+                        return null;
+                    }
+                    return partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
                 }
-                return partitionPropertyMarshaller.fromBytes(rawPartitionProperties.getValue());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         });
     }
@@ -127,7 +130,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
 
         if (!versionedPartitionName.getPartitionName().isSystemPartition()
-            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(new WALKey(partitionName.toBytes()))) {
+            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(partitionName.toBytes())) {
             return null;
         }
 
@@ -166,7 +169,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 return partitionStore;
             }
 
-            File workingDirectory = new File(workingDirectories[(int) Math.abs((long) versionedPartitionName.hashCode()) % workingDirectories.length]);
+            File workingDirectory = new File(workingDirectories[Math.abs(versionedPartitionName.hashCode() % workingDirectories.length)]);
             WALStorage walStorage = walStorageProvider.create(workingDirectory, domain, versionedPartitionName, properties.walStorageDescriptor);
             partitionStore = new PartitionStore(walStorage, hardFlush);
             partitionStore.load();
@@ -217,8 +220,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     @Override
     public void changes(final RowsChanged changes) throws Exception {
         if (changes.getVersionedPartitionName().getPartitionName().equals(REGION_PROPERTIES.getPartitionName())) {
-            changes.commitable(null, (long rowTxId, WALKey key, WALValue scanned) -> {
-                PartitionName partitionName = PartitionName.fromBytes(key.getKey());
+            changes.commitable(null, (long rowTxId, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstone) -> {
+                PartitionName partitionName = PartitionName.fromBytes(key);
                 removeProperties(partitionName);
 
                 ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(partitionName);

@@ -12,7 +12,8 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.take.RowsTaker;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
+import com.jivesoftware.os.amza.shared.take.RowsTakerFactory;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 
@@ -29,7 +30,8 @@ public class EmbeddedAmzaServiceInitializer {
         IdPacker idPacker,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         WALIndexProviderRegistry indexProviderRegistry,
-        RowsTaker updatesTaker,
+        AvailableRowsTaker availableRowsTaker,
+        RowsTakerFactory rowsTakerFactory,
         Optional<TakeFailureListener> takeFailureListener,
         RowChanges allRowChanges) throws Exception {
 
@@ -43,7 +45,6 @@ public class EmbeddedAmzaServiceInitializer {
         IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
             rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, orderIdProvider, tombstoneCompactionFactor, compactAfterGrowthFactor);
 
-
         AmzaService service = new AmzaServiceInitializer().initialize(config,
             amzaStats,
             primaryRowMarshaller,
@@ -54,7 +55,8 @@ public class EmbeddedAmzaServiceInitializer {
             idPacker,
             partitionPropertyMarshaller,
             walStorageProvider,
-            updatesTaker,
+            availableRowsTaker,
+            rowsTakerFactory,
             takeFailureListener,
             allRowChanges);
 

@@ -5,7 +5,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.take.RowsTaker.AvailableStream;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -19,7 +19,12 @@ public class StreamingTakesConsumer {
     public void consume(InputStream bis, AvailableStream updatedPartitionsStream) throws Exception {
         try (DataInputStream dis = new DataInputStream(bis)) {
             while (dis.read() == 1) {
-                byte[] versionedPartitionNameBytes = new byte[dis.readInt()];
+                int partitionNameLength = dis.readInt();
+                if (partitionNameLength == 0) {
+                    // this is a ping
+                    continue;
+                }
+                byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
                 dis.readFully(versionedPartitionNameBytes);
                 byte[] statusBytes = new byte[1];
                 dis.readFully(statusBytes);

@@ -28,6 +28,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
 
             // Open the environment, creating one if it does not exist
             EnvironmentConfig envConfig = new EnvironmentConfig()
+                //.setConfigParam(EnvironmentConfig.ENV_RUN_CHECKPOINTER, "false")
                 .setAllowCreate(true)
                 .setSharedCache(true);
             envConfig.setCachePercentVoid(30);
@@ -38,14 +39,14 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     @Override
     public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, versionedPartitionName.toBase64());
-        return new BerkeleyDBWALIndex(environments[Math.abs(versionedPartitionName.hashCode()) % environments.length], name);
+        return new BerkeleyDBWALIndex(environments[Math.abs(versionedPartitionName.hashCode() % environments.length)], name);
     }
 
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Prefix.active, versionedPartitionName.toBase64());
         for (BerkeleyDBWALIndexName n : name.all()) {
-            environments[Math.abs(versionedPartitionName.hashCode()) % environments.length].removeDatabase(null, n.getName());
+            environments[Math.abs(versionedPartitionName.hashCode() % environments.length)].removeDatabase(null, n.getName());
         }
     }
 

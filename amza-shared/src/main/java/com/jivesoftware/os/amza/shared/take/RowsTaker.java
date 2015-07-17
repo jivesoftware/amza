@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.shared.take;
 
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
@@ -23,18 +22,6 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import java.util.Map;
 
 public interface RowsTaker {
-
-    void availableRowsStream(RingMember localRingMember,
-        RingMember remoteRingMember,
-        RingHost remoteRingHost,
-        long takeSessionId,
-        long timeoutMillis,
-        AvailableStream availableStream) throws Exception;
-
-    interface AvailableStream {
-
-        void available(VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception;
-    }
 
     StreamingRowsResult rowsStream(RingMember localRingMember,
         RingMember remoteRingMember,

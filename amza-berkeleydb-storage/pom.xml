@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>shared-lib-build-management</artifactId>
-        <version>0.94</version>
+        <version>0.95</version>
         <relativePath>../inheritance-poms/shared-lib-build-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -21,7 +21,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
-            <version>0.94</version>
+            <version>0.95</version>
         </dependency>
         <dependency>
             <groupId>org.testng</groupId>
@@ -35,7 +35,7 @@
         <dependency>
             <groupId>com.sleepycat</groupId>
             <artifactId>je</artifactId>
-            <version>6.2.31</version>
+            <version>6.3.8</version>
         </dependency>
     </dependencies>
     <name>amza-berkeleydb-storage</name>

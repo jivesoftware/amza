@@ -17,49 +17,23 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.scan.RangeScannable;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import com.jivesoftware.os.amza.shared.scan.RangeScannablePointers;
 
-public interface WALIndex extends RangeScannable<WALPointer> {
+public interface WALIndex extends RangeScannablePointers {
 
-    void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception;
+    boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception;
 
-    WALPointer getPointer(WALKey key);
+    boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception;
 
-    WALPointer[] getPointers(WALKey[] keys) throws Exception;
-
-    List<Boolean> containsKey(List<WALKey> key) throws Exception;
-
-    void remove(Collection<WALKey> key) throws Exception;
-
-    boolean isEmpty() throws Exception;
+    boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception;
 
     long size() throws Exception;
-
-    /**
-     * Force persistence of all changes
-     * @throws java.lang.Exception
-     */
-    void commit() throws Exception;
 
     void close() throws Exception;
 
     void compact() throws Exception;
 
-    CompactionWALIndex startCompaction() throws Exception;
-
     boolean delete() throws Exception;
-
-    interface CompactionWALIndex {
-
-        void put(Collection<? extends Map.Entry<WALKey, WALPointer>> entry) throws Exception;
-
-        void abort() throws Exception;
-
-        void commit() throws Exception;
-    }
 
     void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors);
 

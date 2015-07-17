@@ -19,18 +19,16 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.client.AmzaKretrProvider;
-import com.jivesoftware.os.amza.service.AmzaChangeIdPacker;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
-import com.jivesoftware.os.amza.service.replication.MemoryBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI.TimestampedValue;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
@@ -41,15 +39,15 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer.StreamingTakeConsumed;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -61,13 +59,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -117,13 +115,11 @@ public class AmzaTestCluster {
         config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
-
-        AmzaChangeIdPacker idPacker = new AmzaChangeIdPacker();
-        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()),
-            idPacker,
+        SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
+        OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()), idPacker,
             new JiveEpochTimestampProvider());
 
-        RowsTaker updateTaker = new RowsTaker() {
+        AvailableRowsTaker availableRowsTaker = new AvailableRowsTaker() {
 
             @Override
             public void availableRowsStream(RingMember localRingMember,
@@ -131,19 +127,34 @@ public class AmzaTestCluster {
                 RingHost remoteRingHost,
                 long takeSessionId,
                 long timeoutMillis,
-                RowsTaker.AvailableStream updatedPartitionsStream) throws Exception {
+                AvailableRowsTaker.AvailableStream updatedPartitionsStream) throws Exception {
 
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
                 if (amzaNode == null) {
                     throw new IllegalStateException("Service doesn't exists for " + remoteRingMember);
                 } else {
-                    amzaNode.takePartitionUpdates(localRingMember, takeSessionId, timeoutMillis, (versionedPartitionName, status, txId) -> {
-                        if (versionedPartitionName != null) {
-                            updatedPartitionsStream.available(versionedPartitionName, status, txId);
-                        }
-                    });
+                    amzaNode.takePartitionUpdates(localRingMember,
+                        takeSessionId,
+                        timeoutMillis,
+                        (versionedPartitionName, status, txId) -> {
+                            if (versionedPartitionName != null) {
+                                updatedPartitionsStream.available(versionedPartitionName, status, txId);
+                            }
+                        },
+                        () -> {
+                            LOG.debug("Special delivery! Special delivery!");
+                            return null;
+                        },
+                        () -> {
+                            LOG.debug("Ping pong!");
+                            return null;
+                        });
                 }
             }
+
+        };
+
+        RowsTaker updateTaker = new RowsTaker() {
 
             @Override
             public RowsTaker.StreamingRowsResult rowsStream(RingMember localRingMember,
@@ -208,7 +219,6 @@ public class AmzaTestCluster {
         };
 
         AmzaStats amzaStats = new AmzaStats();
-        HighwaterStorage highWaterMarks = new MemoryBackedHighwaterStorage();
         Optional<TakeFailureListener> absent = Optional.<TakeFailureListener>absent();
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
@@ -219,7 +229,9 @@ public class AmzaTestCluster {
             idPacker,
             partitionPropertyMarshaller,
             new WALIndexProviderRegistry(),
-            updateTaker,
+            availableRowsTaker, () -> {
+                return updateTaker;
+            },
             absent,
             (RowsChanged changes) -> {
             });
@@ -228,25 +240,25 @@ public class AmzaTestCluster {
 
         amzaService.watch(partitionName,
             (RowsChanged changes) -> {
-                if (changes.getApply().size() > 0) {
-                    System.out.println("Service:" + localRingMember
-                        + " Partition:" + partitionName.getName()
-                        + " Changed:" + changes.getApply().size());
-                }
+                /*if (changes.getApply().size() > 0) {
+                 System.out.println("Service:" + localRingMember
+                 + " Partition:" + partitionName.getName()
+                 + " Changed:" + changes.getApply().size());
+                 }*/
             }
         );
 
         try {
             amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, localRingMember); // ?? Hacky
-            amzaService.getRingWriter().addRingMember("test", localRingMember); // ?? Hacky
+            amzaService.getRingWriter().addRingMember("test".getBytes(), localRingMember); // ?? Hacky
             if (lastAmzaService != null) {
                 amzaService.getRingWriter().register(lastAmzaService.getRingReader().getRingMember(), lastAmzaService.getRingWriter().getRingHost());
                 amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
-                amzaService.getRingWriter().addRingMember("test", lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
+                amzaService.getRingWriter().addRingMember("test".getBytes(), lastAmzaService.getRingReader().getRingMember()); // ?? Hacky
 
                 lastAmzaService.getRingWriter().register(localRingMember, localRingHost);
                 lastAmzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, localRingMember); // ?? Hacky
-                lastAmzaService.getRingWriter().addRingMember("test", localRingMember); // ?? Hacky
+                lastAmzaService.getRingWriter().addRingMember("test".getBytes(), localRingMember); // ?? Hacky
             }
             lastAmzaService = amzaService;
         } catch (Exception x) {
@@ -255,7 +267,7 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(localRingMember, localRingHost, amzaService, highWaterMarks, orderIdProvider);
+        service = new AmzaNode(localRingMember, localRingHost, amzaService, orderIdProvider);
 
         cluster.put(localRingMember, service);
 
@@ -269,7 +281,6 @@ public class AmzaTestCluster {
         private final RingMember ringMember;
         private final RingHost ringHost;
         private final AmzaService amzaService;
-        private final HighwaterStorage highWaterMarks;
         private final TimestampedOrderIdProvider orderIdProvider;
         private boolean off = false;
         private int flapped = 0;
@@ -279,13 +290,11 @@ public class AmzaTestCluster {
         public AmzaNode(RingMember ringMember,
             RingHost ringHost,
             AmzaService amzaService,
-            HighwaterStorage highWaterMarks,
             TimestampedOrderIdProvider orderIdProvider) {
 
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
-            this.highWaterMarks = highWaterMarks;
             this.clientProvider = new AmzaKretrProvider(amzaService);
             this.orderIdProvider = orderIdProvider;
         }
@@ -316,7 +325,7 @@ public class AmzaTestCluster {
             amzaService.awaitOnline(partitionName, 10_000);
         }
 
-        public void update(PartitionName partitionName, WALKey k, byte[] v, boolean tombstone) throws Exception {
+        public void update(PartitionName partitionName, byte[] k, byte[] v, boolean tombstone) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
@@ -332,16 +341,17 @@ public class AmzaTestCluster {
 
         }
 
-        public byte[] get(PartitionName partitionName, WALKey key) throws Exception {
+        public byte[] get(PartitionName partitionName, byte[] key) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(Collections.singletonList(key), (rowTxId, key1, timestampedValue) -> {
-                got.add(timestampedValue != null ? timestampedValue.getValue() : null);
-                return true;
-            });
+            clientProvider.getClient(partitionName).get(stream -> stream.stream(key),
+                (key1, value, timestamp) -> {
+                    got.add(value);
+                    return true;
+                });
             return got.get(0);
         }
 
@@ -370,9 +380,7 @@ public class AmzaTestCluster {
                 });
                 submit.get();
                 StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
-                StreamingTakesConsumer.StreamingTakeConsumed consumed = streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()),
-                    rowStream);
-                return consumed;
+                return streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()), rowStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -422,7 +430,6 @@ public class AmzaTestCluster {
                     return false;
                 }
                 if (!compare(partitionName, a, b)) {
-                    System.out.println(highWaterMarks + " -vs- " + service.highWaterMarks);
                     return false;
                 }
             }
@@ -432,7 +439,9 @@ public class AmzaTestCluster {
         private void takePartitionUpdates(RingMember ringMember,
             long sessionId,
             long timeoutMillis,
-            RowsTaker.AvailableStream updatedPartitionsStream) {
+            AvailableRowsTaker.AvailableStream updatedPartitionsStream,
+            Callable<Void> deliverCallback,
+            Callable<Void> pingCallback) {
 
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
@@ -442,7 +451,7 @@ public class AmzaTestCluster {
             }
 
             try {
-                amzaService.availableRowsStream(ringMember, sessionId, timeoutMillis, updatedPartitionsStream);
+                amzaService.availableRowsStream(ringMember, sessionId, timeoutMillis, updatedPartitionsStream, deliverCallback, pingCallback);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -456,14 +465,15 @@ public class AmzaTestCluster {
                 try {
                     compared.increment();
                     TimestampedValue[] bValues = new TimestampedValue[1];
-                    b.get(Collections.singletonList(key), (rowTxId, key1, scanned) -> {
-                        bValues[0] = scanned;
-                        return true;
-                    });
+                    b.get(stream -> stream.stream(key),
+                        (_key, value, timestamp) -> {
+                            bValues[0] = new TimestampedValue(timestamp, value);
+                            return true;
+                        });
 
                     TimestampedValue bValue = bValues[0];
-                    String comparing = partitionName.getRingName() + ":" + partitionName.getName()
-                        + " to " + partitionName.getRingName() + ":" + partitionName.getName() + "\n";
+                    String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
+                        + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                     if (bValue == null) {
                         System.out.println("INCONSISTENCY: " + comparing + " " + aValue.getTimestampId()
@@ -503,7 +513,8 @@ public class AmzaTestCluster {
                 }
             });
 
-            System.out.println("partition:" + partitionName.getName() + " vs:" + partitionName.getName() + " compared:" + compared + " keys");
+            System.out.println(
+                "partition:" + new String(partitionName.getName()) + " vs:" + new String(partitionName.getName()) + " compared:" + compared + " keys");
             return passed.booleanValue();
         }
     }

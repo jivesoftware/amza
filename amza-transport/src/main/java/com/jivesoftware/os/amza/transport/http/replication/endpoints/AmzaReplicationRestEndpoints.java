@@ -17,8 +17,6 @@ package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -39,6 +37,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
+import org.glassfish.jersey.server.ChunkedOutput;
 
 @Singleton
 @Path("/amza")
@@ -46,68 +45,13 @@ public class AmzaReplicationRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaStats amzaStats;
-    private final AmzaRingWriter ringWriter;
-    private final AmzaRingReader ringReader;
     private final AmzaInstance amzaInstance;
 
     public AmzaReplicationRestEndpoints(@Context AmzaStats amzaStats,
-        @Context AmzaRingWriter ringWriter,
-        @Context AmzaRingReader ringReader,
         @Context AmzaInstance amzaInstance) {
         this.amzaStats = amzaStats;
-        this.ringWriter = ringWriter;
-        this.ringReader = ringReader;
         this.amzaInstance = amzaInstance;
     }
-    /*
-    @POST
-    @Consumes("application/json")
-    @Path("/ring/add/{logicalName}/{host}/{port}")
-    public Response addMember(@PathParam("logicalName") String logicalName,
-        @PathParam("host") String host,
-        @PathParam("port") int port) {
-        try {
-            LOG.info("Attempting to add {}/{}/{} ", logicalName, host, port);
-            RingMember ringMember = new RingMember(logicalName);
-            ringWriter.register(ringMember, new RingHost(host, port));
-            ringWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
-            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
-        } catch (Exception x) {
-            LOG.warn("Failed to add {}/{}/{} ", new Object[]{logicalName, host, port}, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to add system member: " + logicalName, x);
-        }
-    }
-
-    @POST
-    @Consumes("application/json")
-    @Path("/ring/remove/{logicalName}")
-    public Response removeMember(@PathParam("logicalName") String logicalName) {
-        try {
-            LOG.info("Attempting to remove RingHost: " + logicalName);
-            ringWriter.removeRingMember(AmzaRingReader.SYSTEM_RING, new RingMember(logicalName));
-            return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
-        } catch (Exception x) {
-            LOG.warn("Failed to add RingHost: " + logicalName, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to remove RingHost: " + logicalName, x);
-        }
-    }
-
-    @POST
-    @Consumes("application/json")
-    @Path("/ring")
-    public Response getRing() {
-        try {
-            amzaStats.getRing.incrementAndGet();
-            LOG.info("Attempting to get amza ring.");
-            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
-            return ResponseHelper.INSTANCE.jsonResponse(ring);
-        } catch (Exception x) {
-            LOG.warn("Failed to get amza ring.", x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to get amza ring.", x);
-        } finally {
-            amzaStats.getRing.decrementAndGet();
-        }
-    }*/
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
@@ -134,15 +78,14 @@ public class AmzaReplicationRestEndpoints {
                     throw new IOException("Failed to stream takes.", x);
                 } finally {
                     dos.flush();
+                    amzaStats.rowsStream.decrementAndGet();
                 }
             };
             return Response.ok(stream).build();
         } catch (Exception x) {
-            Object[] vals = new Object[]{ringMemberString, versionedPartitionName, txId};
+            Object[] vals = new Object[] { ringMemberString, versionedPartitionName, txId };
             LOG.warn("Failed to rowsStream {} {} {}. ", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to rowsStream " + Arrays.toString(vals), x);
-        } finally {
-            amzaStats.rowsStream.decrementAndGet();
         }
     }
 
@@ -150,28 +93,32 @@ public class AmzaReplicationRestEndpoints {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/rows/available/{ringMember}/{takeSessionId}/{timeoutMillis}")
-    public Response availableRowsStream(@PathParam("ringMember") String ringMemberString,
+    public ChunkedOutput<byte[]> availableRowsStream(@PathParam("ringMember") String ringMemberString,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
         try {
             amzaStats.availableRowsStream.incrementAndGet();
+            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
 
-            StreamingOutput stream = (OutputStream os) -> {
-                os.flush();
-                final DataOutputStream dos = new DataOutputStream(os);
+            new Thread(() -> {
                 try {
-                    amzaInstance.availableRowsStream(dos, new RingMember(ringMemberString), takeSessionId, timeoutMillis);
+                    amzaInstance.availableRowsStream(
+                        chunkedOutput::write,
+                        new RingMember(ringMemberString),
+                        takeSessionId,
+                        timeoutMillis);
                 } catch (Exception x) {
-                    LOG.error("Failed to stream takes.", x);
-                    throw new IOException("Failed to stream takes.", x);
+                    LOG.warn("Failed to stream available rows", x);
                 } finally {
-                    dos.flush();
+                    try {
+                        chunkedOutput.close();
+                    } catch (IOException x) {
+                        LOG.warn("Failed to close stream for available rows", x);
+                    }
                 }
-            };
-            return Response.ok(stream).build();
-        } catch (Exception x) {
-            LOG.warn("Failed to stream partition updates. ", x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to stream partition updates.", x);
+            }, "available-" + ringMemberString).start();
+
+            return chunkedOutput;
         } finally {
             amzaStats.availableRowsStream.decrementAndGet();
         }
@@ -192,7 +139,7 @@ public class AmzaReplicationRestEndpoints {
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to ack for member:{} partition:{} txId:{}",
-                new Object[]{ringMemberName, versionedPartitionName, txId}, x);
+                new Object[] { ringMemberName, versionedPartitionName, txId }, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to ack.", x);
         } finally {
             amzaStats.rowsTaken.decrementAndGet();

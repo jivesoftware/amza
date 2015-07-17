@@ -24,15 +24,10 @@ public class AckWaters {
 
     public void set(RingMember ringMember, VersionedPartitionName partitionName, Long txId) throws Exception {
         ConcurrentHashMap<VersionedPartitionName, Long> partitionTxIds = ackWaters.computeIfAbsent(ringMember, (t) -> new ConcurrentHashMap<>());
-        LOG.startTenantTimer("ackWaters>set", partitionName.getPartitionName().getName());
-        try {
-            awaitNotify.notifyChange(partitionName, () -> {
-                long merge = partitionTxIds.merge(partitionName, txId, Math::max);
-                return (merge == txId);
-            });
-        } finally {
-            LOG.stopTenantTimer("ackWaters>set", partitionName.getPartitionName().getName());
-        }
+        awaitNotify.notifyChange(partitionName, () -> {
+            long merge = partitionTxIds.merge(partitionName, txId, Math::max);
+            return (merge == txId);
+        });
     }
 
     public Long get(RingMember ringMember, VersionedPartitionName partitionName) {
@@ -51,30 +46,23 @@ public class AckWaters {
 
         RingMember[] ringMembers = takeRingMembers.toArray(new RingMember[takeRingMembers.size()]);
         int[] passed = new int[1];
-        LOG.startTenantTimer("ackWaters>await", partitionName.getPartitionName().getName());
-        try {
-            LOG.inc("ackWaters>await>request", partitionName.getPartitionName().getName());
-            return awaitNotify.awaitChange(partitionName, () -> {
-                for (int i = 0; i < ringMembers.length; i++) {
-                    RingMember ringMember = ringMembers[i];
-                    if (ringMember == null) {
-                        continue;
-                    }
-                    Long txId = get(ringMember, partitionName);
-                    if (txId != null && txId >= desiredTxId) {
-                        passed[0]++;
-                        ringMembers[i] = null;
-                    }
-                    if (passed[0] >= desiredTakeQuorum) {
-                        LOG.inc("ackWaters>await>passed", partitionName.getPartitionName().getName());
-                        return Optional.of(passed[0]);
-                    }
+        return awaitNotify.awaitChange(partitionName, () -> {
+            for (int i = 0; i < ringMembers.length; i++) {
+                RingMember ringMember = ringMembers[i];
+                if (ringMember == null) {
+                    continue;
                 }
-                LOG.inc("ackWaters>await>missed", partitionName.getPartitionName().getName());
-                return null;
-            }, toMillis);
-        } finally {
-            LOG.stopTenantTimer("ackWaters>await", partitionName.getPartitionName().getName());
-        }
+                Long txId = get(ringMember, partitionName);
+                if (txId != null && txId >= desiredTxId) {
+                    passed[0]++;
+                    ringMembers[i] = null;
+                }
+                if (passed[0] >= desiredTakeQuorum) {
+                    return Optional.of(passed[0]);
+                }
+            }
+            return null;
+        }, toMillis);
+
     }
 }

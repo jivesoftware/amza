@@ -19,7 +19,6 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
@@ -46,7 +45,7 @@ public class AmzaServiceTest {
         File createTempDir = Files.createTempDir();
         final AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
 
-        final PartitionName partitionName = new PartitionName(false, "test", "partition1");
+        final PartitionName partitionName = new PartitionName(false, "test".getBytes(), "partition1".getBytes());
         for (int i = 0; i < maxNumberOfServices; i++) {
             cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i), partitionName);
         }
@@ -65,7 +64,7 @@ public class AmzaServiceTest {
                             node.create(partitionName);
                             boolean tombstone = random.nextBoolean();
                             String key = "a-" + random.nextInt(maxFields);
-                            WALKey indexKey = new WALKey(key.getBytes());
+                            byte[] indexKey = key.getBytes();
                             node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
                             node.get(partitionName, indexKey);

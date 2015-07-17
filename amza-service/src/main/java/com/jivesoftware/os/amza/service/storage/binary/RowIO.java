@@ -4,7 +4,6 @@ import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
 
 /**
- *
  * @author jonathan.colt
  */
 public interface RowIO<K> extends WALReader, WALWriter {

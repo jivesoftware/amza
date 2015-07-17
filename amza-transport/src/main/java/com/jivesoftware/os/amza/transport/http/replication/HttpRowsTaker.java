@@ -49,24 +49,6 @@ public class HttpRowsTaker implements RowsTaker {
         this.amzaStats = amzaStats;
     }
 
-    @Override
-    public void availableRowsStream(RingMember localRingMember,
-        RingMember remoteRingMember,
-        RingHost remoteRingHost,
-        long takeSessionId,
-        long timeoutMillis,
-        AvailableStream availableStream) throws Exception {
-
-        HttpStreamResponse httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
-            "/amza/rows/available/" + localRingMember.getMember() + "/" + takeSessionId + "/" + timeoutMillis);
-        try {
-            BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
-            streamingTakesConsumer.consume(bis, availableStream);
-        } finally {
-            httpStreamResponse.close();
-        }
-    }
-
     /**
      * @param localRingMember
      * @param remoteRingMember

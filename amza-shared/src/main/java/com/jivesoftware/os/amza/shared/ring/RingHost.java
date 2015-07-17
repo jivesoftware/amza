@@ -18,7 +18,6 @@ package com.jivesoftware.os.amza.shared.ring;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jivesoftware.os.amza.shared.filer.UIO;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
@@ -38,7 +37,7 @@ public class RingHost {
         return bytes;
     }
 
-    public static RingHost fromBytes(byte[] bytes) throws IOException {
+    public static RingHost fromBytes(byte[] bytes) throws Exception {
         if (bytes[0] == 0) {
             int port = UIO.bytesInt(bytes, 1);
             String host = new String(bytes, 1 + 4, bytes.length - (1 + 4), StandardCharsets.UTF_8);

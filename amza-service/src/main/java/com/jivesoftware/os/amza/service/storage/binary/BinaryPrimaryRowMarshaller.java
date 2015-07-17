@@ -17,37 +17,51 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALRow;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 
 public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> {
 
     @Override
-    public byte[] toRow(WALKey k, WALValue v) throws Exception {
+    public byte[] toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned) throws Exception {
         HeapFiler filer = new HeapFiler();
-        UIO.writeByteArray(filer, v.getValue(), "value");
-        UIO.writeLong(filer, v.getTimestampId(), "timestamp");
-        UIO.writeBoolean(filer, v.getTombstoned(), "tombstone");
-        UIO.writeByteArray(filer, k.getKey(), "key");
+        UIO.writeLong(filer, timestamp, "timestamp");
+        UIO.writeBoolean(filer, tombstoned, "tombstone");
+        UIO.writeByteArray(filer, value, "value");
+        UIO.writeByteArray(filer, key, "key");
         return filer.getBytes();
-
     }
 
     @Override
-    public WALRow fromRow(byte[] row) throws Exception {
+    public boolean fromRow(byte[] row, KeyValueStream keyValueStream) throws Exception {
         HeapFiler filer = new HeapFiler(row);
-        final byte[] value = UIO.readByteArray(filer, "value");
-        final long timestamp = UIO.readLong(filer, "timestamp");
-        final boolean tombstone = UIO.readBoolean(filer, "tombstone");
-        final byte[] key = UIO.readByteArray(filer, "key");
-        return new WALRow(new WALKey(key), new WALValue(value, timestamp, tombstone));
+        long timestamp = UIO.readLong(filer, "timestamp");
+        boolean tombstone = UIO.readBoolean(filer, "tombstone");
+        byte[] value = UIO.readByteArray(filer, "value");
+        byte[] key = UIO.readByteArray(filer, "key");
+        return keyValueStream.stream(key, value, timestamp, tombstone);
+    }
+
+    @Override
+    public boolean fromRow(byte[] row, long txId, TxKeyValueStream keyValueStream) throws Exception {
+        HeapFiler filer = new HeapFiler(row);
+        long timestamp = UIO.readLong(filer, "timestamp");
+        boolean tombstone = UIO.readBoolean(filer, "tombstone");
+        byte[] value = UIO.readByteArray(filer, "value");
+        byte[] key = UIO.readByteArray(filer, "key");
+        return keyValueStream.row(txId, key, value, timestamp, tombstone);
     }
 
     @Override
     public byte[] valueFromRow(byte[] row) throws Exception {
         HeapFiler filer = new HeapFiler(row);
+        filer.seek(8 + 1);
         return UIO.readByteArray(filer, "value");
+    }
+
+    @Override
+    public long timestampFromRow(byte[] row) throws Exception {
+        return UIO.bytesLong(row, 0);
     }
 }

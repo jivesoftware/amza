@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
-import com.jivesoftware.os.amza.service.replication.MemoryBackedHighwaterStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionProvider;
@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
+import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
@@ -23,13 +24,17 @@ import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
+import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.scan.Scan;
+import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -63,26 +68,36 @@ public class DeltaStripeWALStorageNGTest {
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
             walIndexProviderRegistry, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, ids, -1, -1);
         PartitionIndex partitionIndex = new PartitionIndex(
-            new String[]{partitionTmpDir.getAbsolutePath()},
+            new String[] { partitionTmpDir.getAbsolutePath() },
             "domain",
             indexedWALStorageProvider,
             partitionPropertyMarshaller,
             false);
-
-        partitionIndex.open(new TxPartitionStatus() {
+        TxPartitionStatus txPartitionStatus = new TxPartitionStatus() {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
                 return tx.tx(new VersionedPartitionName(partitionName, 0), TxPartitionStatus.Status.ONLINE);
             }
-        });
 
-        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex, null, false);
+            @Override
+            public VersionedStatus getLocalStatus(PartitionName partitionName) throws Exception {
+                return new VersionedStatus(Status.ONLINE, 0, 0);
+            }
+        };
+
+        partitionIndex.open(txPartitionStatus);
+
+        SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            null,
+            false);
 
         PartitionProvider partitionProvider = new PartitionProvider(ids,
             partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, partitionIndex);
 
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring", "partitionName"), 1);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "partitionName".getBytes()), 1);
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
             new PrimaryIndexDescriptor("memory", 0, false, null), null, 100, 100);
 
@@ -90,66 +105,83 @@ public class DeltaStripeWALStorageNGTest {
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         Assert.assertNotNull(partitionStore);
 
-        HighwaterStorage highwaterStorage = new MemoryBackedHighwaterStorage();
+        HighwaterStorage highwaterStorage = new PartitionBackedHighwaterStorage(ids, new RingMember("localhost"), systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
-        DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(
-            1, new AmzaStats(), deltaWALFactory, updated, 0);
-        deltaStripeWALStorage.load(partitionIndex, primaryRowMarshaller);
+        DeltaStripeWALStorage deltaStripeWALStorage = new DeltaStripeWALStorage(1, new AmzaStats(), deltaWALFactory, 0);
+        deltaStripeWALStorage.load(txPartitionStatus, partitionIndex, primaryRowMarshaller);
 
         WALStorage storage = partitionStore.getWalStorage();
-        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
+        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(false));
         Assert.assertEquals(0, storage.count());
-        Assert.assertNull(storage.get(key(1)));
+        Assert.assertNull(storage.get(key(1).getKey()));
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 1, false), updated);
 
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
+        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(0, storage.count());
-        Assert.assertNull(storage.get(key(1)));
+        Assert.assertNull(storage.get(key(1).getKey()));
 
-        deltaStripeWALStorage.compact(partitionIndex, false);
+        deltaStripeWALStorage.merge(partitionIndex, false);
 
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
+        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(true));
+        Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 0, false), updated);
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
-        Assert.assertTrue(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
+        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(true));
+        Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
-        deltaStripeWALStorage.compact(partitionIndex, false);
+        deltaStripeWALStorage.merge(partitionIndex, false);
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, new IntUpdate(1, 2, true), updated);
-        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
-        Assert.assertEquals(new WALValue(UIO.intBytes(1), 1, false), storage.get(key(1)));
+        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(false));
+        Assert.assertEquals(new TimestampedValue(1, UIO.intBytes(1)), storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
-        deltaStripeWALStorage.compact(partitionIndex, false);
-        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1)));
-        Assert.assertFalse(deltaStripeWALStorage.containsKey(versionedPartitionName, storage, key(1)));
-        Assert.assertNull(storage.get(key(1)));
+        deltaStripeWALStorage.merge(partitionIndex, false);
+        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, key(1).getKey()));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, keys(1), assertKeyIsContained(false));
+        Assert.assertNull(storage.get(key(1).getKey()));
         Assert.assertEquals(1, storage.count());
 
-        storage.compactTombstone(10, Long.MAX_VALUE);
-        storage.compactTombstone(10, Long.MAX_VALUE); // Bla
+        storage.compactTombstone(10, Long.MAX_VALUE, false);
+        storage.compactTombstone(10, Long.MAX_VALUE, false); // Bla
 
         Assert.assertEquals(0, storage.count());
 
+    }
+
+    private KeyContainedStream assertKeyIsContained(boolean shouldBeContained) {
+        return (key, contained) -> {
+            Assert.assertEquals(contained, shouldBeContained);
+            return true;
+        };
     }
 
     private WALKey key(int i) {
         return new WALKey(UIO.intBytes(i));
     }
 
-    static class IntUpdate implements Commitable<WALValue> {
+    private WALKeys keys(int... lotsOfIs) {
+        return stream -> {
+            for (int i : lotsOfIs) {
+                if (!stream.stream(UIO.intBytes(i))) {
+                    return false;
+                }
+            }
+            return true;
+        };
+    }
+
+    static class IntUpdate implements Commitable {
 
         private final WALKey key;
         private final WALValue value;
@@ -160,8 +192,8 @@ public class DeltaStripeWALStorageNGTest {
         }
 
         @Override
-        public void commitable(Highwaters highwaters, Scan<WALValue> scan) throws Exception {
-            scan.row(-1, key, value);
+        public boolean commitable(Highwaters highwaters, TxKeyValueStream keyValueStream) throws Exception {
+            return keyValueStream.row(-1, key.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned());
         }
     }
 

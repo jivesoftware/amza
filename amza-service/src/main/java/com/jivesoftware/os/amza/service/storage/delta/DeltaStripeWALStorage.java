@@ -261,7 +261,6 @@ public class DeltaStripeWALStorage {
         }
         amzaStats.beginCompaction("Merging Delta Stripe:" + index);
         try {
-            updateSinceLastMerge.set(0);
             mergeDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create);
         } finally {
             merging.set(false);
@@ -282,6 +281,7 @@ public class DeltaStripeWALStorage {
             LOG.info("Merging delta partitions...");
             DeltaWAL newDeltaWAL = newWAL.call();
             deltaWAL.set(newDeltaWAL);
+            updateSinceLastMerge.set(0);
 
             AtomicLong mergeable = new AtomicLong();
             AtomicLong merged = new AtomicLong();

@@ -201,7 +201,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                         completed();
                     }
                 } catch (Exception x) {
-                    x.printStackTrace();
+                    LOG.error("Failed to feed for region {}", new Object[] { regionName }, x);
                 }
             }
         }

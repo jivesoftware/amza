@@ -15,7 +15,7 @@
         <glassfish.version>2.13</glassfish.version>
         <mlogger.version>0.10</mlogger.version>
         <filer.version>0.72</filer.version>
-        <routing.bird.version>0.15-SNAPSHOT</routing.bird.version>
+        <routing.bird.version>0.15</routing.bird.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>

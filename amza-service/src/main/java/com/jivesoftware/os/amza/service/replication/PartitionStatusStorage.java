@@ -122,9 +122,11 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
                 return new ConcurrentHashMap<>();
             });
 
-        ringMemberStatus.merge(remoteRingMember, remoteVersionedStatus, (com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus existing, com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus updated) -> {
-            return (updated.version > existing.version) ? updated : existing;
-        });
+        ringMemberStatus.merge(remoteRingMember, remoteVersionedStatus,
+            (com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus existing, com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus
+                updated) -> {
+                return (updated.version > existing.version) ? updated : existing;
+            });
 
     }
 
@@ -146,7 +148,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
                 markAsOnline(localVersionedPartitionName);
                 LOG.info(
                     "Resolving cold start stalemate. " + rootRingMember + " was elected as online for " + localVersionedPartitionName
-                    + " ring size (" + remoteRingMembers.size() + ")");
+                        + " ring size (" + remoteRingMembers.size() + ")");
             }
         }
     }
@@ -316,7 +318,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     }
 
     private void invalidateLocalStatusCache(VersionedPartitionName versionedPartitionName) {
-        localStatusCache.computeIfPresent(versionedPartitionName.getPartitionName(), (partitionName,  versionedStatus) -> {
+        localStatusCache.computeIfPresent(versionedPartitionName.getPartitionName(), (partitionName, versionedStatus) -> {
             if (versionedStatus.version == versionedPartitionName.getPartitionVersion()) {
                 return null;
             } else {

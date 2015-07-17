@@ -21,19 +21,13 @@ import com.jivesoftware.os.amza.shared.scan.RangeScannablePointers;
 
 public interface WALIndex extends RangeScannablePointers {
 
-   
-
     boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception;
 
     boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception;
 
     boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception;
 
-   
-
     long size() throws Exception;
-
-   
 
     void close() throws Exception;
 

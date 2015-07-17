@@ -54,7 +54,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     public BerkeleyDBWALIndex(Environment environment, BerkeleyDBWALIndexName name) throws Exception {
         this.environment = environment;
         this.name = name;
-        
+
         // Open the database, creating one if it does not exist
         this.dbConfig = new DatabaseConfig().setAllowCreate(true);
         this.database = environment.openDatabase(null, name.getName(), dbConfig);

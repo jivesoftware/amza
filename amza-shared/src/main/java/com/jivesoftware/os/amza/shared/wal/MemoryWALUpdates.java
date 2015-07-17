@@ -19,8 +19,6 @@ import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 public class MemoryWALUpdates implements Commitable {
 

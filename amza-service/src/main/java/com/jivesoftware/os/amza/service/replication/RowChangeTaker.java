@@ -280,7 +280,7 @@ public class RowChangeTaker implements RowChanges {
                             versionedPartitionRowTakers.compute(remoteVersionedPartitionName, (key1, rowTaker) -> {
 
                                 if (rowTaker == null
-                                || rowTaker.localVersionedPartitionName.getPartitionVersion() < currentLocalVersionedPartitionName.getPartitionVersion()) {
+                                    || rowTaker.localVersionedPartitionName.getPartitionVersion() < currentLocalVersionedPartitionName.getPartitionVersion()) {
 
                                     rowTaker = new RowTaker(disposed,
                                         currentLocalVersionedPartitionName,
@@ -322,7 +322,7 @@ public class RowChangeTaker implements RowChanges {
                 } catch (InterruptedException ie) {
                     return;
                 } catch (Exception x) {
-                    LOG.error("Failed to take partitions updated:{}", new Object[]{remoteRingMember}, x);
+                    LOG.error("Failed to take partitions updated:{}", new Object[] { remoteRingMember }, x);
                     try {
                         Thread.sleep(1_000);
                     } catch (InterruptedException ie) {
@@ -429,7 +429,7 @@ public class RowChangeTaker implements RowChanges {
                                 if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                     LOG.warn("Error while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                     LOG.trace("Error while taking from member:{} host:{} partition:{}",
-                                        new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, rowsResult.error);
+                                        new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, rowsResult.error);
                                 }
                                 amzaStats.takeErrors.add(remoteRingMember);
                             } else if (rowsResult.unreachable != null) {
@@ -441,7 +441,7 @@ public class RowChangeTaker implements RowChanges {
                                 if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                     LOG.debug("Unreachable while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                     LOG.trace("Unreachable while taking from member:{} host:{} partition:{}",
-                                        new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName},
+                                        new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName },
                                         rowsResult.unreachable);
                                 }
                                 amzaStats.takeErrors.add(remoteRingMember);
@@ -481,7 +481,7 @@ public class RowChangeTaker implements RowChanges {
                                         takeRowStream.largestFlushedTxId());
                                 } catch (Exception x) {
                                     LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                                        new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                                        new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
                                 }
                             }
 
@@ -492,14 +492,14 @@ public class RowChangeTaker implements RowChanges {
 
                     } catch (Exception x) {
                         LOG.warn("Failed to take from member:{} host:{} partition:{}",
-                            new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
+                            new Object[] { remoteRingMember, remoteRingHost, localVersionedPartitionName }, x);
                     }
                     onCompletion.completed(this, flushed, currentVersion, version);
                     return null;
                 });
             } catch (Exception x) {
                 LOG.error("Failed to take from member:{} host:{} partition:{}",
-                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
                 onError.error(this, x);
             }
         }

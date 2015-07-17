@@ -84,7 +84,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[]{"./var/data/"};
+        public String[] workingDirectories = new String[] { "./var/data/" };
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -177,7 +177,7 @@ public class AmzaServiceInitializer {
                 try (FileInputStream fileInputStream = new FileInputStream(versionFile)) {
                     DataInput input = new DataInputStream(fileInputStream);
                     stripeVersion[i] = input.readLong();
-                    LOG.info("Loaded stripeVersion:" + stripeVersion[i] + " for stripe:" + i+ " from " + versionFile);
+                    LOG.info("Loaded stripeVersion:" + stripeVersion[i] + " for stripe:" + i + " from " + versionFile);
                 }
             } else {
                 if (versionFile.createNewFile()) {

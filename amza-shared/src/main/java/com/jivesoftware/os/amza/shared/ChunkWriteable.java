@@ -1,7 +1,5 @@
 package com.jivesoftware.os.amza.shared;
 
-import java.io.IOException;
-
 /**
  *
  */

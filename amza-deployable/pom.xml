@@ -5,12 +5,12 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>executable-build-management</artifactId>
-        <version>0.96-SNAPSHOT</version>
+        <version>0.96</version>
         <relativePath>../inheritance-poms/executable-build-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
     <artifactId>amza-deployable</artifactId>
-    <version>0.96-SNAPSHOT</version>
+    <version>0.96</version>
     <properties>
         <java.main>com.jivesoftware.os.amza.deployable.AmzaMain</java.main>
         <assembly.home>${project.basedir}</assembly.home>
@@ -53,17 +53,17 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-service</artifactId>
-            <version>0.96-SNAPSHOT</version>
+            <version>0.96</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-ui</artifactId>
-            <version>0.96-SNAPSHOT</version>
+            <version>0.96</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
-            <version>0.96-SNAPSHOT</version>
+            <version>0.96</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -91,12 +91,12 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-transport</artifactId>
-            <version>0.96-SNAPSHOT</version>
+            <version>0.96</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-berkeleydb-storage</artifactId>
-            <version>0.96-SNAPSHOT</version>
+            <version>0.96</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.mlogger</groupId>

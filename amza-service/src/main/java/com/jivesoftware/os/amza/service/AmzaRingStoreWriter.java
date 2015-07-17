@@ -194,7 +194,9 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
             }, walUpdated);
         ringSizes.remove(new IBA(ringName));
 
-        LOG.info("Ring update:{} -> {}", ringName, members);
+        if (LOG.isInfoEnabled()) {
+            LOG.info("Ring update:{} -> {}", new String(ringName), members);
+        }
     }
 
     @Override

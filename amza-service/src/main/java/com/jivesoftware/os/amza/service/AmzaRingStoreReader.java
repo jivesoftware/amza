@@ -161,7 +161,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
                         byte[] ringName = UIO.readByteArray(filer, "ringName");
                         UIO.readByte(filer, "seperator");
                         RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
-                        if (ringMember.equals(desiredRingMember)) {
+                        if (ringMember != null && ringMember.equals(desiredRingMember)) {
                             set.add(new IBA(ringName));
                         }
                     }

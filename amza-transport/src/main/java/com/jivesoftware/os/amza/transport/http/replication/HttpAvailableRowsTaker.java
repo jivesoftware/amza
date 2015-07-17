@@ -34,7 +34,7 @@ import java.io.BufferedInputStream;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class HttpAvaliableRowsTaker implements AvailableRowsTaker {
+public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -42,7 +42,7 @@ public class HttpAvaliableRowsTaker implements AvailableRowsTaker {
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
 
-    public HttpAvaliableRowsTaker(AmzaStats amzaStats) {
+    public HttpAvailableRowsTaker(AmzaStats amzaStats) {
         this.amzaStats = amzaStats;
     }
 

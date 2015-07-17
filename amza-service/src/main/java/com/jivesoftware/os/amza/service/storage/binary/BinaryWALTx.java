@@ -267,7 +267,7 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
             removeTombstonedOlderThanTimestampId,
             ttlTimestampId);
 
-        return Optional.<Compacted<I>>of((Compacted<I>) () -> {
+        return Optional.of(() -> {
             compactionLock.acquire(NUM_PERMITS);
             try {
                 long startCatchup = System.currentTimeMillis();
@@ -334,8 +334,7 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
         AtomicLong tombstoneCount,
         AtomicLong ttlCount,
         long removeTombstonedOlderThanTimestampId,
-        long ttlTimestampId) throws
-        Exception {
+        long ttlTimestampId) throws Exception {
 
         Preconditions.checkNotNull(compactableWALIndex, "If you don't have one use NOOpWALIndex.");
 

@@ -37,5 +37,11 @@
             <artifactId>je</artifactId>
             <version>6.2.31</version>
         </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-service</artifactId>
+            <version>0.95-SNAPSHOT</version>
+            <type>jar</type>
+        </dependency>
     </dependencies>
 </project>

@@ -40,6 +40,10 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
         this.size = new AtomicLong(super.length());
     }
 
+    public String getFileName() {
+        return fileName;
+    }
+
     @Override
     public IReadable fileChannelFiler() {
         final FileChannel channel = getChannel();

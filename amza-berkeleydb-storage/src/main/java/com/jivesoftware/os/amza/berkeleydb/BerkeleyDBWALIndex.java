@@ -229,7 +229,9 @@ public class BerkeleyDBWALIndex implements WALIndex {
         DiskOrderedCursor cursor = null;
         try {
             cursor = database.openCursor(new DiskOrderedCursorConfig().setKeysOnly(true).setQueueSize(1).setLSNBatchSize(1));
-            return (cursor.getNext(new DatabaseEntry(), new DatabaseEntry(), LockMode.READ_UNCOMMITTED) != OperationStatus.SUCCESS);
+            DatabaseEntry value = new DatabaseEntry();
+            value.setPartial(true);
+            return (cursor.getNext(new DatabaseEntry(), value, LockMode.READ_UNCOMMITTED) != OperationStatus.SUCCESS);
         } finally {
             lock.release();
             if (cursor != null) {

@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
 import java.util.Arrays;
 import java.util.PriorityQueue;
 
@@ -9,95 +8,99 @@ import java.util.PriorityQueue;
  *
  * @author jonathan.colt
  */
-public class LsmWalIndexs {
+public class PointerIndexs {
 
     // most newest to oldest
     private final Object indexesLock = new Object();
-    private ConcurrentReadableWalIndex[] indexes = new ConcurrentReadableWalIndex[0];
+    private ConcurrentReadablePointerIndex[] indexes = new ConcurrentReadablePointerIndex[0];
 
-    public void merge(LsmWalIndexFactory indexFactory) throws Exception {
-        ConcurrentReadableWalIndex[] copy;
+    public boolean merge(PointerIndexFactory indexFactory) throws Exception {
+        ConcurrentReadablePointerIndex[] copy;
         synchronized (indexesLock) {
             copy = indexes;
         }
-        LsmWalIndex mergedIndex = indexFactory.createWALIndex();
-        FeedNext[] feeders = new FeedNext[copy.length];
+        if (copy.length <= 2) {
+            return false;
+        }
+        PointerIndex mergedIndex = indexFactory.createPointerIndex();
+        NextPointer[] feeders = new NextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
             feeders[i] = copy[i].concurrent().rowScan();
         }
         FeedInterleaver feedInterleaver = new FeedInterleaver(feeders);
         mergedIndex.append((stream) -> {
-            while (feedInterleaver.feedNext(stream));
+            while (feedInterleaver.next(stream));
             return true;
         });
 
         synchronized (indexesLock) {
             int keep = indexes.length - copy.length;
-            LsmWalIndex[] merged = new LsmWalIndex[keep + 1];
+            PointerIndex[] merged = new PointerIndex[keep + 1];
             System.arraycopy(indexes, 0, merged, 0, keep);
             merged[keep] = mergedIndex;
             indexes = merged;
         }
-        for (ConcurrentReadableWalIndex c : copy) {
+        for (ConcurrentReadablePointerIndex c : copy) {
             c.destroy();
         }
+        return true;
     }
 
-    public void append(ConcurrentReadableWalIndex walIndex) {
+    public void append(ConcurrentReadablePointerIndex walIndex) {
         synchronized (indexesLock) {
-            ConcurrentReadableWalIndex[] append = new ConcurrentReadableWalIndex[indexes.length + 1];
+            ConcurrentReadablePointerIndex[] append = new ConcurrentReadablePointerIndex[indexes.length + 1];
             append[0] = walIndex;
             System.arraycopy(indexes, 0, append, 1, indexes.length);
             indexes = append;
         }
     }
 
-    public FeedNext getPointer(byte[] key) throws Exception {
-        ConcurrentReadableWalIndex[] copy = indexes;
+    public NextPointer getPointer(byte[] key) throws Exception {
+        ConcurrentReadablePointerIndex[] copy = indexes;
         return (stream) -> {
-            WALKeyPointerStream found = (key1, timestamp, tombstoned, fp) -> {
+            PointerStream found = (sortIndex, key1, timestamp, tombstoned, fp) -> {
                 if (fp != -1) {
-                    return stream.stream(key1, timestamp, tombstoned, fp);
+                    return stream.stream(sortIndex, key1, timestamp, tombstoned, fp);
                 }
                 return false;
             };
-            for (ConcurrentReadableWalIndex index : copy) {
-                FeedNext feedI = index.concurrent().getPointer(key);
-                if (feedI.feedNext(found)) {
+            for (ConcurrentReadablePointerIndex index : copy) {
+                NextPointer feedI = index.concurrent().getPointer(key);
+                if (feedI.next(found)) {
                     return false;
                 }
             }
-            stream.stream(key, -1, false, -1);
+            stream.stream(Integer.MIN_VALUE, key, -1, false, -1);
             return false;
         };
     }
 
-    public FeedNext rangeScan(byte[] from, byte[] to) throws Exception {
-        ConcurrentReadableWalIndex[] copy = indexes;
-        FeedNext[] feeders = new FeedNext[copy.length];
+    public NextPointer rangeScan(byte[] from, byte[] to) throws Exception {
+        ConcurrentReadablePointerIndex[] copy = indexes;
+        NextPointer[] feeders = new NextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
             feeders[i] = copy[i].concurrent().rangeScan(from, to);
         }
         return new FeedInterleaver(feeders);
     }
 
-    public FeedNext rowScan() throws Exception {
-        ConcurrentReadableWalIndex[] copy = indexes;
-        FeedNext[] feeders = new FeedNext[copy.length];
+    public NextPointer rowScan() throws Exception {
+        ConcurrentReadablePointerIndex[] copy = indexes;
+        NextPointer[] feeders = new NextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
             feeders[i] = copy[i].concurrent().rowScan();
         }
         return new FeedInterleaver(feeders);
     }
 
-    static class FeedInterleaver implements WALKeyPointerStream, FeedNext {
+    static class FeedInterleaver implements PointerStream, NextPointer {
 
-        private final FeedNext[] feeds;
+        private final NextPointer[] feeds;
         private final boolean[] done;
         private int activeFeedsI = 0;
         private final PriorityQueue<WALPointer> queue = new PriorityQueue<>();
 
-        public FeedInterleaver(FeedNext[] feeds) throws Exception {
+        public FeedInterleaver(NextPointer[] feeds) throws Exception {
             this.feeds = feeds;
             this.done = new boolean[feeds.length];
             // Prime
@@ -109,24 +112,24 @@ public class LsmWalIndexs {
         private void feedNext(int i) throws Exception {
             if (!done[i]) {
                 activeFeedsI = i;
-                if (!feeds[i].feedNext(this)) {
+                if (!feeds[i].next(this)) {
                     done[i] = true; // no more in feed marker
                 }
             }
         }
 
         @Override
-        public boolean stream(byte[] key, long timestamp, boolean tombstone, long fp) throws Exception {
-            queue.add(new WALPointer(activeFeedsI, key, timestamp, tombstone, fp));
+        public boolean stream(int sortIndex, byte[] key, long timestamp, boolean tombstone, long fp) throws Exception {
+            queue.add(new WALPointer(sortIndex, activeFeedsI, key, timestamp, tombstone, fp));
             return true;
         }
 
         @Override
-        public boolean feedNext(WALKeyPointerStream pointerStream) throws Exception {
+        public boolean next(PointerStream stream) throws Exception {
 
             WALPointer poll = queue.poll();
             if (poll != null) {
-                pointerStream.stream(poll.key, poll.timestamps, poll.tombstones, poll.fps);
+                stream.stream(poll.sortIndex, poll.key, poll.timestamps, poll.tombstones, poll.fps);
                 feedNext(poll.fi);
                 WALPointer peek = queue.peek();
                 while (peek != null && Arrays.equals(peek.key, poll.key)) {
@@ -148,13 +151,15 @@ public class LsmWalIndexs {
 
         static class WALPointer implements Comparable<WALPointer> {
 
+            final int sortIndex;
             final int fi;
             final byte[] key;
             final long timestamps;
             final boolean tombstones;
             final long fps;
 
-            public WALPointer(int fi, byte[] key, long timestamps, boolean tombstones, long fps) {
+            public WALPointer(int sortIndex, int fi, byte[] key, long timestamps, boolean tombstones, long fps) {
+                this.sortIndex = sortIndex;
                 this.fi = fi;
                 this.key = key;
                 this.timestamps = timestamps;

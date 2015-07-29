@@ -6,9 +6,9 @@ import java.io.IOException;
  *
  * @author jonathan.colt
  */
-public interface ConcurrentReadableWalIndex {
+public interface ConcurrentReadablePointerIndex {
 
-    ReadableWalIndex concurrent() throws Exception;
+    ReadablePointerIndex concurrent() throws Exception;
 
     void destroy() throws IOException;
 

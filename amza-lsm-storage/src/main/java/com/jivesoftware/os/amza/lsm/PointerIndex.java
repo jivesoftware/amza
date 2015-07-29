@@ -1,11 +1,9 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.shared.filer.IReadable;
+import com.jivesoftware.os.amza.shared.filer.IWriteable;
 import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointers;
 import java.io.File;
 import java.io.IOException;
 
@@ -13,14 +11,14 @@ import java.io.IOException;
  *
  * @author jonathan.colt
  */
-public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalIndex {
+public class PointerIndex implements ConcurrentReadablePointerIndex, AppendablePointerIndex {
 
     private static final int INDEX_ENTRY_SIZE = 8 + 4 + 8 + 1 + 8; // keyFp+ keyLength + timestamp + tombstone + walPointer
 
-    private final DiskBackedWALFiler index;
-    private final DiskBackedWALFiler keys;
+    private final DiskBackedPointerIndexFiler index;
+    private final DiskBackedPointerIndexFiler keys;
 
-    public LsmWalIndex(DiskBackedWALFiler index, DiskBackedWALFiler keys) {
+    public PointerIndex(DiskBackedPointerIndexFiler index, DiskBackedPointerIndexFiler keys) {
         this.index = index;
         this.keys = keys;
     }
@@ -36,24 +34,35 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
     }
 
     @Override
-    public void append(WALKeyPointers pointerStream) throws Exception {
-        keys.seek(keys.length());
-        index.seek(index.length());
+    public void append(Pointers pointers) throws Exception {
+        IWriteable writeKeys = keys.fileChannelWriter();
+        IWriteable writeIndex = index.fileChannelWriter();
 
-        pointerStream.consume((byte[] key, long timestamp, boolean tombstoned, long walPointer) -> {
-            long keyFp = keys.getFilePointer();
-            UIO.writeLong(index, keyFp, "keyFp");
-            UIO.writeInt(index, key.length, "keyLength");
-            UIO.writeLong(index, timestamp, "timestamp");
-            UIO.writeBoolean(index, tombstoned, "tombstone");
-            UIO.writeLong(index, walPointer, "walPointerFp");
+        writeKeys.seek(0);
+        writeIndex.seek(0);
 
-            UIO.write(keys, key);
+        long[] keyFp = new long[]{keys.getFilePointer()};
+        pointers.consume((sortIndex, key, timestamp, tombstoned,  walPointer) -> {
+            UIO.writeInt(writeIndex, sortIndex, "sortIndex");
+            UIO.writeLong(writeIndex, keyFp[0], "keyFp");
+            UIO.writeInt(writeIndex, key.length, "keyLength");
+            UIO.writeLong(writeIndex, timestamp, "timestamp");
+            UIO.writeBoolean(writeIndex, tombstoned, "tombstone");
+            UIO.writeLong(writeIndex, walPointer, "walPointerFp");
+
+            UIO.write(writeKeys, key);
+            keyFp[0] += key.length;
+
             return true;
         });
+
+        writeKeys.flush(false);
+        writeIndex.flush(false);
+
+        System.out.println("index:" + writeIndex.length() + "bytes keys:" + writeKeys.length() + "bytes");
     }
 
-    public static class WalPIndex implements ReadableWalIndex {
+    public static class WalPIndex implements ReadablePointerIndex {
 
         private final int count;
         private final IReadable readableIndex;
@@ -67,21 +76,22 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
         }
 
         @Override
-        public FeedNext getPointer(byte[] key) throws Exception {
+        public NextPointer getPointer(byte[] key) throws Exception {
             return binarySearch(0, count, key, null);
         }
 
         @Override
-        public FeedNext rangeScan(byte[] from, byte[] to) throws Exception {
+        public NextPointer rangeScan(byte[] from, byte[] to) throws Exception {
             return binarySearch(0, count, from, to);
         }
 
         @Override
-        public FeedNext rowScan() throws Exception {
+        public NextPointer rowScan() throws Exception {
             int[] i = new int[]{0};
             return (stream) -> {
                 if (i[0] < count) {
                     readableIndex.seek(i[0] * INDEX_ENTRY_SIZE);
+                    int sortIndex = UIO.readInt(readableIndex, "sortIndex");
                     long keyFp = UIO.readLong(readableIndex, "keyFp");
                     int keyLength = UIO.readInt(readableIndex, "keyLength");
                     long timestamp = UIO.readLong(readableIndex, "timestamp");
@@ -92,7 +102,7 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
                     readableKeys.seek(keyFp);
                     readableKeys.read(key);
                     i[0]++;
-                    return stream.stream(key, timestamp, tombstone, walPointerFp);
+                    return stream.stream(Integer.MAX_VALUE, key, timestamp, tombstone, walPointerFp);
                 } else {
                     return false;
                 }
@@ -110,7 +120,7 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
         }
 
         // TODO add reverse order support if toKey < fromKey
-        private FeedNext binarySearch(int fromIndex,
+        private NextPointer binarySearch(int fromIndex,
             int toIndex,
             byte[] fromKey,
             byte[] toKey) throws Exception {
@@ -134,7 +144,7 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
                             if (i[0] == 0) {
                                 readableIndex.seek((_mid * INDEX_ENTRY_SIZE) + 8 + 4);
                                 i[0]++;
-                                return stream.stream(fromKey,
+                                return stream.stream(_mid, fromKey,
                                     UIO.readLong(readableIndex, "timestamp"),
                                     UIO.readBoolean(readableIndex, "tombstone"),
                                     UIO.readLong(readableIndex, "walPointerFp"));
@@ -159,11 +169,12 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
             }
             // return -(low + 1);  // key not found.
             if (toKey == null) {
+                int _low = low;
                 int[] i = new int[]{0};
                 return (stream) -> {
                     if (i[0] == 0) {
                         i[0]++;
-                        return stream.stream(fromKey, -1, false, -1);
+                        return stream.stream(-(_low + 1), fromKey, -1, false, -1);
                     } else {
                         return false;
                     }
@@ -183,7 +194,7 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
             }
         }
 
-        private boolean stream(int i, byte[] stopKeyExclusive, WALKeyPointerStream stream) throws Exception {
+        private boolean stream(int i, byte[] stopKeyExclusive, PointerStream stream) throws Exception {
             readableIndex.seek(i * INDEX_ENTRY_SIZE);
             long keyFp = UIO.readLong(readableIndex, "keyFp");
             int keyLength = UIO.readInt(readableIndex, "keyLength");
@@ -194,7 +205,7 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
             readableKeys.seek(keyFp);
             readableKeys.read(key);
             if (UnsignedBytes.lexicographicalComparator().compare(key, stopKeyExclusive) < 0) {
-                return stream.stream(key, timestamp, tombstone, walPointerFp);
+                return stream.stream(i, key, timestamp, tombstone, walPointerFp);
             } else {
                 return false;
             }
@@ -218,7 +229,7 @@ public class LsmWalIndex implements ConcurrentReadableWalIndex, AppendableWalInd
     }
 
     @Override
-    public ReadableWalIndex concurrent() throws Exception {
+    public ReadablePointerIndex concurrent() throws Exception {
         IReadable readableIndex = index.fileChannelFiler();
         IReadable readableKeys = keys.fileChannelFiler();
         return new WalPIndex((int) (readableIndex.length() / INDEX_ENTRY_SIZE), readableIndex, readableKeys);

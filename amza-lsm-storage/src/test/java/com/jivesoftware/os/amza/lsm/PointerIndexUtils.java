@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.lsm;
 
 import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -15,29 +14,32 @@ import junit.framework.Assert;
  *
  * @author jonathan.colt
  */
-public class LsmWalIndexUtils {
+public class PointerIndexUtils {
 
     static final Random rand = new Random();
     static OrderIdProvider timeProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
 
-    static void append(AppendableWalIndex walIndex,
+    static void append(AppendablePointerIndex walIndex,
+        long start,
         int step,
         int count,
         ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws Exception {
-        walIndex.append((WALKeyPointerStream stream) -> {
-            long k = 1 + rand.nextInt(step);
+        walIndex.append((stream) -> {
+            long k = start + rand.nextInt(step);
             for (int i = 0; i < count; i++) {
                 long walFp = Math.abs(rand.nextLong());
                 byte[] key = UIO.longBytes(k);
                 long time = timeProvider.nextId();
-                desired.compute(key, (byte[] t, TimestampedValue u) -> {
-                    if (u == null) {
-                        return new TimestampedValue(time, UIO.longBytes(walFp));
-                    } else {
-                        return u.getTimestampId() > time ? u : new TimestampedValue(time, UIO.longBytes(walFp));
-                    }
-                });
-                if (!stream.stream(key, time, false, walFp)) {
+                if (desired != null) {
+                    desired.compute(key, (byte[] t, TimestampedValue u) -> {
+                        if (u == null) {
+                            return new TimestampedValue(time, UIO.longBytes(walFp));
+                        } else {
+                            return u.getTimestampId() > time ? u : new TimestampedValue(time, UIO.longBytes(walFp));
+                        }
+                    });
+                }
+                if (!stream.stream(Integer.MIN_VALUE, key, time, false, walFp)) {
                     break;
                 }
                 k += 1 + rand.nextInt(step);
@@ -46,9 +48,7 @@ public class LsmWalIndexUtils {
         });
     }
 
-
-
-    static void assertions(LsmWalIndexs indexs,
+    static void assertions(PointerIndexs indexs,
         int count, int step,
         ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws
         Exception {
@@ -56,21 +56,21 @@ public class LsmWalIndexUtils {
         ArrayList<byte[]> keys = new ArrayList<>(desired.navigableKeySet());
 
         int[] index = new int[1];
-        FeedNext rowScan = indexs.rowScan();
-        WALKeyPointerStream stream = (key, timestamp, tombstoned, fp) -> {
+        NextPointer rowScan = indexs.rowScan();
+        PointerStream stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
             //System.out.println(UIO.bytesLong(keys.get(index[0]))+" "+UIO.bytesLong(key));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
             return true;
         };
-        while (rowScan.feedNext(stream));
+        while (rowScan.next(stream));
 
         System.out.println("rowScan PASSED");
 
         for (int i = 0; i < count * step; i++) {
             long k = i;
-            FeedNext getPointer = indexs.getPointer(UIO.longBytes(k));
-            stream = (key, timestamp, tombstoned, fp) -> {
+            NextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
+            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
                 TimestampedValue expectedFP = desired.get(key);
                 if (expectedFP == null) {
                     Assert.assertTrue(expectedFP == null && fp == -1);
@@ -80,7 +80,7 @@ public class LsmWalIndexUtils {
                 return true;
             };
 
-            while (getPointer.feedNext(stream));
+            while (getPointer.next(stream));
         }
 
         System.out.println("getPointer PASSED");
@@ -89,7 +89,7 @@ public class LsmWalIndexUtils {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
                 if (fp > -1) {
                     System.out.println("Streamed:" + UIO.bytesLong(key));
                     streamed[0]++;
@@ -98,8 +98,8 @@ public class LsmWalIndexUtils {
             };
 
             System.out.println("Asked:" + UIO.bytesLong(keys.get(_i)) + " to " + UIO.bytesLong(keys.get(_i + 3)));
-            FeedNext rangeScan = indexs.rangeScan(keys.get(_i), keys.get(_i + 3));
-            while (rangeScan.feedNext(stream));
+            NextPointer rangeScan = indexs.rangeScan(keys.get(_i), keys.get(_i + 3));
+            while (rangeScan.next(stream));
             Assert.assertEquals(3, streamed[0]);
 
         }
@@ -109,14 +109,14 @@ public class LsmWalIndexUtils {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
                 if (fp > -1) {
                     streamed[0]++;
                 }
                 return true;
             };
-            FeedNext rangeScan = indexs.rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
-            while (rangeScan.feedNext(stream));
+            NextPointer rangeScan = indexs.rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
+            while (rangeScan.next(stream));
             Assert.assertEquals(2, streamed[0]);
 
         }

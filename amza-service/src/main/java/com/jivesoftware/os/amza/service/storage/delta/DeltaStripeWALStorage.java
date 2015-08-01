@@ -150,20 +150,28 @@ public class DeltaStripeWALStorage {
                         mergeDelta(partitionIndex, deltaWAL.get(), () -> wal);
                     }
                     deltaWAL.set(wal);
-                    primaryRowMarshaller.fromRows(txFpRowStream -> {
-                        wal.load((rowFP, rowTxId, rowType, rawRow) -> {
-                            if (rowType == RowType.primary) {
-                                if (!txFpRowStream.stream(rowTxId, rowFP, rawRow)) {
-                                    return false;
+                    WALKey.decompose(
+                        (WALKey.TxFpRawKeyValueEntries<VersionedPartitionName>) txRawKeyEntryStream -> primaryRowMarshaller.fromRows(
+                            txFpRowStream -> {
+                                wal.load((rowFP, rowTxId, rowType, rawRow) -> {
+                                    if (rowType == RowType.primary) {
+                                        if (!txFpRowStream.stream(rowTxId, rowFP, rawRow)) {
+                                            return false;
+                                        }
+                                    }
+                                    return true;
+                                });
+                                return true;
+                            },
+                            (rowTxId, rowFP, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
+                                VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix);
+                                VersionedStatus localStatus = txPartitionStatus.getLocalStatus(versionedPartitionName.getPartitionName());
+                                if (localStatus != null && localStatus.version == versionedPartitionName.getPartitionVersion()) {
+                                    return txRawKeyEntryStream.stream(rowTxId, rowFP, key, value, valueTimestamp, valueTombstoned, versionedPartitionName);
                                 }
-                            }
-                            return true;
-                        });
-                        return true;
-                    }, (rowTxId, rowFP, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
-                        VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix);
-                        VersionedStatus localStatus = txPartitionStatus.getLocalStatus(versionedPartitionName.getPartitionName());
-                        if (localStatus != null && localStatus.version == versionedPartitionName.getPartitionVersion()) {
+                                return true;
+                            }),
+                        (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, versionedPartitionName) -> {
                             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                             if (partitionStore == null) {
                                 LOG.warn("Dropping values on the floor for versionedPartitionName:{} "
@@ -177,33 +185,36 @@ public class DeltaStripeWALStorage {
                                     if (partitionValue == null || partitionValue.getTimestampId() < valueTimestamp) {
                                         WALPointer got = delta.getPointer(prefix, key);
                                         if (got == null || got.getTimestampId() < valueTimestamp) {
-                                            wal.hydrateKeyValueHighwaters(stream -> stream.stream(rowFP),
-                                                (fp, loadPrefix, loadKey, loadValue, loadValueTimestamp, loadValueTombstoned, highwater) -> {
+                                            boolean completed = wal.hydrateKeyValueHighwaters(stream -> stream.stream(fp),
+                                                (_fp, loadPrefix, loadKey, loadValue, loadValueTimestamp, loadValueTombstoned, highwater) -> {
                                                     delta.put(fp, loadPrefix, loadKey, loadValue, loadValueTimestamp, loadValueTombstoned, highwater);
-                                                    delta.appendTxFps(rowTxId, fp);
+                                                    delta.appendTxFps(txId, fp);
                                                     return true;
                                                 });
-
+                                            updateSinceLastMerge.incrementAndGet();
+                                            return completed;
                                         }
                                     }
                                 } finally {
                                     releaseOne();
                                 }
                             }
-                            updateSinceLastMerge.incrementAndGet();
-                        }
-                        return true;
-                    });
+                            return true;
+                        });
                 }
             }
         }
+
         amzaStats.deltaStripeLoad(index, updateSinceLastMerge.get(), (double) updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
 
-        if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
+        if (updateSinceLastMerge.get() > mergeAfterNUpdates)
+
+        {
             synchronized (awakeCompactionsLock) {
                 awakeCompactionsLock.notifyAll();
             }
         }
+
         LOG.info("Reloaded deltas stripe:{} in {} ms", index, (System.currentTimeMillis() - start));
     }
 

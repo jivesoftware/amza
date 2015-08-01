@@ -39,11 +39,11 @@ public interface PrimaryRowMarshaller<R> {
         boolean stream(long txId, long fp, byte[] row) throws Exception;
     }
 
-    boolean fromRows(FpRows fpRows, FpKeyValueStream keyValueStream) throws Exception;
+    boolean fromRows(FpRows fpRows, FpKeyValueStream fpKeyValueStream) throws Exception;
 
-    boolean fromRows(TxFpRows txFpRows, TxKeyValueStream keyValueStream) throws Exception;
+    boolean fromRows(TxFpRows txFpRows, TxKeyValueStream txKeyValueStream) throws Exception;
 
-    boolean fromRows(TxFpRows txFpRows, TxFpKeyValueStream txFpKeyValueStream) throws Exception;
+    boolean fromRows(TxFpRows txFpRows, WALKey.TxFpKeyValueEntryStream<byte[]> txFpKeyValueEntryStream) throws Exception;
 
     byte[] valueFromRow(R row) throws Exception;
 

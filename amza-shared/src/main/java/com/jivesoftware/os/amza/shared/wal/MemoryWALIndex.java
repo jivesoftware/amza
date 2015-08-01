@@ -41,53 +41,57 @@ public class MemoryWALIndex implements WALIndex {
 
     @Override
     public boolean rowScan(WALKeyPointerStream stream) throws Exception {
-        return WALKey.decomposeEntries((WALKey.RawKeyEntries<WALPointer>) keyEntryStream -> {
-            for (Entry<byte[], WALPointer> e : index.entrySet()) {
-                WALPointer rowPointer = e.getValue();
-                if (!keyEntryStream.stream(e.getKey(), rowPointer)) {
-                    return false;
+        return WALKey.decompose(
+            keyEntryStream -> {
+                for (Entry<byte[], WALPointer> e : index.entrySet()) {
+                    WALPointer rowPointer = e.getValue();
+                    if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
+                        return false;
+                    }
                 }
-            }
-            return true;
-        }, (prefix, key, entry) -> stream.stream(prefix, key, entry.getTimestampId(), entry.getTombstoned(), entry.getFp()));
+                return true;
+            },
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> stream.stream(prefix, key, valueTimestamp, valueTombstoned, fp));
     }
 
     @Override
     public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream) throws Exception {
         byte[] fromPk = WALKey.compose(fromPrefix, fromKey);
         byte[] toPk = WALKey.compose(toPrefix, toKey);
-        return WALKey.decomposeEntries((WALKey.RawKeyEntries<WALPointer>) keyEntryStream -> {
-            if (fromPk == null && toPk == null) {
-                for (Entry<byte[], WALPointer> e : index.entrySet()) {
-                    WALPointer rowPointer = e.getValue();
-                    if (!keyEntryStream.stream(e.getKey(), rowPointer)) {
-                        return false;
+        return WALKey.decompose(
+            keyEntryStream -> {
+                if (fromPk == null && toPk == null) {
+                    for (Entry<byte[], WALPointer> e : index.entrySet()) {
+                        WALPointer rowPointer = e.getValue();
+                        if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
+                            return false;
+                        }
+                    }
+                } else if (toPk == null) {
+                    for (Entry<byte[], WALPointer> e : index.tailMap(fromPk, true).entrySet()) {
+                        WALPointer rowPointer = e.getValue();
+                        if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
+                            return false;
+                        }
+                    }
+                } else if (fromPk == null) {
+                    for (Entry<byte[], WALPointer> e : index.headMap(toPk, false).entrySet()) {
+                        WALPointer rowPointer = e.getValue();
+                        if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
+                            return false;
+                        }
+                    }
+                } else {
+                    for (Entry<byte[], WALPointer> e : index.subMap(fromPk, toPk).entrySet()) {
+                        WALPointer rowPointer = e.getValue();
+                        if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
+                            return false;
+                        }
                     }
                 }
-            } else if (toPk == null) {
-                for (Entry<byte[], WALPointer> e : index.tailMap(fromPk, true).entrySet()) {
-                    WALPointer rowPointer = e.getValue();
-                    if (!keyEntryStream.stream(e.getKey(), rowPointer)) {
-                        return false;
-                    }
-                }
-            } else if (fromPk == null) {
-                for (Entry<byte[], WALPointer> e : index.headMap(toPk, false).entrySet()) {
-                    WALPointer rowPointer = e.getValue();
-                    if (!keyEntryStream.stream(e.getKey(), rowPointer)) {
-                        return false;
-                    }
-                }
-            } else {
-                for (Entry<byte[], WALPointer> e : index.subMap(fromPk, toPk).entrySet()) {
-                    WALPointer rowPointer = e.getValue();
-                    if (!keyEntryStream.stream(e.getKey(), rowPointer)) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        }, (prefix, key, entry) -> stream.stream(prefix, key, entry.getTimestampId(), entry.getTombstoned(), entry.getFp()));
+                return true;
+            },
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> stream.stream(prefix, key, valueTimestamp, valueTombstoned, fp));
     }
 
     @Override
@@ -124,7 +128,13 @@ public class MemoryWALIndex implements WALIndex {
         }
     }
 
-    private boolean stream(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, WALPointer pointer, KeyValuePointerStream stream) throws
+    private boolean stream(byte[] prefix,
+        byte[] key,
+        byte[] value,
+        long valueTimestamp,
+        boolean valueTombstoned,
+        WALPointer pointer,
+        KeyValuePointerStream stream) throws
         Exception {
         if (pointer == null) {
             return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, -1, false, -1);

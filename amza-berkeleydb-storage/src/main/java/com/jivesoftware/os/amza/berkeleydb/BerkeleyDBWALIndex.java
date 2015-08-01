@@ -5,13 +5,13 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.wal.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.MergeTxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.TxKeyPointers;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALMergeKeyPointerStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -299,14 +299,14 @@ public class BerkeleyDBWALIndex implements WALIndex {
         try (Cursor cursor = database.openCursor(null, null)) {
             DatabaseEntry keyEntry = new DatabaseEntry();
             DatabaseEntry valueEntry = new DatabaseEntry();
-            return WALKey.decomposeEntries((WALKey.RawKeyEntries<byte[]>) keyEntryStream -> {
+            return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
                 while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
-                    if (!keyEntryStream.stream(keyEntry.getData(), valueEntry.getData())) {
+                    if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, valueEntry.getData())) {
                         return false;
                     }
                 }
                 return true;
-            }, (prefix, key, entry) -> entryToWALPointer(prefix, key, entry, stream));
+            }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> entryToWALPointer(prefix, key, entry, stream));
         } finally {
             lock.release();
         }
@@ -320,18 +320,18 @@ public class BerkeleyDBWALIndex implements WALIndex {
             byte[] toPk = WALKey.compose(toPrefix, toKey);
             DatabaseEntry keyEntry = new DatabaseEntry(fromPk);
             DatabaseEntry valueEntry = new DatabaseEntry();
-            return WALKey.decomposeEntries((WALKey.RawKeyEntries<byte[]>) keyEntryStream -> {
+            return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
                 do {
                     if (toPk != null && WALKey.compare(keyEntry.getData(), toPk) >= 0) {
                         return false;
                     }
-                    if (!keyEntryStream.stream(keyEntry.getData(), valueEntry.getData())) {
+                    if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, valueEntry.getData())) {
                         return false;
                     }
                 }
                 while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
                 return true;
-            }, (prefix, key, entry) -> entryToWALPointer(prefix, key, entry, stream));
+            }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> entryToWALPointer(prefix, key, entry, stream));
         } finally {
             lock.release();
         }

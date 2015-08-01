@@ -159,14 +159,16 @@ class PartitionDelta {
     }
 
     boolean keys(WALKeyStream keyStream) throws Exception {
-        return WALKey.decomposeEntries(stream -> {
-            for (byte[] pk : orderedIndex.keySet()) {
-                if (!stream.stream(pk, null)) {
-                    return false;
+        return WALKey.decompose(
+            txFpRawKeyValueEntryStream -> {
+                for (byte[] pk : orderedIndex.keySet()) {
+                    if (!txFpRawKeyValueEntryStream.stream(-1, -1, pk, null, -1, false, null)) {
+                        return false;
+                    }
                 }
-            }
-            return true;
-        }, (prefix, key, entry) -> keyStream.stream(prefix, key));
+                return true;
+            },
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> keyStream.stream(prefix, key));
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {

@@ -72,33 +72,23 @@ public class WALKey {
         return UnsignedBytes.lexicographicalComparator().compare(composedA, composedB);
     }
 
-    public interface RawKeyEntries<R> {
+    public interface TxFpRawKeyValueEntries<R> {
 
-        boolean consume(RawKeyEntryStream<R> rawKeyEntryStream) throws Exception;
+        boolean consume(TxFpRawKeyValueEntryStream<R> txFpRawKeyValueEntryStream) throws Exception;
     }
 
-    public interface RawKeyEntryStream<R> {
+    public interface TxFpRawKeyValueEntryStream<R> {
 
-        boolean stream(byte[] rawKey, R entry) throws Exception;
+        boolean stream(long txId, long fp, byte[] rawKey, byte[] value, long valueTimestamp, boolean valueTombstoned, R entry) throws Exception;
     }
 
-    public interface TxFpRawKeyValues {
+    public interface TxFpKeyValueEntryStream<R> {
 
-        boolean consume(TxFpRawKeyValueStream txFpRawKeyValueStream) throws Exception;
+        boolean stream(long txId, long fp, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, R entry) throws Exception;
     }
 
-    public interface TxFpRawKeyValueStream {
-
-        boolean stream(long txId, long fp, byte[] rawKey, byte[] value, long valueTimestamp, boolean valueTombstoned, byte[] row) throws Exception;
-    }
-
-    public interface WALKeyEntryStream<R> {
-
-        boolean stream(byte[] prefix, byte[] key, R entry) throws Exception;
-    }
-
-    public static boolean decompose(TxFpRawKeyValues keyValues, TxFpKeyValueStream stream) throws Exception {
-        return keyValues.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned, row) -> {
+    public static <R> boolean decompose(TxFpRawKeyValueEntries<R> keyEntries, TxFpKeyValueEntryStream<R> stream) throws Exception {
+        return keyEntries.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned, entry) -> {
             byte precision = rawKey[0];
             int prefixLengthInBytes;
             if (precision == 0) {
@@ -116,30 +106,7 @@ public class WALKey {
                 System.arraycopy(rawKey, 1 + precision, prefix, 0, prefixLengthInBytes);
             }
             System.arraycopy(rawKey, 1 + precision + prefixLengthInBytes, key, 0, key.length);
-            return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row);
-        });
-    }
-
-    public static <R> boolean decomposeEntries(RawKeyEntries<R> keyEntries, WALKeyEntryStream<R> stream) throws Exception {
-        return keyEntries.consume((rawKey, entry) -> {
-            byte precision = rawKey[0];
-            int prefixLengthInBytes;
-            if (precision == 0) {
-                prefixLengthInBytes = 0;
-            } else if (precision == 1) {
-                prefixLengthInBytes = rawKey[1];
-            } else if (precision == 2) {
-                prefixLengthInBytes = UIO.bytesShort(rawKey, 1);
-            } else {
-                prefixLengthInBytes = UIO.bytesInt(rawKey, 1);
-            }
-            byte[] prefix = prefixLengthInBytes > 0 ? new byte[prefixLengthInBytes] : null;
-            byte[] key = new byte[rawKey.length - 1 - precision - prefixLengthInBytes];
-            if (prefix != null) {
-                System.arraycopy(rawKey, 1 + precision, prefix, 0, prefixLengthInBytes);
-            }
-            System.arraycopy(rawKey, 1 + precision + prefixLengthInBytes, key, 0, key.length);
-            return stream.stream(prefix, key, entry);
+            return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry);
         });
     }
 

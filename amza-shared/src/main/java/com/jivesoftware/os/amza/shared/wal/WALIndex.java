@@ -23,7 +23,7 @@ public interface WALIndex extends RangeScannablePointers {
 
     boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception;
 
-    boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception;
+    boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception;
 
     boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception;
 

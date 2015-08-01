@@ -5,6 +5,6 @@ package com.jivesoftware.os.amza.shared.wal;
  */
 public interface WALKeyStream {
 
-    boolean stream(byte[] key) throws Exception;
+    boolean stream(byte[] prefix, byte[] key) throws Exception;
 
 }

@@ -19,6 +19,6 @@ package com.jivesoftware.os.amza.shared.scan;
 // TODO kill <S>
 public interface Scan<S> {
 
-    boolean row(long rowTxId, byte[] key, S scanned) throws Exception;
+    boolean row(long rowTxId, byte[] prefix, byte[] key, S scanned) throws Exception;
 
 }

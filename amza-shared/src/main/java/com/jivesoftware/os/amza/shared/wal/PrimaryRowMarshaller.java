@@ -15,17 +15,39 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
-
 public interface PrimaryRowMarshaller<R> {
 
     R toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned) throws Exception;
 
-    boolean fromRow(R row, KeyValueStream keyValueStream) throws Exception;
+    interface FpRows {
 
-    boolean fromRow(R row, long txId, TxKeyValueStream keyValueStream) throws Exception;
+        boolean consume(FpRowStream fpRowStream) throws Exception;
+    }
+
+    interface FpRowStream {
+
+        boolean stream(long fp, byte[] row) throws Exception;
+    }
+
+    interface TxFpRows {
+
+        boolean consume(TxFpRowStream txFpRowStream) throws Exception;
+    }
+
+    interface TxFpRowStream {
+
+        boolean stream(long txId, long fp, byte[] row) throws Exception;
+    }
+
+    boolean fromRows(FpRows fpRows, FpKeyValueStream keyValueStream) throws Exception;
+
+    boolean fromRows(TxFpRows txFpRows, TxKeyValueStream keyValueStream) throws Exception;
+
+    boolean fromRows(TxFpRows txFpRows, TxFpKeyValueStream txFpKeyValueStream) throws Exception;
 
     byte[] valueFromRow(R row) throws Exception;
 
     long timestampFromRow(R row) throws Exception;
+
+    boolean tombstonedFromRow(R row) throws Exception;
 }

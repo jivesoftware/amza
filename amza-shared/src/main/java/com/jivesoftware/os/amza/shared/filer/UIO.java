@@ -520,7 +520,7 @@ public class UIO {
         }
         for (int i = 0; i < len; i++) {
             long v = array[i];
-            _filer.write(new byte[]{
+            _filer.write(new byte[] {
                 (byte) (v >>> 56),
                 (byte) (v >>> 48),
                 (byte) (v >>> 40),
@@ -670,6 +670,10 @@ public class UIO {
         return readInt(_filer, "length");
     }
 
+    public static int readLength(byte[] array, int _offset) throws IOException {
+        return UIO.bytesInt(array, _offset);
+    }
+
     /**
      *
      * @param _filer
@@ -722,6 +726,19 @@ public class UIO {
         }
         byte[] array = new byte[len];
         readFully(_filer, array, len);
+        return array;
+    }
+
+    public static byte[] readByteArray(byte[] bytes, int _offset, String fieldName) throws IOException {
+        int len = readLength(bytes, _offset);
+        if (len < 0) {
+            return null;
+        }
+        if (len == 0) {
+            return new byte[0];
+        }
+        byte[] array = new byte[len];
+        readFully(bytes, _offset + 4, array, len);
         return array;
     }
 
@@ -1445,6 +1462,28 @@ public class UIO {
 
     /**
      *
+     * @param v
+     * @param _bytes
+     * @param _offset
+     * @return
+     */
+    public static byte[] shortBytes(short v, byte[] _bytes, int _offset) {
+        _bytes[_offset + 0] = (byte) (v >>> 8);
+        _bytes[_offset + 1] = (byte) v;
+        return _bytes;
+    }
+
+    /**
+     *
+     * @param _bytes
+     * @return
+     */
+    public static short bytesShort(byte[] _bytes) {
+        return bytesShort(_bytes, 0);
+    }
+
+    /**
+     *
      * @param _bytes
      * @return
      */
@@ -1475,6 +1514,20 @@ public class UIO {
         v |= (bytes[_offset + 2] & 0xFF);
         v <<= 8;
         v |= (bytes[_offset + 3] & 0xFF);
+        return v;
+    }
+
+    /**
+     *
+     * @param bytes
+     * @param _offset
+     * @return
+     */
+    public static short bytesShort(byte[] bytes, int _offset) {
+        short v = 0;
+        v |= (bytes[_offset + 0] & 0xFF);
+        v <<= 8;
+        v |= (bytes[_offset + 1] & 0xFF);
         return v;
     }
 
@@ -1722,5 +1775,9 @@ public class UIO {
         if (read != length) {
             throw new IOException("Failed to fully. Only had " + read + " needed " + length);
         }
+    }
+
+    private static void readFully(byte[] from, int offset, byte[] into, int length) throws IOException {
+        System.arraycopy(from, offset, into, 0, length);
     }
 }

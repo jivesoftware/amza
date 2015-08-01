@@ -11,7 +11,7 @@ import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
@@ -228,15 +228,15 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                             String max = String.valueOf(input.numBatches * input.batchSize);
                             int bStart = batch * input.batchSize;
                             for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
-                                String k = "k" + Strings.padEnd(String.valueOf(b), max.length(), '0');
-                                txKeyValueStream.row(-1, k.getBytes(), ("v" + batch).getBytes(), -1, false);
+                                String k = Strings.padEnd(String.valueOf(b), max.length(), '0');
+                                txKeyValueStream.row(-1, "k".getBytes(), k.getBytes(), ("v" + batch).getBytes(), -1, false);
                             }
                         } else {
                             int bStart = threadIndex * input.batchSize;
                             int bEnd = bStart + input.batchSize;
                             for (int b = bStart; b < bEnd; b++) {
-                                String k = b + "k" + batch;
-                                txKeyValueStream.row(-1, k.getBytes(), (b + "v" + batch).getBytes(), -1, false);
+                                String k = String.valueOf(batch);
+                                txKeyValueStream.row(-1, (b + "k").getBytes(), k.getBytes(), (b + "v" + batch).getBytes(), -1, false);
                             }
                         }
                         return true;

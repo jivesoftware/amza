@@ -12,12 +12,15 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
+import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -70,7 +73,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);
-        partitionIndexStore.rowScan((key, value, valueTimestamp, valueTombstone) -> {
+        partitionIndexStore.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
             final PartitionName partitionName = PartitionName.fromBytes(key);
             try {
                 total.incrementAndGet();
@@ -107,7 +110,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 if (partitionName.isSystemPartition()) {
                     return coldstartSystemPartitionProperties(partitionName);
                 } else {
-                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(partitionName.toBytes());
+                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(null, partitionName.toBytes());
                     if (rawPartitionProperties == null) {
                         return null;
                     }
@@ -130,7 +133,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
 
         if (!versionedPartitionName.getPartitionName().isSystemPartition()
-            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(partitionName.toBytes())) {
+            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(null, partitionName.toBytes())) {
             return null;
         }
 
@@ -220,19 +223,22 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     @Override
     public void changes(final RowsChanged changes) throws Exception {
         if (changes.getVersionedPartitionName().getPartitionName().equals(REGION_PROPERTIES.getPartitionName())) {
-            changes.commitable(null, (long rowTxId, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstone) -> {
-                PartitionName partitionName = PartitionName.fromBytes(key);
-                removeProperties(partitionName);
+            try {
+                for (Map.Entry<WALKey, WALValue> entry : changes.getApply().entrySet()) {
+                    PartitionName partitionName = PartitionName.fromBytes(entry.getKey().key);
+                    removeProperties(partitionName);
 
-                ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(partitionName);
-                if (versionedPartitionStores != null) {
-                    for (PartitionStore store : versionedPartitionStores.values()) {
-                        PartitionProperties properties = getProperties(partitionName);
-                        store.updatedStorageDescriptor(properties.walStorageDescriptor);
+                    ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(partitionName);
+                    if (versionedPartitionStores != null) {
+                        for (PartitionStore store : versionedPartitionStores.values()) {
+                            PartitionProperties properties = getProperties(partitionName);
+                            store.updatedStorageDescriptor(properties.walStorageDescriptor);
+                        }
                     }
                 }
-                return true;
-            });
+            } catch (Throwable ex) {
+                throw new RuntimeException("Error while streaming entry set.", ex);
+            }
         }
     }
 

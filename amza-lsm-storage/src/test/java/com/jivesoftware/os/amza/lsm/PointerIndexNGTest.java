@@ -15,7 +15,7 @@ import org.testng.annotations.Test;
  */
 public class PointerIndexNGTest {
 
-    @Test
+    @Test(enabled = false)
     public void testDisk() throws Exception {
         File indexFiler = File.createTempFile("b-index", ".tmp");
         File keysFile = File.createTempFile("b-keys", ".tmp");
@@ -32,7 +32,7 @@ public class PointerIndexNGTest {
         assertions(walIndex, count, step, desired);
     }
 
-    @Test
+    @Test(enabled = false)
     public void testMemory() throws Exception {
 
         ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
@@ -46,7 +46,7 @@ public class PointerIndexNGTest {
         assertions(walIndex, count, step, desired);
     }
 
-    @Test
+    @Test(enabled = false)
     public void testMemoryToDisk() throws Exception {
 
         ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());

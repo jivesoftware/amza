@@ -550,17 +550,18 @@ public class RowChangeTaker implements RowChanges {
                     oldestTxId.setValue(Long.MAX_VALUE);
                 }
 
-                primaryRowMarshaller.fromRow(row, txId, (rowTxId, key, value, valueTimestamp, valueTombstoned) -> {
-                    streamed.incrementAndGet();
-                    if (highWaterMark.longValue() < txId) {
-                        highWaterMark.setValue(txId);
-                    }
-                    if (oldestTxId.longValue() > txId) {
-                        oldestTxId.setValue(txId);
-                    }
-                    batch.add(new WALRow(key, value, valueTimestamp, valueTombstoned));
-                    return true;
-                });
+                primaryRowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(txId, rowFP, row),
+                    (rowTxId, fp, prefix, key, value, valueTimestamp, valueTombstoned, _row) -> {
+                        streamed.incrementAndGet();
+                        if (highWaterMark.longValue() < txId) {
+                            highWaterMark.setValue(txId);
+                        }
+                        if (oldestTxId.longValue() > txId) {
+                            oldestTxId.setValue(txId);
+                        }
+                        batch.add(new WALRow(prefix, key, value, valueTimestamp, valueTombstoned));
+                        return true;
+                    });
 
             } else if (rowType == RowType.highwater) {
                 highwater.set(binaryHighwaterRowMarshaller.fromBytes(row));

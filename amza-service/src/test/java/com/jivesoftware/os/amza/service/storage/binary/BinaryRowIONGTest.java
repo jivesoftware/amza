@@ -29,14 +29,21 @@ public class BinaryRowIONGTest {
         File file = File.createTempFile("BinaryRowIO", "dat");
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false);
         IoStats ioStats = new IoStats();
-        write(10_000, () -> new BinaryRowIO(new ManageFileRowIO(), file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats)));
+        BinaryRowIO<File> binaryRowIO = new BinaryRowIO<>(new ManageFileRowIO(),
+            file,
+            new BinaryRowReader(filer, ioStats, 10),
+            new BinaryRowWriter(filer, ioStats));
+        write(10_000, () -> binaryRowIO);
     }
 
     @Test
     public void testMemoryWrite() throws Exception {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new HeapFiler());
         IoStats ioStats = new IoStats();
-        BinaryRowIO binaryRowIO = new BinaryRowIO(new ManageMemoryRowIO(), filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
+        BinaryRowIO binaryRowIO = new BinaryRowIO<>(new ManageMemoryRowIO(),
+            filer,
+            new BinaryRowReader(filer, ioStats, 10),
+            new BinaryRowWriter(filer, ioStats));
         write(500, () -> binaryRowIO);
     }
 
@@ -54,7 +61,11 @@ public class BinaryRowIONGTest {
             rowTxIds.add(nextTxId);
             rows.add(UIO.longBytes(i));
             byte[] row = UIO.longBytes(i);
-            rowIO.write(nextTxId, RowType.primary, stream -> stream.stream(row), stream -> true, (txId, key, valueTimestamp, valueTombstoned, fp) -> true);
+            rowIO.write(nextTxId,
+                RowType.primary,
+                stream -> stream.stream(row),
+                stream -> true,
+                (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
         }
 
         rowIO = reopen.call();
@@ -108,7 +119,11 @@ public class BinaryRowIONGTest {
 
         for (long i = 0; i < numRows; i++) {
             byte[] row = UIO.longBytes(i);
-            rowIO.write(i, RowType.primary, stream -> stream.stream(row), stream -> true, (txId, key, valueTimestamp, valueTombstoned, fp) -> true);
+            rowIO.write(i,
+                RowType.primary,
+                stream -> stream.stream(row),
+                stream -> true,
+                (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
             /*if (i % 10_000 == 0) {
              System.out.println("Wrote " + i);
              }*/

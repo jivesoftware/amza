@@ -21,7 +21,7 @@ public interface CompactableWALIndex {
         void commit() throws Exception;
     }
 
-    boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception;
+    boolean getPointer(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception;
 
     boolean isEmpty() throws Exception;
 

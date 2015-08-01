@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.shared.scan;
 
 import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
 
 /**
  *

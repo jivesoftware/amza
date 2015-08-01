@@ -6,6 +6,6 @@ package com.jivesoftware.os.amza.shared.wal;
  */
 public interface KeyContainedStream {
 
-    boolean stream(byte[] key, boolean contained) throws Exception;
+    boolean stream(byte[] prefix, byte[] key, boolean contained) throws Exception;
 
 }

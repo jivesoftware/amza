@@ -83,7 +83,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                 if (partition != null) {
                     final AtomicLong offset = new AtomicLong(input.offset);
                     final AtomicLong batch = new AtomicLong(input.batchSize);
-                    partition.scan(null, null, (rowTxId, key, value) -> {
+                    partition.scan(null, null, null, null, (rowTxId, prefix, key, value) -> {
                         if (offset.decrementAndGet() >= 0) {
                             return true;
                         }
@@ -111,7 +111,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        partition.get(walKeysFromList(rawKeys), (byte[] key, byte[] value, long timestamp) -> {
+                        partition.get(walKeysFromList(rawKeys), (prefix, key, value, timestamp) -> {
+                            //TODO prefix
                             Map<String, String> row = new HashMap<>();
                             row.put("keyAsHex", bytesToHex(key));
                             row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
@@ -133,9 +134,13 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         msg.add("No keys to remove. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-                        updates.removeAll(rawKeys, -1);
+                        for (byte[] rawKey : rawKeys) {
+                            //TODO prefix
+                            updates.remove(null, rawKey, -1);
+                        }
                         partition.commit(updates, 1, 30_000); // TODO expose to UI
-                        partition.get(walKeysFromList(rawKeys), (byte[] key, byte[] value, long timestamp) -> {
+                        partition.get(walKeysFromList(rawKeys), (prefix, key, value, timestamp) -> {
+                            //TODO prefix
                             Map<String, String> row = new HashMap<>();
                             row.put("keyAsHex", bytesToHex(key));
                             row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
@@ -165,7 +170,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
     private WALKeys walKeysFromList(List<byte[]> rawKeys) {
         return stream -> {
             for (byte[] key : rawKeys) {
-                if (!stream.stream(key)) {
+                //TODO prefix
+                if (!stream.stream(null, key)) {
                     return false;
                 }
             }

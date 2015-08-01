@@ -84,12 +84,8 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>>
     // TODO fix this Ugly Abomination
     private Map.Entry<byte[], WALValue> hydrate(Map.Entry<byte[], WALPointer> entry, WALRowHydrator valueHydrator) {
         try {
-            Map.Entry<byte[], WALValue>[] hydrated = new Map.Entry[1];
-            valueHydrator.hydrate(entry.getValue().getFp(), (fp, key, value, valueTimestamp, valueTombstone, highwater) -> {
-                hydrated[0] = new AbstractMap.SimpleEntry<>(entry.getKey(), new WALValue(value, valueTimestamp, valueTombstone));
-                return true;
-            });
-            return hydrated[0];
+            WALValue hydrated = valueHydrator.hydrate(entry.getValue().getFp());
+            return new AbstractMap.SimpleEntry<>(entry.getKey(), hydrated);
         } catch (Exception e) {
             throw new RuntimeException("Failed to hydrate while iterating delta", e);
         }

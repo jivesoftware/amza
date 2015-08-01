@@ -5,6 +5,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.wal.FpKeyValueHighwaterStream;
+import com.jivesoftware.os.amza.shared.wal.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.Fps;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
@@ -36,28 +38,41 @@ public class DeltaPeekableElmoIteratorNGTest {
             for (int i = 0; i < 128; i++) {
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
+                    byte[] prefix = new byte[] { (byte) -i };
                     byte[] key = new byte[] { (byte) i };
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     wal.put(key, pointer);
-                    fpRows.put((long) i, new WALRow(key, value.getValue(), value.getTimestampId(), value.getTombstoned()));
+                    fpRows.put((long) i, new WALRow(prefix, key, value.getValue(), value.getTimestampId(), value.getTombstoned()));
                     expected.add((byte) i);
                     expectedBoth.add((byte) i);
                 }
                 if (rand.nextBoolean()) {
                     long timestamp = rand.nextInt(128);
+                    byte[] prefix = new byte[] { (byte) -i };
                     byte[] key = new byte[] { (byte) i };
                     WALPointer pointer = new WALPointer((long) i, timestamp, false);
                     WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false);
                     other.put(key, pointer);
-                    fpRows.put((long) i, new WALRow(key, value.getValue(), value.getTimestampId(), value.getTombstoned()));
+                    fpRows.put((long) i, new WALRow(prefix, key, value.getValue(), value.getTimestampId(), value.getTombstoned()));
                     expectedBoth.add((byte) i);
                 }
             }
 
-            WALRowHydrator hydrator = (long fp, FpKeyValueHighwaterStream stream) -> {
-                WALRow row = fpRows.get(fp);
-                return stream.stream(fp, row.key, row.value, row.timestamp, row.tombstoned, null);
+            WALRowHydrator hydrator = new WALRowHydrator() {
+                @Override
+                public boolean hydrate(Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception {
+                    return fps.consume(fp -> {
+                        WALRow row = fpRows.get(fp);
+                        return fpKeyValueStream.stream(fp, row.prefix, row.key, row.value, row.timestamp, row.tombstoned);
+                    });
+                }
+
+                @Override
+                public WALValue hydrate(long fp) throws Exception {
+                    WALRow row = fpRows.get(fp);
+                    return new WALValue(row.value, row.timestamp, row.tombstoned);
+                }
             };
             DeltaPeekableElmoIterator deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(
                 wal.entrySet().iterator(),

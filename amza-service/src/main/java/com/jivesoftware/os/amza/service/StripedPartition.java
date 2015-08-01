@@ -27,7 +27,7 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
-import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
@@ -85,9 +85,9 @@ public class StripedPartition implements AmzaPartitionAPI {
         long timestampId = orderIdProvider.nextId();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, (highwaters, scan) -> {
-                return updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
+                return updates.commitable(highwaters, (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
                     long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
-                    return scan.row(rowTxId, key, value, timestamp, valueTombstone);
+                    return scan.row(rowTxId, prefix, key, value, timestamp, valueTombstone);
                 });
             }, walUpdated);
             amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
@@ -121,17 +121,19 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void scan(byte[] from, byte[] to, Scan<TimestampedValue> scan) throws Exception {
+    public void scan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, Scan<TimestampedValue> scan) throws Exception {
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            if (from == null && to == null) {
-                stripe.rowScan(partitionName, (key, value, valueTimestamp, valueTombstone) -> valueTombstone || scan.row(-1, key,
-                    new TimestampedValue(valueTimestamp, value)));
+            if (fromKey == null && toKey == null) {
+                stripe.rowScan(partitionName, (prefix, key, value, valueTimestamp, valueTombstone) ->
+                    valueTombstone || scan.row(-1, prefix, key, new TimestampedValue(valueTimestamp, value)));
             } else {
                 stripe.rangeScan(partitionName,
-                    from == null ? new byte[0] : from,
-                    to,
-                    (key, value, valueTimestamp, valueTombstone) -> valueTombstone || scan.row(-1, key,
-                        new TimestampedValue(valueTimestamp, value)));
+                    fromPrefix,
+                    fromKey == null ? new byte[0] : fromKey,
+                    toPrefix,
+                    toKey,
+                    (prefix, key, value, valueTimestamp, valueTombstone) ->
+                        valueTombstone || scan.row(-1, prefix, key, new TimestampedValue(valueTimestamp, value)));
             }
             return null;
         });
@@ -142,8 +144,8 @@ public class StripedPartition implements AmzaPartitionAPI {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             MutableLong lastTxId = new MutableLong(-1);
             WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters,
-                (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
-                    if (valueTombstone || scan.row(rowTxId, key, new TimestampedValue(valueTimestamp, value))) {
+                (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
+                    if (valueTombstone || scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value))) {
                         if (rowTxId > lastTxId.longValue()) {
                             lastTxId.setValue(rowTxId);
                         }
@@ -162,8 +164,8 @@ public class StripedPartition implements AmzaPartitionAPI {
 
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters,
-                (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
-                    txKeyValueStream.row(rowTxId, key, value, valueTimestamp, valueTombstone);
+                (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
+                    txKeyValueStream.row(rowTxId, prefix, key, value, valueTimestamp, valueTombstone);
                     return true;
                 });
             return tookToEnd;

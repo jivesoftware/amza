@@ -16,7 +16,6 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import java.util.List;
 
@@ -33,7 +32,7 @@ public class MemoryWALUpdates implements Commitable {
     @Override
     public boolean commitable(Highwaters highwaters, TxKeyValueStream txKeyValueStream) throws Exception {
         for (WALRow update : updates) {
-            if (!txKeyValueStream.row(-1, update.key, update.value, update.timestamp, update.tombstoned)) {
+            if (!txKeyValueStream.row(-1, update.prefix, update.key, update.value, update.timestamp, update.tombstoned)) {
                 return false;
             }
         }

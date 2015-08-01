@@ -89,15 +89,17 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         HeapFiler filer = new HeapFiler(walKey);
         UIO.readByte(filer, "serializationVersion");
         RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member"));
-        PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition"));
-        VersionedStatus versionedStatus = VersionedStatus.fromBytes(walValue);
-        if (ringMember.equals(rootRingMember)) {
-            invalidateLocalStatusCache(new VersionedPartitionName(partitionName, versionedStatus.version));
-        } else {
-            remoteStatusCache.computeIfPresent(partitionName, (PartitionName key, ConcurrentHashMap<RingMember, RemoteVersionedStatus> cache) -> {
-                cache.remove(ringMember);
-                return cache;
-            });
+        if (ringMember != null) {
+            PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition"));
+            VersionedStatus versionedStatus = VersionedStatus.fromBytes(walValue);
+            if (ringMember.equals(rootRingMember)) {
+                invalidateLocalStatusCache(new VersionedPartitionName(partitionName, versionedStatus.version));
+            } else {
+                remoteStatusCache.computeIfPresent(partitionName, (PartitionName key, ConcurrentHashMap<RingMember, RemoteVersionedStatus> cache) -> {
+                    cache.remove(ringMember);
+                    return cache;
+                });
+            }
         }
     }
 
@@ -164,7 +166,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             return versionedStatus;
         }
 
-        TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(rootRingMember, partitionName));
+        TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, null, walKey(rootRingMember, partitionName));
         versionedStatus = rawStatus == null ? null : VersionedStatus.fromBytes(rawStatus.getValue());
         if (versionedStatus == null || versionedStatus.stripeVersion != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
             return null;
@@ -178,7 +180,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         }
 
         //TODO consider wiring in remote status cache, for now it's racy
-        TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
+        TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, null, walKey(ringMember, partitionName));
         if (rawStatus == null) {
             return null;
         }
@@ -215,9 +217,9 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     }
 
     public void streamLocalState(PartitionMemberStatusStream stream) throws Exception {
-        byte[] from = walKey(rootRingMember, null);
-        byte[] to = WALKey.prefixUpperExclusive(from);
-        systemWALStorage.rangeScan(PartitionProvider.REGION_ONLINE_INDEX, from, to, (key, value, valueTimestamp, valueTombstone) -> {
+        byte[] fromKey = walKey(rootRingMember, null);
+        byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
+        systemWALStorage.rangeScan(PartitionProvider.REGION_ONLINE_INDEX, null, fromKey, null, toKey, (prefix, key, value, valueTimestamp, valueTombstone) -> {
             HeapFiler filer = new HeapFiler(key);
             UIO.readByte(filer, "serializationVersion");
             RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member"));
@@ -247,7 +249,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
 
         return transactor.doWithAll(versionedPartitionName, versionedStatus.status, (currentVersionedPartitionName, status) -> {
 
-            TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, walKey(ringMember, partitionName));
+            TimestampedValue rawStatus = systemWALStorage.get(PartitionProvider.REGION_ONLINE_INDEX, null, walKey(ringMember, partitionName));
             VersionedStatus commitableVersionStatus = null;
             VersionedStatus returnableStatus = null;
             long stripeVersion = stripeVersions[partitionStripeFunction.stripe(partitionName)];
@@ -270,6 +272,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
                 awaitNotify.notifyChange(partitionName, () -> {
                     RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
                         (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
+                            null,
                             walKey(ringMember, partitionName),
                             versionedStatusBytes, orderIdProvider.nextId(), false), walUpdated);
                     return !rowsChanged.isEmpty();
@@ -303,11 +306,11 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             transactor.doWithAll(compost, Status.EXPUNGE, (versionedPartitionName, partitionStatus) -> {
                 awaitNotify.notifyChange(compost.getPartitionName(), () -> {
                     RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
-                        (highwaters, scan) -> {
-                            return scan.row(orderIdProvider.nextId(),
-                                walKey(rootRingMember, compost.getPartitionName()),
-                                null, orderIdProvider.nextId(), true);
-                        }, walUpdated);
+                        (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
+                            null,
+                            walKey(rootRingMember, compost.getPartitionName()),
+                            null, orderIdProvider.nextId(), true),
+                        walUpdated);
                     return !rowsChanged.isEmpty();
                 });
                 invalidateLocalStatusCache(compost);
@@ -345,7 +348,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     public void changes(RowsChanged changes) throws Exception {
         if (PartitionProvider.REGION_ONLINE_INDEX.equals(changes.getVersionedPartitionName())) {
             for (Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
-                clearCache(change.getKey().getKey(), change.getValue().getValue());
+                clearCache(change.getKey().key, change.getValue().getValue());
             }
         }
     }

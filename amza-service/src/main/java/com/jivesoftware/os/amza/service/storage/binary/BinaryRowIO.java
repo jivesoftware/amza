@@ -25,7 +25,8 @@ public class BinaryRowIO<K> implements RowIO<K> {
     private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
 
-    public BinaryRowIO(ManageRowIO<K> manageRowIO, K filerKey,
+    public BinaryRowIO(ManageRowIO<K> manageRowIO,
+        K filerKey,
         BinaryRowReader rowReader,
         BinaryRowWriter rowWriter) throws Exception {
 

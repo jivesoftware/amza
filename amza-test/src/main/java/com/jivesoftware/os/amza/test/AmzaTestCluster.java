@@ -112,7 +112,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
@@ -325,7 +325,7 @@ public class AmzaTestCluster {
             amzaService.awaitOnline(partitionName, 10_000);
         }
 
-        public void update(PartitionName partitionName, byte[] k, byte[] v, boolean tombstone) throws Exception {
+        public void update(PartitionName partitionName, byte[] p, byte[] k, byte[] v, boolean tombstone) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
@@ -333,22 +333,22 @@ public class AmzaTestCluster {
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             long timestamp = orderIdProvider.nextId();
             if (tombstone) {
-                updates.remove(k, timestamp);
+                updates.remove(p, k, timestamp);
             } else {
-                updates.set(k, v, timestamp);
+                updates.set(p, k, v, timestamp);
             }
             clientProvider.getClient(partitionName).commit(updates, 2, 10, TimeUnit.SECONDS);
 
         }
 
-        public byte[] get(PartitionName partitionName, byte[] key) throws Exception {
+        public byte[] get(PartitionName partitionName, byte[] prefix, byte[] key) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(stream -> stream.stream(key),
-                (key1, value, timestamp) -> {
+            clientProvider.getClient(partitionName).get(stream -> stream.stream(prefix, key),
+                (_prefix, _key, value, timestamp) -> {
                     got.add(value);
                     return true;
                 });
@@ -461,12 +461,12 @@ public class AmzaTestCluster {
         private boolean compare(PartitionName partitionName, AmzaPartitionAPI a, AmzaPartitionAPI b) throws Exception {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
-            a.scan(null, null, (txid, key, aValue) -> {
+            a.scan(null, null, null, null, (txid, prefix, key, aValue) -> {
                 try {
                     compared.increment();
                     TimestampedValue[] bValues = new TimestampedValue[1];
-                    b.get(stream -> stream.stream(key),
-                        (_key, value, timestamp) -> {
+                    b.get(stream -> stream.stream(prefix, key),
+                        (_prefix, _key, value, timestamp) -> {
                             bValues[0] = new TimestampedValue(timestamp, value);
                             return true;
                         });
@@ -501,8 +501,6 @@ public class AmzaTestCluster {
                     if (aValue.getValue() != null && !Arrays.equals(aValue.getValue(), bValue.getValue())) {
                         System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(aValue.getValue())
                             + "' != '" + Arrays.toString(bValue.getValue())
-                            + "' aClass:" + aValue.getValue().getClass()
-                            + "' bClass:" + bValue.getValue().getClass()
                             + "' \n" + aValue + " vs " + bValue);
                         passed.setValue(false);
                         return false;

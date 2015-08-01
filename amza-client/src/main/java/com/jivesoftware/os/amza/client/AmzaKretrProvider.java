@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.shared.take.TakeCursors;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -59,24 +60,24 @@ public class AmzaKretrProvider { // Aka Partition Client Provider
             partitionAPIProvider.getPartition(partitionName).get(keys, valuesStream);
         }
 
-        public byte[] getValue(byte[] key) throws Exception {
-            TimestampedValue timestampedValue = getTimestampedValue(key);
+        public byte[] getValue(byte[] prefix, byte[] key) throws Exception {
+            TimestampedValue timestampedValue = getTimestampedValue(prefix, key);
             return timestampedValue != null ? timestampedValue.getValue() : null;
         }
 
-        public TimestampedValue getTimestampedValue(byte[] key) throws Exception {
+        public TimestampedValue getTimestampedValue(byte[] prefix, byte[] key) throws Exception {
             final TimestampedValue[] r = new TimestampedValue[1];
-            get(stream -> stream.stream(key),
-                (_key, value, timestamp) -> {
+            get(stream -> stream.stream(prefix, key),
+                (_prefix, _key, value, timestamp) -> {
                     r[0] = new TimestampedValue(timestamp, value);
                     return true;
                 });
             return r[0];
         }
 
-        public void scan(byte[] from, byte[] to, Scan<TimestampedValue> stream) throws Exception {
+        public void scan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, Scan<TimestampedValue> stream) throws Exception {
             // TODO impl WTF quorum scan? Really
-            partitionAPIProvider.getPartition(partitionName).scan(from, to, stream);
+            partitionAPIProvider.getPartition(partitionName).scan(fromPrefix, fromKey, toPrefix, toKey, stream);
         }
 
         public TakeCursors takeFromTransactionId(long transactionId,

@@ -5,6 +5,6 @@ package com.jivesoftware.os.amza.shared.wal;
  */
 public interface WALKeys {
 
-    boolean consume(WALKeyStream stream) throws Exception;
+    boolean consume(WALKeyStream keyStream) throws Exception;
 
 }

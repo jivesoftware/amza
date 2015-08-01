@@ -55,8 +55,8 @@ public class PartitionStore implements RangeScannable {
     }
 
     @Override
-    public boolean rangeScan(byte[] from, byte[] to, KeyValueStream txKeyValueStream) throws Exception {
-        return walStorage.rangeScan(from, to, txKeyValueStream);
+    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream txKeyValueStream) throws Exception {
+        return walStorage.rangeScan(fromPrefix, fromKey, toPrefix, toKey, txKeyValueStream);
     }
 
     public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {
@@ -67,18 +67,17 @@ public class PartitionStore implements RangeScannable {
         walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
     }
 
-    public TimestampedValue get(byte[] key) throws Exception {
-        return walStorage.get(key);
+    public TimestampedValue get(byte[] prefix, byte[] key) throws Exception {
+        return walStorage.get(prefix, key);
     }
 
-    // TODO keyValues sucks need Keys and KeyStream
-    public boolean get(WALKeys keys, KeyValueStream stream) throws Exception {
-        return walStorage.get(keys, stream);
+    public boolean streamValues(WALKeys keys, KeyValueStream stream) throws Exception {
+        return walStorage.streamValues(keys, stream);
     }
 
-    public boolean containsKey(byte[] key) throws Exception {
+    public boolean containsKey(byte[] prefix, byte[] key) throws Exception {
         boolean[] result = new boolean[1];
-        walStorage.containsKeys(stream -> stream.stream(key), (_key, contained) -> {
+        walStorage.containsKeys(stream -> stream.stream(prefix, key), (_prefix, _key, contained) -> {
             result[0] = contained;
             return true;
         });

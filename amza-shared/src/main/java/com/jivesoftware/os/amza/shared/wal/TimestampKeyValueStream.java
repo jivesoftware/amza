@@ -6,5 +6,5 @@ package com.jivesoftware.os.amza.shared.wal;
  */
 public interface TimestampKeyValueStream {
 
-    boolean stream(byte[] key, byte[] value, long timestamp) throws Exception;
+    boolean stream(byte[] prefix, byte[] key, byte[] value, long timestamp) throws Exception;
 }

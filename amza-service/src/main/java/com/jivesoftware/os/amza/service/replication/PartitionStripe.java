@@ -18,13 +18,13 @@ import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -151,7 +151,7 @@ public class PartitionStripe {
         storage.flush(fsync);
     }
 
-    public boolean get(PartitionName partitionName, byte[] key, TimestampKeyValueStream keyValueStream) throws Exception {
+    public boolean get(PartitionName partitionName, byte[] prefix, byte[] key, TimestampKeyValueStream keyValueStream) throws Exception {
         return txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -162,7 +162,7 @@ public class PartitionStripe {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
                     return storage.get(versionedPartitionName, partitionStore.getWalStorage(), (stream) -> {
-                        return stream.stream(key);
+                        return stream.stream(prefix, key);
                     }, keyValueStream);
                 }
             });
@@ -199,7 +199,13 @@ public class PartitionStripe {
             });
     }
 
-    public void rangeScan(PartitionName partitionName, byte[] from, byte[] to, KeyValueStream keyValueStream) throws Exception {
+    public void rangeScan(PartitionName partitionName,
+        byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
+        KeyValueStream keyValueStream) throws Exception {
+
         txPartitionStatus.tx(partitionName,
             (versionedPartitionName, partitionStatus) -> {
                 Preconditions.checkState(partitionStatus == TxPartitionStatus.Status.ONLINE, "Partition:%s status:%s is not online.", partitionName,
@@ -209,7 +215,7 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    storage.rangeScan(versionedPartitionName, partitionStore, from, to, keyValueStream);
+                    storage.rangeScan(versionedPartitionName, partitionStore, fromPrefix, fromKey, toPrefix, toKey, keyValueStream);
                 }
                 return null;
             });
@@ -276,19 +282,22 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    RowStream stream = (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
-                        if (rowType == RowType.primary) {
-                            return primaryRowMarshaller.fromRow(row, rowTxId, txKeyValueStream);
-                        } else if (rowType == RowType.highwater) {
-                            highwaters.highwater(highwaterRowMarshaller.fromBytes(row));
+                    WALHighwater[] highwater = new WALHighwater[1];
+                    primaryRowMarshaller.fromRows(txFpRowStream -> {
+                        RowStream stream = (rowFP, rowTxId, rowType, row) -> {
+                            if (rowType == RowType.primary) {
+                                return txFpRowStream.stream(rowTxId, rowFP, row);
+                            } else if (rowType == RowType.highwater) {
+                                highwaters.highwater(highwaterRowMarshaller.fromBytes(row));
+                            }
+                            return true;
+                        };
+                        if (storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, stream)) {
+                            highwater[0] = partitionHighwater;
                         }
                         return true;
-                    };
-                    if (storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, stream)) {
-                        return partitionHighwater;
-                    } else {
-                        return null;
-                    }
+                    }, txKeyValueStream);
+                    return highwater[0];
                 }
             });
     }

@@ -15,7 +15,7 @@ import org.testng.annotations.Test;
  */
 public class PointerIndexsNGTest {
 
-    @Test
+    @Test(enabled = false)
     public void testTx() throws Exception {
 
         ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());

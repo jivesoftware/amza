@@ -63,11 +63,13 @@ public class AmzaServiceTest {
                         if (node != null) {
                             node.create(partitionName);
                             boolean tombstone = random.nextBoolean();
-                            String key = "a-" + random.nextInt(maxFields);
+                            String prefix = "a";
+                            String key = String.valueOf(random.nextInt(maxFields));
+                            byte[] indexPrefix = prefix.getBytes();
                             byte[] indexKey = key.getBytes();
-                            node.update(partitionName, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
+                            node.update(partitionName, indexPrefix, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
-                            node.get(partitionName, indexKey);
+                            node.get(partitionName, indexPrefix, indexKey);
                         }
                     } catch (Exception x) {
                         x.printStackTrace();

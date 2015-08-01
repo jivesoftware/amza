@@ -21,17 +21,24 @@ import java.util.Arrays;
 
 public class KeyedTimestampId {
 
+    private final byte[] prefix;
     private final byte[] key;
     private final long timestamp;
     private final boolean tombstoned;
 
     @JsonCreator
-    public KeyedTimestampId(@JsonProperty("key") byte[] key,
+    public KeyedTimestampId(@JsonProperty("prefix") byte[] prefix,
+        @JsonProperty("key") byte[] key,
         @JsonProperty("timestamp") long timestamp,
         @JsonProperty("tombstoned") boolean tombstoned) {
+        this.prefix = prefix;
         this.key = key;
         this.timestamp = timestamp;
         this.tombstoned = tombstoned;
+    }
+
+    public byte[] getPrefix() {
+        return prefix;
     }
 
     public byte[] getKey() {
@@ -48,37 +55,45 @@ public class KeyedTimestampId {
 
     @Override
     public String toString() {
-        return "KeyedTimestampId{" + "key=" + key + ", timestamp=" + timestamp + ", tombstoned=" + tombstoned + '}';
+        return "KeyedTimestampId{" +
+            "prefix=" + Arrays.toString(prefix) +
+            ", key=" + Arrays.toString(key) +
+            ", timestamp=" + timestamp +
+            ", tombstoned=" + tombstoned +
+            '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        KeyedTimestampId that = (KeyedTimestampId) o;
+
+        if (timestamp != that.timestamp) {
+            return false;
+        }
+        if (tombstoned != that.tombstoned) {
+            return false;
+        }
+        if (!Arrays.equals(prefix, that.prefix)) {
+            return false;
+        }
+        return Arrays.equals(key, that.key);
+
     }
 
     @Override
     public int hashCode() {
         int hash = 7;
-        hash = 17 * hash + Arrays.hashCode(this.key);
-        hash = 17 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
-        hash = 17 * hash + (this.tombstoned ? 1 : 0);
+        hash = 17 * hash + (prefix != null ? Arrays.hashCode(prefix) : 0);
+        hash = 17 * hash + (key != null ? Arrays.hashCode(key) : 0);
+        hash = 17 * hash + (int) (timestamp ^ (timestamp >>> 32));
+        hash = 17 * hash + (tombstoned ? 1 : 0);
         return hash;
     }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final KeyedTimestampId other = (KeyedTimestampId) obj;
-        if (!Arrays.equals(this.key, other.key)) {
-            return false;
-        }
-        if (this.timestamp != other.timestamp) {
-            return false;
-        }
-        if (this.tombstoned != other.tombstoned) {
-            return false;
-        }
-        return true;
-    }
-
 }

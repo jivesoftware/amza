@@ -20,12 +20,14 @@ public interface AmzaPartitionAPI {
     boolean get(WALKeys keys, TimestampKeyValueStream valuesStream) throws Exception;
 
     /**
-     * @param from   nullable (inclusive)
-     * @param to     nullable (exclusive)
+     * @param fromPrefix   nullable (inclusive)
+     * @param fromKey      nullable (inclusive)
+     * @param toPrefix     nullable (exclusive)
+     * @param toKey        nullable (exclusive)
      * @param stream
      * @throws Exception
      */
-    void scan(byte[] from, byte[] to, Scan<TimestampedValue> stream) throws Exception;
+    void scan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, Scan<TimestampedValue> stream) throws Exception;
 
     TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception;
 

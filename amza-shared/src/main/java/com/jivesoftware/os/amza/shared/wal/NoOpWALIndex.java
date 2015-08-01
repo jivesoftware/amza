@@ -10,9 +10,9 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {
-        return pointers.consume((long txId, byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+        return pointers.consume((txId, prefix, key, timestamp, tombstoned, fp) -> {
             if (stream != null) {
-                if (!stream.stream(WALMergeKeyPointerStream.ignored, txId, key, timestamp, tombstoned, fp)) {
+                if (!stream.stream(WALMergeKeyPointerStream.ignored, txId, prefix, key, timestamp, tombstoned, fp)) {
                     return false;
                 }
             }
@@ -21,24 +21,24 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception {
-        return stream.stream(key, -1, false, -1);
+    public boolean getPointer(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception {
+        return stream.stream(prefix, key, -1, false, -1);
     }
 
     @Override
     public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
-        return keys.consume(key -> stream.stream(key, -1, false, -1));
+        return keys.consume((prefix, key) -> stream.stream(prefix, key, -1, false, -1));
     }
 
     @Override
-    public boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((key, value, valueTimestamp, valueTombstoned) ->
-            stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1));
+    public boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
+        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned) ->
+            stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, -1, false, -1));
     }
 
     @Override
     public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
-        return keys.consume(key -> stream.stream(key, false));
+        return keys.consume((prefix, key) -> stream.stream(prefix, key, false));
     }
 
     @Override
@@ -91,7 +91,7 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean rangeScan(byte[] from, byte[] to, WALKeyPointerStream stream) throws Exception {
+    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream) throws Exception {
         return true;
     }
 

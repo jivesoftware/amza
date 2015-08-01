@@ -7,5 +7,5 @@ import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
  */
 public interface RangeScannable extends Scannable {
 
-    boolean rangeScan(byte[] from, byte[] to, KeyValueStream scan) throws Exception;
+    boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream keyValueStream) throws Exception;
 }

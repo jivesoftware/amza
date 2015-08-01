@@ -89,7 +89,7 @@ public class WALKey {
 
     public interface TxFpRawKeyValueStream {
 
-        boolean stream(long txId, long fp, byte[] rawKey, byte[] value, long valueTimestamp, boolean valueTombstoned) throws Exception;
+        boolean stream(long txId, long fp, byte[] rawKey, byte[] value, long valueTimestamp, boolean valueTombstoned, byte[] row) throws Exception;
     }
 
     public interface WALKeyEntryStream<R> {
@@ -98,7 +98,7 @@ public class WALKey {
     }
 
     public static boolean decompose(TxFpRawKeyValues keyValues, TxFpKeyValueStream stream) throws Exception {
-        return keyValues.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned) -> {
+        return keyValues.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned, row) -> {
             byte precision = rawKey[0];
             int prefixLengthInBytes;
             if (precision == 0) {
@@ -116,7 +116,7 @@ public class WALKey {
                 System.arraycopy(rawKey, 1 + precision, prefix, 0, prefixLengthInBytes);
             }
             System.arraycopy(rawKey, 1 + precision + prefixLengthInBytes, key, 0, key.length);
-            return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, null);
+            return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row);
         });
     }
 

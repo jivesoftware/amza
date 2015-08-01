@@ -44,7 +44,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
                 boolean tombstone = UIO.readBoolean(filer, "tombstone");
                 byte[] value = UIO.readByteArray(filer, "value");
                 byte[] key = UIO.readByteArray(filer, "key");
-                return stream.stream(-1, fp, key, value, timestamp, tombstone);
+                return stream.stream(-1, fp, key, value, timestamp, tombstone, row);
             }),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
                 fpKeyValueStream.stream(fp, prefix, key, value, valueTimestamp, valueTombstoned));
@@ -59,7 +59,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
                 boolean tombstone = UIO.readBoolean(filer, "tombstone");
                 byte[] value = UIO.readByteArray(filer, "value");
                 byte[] key = UIO.readByteArray(filer, "key");
-                return stream.stream(txId, fp, key, value, timestamp, tombstone);
+                return stream.stream(txId, fp, key, value, timestamp, tombstone, row);
             }),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
                 txKeyValueStream.row(txId, prefix, key, value, valueTimestamp, valueTombstoned));
@@ -74,7 +74,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
                 boolean tombstone = UIO.readBoolean(filer, "tombstone");
                 byte[] value = UIO.readByteArray(filer, "value");
                 byte[] key = UIO.readByteArray(filer, "key");
-                return stream.stream(txId, fp, key, value, timestamp, tombstone);
+                return stream.stream(txId, fp, key, value, timestamp, tombstone, row);
             }),
             txFpKeyValueStream);
     }

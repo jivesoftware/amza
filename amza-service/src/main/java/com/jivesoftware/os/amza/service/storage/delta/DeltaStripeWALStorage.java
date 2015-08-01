@@ -593,14 +593,14 @@ public class DeltaStripeWALStorage {
                     if (d != null || iterator.hasNext()) {
                         if (d != null) {
                             WALValue got = d.getValue();
-                            if (!fpRawKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
+                            if (!fpRawKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
                                 return false;
                             }
                         }
                         while (iterator.hasNext()) {
                             d = iterator.next();
                             WALValue got = d.getValue();
-                            if (!fpRawKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
+                            if (!fpRawKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
                                 return false;
                             }
                         }
@@ -630,14 +630,14 @@ public class DeltaStripeWALStorage {
                         Map.Entry<byte[], WALValue> last = d;
                         if (last != null) {
                             WALValue got = last.getValue();
-                            if (!fpRawKeyValueStream.stream(-1, -1, last.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
+                            if (!fpRawKeyValueStream.stream(-1, -1, last.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
                                 return false;
                             }
                         }
                         while (iterator.hasNext()) {
                             last = iterator.next();
                             WALValue got = last.getValue();
-                            if (!fpRawKeyValueStream.stream(-1, -1, last.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
+                            if (!fpRawKeyValueStream.stream(-1, -1, last.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
                                 return false;
                             }
                         }
@@ -697,7 +697,7 @@ public class DeltaStripeWALStorage {
                         if (Arrays.equals(d.getKey(), pk)) {
                             needsKey[0] = false;
                         }
-                        if (!txFpKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
+                        if (!txFpKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
                             return false;
                         }
                         if (iterator.hasNext()) {

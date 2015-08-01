@@ -285,7 +285,7 @@ class PartitionDelta {
                                             throw new RuntimeException("Delta WAL missing key: " + Arrays.toString(key));
                                         }
                                         if (pointer.getFp() == fp) {
-                                            if (!txFpRawKeyValueStream.stream(txId, fp, key, value, valueTimestamp, valueTombstone)) {
+                                            if (!txFpRawKeyValueStream.stream(txId, fp, key, value, valueTimestamp, valueTombstone, null)) {
                                                 return false;
                                             }
                                             if (highwater != null) {

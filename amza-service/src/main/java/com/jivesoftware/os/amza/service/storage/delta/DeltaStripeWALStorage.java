@@ -185,14 +185,10 @@ public class DeltaStripeWALStorage {
                                     if (partitionValue == null || partitionValue.getTimestampId() < valueTimestamp) {
                                         WALPointer got = delta.getPointer(prefix, key);
                                         if (got == null || got.getTimestampId() < valueTimestamp) {
-                                            boolean completed = wal.hydrateKeyValueHighwaters(stream -> stream.stream(fp),
-                                                (_fp, loadPrefix, loadKey, loadValue, loadValueTimestamp, loadValueTombstoned, highwater) -> {
-                                                    delta.put(fp, loadPrefix, loadKey, loadValue, loadValueTimestamp, loadValueTombstoned, highwater);
-                                                    delta.appendTxFps(txId, fp);
-                                                    return true;
-                                                });
+                                            delta.put(fp, prefix, key, valueTimestamp, valueTombstoned);
+                                            delta.appendTxFps(txId, fp);
                                             updateSinceLastMerge.incrementAndGet();
-                                            return completed;
+                                            return true;
                                         }
                                     }
                                 } finally {
@@ -207,9 +203,7 @@ public class DeltaStripeWALStorage {
 
         amzaStats.deltaStripeLoad(index, updateSinceLastMerge.get(), (double) updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
 
-        if (updateSinceLastMerge.get() > mergeAfterNUpdates)
-
-        {
+        if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
             synchronized (awakeCompactionsLock) {
                 awakeCompactionsLock.notifyAll();
             }
@@ -426,10 +420,8 @@ public class DeltaStripeWALStorage {
                             delta.put(fp,
                                 keyValueHighwater.prefix,
                                 keyValueHighwater.key,
-                                keyValueHighwater.value,
                                 keyValueHighwater.valueTimestamp,
-                                keyValueHighwater.valueTombstone,
-                                keyValueHighwater.highwater);
+                                keyValueHighwater.valueTombstone);
                         } else {
                             apply.remove(new WALKey(keyValueHighwater.prefix, keyValueHighwater.key));
                         }

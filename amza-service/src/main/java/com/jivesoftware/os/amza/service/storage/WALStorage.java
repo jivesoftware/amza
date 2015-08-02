@@ -233,8 +233,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 return true;
             };
 
-            primaryRowMarshaller.fromRows(fpRowStream -> {
-                return walTx.read((WALReader rowReader) -> {
+            MutableLong keys = new MutableLong(0);
+            MutableLong clobbers = new MutableLong(0);
+            boolean completed = primaryRowMarshaller.fromRows(fpRowStream -> {
+                return walTx.read(rowReader -> {
                     rowReader.reverseScan((rowFP, rowTxId, rowType, row) -> {
                         if (rowTxId > lastTxId.longValue()) {
                             lastTxId.setValue(rowTxId);
@@ -245,8 +247,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             if (key == RowType.COMPACTION_HINTS_KEY) {
                                 long[] parts = UIO.bytesLongs(row);
                                 if (needCompactionHints.booleanValue()) {
-                                    keyCount.set(parts[1]);
-                                    clobberCount.set(parts[2]);
+                                    keys.add(parts[1]);
+                                    clobbers.add(parts[2]);
                                     needCompactionHints.setValue(false);
                                 }
                                 if (needKeyHighwaterStripes.booleanValue()) {
@@ -259,8 +261,11 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                 }
                             }
                         }
-                        if (needKeyHighwaterStripes.booleanValue() && rowType == RowType.primary) {
-                            if (!fpRowStream.stream(rowFP, row)) {
+                        if (rowType == RowType.primary) {
+                            if (needCompactionHints.booleanValue()) {
+                                keys.increment();
+                            }
+                            if (needKeyHighwaterStripes.booleanValue() && !fpRowStream.stream(rowFP, row)) {
                                 return false;
                             }
                         }
@@ -270,6 +275,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     return true;
                 });
             }, mergeStripedKeyHighwaters);
+
+            if (!completed) {
+                throw new IllegalStateException("WALStorage failed to load completely for: " + versionedPartitionName);
+            }
+
+            keyCount.set(keys.longValue());
+            clobberCount.set(clobbers.longValue());
 
             if (!highestTxId.compareAndSet(0, lastTxId.longValue())) {
                 throw new RuntimeException("Load should have completed before highestTxId:" + highestTxId.get() + " is modified.");

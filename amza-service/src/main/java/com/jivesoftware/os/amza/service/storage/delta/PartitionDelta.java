@@ -135,10 +135,8 @@ class PartitionDelta {
     void put(long fp,
         byte[] prefix,
         byte[] key,
-        byte[] value,
         long valueTimestamp,
-        boolean valueTombstone,
-        WALHighwater highwater) {
+        boolean valueTombstone) {
 
         WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone);
         WALKey walKey = new WALKey(prefix, key);
@@ -284,7 +282,10 @@ class PartitionDelta {
                                         // prefix is the partitionName and is discarded
                                         WALPointer pointer = merge.orderedIndex.get(key);
                                         if (pointer == null) {
-                                            throw new RuntimeException("Delta WAL missing key: " + Arrays.toString(key));
+                                            throw new RuntimeException("Delta WAL missing" +
+                                                " prefix: " + Arrays.toString(prefix) +
+                                                " key: " + Arrays.toString(key) +
+                                                " for: " + versionedPartitionName);
                                         }
                                         if (pointer.getFp() == fp) {
                                             if (!txFpRawKeyValueStream.stream(txId, fp, key, value, valueTimestamp, valueTombstone, null)) {

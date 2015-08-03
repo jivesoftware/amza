@@ -9,7 +9,7 @@ import java.util.List;
  */
 public class BerkeleyDBWALIndexName {
 
-    public static enum Prefix {
+    public enum Type {
 
         active,
         compacting,
@@ -17,32 +17,36 @@ public class BerkeleyDBWALIndexName {
         backup;
     }
 
-    private final Prefix prefix;
+    private final Type type;
     private final String name;
 
-    public BerkeleyDBWALIndexName(Prefix prefix, String name) {
-        this.prefix = prefix;
+    public BerkeleyDBWALIndexName(Type type, String name) {
+        this.type = type;
         this.name = name;
     }
 
-    public String getName() {
-        return prefix.toString() + "-" + name;
+    public String getPrimaryName() {
+        return "primary-" + type.toString() + "-" + name;
     }
 
-    public BerkeleyDBWALIndexName prefixName(Prefix prefix) {
-        return new BerkeleyDBWALIndexName(prefix, name);
+    public String getPrefixName() {
+        return "prefix-" + type.toString() + "-" + name;
+    }
+
+    public BerkeleyDBWALIndexName typeName(Type type) {
+        return new BerkeleyDBWALIndexName(type, name);
     }
 
     public List<BerkeleyDBWALIndexName> all() {
         List<BerkeleyDBWALIndexName> all = new ArrayList<>();
-        for (Prefix v : Prefix.values()) {
-            all.add(prefixName(v));
+        for (Type v : Type.values()) {
+            all.add(typeName(v));
         }
         return all;
     }
 
     @Override
     public String toString() {
-        return "BerkeleyDBWALIndexName{" + "prefix=" + prefix + ", name=" + name + '}';
+        return "BerkeleyDBWALIndexName{" + "type=" + type + ", name=" + name + '}';
     }
 }

@@ -15,9 +15,10 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.google.common.primitives.UnsignedBytes;
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.util.Arrays;
+import java.util.Comparator;
 
 public class WALKey {
 
@@ -36,40 +37,24 @@ public class WALKey {
     }
 
     public static byte[] compose(byte[] prefix, byte[] key) {
-        if (key == null) {
-            return null;
-        }
+        Preconditions.checkNotNull(key, "Key cannot be null");
+
         int prefixLength = prefix != null ? prefix.length : 0;
-        if (prefixLength == 0) {
-            byte[] pk = new byte[1 + key.length];
-            System.arraycopy(key, 0, pk, 1, key.length);
-            return pk;
-        } else if (prefixLength <= Byte.MAX_VALUE) {
-            byte[] pk = new byte[1 + 1 + prefix.length + key.length];
-            pk[0] = 1;
-            pk[1] = (byte) prefixLength;
-            System.arraycopy(prefix, 0, pk, 1 + 1, prefix.length);
-            System.arraycopy(key, 0, pk, 1 + 1 + prefix.length, key.length);
-            return pk;
-        } else if (prefixLength <= Short.MAX_VALUE) {
-            byte[] pk = new byte[1 + 2 + prefix.length + key.length];
-            pk[0] = 2;
-            UIO.shortBytes((short) prefixLength, pk, 1);
-            System.arraycopy(prefix, 0, pk, 1 + 2, prefix.length);
-            System.arraycopy(key, 0, pk, 1 + 2 + prefix.length, key.length);
-            return pk;
-        } else {
-            byte[] pk = new byte[1 + 4 + prefix.length + key.length];
-            pk[0] = 4;
-            UIO.intBytes(prefixLength, pk, 1);
-            System.arraycopy(prefix, 0, pk, 1 + 4, prefix.length);
-            System.arraycopy(key, 0, pk, 1 + 4 + prefix.length, key.length);
-            return pk;
+        Preconditions.checkArgument(prefixLength <= Short.MAX_VALUE, "Max prefix length is %s", Short.MAX_VALUE);
+
+        byte[] pk = new byte[2 + prefixLength + key.length];
+        UIO.shortBytes((short) prefixLength, pk, 0);
+        if (prefix != null) {
+            System.arraycopy(prefix, 0, pk, 2, prefixLength);
         }
+        System.arraycopy(key, 0, pk, 2 + prefixLength, key.length);
+        return pk;
     }
 
+    private static final Comparator<byte[]> LEX_COMPARATOR = KeyUtil.lexicographicalComparator();
+
     public static int compare(byte[] composedA, byte[] composedB) {
-        return UnsignedBytes.lexicographicalComparator().compare(composedA, composedB);
+        return LEX_COMPARATOR.compare(composedA, composedB);
     }
 
     public interface TxFpRawKeyValueEntries<R> {
@@ -89,23 +74,13 @@ public class WALKey {
 
     public static <R> boolean decompose(TxFpRawKeyValueEntries<R> keyEntries, TxFpKeyValueEntryStream<R> stream) throws Exception {
         return keyEntries.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned, entry) -> {
-            byte precision = rawKey[0];
-            int prefixLengthInBytes;
-            if (precision == 0) {
-                prefixLengthInBytes = 0;
-            } else if (precision == 1) {
-                prefixLengthInBytes = rawKey[1];
-            } else if (precision == 2) {
-                prefixLengthInBytes = UIO.bytesShort(rawKey, 1);
-            } else {
-                prefixLengthInBytes = UIO.bytesInt(rawKey, 1);
-            }
+            short prefixLengthInBytes = UIO.bytesShort(rawKey);
             byte[] prefix = prefixLengthInBytes > 0 ? new byte[prefixLengthInBytes] : null;
-            byte[] key = new byte[rawKey.length - 1 - precision - prefixLengthInBytes];
+            byte[] key = new byte[rawKey.length - 2 - prefixLengthInBytes];
             if (prefix != null) {
-                System.arraycopy(rawKey, 1 + precision, prefix, 0, prefixLengthInBytes);
+                System.arraycopy(rawKey, 2, prefix, 0, prefixLengthInBytes);
             }
-            System.arraycopy(rawKey, 1 + precision + prefixLengthInBytes, key, 0, key.length);
+            System.arraycopy(rawKey, 2 + prefixLengthInBytes, key, 0, key.length);
             return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry);
         });
     }

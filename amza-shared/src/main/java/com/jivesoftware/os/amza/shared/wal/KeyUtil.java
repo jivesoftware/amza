@@ -41,7 +41,14 @@ public class KeyUtil {
                     return c;
                 }
 
-                return keyComparison.compare(o1, PREFIX_OFFSET, o1.length - PREFIX_OFFSET - len1, o2, PREFIX_OFFSET, o2.length - PREFIX_OFFSET - len2);
+                int keyOffset1 = PREFIX_OFFSET + len1;
+                int keyOffset2 = PREFIX_OFFSET + len2;
+                return keyComparison.compare(o1,
+                    keyOffset1,
+                    o1.length - keyOffset1,
+                    o2,
+                    keyOffset2,
+                    o2.length - keyOffset2);
             };
         }
     }

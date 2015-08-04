@@ -13,7 +13,7 @@ import java.io.IOException;
  */
 public class PointerIndex implements ConcurrentReadablePointerIndex, AppendablePointerIndex {
 
-    private static final int INDEX_ENTRY_SIZE = 8 + 4 + 8 + 1 + 8; // keyFp+ keyLength + timestamp + tombstone + walPointer
+    private static final int INDEX_ENTRY_SIZE = 4 + 8 + 4 + 8 + 1 + 8; // sortIndex + keyFp+ keyLength + timestamp + tombstone + walPointer
 
     private final DiskBackedPointerIndexFiler index;
     private final DiskBackedPointerIndexFiler keys;
@@ -42,7 +42,7 @@ public class PointerIndex implements ConcurrentReadablePointerIndex, AppendableP
         writeIndex.seek(0);
 
         long[] keyFp = new long[]{keys.getFilePointer()};
-        pointers.consume((sortIndex, key, timestamp, tombstoned,  walPointer) -> {
+        pointers.consume((sortIndex, key, timestamp, tombstoned, walPointer) -> {
             UIO.writeInt(writeIndex, sortIndex, "sortIndex");
             UIO.writeLong(writeIndex, keyFp[0], "keyFp");
             UIO.writeInt(writeIndex, key.length, "keyLength");
@@ -115,6 +115,7 @@ public class PointerIndex implements ConcurrentReadablePointerIndex, AppendableP
 
         private void fillOffsetAndLength(int index) throws Exception {
             readableIndex.seek(index * INDEX_ENTRY_SIZE);
+            int sortIndex = UIO.readInt(readableIndex, "sortIndex");
             offsetAndLength[0] = UIO.readLong(readableIndex, "keyFp");
             offsetAndLength[1] = UIO.readInt(readableIndex, "keyLength");
         }
@@ -142,7 +143,7 @@ public class PointerIndex implements ConcurrentReadablePointerIndex, AppendableP
                         int[] i = new int[]{0};
                         return (stream) -> {
                             if (i[0] == 0) {
-                                readableIndex.seek((_mid * INDEX_ENTRY_SIZE) + 8 + 4);
+                                readableIndex.seek((_mid * INDEX_ENTRY_SIZE) + 4+ 8 + 4);
                                 i[0]++;
                                 return stream.stream(_mid, fromKey,
                                     UIO.readLong(readableIndex, "timestamp"),
@@ -196,6 +197,7 @@ public class PointerIndex implements ConcurrentReadablePointerIndex, AppendableP
 
         private boolean stream(int i, byte[] stopKeyExclusive, PointerStream stream) throws Exception {
             readableIndex.seek(i * INDEX_ENTRY_SIZE);
+            int sortIndex = UIO.readInt(readableIndex, "sortIndex");
             long keyFp = UIO.readLong(readableIndex, "keyFp");
             int keyLength = UIO.readInt(readableIndex, "keyLength");
             long timestamp = UIO.readLong(readableIndex, "timestamp");

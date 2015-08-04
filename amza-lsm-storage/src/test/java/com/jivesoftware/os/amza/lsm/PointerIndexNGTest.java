@@ -15,7 +15,7 @@ import org.testng.annotations.Test;
  */
 public class PointerIndexNGTest {
 
-    @Test(enabled = false)
+    @Test(enabled = true)
     public void testDisk() throws Exception {
         File indexFiler = File.createTempFile("b-index", ".tmp");
         File keysFile = File.createTempFile("b-keys", ".tmp");
@@ -25,14 +25,14 @@ public class PointerIndexNGTest {
         int count = 10;
         int step = 10;
 
-        PointerIndex walIndex = new PointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+        PointerIndex pointerIndex = new PointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
             new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
-        PointerIndexUtils.append(walIndex, 0, step, count, desired);
-        assertions(walIndex, count, step, desired);
+        PointerIndexUtils.append(pointerIndex, 0, step, count, desired);
+        assertions(pointerIndex, count, step, desired);
     }
 
-    @Test(enabled = false)
+    @Test(enabled = true)
     public void testMemory() throws Exception {
 
         ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
@@ -46,7 +46,7 @@ public class PointerIndexNGTest {
         assertions(walIndex, count, step, desired);
     }
 
-    @Test(enabled = false)
+    @Test(enabled = true)
     public void testMemoryToDisk() throws Exception {
 
         ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());

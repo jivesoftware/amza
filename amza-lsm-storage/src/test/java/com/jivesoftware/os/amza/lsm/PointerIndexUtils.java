@@ -19,12 +19,13 @@ public class PointerIndexUtils {
     static final Random rand = new Random();
     static OrderIdProvider timeProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
 
-    static void append(AppendablePointerIndex walIndex,
+    static void append(AppendablePointerIndex appendablePointerIndex,
         long start,
         int step,
         int count,
         ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws Exception {
-        walIndex.append((stream) -> {
+
+        appendablePointerIndex.append((stream) -> {
             long k = start + rand.nextInt(step);
             for (int i = 0; i < count; i++) {
                 long walFp = Math.abs(rand.nextLong());
@@ -58,7 +59,7 @@ public class PointerIndexUtils {
         int[] index = new int[1];
         NextPointer rowScan = indexs.rowScan();
         PointerStream stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
-            //System.out.println(UIO.bytesLong(keys.get(index[0]))+" "+UIO.bytesLong(key));
+            System.out.println("scanned:" + UIO.bytesLong(keys.get(index[0])) + " " + UIO.bytesLong(key));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
             return true;

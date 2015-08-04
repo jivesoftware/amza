@@ -1,15 +1,15 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
-import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Type;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.MergeTxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.wal.TxFpStream;
 import com.jivesoftware.os.amza.shared.wal.TxKeyPointers;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -68,7 +68,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
         // Open the database, creating one if it does not exist
         this.prefixDbConfig = new DatabaseConfig()
             .setAllowCreate(true)
-            .setBtreeComparator(UnsignedBytes.lexicographicalComparator());
+            .setBtreeComparator(KeyUtil.lexicographicalComparator());
         this.prefixDb = environment.openDatabase(null, name.getPrefixName(), prefixDbConfig);
     }
 
@@ -133,10 +133,14 @@ public class BerkeleyDBWALIndex implements WALIndex {
             throw new RuntimeException(ie);
         }
         try {
+            DatabaseEntry dbKey = new DatabaseEntry();
             DatabaseEntry dbValue = new DatabaseEntry();
+            byte[] txFpBytes = new byte[16];
+            byte[] emptyValue = new byte[0];
             return pointers.consume((txId, prefix, key, timestamp, tombstoned, fp) -> {
                 byte[] pk = WALKey.compose(prefix, key);
-                OperationStatus status = primaryDb.get(null, new DatabaseEntry(pk), dbValue, LockMode.READ_UNCOMMITTED);
+                dbKey.setData(pk);
+                OperationStatus status = primaryDb.get(null, dbKey, dbValue, LockMode.READ_UNCOMMITTED);
                 byte mode;
                 if (status == OperationStatus.SUCCESS) {
                     mode = (entryToTimestamp(dbValue.getData()) < timestamp) ? WALMergeKeyPointerStream.clobbered : WALMergeKeyPointerStream.ignored;
@@ -145,7 +149,16 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 }
                 if (mode != WALMergeKeyPointerStream.ignored) {
                     walPointerToEntry(fp, timestamp, tombstoned, dbValue);
-                    primaryDb.put(null, new DatabaseEntry(pk), dbValue);
+                    primaryDb.put(null, dbKey, dbValue);
+
+                    if (prefix != null) {
+                        UIO.longBytes(txId, txFpBytes, 0);
+                        UIO.longBytes(fp, txFpBytes, 8);
+                        byte[] prefixTxFp = WALKey.compose(prefix, txFpBytes);
+                        dbKey.setData(prefixTxFp);
+                        dbValue.setData(emptyValue);
+                        prefixDb.put(null, dbKey, dbValue);
+                    }
                 }
                 if (stream != null) {
                     return stream.stream(mode, txId, prefix, key, timestamp, tombstoned, fp);
@@ -153,7 +166,36 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     return true;
                 }
             });
+        } finally {
+            lock.release();
+        }
+    }
 
+    @Override
+    public boolean takePrefixUpdatesSince(byte[] prefix, long sinceTransactionId, TxFpStream txFpStream) throws Exception {
+        lock.acquire();
+        try (Cursor cursor = prefixDb.openCursor(null, null)) {
+            byte[] fromFpPk = WALKey.compose(prefix, new byte[0]);
+            byte[] toFpPk = WALKey.prefixUpperExclusive(fromFpPk);
+            DatabaseEntry keyEntry = new DatabaseEntry(fromFpPk);
+            DatabaseEntry valueEntry = new DatabaseEntry();
+            valueEntry.setPartial(true);
+            return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
+                do {
+                    if (KeyUtil.compare(keyEntry.getData(), toFpPk) >= 0) {
+                        return false;
+                    }
+                    if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, null)) {
+                        return false;
+                    }
+                }
+                while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                return true;
+            }, (txId, fp, _prefix, key, value, valueTimestamp, valueTombstoned, entry) -> {
+                long takeTxId = UIO.bytesLong(key, 0);
+                long takeFp = UIO.bytesLong(key, 8);
+                return txFpStream.stream(takeTxId, takeFp);
+            });
         } finally {
             lock.release();
         }
@@ -300,6 +342,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
         try {
             primaryDb.close();
             primaryDb = null;
+            prefixDb.close();
+            prefixDb = null;
         } finally {
             lock.release(numPermits);
         }
@@ -334,7 +378,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
             DatabaseEntry valueEntry = new DatabaseEntry();
             return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
                 do {
-                    if (toPk != null && WALKey.compare(keyEntry.getData(), toPk) >= 0) {
+                    if (toPk != null && KeyUtil.compare(keyEntry.getData(), toPk) >= 0) {
                         return false;
                     }
                     if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, valueEntry.getData())) {
@@ -355,11 +399,11 @@ public class BerkeleyDBWALIndex implements WALIndex {
         synchronized (compactingTo) {
             WALIndex got = compactingTo.get();
             if (got != null) {
-                throw new IllegalStateException("Try to compact while another compaction is already underway: " + name);
+                throw new IllegalStateException("Tried to compact while another compaction is already underway: " + name);
             }
 
-            if (primaryDb == null) {
-                throw new IllegalStateException("Try to compact a index that has been expunged: " + name);
+            if (primaryDb == null || prefixDb == null) {
+                throw new IllegalStateException("Tried to compact a index that has been expunged: " + name);
             }
 
             removeDatabase(Type.compacting);
@@ -391,7 +435,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     lock.acquire(numPermits);
                     try {
                         compactingTo.set(null);
-                        if (primaryDb == null) {
+                        if (primaryDb == null || prefixDb == null) {
                             LOG.warn("Was not commited because index has been closed.");
                         } else {
                             LOG.info("Committing before swap: {}", name.getPrimaryName());
@@ -401,12 +445,15 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
                             primaryDb.close();
                             primaryDb = null;
+                            prefixDb.close();
+                            prefixDb = null;
                             renameDatabase(Type.active, Type.backup);
 
                             renameDatabase(Type.compacted, Type.active);
                             removeDatabase(Type.backup);
 
                             primaryDb = environment.openDatabase(null, name.getPrimaryName(), primaryDbConfig);
+                            prefixDb = environment.openDatabase(null, name.getPrefixName(), prefixDbConfig);
 
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }
@@ -420,11 +467,17 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
     private void renameDatabase(Type fromType, Type toType) {
         environment.renameDatabase(null, name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName());
+        environment.renameDatabase(null, name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName());
     }
 
     private void removeDatabase(Type type) {
         try {
             environment.removeDatabase(null, name.typeName(type).getPrimaryName());
+        } catch (DatabaseNotFoundException e) {
+            // yummm
+        }
+        try {
+            environment.removeDatabase(null, name.typeName(type).getPrefixName());
         } catch (DatabaseNotFoundException e) {
             // yummm
         }

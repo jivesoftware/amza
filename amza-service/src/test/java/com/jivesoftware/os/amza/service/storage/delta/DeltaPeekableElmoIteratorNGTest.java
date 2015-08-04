@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.wal.FpKeyValueHighwaterStream;
 import com.jivesoftware.os.amza.shared.wal.FpKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.Fps;
+import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
@@ -29,8 +30,8 @@ public class DeltaPeekableElmoIteratorNGTest {
     @Test
     public void testSimple() throws Exception {
         for (int r = 0; r < 10; r++) {
-            ConcurrentSkipListMap<byte[], WALPointer> wal = new ConcurrentSkipListMap<>(WALKey::compare);
-            ConcurrentSkipListMap<byte[], WALPointer> other = new ConcurrentSkipListMap<>(WALKey::compare);
+            ConcurrentSkipListMap<byte[], WALPointer> wal = new ConcurrentSkipListMap<>(KeyUtil::compare);
+            ConcurrentSkipListMap<byte[], WALPointer> other = new ConcurrentSkipListMap<>(KeyUtil::compare);
             Random rand = new Random();
             NavigableSet<Byte> expected = new TreeSet<>();
             NavigableSet<Byte> expectedBoth = new TreeSet<>();

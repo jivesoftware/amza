@@ -25,6 +25,8 @@ public interface WALIndex extends RangeScannablePointers {
 
     boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception;
 
+    boolean takePrefixUpdatesSince(byte[] prefix, long sinceTransactionId, TxFpStream txFpStream) throws Exception;
+
     boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception;
 
     long size() throws Exception;

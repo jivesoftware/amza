@@ -86,6 +86,11 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
+    public boolean takePrefixUpdatesSince(byte[] prefix, long sinceTransactionId, TxFpStream txFpStream) throws Exception {
+        return true;
+    }
+
+    @Override
     public boolean rowScan(WALKeyPointerStream stream) throws Exception {
         return true;
     }

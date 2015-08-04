@@ -51,12 +51,6 @@ public class WALKey {
         return pk;
     }
 
-    private static final Comparator<byte[]> LEX_COMPARATOR = KeyUtil.lexicographicalComparator();
-
-    public static int compare(byte[] composedA, byte[] composedB) {
-        return LEX_COMPARATOR.compare(composedA, composedB);
-    }
-
     public interface TxFpRawKeyValueEntries<R> {
 
         boolean consume(TxFpRawKeyValueEntryStream<R> txFpRawKeyValueEntryStream) throws Exception;

@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.AbstractMap;
@@ -53,7 +53,7 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>>
             cNext = compactingIterator.next();
         }
         if (iNext != null && cNext != null) {
-            int compare = WALKey.compare(iNext.getKey(), cNext.getKey());
+            int compare = KeyUtil.compare(iNext.getKey(), cNext.getKey());
             if (compare == 0) {
                 if (iNext.getValue().getTimestampId() > cNext.getValue().getTimestampId()) {
                     last = hydrate(iNext, hydrator);

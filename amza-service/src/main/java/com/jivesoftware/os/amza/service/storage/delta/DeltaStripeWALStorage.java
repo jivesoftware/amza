@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.shared.scan.Scannable;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyValues;
@@ -186,7 +187,7 @@ public class DeltaStripeWALStorage {
                                         WALPointer got = delta.getPointer(prefix, key);
                                         if (got == null || got.getTimestampId() < valueTimestamp) {
                                             delta.put(fp, prefix, key, valueTimestamp, valueTombstoned);
-                                            delta.appendTxFps(txId, fp);
+                                            delta.onLoadAppendTxFp(txId, fp);
                                             updateSinceLastMerge.incrementAndGet();
                                             return true;
                                         }
@@ -695,7 +696,7 @@ public class DeltaStripeWALStorage {
             byte[] pk = WALKey.compose(prefix, key);
             boolean complete = WALKey.decompose(
                 txFpKeyValueStream -> {
-                    while (d != null && WALKey.compare(d.getKey(), pk) <= 0) {
+                    while (d != null && KeyUtil.compare(d.getKey(), pk) <= 0) {
                         WALValue got = d.getValue();
                         if (Arrays.equals(d.getKey(), pk)) {
                             needsKey[0] = false;

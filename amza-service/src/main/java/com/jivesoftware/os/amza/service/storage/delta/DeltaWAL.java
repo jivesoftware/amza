@@ -18,9 +18,7 @@ import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import java.nio.ByteBuffer;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -130,21 +128,21 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
         return new DeltaWALApplied(txId.longValue(), keyValueHighwaters, fps);
     }
 
-    boolean takeRows(final NavigableMap<Long, long[]> tailMap,
-        RowStream rowStream) throws Exception {
+    public interface ConsumeTxFps {
+        boolean consume(TxFpsStream txFpsStream) throws Exception;
+    }
+
+    boolean takeRows(ConsumeTxFps consumeTxFps, RowStream rowStream) throws Exception {
         return wal.read(reader -> primaryRowMarshaller.fromRows(
-            txFpRowStream -> {
-                for (Long txId : tailMap.keySet()) {
-                    long[] rowFPs = tailMap.get(txId);
-                    for (long fp : rowFPs) {
-                        byte[] rawRow = reader.read(fp);
-                        if (!txFpRowStream.stream(txId, fp, rawRow)) {
-                            return false;
-                        }
+            txFpRowStream -> consumeTxFps.consume(txFps -> {
+                for (long fp : txFps.fps) {
+                    byte[] rawRow = reader.read(fp);
+                    if (!txFpRowStream.stream(txFps.txId, fp, rawRow)) {
+                        return false;
                     }
                 }
                 return true;
-            },
+            }),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
                 HeapFiler filer = new HeapFiler(value);
                 byte[] deltaRow = primaryRowMarshaller.toRow(key, UIO.readByteArray(filer, "value"), valueTimestamp, valueTombstoned);

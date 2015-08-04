@@ -15,14 +15,19 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
+import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 public class MemoryWALIndex implements WALIndex {
 
-    private final ConcurrentSkipListMap<byte[], WALPointer> index = new ConcurrentSkipListMap<>(WALKey::compare);
+    private final ConcurrentSkipListMap<byte[], WALPointer> index = new ConcurrentSkipListMap<>(KeyUtil::compare);
+    private final ConcurrentSkipListMap<byte[], ConcurrentSkipListMap<Long, ConcurrentLinkedQueue<Long>>> prefixFpIndex = new ConcurrentSkipListMap<>(
+        UnsignedBytes.lexicographicalComparator());
 
     @Override
     public void commit() {
@@ -37,6 +42,23 @@ public class MemoryWALIndex implements WALIndex {
     @Override
     public void compact() {
 
+    }
+
+    @Override
+    public boolean takePrefixUpdatesSince(byte[] prefix, long sinceTransactionId, TxFpStream txFpStream) throws Exception {
+        ConcurrentSkipListMap<Long, ConcurrentLinkedQueue<Long>> prefixMap = prefixFpIndex.get(prefix);
+        if (prefixMap != null) {
+            ConcurrentNavigableMap<Long, ConcurrentLinkedQueue<Long>> txIdMap = prefixMap.tailMap(sinceTransactionId, false);
+            for (Entry<Long, ConcurrentLinkedQueue<Long>> e : txIdMap.entrySet()) {
+                long txId = e.getKey();
+                for (Long fp : e.getValue()) {
+                    if (!txFpStream.stream(txId, fp)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     @Override
@@ -177,6 +199,11 @@ public class MemoryWALIndex implements WALIndex {
                 return existingPointer;
             }
         });
+        if (prefix != null) {
+            ConcurrentSkipListMap<Long, ConcurrentLinkedQueue<Long>> prefixMap = prefixFpIndex.computeIfAbsent(prefix, bytes -> new ConcurrentSkipListMap<>());
+            ConcurrentLinkedQueue<Long> queue = prefixMap.computeIfAbsent(txId, _txId -> new ConcurrentLinkedQueue<>());
+            queue.add(fp);
+        }
         if (stream != null) {
             return stream.stream(mode[0], txId, prefix, key, compute.getTimestampId(), compute.getTombstoned(), compute.getFp());
         } else {
@@ -217,5 +244,15 @@ public class MemoryWALIndex implements WALIndex {
     public boolean delete() throws Exception {
         index.clear();
         return true;
+    }
+
+    private static class TxFp {
+        private final long txId;
+        private final long[] fps;
+
+        public TxFp(long txId, long[] fps) {
+            this.txId = txId;
+            this.fps = fps;
+        }
     }
 }

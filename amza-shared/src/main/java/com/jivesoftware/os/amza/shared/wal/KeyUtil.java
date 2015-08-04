@@ -16,6 +16,10 @@ public class KeyUtil {
 
     private static final BestComparator INSTANCE = new BestComparator();
 
+    public static int compare(byte[] composedA, byte[] composedB) {
+        return INSTANCE.compare(composedA, composedB);
+    }
+
     public static Comparator<byte[]> lexicographicalComparator() {
         return INSTANCE;
     }

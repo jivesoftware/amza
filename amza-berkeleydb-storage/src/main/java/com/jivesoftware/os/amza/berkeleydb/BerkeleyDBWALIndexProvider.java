@@ -47,6 +47,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
         BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
         for (BerkeleyDBWALIndexName n : name.all()) {
             environments[Math.abs(versionedPartitionName.hashCode() % environments.length)].removeDatabase(null, n.getPrimaryName());
+            environments[Math.abs(versionedPartitionName.hashCode() % environments.length)].removeDatabase(null, n.getPrefixName());
         }
     }
 

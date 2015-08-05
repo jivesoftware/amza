@@ -228,8 +228,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
             while (true) {
                 try {
-                    byte[] prefix = input.numKeyPrefixes > 0 ? UIO.intBytes(batch % 1_000) : null;
-                    partition.commit(null, (Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) -> {
+                    byte[] prefix = input.numKeyPrefixes > 0 ? UIO.intBytes(batch % input.numKeyPrefixes) : null;
+                    partition.commit(prefix, (Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) -> {
                         if (input.orderedInsertion) {
                             String max = String.valueOf(input.numBatches * input.batchSize);
                             int bStart = batch * input.batchSize;

@@ -121,10 +121,12 @@ public class BinaryRowIO<K> implements RowIO<K> {
     @Override
     public int write(long txId,
         RowType rowType,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream) throws Exception {
-        int count = rowWriter.write(txId, rowType, rows, indexableKeys, stream);
+        int count = rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream);
         if (updatesSinceLeap.addAndGet(count) >= UPDATES_BETWEEN_LEAPS) {
             LeapFrog latest = latestLeapFrog.get();
             Leaps leaps = computeNextLeaps(txId, latest);

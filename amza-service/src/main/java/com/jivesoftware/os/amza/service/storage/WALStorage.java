@@ -25,7 +25,6 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.Fps;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
@@ -425,7 +424,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } else {
                 List<WALIndexable> indexables = new ArrayList<>(apply.size());
                 walTx.write((WALWriter rowWriter) -> {
+                    int estimatedSizeInBytes = 0;
+                    for (Entry<WALKey, WALValue> row : apply.entrySet()) {
+                        byte[] value = row.getValue().getValue();
+                        estimatedSizeInBytes += primaryRowMarshaller.sizeInBytes(row.getKey().sizeOfComposed(), (value != null ? value.length : 0));
+                    }
                     flush(forceTxId,
+                        apply.size(),
+                        estimatedSizeInBytes,
                         rowStream -> {
                             for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                                 WALValue value = row.getValue();
@@ -511,6 +517,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     }
 
     private void flush(long txId,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys,
         MutableLong indexCommitedUpToTxId,
@@ -525,7 +533,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 txId = orderIdProvider.nextId();
             }
             indexCommitedUpToTxId.setValue(txId);
-            count = rowWriter.write(txId, RowType.primary, rows, indexableKeys, stream);
+            count = rowWriter.write(txId, RowType.primary, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream);
             if (highwater != null) {
                 writeHighwaterMarker(rowWriter, highwater);
             }

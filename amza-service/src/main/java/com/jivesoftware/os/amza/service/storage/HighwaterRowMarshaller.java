@@ -10,5 +10,7 @@ public interface HighwaterRowMarshaller<R> {
 
     R toBytes(WALHighwater highwater) throws Exception;
 
+    int sizeInBytes(WALHighwater hints);
+
     WALHighwater fromBytes(R row) throws Exception;
 }

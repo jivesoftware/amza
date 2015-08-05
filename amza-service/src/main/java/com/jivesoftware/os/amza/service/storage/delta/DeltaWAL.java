@@ -60,16 +60,28 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
     }
 
     // TODO IOC shift to using callback
-    byte[] appendHighwaterHints(byte[] value, WALHighwater hints) throws Exception {
-        HeapFiler filer = new HeapFiler();
-        UIO.writeByteArray(filer, value, "value");
+    private byte[] appendHighwaterHints(byte[] value, WALHighwater hints) throws Exception {
         if (hints != null) {
+            byte[] hintsBytes = highwaterRowMarshaller.toBytes(hints);
+            HeapFiler filer = new HeapFiler(new byte[4 + (value != null ? value.length : 0) + 1 + 4 + hintsBytes.length]);
+            UIO.writeByteArray(filer, value, "value");
             UIO.writeBoolean(filer, true, "hasHighwaterHints");
-            UIO.writeByteArray(filer, highwaterRowMarshaller.toBytes(hints), "highwaterHints");
+            UIO.writeByteArray(filer, hintsBytes, "highwaterHints");
+            return filer.getBytes();
         } else {
+            HeapFiler filer = new HeapFiler(new byte[4 + (value != null ? value.length : 0) + 1]);
+            UIO.writeByteArray(filer, value, "value");
             UIO.writeBoolean(filer, false, "hasHighwaterHints");
+            return filer.getBytes();
         }
-        return filer.getBytes();
+    }
+
+    private int sizeWithAppendedHighwaterHints(byte[] value, WALHighwater hints) {
+        if (hints != null) {
+            return 4 + (value != null ? value.length : 0) + 1 + 4 + highwaterRowMarshaller.sizeInBytes(hints);
+        } else {
+            return 4 + (value != null ? value.length : 0) + 1;
+        }
     }
 
     public DeltaWALApplied update(final VersionedPartitionName versionedPartitionName,
@@ -94,8 +106,17 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
             MutableInt fpIndex = new MutableInt(0);
             synchronized (oneTxAtATimeLock) {
                 transactionId = (orderIdProvider == null) ? 0 : orderIdProvider.nextId();
+                int estimatedSizeInBytes = 0;
+                for (KeyValueHighwater kvh : keyValueHighwaters) {
+                    int pkSizeInBytes = WALKey.sizeOfComposed(versionedPartitionName.sizeInBytes(),
+                        WALKey.sizeOfComposed(kvh.prefix != null ? kvh.prefix.length : 0, kvh.key.length));
+                    int valueSizeInBytes = sizeWithAppendedHighwaterHints(kvh.value, kvh.highwater);
+                    estimatedSizeInBytes += primaryRowMarshaller.sizeInBytes(pkSizeInBytes, valueSizeInBytes);
+                }
                 rowWriter.write(transactionId,
                     RowType.primary,
+                    keyValueHighwaters.length,
+                    estimatedSizeInBytes,
                     rowStream -> {
                         for (KeyValueHighwater kvh : keyValueHighwaters) {
                             byte[] pk = WALKey.compose(versionedPartitionName.toBytes(), WALKey.compose(kvh.prefix, kvh.key));

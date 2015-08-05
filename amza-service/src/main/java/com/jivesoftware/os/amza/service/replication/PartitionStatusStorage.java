@@ -76,13 +76,23 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
     }
 
     byte[] walKey(RingMember member, PartitionName partitionName) throws Exception {
-        HeapFiler filer = new HeapFiler();
-        UIO.writeByte(filer, 0, "serializationVersion");
-        UIO.writeByteArray(filer, member.toBytes(), "member");
+        byte[] memberBytes = member.toBytes();
         if (partitionName != null) {
-            UIO.writeByteArray(filer, partitionName.toBytes(), "partition");
+            byte[] partitionNameBytes = partitionName.toBytes();
+            byte[] asBytes = new byte[1 + 4 + memberBytes.length + 4 + partitionNameBytes.length];
+            asBytes[0] = 0; // version
+            UIO.intBytes(memberBytes.length, asBytes, 1);
+            System.arraycopy(memberBytes, 0, asBytes, 1 + 4, memberBytes.length);
+            UIO.intBytes(partitionNameBytes.length, asBytes, 1 + 4 + memberBytes.length);
+            System.arraycopy(partitionNameBytes, 0, asBytes, 1 + 4 + memberBytes.length + 4, partitionNameBytes.length);
+            return asBytes;
+        } else {
+            byte[] asBytes = new byte[1 + 4 + memberBytes.length];
+            asBytes[0] = 0; // version
+            UIO.intBytes(memberBytes.length, asBytes, 1);
+            System.arraycopy(memberBytes, 0, asBytes, 1 + 4, memberBytes.length);
+            return asBytes;
         }
-        return filer.getBytes();
     }
 
     void clearCache(byte[] walKey, byte[] walValue) throws Exception {

@@ -36,6 +36,10 @@ public class WALKey {
         return compose(prefix, key);
     }
 
+    public int sizeOfComposed() {
+        return sizeOfComposed(prefix != null ? prefix.length : 0, key.length);
+    }
+
     public static byte[] compose(byte[] prefix, byte[] key) {
         Preconditions.checkNotNull(key, "Key cannot be null");
 
@@ -49,6 +53,10 @@ public class WALKey {
         }
         System.arraycopy(key, 0, pk, 2 + prefixLength, key.length);
         return pk;
+    }
+
+    public static int sizeOfComposed(int sizeOfPrefix, int sizeOfKey) {
+        return 2 + sizeOfPrefix + sizeOfKey;
     }
 
     public interface TxFpRawKeyValueEntries<R> {

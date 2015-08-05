@@ -23,6 +23,8 @@ public interface PrimaryRowMarshaller<R> {
 
     R toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned) throws Exception;
 
+    int sizeInBytes(int pkSizeInBytes, int valueSizeInBytes);
+
     interface FpRows {
 
         boolean consume(FpRowStream fpRowStream) throws Exception;

@@ -27,12 +27,17 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
 
     @Override
     public byte[] toRow(byte[] pk, byte[] value, long timestamp, boolean tombstoned) throws Exception {
-        HeapFiler filer = new HeapFiler();
+        HeapFiler filer = new HeapFiler(new byte[8 + 1 + 4 + (value != null ? value.length : 0) + 4 + pk.length]);
         UIO.writeLong(filer, timestamp, "timestamp");
         UIO.writeBoolean(filer, tombstoned, "tombstone");
         UIO.writeByteArray(filer, value, "value");
         UIO.writeByteArray(filer, pk, "key");
         return filer.getBytes();
+    }
+
+    @Override
+    public int sizeInBytes(int pkSizeInBytes, int valueSizeInBytes) {
+        return 8 + 1 + 4 + valueSizeInBytes + 4 + pkSizeInBytes;
     }
 
     @Override

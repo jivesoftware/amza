@@ -79,14 +79,28 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     byte[] walKey(VersionedPartitionName versionedPartitionName, RingMember member) throws IOException {
-        HeapFiler filer = new HeapFiler();
-        UIO.writeByte(filer, 0, "version");
-        UIO.writeByteArray(filer, versionedPartitionName.toBytes(), "partition");
-        UIO.writeByteArray(filer, rootRingMember.toBytes(), "rootMember");
+        byte[] versionedPartitionNameBytes = versionedPartitionName.toBytes();
+        byte[] rootRingMemberBytes = rootRingMember.toBytes();
         if (member != null) {
-            UIO.writeByteArray(filer, member.toBytes(), "member");
+            byte[] memberBytes = member.toBytes();
+            byte[] asBytes = new byte[1 + 4 + versionedPartitionNameBytes.length + 4 + rootRingMemberBytes.length + 4 + memberBytes.length];
+            asBytes[0] = 0; // version
+            UIO.intBytes(versionedPartitionNameBytes.length, asBytes, 1);
+            System.arraycopy(versionedPartitionNameBytes, 0, asBytes, 1 + 4, versionedPartitionNameBytes.length);
+            UIO.intBytes(rootRingMemberBytes.length, asBytes, 1 + 4 + versionedPartitionNameBytes.length);
+            System.arraycopy(rootRingMemberBytes, 0, asBytes, 1 + 4 + versionedPartitionNameBytes.length + 4, rootRingMemberBytes.length);
+            UIO.intBytes(memberBytes.length, asBytes, 1 + 4 + versionedPartitionNameBytes.length + 4 + rootRingMemberBytes.length);
+            System.arraycopy(memberBytes, 0, asBytes, 1 + 4 + versionedPartitionNameBytes.length + 4 + rootRingMemberBytes.length + 4, memberBytes.length);
+            return asBytes;
+        } else {
+            byte[] asBytes = new byte[1 + 4 + versionedPartitionNameBytes.length + 4 + rootRingMemberBytes.length];
+            asBytes[0] = 0; // version
+            UIO.intBytes(versionedPartitionNameBytes.length, asBytes, 1);
+            System.arraycopy(versionedPartitionNameBytes, 0, asBytes, 1 + 4, versionedPartitionNameBytes.length);
+            UIO.intBytes(rootRingMemberBytes.length, asBytes, 1 + 4 + versionedPartitionNameBytes.length);
+            System.arraycopy(rootRingMemberBytes, 0, asBytes, 1 + 4 + versionedPartitionNameBytes.length + 4, rootRingMemberBytes.length);
+            return asBytes;
         }
-        return filer.getBytes();
     }
 
     RingMember getMember(byte[] rawMember) throws Exception {

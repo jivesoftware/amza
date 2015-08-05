@@ -10,8 +10,8 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALWriter.IndexableKeys;
@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
@@ -338,6 +339,7 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
         Preconditions.checkNotNull(compactableWALIndex, "If you don't have one use NOOpWALIndex.");
 
         List<CompactionFlushable> flushables = new ArrayList<>();
+        MutableInt estimatedSizeInBytes = new MutableInt(0);
         MutableLong flushTxId = new MutableLong(-1);
         primaryRowMarshaller.fromRows(
             txFpRowStream -> io.scan(startAtRow, false,
@@ -351,7 +353,14 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
 
                     long lastTxId = flushTxId.longValue();
                     if (lastTxId != rowTxId) {
-                        flushBatch(compactionWALIndex, compactionIO, flushables, lastTxId);
+                        flushBatch(compactionWALIndex,
+                            compactionIO,
+                            flushables.size(),
+                            estimatedSizeInBytes.intValue(),
+                            flushables,
+                            lastTxId);
+                        flushables.clear();
+                        estimatedSizeInBytes.setValue(0);
                         flushTxId.setValue(rowTxId);
                     }
 
@@ -373,6 +382,7 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                             tombstoneCount.incrementAndGet();
                         } else {
                             if (valueTimestamp > ttlTimestampId) {
+                                estimatedSizeInBytes.add(row.length);
                                 flushables.add(new CompactionFlushable(prefix, key, valueTimestamp, valueTombstoned, row));
                                 keyCount.incrementAndGet();
                             } else {
@@ -386,18 +396,32 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                 });
                 return true;
             });
-        flushBatch(compactionWALIndex, compactionIO, flushables, flushTxId.longValue());
+        flushBatch(compactionWALIndex,
+            compactionIO,
+            flushables.size(),
+            estimatedSizeInBytes.intValue(),
+            flushables,
+            flushTxId.longValue());
+        estimatedSizeInBytes.setValue(0);
+        flushables.clear();
     }
 
     private void flushBatch(CompactionWALIndex compactionWALIndex,
         RowIO compactionIO,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
         List<CompactionFlushable> flushables,
         long lastTxId) throws Exception {
 
         if (flushables.isEmpty()) {
             return;
         }
-        flush(compactionWALIndex, compactionIO, lastTxId, RowType.primary,
+        flush(compactionWALIndex,
+            compactionIO,
+            lastTxId,
+            RowType.primary,
+            estimatedNumberOfRows,
+            estimatedSizeInBytes,
             rowStream -> {
                 for (CompactionFlushable flushable : flushables) {
                     if (!rowStream.stream(flushable.row)) {
@@ -414,24 +438,26 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                 }
                 return true;
             });
-        flushables.clear();
     }
 
     private void flush(CompactionWALIndex compactionWALIndex,
         RowIO compactionIO,
         long txId,
         RowType rowType,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys) throws Exception {
 
         if (compactionWALIndex != null) {
             compactionWALIndex.merge((TxKeyPointerStream stream) -> {
-                compactionIO.write(txId, rowType, rows, indexableKeys, (rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp) ->
-                    stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, fp));
+                compactionIO.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys,
+                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp) -> stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, fp));
                 return true;
             });
         } else {
-            compactionIO.write(txId, rowType, rows, indexableKeys, (rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
+            compactionIO.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys,
+                (rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
         }
     }
 

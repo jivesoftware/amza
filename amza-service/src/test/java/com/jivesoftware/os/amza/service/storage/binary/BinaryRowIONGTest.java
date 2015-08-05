@@ -63,6 +63,8 @@ public class BinaryRowIONGTest {
             byte[] row = UIO.longBytes(i);
             rowIO.write(nextTxId,
                 RowType.primary,
+                1,
+                row.length,
                 stream -> stream.stream(row),
                 stream -> true,
                 (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
@@ -102,14 +104,14 @@ public class BinaryRowIONGTest {
         File file = File.createTempFile("BinaryRowIO", "dat");
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false);
         IoStats ioStats = new IoStats();
-        leap(() -> new BinaryRowIO(new ManageFileRowIO(), file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats)));
+        leap(() -> new BinaryRowIO<>(new ManageFileRowIO(), file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats)));
     }
 
     @Test
     public void testMemoryLeap() throws Exception {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new HeapFiler());
         IoStats ioStats = new IoStats();
-        BinaryRowIO binaryRowIO = new BinaryRowIO(new ManageMemoryRowIO(), filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
+        BinaryRowIO binaryRowIO = new BinaryRowIO<>(new ManageMemoryRowIO(), filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
         leap(() -> binaryRowIO);
     }
 
@@ -121,6 +123,8 @@ public class BinaryRowIONGTest {
             byte[] row = UIO.longBytes(i);
             rowIO.write(i,
                 RowType.primary,
+                1,
+                row.length,
                 stream -> stream.stream(row),
                 stream -> true,
                 (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);

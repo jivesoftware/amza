@@ -3,14 +3,12 @@ package com.jivesoftware.os.amza.shared.partition;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
 import java.util.Objects;
 
 
 /**
- *
  * @author jonathan.colt
  */
 public class VersionedPartitionName implements Comparable<VersionedPartitionName> {
@@ -20,19 +18,27 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
     private transient int hash = 0;
 
     public byte[] toBytes() throws IOException {
-        HeapFiler memoryFiler = new HeapFiler();
-        UIO.writeByte(memoryFiler, 0, "version");
-        UIO.writeByteArray(memoryFiler, partitionName.toBytes(), "partitionName");
-        UIO.writeLong(memoryFiler, partitionVersion, "partitionVersion");
-        return memoryFiler.getBytes();
+        byte[] partitionNameBytes = partitionName.toBytes();
+
+        byte[] asBytes = new byte[1 + 4 + partitionNameBytes.length + 8];
+        asBytes[0] = 0; // version
+        UIO.intBytes(partitionNameBytes.length, asBytes, 1);
+        System.arraycopy(partitionNameBytes, 0, asBytes, 1 + 4, partitionNameBytes.length);
+        UIO.longBytes(partitionVersion, asBytes, 1 + 4 + partitionNameBytes.length);
+        return asBytes;
+    }
+
+    public int sizeInBytes() {
+        return 1 + 4 + partitionName.sizeInBytes() + 8;
     }
 
     public static VersionedPartitionName fromBytes(byte[] bytes) throws IOException {
-        HeapFiler memoryFiler = new HeapFiler(bytes);
-        if (UIO.readByte(memoryFiler, "version") == 0) {
-            return new VersionedPartitionName(
-                PartitionName.fromBytes(UIO.readByteArray(memoryFiler, "systemPartition")),
-                UIO.readLong(memoryFiler, "ringName"));
+        if (bytes[0] == 0) { // version
+            int partitionNameBytesLength = UIO.bytesInt(bytes, 1);
+            byte[] partitionNameBytes = new byte[partitionNameBytesLength];
+            System.arraycopy(bytes, 1 + 4, partitionNameBytes, 0, partitionNameBytesLength);
+            long version = UIO.bytesLong(bytes, 1 + 4 + partitionNameBytesLength);
+            return new VersionedPartitionName(PartitionName.fromBytes(partitionNameBytes), version);
         }
         throw new IOException("Invalid version:" + bytes[0]);
     }
@@ -102,6 +108,5 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
     public String toString() {
         return "VersionedPartitionName{" + "partitionName=" + partitionName + ", partitionVersion=" + partitionVersion + '}';
     }
-
 
 }

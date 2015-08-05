@@ -19,7 +19,13 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 
 public interface WALWriter {
 
-    int write(long txId, RowType rowType, RawRows rows, IndexableKeys indexableKeys, TxKeyPointerFpStream stream) throws Exception;
+    int write(long txId,
+        RowType rowType,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
+        RawRows rows,
+        IndexableKeys indexableKeys,
+        TxKeyPointerFpStream stream) throws Exception;
 
     long writeSystem(byte[] row) throws Exception;
 

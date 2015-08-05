@@ -31,6 +31,10 @@ public class RingMember implements Comparable<RingMember> {
         return bytes;
     }
 
+    public int sizeInBytes() {
+        return 1 + memberAsBytes.length;
+    }
+
     public static RingMember fromBytes(byte[] bytes) throws Exception {
         if (bytes[0] == 0) {
             String member = new String(bytes, 1, bytes.length - 1, StandardCharsets.UTF_8);

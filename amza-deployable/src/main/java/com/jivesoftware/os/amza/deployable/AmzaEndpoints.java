@@ -68,9 +68,9 @@ public class AmzaEndpoints {
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
                 //TODO prefix
-                updates.set(null, keys[i].getBytes(), values[i].getBytes(), -1);
+                updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
             }
-            partitionAPI.commit(updates, 1, 30000);
+            partitionAPI.commit(null, updates, 1, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
@@ -89,9 +89,9 @@ public class AmzaEndpoints {
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
                 //TODO prefix
-                updates.set(null, entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
+                updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
             }
-            partitionAPI.commit(updates, 1, 30000);
+            partitionAPI.commit(null, updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -112,9 +112,9 @@ public class AmzaEndpoints {
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
                 //TODO prefix
-                updates.set(null, entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
+                updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
             }
-            partitionAPI.commit(updates, 1, 30000);
+            partitionAPI.commit(null, updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -132,11 +132,11 @@ public class AmzaEndpoints {
         try {
             AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             List<byte[]> got = new ArrayList<>();
-            partitionAPI.get(
+            //TODO prefix
+            partitionAPI.get(null,
                 stream -> {
                     for (String s : Splitter.on(',').split(key)) {
-                        //TODO prefix
-                        if (!stream.stream(null, s.getBytes())) {
+                        if (!stream.stream(s.getBytes())) {
                             return false;
                         }
                     }
@@ -163,8 +163,8 @@ public class AmzaEndpoints {
             AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             //TODO prefix
-            updates.remove(null, key.getBytes(), -1);
-            partitionAPI.commit(updates, 1, 30000);
+            updates.remove(key.getBytes(), -1);
+            partitionAPI.commit(null, updates, 1, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove partition:" + partition + " key:" + key, x);

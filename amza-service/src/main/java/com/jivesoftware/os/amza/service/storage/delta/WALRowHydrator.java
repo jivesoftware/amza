@@ -1,8 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.shared.wal.FpKeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.Fps;
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.Fps;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 
 /**

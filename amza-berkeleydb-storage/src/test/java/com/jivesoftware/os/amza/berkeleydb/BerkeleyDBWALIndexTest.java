@@ -4,7 +4,7 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.wal.TxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import java.io.File;
 import java.util.Arrays;

@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.test;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.client.AmzaKretrProvider;
+import com.jivesoftware.os.amza.client.AmzaClientProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -285,7 +285,7 @@ public class AmzaTestCluster {
         private boolean off = false;
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
-        private final AmzaKretrProvider clientProvider;
+        private final AmzaClientProvider clientProvider;
 
         public AmzaNode(RingMember ringMember,
             RingHost ringHost,
@@ -295,7 +295,7 @@ public class AmzaTestCluster {
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
-            this.clientProvider = new AmzaKretrProvider(amzaService);
+            this.clientProvider = new AmzaClientProvider(amzaService);
             this.orderIdProvider = orderIdProvider;
         }
 
@@ -333,11 +333,11 @@ public class AmzaTestCluster {
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             long timestamp = orderIdProvider.nextId();
             if (tombstone) {
-                updates.remove(p, k, timestamp);
+                updates.remove(k, timestamp);
             } else {
-                updates.set(p, k, v, timestamp);
+                updates.set(k, v, timestamp);
             }
-            clientProvider.getClient(partitionName).commit(updates, 2, 10, TimeUnit.SECONDS);
+            clientProvider.getClient(partitionName).commit(p, updates, 2, 10, TimeUnit.SECONDS);
 
         }
 
@@ -347,7 +347,7 @@ public class AmzaTestCluster {
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(stream -> stream.stream(prefix, key),
+            clientProvider.getClient(partitionName).get(prefix, stream -> stream.stream(key),
                 (_prefix, _key, value, timestamp) -> {
                     got.add(value);
                     return true;
@@ -465,7 +465,7 @@ public class AmzaTestCluster {
                 try {
                     compared.increment();
                     TimestampedValue[] bValues = new TimestampedValue[1];
-                    b.get(stream -> stream.stream(prefix, key),
+                    b.get(prefix, stream -> stream.stream(key),
                         (_prefix, _key, value, timestamp) -> {
                             bValues[0] = new TimestampedValue(timestamp, value);
                             return true;

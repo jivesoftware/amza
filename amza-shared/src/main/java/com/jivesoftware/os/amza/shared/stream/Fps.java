@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.shared.wal;
+package com.jivesoftware.os.amza.shared.stream;
 
 /**
  * @author jonathan.colt

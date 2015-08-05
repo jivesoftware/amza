@@ -14,14 +14,14 @@ import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 
 /**
@@ -50,12 +50,13 @@ public class SystemWALStorage {
     }
 
     public RowsChanged update(VersionedPartitionName versionedPartitionName,
+        byte[] prefix,
         Commitable updates,
         WALUpdated updated) throws Exception {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-        RowsChanged changed = partitionStore.getWalStorage().update(-1, false, updates);
+        RowsChanged changed = partitionStore.getWalStorage().update(-1, false, prefix, updates);
         if (allRowChanges != null && !changed.isEmpty()) {
             allRowChanges.changes(changed);
         }
@@ -72,9 +73,12 @@ public class SystemWALStorage {
         return partitionIndex.get(versionedPartitionName).get(prefix, key);
     }
 
-    public boolean get(VersionedPartitionName versionedPartitionName, WALKeys keys, TimestampKeyValueStream stream) throws Exception {
+    public boolean get(VersionedPartitionName versionedPartitionName,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        TimestampKeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).streamValues(keys, (prefix, key, value, valueTimestamp, valueTombstone) -> {
+        return partitionIndex.get(versionedPartitionName).streamValues(prefix, keys, (_prefix, key, value, valueTimestamp, valueTombstone) -> {
             if (value == null || valueTombstone) {
                 return stream.stream(prefix, key, null, -1);
             } else {
@@ -83,9 +87,12 @@ public class SystemWALStorage {
         });
     }
 
-    public boolean containsKeys(VersionedPartitionName versionedPartitionName, WALKeys keys, KeyContainedStream stream) throws Exception {
+    public boolean containsKeys(VersionedPartitionName versionedPartitionName,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyContainedStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).containsKeys(keys, stream);
+        return partitionIndex.get(versionedPartitionName).containsKeys(prefix, keys, stream);
     }
 
     public <R> R takeRowUpdatesSince(VersionedPartitionName versionedPartitionName,
@@ -162,6 +169,6 @@ public class SystemWALStorage {
     }
 
     public long count(VersionedPartitionName versionedPartitionName) throws Exception {
-        return partitionIndex.get(versionedPartitionName).getWalStorage().count();
+        return partitionIndex.get(versionedPartitionName).getWalStorage().count(keyStream -> true);
     }
 }

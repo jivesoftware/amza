@@ -27,10 +27,11 @@ public class StripedPartitionCommitChanges implements CommitChanges {
     public void commit(VersionedPartitionName versionedPartitionName, CommitTx commitTx) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            return commitTx.tx(highwaterStorage, (commitable) -> stripe.commit(highwaterStorage,
+            return commitTx.tx(highwaterStorage, (prefix, commitable) -> stripe.commit(highwaterStorage,
                 partitionName,
                 Optional.of(versionedPartitionName.getPartitionVersion()),
                 false,
+                prefix,
                 commitable,
                 walUpdated));
         });

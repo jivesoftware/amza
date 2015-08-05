@@ -4,18 +4,19 @@ import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Type;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.TxFpStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.WALMergeKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.KeyUtil;
-import com.jivesoftware.os.amza.shared.wal.KeyValuePointerStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValues;
-import com.jivesoftware.os.amza.shared.wal.MergeTxKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.TxFpStream;
-import com.jivesoftware.os.amza.shared.wal.TxKeyPointers;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
-import com.jivesoftware.os.amza.shared.wal.WALMergeKeyPointerStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.Cursor;
@@ -223,13 +224,13 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
+    public boolean getPointers(byte[] prefix, UnprefixedWALKeys keys, WALKeyPointerStream stream) throws Exception {
         lock.acquire();
         try {
             DatabaseEntry dbKey = new DatabaseEntry();
             DatabaseEntry dpPointerValue = new DatabaseEntry();
 
-            return keys.consume((byte[] prefix, byte[] key) -> {
+            return keys.consume((key) -> {
                 dbKey.setData(WALKey.compose(prefix, key));
                 OperationStatus status = primaryDb.get(null, dbKey, dpPointerValue, LockMode.READ_UNCOMMITTED);
                 if (status == OperationStatus.SUCCESS) {
@@ -266,10 +267,10 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
+    public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
         lock.acquire();
         try {
-            return keys.consume((prefix, key) -> getPointer(prefix, key,
+            return keys.consume((key) -> getPointer(prefix, key,
                 (_prefix, _key, timestamp, tombstoned, fp) -> {
                     stream.stream(prefix, key, fp != -1 && !tombstoned);
                     return true;
@@ -294,6 +295,36 @@ public class BerkeleyDBWALIndex implements WALIndex {
             if (cursor != null) {
                 cursor.close();
             }
+        }
+    }
+
+    @Override
+    public long deltaCount(WALKeyPointers keyPointers) throws Exception {
+        lock.acquire();
+        try {
+            long[] delta = new long[1];
+            boolean completed = keyPointers.consume((prefix, key, requestTimestamp, requestTombstoned, fp) -> getPointer(prefix, key,
+                (_prefix, _key, indexTimestamp, indexTombstoned, indexFp) -> {
+                    // indexFp, indexTombstoned, requestTombstoned, delta
+                    // -1       false            false              1
+                    // -1       false            true               0
+                    //  1       false            false              0
+                    //  1       false            true               -1
+                    //  1       true             false              1
+                    //  1       true             true               0
+                    if (!requestTombstoned && (indexFp == -1 && !indexTombstoned || indexFp != -1 && indexTombstoned)) {
+                        delta[1]++;
+                    } else if (indexFp != -1 && !indexTombstoned && requestTombstoned) {
+                        delta[1]--;
+                    }
+                    return true;
+                }));
+            if (!completed) {
+                return -1;
+            }
+            return delta[0];
+        } finally {
+            lock.release();
         }
     }
 

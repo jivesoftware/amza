@@ -15,27 +15,39 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 public class AmzaPartitionUpdates implements Commitable {
 
-    private final ConcurrentHashMap<WALKey, WALValue> changes = new ConcurrentHashMap<>();
+    private final ConcurrentSkipListMap<byte[], WALValue> changes = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
 
-    public AmzaPartitionUpdates set(byte[] prefix, byte[] key, byte[] value) throws Exception {
-        return set(prefix, key, value, -1);
+    public AmzaPartitionUpdates setAll(Iterable<Entry<byte[], byte[]>> updates) throws Exception {
+        setAll(updates, -1);
+        return this;
     }
 
-    public AmzaPartitionUpdates set(byte[] prefix, byte[] key, byte[] value, long timestampId) throws Exception {
+    public AmzaPartitionUpdates setAll(Iterable<Entry<byte[], byte[]>> updates, long timestampId) throws Exception {
+        for (Entry<byte[], byte[]> update : updates) {
+            set(update.getKey(), update.getValue(), timestampId);
+        }
+        return this;
+    }
+
+    public AmzaPartitionUpdates set(byte[] key, byte[] value) throws Exception {
+        return set(key, value, -1);
+    }
+
+    public AmzaPartitionUpdates set(byte[] key, byte[] value, long timestampId) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        changes.merge(new WALKey(prefix, key), new WALValue(value, timestampId, false), (existing, provided) -> {
+        changes.merge(key, new WALValue(value, timestampId, false), (existing, provided) -> {
             if (provided.getTimestampId() >= existing.getTimestampId()) {
                 return provided;
             } else {
@@ -45,15 +57,22 @@ public class AmzaPartitionUpdates implements Commitable {
         return this;
     }
 
-    public AmzaPartitionUpdates remove(byte[] prefix, byte[] key) throws Exception {
-        return remove(prefix, key, -1);
+    public AmzaPartitionUpdates removeAll(Iterable<byte[]> keys, long timestampId) throws Exception {
+        for (byte[] key : keys) {
+            remove(key, timestampId);
+        }
+        return this;
     }
 
-    public AmzaPartitionUpdates remove(byte[] prefix, byte[] key, long timestamp) throws Exception {
+    public AmzaPartitionUpdates remove(byte[] key) throws Exception {
+        return remove(key, -1);
+    }
+
+    public AmzaPartitionUpdates remove(byte[] key, long timestamp) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        changes.merge(new WALKey(prefix, key), new WALValue(null, timestamp, true), (existing, provided) -> {
+        changes.merge(key, new WALValue(null, timestamp, true), (existing, provided) -> {
             if (provided.getTimestampId() >= existing.getTimestampId()) {
                 return provided;
             } else {
@@ -64,10 +83,10 @@ public class AmzaPartitionUpdates implements Commitable {
     }
 
     @Override
-    public boolean commitable(Highwaters highwaters, TxKeyValueStream txKeyValueStream) throws Exception {
-        for (Entry<WALKey, WALValue> e : changes.entrySet()) {
+    public boolean commitable(Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) throws Exception {
+        for (Entry<byte[], WALValue> e : changes.entrySet()) {
             WALValue value = e.getValue();
-            if (!txKeyValueStream.row(-1, e.getKey().prefix, e.getKey().key, value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+            if (!txKeyValueStream.row(-1, e.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
                 return false;
             }
         }

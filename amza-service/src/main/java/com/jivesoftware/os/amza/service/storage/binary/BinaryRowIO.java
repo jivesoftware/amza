@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage.binary;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.shared.stream.Fps;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
@@ -103,8 +104,8 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public <R> R read(long fp, ReadTx<R> tx) throws Exception {
-        return rowReader.read(fp, tx);
+    public boolean read(Fps fps, RowStream rowStream) throws Exception {
+        return rowReader.read(fps, rowStream);
     }
 
     @Override

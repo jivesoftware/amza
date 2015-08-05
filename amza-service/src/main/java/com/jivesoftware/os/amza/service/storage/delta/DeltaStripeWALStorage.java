@@ -17,18 +17,18 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.wal.KeyUtil;
-import com.jivesoftware.os.amza.shared.wal.KeyValuePointerStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValues;
 import com.jivesoftware.os.amza.shared.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -50,7 +50,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.commons.lang.mutable.MutableInt;
 
 /**
  * @author jonathan.colt
@@ -187,7 +186,7 @@ public class DeltaStripeWALStorage {
                                         WALPointer got = delta.getPointer(prefix, key);
                                         if (got == null || got.getTimestampId() < valueTimestamp) {
                                             delta.put(fp, prefix, key, valueTimestamp, valueTombstoned);
-                                            delta.onLoadAppendTxFp(txId, fp);
+                                            delta.onLoadAppendTxFp(prefix, txId, fp);
                                             updateSinceLastMerge.incrementAndGet();
                                             return true;
                                         }
@@ -339,6 +338,7 @@ public class DeltaStripeWALStorage {
         VersionedPartitionName versionedPartitionName,
         Status partitionStatus,
         WALStorage storage,
+        byte[] prefix,
         Commitable updates,
         WALUpdated updated) throws Exception {
 
@@ -353,11 +353,9 @@ public class DeltaStripeWALStorage {
         final List<KeyedTimestampId> removes = new ArrayList<>();
         final List<KeyedTimestampId> clobbers = new ArrayList<>();
 
-        final List<byte[]> prefixes = new ArrayList<>();
         final List<byte[]> keys = new ArrayList<>();
         final List<WALValue> values = new ArrayList<>();
-        updates.commitable(null, (transactionId, prefix, key, value, valueTimestamp, valueTombstone) -> {
-            prefixes.add(prefix);
+        updates.commitable(null, (transactionId, key, value, valueTimestamp, valueTombstone) -> {
             keys.add(key);
             values.add(new WALValue(value, valueTimestamp, valueTombstone));
             return true;
@@ -370,7 +368,6 @@ public class DeltaStripeWALStorage {
 
             getPointers(versionedPartitionName, storage, (stream) -> {
                 for (int i = 0; i < keys.size(); i++) {
-                    byte[] prefix = prefixes.get(i);
                     byte[] key = keys.get(i);
                     WALValue update = values.get(i);
                     if (!stream.stream(prefix, key, update.getValue(), update.getTimestampId(), update.getTombstoned())) {
@@ -378,7 +375,7 @@ public class DeltaStripeWALStorage {
                     }
                 }
                 return true;
-            }, (prefix, key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+            }, (_prefix, key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
                 WALKey walKey = new WALKey(prefix, key);
                 WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone);
                 if (pointerFp == -1) {
@@ -427,7 +424,7 @@ public class DeltaStripeWALStorage {
                             apply.remove(new WALKey(keyValueHighwater.prefix, keyValueHighwater.key));
                         }
                     }
-                    delta.appendTxFps(updateApplied.txId, updateApplied.fps);
+                    delta.appendTxFps(prefix, updateApplied.txId, updateApplied.fps);
                     rowsChanged = new RowsChanged(versionedPartitionName,
                         oldestAppliedTimestamp.get(),
                         apply,
@@ -476,6 +473,34 @@ public class DeltaStripeWALStorage {
         }
     }
 
+    public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName,
+        WALStorage storage,
+        byte[] prefix,
+        long transactionId,
+        RowStream rowStream) throws Exception {
+
+        long lowestTxId;
+        acquireOne();
+        try {
+            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
+            lowestTxId = delta.lowestTxId(prefix);
+        } finally {
+            releaseOne();
+        }
+
+        if ((lowestTxId == -1 || lowestTxId > transactionId) && !storage.takeRowUpdatesSince(prefix, transactionId, rowStream)) {
+            return false;
+        }
+
+        acquireOne();
+        try {
+            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
+            return delta.takeRowsFromTransactionId(prefix, transactionId, rowStream);
+        } finally {
+            releaseOne();
+        }
+    }
+
     public boolean takeAllRows(VersionedPartitionName versionedPartitionName, WALStorage storage, RowStream rowStream)
         throws Exception {
 
@@ -496,7 +521,8 @@ public class DeltaStripeWALStorage {
         WALValue[] walValue = new WALValue[1];
         get(versionedPartitionName,
             storage,
-            stream -> stream.stream(prefix, key),
+            prefix,
+            stream -> stream.stream(key),
             (_prefix, _key, value, timestamp) -> {
                 if (value != null) {
                     walValue[0] = new WALValue(value, timestamp, false);
@@ -506,14 +532,19 @@ public class DeltaStripeWALStorage {
         return walValue[0];
     }
 
-    public boolean get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKeys keys, TimestampKeyValueStream stream) throws Exception {
+    public boolean get(VersionedPartitionName versionedPartitionName,
+        WALStorage storage,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        TimestampKeyValueStream stream) throws Exception {
+
         acquireOne();
         try {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
-            return storage.streamValues(
-                storageStream -> partitionDelta.get(keys, (fp, prefix, key, value, valueTimestamp, valueTombstoned) -> {
+            return storage.streamValues(prefix,
+                storageStream -> partitionDelta.get(prefix, keys, (fp, _prefix, key, value, valueTimestamp, valueTombstoned) -> {
                     if (value == null) {
-                        return storageStream.stream(prefix, key);
+                        return storageStream.stream(key);
                     } else {
                         if (valueTombstoned) {
                             return stream.stream(prefix, key, null, -1);
@@ -522,7 +553,7 @@ public class DeltaStripeWALStorage {
                         }
                     }
                 }),
-                (prefix, key, value, valueTimestamp, valueTombstoned) -> {
+                (_prefix, key, value, valueTimestamp, valueTombstoned) -> {
                     if (valueTombstoned) {
                         return stream.stream(prefix, key, null, -1);
                     } else {
@@ -534,16 +565,20 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public boolean containsKeys(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKeys keys, KeyContainedStream stream) throws Exception {
+    public boolean containsKeys(VersionedPartitionName versionedPartitionName,
+        WALStorage storage,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyContainedStream stream) throws Exception {
         acquireOne();
         try {
-            return storage.containsKeys(
-                storageKeyStream -> getPartitionDelta(versionedPartitionName).containsKeys(keys,
-                    (prefix, key, tombstoned, exists) -> {
+            return storage.containsKeys(prefix,
+                storageKeyStream -> getPartitionDelta(versionedPartitionName).containsKeys(prefix, keys,
+                    (_prefix, key, tombstoned, exists) -> {
                         if (exists) {
                             return stream.stream(prefix, key, !tombstoned);
                         } else {
-                            return storageKeyStream.stream(prefix, key);
+                            return storageKeyStream.stream(key);
                         }
                     }),
                 stream);
@@ -660,20 +695,12 @@ public class DeltaStripeWALStorage {
      * Stupid expensive!!!!
      */
     public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
-        MutableInt count = new MutableInt(0);
         acquireOne();
         try {
-            storage.containsKeys(stream -> getPartitionDelta(versionedPartitionName).keys(stream::stream),
-                (prefix, key, contained) -> {
-                    if (!contained) {
-                        count.increment();
-                    }
-                    return true;
-                });
+            return storage.count(stream -> getPartitionDelta(versionedPartitionName).keys(stream::stream));
         } finally {
             releaseOne();
         }
-        return count.intValue() + storage.count();
     }
 
     static class LatestKeyValueStream implements KeyValueStream {

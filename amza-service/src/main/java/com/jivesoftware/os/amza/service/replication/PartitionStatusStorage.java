@@ -270,9 +270,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             if (commitableVersionStatus != null) {
                 byte[] versionedStatusBytes = commitableVersionStatus.toBytes();
                 awaitNotify.notifyChange(partitionName, () -> {
-                    RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
+                    RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX, null,
                         (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
-                            null,
                             walKey(ringMember, partitionName),
                             versionedStatusBytes, orderIdProvider.nextId(), false), walUpdated);
                     return !rowsChanged.isEmpty();
@@ -305,9 +304,8 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         for (VersionedPartitionName compost : composted) {
             transactor.doWithAll(compost, Status.EXPUNGE, (versionedPartitionName, partitionStatus) -> {
                 awaitNotify.notifyChange(compost.getPartitionName(), () -> {
-                    RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX,
+                    RowsChanged rowsChanged = systemWALStorage.update(PartitionProvider.REGION_ONLINE_INDEX, null,
                         (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
-                            null,
                             walKey(rootRingMember, compost.getPartitionName()),
                             null, orderIdProvider.nextId(), true),
                         walUpdated);

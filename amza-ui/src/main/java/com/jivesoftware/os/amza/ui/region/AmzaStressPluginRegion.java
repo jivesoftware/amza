@@ -5,13 +5,14 @@ import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
@@ -63,7 +64,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         final int batchSize;
         final int numPartitions;
         final int numThreadsPerPartition;
-        final int desiredQuorm;
+        final int numKeyPrefixes;
+        final int desiredQuorum;
         final boolean orderedInsertion;
         final String action;
 
@@ -73,7 +75,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             int batchSize,
             int numPartitions,
             int numThreadsPerRegion,
-            int desiredQuorm,
+            int numKeyPrefixes,
+            int desiredQuorum,
             boolean orderedInsertion,
             String action) {
             this.name = name;
@@ -82,7 +85,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             this.batchSize = batchSize;
             this.numPartitions = numPartitions;
             this.numThreadsPerPartition = numThreadsPerRegion;
-            this.desiredQuorm = desiredQuorm;
+            this.numKeyPrefixes = numKeyPrefixes;
+            this.desiredQuorum = desiredQuorum;
             this.orderedInsertion = orderedInsertion;
             this.action = action;
         }
@@ -131,7 +135,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 row.put("batchSize", String.valueOf(stress.input.batchSize));
                 row.put("numPartitions", String.valueOf(stress.input.numPartitions));
                 row.put("numThreadsPerRegion", String.valueOf(stress.input.numThreadsPerPartition));
-                row.put("desiredQuorm", String.valueOf(stress.input.desiredQuorm));
+                row.put("numKeyPrefixes", String.valueOf(stress.input.numKeyPrefixes));
+                row.put("desiredQuorum", String.valueOf(stress.input.desiredQuorum));
                 row.put("orderedInsertion", String.valueOf(stress.input.orderedInsertion));
 
                 row.put("elapsed", MetricsPluginRegion.getDurationBreakdown(elapsed));
@@ -223,24 +228,25 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
             while (true) {
                 try {
-                    partition.commit((Highwaters highwaters, TxKeyValueStream txKeyValueStream) -> {
+                    byte[] prefix = input.numKeyPrefixes > 0 ? UIO.intBytes(batch % 1_000) : null;
+                    partition.commit(null, (Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) -> {
                         if (input.orderedInsertion) {
                             String max = String.valueOf(input.numBatches * input.batchSize);
                             int bStart = batch * input.batchSize;
                             for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
                                 String k = Strings.padEnd(String.valueOf(b), max.length(), '0');
-                                txKeyValueStream.row(-1, "k".getBytes(), k.getBytes(), ("v" + batch).getBytes(), -1, false);
+                                txKeyValueStream.row(-1, k.getBytes(), ("v" + batch).getBytes(), -1, false);
                             }
                         } else {
                             int bStart = threadIndex * input.batchSize;
                             int bEnd = bStart + input.batchSize;
                             for (int b = bStart; b < bEnd; b++) {
                                 String k = String.valueOf(batch);
-                                txKeyValueStream.row(-1, (b + "k").getBytes(), k.getBytes(), (b + "v" + batch).getBytes(), -1, false);
+                                txKeyValueStream.row(-1, (b + "k" + k).getBytes(), (b + "v" + batch).getBytes(), -1, false);
                             }
                         }
                         return true;
-                    }, input.desiredQuorm, 30_000);
+                    }, input.desiredQuorum, 30_000);
                     break;
 
                 } catch (DeltaOverCapacityException de) {

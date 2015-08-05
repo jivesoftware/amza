@@ -6,5 +6,5 @@ package com.jivesoftware.os.amza.shared.scan;
  */
 public interface CommitTo {
 
-    RowsChanged commit(Commitable commitable) throws Exception;
+    RowsChanged commit(byte[] prefix, Commitable commitable) throws Exception;
 }

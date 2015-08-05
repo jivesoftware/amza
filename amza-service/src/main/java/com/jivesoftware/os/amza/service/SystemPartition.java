@@ -29,12 +29,12 @@ import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
-import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -82,16 +82,17 @@ public class SystemPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void commit(Commitable updates,
+    public void commit(byte[] prefix,
+        Commitable updates,
         int takeQuorum,
         long timeoutInMillis) throws Exception {
 
         long timestampId = orderIdProvider.nextId();
-        RowsChanged commit = systemWALStorage.update(versionedPartitionName,
+        RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix,
             (highwaters, scan) ->
-                updates.commitable(highwaters, (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
+                updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
                     long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
-                    return scan.row(rowTxId, prefix, key, value, timestamp, valueTombstone);
+                    return scan.row(rowTxId, key, value, timestamp, valueTombstone);
                 }),
             walUpdated);
         amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
@@ -112,8 +113,8 @@ public class SystemPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public boolean get(WALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
-        return systemWALStorage.get(versionedPartitionName, keys, valuesStream);
+    public boolean get(byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
+        return systemWALStorage.get(versionedPartitionName, prefix, keys, valuesStream);
     }
 
     @Override

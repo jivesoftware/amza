@@ -18,16 +18,25 @@ package com.jivesoftware.os.amza.shared.wal;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.scan.RangeScannablePointers;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.TxFpStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
 
 public interface WALIndex extends RangeScannablePointers {
 
-    boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception;
+    boolean getPointers(byte[] prefix, UnprefixedWALKeys keys, WALKeyPointerStream stream) throws Exception;
 
     boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception;
 
     boolean takePrefixUpdatesSince(byte[] prefix, long sinceTransactionId, TxFpStream txFpStream) throws Exception;
 
-    boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception;
+    boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception;
+
+    long deltaCount(WALKeyPointers keyPointers) throws Exception;
 
     long size() throws Exception;
 

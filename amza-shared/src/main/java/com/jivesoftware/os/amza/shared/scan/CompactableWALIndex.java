@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.shared.scan;
 
-import com.jivesoftware.os.amza.shared.wal.MergeTxKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.TxKeyPointers;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
 
 /**
  *

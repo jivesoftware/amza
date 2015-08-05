@@ -27,13 +27,13 @@ import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scan;
-import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.take.TakeResult;
-import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -78,16 +78,17 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void commit(Commitable updates,
+    public void commit(byte[] prefix,
+        Commitable updates,
         int takeQuorum,
         long timeoutInMillis) throws Exception {
 
         long timestampId = orderIdProvider.nextId();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, (highwaters, scan) -> {
-                return updates.commitable(highwaters, (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
+            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix, (highwaters, scan) -> {
+                return updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
                     long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
-                    return scan.row(rowTxId, prefix, key, value, timestamp, valueTombstone);
+                    return scan.row(rowTxId, key, value, timestamp, valueTombstone);
                 });
             }, walUpdated);
             amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
@@ -115,9 +116,9 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public boolean get(WALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
+    public boolean get(byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
         return partitionStripeProvider.txPartition(partitionName,
-            (stripe, highwaterStorage) -> stripe.get(partitionName, keys, valuesStream));
+            (stripe, highwaterStorage) -> stripe.get(partitionName, prefix, keys, valuesStream));
     }
 
     @Override
@@ -157,18 +158,21 @@ public class StripedPartition implements AmzaPartitionAPI {
         });
     }
 
-    public WALHighwater takeAllFromTransactionId(PartitionName partitionName,
-        long transactionId,
-        Highwaters highwaters,
-        TxKeyValueStream txKeyValueStream) throws Exception {
-
+    @Override
+    public TakeResult takeFromTransactionId(byte[] prefix, long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters,
-                (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
-                    txKeyValueStream.row(rowTxId, prefix, key, value, valueTimestamp, valueTombstone);
-                    return true;
+            MutableLong lastTxId = new MutableLong(-1);
+            WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, prefix, transactionId, highwaterStorage, highwaters,
+                (rowTxId, _prefix, key, value, valueTimestamp, valueTombstone) -> {
+                    if (valueTombstone || scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value))) {
+                        if (rowTxId > lastTxId.longValue()) {
+                            lastTxId.setValue(rowTxId);
+                        }
+                        return true;
+                    }
+                    return false;
                 });
-            return tookToEnd;
+            return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd);
         });
     }
 

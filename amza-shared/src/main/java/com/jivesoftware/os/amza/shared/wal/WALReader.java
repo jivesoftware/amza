@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.filer.IReadable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
+import com.jivesoftware.os.amza.shared.stream.Fps;
 
 public interface WALReader {
 
@@ -35,11 +36,6 @@ public interface WALReader {
 
     byte[] read(long fp) throws Exception;
 
-    interface ReadTx<R> {
-
-        R tx(IReadable readable) throws Exception;
-    }
-
-    <R> R read(long fp, ReadTx<R> tx) throws Exception;
+    boolean read(Fps fps, RowStream rowStream) throws Exception;
 
 }

@@ -95,7 +95,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
 
     public boolean isMemberOfRing(byte[] ringName) throws Exception {
         boolean[] isMember = new boolean[1];
-        ringIndex.containsKeys(stream -> stream.stream(null, key(ringName, rootRingMember)),
+        ringIndex.containsKeys(null, stream -> stream.stream(key(ringName, rootRingMember)),
             (prefix, key, contained) -> {
                 isMember[0] = contained;
                 return true;
@@ -108,7 +108,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
 
         NavigableMap<RingMember, RingHost> orderedRing = new TreeMap<>();
         byte[] from = key(ringName, null);
-        nodeIndex.streamValues(
+        nodeIndex.streamValues(null,
             stream -> ringIndex.rangeScan(null,
                 from,
                 null,
@@ -116,7 +116,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
                 (prefix, key, value, valueTimestamp, valueTombstone) -> {
                     if (!valueTombstone) {
                         RingMember ringMember = keyToRingMember(key);
-                        return stream.stream(null, ringMember.toBytes());
+                        return stream.stream(ringMember.toBytes());
                     } else {
                         return true;
                     }

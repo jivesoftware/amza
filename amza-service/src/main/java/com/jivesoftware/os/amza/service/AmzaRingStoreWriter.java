@@ -104,16 +104,16 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
             return;
         }
-        systemWALStorage.update(PartitionProvider.NODE_INDEX,
-            (highwater, scan) -> scan.row(-1, null, ringMember.toBytes(), ringHost.toBytes(), orderIdProvider.nextId(), false),
+        systemWALStorage.update(PartitionProvider.NODE_INDEX, null,
+            (highwater, scan) -> scan.row(-1, ringMember.toBytes(), ringHost.toBytes(), orderIdProvider.nextId(), false),
             walUpdated);
         LOG.info("register ringMember:{} as ringHost:{}", ringMember, ringHost);
     }
 
     @Override
     public void deregister(RingMember ringMember) throws Exception {
-        systemWALStorage.update(PartitionProvider.NODE_INDEX,
-            (highwater, scan) -> scan.row(-1, null, ringMember.toBytes(), null, orderIdProvider.nextId(), true),
+        systemWALStorage.update(PartitionProvider.NODE_INDEX, null,
+            (highwater, scan) -> scan.row(-1, ringMember.toBytes(), null, orderIdProvider.nextId(), true),
             walUpdated);
         LOG.info("deregister ringMember:{}");
     }
@@ -180,11 +180,11 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
          We deliberately do a slab update of rings to ensure "all at once" ring visibility.
          */
 
-        systemWALStorage.update(PartitionProvider.RING_INDEX,
+        systemWALStorage.update(PartitionProvider.RING_INDEX, null,
             (highwater, scan) -> {
                 long timestamp = orderIdProvider.nextId();
                 for (RingMember member : members) {
-                    if (!scan.row(-1, null, ringStoreReader.key(ringName, member), new byte[0], timestamp, false)) {
+                    if (!scan.row(-1, ringStoreReader.key(ringName, member), new byte[0], timestamp, false)) {
                         return false;
                     }
                 }
@@ -204,8 +204,8 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         byte[] key = ringStoreReader.key(ringName, ringMember);
         TimestampedValue had = systemWALStorage.get(PartitionProvider.RING_INDEX, null, key);
         if (had != null) {
-            systemWALStorage.update(PartitionProvider.RING_INDEX,
-                (highwater, scan) -> scan.row(-1, null, key, null, orderIdProvider.nextId(), true),
+            systemWALStorage.update(PartitionProvider.RING_INDEX, null,
+                (highwater, scan) -> scan.row(-1, key, null, orderIdProvider.nextId(), true),
                 walUpdated);
         }
     }

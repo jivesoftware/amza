@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
+import com.jivesoftware.os.amza.shared.stream.Fps;
 import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -186,7 +187,6 @@ public class BinaryRowReader implements WALReader {
                         }
                         int trailingLength = -1;
                         try {
-
                             rowType = RowType.fromByte((byte) filer.read());
                             rowTxId = UIO.readLong(filer, "txId");
                             row = new byte[length - lengthOfTypeAndTxId];
@@ -270,103 +270,38 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public <R> R read(long position, ReadTx<R> tx) throws Exception {
-        int length = -1;
-        try {
-            IReadable filer = parent.fileChannelMemMapFiler(position + 4);
-            if (filer == null) {
-                filer = parent.fileChannelFiler();
-            }
-
-            filer.seek(position);
-            length = UIO.readInt(filer, "length");
-
-            if (position + 4 + length > filer.length()) {
-                filer = parent.fileChannelMemMapFiler(position + 4 + length);
+    public boolean read(Fps fps, RowStream rowStream) throws Exception {
+        return fps.consume(fp -> {
+            int length = -1;
+            try {
+                IReadable filer = parent.fileChannelMemMapFiler(fp + 4);
                 if (filer == null) {
                     filer = parent.fileChannelFiler();
                 }
+
+                filer.seek(fp);
+                length = UIO.readInt(filer, "length");
+
+                if (fp + 4 + length > filer.length()) {
+                    filer = parent.fileChannelMemMapFiler(fp + 4 + length);
+                    if (filer == null) {
+                        filer = parent.fileChannelFiler();
+                    }
+                }
+
+                filer.seek(fp + 4);
+                RowType rowType = RowType.fromByte((byte) filer.read());
+                long rowTxId = UIO.readLong(filer, "txId");
+
+                byte[] row = new byte[length - (1 + 8)];
+                if (row.length > 0) {
+                    filer.read(row);
+                }
+                return rowStream.row(fp, rowTxId, rowType, row);
+            } catch (NegativeArraySizeException x) {
+                LOG.error("FAILED to read length:" + length + " bytes at position:" + fp + " in file:" + parent);
+                throw x;
             }
-
-            int rowLength = length - (1 + 8);
-            if (rowLength > 0) {
-                return tx.tx(new RowReadable(filer, position + 4 + 1 + 8, rowLength));
-            }
-            return null;
-        } catch (NegativeArraySizeException x) {
-            LOG.error("FAILED to read length:" + length + " bytes at position:" + position + " in file:" + parent);
-            throw x;
-        }
-    }
-
-    static class RowReadable implements IReadable {
-
-        private final IReadable readable;
-        private final long parentFp;
-        private final long length;
-        private long fp = 0;
-
-        public RowReadable(IReadable readable, long parentFp, long length) throws IOException {
-            this.readable = readable;
-            this.parentFp = parentFp;
-            this.length = length;
-            readable.seek(parentFp);
-        }
-
-        @Override
-        public int read() throws IOException {
-            int r = readable.read();
-            fp++;
-            return r;
-        }
-
-        @Override
-        public int read(byte[] b) throws IOException {
-            if (fp + b.length > length) {
-                throw new IOException("Read overflow. fp:" + fp + " length:" + length);
-            }
-            int r = readable.read(b);
-            fp += b.length;
-            return r;
-        }
-
-        @Override
-        public int read(byte[] b, int _offset, int _len) throws IOException {
-            if (fp + _len > length) {
-                throw new IOException("Read overflow. fp:" + fp + " length:" + length);
-            }
-            int r = readable.read();
-            fp += b.length;
-            return r;
-        }
-
-        @Override
-        public void close() throws IOException {
-            readable.close();
-        }
-
-        @Override
-        public Object lock() {
-            return readable.lock();
-        }
-
-        @Override
-        public void seek(long position) throws IOException {
-            if (position > length || position < 0) {
-                throw new IOException("Seek over/under flow. seek:" + position + " length:" + length);
-            }
-            readable.seek(parentFp + position);
-        }
-
-        @Override
-        public long length() throws IOException {
-            return length;
-        }
-
-        @Override
-        public long getFilePointer() throws IOException {
-            return fp;
-        }
-
+        });
     }
 }

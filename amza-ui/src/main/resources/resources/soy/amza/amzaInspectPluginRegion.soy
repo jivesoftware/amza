@@ -6,6 +6,7 @@
  * @param? systemRegion
  * @param? ringName
  * @param? regionName
+ * @param? prefix
  * @param? key
  * @param? offset
  * @param? batchSize
@@ -31,6 +32,7 @@
                             <th>System</th>
                             <th>Ring Name</th>
                             <th>Region Name</th>
+                            <th>Prefix</th>
                             <th>Key/s</th>
                             <th>Offset</th>
                             <th>Batch</th>
@@ -53,6 +55,11 @@
                                     <input type="text" style="padding-left:10px;"
                                         class="form-control" placeholder="Region Name" value="{$regionName?:''}"
                                         name="regionName" data-original-title="" title="{$regionName?:''}">
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                        class="form-control" placeholder="Prefix" value="{$prefix?:''}"
+                                        name="prefix" data-original-title="" title="{$prefix?:''}">
                                 </td>
                                 <td>
                                     <input type="text" style="padding-left:10px;"
@@ -81,16 +88,21 @@
                 <table class="table table-condensed">
                     <thead>
                         <tr>
-                            <th>key</th>
-                            <th>value</th>
-                            <th>timestamp</th>
-                            <th>tombstone</th>
+                            <th>Prefix</th>
+                            <th>Key</th>
+                            <th>Value</th>
+                            <th>Timestamp</th>
+                            <th>Tombstone</th>
                         </tr>
                     </thead>
                     <tbody>
                         {if $rows}
                             {foreach $r in $rows}
                                 <tr>
+                                    <td>
+                                        <p>{$r.prefixAsHex?:''}</p>
+                                        <p>{$r.prefixAsString?:''}</p>
+                                    </td>
                                     <td>
                                         <p>{$r.keyAsHex?:''}</p>
                                         <p>{$r.keyAsString?:''}</p>

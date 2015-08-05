@@ -17,9 +17,10 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.wal.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 
 public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> {
@@ -62,6 +63,21 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
             }),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
                 txKeyValueStream.row(txId, prefix, key, value, valueTimestamp, valueTombstoned));
+    }
+
+    @Override
+    public boolean fromRows(TxFpRows txFpRows, UnprefixedTxKeyValueStream txKeyValueStream) throws Exception {
+        return WALKey.decompose(
+            stream -> txFpRows.consume((txId, fp, row) -> {
+                HeapFiler filer = new HeapFiler(row);
+                long timestamp = UIO.readLong(filer, "timestamp");
+                boolean tombstone = UIO.readBoolean(filer, "tombstone");
+                byte[] value = UIO.readByteArray(filer, "value");
+                byte[] key = UIO.readByteArray(filer, "key");
+                return stream.stream(txId, fp, key, value, timestamp, tombstone, row);
+            }),
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
+                txKeyValueStream.row(txId, key, value, valueTimestamp, valueTombstoned));
     }
 
     @Override

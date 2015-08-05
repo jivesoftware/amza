@@ -2,6 +2,16 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.TxFpStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.WALMergeKeyPointerStream;
 
 /**
  * @author jonathan.colt
@@ -26,8 +36,8 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
-        return keys.consume((prefix, key) -> stream.stream(prefix, key, -1, false, -1));
+    public boolean getPointers(byte[] prefix, UnprefixedWALKeys keys, WALKeyPointerStream stream) throws Exception {
+        return keys.consume((key) -> stream.stream(prefix, key, -1, false, -1));
     }
 
     @Override
@@ -37,13 +47,28 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
-        return keys.consume((prefix, key) -> stream.stream(prefix, key, false));
+    public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
+        return keys.consume((key) -> stream.stream(prefix, key, false));
     }
 
     @Override
     public boolean isEmpty() throws Exception {
         return false;
+    }
+
+    @Override
+    public long deltaCount(WALKeyPointers keyPointers) throws Exception {
+        long[] delta = new long[1];
+        boolean completed = keyPointers.consume((prefix, key, timestamp, tombstoned, fp) -> {
+            if (!tombstoned) {
+                delta[0]++;
+            }
+            return true;
+        });
+        if (!completed) {
+            return -1;
+        }
+        return delta[0];
     }
 
     @Override

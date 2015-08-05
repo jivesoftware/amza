@@ -67,8 +67,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             long removeTimestamp = orderIdProvider.nextId();
             systemWALStorage.rangeScan(PartitionProvider.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
                 (prefix, key, value, valueTimestamp, valueTombstone) -> {
-                    systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX,
-                        (highwaters, txKeyValueStream) -> txKeyValueStream.row(-1, prefix, key, value, removeTimestamp, true),
+                    systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX, prefix,
+                        (highwaters, txKeyValueStream) -> txKeyValueStream.row(-1, key, value, removeTimestamp, true),
                         walUpdated);
                     return true;
                 });
@@ -132,8 +132,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         try {
             ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
             if (partitionHighwaterUpdates != null) {
-                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX,
-                    (highwater, scan) -> scan.row(-1, null, walKey(versionedPartitionName, member), null, orderIdProvider.nextId(), true),
+                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX, null,
+                    (highwater, scan) -> scan.row(-1, walKey(versionedPartitionName, member), null, orderIdProvider.nextId(), true),
                     walUpdated);
                 partitionHighwaterUpdates.remove(versionedPartitionName);
             }
@@ -190,11 +190,11 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         try {
             final ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitions = hostToPartitionToHighwaterUpdates.get(member);
             if (partitions != null && !partitions.isEmpty()) {
-                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX,
+                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX, null,
                     (highwater, scan) -> {
                         long timestamp = orderIdProvider.nextId();
                         for (VersionedPartitionName versionedPartitionName : partitions.keySet()) {
-                            if (!scan.row(-1, null, walKey(versionedPartitionName, member), null, timestamp, true)) {
+                            if (!scan.row(-1, walKey(versionedPartitionName, member), null, timestamp, true)) {
                                 return false;
                             }
                         }
@@ -218,7 +218,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             long flushedUpdates = updatesSinceLastFlush.get();
             if (flushedUpdates > flushHighwatersAfterNUpdates) {
 
-                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX,
+                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX, null,
                     (highwater, scan) -> {
                         if (preFlush != null) {
                             preFlush.call();
@@ -234,7 +234,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                                     try {
                                         long txId = highwaterUpdates.getTxId();
                                         int total = highwaterUpdates.updates.get();
-                                        if (!scan.row(-1, null, walKey(partitionEntry.getKey(), ringMember), UIO.longBytes(txId), timestamp, false)) {
+                                        if (!scan.row(-1, walKey(partitionEntry.getKey(), ringMember), UIO.longBytes(txId), timestamp, false)) {
                                             return false;
                                         }
                                         highwaterUpdates.update(txId, -total);

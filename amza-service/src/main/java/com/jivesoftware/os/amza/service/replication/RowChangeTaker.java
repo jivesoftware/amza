@@ -576,12 +576,13 @@ public class RowChangeTaker implements RowChanges {
         public int flush() throws Exception {
             flushedTxId.setValue(lastTxId.longValue());
             if (!batch.isEmpty()) {
+                byte[] prefix = batch.get(0).prefix; //TODO seems leaky
                 amzaStats.took(ringMember, versionedPartitionName.getPartitionName(), batch.size(), oldestTxId.longValue());
                 WALHighwater walh = highwater.get();
                 MemoryWALUpdates updates = new MemoryWALUpdates(batch, walh);
                 while (true) {
                     try {
-                        RowsChanged changes = commitTo.commit(updates);
+                        RowsChanged changes = commitTo.commit(prefix, updates);
                         if (changes != null) {
                             if (walh != null) {
                                 for (RingMemberHighwater memberHighwater : walh.ringMemberHighwater) {

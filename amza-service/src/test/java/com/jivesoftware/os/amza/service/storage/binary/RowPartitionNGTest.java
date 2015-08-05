@@ -109,13 +109,13 @@ public class RowPartitionNGTest {
 
     private void addBatch(Random r, OrderIdProviderImpl idProvider, WALStorage indexedWAL, int range, int start, int length) throws Exception {
         List<WALRow> updates = Lists.newArrayList();
+        byte[] prefix = UIO.intBytes(-1);
         for (int i = start; i < start + length; i++) {
-            byte[] prefix = UIO.intBytes(-r.nextInt(range));
             byte[] key = UIO.intBytes(r.nextInt(range));
             byte[] value = UIO.intBytes(i);
             updates.add(new WALRow(prefix, key, value, idProvider.nextId(), false));
         }
-        indexedWAL.update(-1, false, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(-1, false, prefix, new MemoryWALUpdates(updates, null));
     }
 
     @Test
@@ -219,6 +219,6 @@ public class RowPartitionNGTest {
     private void update(WALStorage indexedWAL, byte[] prefix, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         List<WALRow> updates = Lists.newArrayList();
         updates.add(new WALRow(prefix, key, value, timestamp, remove));
-        indexedWAL.update(-1, false, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(-1, false, prefix, new MemoryWALUpdates(updates, null));
     }
 }

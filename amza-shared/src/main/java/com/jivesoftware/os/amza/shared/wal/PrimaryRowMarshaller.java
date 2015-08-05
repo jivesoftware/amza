@@ -15,6 +15,10 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
+
 public interface PrimaryRowMarshaller<R> {
 
     R toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned) throws Exception;
@@ -42,6 +46,8 @@ public interface PrimaryRowMarshaller<R> {
     boolean fromRows(FpRows fpRows, FpKeyValueStream fpKeyValueStream) throws Exception;
 
     boolean fromRows(TxFpRows txFpRows, TxKeyValueStream txKeyValueStream) throws Exception;
+
+    boolean fromRows(TxFpRows txFpRows, UnprefixedTxKeyValueStream txKeyValueStream) throws Exception;
 
     boolean fromRows(TxFpRows txFpRows, WALKey.TxFpKeyValueEntryStream<byte[]> txFpKeyValueEntryStream) throws Exception;
 

@@ -20,9 +20,9 @@ import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 
 public class PartitionStore implements RangeScannable {
@@ -71,39 +71,35 @@ public class PartitionStore implements RangeScannable {
         return walStorage.get(prefix, key);
     }
 
-    public boolean streamValues(WALKeys keys, KeyValueStream stream) throws Exception {
-        return walStorage.streamValues(keys, stream);
+    public boolean streamValues(byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
+        return walStorage.streamValues(prefix, keys, stream);
     }
 
     public boolean containsKey(byte[] prefix, byte[] key) throws Exception {
         boolean[] result = new boolean[1];
-        walStorage.containsKeys(stream -> stream.stream(prefix, key), (_prefix, _key, contained) -> {
+        walStorage.containsKeys(prefix, stream -> stream.stream(key), (_prefix, _key, contained) -> {
             result[0] = contained;
             return true;
         });
         return result[0];
     }
 
-    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
-        return walStorage.containsKeys(keys, stream);
+    public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
+        return walStorage.containsKeys(prefix, keys, stream);
     }
 
     public void takeRowUpdatesSince(long transactionId, RowStream rowStream) throws Exception {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged merge(long forceTxId, Commitable updates) throws Exception {
-        RowsChanged changes = walStorage.update(forceTxId, true, updates);
+    public RowsChanged merge(long forceTxId, byte[] prefix, Commitable updates) throws Exception {
+        RowsChanged changes = walStorage.update(forceTxId, true, prefix, updates);
         walStorage.flush(hardFlush);
         return changes;
     }
 
     public void updatedStorageDescriptor(WALStorageDescriptor storageDescriptor) throws Exception {
         walStorage.updatedStorageDescriptor(storageDescriptor);
-    }
-
-    public long count() throws Exception {
-        return walStorage.count();
     }
 
     public long highestTxId() {

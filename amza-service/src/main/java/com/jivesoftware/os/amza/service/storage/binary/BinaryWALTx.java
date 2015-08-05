@@ -11,7 +11,7 @@ import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.TxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
 import com.jivesoftware.os.amza.shared.wal.WALWriter.IndexableKeys;

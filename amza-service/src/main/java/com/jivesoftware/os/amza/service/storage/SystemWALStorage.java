@@ -124,6 +124,25 @@ public class SystemWALStorage {
             });
     }
 
+    public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName,
+        byte[] prefix,
+        long transactionId,
+        Highwaters highwaters,
+        TxKeyValueStream txKeyValueStream)
+        throws Exception {
+        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
+        return partitionIndex.get(versionedPartitionName).getWalStorage().takeRowUpdatesSince(prefix, transactionId,
+            (rowFP, rowTxId, rowType, row) -> {
+                if (rowType == RowType.highwater && highwaters != null) {
+                    WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
+                    highwaters.highwater(highwater);
+                } else if (rowType == RowType.primary && rowTxId > transactionId) {
+                    return rowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(rowTxId, rowFP, row), txKeyValueStream);
+                }
+                return true;
+            });
+    }
+
     public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName, long transactionId, RowStream rowStream)
         throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");

@@ -151,6 +151,23 @@ public class SystemPartition implements AmzaPartitionAPI {
     }
 
     @Override
+    public TakeResult takeFromTransactionId(byte[] prefix, long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
+        final MutableLong lastTxId = new MutableLong(-1);
+        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
+        boolean tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, prefix, transactionId, highwaters,
+            (rowTxId, _prefix, key, value, valueTimestamp, valueTombstone) -> {
+                if (valueTombstone || scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value))) {
+                    if (rowTxId > lastTxId.longValue()) {
+                        lastTxId.setValue(rowTxId);
+                    }
+                    return true;
+                }
+                return false;
+            });
+        return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd ? partitionHighwater : null);
+    }
+
+    @Override
     public long count() throws Exception {
         return systemWALStorage.count(versionedPartitionName);
     }

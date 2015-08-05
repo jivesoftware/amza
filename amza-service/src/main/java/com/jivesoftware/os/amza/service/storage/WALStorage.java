@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.Fps;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
@@ -623,12 +624,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    // TODO fix instanciation to hashcode
+    // TODO fix instantiation to hashcode
     private long getLargestTimestampForKeyStripe(byte[] prefix, byte[] key) {
         int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % stripedKeyHighwaterTimestamps.length);
         return stripedKeyHighwaterTimestamps[highwaterTimestampIndex];
     }
 
+    //TODO replace with stream!
     private byte[] hydrateRowIndexValue(long indexFP) {
         try {
             byte[] row = walTx.read((WALReader rowReader) -> rowReader.read(indexFP));

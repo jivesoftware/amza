@@ -14,6 +14,6 @@ public interface WALFiler extends IWriteable, IReadable {
 
     IReadable fileChannelFiler() throws IOException;
 
-    IReadable fileChannelMemMapFiler(long boundaryFp) throws IOException;
+    IReadable bestFiler(IReadable current, long boundaryFp) throws IOException;
 
 }

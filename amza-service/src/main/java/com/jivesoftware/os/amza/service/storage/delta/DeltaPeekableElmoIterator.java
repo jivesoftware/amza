@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 /**
+ * TODO replace with stream!
+ *
  * @author jonathan.colt
  */
 class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>> {

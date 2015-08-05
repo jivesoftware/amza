@@ -134,15 +134,16 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
 
     boolean takeRows(ConsumeTxFps consumeTxFps, RowStream rowStream) throws Exception {
         return wal.read(reader -> primaryRowMarshaller.fromRows(
-            txFpRowStream -> consumeTxFps.consume(txFps -> {
-                for (long fp : txFps.fps) {
-                    byte[] rawRow = reader.read(fp);
-                    if (!txFpRowStream.stream(txFps.txId, fp, rawRow)) {
-                        return false;
+            txFpRowStream -> consumeTxFps.consume(txFps -> reader.read(
+                fpStream -> {
+                    for (long fp : txFps.fps) {
+                        if (!fpStream.stream(fp)) {
+                            return false;
+                        }
                     }
-                }
-                return true;
-            }),
+                    return true;
+                },
+                (rowFP, rowTxId, rowType, row) -> txFpRowStream.stream(rowTxId, rowFP, row))),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
                 HeapFiler filer = new HeapFiler(value);
                 byte[] deltaRow = primaryRowMarshaller.toRow(key, UIO.readByteArray(filer, "value"), valueTimestamp, valueTombstoned);
@@ -177,10 +178,8 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
     public boolean hydrate(Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception {
         try {
             return primaryRowMarshaller.fromRows(
-                (PrimaryRowMarshaller.FpRows) fpRowStream -> fps.consume(fp -> {
-                    byte[] row = wal.read(rowReader -> rowReader.read(fp));
-                    return fpRowStream.stream(fp, row);
-                }),
+                (PrimaryRowMarshaller.FpRows) fpRowStream -> wal.read(
+                    reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, row))),
                 (fp, prefix, key, value, valueTimestamp, valueTombstoned) -> {
                     byte[] deltaValue = UIO.readByteArray(value, 0, "value");
                     return fpKeyValueStream.stream(fp, prefix, key, deltaValue, valueTimestamp, valueTombstoned);
@@ -192,10 +191,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
 
     public boolean hydrateKeyValueHighwaters(Fps fps, FpKeyValueHighwaterStream stream) throws Exception {
         return primaryRowMarshaller.fromRows(
-            fpRowStream -> fps.consume(fp -> {
-                byte[] row = wal.read((WALReader rowReader) -> rowReader.read(fp));
-                return fpRowStream.stream(-1, fp, row);
-            }),
+            fpRowStream -> wal.read(reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, row))),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
                 try {
                     HeapFiler filer = new HeapFiler(value);

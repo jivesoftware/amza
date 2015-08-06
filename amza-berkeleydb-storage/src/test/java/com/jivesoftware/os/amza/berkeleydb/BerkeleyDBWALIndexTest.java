@@ -125,6 +125,34 @@ public class BerkeleyDBWALIndexTest {
     }
 
     @Test
+    public void testTakePrefixed() throws Exception {
+
+        File dir0 = Files.createTempDir();
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
+        BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
+
+        index.merge((TxKeyPointerStream stream) -> {
+            for (long i = 0; i < 64; i++) {
+                byte[] prefix = { 0, (byte) (i % 4) };
+                byte[] key = { 0, 0, (byte) (i % 2), (byte) i };
+                if (!stream.stream(i, prefix, key, System.currentTimeMillis(), false, i)) {
+                    return false;
+                }
+            }
+            return true;
+        }, null);
+
+        int[] count = new int[1];
+        byte[] prefix = { 0, 1 };
+        index.takePrefixUpdatesSince(prefix, 0, (txId, fp) -> {
+            count[0]++;
+            Assert.assertEquals(fp % 4, 1);
+            return true;
+        });
+        Assert.assertEquals(count[0], 16);
+    }
+
+    @Test
     public void testCompact() throws Exception {
 
         File dir0 = Files.createTempDir();

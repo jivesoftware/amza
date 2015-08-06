@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;

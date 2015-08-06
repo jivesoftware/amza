@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
@@ -160,6 +161,7 @@ public class StripedPartition implements AmzaPartitionAPI {
 
     @Override
     public TakeResult takeFromTransactionId(byte[] prefix, long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
+        Preconditions.checkNotNull(prefix, "Must specify a prefix");
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             MutableLong lastTxId = new MutableLong(-1);
             WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, prefix, transactionId, highwaterStorage, highwaters,

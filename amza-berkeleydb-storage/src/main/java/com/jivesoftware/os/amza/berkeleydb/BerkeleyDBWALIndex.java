@@ -182,15 +182,17 @@ public class BerkeleyDBWALIndex implements WALIndex {
             DatabaseEntry valueEntry = new DatabaseEntry();
             valueEntry.setPartial(true);
             return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
-                do {
-                    if (KeyUtil.compare(keyEntry.getData(), toFpPk) >= 0) {
-                        return false;
+                if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
+                    do {
+                        if (KeyUtil.compare(keyEntry.getData(), toFpPk) >= 0) {
+                            return false;
+                        }
+                        if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, null)) {
+                            return false;
+                        }
                     }
-                    if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, null)) {
-                        return false;
-                    }
+                    while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
                 }
-                while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
                 return true;
             }, (txId, fp, _prefix, key, value, valueTimestamp, valueTombstoned, entry) -> {
                 long takeTxId = UIO.bytesLong(key, 0);

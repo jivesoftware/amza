@@ -13,9 +13,9 @@
     <properties>
         <jive.utils.version>0.93</jive.utils.version>
         <glassfish.version>2.13</glassfish.version>
-        <mlogger.version>0.10</mlogger.version>
-        <filer.version>0.72</filer.version>
-        <routing.bird.version>0.15</routing.bird.version>
+        <mlogger.version>0.12</mlogger.version>
+        <filer.version>0.74</filer.version>
+        <routing.bird.version>0.24</routing.bird.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>

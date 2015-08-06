@@ -1,13 +1,16 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
 import com.google.common.io.Files;
+import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import java.io.File;
 import java.util.Arrays;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
@@ -58,6 +61,67 @@ public class BerkeleyDBWALIndexTest {
             });
 
         }
+    }
+
+    @Test
+    public void testRangesNoPrefix() throws Exception {
+
+        File dir0 = Files.createTempDir();
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
+        BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
+
+        index.merge((TxKeyPointerStream stream) -> {
+            for (long i = 0; i < 64; i++) {
+                byte[] key = { 0, (byte) (i % 4), (byte) (i % 2), (byte) i };
+                if (!stream.stream(i, null, key, System.currentTimeMillis(), false, i)) {
+                    return false;
+                }
+            }
+            return true;
+        }, null);
+
+        int[] count = new int[1];
+        byte[] fromKey = { 0, 1, 0, 0 };
+        byte[] toKey = { 0, 2, 0, 0 };
+        index.rangeScan(null, fromKey, null, toKey, (prefix, key, timestamp, tombstoned, fp) -> {
+            count[0]++;
+            Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(fromKey, key) <= 0);
+            Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(key, toKey) < 0);
+            //System.out.println("prefix: " + Arrays.toString(prefix) + " key: " + Arrays.toString(key));
+            return true;
+        });
+        Assert.assertEquals(count[0], 16);
+    }
+
+    @Test
+    public void testRangesPrefixed() throws Exception {
+
+        File dir0 = Files.createTempDir();
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
+        BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
+
+        index.merge((TxKeyPointerStream stream) -> {
+            for (long i = 0; i < 64; i++) {
+                byte[] prefix = { 0, (byte) (i % 4) };
+                byte[] key = { 0, 0, (byte) (i % 2), (byte) i };
+                if (!stream.stream(i, prefix, key, System.currentTimeMillis(), false, i)) {
+                    return false;
+                }
+            }
+            return true;
+        }, null);
+
+        int[] count = new int[1];
+        byte[] fromPrefix = { 0, 1 };
+        byte[] toPrefix = { 0, 2 };
+        index.rangeScan(fromPrefix, new byte[0], toPrefix, new byte[0], (prefix, key, timestamp, tombstoned, fp) -> {
+            count[0]++;
+            Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(fromPrefix, prefix) <= 0);
+            Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(prefix, toPrefix) < 0);
+            //System.out.println("prefix: " + Arrays.toString(prefix) + " key: " + Arrays.toString(key));
+            return true;
+        });
+        Assert.assertEquals(count[0], 16);
     }
 
     @Test

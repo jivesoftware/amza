@@ -69,9 +69,9 @@ public class PartitionProvider {
         }
 
         byte[] rawPartitionName = partitionName.toBytes();
-        TimestampedValue propertiesValue = systemWALStorage.get(REGION_PROPERTIES, rawPartitionName);
+        TimestampedValue propertiesValue = systemWALStorage.get(REGION_PROPERTIES, null, rawPartitionName);
         if (propertiesValue != null) {
-            TimestampedValue indexValue = systemWALStorage.get(REGION_INDEX, rawPartitionName);
+            TimestampedValue indexValue = systemWALStorage.get(REGION_INDEX, null, rawPartitionName);
             if (indexValue != null) {
                 return true;
             }
@@ -90,9 +90,9 @@ public class PartitionProvider {
             updatePartitionProperties(partitionName, properties);
 
             byte[] rawPartitionName = partitionName.toBytes();
-            RowsChanged changed = systemWALStorage.update(REGION_INDEX, (highwater, scan) -> {
-                return scan.row(-1, rawPartitionName, rawPartitionName, orderIdProvider.nextId(), false);
-            }, walUpdated);
+            RowsChanged changed = systemWALStorage.update(REGION_INDEX, null,
+                (highwater, scan) -> scan.row(-1, rawPartitionName, rawPartitionName, orderIdProvider.nextId(), false),
+                walUpdated);
             if (!changed.isEmpty()) {
                 rowChanges.changes(changed);
             }
@@ -104,7 +104,7 @@ public class PartitionProvider {
     }
 
     public void updatePartitionProperties(PartitionName partitionName, PartitionProperties properties) throws Exception {
-        RowsChanged changed = systemWALStorage.update(REGION_PROPERTIES, (highwater, scan) -> {
+        RowsChanged changed = systemWALStorage.update(REGION_PROPERTIES, null, (highwater, scan) -> {
             return scan.row(-1, partitionName.toBytes(), partitionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false);
         }, walUpdated);
         if (!changed.isEmpty()) {
@@ -116,11 +116,11 @@ public class PartitionProvider {
     public void destroyPartition(PartitionName partitionName) throws Exception {
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot destroy a system partition");
 
-        systemWALStorage.update(REGION_INDEX, (highwaters, scan) -> {
+        systemWALStorage.update(REGION_INDEX, null, (highwaters, scan) -> {
             return scan.row(-1, partitionName.toBytes(), null, orderIdProvider.nextId(), true);
         }, walUpdated);
 
-        systemWALStorage.update(REGION_PROPERTIES, (highwaters, scan) -> {
+        systemWALStorage.update(REGION_PROPERTIES, null, (highwaters, scan) -> {
             return scan.row(-1, partitionName.toBytes(), null, orderIdProvider.nextId(), true);
         }, walUpdated);
 

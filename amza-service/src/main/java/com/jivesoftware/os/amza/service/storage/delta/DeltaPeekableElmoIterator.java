@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.AbstractMap;
@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 /**
+ * TODO replace with stream!
+ *
  * @author jonathan.colt
  */
 class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>> {
@@ -53,7 +55,7 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>>
             cNext = compactingIterator.next();
         }
         if (iNext != null && cNext != null) {
-            int compare = WALKey.compare(iNext.getKey(), cNext.getKey());
+            int compare = KeyUtil.compare(iNext.getKey(), cNext.getKey());
             if (compare == 0) {
                 if (iNext.getValue().getTimestampId() > cNext.getValue().getTimestampId()) {
                     last = hydrate(iNext, hydrator);
@@ -84,12 +86,8 @@ class DeltaPeekableElmoIterator implements Iterator<Map.Entry<byte[], WALValue>>
     // TODO fix this Ugly Abomination
     private Map.Entry<byte[], WALValue> hydrate(Map.Entry<byte[], WALPointer> entry, WALRowHydrator valueHydrator) {
         try {
-            Map.Entry<byte[], WALValue>[] hydrated = new Map.Entry[1];
-            valueHydrator.hydrate(entry.getValue().getFp(), (fp, key, value, valueTimestamp, valueTombstone, highwater) -> {
-                hydrated[0] = new AbstractMap.SimpleEntry<>(entry.getKey(), new WALValue(value, valueTimestamp, valueTombstone));
-                return true;
-            });
-            return hydrated[0];
+            WALValue hydrated = valueHydrator.hydrate(entry.getValue().getFp());
+            return new AbstractMap.SimpleEntry<>(entry.getKey(), hydrated);
         } catch (Exception e) {
             throw new RuntimeException("Failed to hydrate while iterating delta", e);
         }

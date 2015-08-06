@@ -16,7 +16,6 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.base.Splitter;
-import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
@@ -28,7 +27,6 @@ import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -69,9 +67,10 @@ public class AmzaEndpoints {
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
+                //TODO prefix
                 updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
             }
-            partitionAPI.commit(updates, 1, 30000);
+            partitionAPI.commit(null, updates, 1, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
@@ -88,10 +87,11 @@ public class AmzaEndpoints {
             AmzaPartitionAPI partitionAPI = createPartitionIfAbsent("default", partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
-            updates.setAll(
-                Iterables.transform(values.entrySet(), input -> new AbstractMap.SimpleEntry<>(input.getKey().getBytes(), input.getValue().getBytes())),
-                -1);
-            partitionAPI.commit(updates, 1, 30000);
+            for (Map.Entry<String, String> entry : values.entrySet()) {
+                //TODO prefix
+                updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
+            }
+            partitionAPI.commit(null, updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -110,10 +110,11 @@ public class AmzaEndpoints {
             AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
-            updates.setAll(
-                Iterables.transform(values.entrySet(), input -> new AbstractMap.SimpleEntry<>(input.getKey().getBytes(), input.getValue().getBytes())),
-                -1);
-            partitionAPI.commit(updates, 1, 30000);
+            for (Map.Entry<String, String> entry : values.entrySet()) {
+                //TODO prefix
+                updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
+            }
+            partitionAPI.commit(null, updates, 1, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -131,7 +132,8 @@ public class AmzaEndpoints {
         try {
             AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             List<byte[]> got = new ArrayList<>();
-            partitionAPI.get(
+            //TODO prefix
+            partitionAPI.get(null,
                 stream -> {
                     for (String s : Splitter.on(',').split(key)) {
                         if (!stream.stream(s.getBytes())) {
@@ -140,7 +142,7 @@ public class AmzaEndpoints {
                     }
                     return true;
                 },
-                (key1, value, timestamp) -> {
+                (_prefix, _key, value, timestamp) -> {
                     got.add(value);
                     return true;
                 });
@@ -160,8 +162,9 @@ public class AmzaEndpoints {
         try {
             AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
+            //TODO prefix
             updates.remove(key.getBytes(), -1);
-            partitionAPI.commit(updates, 1, 30000);
+            partitionAPI.commit(null, updates, 1, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove partition:" + partition + " key:" + key, x);

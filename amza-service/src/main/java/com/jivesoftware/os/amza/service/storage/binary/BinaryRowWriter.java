@@ -36,8 +36,14 @@ public class BinaryRowWriter implements WALWriter {
     }
 
     @Override
-    public int write(long txId, RowType rowType, RawRows rows, IndexableKeys indexableKeys, TxKeyPointerFpStream stream) throws Exception {
-        HeapFiler memoryFiler = new HeapFiler();
+    public int write(long txId,
+        RowType rowType,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
+        RawRows rows,
+        IndexableKeys indexableKeys,
+        TxKeyPointerFpStream stream) throws Exception {
+        HeapFiler memoryFiler = new HeapFiler(new byte[(estimatedNumberOfRows * (4 + 1 + 8 + 4)) + estimatedSizeInBytes]);
         TLongArrayList offsets = new TLongArrayList();
         rows.consume(row -> {
             offsets.add(memoryFiler.getFilePointer());
@@ -61,7 +67,8 @@ public class BinaryRowWriter implements WALWriter {
         }
 
         TLongIterator iter = offsets.iterator();
-        indexableKeys.consume((key, valueTimestamp, valueTombstones) -> stream.stream(txId, key, valueTimestamp, valueTombstones, startFp + iter.next()));
+        indexableKeys.consume((prefix, key, valueTimestamp, valueTombstones) ->
+            stream.stream(txId, prefix, key, valueTimestamp, valueTombstones, startFp + iter.next()));
         return offsets.size();
     }
 
@@ -79,9 +86,11 @@ public class BinaryRowWriter implements WALWriter {
         long[] fps = new long[1];
         write(-1L,
             type,
+            1,
+            row.length,
             stream -> stream.stream(row),
-            stream -> stream.stream(null, -1, false),
-            (txId, key, valueTimestamp, valueTombstoned, fp) -> {
+            stream -> stream.stream(null, null, -1, false),
+            (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> {
                 fps[0] = fp;
                 return true;
             });

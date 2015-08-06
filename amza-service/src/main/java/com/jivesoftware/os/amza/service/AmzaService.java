@@ -329,7 +329,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         } else {
             PartitionStore store = partitionIndex.get(PartitionProvider.REGION_INDEX);
             if (store != null) {
-                return store.containsKey(partitionName.toBytes());
+                return store.containsKey(null, partitionName.toBytes());
             }
             return false;
         }

@@ -1,7 +1,5 @@
 package com.jivesoftware.os.amza.shared.partition;
 
-import java.util.Arrays;
-
 /**
  * @author jonathan.colt
  */
@@ -9,23 +7,23 @@ public interface TxPartitionStatus {
 
     enum Status {
 
-        EXPUNGE(new byte[]{2}),
-        ONLINE(new byte[]{1}),
-        KETCHUP(new byte[]{0});
+        EXPUNGE((byte) 2),
+        ONLINE((byte) 1),
+        KETCHUP((byte) 0);
 
-        private final byte[] serializedForm;
+        private final byte serializedForm;
 
-        private Status(byte[] serializedForm) {
+        Status(byte serializedForm) {
             this.serializedForm = serializedForm;
         }
 
-        public byte[] getSerializedForm() {
+        public byte getSerializedForm() {
             return serializedForm;
         }
 
-        public static Status fromSerializedForm(byte[] bytes) {
+        public static Status fromSerializedForm(byte serializedForm) {
             for (Status s : values()) {
-                if (Arrays.equals(s.getSerializedForm(), bytes)) {
+                if (s.getSerializedForm() == serializedForm) {
                     return s;
                 }
             }

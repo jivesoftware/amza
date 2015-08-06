@@ -45,7 +45,11 @@ public class HeapFiler implements IFiler {
     }
 
     public byte[] getBytes() {
-        return trim(bytes, (int) fp);
+        if (fp == bytes.length) {
+            return bytes;
+        } else {
+            return trim(bytes, (int) fp);
+        }
     }
 
     public byte[] leakBytes() {

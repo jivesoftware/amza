@@ -15,17 +15,17 @@
  */
 package com.jivesoftware.os.amza.shared;
 
+import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 public class AmzaPartitionUpdates implements Commitable {
 
-    private final ConcurrentSkipListMap<byte[], WALValue> changes = new ConcurrentSkipListMap<>(WALKey::compare);
+    private final ConcurrentSkipListMap<byte[], WALValue> changes = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
 
     public AmzaPartitionUpdates setAll(Iterable<Entry<byte[], byte[]>> updates) throws Exception {
         setAll(updates, -1);
@@ -83,7 +83,7 @@ public class AmzaPartitionUpdates implements Commitable {
     }
 
     @Override
-    public boolean commitable(Highwaters highwaters, TxKeyValueStream txKeyValueStream) throws Exception {
+    public boolean commitable(Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) throws Exception {
         for (Entry<byte[], WALValue> e : changes.entrySet()) {
             WALValue value = e.getValue();
             if (!txKeyValueStream.row(-1, e.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
@@ -92,5 +92,4 @@ public class AmzaPartitionUpdates implements Commitable {
         }
         return true;
     }
-
 }

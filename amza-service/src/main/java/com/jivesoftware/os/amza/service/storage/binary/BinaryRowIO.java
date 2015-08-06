@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage.binary;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.shared.stream.Fps;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
@@ -25,7 +26,8 @@ public class BinaryRowIO<K> implements RowIO<K> {
     private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
 
-    public BinaryRowIO(ManageRowIO<K> manageRowIO, K filerKey,
+    public BinaryRowIO(ManageRowIO<K> manageRowIO,
+        K filerKey,
         BinaryRowReader rowReader,
         BinaryRowWriter rowWriter) throws Exception {
 
@@ -102,8 +104,8 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public <R> R read(long fp, ReadTx<R> tx) throws Exception {
-        return rowReader.read(fp, tx);
+    public boolean read(Fps fps, RowStream rowStream) throws Exception {
+        return rowReader.read(fps, rowStream);
     }
 
     @Override
@@ -119,10 +121,12 @@ public class BinaryRowIO<K> implements RowIO<K> {
     @Override
     public int write(long txId,
         RowType rowType,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream) throws Exception {
-        int count = rowWriter.write(txId, rowType, rows, indexableKeys, stream);
+        int count = rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream);
         if (updatesSinceLeap.addAndGet(count) >= UPDATES_BETWEEN_LEAPS) {
             LeapFrog latest = latestLeapFrog.get();
             Leaps leaps = computeNextLeaps(txId, latest);

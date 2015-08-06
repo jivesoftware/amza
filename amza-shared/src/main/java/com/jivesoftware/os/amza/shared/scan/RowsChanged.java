@@ -16,15 +16,13 @@
 package com.jivesoftware.os.amza.shared.scan;
 
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
-public class RowsChanged implements Commitable {
+public class RowsChanged {
 
     private final VersionedPartitionName versionedPartitionName;
     private final long oldestApply;
@@ -75,21 +73,6 @@ public class RowsChanged implements Commitable {
             return false;
         }
         return !(clobber != null && !clobber.isEmpty());
-    }
-
-    @Override
-    public boolean commitable(Highwaters highwaters, TxKeyValueStream scan) {
-        for (Entry<WALKey, WALValue> cell : apply.entrySet()) {
-            try {
-                WALValue value = cell.getValue();
-                if (!scan.row(-1L, cell.getKey().getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
-                    return false;
-                }
-            } catch (Throwable ex) {
-                throw new RuntimeException("Error while streaming entry set.", ex);
-            }
-        }
-        return true;
     }
 
     public long getLargestCommittedTxId() {

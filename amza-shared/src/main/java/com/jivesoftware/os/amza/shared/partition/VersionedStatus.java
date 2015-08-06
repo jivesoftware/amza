@@ -1,13 +1,11 @@
 package com.jivesoftware.os.amza.shared.partition;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
 import java.util.Objects;
 
 /**
- *
  * @author jonathan.colt
  */
 public class VersionedStatus {
@@ -17,24 +15,22 @@ public class VersionedStatus {
     public final long stripeVersion;
 
     public byte[] toBytes() throws IOException {
-        HeapFiler filer = new HeapFiler();
-        UIO.writeByte(filer, 0, "serializationVersion");
-        UIO.writeByteArray(filer, status.getSerializedForm(), "status");
-        UIO.writeLong(filer, version, "version");
-        UIO.writeLong(filer, stripeVersion, "stripeVersion");
-        return filer.getBytes();
+        byte[] asBytes = new byte[1 + 1 + 8 + 8];
+        asBytes[0] = 0; // version
+        asBytes[1] = status.getSerializedForm();
+        UIO.longBytes(version, asBytes, 1 + 1);
+        UIO.longBytes(stripeVersion, asBytes, 1 + 1 + 8);
+        return asBytes;
     }
 
     public static VersionedStatus fromBytes(byte[] bytes) throws IOException {
-        HeapFiler filer = new HeapFiler(bytes);
-        byte serializationVersion = UIO.readByte(filer, "serializationVersion");
-        if (serializationVersion != 0) {
-            throw new IllegalStateException("Failed to deserialize due to an unknown version:" + serializationVersion);
+        if (bytes[0] == 0) {
+            TxPartitionStatus.Status status = TxPartitionStatus.Status.fromSerializedForm(bytes[1]);
+            long version = UIO.bytesLong(bytes, 1 + 1);
+            long stripeVersion = UIO.bytesLong(bytes, 1 + 1 + 8);
+            return new VersionedStatus(status, version, stripeVersion);
         }
-        TxPartitionStatus.Status status = TxPartitionStatus.Status.fromSerializedForm(UIO.readByteArray(filer, "status"));
-        long version = UIO.readLong(filer, "version");
-        long stripeVersion = UIO.readLong(filer, "stripeVersion");
-        return new VersionedStatus(status, version, stripeVersion);
+        throw new IllegalStateException("Failed to deserialize due to an unknown version:" + bytes[0]);
     }
 
     public VersionedStatus(TxPartitionStatus.Status status, long version, long stripeVersion) {

@@ -40,6 +40,10 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
         this.size = new AtomicLong(super.length());
     }
 
+    public String getFileName() {
+        return fileName;
+    }
+
     @Override
     public IReadable fileChannelFiler() {
         final FileChannel channel = getChannel();
@@ -47,11 +51,14 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
     }
 
     @Override
-    public IReadable fileChannelMemMapFiler(long size) throws IOException {
-        if (!useMemMap) {
-            return null;
+    public IReadable bestFiler(IReadable current, long size) throws IOException {
+        if (current != null && current.length() >= size) {
+            return current;
         }
-        if (size <= memMapFilerLength.get()) {
+        if (!useMemMap) {
+            return fileChannelFiler();
+        }
+        if (memMapFilerLength.get() >= size) {
             return memMapFiler.get().duplicate();
         }
         synchronized (this) {

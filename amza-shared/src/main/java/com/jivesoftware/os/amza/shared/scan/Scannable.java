@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared.scan;
 
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 
 public interface Scannable {
 

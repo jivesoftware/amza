@@ -15,31 +15,81 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.google.common.primitives.UnsignedBytes;
-import java.nio.charset.StandardCharsets;
+import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.util.Arrays;
+import java.util.Comparator;
 
-public class WALKey implements Comparable<WALKey> {
+public class WALKey {
 
-    private final byte[] key;
+    public final byte[] prefix;
+    public final byte[] key;
+
     private transient int hashCode = 0;
 
-    public WALKey(byte[] key) {
+    public WALKey(byte[] prefix, byte[] key) {
+        this.prefix = prefix;
         this.key = key;
     }
 
-    /**
-     * Please don't mutate this array. Should hand out a copy but trying to make this as fast as possible.
-     *
-     * @return the key!
-     */
-    final public byte[] getKey() {
-        return key;
+    public byte[] compose() {
+        return compose(prefix, key);
     }
 
-    public static byte[] prefixUpperExclusive(byte[] key) {
-        byte[] upper = new byte[key.length];
-        System.arraycopy(key, 0, upper, 0, key.length);
+    public int sizeOfComposed() {
+        return sizeOfComposed(prefix != null ? prefix.length : 0, key.length);
+    }
+
+    public static byte[] compose(byte[] prefix, byte[] key) {
+        Preconditions.checkNotNull(key, "Key cannot be null");
+
+        int prefixLength = prefix != null ? prefix.length : 0;
+        Preconditions.checkArgument(prefixLength <= Short.MAX_VALUE, "Max prefix length is %s", Short.MAX_VALUE);
+
+        byte[] pk = new byte[2 + prefixLength + key.length];
+        UIO.shortBytes((short) prefixLength, pk, 0);
+        if (prefix != null) {
+            System.arraycopy(prefix, 0, pk, 2, prefixLength);
+        }
+        System.arraycopy(key, 0, pk, 2 + prefixLength, key.length);
+        return pk;
+    }
+
+    public static int sizeOfComposed(int sizeOfPrefix, int sizeOfKey) {
+        return 2 + sizeOfPrefix + sizeOfKey;
+    }
+
+    public interface TxFpRawKeyValueEntries<R> {
+
+        boolean consume(TxFpRawKeyValueEntryStream<R> txFpRawKeyValueEntryStream) throws Exception;
+    }
+
+    public interface TxFpRawKeyValueEntryStream<R> {
+
+        boolean stream(long txId, long fp, byte[] rawKey, byte[] value, long valueTimestamp, boolean valueTombstoned, R entry) throws Exception;
+    }
+
+    public interface TxFpKeyValueEntryStream<R> {
+
+        boolean stream(long txId, long fp, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, R entry) throws Exception;
+    }
+
+    public static <R> boolean decompose(TxFpRawKeyValueEntries<R> keyEntries, TxFpKeyValueEntryStream<R> stream) throws Exception {
+        return keyEntries.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned, entry) -> {
+            short prefixLengthInBytes = UIO.bytesShort(rawKey);
+            byte[] prefix = prefixLengthInBytes > 0 ? new byte[prefixLengthInBytes] : null;
+            byte[] key = new byte[rawKey.length - 2 - prefixLengthInBytes];
+            if (prefix != null) {
+                System.arraycopy(rawKey, 2, prefix, 0, prefixLengthInBytes);
+            }
+            System.arraycopy(rawKey, 2 + prefixLengthInBytes, key, 0, key.length);
+            return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry);
+        });
+    }
+
+    public static byte[] prefixUpperExclusive(byte[] keyFragment) {
+        byte[] upper = new byte[keyFragment.length];
+        System.arraycopy(keyFragment, 0, upper, 0, keyFragment.length);
 
         // given: [64,72,96,127]
         // want: [64,72,97,-128]
@@ -55,41 +105,39 @@ public class WALKey implements Comparable<WALKey> {
     }
 
     @Override
-    final public int compareTo(WALKey o) {
-        return compare(key, o.key);
-    }
-
-    public static int compare(byte[] keyA, byte[] keyB) {
-        return UnsignedBytes.lexicographicalComparator().compare(keyA, keyB);
-    }
-
-    @Override
     public String toString() {
-        return "WALKey{" + "key=" + new String(key, StandardCharsets.US_ASCII) + '}';
+        return "WALKey{" +
+            "key=" + Arrays.toString(key) +
+            ", prefix=" + Arrays.toString(prefix) +
+            '}';
     }
 
     @Override
     public int hashCode() {
         if (hashCode == 0) {
             int hash = 3;
-            hash = 83 * hash + Arrays.hashCode(this.key);
+            hash = 83 * hash + (prefix != null ? Arrays.hashCode(prefix) : 0);
+            hash = 83 * hash + (key != null ? Arrays.hashCode(key) : 0);
             hashCode = hash;
         }
         return hashCode;
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        if (getClass() != obj.getClass()) {
+
+        WALKey walKey = (WALKey) o;
+
+        if (!Arrays.equals(prefix, walKey.prefix)) {
             return false;
         }
-        final WALKey other = (WALKey) obj;
-        if (!Arrays.equals(this.key, other.key)) {
-            return false;
-        }
-        return true;
+        return Arrays.equals(key, walKey.key);
+
     }
 }

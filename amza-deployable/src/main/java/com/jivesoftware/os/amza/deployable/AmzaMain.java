@@ -26,7 +26,6 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
-import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
@@ -183,22 +182,11 @@ public class AmzaMain {
             deployable.buildServer().start();
             serviceStartupHealthCheck.success();
 
-            if (amzaConfig.getAutoDiscoveryEnabled()) {
-                AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getRingReader(),
-                    amzaService.getRingWriter(),
-                    instanceConfig.getClusterName(),
-                    amzaConfig.getDiscoveryMulticastGroup(),
-                    amzaConfig.getDiscoveryMulticastPort());
-
-                amzaDiscovery.start();
-                System.out.println("-----------------------------------------------------------------------");
-                System.out.println("|      Amza Service Discovery Online");
-                System.out.println("-----------------------------------------------------------------------");
-            } else {
-                System.out.println("-----------------------------------------------------------------------");
-                System.out.println("|     Amza Service is in manual Discovery mode.  No cluster name was specified");
-                System.out.println("-----------------------------------------------------------------------");
-            }
+             RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
+                instanceConfig.getServiceName(),
+                amzaService,
+                amzaConfig.getDiscoveryIntervalMillis());
+            routingBirdAmzaDiscovery.start();
 
         } catch (Throwable t) {
             serviceStartupHealthCheck.info("Encountered the following failure during startup.", t);

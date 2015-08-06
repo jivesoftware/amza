@@ -15,17 +15,47 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.shared.scan.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
 
 public interface PrimaryRowMarshaller<R> {
 
     R toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned) throws Exception;
 
-    boolean fromRow(R row, KeyValueStream keyValueStream) throws Exception;
+    int sizeInBytes(int pkSizeInBytes, int valueSizeInBytes);
 
-    boolean fromRow(R row, long txId, TxKeyValueStream keyValueStream) throws Exception;
+    interface FpRows {
+
+        boolean consume(FpRowStream fpRowStream) throws Exception;
+    }
+
+    interface FpRowStream {
+
+        boolean stream(long fp, byte[] row) throws Exception;
+    }
+
+    interface TxFpRows {
+
+        boolean consume(TxFpRowStream txFpRowStream) throws Exception;
+    }
+
+    interface TxFpRowStream {
+
+        boolean stream(long txId, long fp, byte[] row) throws Exception;
+    }
+
+    boolean fromRows(FpRows fpRows, FpKeyValueStream fpKeyValueStream) throws Exception;
+
+    boolean fromRows(TxFpRows txFpRows, TxKeyValueStream txKeyValueStream) throws Exception;
+
+    boolean fromRows(TxFpRows txFpRows, UnprefixedTxKeyValueStream txKeyValueStream) throws Exception;
+
+    boolean fromRows(TxFpRows txFpRows, WALKey.TxFpKeyValueEntryStream<byte[]> txFpKeyValueEntryStream) throws Exception;
 
     byte[] valueFromRow(R row) throws Exception;
 
     long timestampFromRow(R row) throws Exception;
+
+    boolean tombstonedFromRow(R row) throws Exception;
 }

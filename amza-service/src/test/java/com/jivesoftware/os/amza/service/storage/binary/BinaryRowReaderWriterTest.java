@@ -39,7 +39,7 @@ import org.testng.annotations.Test;
 public class BinaryRowReaderWriterTest {
 
     private final WALWriter.IndexableKeys indexableKeys = stream -> true;
-    private final WALWriter.TxKeyPointerFpStream txKeyPointerFpStream = (txId, key, valueTimestamp, valueTombstoned, fp) -> true;
+    private final WALWriter.TxKeyPointerFpStream txKeyPointerFpStream = (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true;
 
     @Test
     public void testValidateDiskBacked() throws Exception {
@@ -64,9 +64,9 @@ public class BinaryRowReaderWriterTest {
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 3);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
-        binaryRowWriter.write(0L, RowType.primary, stream -> stream.stream(new byte[] { 1, 2, 3, 4 }), indexableKeys, txKeyPointerFpStream);
-        binaryRowWriter.write(1L, RowType.primary, stream -> stream.stream(new byte[] { 1, 2, 3, 5 }), indexableKeys, txKeyPointerFpStream);
-        binaryRowWriter.write(2L, RowType.primary, stream -> stream.stream(new byte[] { 1, 2, 3, 6 }), indexableKeys, txKeyPointerFpStream);
+        binaryRowWriter.write(0L, RowType.primary, 1, 4, stream -> stream.stream(new byte[] { 1, 2, 3, 4 }), indexableKeys, txKeyPointerFpStream);
+        binaryRowWriter.write(1L, RowType.primary, 1, 4, stream -> stream.stream(new byte[] { 1, 2, 3, 5 }), indexableKeys, txKeyPointerFpStream);
+        binaryRowWriter.write(2L, RowType.primary, 1, 4, stream -> stream.stream(new byte[] { 1, 2, 3, 6 }), indexableKeys, txKeyPointerFpStream);
 
         Assert.assertTrue(binaryRowReader.validate());
 
@@ -106,7 +106,7 @@ public class BinaryRowReaderWriterTest {
         Assert.assertTrue(readStream.rows.isEmpty());
         readStream.clear();
 
-        binaryRowWriter.write(0L, RowType.primary, stream -> stream.stream(new byte[] { 1, 2, 3, 4 }), indexableKeys, txKeyPointerFpStream);
+        binaryRowWriter.write(0L, RowType.primary, 1, 4, stream -> stream.stream(new byte[] { 1, 2, 3, 4 }), indexableKeys, txKeyPointerFpStream);
         binaryRowReader.scan(0, false, readStream);
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
@@ -115,7 +115,7 @@ public class BinaryRowReaderWriterTest {
         Assert.assertEquals(readStream.rows.size(), 1);
         readStream.clear();
 
-        binaryRowWriter.write(2L, RowType.primary, stream -> stream.stream(new byte[] { 2, 3, 4, 5 }), indexableKeys, txKeyPointerFpStream);
+        binaryRowWriter.write(2L, RowType.primary, 1, 4, stream -> stream.stream(new byte[] { 2, 3, 4, 5 }), indexableKeys, txKeyPointerFpStream);
         binaryRowReader.scan(0, false, readStream);
         Assert.assertEquals(readStream.rows.size(), 2);
         readStream.clear();
@@ -143,7 +143,7 @@ public class BinaryRowReaderWriterTest {
         int numEntries = 1_000_000;
         for (long i = 0; i < numEntries; i++) {
             byte[] row = (String.valueOf(i) + "k" + (i % 1000)).getBytes();
-            binaryRowWriter.write(i, RowType.primary, stream -> stream.stream(row), indexableKeys, txKeyPointerFpStream);
+            binaryRowWriter.write(i, RowType.primary, 1, row.length, stream -> stream.stream(row), indexableKeys, txKeyPointerFpStream);
         }
 
         for (int i = 0; i < 10; i++) {
@@ -182,7 +182,7 @@ public class BinaryRowReaderWriterTest {
 
             byte[] row = new byte[4];
             rand.nextBytes(row);
-            binaryRowWriter.write(i, RowType.primary, stream -> stream.stream(row), indexableKeys, txKeyPointerFpStream);
+            binaryRowWriter.write(i, RowType.primary, 1, row.length, stream -> stream.stream(row), indexableKeys, txKeyPointerFpStream);
             filer.close();
         }
 

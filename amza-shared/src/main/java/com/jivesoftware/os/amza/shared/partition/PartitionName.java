@@ -19,7 +19,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.filer.UIO;
 import java.io.IOException;
 import java.util.Arrays;
@@ -32,31 +31,32 @@ public class PartitionName implements Comparable<PartitionName> {
     private transient int hash = 0;
 
     public byte[] toBytes() {
-        try {
-            HeapFiler memoryFiler = new HeapFiler();
-            UIO.writeByte(memoryFiler, 0, "version");
-            UIO.writeBoolean(memoryFiler, systemPartition, "systemPartition");
-            UIO.writeByteArray(memoryFiler, ringName, "ringName");
-            UIO.writeByteArray(memoryFiler, name, "name");
-            return memoryFiler.getBytes();
-        } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
-        }
+        byte[] asBytes = new byte[1 + 1 + 4 + ringName.length + 4 + name.length];
+        asBytes[0] = 0; // version
+        asBytes[1] = (byte) (systemPartition ? 1 : 0);
+        UIO.intBytes(ringName.length, asBytes, 1 + 1);
+        System.arraycopy(ringName, 0, asBytes, 1 + 1 + 4, ringName.length);
+        UIO.intBytes(name.length, asBytes, 1 + 1 + 4 + ringName.length);
+        System.arraycopy(name, 0, asBytes, 1 + 1 + 4 + ringName.length + 4, name.length);
+        return asBytes;
+    }
+
+    public int sizeInBytes() {
+        return 1 + 1 + 4 + ringName.length + 4 + name.length;
     }
 
     public static PartitionName fromBytes(byte[] bytes) {
-        try {
-            HeapFiler memoryFiler = new HeapFiler(bytes);
-            if (UIO.readByte(memoryFiler, "version") == 0) {
-                return new PartitionName(
-                    UIO.readBoolean(memoryFiler, "systemPartition"),
-                    UIO.readByteArray(memoryFiler, "ringName"),
-                    UIO.readByteArray(memoryFiler, "name"));
-            }
-            throw new RuntimeException("Invalid version:" + bytes[0]);
-        } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
+        if (bytes[0] == 0) { // version
+            boolean systemPartition = (bytes[1] == 1);
+            int ringNameLength = UIO.bytesInt(bytes, 1 + 1);
+            byte[] ringName = new byte[ringNameLength];
+            System.arraycopy(bytes, 1 + 1 + 4, ringName, 0, ringNameLength);
+            int nameLength = UIO.bytesInt(bytes, 1 + 1 + 4 + ringNameLength);
+            byte[] name = new byte[nameLength];
+            System.arraycopy(bytes, 1 + 1 + 4 + ringNameLength + 4, name, 0, nameLength);
+            return new PartitionName(systemPartition, ringName, name);
         }
+        throw new RuntimeException("Invalid version:" + bytes[0]);
     }
 
     @JsonCreator

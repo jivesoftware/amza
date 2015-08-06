@@ -550,17 +550,18 @@ public class RowChangeTaker implements RowChanges {
                     oldestTxId.setValue(Long.MAX_VALUE);
                 }
 
-                primaryRowMarshaller.fromRow(row, txId, (rowTxId, key, value, valueTimestamp, valueTombstoned) -> {
-                    streamed.incrementAndGet();
-                    if (highWaterMark.longValue() < txId) {
-                        highWaterMark.setValue(txId);
-                    }
-                    if (oldestTxId.longValue() > txId) {
-                        oldestTxId.setValue(txId);
-                    }
-                    batch.add(new WALRow(key, value, valueTimestamp, valueTombstoned));
-                    return true;
-                });
+                primaryRowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(txId, rowFP, row),
+                    (rowTxId, fp, prefix, key, value, valueTimestamp, valueTombstoned, _row) -> {
+                        streamed.incrementAndGet();
+                        if (highWaterMark.longValue() < txId) {
+                            highWaterMark.setValue(txId);
+                        }
+                        if (oldestTxId.longValue() > txId) {
+                            oldestTxId.setValue(txId);
+                        }
+                        batch.add(new WALRow(prefix, key, value, valueTimestamp, valueTombstoned));
+                        return true;
+                    });
 
             } else if (rowType == RowType.highwater) {
                 highwater.set(binaryHighwaterRowMarshaller.fromBytes(row));
@@ -575,12 +576,13 @@ public class RowChangeTaker implements RowChanges {
         public int flush() throws Exception {
             flushedTxId.setValue(lastTxId.longValue());
             if (!batch.isEmpty()) {
+                byte[] prefix = batch.get(0).prefix; //TODO seems leaky
                 amzaStats.took(ringMember, versionedPartitionName.getPartitionName(), batch.size(), oldestTxId.longValue());
                 WALHighwater walh = highwater.get();
                 MemoryWALUpdates updates = new MemoryWALUpdates(batch, walh);
                 while (true) {
                     try {
-                        RowsChanged changes = commitTo.commit(updates);
+                        RowsChanged changes = commitTo.commit(prefix, updates);
                         if (changes != null) {
                             if (walh != null) {
                                 for (RingMemberHighwater memberHighwater : walh.ringMemberHighwater) {

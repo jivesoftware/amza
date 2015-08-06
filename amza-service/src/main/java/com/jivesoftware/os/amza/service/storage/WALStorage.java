@@ -24,19 +24,21 @@ import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.WALMergeKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.TxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALIndexable;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
-import com.jivesoftware.os.amza.shared.wal.WALMergeKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
@@ -227,44 +229,61 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             MutableBoolean needKeyHighwaterStripes = new MutableBoolean(true);
             MutableBoolean needHighestTxId = new MutableBoolean(true);
 
-            KeyValueStream mergeStripedKeyHighwaters = (byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) -> {
-                mergeStripedKeyHighwaters(key, valueTimestamp);
+            FpKeyValueStream mergeStripedKeyHighwaters = (fp, prefix, key, value, valueTimestamp, valueTombstoned) -> {
+                mergeStripedKeyHighwaters(prefix, key, valueTimestamp);
                 return true;
             };
 
-            walTx.read((WALReader rowReader) -> {
-                rowReader.reverseScan((rowPointer, rowTxId, rowType, row) -> {
-                    if (rowTxId > lastTxId.longValue()) {
-                        lastTxId.setValue(rowTxId);
-                        needHighestTxId.setValue(false);
-                    }
-                    if ((needCompactionHints.booleanValue() || needKeyHighwaterStripes.booleanValue()) && rowType == RowType.system) {
-                        long key = UIO.bytesLong(row, 0);
-                        if (key == RowType.COMPACTION_HINTS_KEY) {
-                            long[] parts = UIO.bytesLongs(row);
-                            if (needCompactionHints.booleanValue()) {
-                                keyCount.set(parts[1]);
-                                clobberCount.set(parts[2]);
-                                needCompactionHints.setValue(false);
-                            }
-                            if (needKeyHighwaterStripes.booleanValue()) {
-                                if (parts.length - 3 == numKeyHighwaterStripes) {
-                                    for (int i = 0; i < numKeyHighwaterStripes; i++) {
-                                        stripedKeyHighwaterTimestamps[i] = Math.max(stripedKeyHighwaterTimestamps[i], parts[i + 3]);
+            MutableLong keys = new MutableLong(0);
+            MutableLong clobbers = new MutableLong(0);
+            boolean completed = primaryRowMarshaller.fromRows(fpRowStream -> {
+                return walTx.read(rowReader -> {
+                    rowReader.reverseScan((rowFP, rowTxId, rowType, row) -> {
+                        if (rowTxId > lastTxId.longValue()) {
+                            lastTxId.setValue(rowTxId);
+                            needHighestTxId.setValue(false);
+                        }
+                        if ((needCompactionHints.booleanValue() || needKeyHighwaterStripes.booleanValue()) && rowType == RowType.system) {
+                            long key = UIO.bytesLong(row, 0);
+                            if (key == RowType.COMPACTION_HINTS_KEY) {
+                                long[] parts = UIO.bytesLongs(row);
+                                if (needCompactionHints.booleanValue()) {
+                                    keys.add(parts[1]);
+                                    clobbers.add(parts[2]);
+                                    needCompactionHints.setValue(false);
+                                }
+                                if (needKeyHighwaterStripes.booleanValue()) {
+                                    if (parts.length - 3 == numKeyHighwaterStripes) {
+                                        for (int i = 0; i < numKeyHighwaterStripes; i++) {
+                                            stripedKeyHighwaterTimestamps[i] = Math.max(stripedKeyHighwaterTimestamps[i], parts[i + 3]);
+                                        }
+                                        needKeyHighwaterStripes.setValue(false);
                                     }
-                                    needKeyHighwaterStripes.setValue(false);
                                 }
                             }
                         }
-                    }
-                    if (needKeyHighwaterStripes.booleanValue() && rowType == RowType.primary) {
-                        primaryRowMarshaller.fromRow(row, mergeStripedKeyHighwaters);
-                    }
-                    rowsVisited.decrement();
-                    return needHighestTxId.booleanValue() || needCompactionHints.booleanValue() || needKeyHighwaterStripes.booleanValue();
+                        if (rowType == RowType.primary) {
+                            if (needCompactionHints.booleanValue()) {
+                                keys.increment();
+                            }
+                            if (needKeyHighwaterStripes.booleanValue() && !fpRowStream.stream(rowFP, row)) {
+                                return false;
+                            }
+                        }
+                        rowsVisited.decrement();
+                        return needHighestTxId.booleanValue() || needCompactionHints.booleanValue() || needKeyHighwaterStripes.booleanValue();
+                    });
+                    return true;
                 });
-                return null;
-            });
+            }, mergeStripedKeyHighwaters);
+
+            if (!completed) {
+                throw new IllegalStateException("WALStorage failed to load completely for: " + versionedPartitionName);
+            }
+
+            keyCount.set(keys.longValue());
+            clobberCount.set(clobbers.longValue());
+
             if (!highestTxId.compareAndSet(0, lastTxId.longValue())) {
                 throw new RuntimeException("Load should have completed before highestTxId:" + highestTxId.get() + " is modified.");
             }
@@ -280,8 +299,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    private void mergeStripedKeyHighwaters(byte[] key, long valueTimestamp) {
-        int highwaterTimestampIndex = Math.abs(Arrays.hashCode(key) % stripedKeyHighwaterTimestamps.length);
+    private void mergeStripedKeyHighwaters(byte[] prefix, byte[] key, long valueTimestamp) {
+        int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % stripedKeyHighwaterTimestamps.length);
         stripedKeyHighwaterTimestamps[highwaterTimestampIndex] = Math.max(stripedKeyHighwaterTimestamps[highwaterTimestampIndex], valueTimestamp);
     }
 
@@ -317,9 +336,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId}));
+                indexCommitedUpToTxId }));
         }
     }
 
@@ -329,7 +348,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public RowsChanged update(long forceTxId, boolean forceApply, Commitable updates) throws Exception {
+    public RowsChanged update(long forceTxId, boolean forceApply, byte[] prefix, Commitable updates) throws Exception {
 
         AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         Map<WALKey, WALValue> apply = new LinkedHashMap<>();
@@ -349,7 +368,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 keys.add(key);
                 values.add(walValue);
             } else {
-                apply.put(new WALKey(key), walValue);
+                apply.put(new WALKey(prefix, key), walValue);
             }
             return true;
         });
@@ -366,13 +385,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 wali.getPointers((KeyValueStream stream) -> {
                     for (int k = 0; k < keys.size(); k++) {
                         WALValue value = values.get(k);
-                        if (!stream.stream(keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+                        if (!stream.stream(prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
                             return false;
                         }
                     }
                     return true;
-                }, (key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                    WALKey walKey = new WALKey(key);
+                }, (_prefix, key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+                    WALKey walKey = new WALKey(prefix, key);
                     WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone);
                     if (pointerFp == -1) {
                         apply.put(walKey, walValue);
@@ -386,7 +405,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         }
                         //TODO do we REALLY need the old value? WALValue value = hydrateRowIndexValue(currentPointer);
                         WALTimestampId currentTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
-                        KeyedTimestampId keyedTimestampId = new KeyedTimestampId(walKey.getKey(),
+                        KeyedTimestampId keyedTimestampId = new KeyedTimestampId(walKey.prefix,
+                            walKey.key,
                             currentTimestampId.getTimestampId(),
                             currentTimestampId.getTombstoned());
                         clobbers.add(keyedTimestampId);
@@ -404,14 +424,21 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } else {
                 List<WALIndexable> indexables = new ArrayList<>(apply.size());
                 walTx.write((WALWriter rowWriter) -> {
+                    int estimatedSizeInBytes = 0;
+                    for (Entry<WALKey, WALValue> row : apply.entrySet()) {
+                        byte[] value = row.getValue().getValue();
+                        estimatedSizeInBytes += primaryRowMarshaller.sizeInBytes(row.getKey().sizeOfComposed(), (value != null ? value.length : 0));
+                    }
                     flush(forceTxId,
+                        apply.size(),
+                        estimatedSizeInBytes,
                         rowStream -> {
                             for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                                 WALValue value = row.getValue();
-                                if (!rowStream.stream(primaryRowMarshaller.toRow(row.getKey().getKey(),
-                                        value.getValue(),
-                                        value.getTimestampId(),
-                                        value.getTombstoned()))) {
+                                if (!rowStream.stream(primaryRowMarshaller.toRow(row.getKey().compose(),
+                                    value.getValue(),
+                                    value.getTimestampId(),
+                                    value.getTombstoned()))) {
                                     return false;
                                 }
                             }
@@ -420,7 +447,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         indexableKeyStream -> {
                             for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                                 WALValue value = row.getValue();
-                                if (!indexableKeyStream.stream(row.getKey().getKey(), value.getTimestampId(), value.getTombstoned())) {
+                                if (!indexableKeyStream.stream(row.getKey().prefix, row.getKey().key, value.getTimestampId(), value.getTombstoned())) {
                                     return false;
                                 }
                             }
@@ -430,8 +457,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         rowWriter,
                         highwater[0],
                         flushCompactionHint,
-                        (rowTxId, key, valueTimestamp, valueTombstoned, fp) -> {
-                            indexables.add(new WALIndexable(rowTxId, key, valueTimestamp, valueTombstoned, fp));
+                        (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, fp) -> {
+                            indexables.add(new WALIndexable(rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp));
                             return true;
                         });
 
@@ -439,22 +466,21 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 });
                 synchronized (oneIndexerAtATimeLock) {
                     wali.merge((TxKeyPointerStream stream) -> {
-                        for (WALIndexable indexable : indexables) {
-                            if (!stream.stream(indexable.txId, indexable.key, indexable.valueTimestamp, indexable.valueTombstoned, indexable.fp)) {
+                        for (WALIndexable ix : indexables) {
+                            if (!stream.stream(ix.txId, ix.prefix, ix.key, ix.valueTimestamp, ix.valueTombstoned, ix.fp)) {
                                 return false;
                             }
 
-                            mergeStripedKeyHighwaters(indexable.key, indexable.valueTimestamp);
-
+                            mergeStripedKeyHighwaters(ix.prefix, ix.key, ix.valueTimestamp);
                         }
                         return true;
-                    }, (mode, txId, key, timestamp, tombstoned, fp) -> {
+                    }, (mode, txId, _prefix, key, timestamp, tombstoned, fp) -> {
                         if (mode == WALMergeKeyPointerStream.added) {
                             keyCount.incrementAndGet();
                         } else if (mode == WALMergeKeyPointerStream.clobbered) {
                             clobberCount.incrementAndGet();
                         } else {
-                            apply.remove(new WALKey(key));
+                            apply.remove(new WALKey(prefix, key));
                         }
                         return true;
                     });
@@ -491,6 +517,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     }
 
     private void flush(long txId,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys,
         MutableLong indexCommitedUpToTxId,
@@ -505,7 +533,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 txId = orderIdProvider.nextId();
             }
             indexCommitedUpToTxId.setValue(txId);
-            count = rowWriter.write(txId, RowType.primary, rows, indexableKeys, stream);
+            count = rowWriter.write(txId, RowType.primary, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream);
             if (highwater != null) {
                 writeHighwaterMarker(rowWriter, highwater);
             }
@@ -521,8 +549,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
-            return wali.rowScan((key, timestamp, tombstoned, fp) -> {
-                return keyValueStream.stream(key, hydrateRowIndexValue(fp), timestamp, tombstoned);
+            return wali.rowScan((prefix, key, timestamp, tombstoned, fp) -> {
+                return keyValueStream.stream(prefix, key, hydrateRowIndexValue(fp), timestamp, tombstoned);
             });
         } finally {
             releaseOne();
@@ -530,24 +558,26 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     }
 
     @Override
-    public boolean rangeScan(byte[] from, byte[] to, KeyValueStream keyValueStream) throws Exception {
+    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
-            return wali.rangeScan(from,
-                to,
-                (key, timestamp, tombstoned, fp) -> keyValueStream.stream(key, hydrateRowIndexValue(fp), timestamp, tombstoned));
+            return wali.rangeScan(fromPrefix,
+                fromKey,
+                toPrefix,
+                toKey,
+                (prefix, key, timestamp, tombstoned, fp) -> keyValueStream.stream(prefix, key, hydrateRowIndexValue(fp), timestamp, tombstoned));
         } finally {
             releaseOne();
         }
     }
 
     // TODO fix barf
-    public TimestampedValue get(byte[] key) throws Exception {
+    public TimestampedValue get(byte[] prefix, byte[] key) throws Exception {
         acquireOne();
         try {
             TimestampedValue[] values = new TimestampedValue[1];
-            walIndex.get().getPointer(key, (key1, timestamp, tombstoned, fp) -> {
+            walIndex.get().getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, fp) -> {
                 if (fp != -1 && !tombstoned) {
                     values[0] = new TimestampedValue(timestamp, hydrateRowIndexValue(fp));
                 }
@@ -559,15 +589,15 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public boolean get(WALKeys keys, KeyValueStream keyValueStream) throws Exception {
+    public boolean streamValues(byte[] prefix, UnprefixedWALKeys keys, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().getPointers(keys,
-                (key, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+            return walIndex.get().getPointers(prefix, keys,
+                (_prefix, key, pointerTimestamp, pointerTombstoned, pointerFp) -> {
                     if (pointerFp != -1 && !pointerTombstoned) {
-                        return keyValueStream.stream(key, hydrateRowIndexValue(pointerFp), pointerTimestamp, pointerTombstoned);
+                        return keyValueStream.stream(prefix, key, hydrateRowIndexValue(pointerFp), pointerTimestamp, false);
                     } else {
-                        return keyValueStream.stream(key, null, -1, false);
+                        return keyValueStream.stream(prefix, key, null, -1, false);
                     }
                 });
         } finally {
@@ -575,16 +605,16 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public boolean streamWALPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
+    public boolean streamPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
         acquireOne();
         try {
             return walIndex.get().getPointers(
                 indexStream -> keyValues.consume(
-                    (key, value, valueTimestamp, valueTombstone) -> {
-                        if (valueTimestamp > getLargestTimestampForKeyStripe(key)) {
-                            return stream.stream(key, value, valueTimestamp, valueTombstone, -1, false, -1);
+                    (prefix, key, value, valueTimestamp, valueTombstone) -> {
+                        if (valueTimestamp > getLargestTimestampForKeyStripe(prefix, key)) {
+                            return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, -1, false, -1);
                         } else {
-                            return indexStream.stream(key, value, valueTimestamp, valueTombstone);
+                            return indexStream.stream(prefix, key, value, valueTimestamp, valueTombstone);
                         }
                     }),
                 stream);
@@ -593,21 +623,22 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
+    public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().containsKeys(keys, stream);
+            return walIndex.get().containsKeys(prefix, keys, stream);
         } finally {
             releaseOne();
         }
     }
 
-    // TODO fix instanciation to hashcode
-    private long getLargestTimestampForKeyStripe(byte[] key) {
-        int highwaterTimestampIndex = Math.abs(Arrays.hashCode(key) % stripedKeyHighwaterTimestamps.length);
+    // TODO fix instantiation to hashcode
+    private long getLargestTimestampForKeyStripe(byte[] prefix, byte[] key) {
+        int highwaterTimestampIndex = Math.abs((Arrays.hashCode(prefix) ^ Arrays.hashCode(key)) % stripedKeyHighwaterTimestamps.length);
         return stripedKeyHighwaterTimestamps[highwaterTimestampIndex];
     }
 
+    //TODO replace with stream!
     private byte[] hydrateRowIndexValue(long indexFP) {
         try {
             byte[] row = walTx.read((WALReader rowReader) -> rowReader.read(indexFP));
@@ -638,8 +669,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             long[] takeMetrics = new long[1];
-            Boolean readFromTransactionId = walTx.readFromTransactionId(sinceTransactionId, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
-                (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
+            Boolean readFromTransactionId = walTx.readFromTransactionId(sinceTransactionId, (offset, reader) -> reader.scan(offset, false,
+                (rowPointer, rowTxId, rowType, row) -> {
                     if (rowType != RowType.system && rowTxId > sinceTransactionId) {
                         return rowStream.row(rowPointer, rowTxId, rowType, row);
                     } else {
@@ -654,13 +685,35 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
+    public boolean takeRowUpdatesSince(byte[] prefix, long sinceTransactionId, RowStream rowStream) throws Exception {
+        if (sinceTransactionId >= highestTxId.get()) {
+            return true;
+        }
+        acquireOne();
+        try {
+            long[] takeMetrics = new long[1];
+            WALIndex wali = walIndex.get();
+            Boolean readFromTransactionId = walTx.read(reader ->
+                reader.read(fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
+                    (rowPointer, rowTxId, rowType, row) -> {
+                        if (rowType != RowType.system && rowTxId > sinceTransactionId) {
+                            return rowStream.row(rowPointer, rowTxId, rowType, row);
+                        } else {
+                            takeMetrics[0]++;
+                        }
+                        return true;
+                    }));
+            LOG.inc("excessTakes", takeMetrics[0]);
+            return readFromTransactionId;
+        } finally {
+            releaseOne();
+        }
+    }
+
     public boolean takeAllRows(final RowStream rowStream) throws Exception {
         acquireOne();
         try {
-            return walTx.readFromTransactionId(0, (long offset, WALReader rowReader) -> rowReader.scan(offset, false,
-                (long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
-                    return rowStream.row(rowPointer, rowTxId, rowType, row);
-                }));
+            return walTx.readFromTransactionId(0, (offset, reader) -> reader.scan(offset, false, rowStream::row));
         } finally {
             releaseOne();
         }
@@ -678,8 +731,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public long count() throws Exception {
-        return keyCount.get();
+    public long count(WALKeyPointers keyPointers) throws Exception {
+        acquireOne();
+        try {
+            return walIndex.get().deltaCount(keyPointers) + keyCount.get();
+        } finally {
+            releaseOne();
+        }
     }
 
     public long highestTxId() {

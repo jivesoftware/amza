@@ -285,8 +285,7 @@ public class AmzaServiceInitializer {
         }
         stripeLoaderThreadPool.shutdown();
 
-        ScheduledExecutorService compactDeltasThreadPool = Executors.newScheduledThreadPool(config.numberOfCompactorThreads,
-            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
+        ExecutorService compactDeltasThreadPool = Executors.newFixedThreadPool(config.numberOfDeltaStripes);
         for (PartitionStripe partitionStripe : partitionStripes) {
             compactDeltasThreadPool.submit(() -> {
                 while (true) {

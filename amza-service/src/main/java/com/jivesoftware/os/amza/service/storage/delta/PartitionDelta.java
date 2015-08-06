@@ -1,26 +1,27 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Iterators;
+import com.google.common.primitives.Longs;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.wal.FpKeyValueHighwaterStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValues;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
+import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALKeyStream;
-import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
+import com.jivesoftware.os.amza.shared.wal.WALPrefix;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -39,8 +40,9 @@ class PartitionDelta {
     final AtomicReference<PartitionDelta> merging;
 
     private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>(); //TODO replace with concurrent byte[] map
-    private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(WALKey::compare);
-    private final ConcurrentSkipListMap<Long, long[]> txIdWAL = new ConcurrentSkipListMap<>();
+    private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(KeyUtil::compare);
+    private final ConcurrentHashMap<WALPrefix, AppendOnlyConcurrentArrayList> prefixTxFpIndex = new ConcurrentHashMap<>();
+    private final AppendOnlyConcurrentArrayList txIdWAL = new AppendOnlyConcurrentArrayList(1024); //TODO expose to config
     private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
 
     PartitionDelta(VersionedPartitionName versionedPartitionName,
@@ -55,86 +57,99 @@ class PartitionDelta {
         return pointerIndex.size();
     }
 
-    private boolean getRawValue(byte[] key, FpKeyValueHighwaterStream stream) throws Exception {
-        WALPointer got = pointerIndex.get(new WALKey(key));
-        if (got == null) {
-            PartitionDelta partitionDelta = merging.get();
-            if (partitionDelta != null) {
-                return partitionDelta.getRawValue(key, stream);
+    private boolean streamRawValues(byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
+        return deltaWAL.hydrate(fpStream -> {
+            PartitionDelta mergingPartitionDelta = merging.get();
+            if (mergingPartitionDelta != null) {
+                return mergingPartitionDelta.streamRawValues(prefix,
+                    mergingKeyStream -> keys.consume((key) -> {
+                        WALPointer got = pointerIndex.get(new WALKey(prefix, key));
+                        if (got == null) {
+                            return mergingKeyStream.stream(key);
+                        } else {
+                            return fpStream.stream(got.getFp());
+                        }
+                    }),
+                    fpKeyValueStream);
+            } else {
+                return keys.consume((key) -> {
+                    WALPointer got = pointerIndex.get(new WALKey(prefix, key));
+                    if (got == null) {
+                        return fpKeyValueStream.stream(-1, prefix, key, null, -1, false);
+                    } else {
+                        return fpStream.stream(got.getFp());
+                    }
+                });
             }
-            return stream.stream(-1, key, null, -1, false, null);
-        }
-        return deltaWAL.hydrate(got.getFp(), stream);
+        }, fpKeyValueStream);
     }
 
-    boolean get(WALKeys keys, KeyValueStream stream) throws Exception {
-        return keys.consume((key)
-            -> getRawValue(key, (fp, key1, value1, valueTimestamp1, valueTombstone1, highwater)
-                -> stream.stream(key, value1, valueTimestamp1, valueTombstone1)));
+    boolean get(byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
+        return streamRawValues(prefix, keys::consume, fpKeyValueStream);
     }
 
-    WALPointer getPointer(byte[] key) throws Exception {
-        WALPointer got = pointerIndex.get(new WALKey(key));
+    WALPointer getPointer(byte[] prefix, byte[] key) throws Exception {
+        WALPointer got = pointerIndex.get(new WALKey(prefix, key));
         if (got != null) {
             return got;
         }
         PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {
-            return partitionDelta.getPointer(key);
+            return partitionDelta.getPointer(prefix, key);
         }
         return null;
     }
 
-    boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((key, value, valueTimestamp, valueTombstone) -> {
-            WALPointer pointer = getPointer(key);
+    boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
+        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstone) -> {
+            WALPointer pointer = getPointer(prefix, key);
             if (pointer != null) {
-                return stream.stream(key, value, valueTimestamp, valueTombstone, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
             } else {
-                return stream.stream(key, value, valueTimestamp, valueTombstone, -1, false, -1);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, -1, false, -1);
             }
         });
     }
 
-    Boolean containsKey(byte[] key) {
-        WALPointer got = pointerIndex.get(new WALKey(key));
+    Boolean containsKey(byte[] prefix, byte[] key) {
+        WALPointer got = pointerIndex.get(new WALKey(prefix, key));
         if (got != null) {
             return !got.getTombstoned();
         }
         PartitionDelta partitionDelta = merging.get();
         if (partitionDelta != null) {
-            return partitionDelta.containsKey(key);
+            return partitionDelta.containsKey(prefix, key);
         }
         return null;
     }
 
-    boolean containsKeys(WALKeys keys, KeyTombstoneExistsStream stream) throws Exception {
-        return keys.consume(key -> {
-            Boolean got = containsKey(key);
-            return stream.stream(key, got != null && !got, got != null);
+    boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyTombstoneExistsStream stream) throws Exception {
+        return keys.consume((key) -> {
+            Boolean got = containsKey(prefix, key);
+            return stream.stream(prefix, key, got != null && !got, got != null);
         });
     }
 
     interface KeyTombstoneExistsStream {
 
-        boolean stream(byte[] key, boolean tombstoned, boolean exists) throws Exception;
+        boolean stream(byte[] prefix, byte[] key, boolean tombstoned, boolean exists) throws Exception;
     }
 
     void put(long fp,
+        byte[] prefix,
         byte[] key,
-        byte[] value,
         long valueTimestamp,
-        boolean valueTombstone,
-        WALHighwater highwater) {
+        boolean valueTombstone) {
 
         WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone);
-        WALKey walKey = new WALKey(key);
+        WALKey walKey = new WALKey(prefix, key);
         pointerIndex.put(walKey, pointer);
-        orderedIndex.put(key, pointer);
+        orderedIndex.put(walKey.compose(), pointer);
     }
 
     private AtomicBoolean firstAndOnlyOnce = new AtomicBoolean(true);
-    boolean shouldWriteHighwater() {
+
+    public boolean shouldWriteHighwater() {
         long got = updatesSinceLastHighwaterFlush.get();
         if (got > 1000) { // TODO expose to partition config
             updatesSinceLastHighwaterFlush.set(0);
@@ -144,16 +159,30 @@ class PartitionDelta {
         }
     }
 
-    boolean keys(WALKeyStream stream) throws Exception {
-        for (byte[] key : orderedIndex.keySet()) {
-            if (!stream.stream(key)) {
-                return false;
-            }
-        }
-        return true;
+    boolean keys(WALKeyPointerStream keyPointerStream) throws Exception {
+        return WALKey.decompose(
+            txFpRawKeyValueEntryStream -> {
+                for (Map.Entry<byte[], WALPointer> entry : orderedIndex.entrySet()) {
+                    WALPointer pointer = entry.getValue();
+                    if (!txFpRawKeyValueEntryStream.stream(-1,
+                        pointer.getFp(),
+                        entry.getKey(),
+                        null,
+                        pointer.getTimestampId(),
+                        pointer.getTombstoned(),
+                        null)) {
+                        return false;
+                    }
+                }
+                return true;
+            },
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) ->
+                keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, fp));
     }
 
-    DeltaPeekableElmoIterator rangeScanIterator(byte[] from, byte[] to) {
+    DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
+        byte[] from = WALKey.compose(fromPrefix, fromKey);
+        byte[] to = WALKey.compose(toPrefix, toKey);
         Iterator<Map.Entry<byte[], WALPointer>> iterator = orderedIndex.subMap(from, to).entrySet().iterator();
         Iterator<Map.Entry<byte[], WALPointer>> mergingIterator = Iterators.emptyIterator();
         PartitionDelta mergingPartitionDelta = merging.get();
@@ -179,9 +208,19 @@ class PartitionDelta {
 
     long highestTxId() {
         if (txIdWAL.isEmpty()) {
-            return -1;
+            PartitionDelta partitionDelta = merging.get();
+            return (partitionDelta != null) ? partitionDelta.highestTxId() : -1;
         }
-        return txIdWAL.lastKey();
+        return txIdWAL.last().txId;
+    }
+
+    long highestTxId(byte[] prefix) {
+        AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.get(new WALPrefix(prefix));
+        if (prefixTxFps == null || prefixTxFps.isEmpty()) {
+            PartitionDelta partitionDelta = merging.get();
+            return (partitionDelta != null) ? partitionDelta.highestTxId(prefix) : -1;
+        }
+        return prefixTxFps.last().txId;
     }
 
     public long lowestTxId() {
@@ -196,26 +235,51 @@ class PartitionDelta {
         if (txIdWAL.isEmpty()) {
             return -1;
         }
-        return txIdWAL.firstKey();
+        return txIdWAL.first().txId;
     }
 
-    void appendTxFps(long rowTxId, long rowFP) {
-        long[] fps = txIdWAL.get(rowTxId);
-        if (fps == null) {
-            fps = new long[]{rowFP};
-            txIdWAL.put(rowTxId, fps);
+    public long lowestTxId(byte[] prefix) {
+        PartitionDelta partitionDelta = merging.get();
+        if (partitionDelta != null) {
+            long lowestTxId = partitionDelta.lowestTxId(prefix);
+            if (lowestTxId >= 0) {
+                return lowestTxId;
+            }
+        }
+
+        AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.get(new WALPrefix(prefix));
+        if (prefixTxFps == null || prefixTxFps.isEmpty()) {
+            return -1;
+        }
+        return prefixTxFps.first().txId;
+    }
+
+    void onLoadAppendTxFp(byte[] prefix, long rowTxId, long rowFP) {
+        if (txIdWAL.isEmpty() || txIdWAL.last().txId != rowTxId) {
+            txIdWAL.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
         } else {
-            long[] swap = new long[fps.length + 1];
-            System.arraycopy(fps, 0, swap, 0, fps.length);
-            swap[swap.length - 1] = rowFP;
+            txIdWAL.onLoadAddFpToTail(rowFP);
+        }
+        if (prefix != null) {
+            AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.computeIfAbsent(new WALPrefix(prefix),
+                walPrefix -> new AppendOnlyConcurrentArrayList(8));
+            if (prefixTxFps.isEmpty() || prefixTxFps.last().txId != rowTxId) {
+                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
+            } else {
+                prefixTxFps.onLoadAddFpToTail(rowFP);
+            }
         }
     }
 
-    void appendTxFps(long rowTxId, long[] rowFPs) {
-        long[] existing = txIdWAL.putIfAbsent(rowTxId, rowFPs);
-        if (existing != null) {
-            throw new IllegalStateException("Already appended this txId: " + rowTxId);
+    void appendTxFps(byte[] prefix, long rowTxId, long[] rowFPs) {
+        TxFps txFps = new TxFps(prefix, rowTxId, rowFPs);
+        if (prefix != null) {
+            AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.computeIfAbsent(new WALPrefix(prefix),
+                walPrefix -> new AppendOnlyConcurrentArrayList(8));
+            prefixTxFps.add(txFps);
         }
+
+        txIdWAL.add(txFps);
         updatesSinceLastHighwaterFlush.addAndGet(rowFPs.length);
     }
 
@@ -227,12 +291,27 @@ class PartitionDelta {
             }
         }
 
-        if (txIdWAL.isEmpty() || txIdWAL.lastEntry().getKey() < transactionId) {
+        if (txIdWAL.isEmpty() || txIdWAL.last().txId < transactionId) {
             return true;
         }
 
-        ConcurrentNavigableMap<Long, long[]> tailMap = txIdWAL.tailMap(transactionId, false);
-        return deltaWAL.takeRows(tailMap, rowStream);
+        return deltaWAL.takeRows(txFpsStream -> txIdWAL.streamFromTxId(transactionId, false, txFpsStream), rowStream);
+    }
+
+    public boolean takeRowsFromTransactionId(byte[] prefix, long transactionId, RowStream rowStream) throws Exception {
+        PartitionDelta partitionDelta = merging.get();
+        if (partitionDelta != null) {
+            if (!partitionDelta.takeRowsFromTransactionId(prefix, transactionId, rowStream)) {
+                return false;
+            }
+        }
+
+        AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.get(new WALPrefix(prefix));
+        if (prefixTxFps == null || prefixTxFps.isEmpty() || prefixTxFps.last().txId < transactionId) {
+            return true;
+        }
+
+        return deltaWAL.takeRows(txFpsStream -> prefixTxFps.streamFromTxId(transactionId, false, txFpsStream), rowStream);
     }
 
     long merge(PartitionIndex partitionIndex) throws Exception {
@@ -247,37 +326,52 @@ class PartitionDelta {
                     LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.orderedIndex.size(), merge.versionedPartitionName, highestTxId);
                     LOG.debug("Merging keys: {}", merge.orderedIndex.keySet());
                     MutableBoolean eos = new MutableBoolean(false);
-                    for (Map.Entry<Long, long[]> e : merge.txIdWAL.tailMap(highestTxId, true).entrySet()) {
-                        long txId = e.getKey();
-                        partitionStore.merge(txId, (highwaters, scan) -> {
-                            for (long fp : e.getValue()) {
-                                boolean done = merge.deltaWAL.hydrateKeyValueHighwater(fp,
-                                    (_fp, key, value, valueTimestamp, valueTombstone, walHighwater) -> {
-                                        WALPointer pointer = merge.orderedIndex.get(key);
-                                        if (pointer == null) {
-                                            throw new RuntimeException("Delta WAL missing key: " + Arrays.toString(key));
-                                        }
-                                        if (pointer.getFp() == fp) {
-                                            if (!scan.row(txId, key, value, valueTimestamp, valueTombstone)) {
-                                                eos.setValue(true);
+                    merge.txIdWAL.streamFromTxId(highestTxId, true, txFps -> {
+                        long txId = txFps.txId;
+
+                        partitionStore.merge(txId,
+                            txFps.prefix,
+                            (highwaters, scan) -> WALKey.decompose(
+                                txFpRawKeyValueStream -> merge.deltaWAL.hydrateKeyValueHighwaters(
+                                    fpStream -> {
+                                        for (long fp : txFps.fps) {
+                                            if (!fpStream.stream(fp)) {
                                                 return false;
-                                            }
-                                            if (walHighwater != null) {
-                                                highwaters.highwater(walHighwater);
                                             }
                                         }
                                         return true;
-                                    });
-                                if (!done) {
-                                    return false;
-                                }
-                            }
-                            return true;
-                        });
+                                    },
+                                    (fp, prefix, key, value, valueTimestamp, valueTombstone, highwater) -> {
+                                        // prefix is the partitionName and is discarded
+                                        WALPointer pointer = merge.orderedIndex.get(key);
+                                        if (pointer == null) {
+                                            throw new RuntimeException("Delta WAL missing" +
+                                                " prefix: " + Arrays.toString(prefix) +
+                                                " key: " + Arrays.toString(key) +
+                                                " for: " + versionedPartitionName);
+                                        }
+                                        if (pointer.getFp() == fp) {
+                                            if (!txFpRawKeyValueStream.stream(txId, fp, key, value, valueTimestamp, valueTombstone, null)) {
+                                                return false;
+                                            }
+                                            if (highwater != null) {
+                                                highwaters.highwater(highwater);
+                                            }
+                                        }
+                                        return true;
+                                    }),
+                                (_txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
+                                    if (!scan.row(txId, key, value, valueTimestamp, valueTombstoned)) {
+                                        eos.setValue(true);
+                                        return false;
+                                    }
+                                    return true;
+                                }));
                         if (eos.booleanValue()) {
-                            break;
+                            return false;
                         }
-                    }
+                        return true;
+                    });
                     partitionStore.getWalStorage().commitIndex();
                     LOG.info("Merged deltas for {}", merge.versionedPartitionName);
                 } catch (Throwable ex) {
@@ -287,5 +381,93 @@ class PartitionDelta {
         }
         merging.set(null);
         return merged;
+    }
+
+    private static final Comparator<TxFps> txFpsComparator = (o1, o2) -> Longs.compare(o1.txId, o2.txId);
+
+    private static class AppendOnlyConcurrentArrayList {
+
+        private volatile TxFps[] array;
+        private volatile int length;
+
+        public AppendOnlyConcurrentArrayList(int initialCapacity) {
+            this.array = new TxFps[Math.max(initialCapacity, 1)];
+        }
+
+        public void onLoadAddFpToTail(long fp) {
+            long[] existing = array[length - 1].fps;
+            long[] extended = new long[existing.length + 1];
+            System.arraycopy(existing, 0, extended, 0, existing.length);
+            extended[existing.length] = fp;
+            array[length - 1].fps = extended;
+        }
+
+        public void add(TxFps txFps) {
+            synchronized (this) {
+                if (length > 0 && txFps.txId <= array[length - 1].txId) {
+                    throw new IllegalStateException("Appending txIds out of order: " + txFps.txId + " <= " + array[length - 1].txId);
+                }
+                if (length == array.length) {
+                    TxFps[] doubled = new TxFps[array.length * 2];
+                    System.arraycopy(array, 0, doubled, 0, array.length);
+                    array = doubled;
+                }
+                array[length] = txFps;
+                length++;
+            }
+        }
+
+        public boolean streamFromTxId(long txId, boolean inclusive, TxFpsStream txFpsStream) throws Exception {
+            TxFps[] array;
+            int length;
+            synchronized (this) {
+                array = this.array;
+                length = this.length;
+            }
+            int index = Arrays.binarySearch(array, 0, length, new TxFps(null, txId, null), txFpsComparator);
+            if (index >= 0 && !inclusive) {
+                index++;
+            } else if (index < 0) {
+                index = -(index + 1);
+            }
+            while (true) {
+                for (int i = index; i < length; i++) {
+                    if (!txFpsStream.stream(array[i])) {
+                        return false;
+                    }
+                }
+                int latestLength;
+                synchronized (this) {
+                    latestLength = this.length;
+                    array = this.array;
+                }
+                if (latestLength != length) {
+                    length = latestLength;
+                } else {
+                    break;
+                }
+            }
+            return true;
+        }
+
+        public boolean isEmpty() {
+            synchronized (this) {
+                return length == 0;
+            }
+        }
+
+        public TxFps first() {
+            return array[0];
+        }
+
+        public TxFps last() {
+            TxFps[] array;
+            int length;
+            synchronized (this) {
+                array = this.array;
+                length = this.length;
+            }
+            return array[length - 1];
+        }
     }
 }

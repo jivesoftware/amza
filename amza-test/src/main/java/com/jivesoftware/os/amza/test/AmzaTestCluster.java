@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.test;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.client.AmzaKretrProvider;
+import com.jivesoftware.os.amza.client.AmzaClientProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -112,7 +112,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
@@ -285,7 +285,7 @@ public class AmzaTestCluster {
         private boolean off = false;
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
-        private final AmzaKretrProvider clientProvider;
+        private final AmzaClientProvider clientProvider;
 
         public AmzaNode(RingMember ringMember,
             RingHost ringHost,
@@ -295,7 +295,7 @@ public class AmzaTestCluster {
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
-            this.clientProvider = new AmzaKretrProvider(amzaService);
+            this.clientProvider = new AmzaClientProvider(amzaService);
             this.orderIdProvider = orderIdProvider;
         }
 
@@ -325,7 +325,7 @@ public class AmzaTestCluster {
             amzaService.awaitOnline(partitionName, 10_000);
         }
 
-        public void update(PartitionName partitionName, byte[] k, byte[] v, boolean tombstone) throws Exception {
+        public void update(PartitionName partitionName, byte[] p, byte[] k, byte[] v, boolean tombstone) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
@@ -337,18 +337,18 @@ public class AmzaTestCluster {
             } else {
                 updates.set(k, v, timestamp);
             }
-            clientProvider.getClient(partitionName).commit(updates, 2, 10, TimeUnit.SECONDS);
+            clientProvider.getClient(partitionName).commit(p, updates, 2, 10, TimeUnit.SECONDS);
 
         }
 
-        public byte[] get(PartitionName partitionName, byte[] key) throws Exception {
+        public byte[] get(PartitionName partitionName, byte[] prefix, byte[] key) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(stream -> stream.stream(key),
-                (key1, value, timestamp) -> {
+            clientProvider.getClient(partitionName).get(prefix, stream -> stream.stream(key),
+                (_prefix, _key, value, timestamp) -> {
                     got.add(value);
                     return true;
                 });
@@ -461,12 +461,12 @@ public class AmzaTestCluster {
         private boolean compare(PartitionName partitionName, AmzaPartitionAPI a, AmzaPartitionAPI b) throws Exception {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
-            a.scan(null, null, (txid, key, aValue) -> {
+            a.scan(null, null, null, null, (txid, prefix, key, aValue) -> {
                 try {
                     compared.increment();
                     TimestampedValue[] bValues = new TimestampedValue[1];
-                    b.get(stream -> stream.stream(key),
-                        (_key, value, timestamp) -> {
+                    b.get(prefix, stream -> stream.stream(key),
+                        (_prefix, _key, value, timestamp) -> {
                             bValues[0] = new TimestampedValue(timestamp, value);
                             return true;
                         });
@@ -501,8 +501,6 @@ public class AmzaTestCluster {
                     if (aValue.getValue() != null && !Arrays.equals(aValue.getValue(), bValue.getValue())) {
                         System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(aValue.getValue())
                             + "' != '" + Arrays.toString(bValue.getValue())
-                            + "' aClass:" + aValue.getValue().getClass()
-                            + "' bClass:" + bValue.getValue().getClass()
                             + "' \n" + aValue + " vs " + bValue);
                         passed.setValue(false);
                         return false;

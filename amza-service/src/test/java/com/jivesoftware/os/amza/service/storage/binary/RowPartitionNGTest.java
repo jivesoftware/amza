@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
+import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -43,10 +44,10 @@ public class RowPartitionNGTest {
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
+        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        WALStorage indexedWAL = new WALStorage(
+        WALStorage<MemoryWALIndex> indexedWAL = new WALStorage<>(
             partitionName,
             idProvider,
             primaryRowMarshaller,
@@ -108,12 +109,13 @@ public class RowPartitionNGTest {
 
     private void addBatch(Random r, OrderIdProviderImpl idProvider, WALStorage indexedWAL, int range, int start, int length) throws Exception {
         List<WALRow> updates = Lists.newArrayList();
+        byte[] prefix = UIO.intBytes(-1);
         for (int i = start; i < start + length; i++) {
             byte[] key = UIO.intBytes(r.nextInt(range));
             byte[] value = UIO.intBytes(i);
-            updates.add(new WALRow(key, value, idProvider.nextId(), false));
+            updates.add(new WALRow(prefix, key, value, idProvider.nextId(), false));
         }
-        indexedWAL.update(-1, false, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(-1, false, prefix, new MemoryWALUpdates(updates, null));
     }
 
     @Test
@@ -126,7 +128,7 @@ public class RowPartitionNGTest {
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
+        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx);
@@ -148,9 +150,9 @@ public class RowPartitionNGTest {
         testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx);
     }
 
-    private void testEventualConsitency(VersionedPartitionName versionedPartitionName, OrderIdProviderImpl idProvider, BinaryWALTx binaryWALTx)
+    private void testEventualConsitency(VersionedPartitionName versionedPartitionName, OrderIdProviderImpl idProvider, BinaryWALTx<MemoryWALIndex> binaryWALTx)
         throws Exception {
-        WALStorage indexedWAL = new WALStorage(
+        WALStorage<MemoryWALIndex> indexedWAL = new WALStorage<>(
             versionedPartitionName,
             idProvider,
             primaryRowMarshaller,
@@ -161,61 +163,62 @@ public class RowPartitionNGTest {
             2);
 
         indexedWAL.load();
-        TimestampedValue value = indexedWAL.get(k(1));
+        WALKey walKey = k(1);
+        TimestampedValue value = indexedWAL.get(walKey.prefix, walKey.key);
         Assert.assertNull(value);
 
         int t = 10;
-        update(indexedWAL, k(1), v("hello"), t, false);
+        update(indexedWAL, walKey.prefix, walKey.key, v("hello"), t, false);
 
-        value = indexedWAL.get(k(1));
+        value = indexedWAL.get(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello");
 
         t++;
-        update(indexedWAL, k(1), v("hello2"), t, false);
-        value = indexedWAL.get(k(1));
+        update(indexedWAL, walKey.prefix, walKey.key, v("hello2"), t, false);
+        value = indexedWAL.get(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
-        update(indexedWAL, k(1), v("hello3"), t, false);
-        value = indexedWAL.get(k(1));
+        update(indexedWAL, walKey.prefix, walKey.key, v("hello3"), t, false);
+        value = indexedWAL.get(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
-        update(indexedWAL, k(1), v("fail"), t - 1, false);
-        value = indexedWAL.get(k(1));
+        update(indexedWAL, walKey.prefix, walKey.key, v("fail"), t - 1, false);
+        value = indexedWAL.get(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         t++;
-        update(indexedWAL, k(1), v("deleted"), t, false);
-        value = indexedWAL.get(k(1));
+        update(indexedWAL, walKey.prefix, walKey.key, v("deleted"), t, false);
+        value = indexedWAL.get(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "deleted");
 
-        update(indexedWAL, k(1), v("fail"), t - 1, false);
-        value = indexedWAL.get(k(1));
+        update(indexedWAL, walKey.prefix, walKey.key, v("fail"), t - 1, false);
+        value = indexedWAL.get(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "deleted");
 
         t++;
-        update(indexedWAL, k(1), v("hello4"), t, false);
-        value = indexedWAL.get(k(1));
+        update(indexedWAL, walKey.prefix, walKey.key, v("hello4"), t, false);
+        value = indexedWAL.get(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello4");
     }
 
-    public byte[] k(int key) {
-        return UIO.intBytes(key);
+    public WALKey k(int key) {
+        return new WALKey(UIO.intBytes(-key), UIO.intBytes(key));
     }
 
     public byte[] v(String value) {
         return value.getBytes();
     }
 
-    private void update(WALStorage indexedWAL, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
+    private void update(WALStorage indexedWAL, byte[] prefix, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         List<WALRow> updates = Lists.newArrayList();
-        updates.add(new WALRow(key, value, timestamp, remove));
-        indexedWAL.update(-1, false, new MemoryWALUpdates(updates, null));
+        updates.add(new WALRow(prefix, key, value, timestamp, remove));
+        indexedWAL.update(-1, false, prefix, new MemoryWALUpdates(updates, null));
     }
 }

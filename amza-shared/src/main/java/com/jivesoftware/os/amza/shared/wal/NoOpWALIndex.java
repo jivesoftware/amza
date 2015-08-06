@@ -2,6 +2,16 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.TxFpStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.WALMergeKeyPointerStream;
 
 /**
  * @author jonathan.colt
@@ -10,9 +20,9 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {
-        return pointers.consume((long txId, byte[] key, long timestamp, boolean tombstoned, long fp) -> {
+        return pointers.consume((txId, prefix, key, timestamp, tombstoned, fp) -> {
             if (stream != null) {
-                if (!stream.stream(WALMergeKeyPointerStream.ignored, txId, key, timestamp, tombstoned, fp)) {
+                if (!stream.stream(WALMergeKeyPointerStream.ignored, txId, prefix, key, timestamp, tombstoned, fp)) {
                     return false;
                 }
             }
@@ -21,29 +31,44 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception {
-        return stream.stream(key, -1, false, -1);
+    public boolean getPointer(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception {
+        return stream.stream(prefix, key, -1, false, -1);
     }
 
     @Override
-    public boolean getPointers(WALKeys keys, WALKeyPointerStream stream) throws Exception {
-        return keys.consume(key -> stream.stream(key, -1, false, -1));
+    public boolean getPointers(byte[] prefix, UnprefixedWALKeys keys, WALKeyPointerStream stream) throws Exception {
+        return keys.consume((key) -> stream.stream(prefix, key, -1, false, -1));
     }
 
     @Override
-    public boolean getPointers(KeyValues keyValues, WALKeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((key, value, valueTimestamp, valueTombstoned) ->
-            stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1));
+    public boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
+        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned) ->
+            stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, -1, false, -1));
     }
 
     @Override
-    public boolean containsKeys(WALKeys keys, KeyContainedStream stream) throws Exception {
-        return keys.consume(key -> stream.stream(key, false));
+    public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
+        return keys.consume((key) -> stream.stream(prefix, key, false));
     }
 
     @Override
     public boolean isEmpty() throws Exception {
         return false;
+    }
+
+    @Override
+    public long deltaCount(WALKeyPointers keyPointers) throws Exception {
+        long[] delta = new long[1];
+        boolean completed = keyPointers.consume((prefix, key, timestamp, tombstoned, fp) -> {
+            if (!tombstoned) {
+                delta[0]++;
+            }
+            return true;
+        });
+        if (!completed) {
+            return -1;
+        }
+        return delta[0];
     }
 
     @Override
@@ -86,12 +111,17 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
+    public boolean takePrefixUpdatesSince(byte[] prefix, long sinceTransactionId, TxFpStream txFpStream) throws Exception {
+        return true;
+    }
+
+    @Override
     public boolean rowScan(WALKeyPointerStream stream) throws Exception {
         return true;
     }
 
     @Override
-    public boolean rangeScan(byte[] from, byte[] to, WALKeyPointerStream stream) throws Exception {
+    public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream) throws Exception {
         return true;
     }
 

@@ -17,24 +17,24 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValues;
+import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.wal.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.KeyValues;
+import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALKeyValuePointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALPointer;
 import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,7 +50,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.commons.lang.mutable.MutableInt;
 
 /**
  * @author jonathan.colt
@@ -151,56 +150,57 @@ public class DeltaStripeWALStorage {
                         mergeDelta(partitionIndex, deltaWAL.get(), () -> wal);
                     }
                     deltaWAL.set(wal);
-                    wal.load((long rowFP, final long rowTxId, RowType rowType, byte[] rawRow) -> {
-                        if (rowType == RowType.primary) {
-                            primaryRowMarshaller.fromRow(rawRow, (key, value, valueTimestamp, valueTombstoned) -> {
-                                ByteBuffer bb = ByteBuffer.wrap(key);
-                                byte[] partitionNameBytes = new byte[bb.getShort()];
-                                bb.get(partitionNameBytes);
-                                final byte[] keyBytes = new byte[bb.getInt()];
-                                bb.get(keyBytes);
-
-                                VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(partitionNameBytes);
-                                VersionedStatus localStatus = txPartitionStatus.getLocalStatus(versionedPartitionName.getPartitionName());
-                                if (localStatus != null && localStatus.version == versionedPartitionName.getPartitionVersion()) {
-                                    PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-                                    if (partitionStore == null) {
-                                        LOG.warn("Dropping values on the floor for versionedPartitionName:{} "
-                                            + " this is typical when loading an expunged partition", versionedPartitionName);
-                                        // TODO ensure partitionIsExpunged?
-                                    } else {
-                                        acquireOne();
-                                        try {
-                                            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-                                            TimestampedValue partitionValue = partitionStore.get(keyBytes);
-                                            if (partitionValue == null || partitionValue.getTimestampId() < valueTimestamp) {
-                                                WALPointer got = delta.getPointer(keyBytes);
-                                                if (got == null || got.getTimestampId() < valueTimestamp) {
-                                                    wal.hydrateKeyValueHighwater(rowFP,
-                                                        (fp, key1, value1, valueTimestamp1, valueTombstone, highwater) -> {
-                                                            delta.put(fp, key1, value1, valueTimestamp1, valueTombstone, highwater);
-                                                            delta.appendTxFps(rowTxId, fp);
-                                                            return true;
-                                                        });
-
-                                                }
-                                            }
-                                        } finally {
-                                            releaseOne();
+                    WALKey.decompose(
+                        (WALKey.TxFpRawKeyValueEntries<VersionedPartitionName>) txRawKeyEntryStream -> primaryRowMarshaller.fromRows(
+                            txFpRowStream -> {
+                                wal.load((rowFP, rowTxId, rowType, rawRow) -> {
+                                    if (rowType == RowType.primary) {
+                                        if (!txFpRowStream.stream(rowTxId, rowFP, rawRow)) {
+                                            return false;
                                         }
                                     }
-                                    updateSinceLastMerge.incrementAndGet();
+                                    return true;
+                                });
+                                return true;
+                            },
+                            (rowTxId, rowFP, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
+                                VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix);
+                                VersionedStatus localStatus = txPartitionStatus.getLocalStatus(versionedPartitionName.getPartitionName());
+                                if (localStatus != null && localStatus.version == versionedPartitionName.getPartitionVersion()) {
+                                    return txRawKeyEntryStream.stream(rowTxId, rowFP, key, value, valueTimestamp, valueTombstoned, versionedPartitionName);
                                 }
                                 return true;
-                            });
-
-                        }
-                        return true;
-                    });
-
+                            }),
+                        (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, versionedPartitionName) -> {
+                            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                            if (partitionStore == null) {
+                                LOG.warn("Dropping values on the floor for versionedPartitionName:{} "
+                                    + " this is typical when loading an expunged partition", versionedPartitionName);
+                                // TODO ensure partitionIsExpunged?
+                            } else {
+                                acquireOne();
+                                try {
+                                    PartitionDelta delta = getPartitionDelta(versionedPartitionName);
+                                    TimestampedValue partitionValue = partitionStore.get(prefix, key);
+                                    if (partitionValue == null || partitionValue.getTimestampId() < valueTimestamp) {
+                                        WALPointer got = delta.getPointer(prefix, key);
+                                        if (got == null || got.getTimestampId() < valueTimestamp) {
+                                            delta.put(fp, prefix, key, valueTimestamp, valueTombstoned);
+                                            delta.onLoadAppendTxFp(prefix, txId, fp);
+                                            updateSinceLastMerge.incrementAndGet();
+                                            return true;
+                                        }
+                                    }
+                                } finally {
+                                    releaseOne();
+                                }
+                            }
+                            return true;
+                        });
                 }
             }
         }
+
         amzaStats.deltaStripeLoad(index, updateSinceLastMerge.get(), (double) updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
 
         if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
@@ -208,6 +208,7 @@ public class DeltaStripeWALStorage {
                 awakeCompactionsLock.notifyAll();
             }
         }
+
         LOG.info("Reloaded deltas stripe:{} in {} ms", index, (System.currentTimeMillis() - start));
     }
 
@@ -337,6 +338,7 @@ public class DeltaStripeWALStorage {
         VersionedPartitionName versionedPartitionName,
         Status partitionStatus,
         WALStorage storage,
+        byte[] prefix,
         Commitable updates,
         WALUpdated updated) throws Exception {
 
@@ -368,13 +370,13 @@ public class DeltaStripeWALStorage {
                 for (int i = 0; i < keys.size(); i++) {
                     byte[] key = keys.get(i);
                     WALValue update = values.get(i);
-                    if (!stream.stream(key, update.getValue(), update.getTimestampId(), update.getTombstoned())) {
+                    if (!stream.stream(prefix, key, update.getValue(), update.getTimestampId(), update.getTombstoned())) {
                         return false;
                     }
                 }
                 return true;
-            }, (key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                WALKey walKey = new WALKey(key);
+            }, (_prefix, key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+                WALKey walKey = new WALKey(prefix, key);
                 WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone);
                 if (pointerFp == -1) {
                     apply.put(walKey, walValue);
@@ -387,7 +389,7 @@ public class DeltaStripeWALStorage {
                         oldestAppliedTimestamp.set(valueTimestamp);
                     }
                     WALTimestampId walTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
-                    KeyedTimestampId keyedTimestampId = new KeyedTimestampId(walKey.getKey(), walTimestampId.getTimestampId(), walTimestampId.getTombstoned());
+                    KeyedTimestampId keyedTimestampId = new KeyedTimestampId(prefix, key, walTimestampId.getTimestampId(), walTimestampId.getTombstoned());
                     clobbers.add(keyedTimestampId);
                     if (valueTombstone && !pointerTombstoned) {
                         removes.add(keyedTimestampId);
@@ -411,15 +413,18 @@ public class DeltaStripeWALStorage {
                     for (int i = 0; i < updateApplied.fps.length; i++) {
                         KeyValueHighwater keyValueHighwater = updateApplied.keyValueHighwaters[i];
                         long fp = updateApplied.fps[i];
-                        WALPointer got = delta.getPointer(keyValueHighwater.key);
+                        WALPointer got = delta.getPointer(keyValueHighwater.prefix, keyValueHighwater.key);
                         if (got == null || got.getTimestampId() < keyValueHighwater.valueTimestamp) {
-                            delta.put(fp, keyValueHighwater.key, keyValueHighwater.value, keyValueHighwater.valueTimestamp, keyValueHighwater.valueTombstone,
-                                keyValueHighwater.highwater);
+                            delta.put(fp,
+                                keyValueHighwater.prefix,
+                                keyValueHighwater.key,
+                                keyValueHighwater.valueTimestamp,
+                                keyValueHighwater.valueTombstone);
                         } else {
-                            apply.remove(new WALKey(keyValueHighwater.key));
+                            apply.remove(new WALKey(keyValueHighwater.prefix, keyValueHighwater.key));
                         }
                     }
-                    delta.appendTxFps(updateApplied.txId, updateApplied.fps);
+                    delta.appendTxFps(prefix, updateApplied.txId, updateApplied.fps);
                     rowsChanged = new RowsChanged(versionedPartitionName,
                         oldestAppliedTimestamp.get(),
                         apply,
@@ -468,6 +473,34 @@ public class DeltaStripeWALStorage {
         }
     }
 
+    public boolean takeRowsFromTransactionId(VersionedPartitionName versionedPartitionName,
+        WALStorage storage,
+        byte[] prefix,
+        long transactionId,
+        RowStream rowStream) throws Exception {
+
+        long lowestTxId;
+        acquireOne();
+        try {
+            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
+            lowestTxId = delta.lowestTxId(prefix);
+        } finally {
+            releaseOne();
+        }
+
+        if ((lowestTxId == -1 || lowestTxId > transactionId) && !storage.takeRowUpdatesSince(prefix, transactionId, rowStream)) {
+            return false;
+        }
+
+        acquireOne();
+        try {
+            PartitionDelta delta = getPartitionDelta(versionedPartitionName);
+            return delta.takeRowsFromTransactionId(prefix, transactionId, rowStream);
+        } finally {
+            releaseOne();
+        }
+    }
+
     public boolean takeAllRows(VersionedPartitionName versionedPartitionName, WALStorage storage, RowStream rowStream)
         throws Exception {
 
@@ -484,41 +517,47 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, byte[] key) throws Exception {
+    public WALValue get(VersionedPartitionName versionedPartitionName, WALStorage storage, byte[] prefix, byte[] key) throws Exception {
         WALValue[] walValue = new WALValue[1];
-        get(versionedPartitionName, storage, (stream) -> {
-            return stream.stream(key);
-        }, (byte[] key1, byte[] value, long timestamp) -> {
-            if (value != null) {
-                walValue[0] = new WALValue(value, timestamp, false);
-            }
-            return true;
-        });
+        get(versionedPartitionName,
+            storage,
+            prefix,
+            stream -> stream.stream(key),
+            (_prefix, _key, value, timestamp) -> {
+                if (value != null) {
+                    walValue[0] = new WALValue(value, timestamp, false);
+                }
+                return true;
+            });
         return walValue[0];
     }
 
-    public boolean get(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKeys keys, TimestampKeyValueStream stream) throws Exception {
+    public boolean get(VersionedPartitionName versionedPartitionName,
+        WALStorage storage,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        TimestampKeyValueStream stream) throws Exception {
+
         acquireOne();
         try {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
-            return storage.get(
-                (storageStream)
-                    -> partitionDelta.get(keys, (key, value, valueTimestamp, valueTombstoned) -> {
+            return storage.streamValues(prefix,
+                storageStream -> partitionDelta.get(prefix, keys, (fp, _prefix, key, value, valueTimestamp, valueTombstoned) -> {
                     if (value == null) {
                         return storageStream.stream(key);
                     } else {
                         if (valueTombstoned) {
-                            return stream.stream(key, null, -1);
+                            return stream.stream(prefix, key, null, -1);
                         } else {
-                            return stream.stream(key, value, valueTimestamp);
+                            return stream.stream(prefix, key, value, valueTimestamp);
                         }
                     }
                 }),
-                (key, value, valueTimestamp, valueTombstoned) -> {
+                (_prefix, key, value, valueTimestamp, valueTombstoned) -> {
                     if (valueTombstoned) {
-                        return stream.stream(key, null, -1);
+                        return stream.stream(prefix, key, null, -1);
                     } else {
-                        return stream.stream(key, value, valueTimestamp);
+                        return stream.stream(prefix, key, value, valueTimestamp);
                     }
                 });
         } finally {
@@ -526,14 +565,18 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public boolean containsKeys(VersionedPartitionName versionedPartitionName, WALStorage storage, WALKeys keys, KeyContainedStream stream) throws Exception {
+    public boolean containsKeys(VersionedPartitionName versionedPartitionName,
+        WALStorage storage,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyContainedStream stream) throws Exception {
         acquireOne();
         try {
-            return storage.containsKeys(
-                storageKeyStream -> getPartitionDelta(versionedPartitionName).containsKeys(keys,
-                    (key, tombstoned, exists) -> {
+            return storage.containsKeys(prefix,
+                storageKeyStream -> getPartitionDelta(versionedPartitionName).containsKeys(prefix, keys,
+                    (_prefix, key, tombstoned, exists) -> {
                         if (exists) {
-                            return stream.stream(key, !tombstoned);
+                            return stream.stream(prefix, key, !tombstoned);
                         } else {
                             return storageKeyStream.stream(key);
                         }
@@ -547,82 +590,100 @@ public class DeltaStripeWALStorage {
     private boolean getPointers(VersionedPartitionName versionedPartitionName,
         WALStorage storage,
         KeyValues keyValues,
-        WALKeyValuePointerStream stream) throws Exception {
+        KeyValuePointerStream stream) throws Exception {
 
-        return storage.streamWALPointers((storageStream) -> {
+        return storage.streamPointers((storageStream) -> {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
-            return partitionDelta.getPointers(keyValues, (key, value, valueTimestamp, valueTombstoned,
-                pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                if (pointerFp == -1) {
-                    return storageStream.stream(key, value, valueTimestamp, valueTombstoned);
-                } else {
-                    return stream.stream(key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp);
-                }
-            });
-        }, (key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+            return partitionDelta.getPointers(keyValues,
+                (prefix, key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+                    if (pointerFp == -1) {
+                        return storageStream.stream(prefix, key, value, valueTimestamp, valueTombstoned);
+                    } else {
+                        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp);
+                    }
+                });
+        }, (prefix, key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp) -> {
             if (pointerFp == -1) {
-                return stream.stream(key, value, valueTimestamp, valueTombstoned, -1, false, -1);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, -1, false, -1);
             } else {
-                return stream.stream(key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, pointerTimestamp, pointerTombstoned, pointerFp);
             }
         });
 
     }
 
-    public void rangeScan(VersionedPartitionName versionedPartitionName,
+    public boolean rangeScan(VersionedPartitionName versionedPartitionName,
         RangeScannable rangeScannable,
-        byte[] from,
-        byte[] to,
+        byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
         KeyValueStream keyValueStream) throws Exception {
+
         acquireOne();
         try {
             PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-            final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(from, to);
-            rangeScannable.rangeScan(from, to, new LatestWinnernator(iterator, keyValueStream));
+            final DeltaPeekableElmoIterator iterator = delta.rangeScanIterator(fromPrefix, fromKey, toPrefix, toKey);
+            rangeScannable.rangeScan(fromPrefix, fromKey, toPrefix, toKey, new LatestKeyValueStream(iterator, keyValueStream));
 
-            Map.Entry<byte[], WALValue> d = iterator.last();
-            if (d != null || iterator.hasNext()) {
-                if (d != null) {
-                    WALValue got = d.getValue();
-                    keyValueStream.stream(d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned());
-                }
-                while (iterator.hasNext()) {
-                    d = iterator.next();
-                    WALValue got = d.getValue();
-                    if (!keyValueStream.stream(d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
-                        return;
+            return WALKey.decompose(
+                fpRawKeyValueStream -> {
+                    Map.Entry<byte[], WALValue> d = iterator.last();
+                    if (d != null || iterator.hasNext()) {
+                        if (d != null) {
+                            WALValue got = d.getValue();
+                            if (!fpRawKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
+                                return false;
+                            }
+                        }
+                        while (iterator.hasNext()) {
+                            d = iterator.next();
+                            WALValue got = d.getValue();
+                            if (!fpRawKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
+                                return false;
+                            }
+                        }
                     }
-                }
-            }
+                    return true;
+                },
+                (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
+                    keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned));
         } finally {
             releaseOne();
         }
     }
 
-    public boolean rowScan(final VersionedPartitionName versionedPartitionName, Scannable scanable, KeyValueStream keyValueStream) throws Exception {
+    public boolean rowScan(final VersionedPartitionName versionedPartitionName, Scannable scannable, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
         try {
             PartitionDelta delta = getPartitionDelta(versionedPartitionName);
             DeltaPeekableElmoIterator iterator = delta.rowScanIterator();
-            if (!scanable.rowScan(new LatestWinnernator(iterator, keyValueStream))) {
+            if (!scannable.rowScan(new LatestKeyValueStream(iterator, keyValueStream))) {
                 return false;
             }
 
             Map.Entry<byte[], WALValue> d = iterator.last();
             if (d != null || iterator.hasNext()) {
-                if (d != null) {
-                    WALValue got = d.getValue();
-                    if (!keyValueStream.stream(d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
-                        return false;
-                    }
-                }
-                while (iterator.hasNext()) {
-                    d = iterator.next();
-                    WALValue got = d.getValue();
-                    if (!keyValueStream.stream(d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
-                        return false;
-                    }
-                }
+                return WALKey.decompose(
+                    fpRawKeyValueStream -> {
+                        Map.Entry<byte[], WALValue> last = d;
+                        if (last != null) {
+                            WALValue got = last.getValue();
+                            if (!fpRawKeyValueStream.stream(-1, -1, last.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
+                                return false;
+                            }
+                        }
+                        while (iterator.hasNext()) {
+                            last = iterator.next();
+                            WALValue got = last.getValue();
+                            if (!fpRawKeyValueStream.stream(-1, -1, last.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    },
+                    (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
+                        keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned));
             }
             return true;
         } finally {
@@ -634,57 +695,59 @@ public class DeltaStripeWALStorage {
      * Stupid expensive!!!!
      */
     public long count(VersionedPartitionName versionedPartitionName, WALStorage storage) throws Exception {
-        MutableInt count = new MutableInt(0);
         acquireOne();
         try {
-            storage.containsKeys(stream -> getPartitionDelta(versionedPartitionName).keys(stream::stream),
-                (key, contained) -> {
-                    if (!contained) {
-                        count.increment();
-                    }
-                    return true;
-                });
+            return storage.count(stream -> getPartitionDelta(versionedPartitionName).keys(stream::stream));
         } finally {
             releaseOne();
         }
-        return count.intValue() + storage.count();
     }
 
-    static class LatestWinnernator implements KeyValueStream {
+    static class LatestKeyValueStream implements KeyValueStream {
 
         private final DeltaPeekableElmoIterator iterator;
         private final KeyValueStream keyValueStream;
         private Map.Entry<byte[], WALValue> d;
 
-        public LatestWinnernator(DeltaPeekableElmoIterator iterator, KeyValueStream keyValueStream) {
+        public LatestKeyValueStream(DeltaPeekableElmoIterator iterator, KeyValueStream keyValueStream) {
             this.iterator = iterator;
             this.keyValueStream = keyValueStream;
         }
 
         @Override
-        public boolean stream(byte[] key, byte[] value, long valueTimestamp, boolean valueTombstone) throws Exception {
+        public boolean stream(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) throws Exception {
             if (d == null && iterator.hasNext()) {
                 d = iterator.next();
             }
-            boolean needsKey = true;
-            while (d != null && WALKey.compare(d.getKey(), key) <= 0) {
-                WALValue got = d.getValue();
-                if (Arrays.equals(d.getKey(), key)) {
-                    needsKey = false;
-                }
-                if (!keyValueStream.stream(d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned())) {
-                    return false;
-                }
-                if (iterator.hasNext()) {
-                    d = iterator.next();
-                } else {
-                    iterator.eos();
-                    d = null;
-                    break;
-                }
-            }
-            if (needsKey) {
-                return keyValueStream.stream(key, value, valueTimestamp, valueTombstone);
+            boolean[] needsKey = { true };
+            byte[] pk = WALKey.compose(prefix, key);
+            boolean complete = WALKey.decompose(
+                txFpKeyValueStream -> {
+                    while (d != null && KeyUtil.compare(d.getKey(), pk) <= 0) {
+                        WALValue got = d.getValue();
+                        if (Arrays.equals(d.getKey(), pk)) {
+                            needsKey[0] = false;
+                        }
+                        if (!txFpKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), null)) {
+                            return false;
+                        }
+                        if (iterator.hasNext()) {
+                            d = iterator.next();
+                        } else {
+                            iterator.eos();
+                            d = null;
+                            break;
+                        }
+                    }
+                    return true;
+                },
+                (txId, fp, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, row) ->
+                    keyValueStream.stream(streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned));
+
+            if (!complete) {
+                return false;
+            } else if (needsKey[0]) {
+                return keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned);
             } else {
                 return true;
             }

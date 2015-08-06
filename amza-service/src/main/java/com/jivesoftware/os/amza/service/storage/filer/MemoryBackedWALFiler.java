@@ -23,7 +23,10 @@ public class MemoryBackedWALFiler implements WALFiler, IReadable, IWriteable {
     }
 
     @Override
-    public IReadable fileChannelMemMapFiler(long boundaryFp) throws IOException {
+    public IReadable bestFiler(IReadable current, long boundaryFp) throws IOException {
+        if (current != null) {
+            return current;
+        }
         return filer.createReadOnlyClone();
     }
 

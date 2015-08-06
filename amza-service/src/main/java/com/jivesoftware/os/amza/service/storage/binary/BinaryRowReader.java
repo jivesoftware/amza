@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
+import com.jivesoftware.os.amza.shared.stream.Fps;
 import com.jivesoftware.os.amza.shared.wal.WALReader;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -74,13 +75,10 @@ public class BinaryRowReader implements WALReader {
     @Override
     public boolean reverseScan(RowStream stream) throws Exception {
         long boundaryFp = parent.length();
-        IReadable parentFiler = parent.fileChannelMemMapFiler(boundaryFp);
-        if (parentFiler == null) {
-            parentFiler = parent.fileChannelFiler();
-        }
         if (boundaryFp == 0) {
             return true;
         }
+        IReadable parentFiler = parent.bestFiler(null, boundaryFp);
         long read = 0;
         try {
             int pageSize = 1024 * 1024;
@@ -152,12 +150,10 @@ public class BinaryRowReader implements WALReader {
         long fileLength = 0;
         long read = 0;
         try {
+            IReadable filer = null;
             while (fileLength < parent.length()) {
                 fileLength = parent.length();
-                IReadable filer = parent.fileChannelMemMapFiler(fileLength);
-                if (filer == null) {
-                    filer = parent.fileChannelFiler();
-                }
+                filer = parent.bestFiler(filer, fileLength);
                 while (true) {
                     long rowFP;
                     long rowTxId = -1;
@@ -186,7 +182,6 @@ public class BinaryRowReader implements WALReader {
                         }
                         int trailingLength = -1;
                         try {
-
                             rowType = RowType.fromByte((byte) filer.read());
                             rowTxId = UIO.readLong(filer, "txId");
                             row = new byte[length - lengthOfTypeAndTxId];
@@ -242,20 +237,12 @@ public class BinaryRowReader implements WALReader {
     public byte[] read(long position) throws IOException {
         int length = -1;
         try {
-            IReadable filer = parent.fileChannelMemMapFiler(position + 4);
-            if (filer == null) {
-                filer = parent.fileChannelFiler();
-            }
+            IReadable filer = parent.bestFiler(null, position + 4);
 
             filer.seek(position);
             length = UIO.readInt(filer, "length");
 
-            if (position + 4 + length > filer.length()) {
-                filer = parent.fileChannelMemMapFiler(position + 4 + length);
-                if (filer == null) {
-                    filer = parent.fileChannelFiler();
-                }
-            }
+            filer = parent.bestFiler(filer, position + 4 + length);
 
             filer.seek(position + 4 + 1 + 8);
             byte[] row = new byte[length - (1 + 8)];
@@ -270,11 +257,31 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public <R> R read(long position, ReadTx<R> tx) throws Exception {
-        IReadable filer = parent.fileChannelMemMapFiler(position + 4);
-        if (filer == null) {
-            filer = parent.fileChannelFiler();
-        }
-        return tx.tx(filer);
+    public boolean read(Fps fps, RowStream rowStream) throws Exception {
+        IReadable[] filerRef = { parent.bestFiler(null, 0) };
+        return fps.consume(fp -> {
+            int length = -1;
+            try {
+                IReadable filer = parent.bestFiler(filerRef[0], fp + 4);
+                filer.seek(fp);
+                length = UIO.readInt(filer, "length");
+
+                filer = parent.bestFiler(filer, fp + 4 + length);
+                filer.seek(fp + 4);
+                RowType rowType = RowType.fromByte((byte) filer.read());
+                long rowTxId = UIO.readLong(filer, "txId");
+
+                byte[] row = new byte[length - (1 + 8)];
+                if (row.length > 0) {
+                    filer.read(row);
+                }
+
+                filerRef[0] = filer;
+                return rowStream.row(fp, rowTxId, rowType, row);
+            } catch (NegativeArraySizeException x) {
+                LOG.error("FAILED to read length:" + length + " bytes at position:" + fp + " in file:" + parent);
+                throw x;
+            }
+        });
     }
 }

@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.shared.scan;
 
-import com.jivesoftware.os.amza.shared.wal.MergeTxKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.TxKeyPointers;
-import com.jivesoftware.os.amza.shared.wal.WALKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
+import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
 
 /**
  *
@@ -21,7 +21,7 @@ public interface CompactableWALIndex {
         void commit() throws Exception;
     }
 
-    boolean getPointer(byte[] key, WALKeyPointerStream stream) throws Exception;
+    boolean getPointer(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception;
 
     boolean isEmpty() throws Exception;
 

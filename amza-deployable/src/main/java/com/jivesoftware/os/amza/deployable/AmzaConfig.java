@@ -1,24 +1,11 @@
 package com.jivesoftware.os.amza.deployable;
 
 import org.merlin.config.Config;
-import org.merlin.config.defaults.BooleanDefault;
 import org.merlin.config.defaults.IntDefault;
 import org.merlin.config.defaults.LongDefault;
 import org.merlin.config.defaults.StringDefault;
 
 public interface AmzaConfig extends Config {
-
-    @BooleanDefault(true)
-    boolean getAutoDiscoveryEnabled();
-
-    @StringDefault("amza")
-    String getClusterName();
-
-    @StringDefault("225.4.5.6")
-    String getDiscoveryMulticastGroup();
-
-    @IntDefault(1223)
-    int getDiscoveryMulticastPort();
 
     @StringDefault("./var/data")
     String getWorkingDirs();
@@ -37,5 +24,8 @@ public interface AmzaConfig extends Config {
 
     @IntDefault(8)
     int getNumberOfTakerThreads();
+
+    @LongDefault(30_000L)
+    long getDiscoveryIntervalMillis();
 
 }

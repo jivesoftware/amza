@@ -26,9 +26,8 @@ public class StreamingTakesConsumer {
                 }
                 byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
                 dis.readFully(versionedPartitionNameBytes);
-                byte[] statusBytes = new byte[1];
-                dis.readFully(statusBytes);
-                Status status = Status.fromSerializedForm(statusBytes);
+                byte statusByte = (byte) dis.read();
+                Status status = Status.fromSerializedForm(statusByte);
                 long txId = dis.readLong();
                 updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), status, txId);
             }

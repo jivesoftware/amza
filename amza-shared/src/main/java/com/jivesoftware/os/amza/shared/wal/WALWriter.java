@@ -19,7 +19,13 @@ import com.jivesoftware.os.amza.shared.scan.RowType;
 
 public interface WALWriter {
 
-    int write(long txId, RowType rowType, RawRows rows, IndexableKeys indexableKeys, TxKeyPointerFpStream stream) throws Exception;
+    int write(long txId,
+        RowType rowType,
+        int estimatedNumberOfRows,
+        int estimatedSizeInBytes,
+        RawRows rows,
+        IndexableKeys indexableKeys,
+        TxKeyPointerFpStream stream) throws Exception;
 
     long writeSystem(byte[] row) throws Exception;
 
@@ -40,10 +46,10 @@ public interface WALWriter {
     }
 
     interface IndexableKeyStream {
-        boolean stream(byte[] key, long valueTimestamp, boolean valueTombstoned) throws Exception;
+        boolean stream(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned) throws Exception;
     }
 
     interface TxKeyPointerFpStream {
-        boolean stream(long txId, byte[] key, long valueTimestamp, boolean valueTombstoned, long fp) throws Exception;
+        boolean stream(long txId, byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long fp) throws Exception;
     }
 }

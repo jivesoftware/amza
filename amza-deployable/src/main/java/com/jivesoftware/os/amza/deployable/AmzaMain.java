@@ -52,6 +52,8 @@ import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
+import com.jivesoftware.os.routing.bird.server.util.Resource;
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 
@@ -87,7 +89,7 @@ public class AmzaMain {
             deployable.buildManageServer().start();
 
             InstanceConfig instanceConfig = deployable.config(InstanceConfig.class);
-           
+
             AmzaConfig amzaConfig = deployable.config(AmzaConfig.class);
 
             final String[] workingDirs = amzaConfig.getWorkingDirs().split(",");
@@ -177,11 +179,18 @@ public class AmzaMain {
                 }
             });
 
+            File staticResourceDir = new File(System.getProperty("user.dir"));
+            System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());
+            Resource sourceTree = new Resource(staticResourceDir)
+                .addResourcePath("resources/static")
+                .setContext("/static");
+            deployable.addResource(sourceTree);
+
             amzaService.start();
             deployable.buildServer().start();
             serviceStartupHealthCheck.success();
 
-             RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
+            RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
                 instanceConfig.getServiceName(),
                 amzaService,
                 amzaConfig.getDiscoveryIntervalMillis());

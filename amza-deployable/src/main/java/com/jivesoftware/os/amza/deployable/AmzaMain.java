@@ -87,8 +87,7 @@ public class AmzaMain {
             deployable.buildManageServer().start();
 
             InstanceConfig instanceConfig = deployable.config(InstanceConfig.class);
-            deployable.buildServer().start();
-
+           
             AmzaConfig amzaConfig = deployable.config(AmzaConfig.class);
 
             final String[] workingDirs = amzaConfig.getWorkingDirs().split(",");

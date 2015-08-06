@@ -14,14 +14,15 @@ public class PointerIndexs {
     private final Object indexesLock = new Object();
     private ConcurrentReadablePointerIndex[] indexes = new ConcurrentReadablePointerIndex[0];
 
-    public boolean merge(PointerIndexFactory indexFactory) throws Exception {
+    public boolean merge(int count, PointerIndexFactory indexFactory) throws Exception {
         ConcurrentReadablePointerIndex[] copy;
         synchronized (indexesLock) {
             copy = indexes;
         }
-        if (copy.length <= 2) {
+        if (copy.length <= count) {
             return false;
         }
+
         PointerIndex mergedIndex = indexFactory.createPointerIndex();
         NextPointer[] feeders = new NextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
@@ -33,17 +34,27 @@ public class PointerIndexs {
             return true;
         });
 
+        System.out.println("Merged (" + copy.length + ") logs.");
+
         synchronized (indexesLock) {
-            int keep = indexes.length - copy.length;
-            PointerIndex[] merged = new PointerIndex[keep + 1];
-            System.arraycopy(indexes, 0, merged, 0, keep);
-            merged[keep] = mergedIndex;
+            int newSinceMerge = indexes.length - copy.length;
+            PointerIndex[] merged = new PointerIndex[newSinceMerge + 1];
+            System.arraycopy(indexes, copy.length, merged, 1, newSinceMerge);
+            merged[0] = mergedIndex;
             indexes = merged;
         }
         for (ConcurrentReadablePointerIndex c : copy) {
-            c.destroy();
+            //c.destroy();
         }
         return true;
+    }
+
+    public int mergeDebut() {
+        ConcurrentReadablePointerIndex[] copy;
+        synchronized (indexesLock) {
+            copy = indexes;
+        }
+        return copy.length;
     }
 
     public void append(ConcurrentReadablePointerIndex walIndex) {

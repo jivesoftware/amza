@@ -42,7 +42,7 @@ public class PointerIndexsNGTest {
         //indexs.append(memoryWalIndex);
         assertions(indexs, count, step, desired);
 
-        indexs.merge(() -> {
+        indexs.merge(2, () -> {
             File indexFiler = File.createTempFile("a-index-merged", ".tmp");
             File keysFile = File.createTempFile("a-keys-merged", ".tmp");
 

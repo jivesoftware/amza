@@ -35,7 +35,7 @@ public class DiskBackedPointerIndexFiler extends RandomAccessFile implements IFi
     }
 
     public IReadable fileChannelFiler() {
-        final FileChannel channel = getChannel();
+        FileChannel channel = getChannel();
         return new DiskBackedPointerIndexFilerChannelReader(this, channel);
     }
 
@@ -50,7 +50,7 @@ public class DiskBackedPointerIndexFiler extends RandomAccessFile implements IFi
             if (size <= memMapFilerLength.get()) {
                 return memMapFiler.get().duplicate();
             }
-            final FileChannel channel = getChannel();
+            FileChannel channel = getChannel();
             long newLength = length();
             // TODO handle larger files
             if (newLength >= Integer.MAX_VALUE) {

@@ -16,7 +16,7 @@ public class PointerIndexStressNGTest {
 
     NumberFormat format = NumberFormat.getInstance();
 
-    @Test(enabled = true)
+    @Test(enabled = false)
     public void stress() throws Exception {
         long start = System.currentTimeMillis();
         PointerIndexs indexs = new PointerIndexs();

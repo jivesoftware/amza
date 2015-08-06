@@ -4,9 +4,9 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
-        <artifactId>executable-build-management</artifactId>
+        <artifactId>global-version-management</artifactId>
         <version>0.97-SNAPSHOT</version>
-        <relativePath>../inheritance-poms/executable-build-management/pom.xml</relativePath>
+        <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
     <artifactId>amza-ui</artifactId>

@@ -27,6 +27,14 @@
             </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.routing.bird</groupId>
+                <artifactId>deployable-scripts</artifactId>
+                <type>tar.gz</type>
+                <classifier>bin</classifier>
+                <scope>runtime</scope>
+                <version>${routing.bird.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jivesoftware.os.routing.bird</groupId>
                 <artifactId>routing-bird-http-client</artifactId>
                 <version>${routing.bird.version}</version>
             </dependency>
@@ -233,7 +241,7 @@
         </dependencies>
     </dependencyManagement>
     
-    <build>
+   <build>
         <!-- This section defines the plugin versions and default configurations/executions. -->
         <pluginManagement>
             <plugins>

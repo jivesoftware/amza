@@ -315,9 +315,9 @@ public class BerkeleyDBWALIndex implements WALIndex {
                     //  1       true             false              1
                     //  1       true             true               0
                     if (!requestTombstoned && (indexFp == -1 && !indexTombstoned || indexFp != -1 && indexTombstoned)) {
-                        delta[1]++;
+                        delta[0]++;
                     } else if (indexFp != -1 && !indexTombstoned && requestTombstoned) {
-                        delta[1]--;
+                        delta[0]--;
                     }
                     return true;
                 }));

@@ -41,7 +41,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Set;
-import org.apache.commons.lang.mutable.MutableLong;
 
 public class SystemPartition implements AmzaPartitionAPI {
 
@@ -136,37 +135,40 @@ public class SystemPartition implements AmzaPartitionAPI {
 
     @Override
     public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
-        final MutableLong lastTxId = new MutableLong(-1);
-        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-        boolean tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, transactionId, highwaters,
-            (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
-                if (valueTombstone || scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value))) {
-                    if (rowTxId > lastTxId.longValue()) {
-                        lastTxId.setValue(rowTxId);
-                    }
-                    return true;
-                }
-                return false;
-            });
-        return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd ? partitionHighwater : null);
+        return takeFromTransactionIdInternal(null, transactionId, highwaters, scan);
     }
 
     @Override
     public TakeResult takeFromTransactionId(byte[] prefix, long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
-        final MutableLong lastTxId = new MutableLong(-1);
+        return takeFromTransactionIdInternal(prefix, transactionId, highwaters, scan);
+    }
+
+    private TakeResult takeFromTransactionIdInternal(byte[] takePrefix,
+        long transactionId,
+        Highwaters highwaters,
+        Scan<TimestampedValue> scan) throws Exception {
+
+        long[] lastTxId = { -1 };
+        boolean[] done = { false };
         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-        boolean tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, prefix, transactionId, highwaters,
-            (rowTxId, _prefix, key, value, valueTimestamp, valueTombstone) -> {
-                if (valueTombstone || scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value))) {
-                    if (rowTxId > lastTxId.longValue()) {
-                        lastTxId.setValue(rowTxId);
-                    }
+        boolean tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, takePrefix, transactionId, highwaters,
+            (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
+                if (valueTombstone) {
                     return true;
                 }
-                return false;
+
+                if (done[0] && rowTxId > lastTxId[0]) {
+                    return false;
+                }
+
+                done[0] |= scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value));
+                if (rowTxId > lastTxId[0]) {
+                    lastTxId[0] = rowTxId;
+                }
+                return true;
             });
-        return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd ? partitionHighwater : null);
+        return new TakeResult(ringMember, lastTxId[0], tookToEnd ? partitionHighwater : null);
     }
 
     @Override

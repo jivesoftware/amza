@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.client;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
@@ -101,7 +100,6 @@ public class AmzaClientProvider { // Aka Partition Client Provider
             for (Map.Entry<RingMember, Long> entry : ringMemberToMaxTxId.entrySet()) {
                 cursors.add(new TakeCursors.RingMemberCursor(entry.getKey(), entry.getValue()));
             }
-            cursors.add(new TakeCursors.RingMemberCursor(takeResult.tookFrom, takeResult.lastTxId));
             return new TakeCursors(cursors);
         }
 
@@ -125,7 +123,6 @@ public class AmzaClientProvider { // Aka Partition Client Provider
             for (Map.Entry<RingMember, Long> entry : ringMemberToMaxTxId.entrySet()) {
                 cursors.add(new TakeCursors.RingMemberCursor(entry.getKey(), entry.getValue()));
             }
-            cursors.add(new TakeCursors.RingMemberCursor(takeResult.tookFrom, takeResult.lastTxId));
             return new TakeCursors(cursors);
         }
     }

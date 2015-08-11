@@ -56,7 +56,9 @@ public class StreamingTakesConsumer {
                 dis.readFully(rowBytes);
                 bytes += 1 + 8 + 1 + 4 + rowBytes.length;
                 if (rowType != null) {
-                    tookRowUpdates.row(-1, rowTxId, rowType, rowBytes);
+                    if (!tookRowUpdates.row(-1, rowTxId, rowType, rowBytes)) {
+                        break;
+                    }
                 }
             }
         }

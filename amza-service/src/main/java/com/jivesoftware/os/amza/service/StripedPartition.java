@@ -40,7 +40,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Set;
-import org.apache.commons.lang.mutable.MutableLong;
 
 public class StripedPartition implements AmzaPartitionAPI {
 
@@ -143,46 +142,52 @@ public class StripedPartition implements AmzaPartitionAPI {
 
     @Override
     public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
-        return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            MutableLong lastTxId = new MutableLong(-1);
-            WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters,
-                (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
-                    if (valueTombstone || scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value))) {
-                        if (rowTxId > lastTxId.longValue()) {
-                            lastTxId.setValue(rowTxId);
-                        }
-                        return true;
-                    }
-                    return false;
-                });
-            return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd);
-        });
+        return takeFromTransactionIdInternal(null, transactionId, highwaters, scan);
     }
 
     @Override
     public TakeResult takeFromTransactionId(byte[] prefix, long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
+        return takeFromTransactionIdInternal(prefix, transactionId, highwaters, scan);
+    }
+
+    private TakeResult takeFromTransactionIdInternal(byte[] takePrefix,
+        long transactionId,
+        Highwaters highwaters,
+        Scan<TimestampedValue> scan) throws Exception {
+
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            MutableLong lastTxId = new MutableLong(-1);
-            WALHighwater tookToEnd = stripe.takeFromTransactionId(partitionName, prefix, transactionId, highwaterStorage, highwaters,
-                (rowTxId, _prefix, key, value, valueTimestamp, valueTombstone) -> {
-                    if (valueTombstone || scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value))) {
-                        if (rowTxId > lastTxId.longValue()) {
-                            lastTxId.setValue(rowTxId);
-                        }
-                        return true;
-                    }
+            long[] lastTxId = { -1 };
+            boolean[] done = { false };
+            TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
+                if (valueTombstone) {
+                    return true;
+                }
+
+                if (done[0] && rowTxId > lastTxId[0]) {
                     return false;
-                });
-            return new TakeResult(ringMember, lastTxId.longValue(), tookToEnd);
+                }
+
+                done[0] |= scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value));
+                if (rowTxId > lastTxId[0]) {
+                    lastTxId[0] = rowTxId;
+                }
+                return true;
+            };
+
+            WALHighwater highwater;
+            if (takePrefix != null) {
+                highwater = stripe.takeFromTransactionId(partitionName, takePrefix, transactionId, highwaterStorage, highwaters, txKeyValueStream);
+            } else {
+                highwater = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters, txKeyValueStream);
+            }
+            return new TakeResult(ringMember, lastTxId[0], highwater);
         });
     }
 
     @Override
     public long count() throws Exception {
-        return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            return stripe.count(partitionName);
-        });
+        return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> stripe.count(partitionName));
     }
 
     @Override

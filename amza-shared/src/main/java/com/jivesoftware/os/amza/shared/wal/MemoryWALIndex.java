@@ -137,8 +137,8 @@ public class MemoryWALIndex implements WALIndex {
         boolean completed = keyPointers.consume((prefix, key, requestTimestamp, requestTombstoned, fp) -> {
             byte[] pk = WALKey.compose(prefix, key);
             WALPointer got = index.get(pk);
-            long indexFp = got.getFp();
-            boolean indexTombstoned = got.getTombstoned();
+            long indexFp = got != null ? got.getFp() : -1;
+            boolean indexTombstoned = got != null && got.getTombstoned();
 
             // indexFp, indexTombstoned, requestTombstoned, delta
             // -1       false            false              1

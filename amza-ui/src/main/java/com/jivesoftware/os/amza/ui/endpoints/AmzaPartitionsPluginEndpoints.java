@@ -44,7 +44,7 @@ public class AmzaPartitionsPluginEndpoints {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response action(@FormParam("action") @DefaultValue("") String action,
         @FormParam("ringName") @DefaultValue("") String ringName,
-        @FormParam("partitionName") @DefaultValue("") String partitionName,
+        @FormParam("name") @DefaultValue("") String partitionName,
         @FormParam("takeFromFactor") @DefaultValue("1") int takeFromFactor) {
         String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput(action, ringName, partitionName, takeFromFactor));
         return Response.ok(rendered).build();

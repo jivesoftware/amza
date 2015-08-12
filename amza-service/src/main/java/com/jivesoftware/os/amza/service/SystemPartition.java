@@ -162,7 +162,7 @@ public class SystemPartition implements AmzaPartitionAPI {
                     return false;
                 }
 
-                done[0] |= scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value));
+                done[0] |= !scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value));
                 if (rowTxId > lastTxId[0]) {
                     lastTxId[0] = rowTxId;
                 }

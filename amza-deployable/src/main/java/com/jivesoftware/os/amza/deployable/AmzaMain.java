@@ -186,6 +186,11 @@ public class AmzaMain {
                 .setContext("/static");
             deployable.addResource(sourceTree);
 
+            Resource staticResource = new Resource(null)
+                .addClasspathResource("resources/static/amza")
+                .setContext("/static/amza");
+            deployable.addResource(staticResource);
+
             amzaService.start();
             deployable.buildServer().start();
             serviceStartupHealthCheck.success();

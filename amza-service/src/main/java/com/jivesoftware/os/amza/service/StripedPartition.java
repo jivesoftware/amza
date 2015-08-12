@@ -130,7 +130,7 @@ public class StripedPartition implements AmzaPartitionAPI {
             } else {
                 stripe.rangeScan(partitionName,
                     fromPrefix,
-                    fromKey == null ? new byte[0] : fromKey,
+                    fromKey,
                     toPrefix,
                     toKey,
                     (prefix, key, value, valueTimestamp, valueTombstone) ->

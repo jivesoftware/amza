@@ -88,42 +88,35 @@ public class MemoryWALIndex implements WALIndex {
 
     @Override
     public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream) throws Exception {
-        byte[] fromPk = WALKey.compose(fromPrefix, fromKey);
-        byte[] toPk = WALKey.compose(toPrefix, toKey);
+        byte[] fromPk = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
+        byte[] toPk = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
         return WALKey.decompose(
             keyEntryStream -> {
-                if (fromPk == null && toPk == null) {
-                    for (Entry<byte[], WALPointer> e : index.entrySet()) {
-                        WALPointer rowPointer = e.getValue();
-                        if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
-                            return false;
-                        }
-                    }
-                } else if (toPk == null) {
-                    for (Entry<byte[], WALPointer> e : index.tailMap(fromPk, true).entrySet()) {
-                        WALPointer rowPointer = e.getValue();
-                        if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
-                            return false;
-                        }
-                    }
-                } else if (fromPk == null) {
-                    for (Entry<byte[], WALPointer> e : index.headMap(toPk, false).entrySet()) {
-                        WALPointer rowPointer = e.getValue();
-                        if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
-                            return false;
-                        }
-                    }
-                } else {
-                    for (Entry<byte[], WALPointer> e : index.subMap(fromPk, toPk).entrySet()) {
-                        WALPointer rowPointer = e.getValue();
-                        if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
-                            return false;
-                        }
+                for (Entry<byte[], WALPointer> e : subMap(index, fromPk, toPk).entrySet()) {
+                    WALPointer rowPointer = e.getValue();
+                    if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
+                        return false;
                     }
                 }
                 return true;
             },
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> stream.stream(prefix, key, valueTimestamp, valueTombstoned, fp));
+    }
+
+    private static ConcurrentNavigableMap<byte[], WALPointer> subMap(ConcurrentSkipListMap<byte[], WALPointer> index, byte[] from, byte[] to) {
+        if (from != null && to != null) {
+            if (KeyUtil.compare(from, to) <= 0) {
+                return index.subMap(from, to);
+            } else {
+                return index.subMap(from, to).descendingMap();
+            }
+        } else if (from != null) {
+            return index.tailMap(from, true);
+        } else if (to != null) {
+            return index.headMap(to, false);
+        } else {
+            return index;
+        }
     }
 
     @Override

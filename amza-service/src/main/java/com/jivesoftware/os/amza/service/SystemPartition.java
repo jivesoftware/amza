@@ -125,7 +125,7 @@ public class SystemPartition implements AmzaPartitionAPI {
         } else {
             systemWALStorage.rangeScan(versionedPartitionName,
                 fromPrefix,
-                fromKey == null ? new byte[0] : fromKey,
+                fromKey,
                 toPrefix,
                 toKey,
                 (prefix, key, value, valueTimestamp, valueTombstone) ->

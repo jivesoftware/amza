@@ -405,24 +405,46 @@ public class BerkeleyDBWALIndex implements WALIndex {
     public boolean rangeScan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, WALKeyPointerStream stream) throws Exception {
         lock.acquire();
         try (Cursor cursor = primaryDb.openCursor(null, null)) {
-            byte[] fromPk = WALKey.compose(fromPrefix, fromKey);
-            byte[] toPk = WALKey.compose(toPrefix, toKey);
-            DatabaseEntry keyEntry = new DatabaseEntry(fromPk);
-            DatabaseEntry valueEntry = new DatabaseEntry();
-            return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
-                if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
-                    do {
-                        if (toPk != null && KeyUtil.compare(keyEntry.getData(), toPk) >= 0) {
-                            return false;
-                        }
-                        if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, valueEntry.getData())) {
-                            return false;
+            byte[] fromPk = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
+            byte[] toPk = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
+            if (fromPk != null && toPk != null && KeyUtil.compare(fromPk, toPk) > 0) {
+                // reverse scan
+                DatabaseEntry keyEntry = new DatabaseEntry(toPk);
+                DatabaseEntry valueEntry = new DatabaseEntry();
+                return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
+                    if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
+                        if (cursor.getPrev(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
+                            do {
+                                if (KeyUtil.compare(keyEntry.getData(), fromPk) < 0) {
+                                    return false;
+                                }
+                                if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, valueEntry.getData())) {
+                                    return false;
+                                }
+                            }
+                            while (cursor.getPrev(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
                         }
                     }
-                    while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
-                }
-                return true;
-            }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> entryToWALPointer(prefix, key, entry, stream));
+                    return true;
+                }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> entryToWALPointer(prefix, key, entry, stream));
+            } else {
+                DatabaseEntry keyEntry = new DatabaseEntry(fromPk);
+                DatabaseEntry valueEntry = new DatabaseEntry();
+                return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
+                    if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
+                        do {
+                            if (toPk != null && KeyUtil.compare(keyEntry.getData(), toPk) >= 0) {
+                                return false;
+                            }
+                            if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, valueEntry.getData())) {
+                                return false;
+                            }
+                        }
+                        while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                    }
+                    return true;
+                }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> entryToWALPointer(prefix, key, entry, stream));
+            }
         } finally {
             lock.release();
         }

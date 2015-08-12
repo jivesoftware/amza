@@ -52,7 +52,7 @@
                                     </td>
                                     <td>TODO</td>
                                     <td>
-                                        <input type="number" name="takeFromFactor" min="0" max="65536" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
+                                        <input type="number" name="takeFromFactor" min="0" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
                                         class="form-control" placeholder="takeFromFactor" value=""   title="">
                                     </td>
                                     <td></td>
@@ -64,7 +64,7 @@
                                     method="post" name="removeRingHost">
                                     <tr>    
                                         <td>
-                                            <a href="/amza/ui/inspect?regionType={$r.type}&ringName={$r.ringName}&regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search">Inspect</a>
+                                            <a href="/amza/ui/inspect?regionType={$r.type}&amp;ringName={$r.ringName}&amp;regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search">Inspect</a>
                                             <input type="hidden" name="ringName" value="{$r.ringName}">
                                             <input type="hidden" name="partitionName" value="{$r.name}">
                                             <div class="btn-group" role="group" aria-label="...">

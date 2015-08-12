@@ -9,7 +9,7 @@ import com.jivesoftware.os.amza.shared.ring.RingHost;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaClusterPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaInspectPluginEndpoints;
-import com.jivesoftware.os.amza.ui.endpoints.AmzaRegionsPluginEndpoints;
+import com.jivesoftware.os.amza.ui.endpoints.AmzaPartitionsPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaRingsPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaStressPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaUIEndpoints;
@@ -82,7 +82,7 @@ public class AmzaUIInitializer {
                 AmzaRingsPluginEndpoints.class,
                 new AmzaRingsPluginRegion("soy.page.amzaRingsPluginRegion", renderer, amzaService.getRingWriter(), amzaService.getRingReader())),
             new ManagePlugin("map-marker", "Partitions", "/amza/ui/partitions",
-                AmzaRegionsPluginEndpoints.class,
+                AmzaPartitionsPluginEndpoints.class,
                 new AmzaPartitionsPluginRegion("soy.page.amzaPartitionsPluginRegion", renderer, amzaService.getRingReader(), amzaService)),
             new ManagePlugin("leaf", "Cluster", "/amza/ui/cluster",
                 AmzaClusterPluginEndpoints.class,

@@ -82,6 +82,14 @@ public class AmzaPartitionUpdates implements Commitable {
         return this;
     }
 
+    public void reset() {
+        changes.clear();
+    }
+
+    public int size() {
+        return changes.size();
+    }
+
     @Override
     public boolean commitable(Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) throws Exception {
         for (Entry<byte[], WALValue> e : changes.entrySet()) {

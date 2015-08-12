@@ -39,10 +39,13 @@ public class AmzaInspectPluginEndpoints {
         @QueryParam("regionName") @DefaultValue("") String regionName,
         @QueryParam("prefix") @DefaultValue("") String prefix,
         @QueryParam("key") @DefaultValue("") String key,
+        @QueryParam("toPrefix") @DefaultValue("") String toPrefix,
+        @QueryParam("toKey") @DefaultValue("") String toKey,
+        @QueryParam("value") @DefaultValue("") String value,
         @QueryParam("offset") @DefaultValue("0") int offset,
         @QueryParam("batchSize") @DefaultValue("100") int batchSize) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new AmzaInspectPluginRegionInput(type.equals("SYSTEM"), ringName, regionName, prefix, key, offset, batchSize, ""));
+            new AmzaInspectPluginRegionInput(type.equals("SYSTEM"), ringName, regionName, prefix, key, toPrefix, toKey, value, offset, batchSize, ""));
         return Response.ok(rendered).build();
     }
 
@@ -55,11 +58,14 @@ public class AmzaInspectPluginEndpoints {
         @FormParam("regionName") @DefaultValue("") String regionName,
         @FormParam("prefix") @DefaultValue("") String prefix,
         @FormParam("key") @DefaultValue("") String key,
+        @FormParam("toPrefix") @DefaultValue("") String toPrefix,
+        @FormParam("toKey") @DefaultValue("") String toKey,
+        @FormParam("value") @DefaultValue("") String value,
         @FormParam("offset") @DefaultValue("0") int offset,
         @FormParam("batchSize") @DefaultValue("100") int batchSize,
         @FormParam("action") @DefaultValue("") String action) {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new AmzaInspectPluginRegionInput(systemRegion, ringName, regionName, prefix, key, offset, batchSize, action));
+            new AmzaInspectPluginRegionInput(systemRegion, ringName, regionName, prefix, key, toPrefix, toKey, value, offset, batchSize, action));
         return Response.ok(rendered).build();
     }
 }

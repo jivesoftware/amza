@@ -8,6 +8,9 @@
  * @param? regionName
  * @param? prefix
  * @param? key
+ * @param? toPrefix
+ * @param? toKey
+ * @param? value
  * @param? offset
  * @param? batchSize
  *
@@ -34,6 +37,9 @@
                             <th>Region Name</th>
                             <th>Prefix</th>
                             <th>Key/s</th>
+                            <th>To Prefix</th>
+                            <th>To Key</th>
+                            <th>Value</th>
                             <th>Offset</th>
                             <th>Batch</th>
                             <th>Actions</th>
@@ -67,6 +73,21 @@
                                         name="key" data-original-title="" title="{$key?:''}">
                                 </td>
                                 <td>
+                                    <input type="text" style="padding-left:10px;"
+                                        class="form-control" placeholder="To Key" value="{$toKey?:''}"
+                                        name="toKey" data-original-title="" title="{$toKey?:''}">
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                        class="form-control" placeholder="To Prefix" value="{$toPrefix?:''}"
+                                        name="toPrefix" data-original-title="" title="{$toPrefix?:''}">
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                        class="form-control" placeholder="Value" value="{$value?:''}"
+                                        name="value" data-original-title="" title="{$value?:''}">
+                                </td>
+                                <td>
                                     <input type="number" name="offset" min="0" autocomplete="off" role="combobox" style="padding-left:10px;"
                                         class="form-control" placeholder="offset" value="{$offset?:'0'}"
                                         data-original-title="" title="{$offset?:'0'}">
@@ -79,6 +100,7 @@
                                 <td>
                                     <button title="Scan" type="submit" name="action" value="scan" class="btn btn-default">Scan</button>
                                     <button title="Get" type="submit" name="action" value="get" class="btn btn-default">Get</button>
+                                    <button title="Set" type="submit" name="action" value="set" class="btn btn-default">Set</button>
                                     <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default">Remove</button>
                                 </td>
                             </tr>

@@ -9,9 +9,11 @@ import java.util.List;
 public class TakeCursors {
 
     public final List<RingMemberCursor> ringMemberCursors;
+    public final boolean tookToEnd;
 
-    public TakeCursors(List<RingMemberCursor> ringMemberCursors) {
+    public TakeCursors(List<RingMemberCursor> ringMemberCursors, boolean tookToEnd) {
         this.ringMemberCursors = ringMemberCursors;
+        this.tookToEnd = tookToEnd;
     }
 
     public static class RingMemberCursor {

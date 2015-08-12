@@ -89,7 +89,9 @@ public class AmzaClientProvider { // Aka Partition Client Provider
                 }
             }, scan);
 
+            boolean tookToEnd = false;
             if (takeResult.tookToEnd != null) {
+                tookToEnd = true;
                 for (WALHighwater.RingMemberHighwater highwater : takeResult.tookToEnd.ringMemberHighwater) {
                     ringMemberToMaxTxId.merge(highwater.ringMember, highwater.transactionId, Math::max);
                 }
@@ -100,7 +102,7 @@ public class AmzaClientProvider { // Aka Partition Client Provider
             for (Map.Entry<RingMember, Long> entry : ringMemberToMaxTxId.entrySet()) {
                 cursors.add(new TakeCursors.RingMemberCursor(entry.getKey(), entry.getValue()));
             }
-            return new TakeCursors(cursors);
+            return new TakeCursors(cursors, tookToEnd);
         }
 
         public TakeCursors takeFromTransactionId(byte[] prefix, long transactionId, Scan<TimestampedValue> scan) throws Exception {
@@ -112,7 +114,9 @@ public class AmzaClientProvider { // Aka Partition Client Provider
                 }
             }, scan);
 
+            boolean tookToEnd = false;
             if (takeResult.tookToEnd != null) {
+                tookToEnd = true;
                 for (WALHighwater.RingMemberHighwater highwater : takeResult.tookToEnd.ringMemberHighwater) {
                     ringMemberToMaxTxId.merge(highwater.ringMember, highwater.transactionId, Math::max);
                 }
@@ -123,7 +127,7 @@ public class AmzaClientProvider { // Aka Partition Client Provider
             for (Map.Entry<RingMember, Long> entry : ringMemberToMaxTxId.entrySet()) {
                 cursors.add(new TakeCursors.RingMemberCursor(entry.getKey(), entry.getValue()));
             }
-            return new TakeCursors(cursors);
+            return new TakeCursors(cursors, tookToEnd);
         }
     }
 

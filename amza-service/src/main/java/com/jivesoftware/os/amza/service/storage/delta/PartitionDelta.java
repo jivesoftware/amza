@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -181,17 +182,33 @@ class PartitionDelta {
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
-        byte[] from = WALKey.compose(fromPrefix, fromKey);
-        byte[] to = WALKey.compose(toPrefix, toKey);
-        Iterator<Map.Entry<byte[], WALPointer>> iterator = orderedIndex.subMap(from, to).entrySet().iterator();
+        byte[] from = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
+        byte[] to = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
+        Iterator<Map.Entry<byte[], WALPointer>> iterator = subMap(orderedIndex, from, to).entrySet().iterator();
         Iterator<Map.Entry<byte[], WALPointer>> mergingIterator = Iterators.emptyIterator();
         PartitionDelta mergingPartitionDelta = merging.get();
         DeltaWAL mergingDeltaWAL = null;
         if (mergingPartitionDelta != null) {
-            mergingIterator = mergingPartitionDelta.orderedIndex.subMap(from, to).entrySet().iterator();
+            mergingIterator = subMap(mergingPartitionDelta.orderedIndex, from, to).entrySet().iterator();
             mergingDeltaWAL = mergingPartitionDelta.deltaWAL;
         }
         return new DeltaPeekableElmoIterator(iterator, mergingIterator, deltaWAL, mergingDeltaWAL);
+    }
+
+    private static ConcurrentNavigableMap<byte[], WALPointer> subMap(ConcurrentSkipListMap<byte[], WALPointer> index, byte[] from, byte[] to) {
+        if (from != null && to != null) {
+            if (KeyUtil.compare(from, to) <= 0) {
+                return index.subMap(from, to);
+            } else {
+                return index.subMap(from, to).descendingMap();
+            }
+        } else if (from != null) {
+            return index.tailMap(from, true);
+        } else if (to != null) {
+            return index.headMap(to, false);
+        } else {
+            return index;
+        }
     }
 
     DeltaPeekableElmoIterator rowScanIterator() {

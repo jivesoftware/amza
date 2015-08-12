@@ -34,7 +34,7 @@ public class AmzaPartitionsPluginEndpoints {
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
-        String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput("", "", ""));
+        String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput("", "", "", -1));
         return Response.ok(rendered).build();
     }
 
@@ -44,8 +44,9 @@ public class AmzaPartitionsPluginEndpoints {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public Response action(@FormParam("action") @DefaultValue("") String action,
         @FormParam("ringName") @DefaultValue("") String ringName,
-        @FormParam("partitionName") @DefaultValue("") String partitionName) {
-        String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput(action, ringName, partitionName));
+        @FormParam("partitionName") @DefaultValue("") String partitionName,
+        @FormParam("takeFromFactor") @DefaultValue("1") int takeFromFactor) {
+        String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput(action, ringName, partitionName, takeFromFactor));
         return Response.ok(rendered).build();
     }
 }

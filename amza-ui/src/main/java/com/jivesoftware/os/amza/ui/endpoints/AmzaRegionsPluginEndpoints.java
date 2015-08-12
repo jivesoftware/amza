@@ -34,7 +34,7 @@ public class AmzaRegionsPluginEndpoints {
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
-        String rendered = soyService.renderPlugin(region, new AmzaPartitionsPluginRegionInput("", "", ""));
+        String rendered = soyService.renderPlugin(region, new AmzaPartitionsPluginRegionInput("", "", "", takeFromFactor));
         return Response.ok(rendered).build();
     }
 
@@ -45,7 +45,7 @@ public class AmzaRegionsPluginEndpoints {
     public Response action(@FormParam("action") @DefaultValue("") String action,
         @FormParam("ringName") @DefaultValue("") String ringName,
         @FormParam("partitionName") @DefaultValue("") String partitionName) {
-        String rendered = soyService.renderPlugin(region, new AmzaPartitionsPluginRegionInput(action, ringName, partitionName));
+        String rendered = soyService.renderPlugin(region, new AmzaPartitionsPluginRegionInput(action, ringName, partitionName, takeFromFactor));
         return Response.ok(rendered).build();
     }
 }

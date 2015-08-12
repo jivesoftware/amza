@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.ui.region;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -58,11 +60,13 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
         final String action;
         final String ringName;
         final String partitionName;
+        final int takeFromFactor;
 
-        public AmzaPartitionsPluginRegionInput(String action, String ringName, String partitionName) {
+        public AmzaPartitionsPluginRegionInput(String action, String ringName, String partitionName, int takeFromFactor) {
             this.action = action;
             this.ringName = ringName;
             this.partitionName = partitionName;
+            this.takeFromFactor = takeFromFactor;
         }
 
     }
@@ -73,12 +77,29 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
         try {
 
+            byte[] ringNameBytes = input.ringName.getBytes();
+            byte[] partitionNameBytes = input.partitionName.getBytes();
             if (input.action.equals("add")) {
+                if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
+                    int ringSize = amzaService.getRingReader().getRingSize(ringNameBytes);
+                    int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
+                    if (ringSize < systemRingSize) {
+                        amzaService.getRingWriter().buildRandomSubRing(ringNameBytes, systemRingSize);
+                    }
 
+                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+                        null, 1000, 1000);
+
+                    PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
+                    amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, input.takeFromFactor, false));
+                    amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
+                }
             } else if (input.action.equals("remove")) {
-                PartitionName partitionName = new PartitionName(false, input.ringName.getBytes(), input.partitionName.getBytes());
-                log.info("Removing {}", partitionName);
-                amzaService.destroyPartition(partitionName);
+                if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
+                    PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
+                    log.info("Removing {}", partitionName);
+                    amzaService.destroyPartition(partitionName);
+                }
             }
             List<Map<String, Object>> rows = new ArrayList<>();
             Set<PartitionName> partitionNames = amzaService.getPartitionNames();

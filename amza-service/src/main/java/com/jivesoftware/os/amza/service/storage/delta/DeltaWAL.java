@@ -198,12 +198,18 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
     @Override
     public boolean hydrate(Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception {
         try {
-            return primaryRowMarshaller.fromRows(
-                (PrimaryRowMarshaller.FpRows) fpRowStream -> wal.read(
-                    reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, row))),
-                (fp, prefix, key, value, valueTimestamp, valueTombstoned) -> {
-                    byte[] deltaValue = UIO.readByteArray(value, 0, "value");
-                    return fpKeyValueStream.stream(fp, prefix, key, deltaValue, valueTimestamp, valueTombstoned);
+            return WALKey.decompose(
+                decomposeStream -> {
+                    return primaryRowMarshaller.fromRows(
+                        (PrimaryRowMarshaller.FpRows) fpRowStream -> wal.read(
+                            reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, row))),
+                        (fp, prefix, key, value, valueTimestamp, valueTombstoned) -> {
+                            byte[] deltaValue = UIO.readByteArray(value, 0, "value");
+                            return decomposeStream.stream(-1, fp, key, deltaValue, valueTimestamp, valueTombstoned, null);
+                        });
+                },
+                (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> {
+                    return fpKeyValueStream.stream(fp, prefix, key, value, valueTimestamp, valueTombstoned);
                 });
         } catch (Exception x) {
             throw new RuntimeException("Failed to hydrate fps, WAL length:" + wal.length(), x);
@@ -212,7 +218,9 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
 
     public boolean hydrateKeyValueHighwaters(Fps fps, FpKeyValueHighwaterStream stream) throws Exception {
         return primaryRowMarshaller.fromRows(
-            fpRowStream -> wal.read(reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, row))),
+            fpRowStream -> wal.read(
+                reader -> reader.read(fps,
+                    (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, row))),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
                 try {
                     HeapFiler filer = new HeapFiler(value);

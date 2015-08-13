@@ -58,13 +58,13 @@ class PartitionDelta {
         return pointerIndex.size();
     }
 
-    private boolean streamRawValues(byte[] streamPrefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
+    private boolean streamRawValues(byte[] prefix, UnprefixedWALKeys keys, FpKeyValueStream fpKeyValueStream) throws Exception {
         return deltaWAL.hydrate(fpStream -> {
             PartitionDelta mergingPartitionDelta = merging.get();
             if (mergingPartitionDelta != null) {
-                return mergingPartitionDelta.streamRawValues(streamPrefix,
+                return mergingPartitionDelta.streamRawValues(prefix,
                     mergingKeyStream -> keys.consume((key) -> {
-                        WALPointer got = pointerIndex.get(new WALKey(streamPrefix, key));
+                        WALPointer got = pointerIndex.get(new WALKey(prefix, key));
                         if (got == null) {
                             return mergingKeyStream.stream(key);
                         } else {
@@ -73,17 +73,14 @@ class PartitionDelta {
                     }),
                     fpKeyValueStream);
             } else {
-                return WALKey.decompose(
-                    txFpRawKeyValueEntryStream -> keys.consume(
-                        key -> txFpRawKeyValueEntryStream.stream(-1, -1, key, null, -1, false, null)),
-                    (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> {
-                        WALPointer got = pointerIndex.get(new WALKey(prefix, key));
-                        if (got == null) {
-                            return fpKeyValueStream.stream(-1, prefix, key, null, -1, false);
-                        } else {
-                            return fpStream.stream(got.getFp());
-                        }
-                    });
+                return keys.consume((key) -> {
+                    WALPointer got = pointerIndex.get(new WALKey(prefix, key));
+                    if (got == null) {
+                        return fpKeyValueStream.stream(-1, prefix, key, null, -1, false);
+                    } else {
+                        return fpStream.stream(got.getFp());
+                    }
+                });
             }
         }, fpKeyValueStream);
     }

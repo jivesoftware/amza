@@ -115,7 +115,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("keyAsHex", bytesToHex(key));
                                 row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
                                 row.put("valueAsHex", bytesToHex(value.getValue()));
-                                row.put("valueAsString", new String(value.getValue(), StandardCharsets.US_ASCII));
+                                row.put("valueAsString", value != null ? new String(value.getValue(), StandardCharsets.US_ASCII) : "null");
                                 row.put("timestampAsHex", Long.toHexString(value.getTimestampId()));
                                 row.put("timestamp", String.valueOf(value.getTimestampId()));
                                 row.put("tombstone", "false");
@@ -142,7 +142,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("keyAsHex", bytesToHex(key));
                                 row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
                                 row.put("valueAsHex", bytesToHex(value));
-                                row.put("valueAsString", new String(value, StandardCharsets.US_ASCII));
+                                row.put("valueAsString", value != null ? new String(value, StandardCharsets.US_ASCII) : "null");
                                 row.put("timestampAsHex", Long.toHexString(timestamp));
                                 row.put("timestamp", String.valueOf(timestamp));
                                 row.put("tombstone", "false");
@@ -171,7 +171,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             row.put("keyAsHex", bytesToHex(key));
                             row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
                             row.put("valueAsHex", bytesToHex(value));
-                            row.put("valueAsString", new String(value, StandardCharsets.US_ASCII));
+                            row.put("valueAsString", value != null ? new String(value, StandardCharsets.US_ASCII) : "null");
                             row.put("timestampAsHex", Long.toHexString(timestamp));
                             row.put("timestamp", String.valueOf(timestamp));
                             row.put("tombstone", "false");
@@ -224,7 +224,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             row.put("keyAsHex", bytesToHex(key));
                             row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
                             row.put("valueAsHex", bytesToHex(value));
-                            row.put("valueAsString", new String(value, StandardCharsets.US_ASCII));
+                            row.put("valueAsString", value != null ? new String(value, StandardCharsets.US_ASCII) : "null");
                             row.put("timestampAsHex", Long.toHexString(timestamp));
                             row.put("timestamp", String.valueOf(timestamp));
                             row.put("tombstone", "false");

@@ -431,7 +431,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 DatabaseEntry keyEntry = new DatabaseEntry(fromPk);
                 DatabaseEntry valueEntry = new DatabaseEntry();
                 return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
-                    if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
+                    if (fromPk == null || cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
                         do {
                             if (toPk != null && KeyUtil.compare(keyEntry.getData(), toPk) >= 0) {
                                 return false;

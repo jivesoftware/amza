@@ -135,6 +135,12 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, prefix, new IntUpdate(1, 1, 1, false), updated);
 
+        deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, keyStream -> keyStream.stream(walKey.key), (_prefix, key, value, timestamp) -> {
+            Assert.assertEquals(key, walKey.key);
+            Assert.assertEquals(value, UIO.intBytes(1));
+            return true;
+        });
+
         Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName, storage, walKey.prefix, walKey.key), new WALValue(UIO.intBytes(1), 1, false));
         deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(storage.count(keyStream -> true), 0);

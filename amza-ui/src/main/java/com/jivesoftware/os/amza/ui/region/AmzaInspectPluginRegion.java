@@ -184,7 +184,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                 AmzaPartitionAPI partition = lookupPartition(input, msg);
                 if (partition != null) {
                     List<byte[]> fromRawKeys = stringToWALKeys(input.key);
-                    List<byte[]> toRawKeys = stringToWALKeys(input.key);
+                    List<byte[]> toRawKeys = stringToWALKeys(input.toKey);
                     if (fromRawKeys.isEmpty()) {
                         msg.add("No keys to remove. Please specifiy a valid key. key='" + input.key + "'");
                     } else if (fromRawKeys.size() > 1 && !toRawKeys.isEmpty() || toRawKeys.size() > 1) {

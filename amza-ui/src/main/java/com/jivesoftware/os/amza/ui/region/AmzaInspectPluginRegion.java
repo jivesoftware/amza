@@ -167,7 +167,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         partition.get(getPrefix(input.prefix), walKeysFromList(rawKeys), (prefix, key, value, timestamp) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("prefixAsHex", bytesToHex(prefix));
-                            row.put("prefixAsString", new String(prefix, StandardCharsets.US_ASCII));
+                            row.put("prefixAsString", prefix != null ? new String(prefix, StandardCharsets.US_ASCII) : "");
                             row.put("keyAsHex", bytesToHex(key));
                             row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
                             row.put("valueAsHex", bytesToHex(value));
@@ -220,7 +220,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         partition.get(getPrefix(input.prefix), walKeysFromList(fromRawKeys), (prefix, key, value, timestamp) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("prefixAsHex", bytesToHex(prefix));
-                            row.put("prefixAsString", new String(prefix, StandardCharsets.US_ASCII));
+                            row.put("prefixAsString", prefix != null ? new String(prefix, StandardCharsets.US_ASCII) : "");
                             row.put("keyAsHex", bytesToHex(key));
                             row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
                             row.put("valueAsHex", bytesToHex(value));

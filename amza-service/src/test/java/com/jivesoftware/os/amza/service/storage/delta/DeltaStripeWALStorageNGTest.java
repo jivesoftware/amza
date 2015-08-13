@@ -335,7 +335,7 @@ public class DeltaStripeWALStorageNGTest {
 
         IntUpdate(int key, int value, long timestamp, boolean delete) {
             this.key = UIO.intBytes(key);
-            this.value = new WALValue(UIO.intBytes(value), timestamp, delete);
+            this.value = new WALValue(delete ? null : UIO.intBytes(value), timestamp, delete);
         }
 
         @Override

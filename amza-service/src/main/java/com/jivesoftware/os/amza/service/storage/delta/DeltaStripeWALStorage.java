@@ -543,14 +543,12 @@ public class DeltaStripeWALStorage {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
             return storage.streamValues(prefix,
                 storageStream -> partitionDelta.get(prefix, keys, (fp, _prefix, key, value, valueTimestamp, valueTombstoned) -> {
-                    if (value == null) {
+                    if (valueTombstoned) {
+                        return stream.stream(prefix, key, null, -1);
+                    } else if (value == null) {
                         return storageStream.stream(key);
                     } else {
-                        if (valueTombstoned) {
-                            return stream.stream(prefix, key, null, -1);
-                        } else {
-                            return stream.stream(prefix, key, value, valueTimestamp);
-                        }
+                        return stream.stream(prefix, key, value, valueTimestamp);
                     }
                 }),
                 (_prefix, key, value, valueTimestamp, valueTombstoned) -> {

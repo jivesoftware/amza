@@ -188,8 +188,7 @@ public class MemoryWALIndex implements WALIndex {
         long valueTimestamp,
         boolean valueTombstoned,
         WALPointer pointer,
-        KeyValuePointerStream stream) throws
-        Exception {
+        KeyValuePointerStream stream) throws Exception {
         if (pointer == null) {
             return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, -1, false, -1);
         } else {

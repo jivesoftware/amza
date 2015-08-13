@@ -218,7 +218,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     AtomicLong longPollAvailables = amzaStats.longPollAvailables.get(polled.getKey());
                     longPolled.add(ImmutableMap.of("member", polled.getKey().getMember(),
                         "longPolled", numberFormat.format(polled.getValue().get()),
-                        "longPollAvailables", numberFormat.format(longPollAvailables == null ? "-1" : longPollAvailables.get())));
+                        "longPollAvailables", numberFormat.format(longPollAvailables == null ? -1L : longPollAvailables.get())));
                 }
 
                 data.put("longPolled", longPolled);

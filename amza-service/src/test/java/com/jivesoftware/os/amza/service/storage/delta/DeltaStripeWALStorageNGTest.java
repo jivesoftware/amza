@@ -180,6 +180,63 @@ public class DeltaStripeWALStorageNGTest {
     }
 
     @Test
+    public void testTombstones() throws Exception {
+        WALStorage storage = partitionStore.getWalStorage();
+        byte[] prefix = UIO.intBytes(-1);
+        byte[] key1 = UIO.intBytes(1);
+        byte[] key2 = UIO.intBytes(2);
+
+        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key1));
+        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key2));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(1), assertKeyIsContained(false));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(2), assertKeyIsContained(false));
+        Assert.assertNull(storage.get(prefix, key1));
+        Assert.assertNull(storage.get(prefix, key2));
+
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, prefix, new IntUpdate(1, 1, 1, false), updated);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, prefix, new IntUpdate(2, 2, 1, false), updated);
+
+        Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key1), new WALValue(UIO.intBytes(1), 1, false));
+        Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key2), new WALValue(UIO.intBytes(2), 1, false));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(1), assertKeyIsContained(true));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(2), assertKeyIsContained(true));
+
+        deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, keys(1), (_prefix, key, value, timestamp) -> {
+            Assert.assertEquals(key, key1);
+            Assert.assertEquals(value, UIO.intBytes(1));
+            return true;
+        });
+        deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, keys(2), (_prefix, key, value, timestamp) -> {
+            Assert.assertEquals(key, key2);
+            Assert.assertEquals(value, UIO.intBytes(2));
+            return true;
+        });
+
+        deltaStripeWALStorage.merge(partitionIndex, false);
+
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, prefix, new IntUpdate(1, 1, 2, true), updated);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, Status.ONLINE, storage, prefix, new IntUpdate(2, 2, 2, true), updated);
+
+        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key1));
+        Assert.assertNull(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key2));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(1), assertKeyIsContained(false));
+        deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(2), assertKeyIsContained(false));
+
+        deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, keys(1), (_prefix, key, value, timestamp) -> {
+            Assert.assertEquals(key, key1);
+            Assert.assertNull(value);
+            Assert.assertEquals(timestamp, -1);
+            return true;
+        });
+        deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, keys(2), (_prefix, key, value, timestamp) -> {
+            Assert.assertEquals(key, key2);
+            Assert.assertNull(value);
+            Assert.assertEquals(timestamp, -1);
+            return true;
+        });
+    }
+
+    @Test
     public void testTakeWithPrefix() throws Exception {
         WALStorage storage = partitionStore.getWalStorage();
         byte[] prefixA = "a".getBytes();

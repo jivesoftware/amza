@@ -40,10 +40,9 @@ public class EmbeddedAmzaServiceInitializer {
         RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
 
         int tombstoneCompactionFactor = 2; // TODO expose to config;
-        int compactAfterGrowthFactor = 2; // TODO expose to config;
 
         IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
-            rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, orderIdProvider, tombstoneCompactionFactor, compactAfterGrowthFactor);
+            rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, orderIdProvider, tombstoneCompactionFactor);
 
         AmzaService service = new AmzaServiceInitializer().initialize(config,
             amzaStats,

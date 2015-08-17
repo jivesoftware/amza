@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshalle
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -25,15 +26,13 @@ public class IndexedWALStorageProvider {
     private final BinaryHighwaterRowMarshaller highwaterRowMarshaller;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final int tombstoneCompactionFactor;
-    private final int compactAfterGrowthFactor;
 
     public IndexedWALStorageProvider(WALIndexProviderRegistry indexProviderRegistry,
         RowIOProvider rowIOProvider,
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         TimestampedOrderIdProvider orderIdProvider,
-        int tombstoneCompactionFactor,
-        int compactAfterGrowthFactor) {
+        int tombstoneCompactionFactor) {
 
         this.indexProviderRegistry = indexProviderRegistry;
         this.rowIOProvider = rowIOProvider;
@@ -41,21 +40,20 @@ public class IndexedWALStorageProvider {
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.orderIdProvider = orderIdProvider;
         this.tombstoneCompactionFactor = tombstoneCompactionFactor;
-        this.compactAfterGrowthFactor = compactAfterGrowthFactor;
     }
 
-    public WALStorage create(File workingDirectory,
+    public <I extends WALIndex> WALStorage<I> create(File workingDirectory,
         String domain,
         VersionedPartitionName versionedPartitionName,
         WALStorageDescriptor storageDescriptor) throws Exception {
-        WALIndexProvider walIndexProvider = indexProviderRegistry.getWALIndexProvider(storageDescriptor);
+        @SuppressWarnings("unchecked")
+        WALIndexProvider<I> walIndexProvider = (WALIndexProvider<I>) indexProviderRegistry.getWALIndexProvider(storageDescriptor);
         File directory = new File(workingDirectory, domain);
         if (!directory.exists() && !directory.mkdirs()) {
             throw new IOException("Failed trying to mkdirs for " + directory);
         }
-        BinaryWALTx binaryWALTx = new BinaryWALTx(directory, versionedPartitionName.toBase64(), rowIOProvider, primaryRowMarshaller, walIndexProvider,
-            compactAfterGrowthFactor);
-        return new WALStorage(versionedPartitionName,
+        BinaryWALTx<I> binaryWALTx = new BinaryWALTx<>(directory, versionedPartitionName.toBase64(), rowIOProvider, primaryRowMarshaller, walIndexProvider);
+        return new WALStorage<>(versionedPartitionName,
             orderIdProvider,
             primaryRowMarshaller,
             highwaterRowMarshaller,

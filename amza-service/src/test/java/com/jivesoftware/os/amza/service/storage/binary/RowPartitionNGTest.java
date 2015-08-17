@@ -44,7 +44,7 @@ public class RowPartitionNGTest {
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
 
-        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
+        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         WALStorage<MemoryWALIndex> indexedWAL = new WALStorage<>(
@@ -128,7 +128,7 @@ public class RowPartitionNGTest {
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
 
-        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
+        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx);
@@ -144,7 +144,7 @@ public class RowPartitionNGTest {
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
 
-        BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider, -1);
+        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx);

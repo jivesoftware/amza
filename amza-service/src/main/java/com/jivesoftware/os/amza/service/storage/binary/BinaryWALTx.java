@@ -43,8 +43,6 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
     private final String name;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final WALIndexProvider<I> walIndexProvider;
-    private final int compactAfterGrowthFactor;
-    private final AtomicLong lastEndOfLastRow = new AtomicLong(-1);
 
     private final RowIOProvider ioProvider;
     private RowIO<File> io;
@@ -53,14 +51,12 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
         String prefix,
         RowIOProvider ioProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
-        WALIndexProvider<I> walIndexProvider,
-        int compactAfterGrowthFactor) throws Exception {
+        WALIndexProvider<I> walIndexProvider) throws Exception {
         this.dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
         this.name = prefix + SUFFIX;
         this.ioProvider = ioProvider;
         this.primaryRowMarshaller = rowMarshaller;
         this.walIndexProvider = walIndexProvider;
-        this.compactAfterGrowthFactor = compactAfterGrowthFactor;
         this.io = ioProvider.create(dir, name);
     }
 
@@ -235,14 +231,6 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
         boolean force) throws Exception {
 
         long endOfLastRow = io.getEndOfLastRow();
-        if (!force && lastEndOfLastRow.get() == -1) {
-            lastEndOfLastRow.set(endOfLastRow);
-            return Optional.absent();
-        }
-        if (!force && (compactAfterGrowthFactor > -1 && endOfLastRow < lastEndOfLastRow.get() * compactAfterGrowthFactor)) {
-            return Optional.absent();
-        }
-        lastEndOfLastRow.set(endOfLastRow);
         long start = System.currentTimeMillis();
 
         CompactionWALIndex compactionRowIndex = compactableWALIndex != null ? compactableWALIndex.startCompaction() : null;
@@ -302,8 +290,6 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                 if (compactionRowIndex != null) {
                     compactionRowIndex.commit();
                 }
-                long endOfLastRow1 = io.getEndOfLastRow();
-                lastEndOfLastRow.set(endOfLastRow1);
                 return new CommittedCompacted<>(compactableWALIndex,
                     sizeBeforeCompaction,
                     sizeAfterCompaction,

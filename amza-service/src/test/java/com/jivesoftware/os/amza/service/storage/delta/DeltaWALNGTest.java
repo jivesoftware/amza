@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
+import com.jivesoftware.os.amza.shared.wal.NoOpWALIndex;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -35,9 +36,10 @@ public class DeltaWALNGTest {
         final PrimaryRowMarshaller<byte[]> primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
 
-        WALTx walTX = new BinaryWALTx(tmp, "test", new BinaryRowIOProvider(new IoStats(), 1, false), primaryRowMarshaller, new NoOpWALIndexProvider(), -1);
+        WALTx<NoOpWALIndex> walTX = new BinaryWALTx<>(tmp, "test", new BinaryRowIOProvider(new IoStats(), 1, false), primaryRowMarshaller,
+            new NoOpWALIndexProvider());
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        DeltaWAL deltaWAL = new DeltaWAL(0, ids, primaryRowMarshaller, highwaterRowMarshaller, walTX);
+        DeltaWAL<NoOpWALIndex> deltaWAL = new DeltaWAL<>(0, ids, primaryRowMarshaller, highwaterRowMarshaller, walTX);
 
         Map<WALKey, WALValue> apply1 = Maps.newLinkedHashMap();
         for (int i = 0; i < 10; i++) {

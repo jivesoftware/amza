@@ -231,7 +231,7 @@ public class AmzaServiceInitializer {
 
             rowsTakers[i] = rowsTakerFactory.create();
 
-            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], ioProvider, primaryRowMarshaller, highwaterRowMarshaller, -1);
+            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
                 i,
                 amzaStats,

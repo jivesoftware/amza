@@ -459,6 +459,7 @@ class PartitionDelta {
                     array = this.array;
                 }
                 if (latestLength != length) {
+                    index = length;
                     length = latestLength;
                 } else {
                     break;

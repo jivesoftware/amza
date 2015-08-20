@@ -18,6 +18,7 @@
         <module>amza-test</module>
         <module>amza-transport</module>
         <module>amza-shared</module>
+        <module>amza-api</module>
         <module>amza-client</module>
         <module>amza-berkeleydb-storage</module>
         <module>amza-lsm-storage</module>

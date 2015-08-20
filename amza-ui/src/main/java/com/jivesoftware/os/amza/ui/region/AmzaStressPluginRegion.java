@@ -2,18 +2,19 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
+import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -206,7 +207,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                         completed();
                     }
                 } catch (Exception x) {
-                    LOG.error("Failed to feed for region {}", new Object[] { regionName }, x);
+                    LOG.error("Failed to feed for region {}", new Object[]{regionName}, x);
                 }
             }
         }
@@ -224,12 +225,18 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         }
 
         private void feed(String regionName, int batch, int threadIndex) throws Exception {
-            AmzaPartitionAPI partition = createPartitionIfAbsent(regionName);
+            Partition partition = createPartitionIfAbsent(regionName);
 
             while (true) {
                 try {
                     byte[] prefix = input.numKeyPrefixes > 0 ? UIO.intBytes(batch % input.numKeyPrefixes) : null;
-                    partition.commit(prefix, (Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) -> {
+                    Consistency consistency = Consistency.leader;
+                    if (input.desiredQuorum == 1) {
+                        consistency = Consistency.leader_plus_one;
+                    } else if (input.desiredQuorum > 1) {
+                        consistency = Consistency.leader_quorum;
+                    }
+                    partition.commit(consistency, prefix, (Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) -> {
                         if (input.orderedInsertion) {
                             String max = String.valueOf(input.numBatches * input.batchSize);
                             int bStart = batch * input.batchSize;
@@ -246,7 +253,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                             }
                         }
                         return true;
-                    }, input.desiredQuorum, 30_000);
+                    }, 30_000);
                     break;
 
                 } catch (DeltaOverCapacityException de) {
@@ -260,7 +267,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         }
     }
 
-    private AmzaPartitionAPI createPartitionIfAbsent(String simplePartitionName) throws Exception {
+    private Partition createPartitionIfAbsent(String simplePartitionName) throws Exception {
 
         NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default".getBytes());
         if (ring.isEmpty()) {

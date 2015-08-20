@@ -8,7 +8,7 @@ import com.jivesoftware.os.amza.shared.stream.KeyValues;
 import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.stream.TxFpStream;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.shared.stream.WALMergeKeyPointerStream;

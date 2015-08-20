@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentSkipListMap;

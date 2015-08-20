@@ -8,6 +8,7 @@
  */
 package com.jivesoftware.os.amza.shared.filer;
 
+import com.jivesoftware.os.amza.api.filer.IFiler;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 

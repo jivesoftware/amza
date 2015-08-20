@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.IWriteable;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.api.filer.IWriteable;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import gnu.trove.iterator.TLongIterator;

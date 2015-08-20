@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;

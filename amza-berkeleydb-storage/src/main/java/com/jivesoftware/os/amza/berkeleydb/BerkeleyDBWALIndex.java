@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Type;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
@@ -10,7 +10,7 @@ import com.jivesoftware.os.amza.shared.stream.KeyValues;
 import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.stream.TxFpStream;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.shared.stream.WALMergeKeyPointerStream;

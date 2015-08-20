@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;

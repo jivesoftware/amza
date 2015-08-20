@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import java.util.Arrays;
 import java.util.Comparator;
 

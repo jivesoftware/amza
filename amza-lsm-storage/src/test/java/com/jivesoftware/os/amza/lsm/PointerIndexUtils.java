@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;

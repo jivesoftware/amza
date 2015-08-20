@@ -1,16 +1,16 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueHighwaterStream;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.Fps;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALReader;

@@ -2,25 +2,25 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.api.scan.RowType;
+import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
@@ -283,7 +283,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
             map.put("ring", ringMaps);
 
-            AmzaPartitionAPI partition = amzaService.getPartition(name);
+            Partition partition = amzaService.getPartition(name);
             if (includeCount) {
                 map.put("count", numberFormat.format(partition.count()));
             } else {

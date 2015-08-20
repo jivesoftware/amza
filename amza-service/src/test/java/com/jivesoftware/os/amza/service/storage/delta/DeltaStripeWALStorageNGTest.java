@@ -2,12 +2,25 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionTx;
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.scan.Commitable;
+import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
-import com.jivesoftware.os.amza.service.storage.PartitionProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
@@ -15,26 +28,13 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
-import com.jivesoftware.os.amza.shared.partition.PartitionTx;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -103,7 +103,7 @@ public class DeltaStripeWALStorageNGTest {
             null,
             false);
 
-        PartitionProvider partitionProvider = new PartitionProvider(ids,
+        PartitionCreator partitionProvider = new PartitionCreator(ids,
             partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, partitionIndex);
 
 

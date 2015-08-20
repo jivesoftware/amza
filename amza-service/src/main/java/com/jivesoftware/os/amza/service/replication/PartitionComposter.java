@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
-import com.jivesoftware.os.amza.service.storage.PartitionProvider;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -27,14 +27,14 @@ public class PartitionComposter {
 
     private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
-    private final PartitionProvider partitionProvider;
+    private final PartitionCreator partitionProvider;
     private final AmzaRingStoreReader amzaRingReader;
     private final PartitionStripeProvider partitionStripeProvider;
     private final PartitionStatusStorage partitionStatusStorage;
 
     public PartitionComposter(AmzaStats amzaStats,
         PartitionIndex partitionIndex,
-        PartitionProvider partitionProvider,
+        PartitionCreator partitionProvider,
         AmzaRingStoreReader amzaRingReader,
         PartitionStatusStorage partitionMemberStatusStorage,
         PartitionStripeProvider partitionStripeProvider) {

@@ -18,24 +18,24 @@ package com.jivesoftware.os.amza.test;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.client.AmzaClientProvider;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
-import com.jivesoftware.os.amza.service.storage.PartitionProvider;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.EmbeddedClientProvider;
+import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -285,7 +285,7 @@ public class AmzaTestCluster {
         private boolean off = false;
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
-        private final AmzaClientProvider clientProvider;
+        private final EmbeddedClientProvider clientProvider;
 
         public AmzaNode(RingMember ringMember,
             RingHost ringHost,
@@ -295,7 +295,7 @@ public class AmzaTestCluster {
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
-            this.clientProvider = new AmzaClientProvider(amzaService);
+            this.clientProvider = new EmbeddedClientProvider(amzaService);
             this.orderIdProvider = orderIdProvider;
         }
 
@@ -337,7 +337,7 @@ public class AmzaTestCluster {
             } else {
                 updates.set(k, v, timestamp);
             }
-            clientProvider.getClient(partitionName).commit(p, updates, 2, 10, TimeUnit.SECONDS);
+            clientProvider.getClient(partitionName).commit(Consistency.quorum, p, updates, 10, TimeUnit.SECONDS);
 
         }
 
@@ -347,7 +347,7 @@ public class AmzaTestCluster {
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(prefix, stream -> stream.stream(key),
+            clientProvider.getClient(partitionName).get(Consistency.none, prefix, stream -> stream.stream(key),
                 (_prefix, _key, value, timestamp) -> {
                     got.add(value);
                     return true;
@@ -418,12 +418,12 @@ public class AmzaTestCluster {
             }
 
             for (PartitionName partitionName : partitionNames) {
-                if (partitionName.equals(PartitionProvider.HIGHWATER_MARK_INDEX.getPartitionName())) {
+                if (partitionName.equals(PartitionCreator.HIGHWATER_MARK_INDEX.getPartitionName())) {
                     continue;
                 }
 
-                AmzaPartitionAPI a = amzaService.getPartition(partitionName);
-                AmzaPartitionAPI b = service.amzaService.getPartition(partitionName);
+                Partition a = amzaService.getPartition(partitionName);
+                Partition b = service.amzaService.getPartition(partitionName);
                 if (a == null || b == null) {
                     System.out.println(partitionName + " " + amzaService.getRingReader().getRingMember() + " " + a + " -- vs --"
                         + service.amzaService.getRingReader().getRingMember() + " " + b);
@@ -458,49 +458,52 @@ public class AmzaTestCluster {
         }
 
         //  Use for testing
-        private boolean compare(PartitionName partitionName, AmzaPartitionAPI a, AmzaPartitionAPI b) throws Exception {
+        private boolean compare(PartitionName partitionName, Partition a, Partition b) throws Exception {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
-            a.scan(null, null, null, null, (txid, prefix, key, aValue) -> {
+            a.scan(Consistency.leader, null, null, null, null, (txid, prefix, key, aValue, aTimestamp) -> {
                 try {
                     compared.increment();
-                    TimestampedValue[] bValues = new TimestampedValue[1];
-                    b.get(prefix, stream -> stream.stream(key),
+                    long[] btimestamp = new long[1];
+                    byte[][] bvalue = new byte[1][];
+                    b.get(Consistency.leader, prefix, stream -> stream.stream(key),
                         (_prefix, _key, value, timestamp) -> {
-                            bValues[0] = new TimestampedValue(timestamp, value);
+                            btimestamp[0] = timestamp;
+                            bvalue[0] = value;
                             return true;
                         });
 
-                    TimestampedValue bValue = bValues[0];
+                    long bTimetamp = btimestamp[0];
+                    byte[] bValue = bvalue[0];
                     String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
                         + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                     if (bValue == null) {
-                        System.out.println("INCONSISTENCY: " + comparing + " " + aValue.getTimestampId()
+                        System.out.println("INCONSISTENCY: " + comparing + " " + aValue
                             + " != null"
                             + "' \n" + aValue + " vs null");
                         passed.setValue(false);
                         return false;
                     }
-                    if (aValue.getTimestampId() != bValue.getTimestampId()) {
-                        System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + aValue.getTimestampId()
-                            + "' != '" + bValue.getTimestampId()
+                    if (aTimestamp != bTimetamp) {
+                        System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + aValue
+                            + "' != '" + bTimetamp
                             + "' \n" + aValue + " vs " + bValue);
                         passed.setValue(false);
                         System.out.println("----------------------------------");
 
                         return false;
                     }
-                    if (aValue.getValue() == null && bValue.getValue() != null) {
+                    if (aValue == null && bValue != null) {
                         System.out.println("INCONSISTENCY: " + comparing + " null"
-                            + " != '" + Arrays.toString(bValue.getValue())
+                            + " != '" + Arrays.toString(bValue)
                             + "' \n" + aValue + " vs " + bValue);
                         passed.setValue(false);
                         return false;
                     }
-                    if (aValue.getValue() != null && !Arrays.equals(aValue.getValue(), bValue.getValue())) {
-                        System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(aValue.getValue())
-                            + "' != '" + Arrays.toString(bValue.getValue())
+                    if (aValue != null && !Arrays.equals(aValue, bValue)) {
+                        System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(aValue)
+                            + "' != '" + Arrays.toString(bValue)
                             + "' \n" + aValue + " vs " + bValue);
                         passed.setValue(false);
                         return false;

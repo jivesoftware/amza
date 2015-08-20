@@ -16,33 +16,33 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.scan.Commitable;
+import com.jivesoftware.os.amza.api.scan.Scan;
+import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.api.take.Highwaters;
+import com.jivesoftware.os.amza.api.take.TakeResult;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AckWaters;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.take.TakeResult;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Set;
 
-public class SystemPartition implements AmzaPartitionAPI {
+public class SystemPartition implements Partition {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -82,23 +82,24 @@ public class SystemPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void commit(byte[] prefix,
+    public void commit(Consistency consistency,
+        byte[] prefix,
         Commitable updates,
-        int takeQuorum,
         long timeoutInMillis) throws Exception {
 
         long timestampId = orderIdProvider.nextId();
         RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix,
-            (highwaters, scan) ->
-                updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
-                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
-                    return scan.row(rowTxId, key, value, timestamp, valueTombstone);
-                }),
+            (highwaters, scan)
+            -> updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
+                long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
+                return scan.row(rowTxId, key, value, timestamp, valueTombstone);
+            }),
             walUpdated);
         amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
 
         Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
 
+        int takeQuorum = consistency.quorum(ringMembers.size());
         if (takeQuorum > 0) {
             if (ringMembers.size() < takeQuorum) {
                 throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
@@ -113,46 +114,59 @@ public class SystemPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public boolean get(byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
+    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
         return systemWALStorage.get(versionedPartitionName, prefix, keys, valuesStream);
     }
 
     @Override
-    public void scan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, Scan<TimestampedValue> scan) throws Exception {
+    public boolean scan(Consistency consistency,
+        byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
+        Scan scan) throws Exception {
         if (fromKey == null && toKey == null) {
-            systemWALStorage.rowScan(versionedPartitionName, (prefix, key, value, valueTimestamp, valueTombstone) ->
-                valueTombstone || scan.row(-1, prefix, key, new TimestampedValue(valueTimestamp, value)));
+            return systemWALStorage.rowScan(versionedPartitionName, (prefix, key, value, valueTimestamp, valueTombstone)
+                -> valueTombstone || scan.row(-1, prefix, key, value, valueTimestamp));
         } else {
-            systemWALStorage.rangeScan(versionedPartitionName,
+            return systemWALStorage.rangeScan(versionedPartitionName,
                 fromPrefix,
                 fromKey,
                 toPrefix,
                 toKey,
-                (prefix, key, value, valueTimestamp, valueTombstone) ->
-                    valueTombstone || scan.row(-1, prefix, key, new TimestampedValue(valueTimestamp, value)));
+                (prefix, key, value, valueTimestamp, valueTombstone)
+                -> valueTombstone || scan.row(-1, prefix, key, value, valueTimestamp));
         }
     }
 
     @Override
-    public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
-        return takeFromTransactionIdInternal(null, transactionId, highwaters, scan);
+    public TakeResult takeFromTransactionId(Consistency consistency,
+        long txId,
+        Highwaters highwaters,
+        Scan scan) throws Exception {
+        return takeFromTransactionIdInternal(false, null, txId, highwaters, scan);
     }
 
     @Override
-    public TakeResult takeFromTransactionId(byte[] prefix, long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
+    public TakeResult takePrefixFromTransactionId(Consistency consistency,
+        byte[] prefix,
+        long txId,
+        Highwaters highwaters,
+        Scan scan) throws Exception {
+
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
-        return takeFromTransactionIdInternal(prefix, transactionId, highwaters, scan);
+        return takeFromTransactionIdInternal(true, prefix, txId, highwaters, scan);
     }
 
-    private TakeResult takeFromTransactionIdInternal(byte[] takePrefix,
-        long transactionId,
+    private TakeResult takeFromTransactionIdInternal(boolean usePrfix, byte[] takePrefix,
+        long txId,
         Highwaters highwaters,
-        Scan<TimestampedValue> scan) throws Exception {
+        Scan scan) throws Exception {
 
-        long[] lastTxId = { -1 };
-        boolean[] done = { false };
+        long[] lastTxId = {-1};
+        boolean[] done = {false};
         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-        boolean tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, takePrefix, transactionId, highwaters,
+        boolean tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, takePrefix, txId, highwaters,
             (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
                 if (valueTombstone) {
                     return true;
@@ -162,7 +176,7 @@ public class SystemPartition implements AmzaPartitionAPI {
                     return false;
                 }
 
-                done[0] |= !scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value));
+                done[0] |= !scan.row(rowTxId, prefix, key, value, valueTimestamp);
                 if (rowTxId > lastTxId[0]) {
                     lastTxId[0] = rowTxId;
                 }

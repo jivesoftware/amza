@@ -2,8 +2,8 @@ package com.jivesoftware.os.amza.shared.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;

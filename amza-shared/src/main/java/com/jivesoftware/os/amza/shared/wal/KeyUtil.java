@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.shared.wal;
 import com.google.common.primitives.Longs;
 import com.google.common.primitives.UnsignedBytes;
 import com.google.common.primitives.UnsignedLongs;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.Serializable;
 import java.nio.ByteOrder;
 import java.util.Comparator;

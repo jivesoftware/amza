@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.shared.partition;
 
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.api.partition.VersionedStatus;
 import java.util.Objects;
 
 /**

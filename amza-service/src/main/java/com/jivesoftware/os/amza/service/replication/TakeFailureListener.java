@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 
 /**
  * @author jonathan.colt

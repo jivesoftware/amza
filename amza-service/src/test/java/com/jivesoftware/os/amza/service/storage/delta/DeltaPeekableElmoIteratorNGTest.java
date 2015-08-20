@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.Fps;
 import com.jivesoftware.os.amza.shared.wal.KeyUtil;

@@ -16,8 +16,8 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;

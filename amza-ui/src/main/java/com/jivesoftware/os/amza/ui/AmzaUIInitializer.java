@@ -5,7 +5,7 @@ import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.tofu.SoyTofu;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaClusterPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaInspectPluginEndpoints;

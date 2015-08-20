@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.shared.filer.IReadable;
-import com.jivesoftware.os.amza.shared.filer.IWriteable;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.filer.IReadable;
+import com.jivesoftware.os.amza.api.filer.IWriteable;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.File;
 import java.io.IOException;
 

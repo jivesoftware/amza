@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.service;
 
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import java.util.ArrayList;

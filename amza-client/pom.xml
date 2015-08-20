@@ -29,9 +29,12 @@
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-shared</artifactId>
+            <artifactId>amza-api</artifactId>
             <version>0.127-SNAPSHOT</version>
-            <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.routing.bird</groupId>
+            <artifactId>routing-bird-http-client</artifactId>
         </dependency>
     </dependencies>
     <name>amza-client</name>

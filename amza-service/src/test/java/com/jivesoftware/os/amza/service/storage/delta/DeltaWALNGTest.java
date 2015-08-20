@@ -2,14 +2,14 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Maps;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndex;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;

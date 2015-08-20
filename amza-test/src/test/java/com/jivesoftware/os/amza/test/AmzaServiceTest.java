@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.test;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;

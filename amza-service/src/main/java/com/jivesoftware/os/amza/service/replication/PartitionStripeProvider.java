@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import java.util.Arrays;

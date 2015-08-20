@@ -2,12 +2,12 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
+import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.mlogger.core.MetricLogger;

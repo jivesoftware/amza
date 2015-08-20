@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
-import com.jivesoftware.os.amza.shared.filer.IFiler;
-import com.jivesoftware.os.amza.shared.filer.IReadable;
-import com.jivesoftware.os.amza.shared.filer.IWriteable;
+import com.jivesoftware.os.amza.api.filer.IFiler;
+import com.jivesoftware.os.amza.api.filer.IReadable;
+import com.jivesoftware.os.amza.api.filer.IWriteable;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;

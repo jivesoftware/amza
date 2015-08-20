@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.shared.partition;
 
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.PartitionTx;
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import java.util.concurrent.Semaphore;
 
 /**

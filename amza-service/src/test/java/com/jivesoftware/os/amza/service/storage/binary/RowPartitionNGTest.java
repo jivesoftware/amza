@@ -2,11 +2,11 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;

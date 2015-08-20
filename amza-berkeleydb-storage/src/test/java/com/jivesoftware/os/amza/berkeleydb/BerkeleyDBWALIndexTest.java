@@ -2,11 +2,10 @@ package com.jivesoftware.os.amza.berkeleydb;
 
 import com.google.common.io.Files;
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import java.io.File;
 import java.util.Arrays;

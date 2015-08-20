@@ -2,13 +2,13 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -27,8 +27,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.jivesoftware.os.amza.service.storage.PartitionProvider.HIGHWATER_MARK_INDEX;
-import static com.jivesoftware.os.amza.service.storage.PartitionProvider.REGION_PROPERTIES;
+import static com.jivesoftware.os.amza.service.storage.PartitionCreator.HIGHWATER_MARK_INDEX;
+import static com.jivesoftware.os.amza.service.storage.PartitionCreator.REGION_PROPERTIES;
 
 /**
  * @author jonathan.colt
@@ -62,12 +62,12 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
 
     public void open(TxPartitionStatus txPartitionState) throws Exception {
 
-        PartitionStore partitionIndexStore = get(PartitionProvider.REGION_INDEX);
-        get(PartitionProvider.RING_INDEX);
-        get(PartitionProvider.NODE_INDEX);
-        get(PartitionProvider.HIGHWATER_MARK_INDEX);
-        get(PartitionProvider.REGION_ONLINE_INDEX);
-        get(PartitionProvider.REGION_PROPERTIES);
+        PartitionStore partitionIndexStore = get(PartitionCreator.REGION_INDEX);
+        get(PartitionCreator.RING_INDEX);
+        get(PartitionCreator.NODE_INDEX);
+        get(PartitionCreator.HIGHWATER_MARK_INDEX);
+        get(PartitionCreator.REGION_ONLINE_INDEX);
+        get(PartitionCreator.REGION_PROPERTIES);
 
         final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
         final AtomicInteger numOpened = new AtomicInteger(0);
@@ -110,7 +110,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 if (partitionName.isSystemPartition()) {
                     return coldstartSystemPartitionProperties(partitionName);
                 } else {
-                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(null, partitionName.toBytes());
+                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionCreator.REGION_PROPERTIES).get(null, partitionName.toBytes());
                     if (rawPartitionProperties == null) {
                         return null;
                     }
@@ -133,7 +133,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
 
         if (!versionedPartitionName.getPartitionName().isSystemPartition()
-            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(null, partitionName.toBytes())) {
+            && !getSystemPartition(PartitionCreator.REGION_INDEX).containsKey(null, partitionName.toBytes())) {
             return null;
         }
 

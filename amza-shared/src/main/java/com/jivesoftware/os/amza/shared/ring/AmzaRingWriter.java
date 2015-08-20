@@ -1,5 +1,8 @@
 package com.jivesoftware.os.amza.shared.ring;
 
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+
 /**
  * @author jonathan.colt
  */

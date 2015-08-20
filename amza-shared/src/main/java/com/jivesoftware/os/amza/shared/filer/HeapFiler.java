@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.shared.filer;
 
 import com.google.common.math.IntMath;
+import com.jivesoftware.os.amza.api.filer.IFiler;
 import java.io.IOException;
 
 /**
@@ -32,6 +33,11 @@ public class HeapFiler implements IFiler {
     public HeapFiler() {
     }
 
+    public HeapFiler(int size) {
+        bytes = new byte[size];
+        maxLength = 0;
+    }
+
     public HeapFiler(byte[] _bytes) {
         bytes = _bytes;
         maxLength = _bytes.length;
@@ -45,11 +51,15 @@ public class HeapFiler implements IFiler {
     }
 
     public byte[] getBytes() {
-        if (fp == bytes.length) {
+        if (maxLength == bytes.length) {
             return bytes;
         } else {
-            return trim(bytes, (int) fp);
+            return trim(bytes, (int) maxLength);
         }
+    }
+
+    public byte[] copyUsedBytes() {
+        return trim(bytes, (int) maxLength);
     }
 
     public byte[] leakBytes() {
@@ -58,7 +68,7 @@ public class HeapFiler implements IFiler {
 
     public void reset() {
         fp = 0;
-        bytes = new byte[0];
+        maxLength = 0;
     }
 
     @Override
@@ -98,7 +108,7 @@ public class HeapFiler implements IFiler {
     @Override
     public void write(int b) throws IOException {
         if (fp + 1 > bytes.length) {
-            bytes = grow(bytes, Math.max(1, bytes.length));
+            bytes = grow(bytes, Math.max((int) ((fp + 1) - bytes.length), bytes.length));
         }
         bytes[(int) fp] = (byte) b;
         fp++;
@@ -117,7 +127,7 @@ public class HeapFiler implements IFiler {
         }
         int len = _len;
         if (fp + len > bytes.length) {
-            bytes = grow(bytes, Math.max(len, bytes.length));
+            bytes = grow(bytes, Math.max((int) ((fp + len) - bytes.length), bytes.length));
         }
         System.arraycopy(_b, _offset, bytes, (int) fp, len);
         fp += len;

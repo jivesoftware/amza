@@ -2,14 +2,14 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Iterators;
 import com.google.common.primitives.Longs;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValues;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALKey;

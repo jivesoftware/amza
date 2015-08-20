@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.shared.take;
 
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import java.util.Map;
 

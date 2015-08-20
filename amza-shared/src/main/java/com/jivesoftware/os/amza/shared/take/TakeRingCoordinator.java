@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.shared.take;
 
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;

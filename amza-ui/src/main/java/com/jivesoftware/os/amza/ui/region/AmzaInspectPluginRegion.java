@@ -1,11 +1,12 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -95,15 +96,15 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
             List<Map<String, String>> rows = new ArrayList<>();
 
             if (input.action.equals("scan")) {
-                AmzaPartitionAPI partition = lookupPartition(input, msg);
+                Partition partition = lookupPartition(input, msg);
                 if (partition != null) {
                     final AtomicLong offset = new AtomicLong(input.offset);
                     final AtomicLong batch = new AtomicLong(input.batchSize);
-                    partition.scan(getPrefix(input.prefix),
+                    partition.scan(Consistency.none, getPrefix(input.prefix),
                         input.key.isEmpty() ? null : hexStringToByteArray(input.key),
                         getPrefix(input.toPrefix),
                         input.toKey.isEmpty() ? null : hexStringToByteArray(input.toKey),
-                        (rowTxId, prefix, key, value) -> {
+                        (rowTxId, prefix, key, value, timestamp) -> {
                             if (offset.decrementAndGet() >= 0) {
                                 return true;
                             }
@@ -114,10 +115,10 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("prefixAsString", prefix != null ? new String(prefix, StandardCharsets.US_ASCII) : "");
                                 row.put("keyAsHex", bytesToHex(key));
                                 row.put("keyAsString", new String(key, StandardCharsets.US_ASCII));
-                                row.put("valueAsHex", bytesToHex(value.getValue()));
-                                row.put("valueAsString", value != null ? new String(value.getValue(), StandardCharsets.US_ASCII) : "null");
-                                row.put("timestampAsHex", Long.toHexString(value.getTimestampId()));
-                                row.put("timestamp", String.valueOf(value.getTimestampId()));
+                                row.put("valueAsHex", bytesToHex(value));
+                                row.put("valueAsString", value != null ? new String(value, StandardCharsets.US_ASCII) : "null");
+                                row.put("timestampAsHex", Long.toHexString(timestamp));
+                                row.put("timestamp", String.valueOf(timestamp));
                                 row.put("tombstone", "false");
                                 rows.add(row);
                                 return true;
@@ -127,13 +128,13 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         });
                 }
             } else if (input.action.equals("get")) {
-                AmzaPartitionAPI partition = lookupPartition(input, msg);
+                Partition partition = lookupPartition(input, msg);
                 if (partition != null) {
                     List<byte[]> rawKeys = stringToWALKeys(input.key);
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
-                        partition.get(getPrefix(input.prefix),
+                        partition.get(Consistency.none, getPrefix(input.prefix),
                             walKeysFromList(rawKeys),
                             (prefix, key, value, timestamp) -> {
                                 Map<String, String> row = new HashMap<>();
@@ -152,7 +153,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     }
                 }
             } else if (input.action.equals("set")) {
-                AmzaPartitionAPI partition = lookupPartition(input, msg);
+                Partition partition = lookupPartition(input, msg);
                 if (partition != null) {
                     List<byte[]> rawKeys = stringToWALKeys(input.key);
                     if (rawKeys.isEmpty()) {
@@ -163,8 +164,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             updates.set(rawKey, hexStringToByteArray(input.value));
                         }
                         //TODO expose to UI
-                        partition.commit(getPrefix(input.prefix), updates, 1, 30_000);
-                        partition.get(getPrefix(input.prefix), walKeysFromList(rawKeys), (prefix, key, value, timestamp) -> {
+                        partition.commit(Consistency.none, getPrefix(input.prefix), updates, 30_000);
+                        partition.get(Consistency.none, getPrefix(input.prefix), walKeysFromList(rawKeys), (prefix, key, value, timestamp) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("prefixAsHex", bytesToHex(prefix));
                             row.put("prefixAsString", prefix != null ? new String(prefix, StandardCharsets.US_ASCII) : "");
@@ -181,7 +182,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     }
                 }
             } else if (input.action.equals("remove")) {
-                AmzaPartitionAPI partition = lookupPartition(input, msg);
+                Partition partition = lookupPartition(input, msg);
                 if (partition != null) {
                     List<byte[]> fromRawKeys = stringToWALKeys(input.key);
                     List<byte[]> toRawKeys = stringToWALKeys(input.toKey);
@@ -194,13 +195,13 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     } else if (!fromRawKeys.isEmpty() && !toRawKeys.isEmpty()) {
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         byte[][] lastPrefix = new byte[1][];
-                        partition.scan(getPrefix(input.prefix),
+                        partition.scan(Consistency.none, getPrefix(input.prefix),
                             fromRawKeys.get(0),
                             getPrefix(input.toPrefix),
                             toRawKeys.get(0),
-                            (rowTxId, prefix, key, scanned) -> {
+                            (rowTxId, prefix, key, value, timestamp) -> {
                                 if (updates.size() >= input.batchSize || !Arrays.equals(lastPrefix[0], prefix)) {
-                                    partition.commit(lastPrefix[0], updates, 1, 30_000);
+                                    partition.commit(Consistency.none, lastPrefix[0], updates, 30_000);
                                     updates.reset();
                                 }
                                 lastPrefix[0] = prefix;
@@ -208,7 +209,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 return true;
                             });
                         if (updates.size() > 0) {
-                            partition.commit(lastPrefix[0], updates, 1, 30_000);
+                            partition.commit(Consistency.none, lastPrefix[0], updates, 30_000);
                         }
                     } else {
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
@@ -216,8 +217,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             updates.remove(rawKey, -1);
                         }
                         //TODO expose to UI
-                        partition.commit(getPrefix(input.prefix), updates, 1, 30_000);
-                        partition.get(getPrefix(input.prefix), walKeysFromList(fromRawKeys), (prefix, key, value, timestamp) -> {
+                        partition.commit(Consistency.none, getPrefix(input.prefix), updates, 30_000);
+                        partition.get(Consistency.none, getPrefix(input.prefix), walKeysFromList(fromRawKeys), (prefix, key, value, timestamp) -> {
                             Map<String, String> row = new HashMap<>();
                             row.put("prefixAsHex", bytesToHex(prefix));
                             row.put("prefixAsString", prefix != null ? new String(prefix, StandardCharsets.US_ASCII) : "");
@@ -274,8 +275,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
         return walKeys;
     }
 
-    private AmzaPartitionAPI lookupPartition(AmzaInspectPluginRegionInput input, List<String> msg) throws Exception {
-        AmzaPartitionAPI partition = amzaService.getPartition(new PartitionName(input.systemRegion, input.ringName.getBytes(), input.regionName.getBytes()));
+    private Partition lookupPartition(AmzaInspectPluginRegionInput input, List<String> msg) throws Exception {
+        Partition partition = amzaService.getPartition(new PartitionName(input.systemRegion, input.ringName.getBytes(), input.regionName.getBytes()));
         if (partition == null) {
             msg.add("No region for ringName:" + input.ringName + " regionName:" + input.regionName + " isSystem:" + input.systemRegion);
         }

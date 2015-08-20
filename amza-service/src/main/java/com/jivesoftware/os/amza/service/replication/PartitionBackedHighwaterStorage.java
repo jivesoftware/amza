@@ -1,15 +1,15 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.jivesoftware.os.amza.service.storage.PartitionProvider;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -65,9 +65,9 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             byte[] fromKey = walKey(versionedPartitionName, null);
             byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
             long removeTimestamp = orderIdProvider.nextId();
-            systemWALStorage.rangeScan(PartitionProvider.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
+            systemWALStorage.rangeScan(PartitionCreator.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
                 (prefix, key, value, valueTimestamp, valueTombstone) -> {
-                    systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX, prefix,
+                    systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, prefix,
                         (highwaters, txKeyValueStream) -> txKeyValueStream.row(-1, key, value, removeTimestamp, true),
                         walUpdated);
                     return true;
@@ -146,7 +146,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         try {
             ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
             if (partitionHighwaterUpdates != null) {
-                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX, null,
+                systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                     (highwater, scan) -> scan.row(-1, walKey(versionedPartitionName, member), null, orderIdProvider.nextId(), true),
                     walUpdated);
                 partitionHighwaterUpdates.remove(versionedPartitionName);
@@ -169,7 +169,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         }
         HighwaterUpdates highwaterUpdates = partitionHighwaterUpdates.get(versionedPartitionName);
         if (highwaterUpdates == null) {
-            TimestampedValue got = systemWALStorage.get(PartitionProvider.HIGHWATER_MARK_INDEX, null, walKey(versionedPartitionName, member));
+            TimestampedValue got = systemWALStorage.get(PartitionCreator.HIGHWATER_MARK_INDEX, null, walKey(versionedPartitionName, member));
             long txtId = -1L;
             if (got != null) {
                 txtId = UIO.bytesLong(got.getValue());
@@ -190,7 +190,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         byte[] fromKey = walKey(versionedPartitionName, null);
         byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
         List<RingMemberHighwater> highwaters = new ArrayList<>();
-        systemWALStorage.rangeScan(PartitionProvider.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
+        systemWALStorage.rangeScan(PartitionCreator.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
             (prefix, key, value, valueTimestamp, valueTombstone) -> {
                 highwaters.add(new RingMemberHighwater(getMember(key), UIO.bytesLong(value)));
                 return true;
@@ -204,7 +204,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         try {
             final ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitions = hostToPartitionToHighwaterUpdates.get(member);
             if (partitions != null && !partitions.isEmpty()) {
-                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX, null,
+                systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                     (highwater, scan) -> {
                         long timestamp = orderIdProvider.nextId();
                         for (VersionedPartitionName versionedPartitionName : partitions.keySet()) {
@@ -232,7 +232,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             long flushedUpdates = updatesSinceLastFlush.get();
             if (flushedUpdates > flushHighwatersAfterNUpdates) {
 
-                systemWALStorage.update(PartitionProvider.HIGHWATER_MARK_INDEX, null,
+                systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                     (highwater, scan) -> {
                         if (preFlush != null) {
                             preFlush.call();

@@ -18,29 +18,29 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
-import com.jivesoftware.os.amza.service.storage.PartitionProvider;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPIProvider;
 import com.jivesoftware.os.amza.shared.ChunkWriteable;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.Partition;
+import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -67,7 +67,7 @@ import org.apache.commons.lang.mutable.MutableLong;
  * Amza pronounced (AH m z ah )
  * Sanskrit word meaning partition / share.
  */
-public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
+public class AmzaService implements AmzaInstance, PartitionProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -84,7 +84,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     private final PartitionTombstoneCompactor partitionTombstoneCompactor;
     private final PartitionComposter partitionComposter;
     private final PartitionIndex partitionIndex;
-    private final PartitionProvider partitionProvider;
+    private final PartitionCreator partitionProvider;
     private final PartitionStripeProvider partitionStripeProvider;
     private final WALUpdated walUpdated;
     private final AmzaPartitionWatcher partitionWatcher;
@@ -102,7 +102,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         PartitionTombstoneCompactor partitionTombstoneCompactor,
         PartitionComposter partitionComposter,
         PartitionIndex partitionIndex,
-        PartitionProvider partitionProvider,
+        PartitionCreator partitionProvider,
         PartitionStripeProvider partitionStripeProvider,
         WALUpdated walUpdated,
         AmzaPartitionWatcher partitionWatcher) {
@@ -145,7 +145,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         return partitionComposter;
     }
 
-    public PartitionProvider getPartitionProvider() {
+    public PartitionCreator getPartitionProvider() {
         return partitionProvider;
     }
 
@@ -300,7 +300,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
     }
 
     @Override
-    public AmzaPartitionAPI getPartition(PartitionName partitionName) throws Exception {
+    public Partition getPartition(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return new SystemPartition(amzaStats,
                 orderIdProvider,
@@ -327,7 +327,7 @@ public class AmzaService implements AmzaInstance, AmzaPartitionAPIProvider {
         if (partitionName.isSystemPartition()) {
             return true;
         } else {
-            PartitionStore store = partitionIndex.get(PartitionProvider.REGION_INDEX);
+            PartitionStore store = partitionIndex.get(PartitionCreator.REGION_INDEX);
             if (store != null) {
                 return store.containsKey(null, partitionName.toBytes());
             }

@@ -18,6 +18,10 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
@@ -30,7 +34,7 @@ import com.jivesoftware.os.amza.service.replication.SystemPartitionCommitChanges
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
-import com.jivesoftware.os.amza.service.storage.PartitionProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
@@ -40,12 +44,8 @@ import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
-import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
@@ -76,7 +76,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 
 public class AmzaServiceInitializer {
 
@@ -144,8 +143,8 @@ public class AmzaServiceInitializer {
             config.takeSystemReofferDeltaMillis,
             config.takeReofferDeltaMillis);
 
-        PartitionStore ringIndex = partitionIndex.get(PartitionProvider.RING_INDEX);
-        PartitionStore nodeIndex = partitionIndex.get(PartitionProvider.NODE_INDEX);
+        PartitionStore ringIndex = partitionIndex.get(PartitionCreator.RING_INDEX);
+        PartitionStore nodeIndex = partitionIndex.get(PartitionCreator.NODE_INDEX);
         ConcurrentMap<IBA, Integer> ringSizesCache = new ConcurrentHashMap<>();
         ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
         AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
@@ -203,7 +202,7 @@ public class AmzaServiceInitializer {
             stripeVersion,
             config.awaitOnlineStripingLevel);
 
-        amzaPartitionWatcher.watch(PartitionProvider.REGION_ONLINE_INDEX.getPartitionName(), partitionStatusStorage);
+        amzaPartitionWatcher.watch(PartitionCreator.REGION_ONLINE_INDEX.getPartitionName(), partitionStatusStorage);
 
         partitionIndex.open(partitionStatusStorage);
         // cold start
@@ -253,7 +252,7 @@ public class AmzaServiceInitializer {
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(stripeFunction,
             partitionStripes, highwaterStorages, rowTakerThreadPools, rowsTakers);
 
-        PartitionProvider partitionProvider = new PartitionProvider(
+        PartitionCreator partitionProvider = new PartitionCreator(
             orderIdProvider,
             partitionPropertyMarshaller,
             partitionIndex,
@@ -311,7 +310,7 @@ public class AmzaServiceInitializer {
             walUpdated,
             ringSizesCache,
             ringMemberRingNamesCache);
-        amzaPartitionWatcher.watch(PartitionProvider.RING_INDEX.getPartitionName(), amzaRingWriter);
+        amzaPartitionWatcher.watch(PartitionCreator.RING_INDEX.getPartitionName(), amzaRingWriter);
         amzaRingWriter.register(ringMember, ringHost);
         amzaRingWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
 

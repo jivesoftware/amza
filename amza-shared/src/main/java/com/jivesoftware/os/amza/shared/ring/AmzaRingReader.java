@@ -1,5 +1,7 @@
 package com.jivesoftware.os.amza.shared.ring;
 
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.NavigableMap;

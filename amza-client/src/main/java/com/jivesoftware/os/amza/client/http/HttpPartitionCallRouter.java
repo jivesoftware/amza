@@ -136,35 +136,7 @@ public class HttpPartitionCallRouter {
         }
     }
 
-    public static class RingHostAnswer<A> {
 
-        private final RingHost ringHost;
-        private final A answer;
-
-        public RingHostAnswer(RingHost ringHost, A answer) {
-            this.ringHost = ringHost;
-            this.answer = answer;
-        }
-
-        public RingHost getRingHost() {
-            return ringHost;
-        }
-
-        public A getAnswer() {
-            return answer;
-        }
-
-        @Override
-        public String toString() {
-            return "RingHostAnswer{" + "ringHost=" + ringHost + ", answer=" + answer + '}';
-        }
-
-    }
-
-    public static interface Merger<R, A> {
-
-        R merge(List<RingHostAnswer<A>> answers) throws Exception;
-    }
 
     private <R, A> R solve(RingHost[] ringHosts, PartitionName partitionName, String family, PartitionCall<HttpClient, A, HttpClientException> partitionCall,
         int mandatory, Merger<R, A> merger) throws InterruptedException, Exception {

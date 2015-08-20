@@ -64,7 +64,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeBoolean(fos, true, "eos");
                     }, null);
                 return new PartitionCall.PartitionResponse<>(response, true);
-            }, null);
+            }, (answers) -> {
+                return true;
+            });
     }
 
     @Override
@@ -82,21 +84,38 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         });
                         UIO.writeBoolean(fos, true, "eos");
                     }, null);
-                return new PartitionCall.PartitionResponse<>(response, true);
-            }, null);
+                FilerInputStream fis = new FilerInputStream(response.getInputStream());
+                return new PartitionCall.PartitionResponse<>(fis, true);
+            }, (answers) -> {
 
-        /*
-         FilerInputStream inputStream = new FilerInputStream(response.getInputStream());
-         while (!UIO.readBoolean(inputStream, "eos")) {
-         if (!valuesStream.stream(
-         UIO.readByteArray(inputStream, "prefix"),
-         UIO.readByteArray(inputStream, "key"),
-         UIO.readByteArray(inputStream, "value"),
-         UIO.readLong(inputStream, "timestamp"))) {
-         return false;
-         }
-         }
-         */
+                boolean eos = false;
+                while (!eos) {
+                    byte[] latestPrefix;
+                    byte[] latestKey;
+                    byte[] latestValue;
+                    long latestTimestamp = -1;
+                    for (RingHostAnswer<FilerInputStream> answer : answers) {
+                        FilerInputStream fis = answer.getAnswer();
+                        if (!UIO.readBoolean(fis, "eos")) {
+                            byte[] p = UIO.readByteArray(fis, "prefix");
+                            byte[] k = UIO.readByteArray(fis, "key");
+                            byte[] v = UIO.readByteArray(fis, "value");
+                            long t = UIO.readLong(fis, "timestamp");
+
+                            if (t > latestTimestamp) {
+                                latestPrefix = p;
+                                latestKey = k;
+                                latestValue = v;
+                                latestTimestamp = t;
+                            }
+                        } else {
+                            eos = true;
+                        }
+                    }
+                    valuesStream.stream(prefix, prefix, prefix, latestTimestamp);
+                }
+                return null;
+            });
         return true;
     }
 
@@ -107,7 +126,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] toPrefix,
         byte[] toKey,
         Scan stream) throws Exception {
-        HttpStreamResponse streamResponse = partitionCallRouter.read(partitionName, consistency, "scan",
+        return partitionCallRouter.read(partitionName, consistency, "scan",
             (ringMember, client) -> {
                 HttpStreamResponse response = client.streamingPostStreamableRequest("/amza/v1/scan/" + base64PartitionName + "/" + consistency.name(),
                     (out) -> {
@@ -117,34 +136,43 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeByteArray(fos, toPrefix, "toPrefix");
                         UIO.writeByteArray(fos, toKey, "toKey");
                     }, null);
-                return new PartitionCall.PartitionResponse<>(response, true);
-            }, null);
 
-        FilerInputStream inputStream = new FilerInputStream(streamResponse.getInputStream());
-        while (!UIO.readBoolean(inputStream, "eos")) {
-            if (!stream.row(
-                UIO.readLong(inputStream, "rowTxId"),
-                UIO.readByteArray(inputStream, "prefix"),
-                UIO.readByteArray(inputStream, "key"),
-                UIO.readByteArray(inputStream, "value"),
-                UIO.readLong(inputStream, "timestampId")
-            )) {
-                return false;
-            }
-        }
-        return true;
+                FilerInputStream fis = new FilerInputStream(response.getInputStream());
+                return new PartitionCall.PartitionResponse<>(fis, true);
+            }, (answers) -> {
+                for (RingHostAnswer<FilerInputStream> answer : answers) {
+                    FilerInputStream fis = answer.getAnswer();
+                    while (!UIO.readBoolean(fis, "eos")) {
+                        if (!stream.row(
+                            UIO.readLong(fis, "rowTxId"),
+                            UIO.readByteArray(fis, "prefix"),
+                            UIO.readByteArray(fis, "key"),
+                            UIO.readByteArray(fis, "value"),
+                            UIO.readLong(fis, "timestampId")
+                        )) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            });
     }
 
     @Override
     public TakeResult takeFromTransactionId(Consistency consistency, Map<RingMember, Long> membersTxId, Highwaters highwaters, Scan scan) throws Exception {
-        HttpStreamResponse streamResponse = partitionCallRouter.read(partitionName, consistency, "takeFromTransactionId",
+        return partitionCallRouter.read(partitionName, consistency, "takeFromTransactionId",
             (ringMember, client) -> {
                 long transactionId = membersTxId.getOrDefault(ringMember, -1L);
                 HttpStreamResponse response = client.streamingPost(
                     "/amza/v1/takeFromTransactionId/" + base64PartitionName + "/" + consistency.name() + "/" + transactionId, null, null);
-                return new PartitionCall.PartitionResponse<>(response, true);
-            }, null);
-        return take(streamResponse, highwaters, scan);
+                FilerInputStream fis = new FilerInputStream(response.getInputStream());
+                return new PartitionCall.PartitionResponse<>(fis, true);
+            }, (answers) -> {
+                for (RingHostAnswer<FilerInputStream> answer : answers) {
+                    return take(answer.getAnswer(), highwaters, scan);
+                }
+                throw new RuntimeException("Failed to takePrefixFromTransactionId.");
+            });
     }
 
     @Override
@@ -153,7 +181,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         Map<RingMember, Long> membersTxId,
         Highwaters highwaters,
         Scan scan) throws Exception {
-        HttpStreamResponse streamResponse = partitionCallRouter.read(partitionName, consistency, "takePrefixFromTransactionId",
+        return partitionCallRouter.read(partitionName, consistency, "takePrefixFromTransactionId",
             (ringMember, client) -> {
                 long transactionId = membersTxId.getOrDefault(ringMember, -1L);
                 HttpStreamResponse response = client.streamingPostStreamableRequest(
@@ -163,14 +191,17 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeByteArray(fos, prefix, "prefix");
                         UIO.writeLong(fos, transactionId, "transactionId");
                     }, null);
-                return new PartitionCall.PartitionResponse<>(response, true);
-            }, null);
-
-        return take(streamResponse, highwaters, scan);
+                FilerInputStream fis = new FilerInputStream(response.getInputStream());
+                return new PartitionCall.PartitionResponse<>(fis, true);
+            }, (answers) -> {
+                for (RingHostAnswer<FilerInputStream> answer : answers) {
+                    return take(answer.getAnswer(), highwaters, scan);
+                }
+                throw new RuntimeException("Failed to takePrefixFromTransactionId.");
+            });
     }
 
-    private TakeResult take(HttpStreamResponse streamResponse, Highwaters highwaters, Scan scan) throws Exception {
-        FilerInputStream fis = new FilerInputStream(streamResponse.getInputStream());
+    private TakeResult take(FilerInputStream fis, Highwaters highwaters, Scan scan) throws Exception {
         long maxTxId = -1;
         RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember"));
         boolean done = false;
@@ -178,7 +209,6 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         while (!UIO.readBoolean(fis, "eos")) {
             RowType rowType = RowType.fromByte(UIO.readByte(fis, "type"));
             if (rowType == RowType.highwater) {
-
                 highwaters.highwater(readHighwaters(fis));
             } else if (rowType == RowType.primary) {
                 long rowTxId = UIO.readLong(fis, "rowTxId");

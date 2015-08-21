@@ -11,13 +11,13 @@ import java.util.concurrent.ExecutorService;
  *
  * @author jonathan.colt
  */
-public class AmzaHttpPartitionClientProvider implements PartitionClientProvider {
+public class AmzaHttpClientProvider implements PartitionClientProvider {
 
     private final PartitionHostsProvider partitionHostsProvider;
     private final ExecutorService callerThreads;
     private final Map<PartitionName, AmzaHttpPartitionClient> cache = new ConcurrentHashMap<>();
 
-    public AmzaHttpPartitionClientProvider(PartitionHostsProvider partitionHostsProvider,
+    public AmzaHttpClientProvider(PartitionHostsProvider partitionHostsProvider,
         ExecutorService callerThreads) {
         this.partitionHostsProvider = partitionHostsProvider;
         this.callerThreads = callerThreads;
@@ -28,7 +28,7 @@ public class AmzaHttpPartitionClientProvider implements PartitionClientProvider 
 
         return cache.computeIfAbsent(partitionName, (key) -> {
             try {
-                HttpPartitionCallRouter partitionCallRouter = new HttpPartitionCallRouter(callerThreads, partitionHostsProvider, null);
+                AmzaHttpClientCallRouter partitionCallRouter = new AmzaHttpClientCallRouter(callerThreads, partitionHostsProvider, null);
                 return new AmzaHttpPartitionClient(key, partitionCallRouter);
             } catch (Exception x) {
                 throw new RuntimeException(x);

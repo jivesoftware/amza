@@ -9,18 +9,17 @@ import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 
@@ -68,21 +67,21 @@ public class SystemWALStorage {
         return changed;
     }
 
-    public TimestampedValue get(VersionedPartitionName versionedPartitionName, byte[] prefix, byte[] key) throws Exception {
+    public TimestampedValue getTimestampedValue(VersionedPartitionName versionedPartitionName, byte[] prefix, byte[] key) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).get(prefix, key);
+        return partitionIndex.get(versionedPartitionName).getTimestampedValue(prefix, key);
     }
 
     public boolean get(VersionedPartitionName versionedPartitionName,
         byte[] prefix,
         UnprefixedWALKeys keys,
-        TimestampKeyValueStream stream) throws Exception {
+        KeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         return partitionIndex.get(versionedPartitionName).streamValues(prefix, keys, (_prefix, key, value, valueTimestamp, valueTombstone) -> {
-            if (value == null || valueTombstone) {
-                return stream.stream(prefix, key, null, -1);
+            if (valueTimestamp == -1) {
+                return stream.stream(prefix, key, null, -1, false);
             } else {
-                return stream.stream(prefix, key, value, valueTimestamp);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone);
             }
         });
     }

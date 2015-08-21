@@ -18,7 +18,7 @@ package com.jivesoftware.os.amza.service.storage.binary;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -67,7 +67,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
                 return stream.stream(txId, fp, key, value, timestamp, tombstone, row);
             }),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
-                txKeyValueStream.row(txId, prefix, key, value, valueTimestamp, valueTombstoned));
+                txKeyValueStream.stream(txId, prefix, key, value, valueTimestamp, valueTombstoned));
     }
 
     @Override

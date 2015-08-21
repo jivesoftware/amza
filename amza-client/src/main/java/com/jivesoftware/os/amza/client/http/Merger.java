@@ -8,6 +8,6 @@ import java.util.List;
  */
 public interface Merger<R, A> {
 
-    R merge(List<RingHostAnswer<A>> answers) throws Exception;
+    R merge(List<RingMemberAndHostAnswer<A>> answers) throws Exception;
 
 }

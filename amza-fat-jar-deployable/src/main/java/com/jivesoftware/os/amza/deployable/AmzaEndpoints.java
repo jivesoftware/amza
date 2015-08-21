@@ -143,8 +143,10 @@ public class AmzaEndpoints {
                     }
                     return true;
                 },
-                (_prefix, _key, value, timestamp) -> {
-                    got.add(value);
+                (_prefix, _key, value, timestamp, tombstoned) -> {
+                    if (timestamp != -1 && !tombstoned) {
+                        got.add(value);
+                    }
                     return true;
                 });
             return ResponseHelper.INSTANCE.jsonResponse(got);

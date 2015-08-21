@@ -8,7 +8,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
  */
 public interface PartitionCall<C, R, E extends Throwable> {
 
-    PartitionResponse<R> call(RingMember ringMember, C client) throws E;
+    PartitionResponse<R> call(RingMember leader, RingMember ringMember, C client) throws E;
 
     public static class PartitionResponse<R> {
 
@@ -20,5 +20,4 @@ public interface PartitionCall<C, R, E extends Throwable> {
             this.responseComplete = responseComplete;
         }
     }
-
 }

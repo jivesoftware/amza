@@ -164,46 +164,46 @@ public class RowPartitionNGTest {
 
         indexedWAL.load();
         WALKey walKey = k(1);
-        TimestampedValue value = indexedWAL.get(walKey.prefix, walKey.key);
+        TimestampedValue value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertNull(value);
 
         int t = 10;
         update(indexedWAL, walKey.prefix, walKey.key, v("hello"), t, false);
 
-        value = indexedWAL.get(walKey.prefix, walKey.key);
+        value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello");
 
         t++;
         update(indexedWAL, walKey.prefix, walKey.key, v("hello2"), t, false);
-        value = indexedWAL.get(walKey.prefix, walKey.key);
+        value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         update(indexedWAL, walKey.prefix, walKey.key, v("hello3"), t, false);
-        value = indexedWAL.get(walKey.prefix, walKey.key);
+        value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         update(indexedWAL, walKey.prefix, walKey.key, v("fail"), t - 1, false);
-        value = indexedWAL.get(walKey.prefix, walKey.key);
+        value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello2");
 
         t++;
         update(indexedWAL, walKey.prefix, walKey.key, v("deleted"), t, false);
-        value = indexedWAL.get(walKey.prefix, walKey.key);
+        value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "deleted");
 
         update(indexedWAL, walKey.prefix, walKey.key, v("fail"), t - 1, false);
-        value = indexedWAL.get(walKey.prefix, walKey.key);
+        value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "deleted");
 
         t++;
         update(indexedWAL, walKey.prefix, walKey.key, v("hello4"), t, false);
-        value = indexedWAL.get(walKey.prefix, walKey.key);
+        value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertEquals(value.getTimestampId(), t);
         Assert.assertEquals(new String(value.getValue()), "hello4");
     }

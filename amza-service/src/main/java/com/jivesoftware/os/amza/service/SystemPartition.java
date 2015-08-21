@@ -22,8 +22,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.scan.Scan;
-import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.scan.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
@@ -35,6 +34,8 @@ import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -114,8 +115,8 @@ public class SystemPartition implements Partition {
     }
 
     @Override
-    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
-        return systemWALStorage.get(versionedPartitionName, prefix, keys, valuesStream);
+    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
+        return systemWALStorage.get(versionedPartitionName, prefix, keys, stream);
     }
 
     @Override
@@ -124,10 +125,10 @@ public class SystemPartition implements Partition {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        Scan scan) throws Exception {
+        KeyValueTimestampStream scan) throws Exception {
         if (fromKey == null && toKey == null) {
             return systemWALStorage.rowScan(versionedPartitionName, (prefix, key, value, valueTimestamp, valueTombstone)
-                -> valueTombstone || scan.row(-1, prefix, key, value, valueTimestamp));
+                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp));
         } else {
             return systemWALStorage.rangeScan(versionedPartitionName,
                 fromPrefix,
@@ -135,7 +136,7 @@ public class SystemPartition implements Partition {
                 toPrefix,
                 toKey,
                 (prefix, key, value, valueTimestamp, valueTombstone)
-                -> valueTombstone || scan.row(-1, prefix, key, value, valueTimestamp));
+                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp));
         }
     }
 
@@ -143,8 +144,8 @@ public class SystemPartition implements Partition {
     public TakeResult takeFromTransactionId(Consistency consistency,
         long txId,
         Highwaters highwaters,
-        Scan scan) throws Exception {
-        return takeFromTransactionIdInternal(false, null, txId, highwaters, scan);
+        TxKeyValueStream stream) throws Exception {
+        return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
     }
 
     @Override
@@ -152,36 +153,38 @@ public class SystemPartition implements Partition {
         byte[] prefix,
         long txId,
         Highwaters highwaters,
-        Scan scan) throws Exception {
+        TxKeyValueStream stream) throws Exception {
 
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
-        return takeFromTransactionIdInternal(true, prefix, txId, highwaters, scan);
+        return takeFromTransactionIdInternal(true, prefix, txId, highwaters, stream);
     }
 
-    private TakeResult takeFromTransactionIdInternal(boolean usePrfix, byte[] takePrefix,
+    private TakeResult takeFromTransactionIdInternal(boolean usePrefix, byte[] takePrefix,
         long txId,
         Highwaters highwaters,
-        Scan scan) throws Exception {
+        TxKeyValueStream stream) throws Exception {
 
         long[] lastTxId = {-1};
         boolean[] done = {false};
         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-        boolean tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, takePrefix, txId, highwaters,
-            (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
-                if (valueTombstone) {
-                    return true;
-                }
+        TxKeyValueStream delegateStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
 
-                if (done[0] && rowTxId > lastTxId[0]) {
-                    return false;
-                }
+            if (done[0] && rowTxId > lastTxId[0]) {
+                return false;
+            }
 
-                done[0] |= !scan.row(rowTxId, prefix, key, value, valueTimestamp);
-                if (rowTxId > lastTxId[0]) {
-                    lastTxId[0] = rowTxId;
-                }
-                return true;
-            });
+            done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone);
+            if (rowTxId > lastTxId[0]) {
+                lastTxId[0] = rowTxId;
+            }
+            return true;
+        };
+        boolean tookToEnd;
+        if (usePrefix) {
+            tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, takePrefix, txId, highwaters, delegateStream);
+        } else {
+            tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, txId, highwaters, delegateStream);
+        }
         return new TakeResult(ringMember, lastTxId[0], tookToEnd ? partitionHighwater : null);
     }
 

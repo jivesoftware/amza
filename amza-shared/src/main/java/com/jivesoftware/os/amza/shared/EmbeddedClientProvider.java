@@ -6,12 +6,13 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.scan.Scan;
+import com.jivesoftware.os.amza.api.scan.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.TakeCursors;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -32,15 +33,15 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
         this.partitionProvider = partitionProvider;
     }
 
-    public AmzaClient getClient(PartitionName partitionName) {
-        return new AmzaClient(partitionName);
+    public EmbeddedClient getClient(PartitionName partitionName) {
+        return new EmbeddedClient(partitionName);
     }
 
-    public class AmzaClient { // Aka Partition Client
+    public class EmbeddedClient { // Aka Partition Client
 
         private final PartitionName partitionName;
 
-        public AmzaClient(PartitionName partitionName) {
+        public EmbeddedClient(PartitionName partitionName) {
             this.partitionName = partitionName;
         }
 
@@ -56,7 +57,14 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
 
         public void get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
             // TODO impl quorum reads?
-            partitionProvider.getPartition(partitionName).get(consistency, prefix, keys, valuesStream);
+            partitionProvider.getPartition(partitionName).get(consistency, prefix, keys,
+                (prefix1, key, value, valueTimestamp, valueTombstoned) -> {
+                    if (valueTimestamp == -1 || valueTombstoned) {
+                        return valuesStream.stream(prefix1, key, null, -1);
+                    } else {
+                        return valuesStream.stream(prefix1, key, value, valueTimestamp);
+                    }
+                });
         }
 
         public byte[] getValue(Consistency consistency, byte[] prefix, byte[] key) throws Exception {
@@ -79,12 +87,12 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
             byte[] fromKey,
             byte[] toPrefix,
             byte[] toKey,
-            Scan stream) throws Exception {
+            KeyValueTimestampStream stream) throws Exception {
             // TODO impl WTF quorum scan? Really
             partitionProvider.getPartition(partitionName).scan(consistency, fromPrefix, fromKey, toPrefix, toKey, stream);
         }
 
-        public TakeCursors takeFromTransactionId(Consistency consistency, long transactionId, Scan scan) throws Exception {
+        public TakeCursors takeFromTransactionId(Consistency consistency, long transactionId, TxKeyValueStream stream) throws Exception {
 
             Map<RingMember, Long> ringMemberToMaxTxId = Maps.newHashMap();
             TakeResult takeResult = partitionProvider.getPartition(partitionName).takeFromTransactionId(consistency, transactionId,
@@ -92,7 +100,7 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                         ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
                     }
-                }, scan);
+                }, stream);
 
             boolean tookToEnd = false;
             if (takeResult.tookToEnd != null) {
@@ -110,7 +118,7 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
             return new TakeCursors(cursors, tookToEnd);
         }
 
-        public TakeCursors takeFromTransactionId(Consistency consistency, byte[] prefix, long transactionId, Scan scan) throws Exception {
+        public TakeCursors takeFromTransactionId(Consistency consistency, byte[] prefix, long transactionId, TxKeyValueStream stream) throws Exception {
 
             Map<RingMember, Long> ringMemberToMaxTxId = Maps.newHashMap();
             TakeResult takeResult = partitionProvider.getPartition(partitionName).takePrefixFromTransactionId(consistency, prefix, transactionId,
@@ -118,7 +126,7 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                         ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
                     }
-                }, scan);
+                }, stream);
 
             boolean tookToEnd = false;
             if (takeResult.tookToEnd != null) {

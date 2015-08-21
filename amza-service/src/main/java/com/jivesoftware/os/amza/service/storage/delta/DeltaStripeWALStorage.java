@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedStatus;
 import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -16,7 +16,6 @@ import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -181,7 +180,7 @@ public class DeltaStripeWALStorage {
                                 acquireOne();
                                 try {
                                     PartitionDelta delta = getPartitionDelta(versionedPartitionName);
-                                    TimestampedValue partitionValue = partitionStore.get(prefix, key);
+                                    TimestampedValue partitionValue = partitionStore.getTimestampedValue(prefix, key);
                                     if (partitionValue == null || partitionValue.getTimestampId() < valueTimestamp) {
                                         WALPointer got = delta.getPointer(prefix, key);
                                         if (got == null || got.getTimestampId() < valueTimestamp) {
@@ -523,9 +522,9 @@ public class DeltaStripeWALStorage {
             storage,
             prefix,
             stream -> stream.stream(key),
-            (_prefix, _key, value, timestamp) -> {
-                if (value != null) {
-                    walValue[0] = new WALValue(value, timestamp, false);
+            (_prefix, _key, value, timestamp, tombstoned) -> {
+                if (timestamp != -1) {
+                    walValue[0] = new WALValue(value, timestamp, tombstoned);
                 }
                 return true;
             });
@@ -536,27 +535,21 @@ public class DeltaStripeWALStorage {
         WALStorage storage,
         byte[] prefix,
         UnprefixedWALKeys keys,
-        TimestampKeyValueStream stream) throws Exception {
+        KeyValueStream stream) throws Exception {
 
         acquireOne();
         try {
             PartitionDelta partitionDelta = getPartitionDelta(versionedPartitionName);
             return storage.streamValues(prefix,
                 storageStream -> partitionDelta.get(prefix, keys, (fp, _prefix, key, value, valueTimestamp, valueTombstoned) -> {
-                    if (valueTombstoned) {
-                        return stream.stream(prefix, key, null, -1);
-                    } else if (value == null) {
-                        return storageStream.stream(key);
+                    if (valueTimestamp != -1) {
+                        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned);
                     } else {
-                        return stream.stream(prefix, key, value, valueTimestamp);
+                        return storageStream.stream(key);
                     }
                 }),
                 (_prefix, key, value, valueTimestamp, valueTombstoned) -> {
-                    if (valueTombstoned) {
-                        return stream.stream(prefix, key, null, -1);
-                    } else {
-                        return stream.stream(prefix, key, value, valueTimestamp);
-                    }
+                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned);
                 });
         } finally {
             releaseOne();
@@ -644,8 +637,8 @@ public class DeltaStripeWALStorage {
                     }
                     return true;
                 },
-                (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
-                    keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned));
+                (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row)
+                -> keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned));
         } finally {
             releaseOne();
         }
@@ -680,8 +673,8 @@ public class DeltaStripeWALStorage {
                         }
                         return true;
                     },
-                    (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) ->
-                        keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned));
+                    (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row)
+                    -> keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned));
             }
             return true;
         } finally {
@@ -717,7 +710,7 @@ public class DeltaStripeWALStorage {
             if (d == null && iterator.hasNext()) {
                 d = iterator.next();
             }
-            boolean[] needsKey = { true };
+            boolean[] needsKey = {true};
             byte[] pk = WALKey.compose(prefix, key);
             boolean complete = WALKey.decompose(
                 txFpKeyValueStream -> {
@@ -739,8 +732,8 @@ public class DeltaStripeWALStorage {
                     }
                     return true;
                 },
-                (txId, fp, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, row) ->
-                    keyValueStream.stream(streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned));
+                (txId, fp, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, row)
+                -> keyValueStream.stream(streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned));
 
             if (!complete) {
                 return false;

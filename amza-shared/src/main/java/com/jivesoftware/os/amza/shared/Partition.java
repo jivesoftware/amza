@@ -3,11 +3,12 @@ package com.jivesoftware.os.amza.shared;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.scan.Scan;
-import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.scan.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 
 /**
  *
@@ -19,7 +20,7 @@ public interface Partition {
         Commitable updates,
         long timeoutInMillis) throws Exception;
 
-    boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception;
+    boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception;
 
     /**
      * @param fromPrefix   nullable (inclusive)
@@ -34,19 +35,19 @@ public interface Partition {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        Scan scan) throws Exception;
+        KeyValueTimestampStream scan) throws Exception;
 
     TakeResult takeFromTransactionId(Consistency consistency,
         long txId,
         Highwaters highwaters,
-        Scan scan) throws
+        TxKeyValueStream stream) throws
         Exception;
 
     TakeResult takePrefixFromTransactionId(Consistency consistency,
         byte[] prefix,
         long txId,
         Highwaters highwaters,
-        Scan scan) throws Exception;
+        TxKeyValueStream stream) throws Exception;
 
     // TODO fix or deprecate: Currently know to be broken. Only accurate if you never delete.
     long count() throws Exception;

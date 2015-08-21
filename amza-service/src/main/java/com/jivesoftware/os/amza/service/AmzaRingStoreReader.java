@@ -1,13 +1,13 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.api.TimestampedValue;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -68,6 +68,13 @@ public class AmzaRingStoreReader implements AmzaRingReader {
         UIO.readByteArray(filer, "ringName");
         UIO.readByte(filer, "separator");
         return RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
+    }
+
+
+    @Override
+    public RingMember getLeader(byte[] ringName, long waitForLeaderElection) throws Exception {
+        // fix me!!
+        return null;
     }
 
     @Override
@@ -133,7 +140,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     }
 
     public RingHost getRingHost(RingMember ringMember) throws Exception {
-        TimestampedValue rawRingHost = nodeIndex.get(null, ringMember.toBytes());
+        TimestampedValue rawRingHost = nodeIndex.getTimestampedValue(null, ringMember.toBytes());
         return rawRingHost == null ? null : RingHost.fromBytes(rawRingHost.getValue());
     }
 
@@ -223,5 +230,6 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             }
         });
     }
+
 
 }

@@ -112,7 +112,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         //config.useMemMap = true;
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
@@ -461,58 +461,61 @@ public class AmzaTestCluster {
         private boolean compare(PartitionName partitionName, Partition a, Partition b) throws Exception {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
-            a.scan(Consistency.leader, null, null, null, null, (txid, prefix, key, aValue, aTimestamp) -> {
-                try {
-                    compared.increment();
-                    long[] btimestamp = new long[1];
-                    byte[][] bvalue = new byte[1][];
-                    b.get(Consistency.leader, prefix, stream -> stream.stream(key),
-                        (_prefix, _key, value, timestamp) -> {
-                            btimestamp[0] = timestamp;
-                            bvalue[0] = value;
-                            return true;
-                        });
+            a.scan(Consistency.leader, null, null, null, null,
+                (prefix, key, aValue, aTimestamp) -> {
+                    try {
+                        compared.increment();
+                        long[] btimestamp = new long[1];
+                        byte[][] bvalue = new byte[1][];
+                        b.get(Consistency.leader, prefix, stream -> stream.stream(key),
+                            (_prefix, _key, value, timestamp, tombstoned) -> {
+                                if (timestamp != -1 && !tombstoned) {
+                                    btimestamp[0] = timestamp;
+                                    bvalue[0] = value;
+                                }
+                                return true;
+                            });
 
-                    long bTimetamp = btimestamp[0];
-                    byte[] bValue = bvalue[0];
-                    String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
+                        long bTimetamp = btimestamp[0];
+                        byte[] bValue = bvalue[0];
+                        String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
                         + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
-                    if (bValue == null) {
-                        System.out.println("INCONSISTENCY: " + comparing + " " + aValue
-                            + " != null"
-                            + "' \n" + aValue + " vs null");
-                        passed.setValue(false);
-                        return false;
-                    }
-                    if (aTimestamp != bTimetamp) {
-                        System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + aValue
-                            + "' != '" + bTimetamp
-                            + "' \n" + aValue + " vs " + bValue);
-                        passed.setValue(false);
-                        System.out.println("----------------------------------");
+                        if (bValue == null) {
+                            System.out.println("INCONSISTENCY: " + comparing + " " + aValue
+                                + " != null"
+                                + "' \n" + aValue + " vs null");
+                            passed.setValue(false);
+                            return false;
+                        }
+                        if (aTimestamp != bTimetamp) {
+                            System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + aValue
+                                + "' != '" + bTimetamp
+                                + "' \n" + aValue + " vs " + bValue);
+                            passed.setValue(false);
+                            System.out.println("----------------------------------");
 
-                        return false;
+                            return false;
+                        }
+                        if (aValue == null && bValue != null) {
+                            System.out.println("INCONSISTENCY: " + comparing + " null"
+                                + " != '" + Arrays.toString(bValue)
+                                + "' \n" + aValue + " vs " + bValue);
+                            passed.setValue(false);
+                            return false;
+                        }
+                        if (aValue != null && !Arrays.equals(aValue, bValue)) {
+                            System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(aValue)
+                                + "' != '" + Arrays.toString(bValue)
+                                + "' \n" + aValue + " vs " + bValue);
+                            passed.setValue(false);
+                            return false;
+                        }
+                        return true;
+                    } catch (Exception x) {
+                        throw new RuntimeException("Failed while comparing", x);
                     }
-                    if (aValue == null && bValue != null) {
-                        System.out.println("INCONSISTENCY: " + comparing + " null"
-                            + " != '" + Arrays.toString(bValue)
-                            + "' \n" + aValue + " vs " + bValue);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    if (aValue != null && !Arrays.equals(aValue, bValue)) {
-                        System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(aValue)
-                            + "' != '" + Arrays.toString(bValue)
-                            + "' \n" + aValue + " vs " + bValue);
-                        passed.setValue(false);
-                        return false;
-                    }
-                    return true;
-                } catch (Exception x) {
-                    throw new RuntimeException("Failed while comparing", x);
-                }
-            });
+                });
 
             System.out.println(
                 "partition:" + new String(partitionName.getName()) + " vs:" + new String(partitionName.getName()) + " compared:" + compared + " keys");

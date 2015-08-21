@@ -100,7 +100,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
 
     @Override
     public void register(RingMember ringMember, RingHost ringHost) throws Exception {
-        TimestampedValue registeredHost = systemWALStorage.get(PartitionCreator.NODE_INDEX, null, ringMember.toBytes());
+        TimestampedValue registeredHost = systemWALStorage.getTimestampedValue(PartitionCreator.NODE_INDEX, null, ringMember.toBytes());
         if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
             return;
         }
@@ -119,7 +119,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     }
 
     public RingHost getRingHost() throws Exception {
-        TimestampedValue registeredHost = systemWALStorage.get(PartitionCreator.NODE_INDEX, null, ringStoreReader.getRingMember().toBytes());
+        TimestampedValue registeredHost = systemWALStorage.getTimestampedValue(PartitionCreator.NODE_INDEX, null, ringStoreReader.getRingMember().toBytes());
         if (registeredHost != null) {
             return RingHost.fromBytes(registeredHost.getValue());
         } else {
@@ -168,7 +168,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         byte[] key = ringStoreReader.key(ringName, ringMember);
-        TimestampedValue had = systemWALStorage.get(PartitionCreator.RING_INDEX, null, key);
+        TimestampedValue had = systemWALStorage.getTimestampedValue(PartitionCreator.RING_INDEX, null, key);
         if (had == null) {
             NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(ringName);
             setInternal(ringName, Iterables.concat(ring.keySet(), Collections.singleton(ringMember)));
@@ -202,7 +202,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         Preconditions.checkNotNull(ringName, "ringName cannot be null.");
         Preconditions.checkNotNull(ringMember, "ringMember cannot be null.");
         byte[] key = ringStoreReader.key(ringName, ringMember);
-        TimestampedValue had = systemWALStorage.get(PartitionCreator.RING_INDEX, null, key);
+        TimestampedValue had = systemWALStorage.getTimestampedValue(PartitionCreator.RING_INDEX, null, key);
         if (had != null) {
             systemWALStorage.update(PartitionCreator.RING_INDEX, null,
                 (highwater, scan) -> scan.row(-1, key, null, orderIdProvider.nextId(), true),

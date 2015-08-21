@@ -177,7 +177,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
             return versionedStatus;
         }
 
-        TimestampedValue rawStatus = systemWALStorage.get(PartitionCreator.REGION_ONLINE_INDEX, null, walKey(rootRingMember, partitionName));
+        TimestampedValue rawStatus = systemWALStorage.getTimestampedValue(PartitionCreator.REGION_ONLINE_INDEX, null, walKey(rootRingMember, partitionName));
         versionedStatus = rawStatus == null ? null : VersionedStatus.fromBytes(rawStatus.getValue());
         if (versionedStatus == null || versionedStatus.stripeVersion != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
             return null;
@@ -191,7 +191,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
         }
 
         //TODO consider wiring in remote status cache, for now it's racy
-        TimestampedValue rawStatus = systemWALStorage.get(PartitionCreator.REGION_ONLINE_INDEX, null, walKey(ringMember, partitionName));
+        TimestampedValue rawStatus = systemWALStorage.getTimestampedValue(PartitionCreator.REGION_ONLINE_INDEX, null, walKey(ringMember, partitionName));
         if (rawStatus == null) {
             return null;
         }
@@ -260,7 +260,7 @@ public class PartitionStatusStorage implements TxPartitionStatus, RowChanges {
 
         return transactor.doWithAll(versionedPartitionName, versionedStatus.status, (currentVersionedPartitionName, status) -> {
 
-            TimestampedValue rawStatus = systemWALStorage.get(PartitionCreator.REGION_ONLINE_INDEX, null, walKey(ringMember, partitionName));
+            TimestampedValue rawStatus = systemWALStorage.getTimestampedValue(PartitionCreator.REGION_ONLINE_INDEX, null, walKey(ringMember, partitionName));
             VersionedStatus commitableVersionStatus = null;
             VersionedStatus returnableStatus = null;
             long stripeVersion = stripeVersions[partitionStripeFunction.stripe(partitionName)];

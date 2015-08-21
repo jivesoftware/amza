@@ -67,8 +67,8 @@ public class PartitionStore implements RangeScannable {
         walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
     }
 
-    public TimestampedValue get(byte[] prefix, byte[] key) throws Exception {
-        return walStorage.get(prefix, key);
+    public TimestampedValue getTimestampedValue(byte[] prefix, byte[] key) throws Exception {
+        return walStorage.getTimestampedValue(prefix, key);
     }
 
     public boolean streamValues(byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {

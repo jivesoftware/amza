@@ -2,8 +2,9 @@ package com.jivesoftware.os.amza.api;
 
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.scan.Scan;
+import com.jivesoftware.os.amza.api.scan.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
@@ -18,7 +19,10 @@ public interface PartitionClient {
         Commitable updates,
         long timeoutInMillis) throws Exception;
 
-    boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception;
+    boolean get(Consistency consistency,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        TimestampKeyValueStream valuesStream) throws Exception;
 
     /**
      * @param fromPrefix   nullable (inclusive)
@@ -33,15 +37,18 @@ public interface PartitionClient {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        Scan scan) throws Exception;
+        KeyValueTimestampStream scan) throws Exception;
 
     TakeResult takeFromTransactionId(Consistency consistency,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
-        Scan scan) throws
+        TxKeyValueStream stream) throws
         Exception;
 
-    TakeResult takePrefixFromTransactionId(Consistency consistency, byte[] prefix, Map<RingMember, Long> memberTxIds, Highwaters highwaters,
-        Scan scan) throws Exception;
+    TakeResult takePrefixFromTransactionId(Consistency consistency,
+        byte[] prefix,
+        Map<RingMember, Long> memberTxIds,
+        Highwaters highwaters,
+        TxKeyValueStream stream) throws Exception;
 
 }

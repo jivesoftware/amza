@@ -20,11 +20,11 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.Commitable;
+import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.api.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
@@ -336,9 +336,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[] {
+            rowWriter.writeSystem(UIO.longsBytes(new long[]{
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId }));
+                indexCommitedUpToTxId}));
         }
     }
 
@@ -436,9 +436,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                                 WALValue value = row.getValue();
                                 if (!rowStream.stream(primaryRowMarshaller.toRow(row.getKey().compose(),
-                                    value.getValue(),
-                                    value.getTimestampId(),
-                                    value.getTombstoned()))) {
+                                        value.getValue(),
+                                        value.getTimestampId(),
+                                        value.getTombstoned()))) {
                                     return false;
                                 }
                             }
@@ -573,7 +573,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     }
 
     // TODO fix barf
-    public TimestampedValue get(byte[] prefix, byte[] key) throws Exception {
+    public TimestampedValue getTimestampedValue(byte[] prefix, byte[] key) throws Exception {
         acquireOne();
         try {
             TimestampedValue[] values = new TimestampedValue[1];
@@ -594,8 +594,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         try {
             return walIndex.get().getPointers(prefix, keys,
                 (_prefix, key, pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                    if (pointerFp != -1 && !pointerTombstoned) {
-                        return keyValueStream.stream(prefix, key, hydrateRowIndexValue(pointerFp), pointerTimestamp, false);
+                    if (pointerFp != -1) {
+                        return keyValueStream.stream(prefix,
+                            key,
+                            (pointerTombstoned) ? null : hydrateRowIndexValue(pointerFp),
+                            pointerTimestamp,
+                            pointerTombstoned
+                        );
+
                     } else {
                         return keyValueStream.stream(prefix, key, null, -1, false);
                     }
@@ -693,8 +699,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         try {
             long[] takeMetrics = new long[1];
             WALIndex wali = walIndex.get();
-            Boolean readFromTransactionId = walTx.read(reader ->
-                reader.read(fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
+            Boolean readFromTransactionId = walTx.read(reader
+                -> reader.read(fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
                     (rowPointer, rowTxId, rowType, row) -> {
                         if (rowType != RowType.system && rowTxId > sinceTransactionId) {
                             return rowStream.row(rowPointer, rowTxId, rowType, row);

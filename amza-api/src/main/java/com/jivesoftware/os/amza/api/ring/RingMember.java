@@ -17,10 +17,12 @@ package com.jivesoftware.os.amza.api.ring;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.SignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+
 
 public class RingMember implements Comparable<RingMember> {
 
@@ -35,14 +37,21 @@ public class RingMember implements Comparable<RingMember> {
         return 1 + memberAsBytes.length;
     }
 
-    public static RingMember fromBytes(byte[] bytes) throws Exception {
-        if (bytes[0] == 0) {
+    public static RingMember fromBytes(byte[] bytes) {
+        if (bytes != null && bytes[0] == 0) {
             String member = new String(bytes, 1, bytes.length - 1, StandardCharsets.UTF_8);
             return new RingMember(member);
         }
         return null;
     }
 
+    public String toBase64() {
+        return BaseEncoding.base64Url().encode(toBytes());
+    }
+
+    public static RingMember fromBase64(String base64) {
+        return fromBytes(BaseEncoding.base64Url().decode(base64));
+    }
 
     private final String member;
     private final byte[] memberAsBytes;

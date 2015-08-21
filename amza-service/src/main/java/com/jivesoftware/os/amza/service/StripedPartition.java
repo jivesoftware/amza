@@ -22,8 +22,7 @@ import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.scan.Scan;
-import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.scan.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
@@ -34,7 +33,8 @@ import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -117,17 +117,17 @@ public class StripedPartition implements Partition {
     }
 
     @Override
-    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
+    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
         return partitionStripeProvider.txPartition(partitionName,
-            (stripe, highwaterStorage) -> stripe.get(partitionName, prefix, keys, valuesStream));
+            (stripe, highwaterStorage) -> stripe.get(partitionName, prefix, keys, stream));
     }
 
     @Override
-    public boolean scan(Consistency consistency, byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, Scan scan) throws Exception {
+    public boolean scan(Consistency consistency, byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueTimestampStream scan) throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             if (fromKey == null && toKey == null) {
                 stripe.rowScan(partitionName, (prefix, key, value, valueTimestamp, valueTombstone)
-                    -> valueTombstone || scan.row(-1, prefix, key, value, valueTimestamp));
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp));
             } else {
                 stripe.rangeScan(partitionName,
                     fromPrefix,
@@ -135,7 +135,7 @@ public class StripedPartition implements Partition {
                     toPrefix,
                     toKey,
                     (prefix, key, value, valueTimestamp, valueTombstone)
-                    -> valueTombstone || scan.row(-1, prefix, key, value, valueTimestamp));
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp));
             }
             return true;
         });
@@ -145,8 +145,8 @@ public class StripedPartition implements Partition {
     public TakeResult takeFromTransactionId(Consistency consistency,
         long txId,
         Highwaters highwaters,
-        Scan scan) throws Exception {
-        return takeFromTransactionIdInternal(false, null, txId, highwaters, scan);
+        TxKeyValueStream stream) throws Exception {
+        return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
     }
 
     @Override
@@ -154,31 +154,27 @@ public class StripedPartition implements Partition {
         byte[] prefix,
         long txId,
         Highwaters highwaters,
-        Scan scan) throws Exception {
+        TxKeyValueStream stream) throws Exception {
 
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
-        return takeFromTransactionIdInternal(true, prefix, txId, highwaters, scan);
+        return takeFromTransactionIdInternal(true, prefix, txId, highwaters, stream);
     }
 
     private TakeResult takeFromTransactionIdInternal(boolean usePrefix,
         byte[] takePrefix,
         long txId,
         Highwaters highwaters,
-        Scan scan) throws Exception {
+        TxKeyValueStream stream) throws Exception {
 
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             long[] lastTxId = {-1};
             boolean[] done = {false};
             TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
-                if (valueTombstone) {
-                    return true;
-                }
-
                 if (done[0] && rowTxId > lastTxId[0]) {
                     return false;
                 }
 
-                done[0] |= !scan.row(rowTxId, prefix, key, value, valueTimestamp);
+                done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone);
                 if (rowTxId > lastTxId[0]) {
                     lastTxId[0] = rowTxId;
                 }
@@ -186,7 +182,7 @@ public class StripedPartition implements Partition {
             };
 
             WALHighwater highwater;
-            if (takePrefix != null) {
+            if (usePrefix) {
                 highwater = stripe.takeFromTransactionId(partitionName, takePrefix, txId, highwaterStorage, highwaters, txKeyValueStream);
             } else {
                 highwater = stripe.takeFromTransactionId(partitionName, txId, highwaterStorage, highwaters, txKeyValueStream);

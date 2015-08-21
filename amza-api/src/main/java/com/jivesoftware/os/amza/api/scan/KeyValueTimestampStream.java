@@ -15,8 +15,8 @@
  */
 package com.jivesoftware.os.amza.api.scan;
 
-public interface Scan {
+public interface KeyValueTimestampStream {
 
-    boolean row(long rowTxId, byte[] prefix, byte[] key, byte[] value, long timestampId) throws Exception;
+    boolean stream(byte[] prefix, byte[] key, byte[] value, long timestampId) throws Exception;
 
 }

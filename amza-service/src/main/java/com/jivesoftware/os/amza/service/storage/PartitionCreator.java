@@ -69,9 +69,9 @@ public class PartitionCreator {
         }
 
         byte[] rawPartitionName = partitionName.toBytes();
-        TimestampedValue propertiesValue = systemWALStorage.get(REGION_PROPERTIES, null, rawPartitionName);
+        TimestampedValue propertiesValue = systemWALStorage.getTimestampedValue(REGION_PROPERTIES, null, rawPartitionName);
         if (propertiesValue != null) {
-            TimestampedValue indexValue = systemWALStorage.get(REGION_INDEX, null, rawPartitionName);
+            TimestampedValue indexValue = systemWALStorage.getTimestampedValue(REGION_INDEX, null, rawPartitionName);
             if (indexValue != null) {
                 return true;
             }

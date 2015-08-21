@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.api.scan.Commitable;
+import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import java.util.List;

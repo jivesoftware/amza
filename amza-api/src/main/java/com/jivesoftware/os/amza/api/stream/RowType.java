@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.api.scan;
+package com.jivesoftware.os.amza.api.stream;
 
 /**
  * @author jonathan.colt

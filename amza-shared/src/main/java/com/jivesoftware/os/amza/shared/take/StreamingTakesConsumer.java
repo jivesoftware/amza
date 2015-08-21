@@ -4,7 +4,7 @@ import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.api.scan.RowType;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import java.io.DataInputStream;
 import java.io.InputStream;

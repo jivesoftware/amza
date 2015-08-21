@@ -2,13 +2,13 @@ package com.jivesoftware.os.amza.shared;
 
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
-import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.scan.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
-import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 
 /**
  *

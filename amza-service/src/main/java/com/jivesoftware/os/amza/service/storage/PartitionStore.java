@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.api.TimestampedValue;
-import com.jivesoftware.os.amza.api.scan.Commitable;
+import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;

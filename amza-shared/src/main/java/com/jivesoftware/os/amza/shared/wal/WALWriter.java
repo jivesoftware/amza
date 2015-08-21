@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.api.scan.RowType;
+import com.jivesoftware.os.amza.api.stream.RowType;
 
 public interface WALWriter {
 

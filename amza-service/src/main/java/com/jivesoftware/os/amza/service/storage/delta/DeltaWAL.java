@@ -6,7 +6,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.api.scan.RowType;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueHighwaterStream;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.Fps;

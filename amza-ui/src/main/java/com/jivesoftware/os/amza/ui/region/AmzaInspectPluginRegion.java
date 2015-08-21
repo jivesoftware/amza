@@ -100,6 +100,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                 if (partition != null) {
                     final AtomicLong offset = new AtomicLong(input.offset);
                     final AtomicLong batch = new AtomicLong(input.batchSize);
+                    long start = System.currentTimeMillis();
                     partition.scan(Consistency.none, getPrefix(input.prefix),
                         input.key.isEmpty() ? null : hexStringToByteArray(input.key),
                         getPrefix(input.toPrefix),
@@ -125,6 +126,36 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 return false;
                             }
                         });
+
+                    msg.add("elapse=" + (System.currentTimeMillis() - start));
+                }
+            } else if (input.action.equals("count")) {
+                Partition partition = lookupPartition(input, msg);
+                if (partition != null) {
+                    AtomicLong count = new AtomicLong(0);
+                    AtomicLong min = new AtomicLong(Long.MAX_VALUE);
+                    AtomicLong max = new AtomicLong(0);
+
+                    long start = System.currentTimeMillis();
+                    partition.scan(Consistency.none, getPrefix(input.prefix),
+                        input.key.isEmpty() ? null : hexStringToByteArray(input.key),
+                        getPrefix(input.toPrefix),
+                        input.toKey.isEmpty() ? null : hexStringToByteArray(input.toKey),
+                        (prefix, key, value, timestamp) -> {
+                            count.incrementAndGet();
+                            if (timestamp < min.get()) {
+                                min.set(timestamp);
+                            }
+                            if (timestamp > max.get()) {
+                                max.set(timestamp);
+                            }
+                            return true;
+                        });
+
+                    msg.add("Count=" + count.get()
+                        + " minTimestamp=" + min.get()
+                        + " maxTimestamp=" + max.get()
+                        + " elapse=" + (System.currentTimeMillis() - start));
                 }
             } else if (input.action.equals("get")) {
                 Partition partition = lookupPartition(input, msg);
@@ -133,6 +164,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to get. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
+                        long start = System.currentTimeMillis();
                         partition.get(Consistency.none, getPrefix(input.prefix),
                             walKeysFromList(rawKeys),
                             (prefix, key, value, timestamp, tombstoned) -> {
@@ -149,6 +181,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 rows.add(row);
                                 return true;
                             });
+                        msg.add("elapse=" + (System.currentTimeMillis() - start));
                     }
                 }
             } else if (input.action.equals("set")) {
@@ -158,6 +191,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     if (rawKeys.isEmpty()) {
                         msg.add("No keys to remove. Please specifiy a valid key. key='" + input.key + "'");
                     } else {
+                        long start = System.currentTimeMillis();
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         for (byte[] rawKey : rawKeys) {
                             updates.set(rawKey, hexStringToByteArray(input.value));
@@ -179,6 +213,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 rows.add(row);
                                 return true;
                             });
+                        msg.add("elapse=" + (System.currentTimeMillis() - start));
                     }
                 }
             } else if (input.action.equals("remove")) {
@@ -193,6 +228,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             + " key='" + input.key + "'"
                             + " toKey='" + input.toKey + "'");
                     } else if (!fromRawKeys.isEmpty() && !toRawKeys.isEmpty()) {
+                        long start = System.currentTimeMillis();
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         byte[][] lastPrefix = new byte[1][];
                         partition.scan(Consistency.none, getPrefix(input.prefix),
@@ -212,6 +248,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             partition.commit(Consistency.none, lastPrefix[0], updates, 30_000);
                         }
                     } else {
+                        long start = System.currentTimeMillis();
                         AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                         for (byte[] rawKey : fromRawKeys) {
                             updates.remove(rawKey, -1);
@@ -233,6 +270,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 rows.add(row);
                                 return true;
                             });
+                        msg.add("elapse=" + (System.currentTimeMillis() - start));
                     }
                 }
             }

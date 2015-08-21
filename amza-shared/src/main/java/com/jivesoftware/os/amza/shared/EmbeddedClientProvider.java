@@ -5,14 +5,13 @@ import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.scan.KeyValueTimestampStream;
-import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.TakeCursors;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -55,7 +54,7 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
             partition.commit(consistency, prefix, commitable, timeUnit.toMillis(timeout));
         }
 
-        public void get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
+        public void get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueTimestampStream valuesStream) throws Exception {
             // TODO impl quorum reads?
             partitionProvider.getPartition(partitionName).get(consistency, prefix, keys,
                 (prefix1, key, value, valueTimestamp, valueTombstoned) -> {

@@ -9,7 +9,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex.CompactionWALIndex;
-import com.jivesoftware.os.amza.api.scan.RowType;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;

@@ -1,6 +1,5 @@
-package com.jivesoftware.os.amza.api.scan;
+package com.jivesoftware.os.amza.api.stream;
 
-import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 
 /**

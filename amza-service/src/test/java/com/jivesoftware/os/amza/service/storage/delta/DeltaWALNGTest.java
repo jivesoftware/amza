@@ -9,7 +9,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
-import com.jivesoftware.os.amza.api.scan.RowType;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndex;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;

@@ -1,9 +1,8 @@
 package com.jivesoftware.os.amza.api;
 
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.scan.Commitable;
-import com.jivesoftware.os.amza.api.scan.KeyValueTimestampStream;
-import com.jivesoftware.os.amza.api.stream.TimestampKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
@@ -22,7 +21,7 @@ public interface PartitionClient {
     boolean get(Consistency consistency,
         byte[] prefix,
         UnprefixedWALKeys keys,
-        TimestampKeyValueStream valuesStream) throws Exception;
+        KeyValueTimestampStream valuesStream) throws Exception;
 
     /**
      * @param fromPrefix   nullable (inclusive)

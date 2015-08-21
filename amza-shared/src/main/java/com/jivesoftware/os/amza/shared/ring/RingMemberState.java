@@ -87,7 +87,7 @@ public class RingMemberState implements Comparable<RingMemberState> {
         return true;
     }
 
-    static enum State {
+    public static enum State {
 
         offline(false, new Offline()),
         elect_leader(true, new ElectLeader()),

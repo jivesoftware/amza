@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.shared;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.scan.Commitable;
+import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALValue;

@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
@@ -19,7 +20,6 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
-import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 
@@ -77,13 +77,14 @@ public class SystemWALStorage {
         UnprefixedWALKeys keys,
         KeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).streamValues(prefix, keys, (_prefix, key, value, valueTimestamp, valueTombstone) -> {
-            if (valueTimestamp == -1) {
-                return stream.stream(prefix, key, null, -1, false);
-            } else {
-                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone);
-            }
-        });
+        return partitionIndex.get(versionedPartitionName).streamValues(prefix, keys,
+            (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                if (valueTimestamp == -1) {
+                    return stream.stream(prefix, key, null, -1, false, -1);
+                } else {
+                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
+                }
+            });
     }
 
     public boolean containsKeys(VersionedPartitionName versionedPartitionName,

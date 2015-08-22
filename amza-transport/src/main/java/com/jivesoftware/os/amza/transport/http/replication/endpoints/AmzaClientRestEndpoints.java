@@ -158,7 +158,8 @@ public class AmzaClientRestEndpoints {
                         UIO.readByteArray(fis, "key"),
                         UIO.readByteArray(fis, "value"),
                         UIO.readLong(fis, "valueTimestamp"),
-                        UIO.readBoolean(fis, "valueTombstoned"))) {
+                        UIO.readBoolean(fis, "valueTombstoned"),
+                        UIO.readLong(fis, "valueVersion"))) {
                         return false;
                     }
                 }
@@ -206,13 +207,14 @@ public class AmzaClientRestEndpoints {
                         }
                         return true;
                     },
-                    (prefix1, key, value, timestamp, tombstoned) -> {
+                    (prefix1, key, value, timestamp, tombstoned, version) -> {
                         UIO.writeBoolean(cf, false, "eos");
                         UIO.writeByteArray(cf, prefix1, "prefix");
                         UIO.writeByteArray(cf, key, "key");
                         UIO.writeByteArray(cf, value, "value");
                         UIO.writeLong(cf, timestamp, "timestamp");
                         UIO.writeBoolean(cf, tombstoned, "tombstoned");
+                        UIO.writeLong(cf, version, "version");
                         return true;
                     });
 
@@ -260,12 +262,13 @@ public class AmzaClientRestEndpoints {
 
                 ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
                 partition.scan(consistency, fromPrefix, fromKey, toPrefix, toKey,
-                    (prefix, key, value, timestamp) -> {
+                    (prefix, key, value, timestamp, version) -> {
                         UIO.writeBoolean(cf, false, "eos");
                         UIO.writeByteArray(cf, prefix, "prefix");
                         UIO.writeByteArray(cf, key, "key");
                         UIO.writeByteArray(cf, value, "value");
                         UIO.writeLong(cf, timestamp, "timestampId");
+                        UIO.writeLong(cf, version, "version");
                         return true;
                     });
 
@@ -375,7 +378,7 @@ public class AmzaClientRestEndpoints {
             UIO.writeByte(cf, RowType.highwater.toByte(), "type");
             writeHighwaters(cf, highwater);
         };
-        TxKeyValueStream stream = (rowTxId, prefix1, key, value, timestamp, tombstoned) -> {
+        TxKeyValueStream stream = (rowTxId, prefix1, key, value, timestamp, tombstoned, version) -> {
             UIO.writeBoolean(cf, false, "eos");
             UIO.writeByte(cf, RowType.primary.toByte(), "type");
             UIO.writeLong(cf, rowTxId, "rowTxId");
@@ -384,6 +387,7 @@ public class AmzaClientRestEndpoints {
             UIO.writeByteArray(cf, value, "value");
             UIO.writeLong(cf, timestamp, "timestamp");
             UIO.writeBoolean(cf, tombstoned, "tombstoned");
+            UIO.writeLong(cf, version, "version");
             return true;
         };
         TakeResult takeResult;

@@ -6,5 +6,5 @@ package com.jivesoftware.os.amza.api.stream;
  */
 public interface KeyValueTimestampStream {
 
-    boolean stream(byte[] prefix, byte[] key, byte[] value, long timestamp) throws Exception;
+    boolean stream(byte[] prefix, byte[] key, byte[] value, long timestamp, long version) throws Exception;
 }

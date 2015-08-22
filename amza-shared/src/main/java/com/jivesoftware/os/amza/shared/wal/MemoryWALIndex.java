@@ -16,6 +16,8 @@
 package com.jivesoftware.os.amza.shared.wal;
 
 import com.google.common.primitives.UnsignedBytes;
+import com.jivesoftware.os.amza.api.CompareTimestampVersions;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
@@ -24,7 +26,6 @@ import com.jivesoftware.os.amza.shared.stream.KeyValues;
 import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.stream.TxFpStream;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
-import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.shared.stream.WALMergeKeyPointerStream;
@@ -77,13 +78,15 @@ public class MemoryWALIndex implements WALIndex {
             keyEntryStream -> {
                 for (Entry<byte[], WALPointer> e : index.entrySet()) {
                     WALPointer rowPointer = e.getValue();
-                    if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
+                    if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null,
+                        rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getVersion(), null)) {
                         return false;
                     }
                 }
                 return true;
             },
-            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> stream.stream(prefix, key, valueTimestamp, valueTombstoned, fp));
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> stream.stream(prefix, key, valueTimestamp, valueTombstoned,
+                valueVersion, fp));
     }
 
     @Override
@@ -94,13 +97,15 @@ public class MemoryWALIndex implements WALIndex {
             keyEntryStream -> {
                 for (Entry<byte[], WALPointer> e : subMap(index, fromPk, toPk).entrySet()) {
                     WALPointer rowPointer = e.getValue();
-                    if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(), null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), null)) {
+                    if (!keyEntryStream.stream(-1, rowPointer.getFp(), e.getKey(),
+                        null, rowPointer.getTimestampId(), rowPointer.getTombstoned(), rowPointer.getVersion(), null)) {
                         return false;
                     }
                 }
                 return true;
             },
-            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) -> stream.stream(prefix, key, valueTimestamp, valueTombstoned, fp));
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> stream.stream(prefix, key,
+                valueTimestamp, valueTombstoned, valueVersion, fp));
     }
 
     private static ConcurrentNavigableMap<byte[], WALPointer> subMap(ConcurrentSkipListMap<byte[], WALPointer> index, byte[] from, byte[] to) {
@@ -127,7 +132,7 @@ public class MemoryWALIndex implements WALIndex {
     @Override
     public long deltaCount(WALKeyPointers keyPointers) throws Exception {
         long[] delta = new long[1];
-        boolean completed = keyPointers.consume((prefix, key, requestTimestamp, requestTombstoned, fp) -> {
+        boolean completed = keyPointers.consume((prefix, key, requestTimestamp, requestTombstoned, requestVersion, fp) -> {
             byte[] pk = WALKey.compose(prefix, key);
             WALPointer got = index.get(pk);
             long indexFp = got != null ? got.getFp() : -1;
@@ -176,9 +181,9 @@ public class MemoryWALIndex implements WALIndex {
 
     private boolean stream(byte[] prefix, byte[] key, WALPointer pointer, WALKeyPointerStream stream) throws Exception {
         if (pointer == null) {
-            return stream.stream(prefix, key, -1, false, -1);
+            return stream.stream(prefix, key, -1, false, -1, -1);
         } else {
-            return stream.stream(prefix, key, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
+            return stream.stream(prefix, key, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion(), pointer.getFp());
         }
     }
 
@@ -187,12 +192,14 @@ public class MemoryWALIndex implements WALIndex {
         byte[] value,
         long valueTimestamp,
         boolean valueTombstoned,
+        long valueVersion,
         WALPointer pointer,
         KeyValuePointerStream stream) throws Exception {
         if (pointer == null) {
-            return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, -1, false, -1);
+            return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1);
         } else {
-            return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
+            return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
+                pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion(), pointer.getFp());
         }
     }
 
@@ -203,28 +210,31 @@ public class MemoryWALIndex implements WALIndex {
 
     @Override
     public boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned) -> {
+        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             WALPointer pointer = index.get(WALKey.compose(prefix, key));
             if (pointer != null) {
-                return stream(prefix, key, value, valueTimestamp, valueTombstoned, pointer, stream);
+                return stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, pointer, stream);
             } else {
-                return stream(prefix, key, value, valueTimestamp, valueTombstoned, null, stream);
+                return stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, null, stream);
             }
         });
     }
 
     @Override
     public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {
-        return pointers.consume((txId, prefix, key, timestamp, tombstoned, fp) ->
-            merge(txId, prefix, key, timestamp, tombstoned, fp, stream));
+        return pointers.consume((txId, prefix, key, timestamp, tombstoned, version, fp)
+            -> merge(txId, prefix, key, timestamp, tombstoned, version, fp, stream));
     }
 
-    private boolean merge(long txId, byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long fp, MergeTxKeyPointerStream stream) throws Exception {
+    private boolean merge(long txId, byte[] prefix, byte[] key, 
+        long timestamp, boolean tombstoned, long version, long fp, MergeTxKeyPointerStream stream) throws Exception {
+
         byte[] mode = new byte[1];
         WALPointer compute = index.compute(WALKey.compose(prefix, key), (existingKey, existingPointer) -> {
-            if (existingPointer == null || timestamp > existingPointer.getTimestampId()) {
+            if (existingPointer == null ||
+                CompareTimestampVersions.compare(timestamp, version, existingPointer.getTimestampId(), existingPointer.getVersion()) > 0) {
                 mode[0] = (existingPointer == null) ? WALMergeKeyPointerStream.added : WALMergeKeyPointerStream.clobbered;
-                return new WALPointer(fp, timestamp, tombstoned);
+                return new WALPointer(fp, timestamp, tombstoned, version);
             } else {
                 mode[0] = WALMergeKeyPointerStream.ignored;
                 return existingPointer;
@@ -236,7 +246,7 @@ public class MemoryWALIndex implements WALIndex {
             queue.add(fp);
         }
         if (stream != null) {
-            return stream.stream(mode[0], txId, prefix, key, compute.getTimestampId(), compute.getTombstoned(), compute.getFp());
+            return stream.stream(mode[0], txId, prefix, key, compute.getTimestampId(), compute.getTombstoned(), compute.getVersion(), compute.getFp());
         } else {
             return true;
         }
@@ -278,6 +288,7 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     private static class TxFp {
+
         private final long txId;
         private final long[] fps;
 

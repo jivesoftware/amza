@@ -57,11 +57,11 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
         public void get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueTimestampStream valuesStream) throws Exception {
             // TODO impl quorum reads?
             partitionProvider.getPartition(partitionName).get(consistency, prefix, keys,
-                (prefix1, key, value, valueTimestamp, valueTombstoned) -> {
+                (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     if (valueTimestamp == -1 || valueTombstoned) {
-                        return valuesStream.stream(prefix1, key, null, -1);
+                        return valuesStream.stream(prefix1, key, null, -1, -1);
                     } else {
-                        return valuesStream.stream(prefix1, key, value, valueTimestamp);
+                        return valuesStream.stream(prefix1, key, value, valueTimestamp, valueVersion);
                     }
                 });
         }
@@ -74,8 +74,8 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
         public TimestampedValue getTimestampedValue(Consistency consistency, byte[] prefix, byte[] key) throws Exception {
             final TimestampedValue[] r = new TimestampedValue[1];
             get(consistency, prefix, stream -> stream.stream(key),
-                (_prefix, _key, value, timestamp) -> {
-                    r[0] = new TimestampedValue(timestamp, value);
+                (_prefix, _key, value, timestamp, version) -> {
+                    r[0] = new TimestampedValue(timestamp, version, value);
                     return true;
                 });
             return r[0];

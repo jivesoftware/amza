@@ -90,8 +90,9 @@ public class PartitionCreator {
             updatePartitionProperties(partitionName, properties);
 
             byte[] rawPartitionName = partitionName.toBytes();
+            long timestampAndVersion = orderIdProvider.nextId();
             RowsChanged changed = systemWALStorage.update(REGION_INDEX, null,
-                (highwater, scan) -> scan.row(-1, rawPartitionName, rawPartitionName, orderIdProvider.nextId(), false),
+                (highwater, scan) -> scan.row(-1, rawPartitionName, rawPartitionName, timestampAndVersion, false, timestampAndVersion),
                 walUpdated);
             if (!changed.isEmpty()) {
                 rowChanges.changes(changed);
@@ -105,7 +106,8 @@ public class PartitionCreator {
 
     public void updatePartitionProperties(PartitionName partitionName, PartitionProperties properties) throws Exception {
         RowsChanged changed = systemWALStorage.update(REGION_PROPERTIES, null, (highwater, scan) -> {
-            return scan.row(-1, partitionName.toBytes(), partitionPropertyMarshaller.toBytes(properties), orderIdProvider.nextId(), false);
+            long timestampAndVersion = orderIdProvider.nextId();
+            return scan.row(-1, partitionName.toBytes(), partitionPropertyMarshaller.toBytes(properties), timestampAndVersion, false, timestampAndVersion);
         }, walUpdated);
         if (!changed.isEmpty()) {
             rowChanges.changes(changed);
@@ -115,13 +117,14 @@ public class PartitionCreator {
 
     public void destroyPartition(PartitionName partitionName) throws Exception {
         Preconditions.checkArgument(!partitionName.isSystemPartition(), "You cannot destroy a system partition");
+        long timestampAndVersion = orderIdProvider.nextId();
 
         systemWALStorage.update(REGION_INDEX, null, (highwaters, scan) -> {
-            return scan.row(-1, partitionName.toBytes(), null, orderIdProvider.nextId(), true);
+            return scan.row(-1, partitionName.toBytes(), null, timestampAndVersion, true, timestampAndVersion);
         }, walUpdated);
 
         systemWALStorage.update(REGION_PROPERTIES, null, (highwaters, scan) -> {
-            return scan.row(-1, partitionName.toBytes(), null, orderIdProvider.nextId(), true);
+            return scan.row(-1, partitionName.toBytes(), null, timestampAndVersion, true, timestampAndVersion);
         }, walUpdated);
 
     }

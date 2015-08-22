@@ -83,12 +83,13 @@ public class StripedPartition implements Partition {
         Commitable updates,
         long timeoutInMillis) throws Exception {
 
-        long timestampId = orderIdProvider.nextId();
+        long currentTime = System.currentTimeMillis();
+        long version = orderIdProvider.nextId();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix, (highwaters, scan) -> {
-                return updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
-                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
-                    return scan.row(rowTxId, key, value, timestamp, valueTombstone);
+            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix, (highwaters, stream) -> {
+                return updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                    long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
+                    return stream.row(rowTxId, key, value, timestamp, valueTombstone, version);
                 });
             }, walUpdated);
             amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
@@ -123,19 +124,20 @@ public class StripedPartition implements Partition {
     }
 
     @Override
-    public boolean scan(Consistency consistency, byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueTimestampStream scan) throws Exception {
+    public boolean scan(Consistency consistency, byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueTimestampStream scan) throws
+        Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             if (fromKey == null && toKey == null) {
-                stripe.rowScan(partitionName, (prefix, key, value, valueTimestamp, valueTombstone)
-                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp));
+                stripe.rowScan(partitionName, (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             } else {
                 stripe.rangeScan(partitionName,
                     fromPrefix,
                     fromKey,
                     toPrefix,
                     toKey,
-                    (prefix, key, value, valueTimestamp, valueTombstone)
-                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp));
+                    (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             }
             return true;
         });
@@ -169,12 +171,12 @@ public class StripedPartition implements Partition {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             long[] lastTxId = {-1};
             boolean[] done = {false};
-            TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
+            TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (done[0] && rowTxId > lastTxId[0]) {
                     return false;
                 }
 
-                done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone);
+                done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
                 if (rowTxId > lastTxId[0]) {
                     lastTxId[0] = rowTxId;
                 }

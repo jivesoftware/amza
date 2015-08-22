@@ -18,7 +18,6 @@ package com.jivesoftware.os.amza.shared.wal;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.util.Arrays;
-import java.util.Comparator;
 
 public class WALKey {
 
@@ -66,16 +65,18 @@ public class WALKey {
 
     public interface TxFpRawKeyValueEntryStream<R> {
 
-        boolean stream(long txId, long fp, byte[] rawKey, byte[] value, long valueTimestamp, boolean valueTombstoned, R entry) throws Exception;
+        boolean stream(long txId, long fp, byte[] rawKey,
+            byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, R entry) throws Exception;
     }
 
     public interface TxFpKeyValueEntryStream<R> {
 
-        boolean stream(long txId, long fp, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, R entry) throws Exception;
+        boolean stream(long txId, long fp, byte[] prefix, byte[] key,
+            byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, R entry) throws Exception;
     }
 
     public static <R> boolean decompose(TxFpRawKeyValueEntries<R> keyEntries, TxFpKeyValueEntryStream<R> stream) throws Exception {
-        return keyEntries.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned, entry) -> {
+        return keyEntries.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
             short prefixLengthInBytes = UIO.bytesShort(rawKey);
             byte[] prefix = prefixLengthInBytes > 0 ? new byte[prefixLengthInBytes] : null;
             byte[] key = new byte[rawKey.length - 2 - prefixLengthInBytes];
@@ -83,7 +84,7 @@ public class WALKey {
                 System.arraycopy(rawKey, 2, prefix, 0, prefixLengthInBytes);
             }
             System.arraycopy(rawKey, 2 + prefixLengthInBytes, key, 0, key.length);
-            return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry);
+            return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry);
         });
     }
 
@@ -106,10 +107,10 @@ public class WALKey {
 
     @Override
     public String toString() {
-        return "WALKey{" +
-            "key=" + Arrays.toString(key) +
-            ", prefix=" + Arrays.toString(prefix) +
-            '}';
+        return "WALKey{"
+            + "key=" + Arrays.toString(key)
+            + ", prefix=" + Arrays.toString(prefix)
+            + '}';
     }
 
     @Override

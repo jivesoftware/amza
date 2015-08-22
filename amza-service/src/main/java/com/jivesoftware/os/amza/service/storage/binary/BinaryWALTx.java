@@ -4,13 +4,13 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex.CompactionWALIndex;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
@@ -157,11 +157,11 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                                 }
                                 return true;
                             });
-                    }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
+                    }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                         rebuilt.increment();
-                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, fp);
+                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
                     }),
-                    (mode, txId, prefix, key, timestamp, tombstoned, fp) -> true);
+                    (mode, txId, prefix, key, timestamp, tombstoned, version, fp) -> true);
 
                 LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
                 walIndex.commit();
@@ -171,7 +171,7 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                 final MutableLong repair = new MutableLong();
                 walIndex.merge(
                     stream -> primaryRowMarshaller.fromRows(txFpRowStream -> {
-                        long[] commitedUpToTxId = { Long.MIN_VALUE };
+                        long[] commitedUpToTxId = {Long.MIN_VALUE};
                         return io.reverseScan((rowFP, rowTxId, rowType, row) -> {
                             if (rowType == RowType.primary) {
                                 if (!txFpRowStream.stream(rowTxId, rowFP, row)) {
@@ -189,11 +189,11 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                                 return rowTxId >= commitedUpToTxId[0];
                             }
                         });
-                    }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
+                    }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                         repair.increment();
-                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, fp);
+                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
                     }),
-                    (mode, txId, prefix, key, timestamp, tombstoned, fp) -> true);
+                    (mode, txId, prefix, key, timestamp, tombstoned, version, fp) -> true);
 
                 LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
                 walIndex.commit();
@@ -213,7 +213,7 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                 try {
                     io.close();
                 } catch (Exception x) {
-                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[] { dir.getAbsolutePath() }, x);
+                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[]{dir.getAbsolutePath()}, x);
                 }
                 io.delete();
                 return true;
@@ -361,15 +361,15 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                     }
                     return true;
                 }),
-            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
-                compactableWALIndex.getPointer(prefix, key, (_prefix, _key, pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                    if (pointerFp == -1 || valueTimestamp >= pointerTimestamp) {
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                compactableWALIndex.getPointer(prefix, key, (_prefix, _key, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
+                    if (pointerFp == -1 || CompareTimestampVersions.compare(valueTimestamp, valueVersion, pointerTimestamp, pointerVersion) >= 0) {
                         if (valueTombstoned && valueTimestamp < removeTombstonedOlderThanTimestampId) {
                             tombstoneCount.incrementAndGet();
                         } else {
                             if (valueTimestamp > ttlTimestampId) {
                                 estimatedSizeInBytes.add(row.length);
-                                flushables.add(new CompactionFlushable(prefix, key, valueTimestamp, valueTombstoned, row));
+                                flushables.add(new CompactionFlushable(prefix, key, valueTimestamp, valueTombstoned, valueVersion, row));
                                 keyCount.incrementAndGet();
                             } else {
                                 ttlCount.incrementAndGet();
@@ -418,7 +418,8 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
             },
             indexableKeyStream -> {
                 for (CompactionFlushable flushable : flushables) {
-                    if (!indexableKeyStream.stream(flushable.prefix, flushable.key, flushable.valueTimestamp, flushable.valueTombstoned)) {
+                    if (!indexableKeyStream.stream(flushable.prefix, flushable.key,
+                        flushable.valueTimestamp, flushable.valueTombstoned, flushable.valueVersion)) {
                         return false;
                     }
                 }
@@ -436,14 +437,15 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
         IndexableKeys indexableKeys) throws Exception {
 
         if (compactionWALIndex != null) {
-            compactionWALIndex.merge((TxKeyPointerStream stream) -> {
+            compactionWALIndex.merge((stream) -> {
                 compactionIO.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys,
-                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp) -> stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, fp));
+                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> stream.stream(txId, prefix, key,
+                        valueTimestamp, valueTombstoned, valueVersion, fp));
                 return true;
             });
         } else {
             compactionIO.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys,
-                (rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
+                (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
         }
     }
 
@@ -453,13 +455,15 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
         public byte[] key;
         public long valueTimestamp;
         public boolean valueTombstoned;
+        public long valueVersion;
         public byte[] row;
 
-        public CompactionFlushable(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, byte[] row) {
+        public CompactionFlushable(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion, byte[] row) {
             this.prefix = prefix;
             this.key = key;
             this.valueTimestamp = valueTimestamp;
             this.valueTombstoned = valueTombstoned;
+            this.valueVersion = valueVersion;
             this.row = row;
         }
     }

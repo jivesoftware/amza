@@ -34,9 +34,9 @@ public class PointerIndexUtils {
                 if (desired != null) {
                     desired.compute(key, (byte[] t, TimestampedValue u) -> {
                         if (u == null) {
-                            return new TimestampedValue(time, UIO.longBytes(walFp));
+                            return new TimestampedValue(time, Long.MAX_VALUE, UIO.longBytes(walFp));
                         } else {
-                            return u.getTimestampId() > time ? u : new TimestampedValue(time, UIO.longBytes(walFp));
+                            return u.getTimestampId() > time ? u : new TimestampedValue(time, Long.MAX_VALUE, UIO.longBytes(walFp));
                         }
                     });
                 }

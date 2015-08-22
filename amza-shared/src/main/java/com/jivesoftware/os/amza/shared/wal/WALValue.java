@@ -21,18 +21,25 @@ import java.util.Arrays;
 
 public class WALValue {
 
+    private final byte[] value;
     private final long timestamp;
     private final boolean tombstoned;
-    private final byte[] value;
+    private final long version;
 
     @JsonCreator
     public WALValue(
         @JsonProperty("value") byte[] value,
         @JsonProperty("timestamp") long timestamp,
-        @JsonProperty("tombstoned") boolean tombstoned) {
+        @JsonProperty("tombstoned") boolean tombstoned,
+         @JsonProperty("version") long version) {
         this.timestamp = timestamp;
         this.value = value;
         this.tombstoned = tombstoned;
+        this.version = version;
+    }
+
+    public byte[] getValue() {
+        return value;
     }
 
     public long getTimestampId() {
@@ -43,15 +50,18 @@ public class WALValue {
         return tombstoned;
     }
 
-    public byte[] getValue() {
-        return value;
+    public long getVersion() {
+        return version;
     }
+
+    
 
     @Override
     public String toString() {
         return "WALValue{"
             + "timestamp=" + timestamp
             + ", tombstoned=" + tombstoned
+            + ", version=" + version
             + ", value=" + (value != null ? Arrays.toString(value) : "null") + '}';
     }
 
@@ -60,6 +70,7 @@ public class WALValue {
         int hash = 5;
         hash = 97 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
         hash = 97 * hash + (this.tombstoned ? 1 : 0);
+        hash = 97 * hash + (int) (this.version ^ (this.version >>> 32));
         hash = 97 * hash + Arrays.hashCode(this.value);
         return hash;
     }
@@ -77,6 +88,9 @@ public class WALValue {
             return false;
         }
         if (this.tombstoned != other.tombstoned) {
+            return false;
+        }
+        if (this.version != other.version) {
             return false;
         }
         if (!Arrays.equals(this.value, other.value)) {

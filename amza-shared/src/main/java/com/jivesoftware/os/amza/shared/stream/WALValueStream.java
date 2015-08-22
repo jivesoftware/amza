@@ -8,6 +8,7 @@ public interface WALValueStream {
 
     boolean stream(byte[] value,
         long valueTimestamp,
-        boolean valueTombstone) throws Exception;
+        boolean valueTombstone,
+        long valueVersion) throws Exception;
 
 }

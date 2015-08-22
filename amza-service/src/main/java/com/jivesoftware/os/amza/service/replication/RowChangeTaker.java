@@ -7,7 +7,9 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
@@ -19,11 +21,9 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedStatus;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.scan.CommitTo;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
@@ -551,7 +551,7 @@ public class RowChangeTaker implements RowChanges {
                 }
 
                 primaryRowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(txId, rowFP, row),
-                    (rowTxId, fp, prefix, key, value, valueTimestamp, valueTombstoned, _row) -> {
+                    (rowTxId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, _row) -> {
                         streamed.incrementAndGet();
                         if (highWaterMark.longValue() < txId) {
                             highWaterMark.setValue(txId);
@@ -559,7 +559,7 @@ public class RowChangeTaker implements RowChanges {
                         if (oldestTxId.longValue() > txId) {
                             oldestTxId.setValue(txId);
                         }
-                        batch.add(new WALRow(prefix, key, value, valueTimestamp, valueTombstoned));
+                        batch.add(new WALRow(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
                         return true;
                     });
 

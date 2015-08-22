@@ -14,6 +14,7 @@ public interface FpKeyValueHighwaterStream {
         byte[] value,
         long valueTimestamp,
         boolean valueTombstone,
+        long valueVersion,
         WALHighwater highwater) throws Exception;
 
 }

@@ -242,14 +242,14 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                             int bStart = batch * input.batchSize;
                             for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
                                 String k = Strings.padEnd(String.valueOf(b), max.length(), '0');
-                                txKeyValueStream.row(-1, k.getBytes(), ("v" + batch).getBytes(), -1, false);
+                                txKeyValueStream.row(-1, k.getBytes(), ("v" + batch).getBytes(), -1, false, -1);
                             }
                         } else {
                             int bStart = threadIndex * input.batchSize;
                             int bEnd = bStart + input.batchSize;
                             for (int b = bStart; b < bEnd; b++) {
                                 String k = String.valueOf(batch);
-                                txKeyValueStream.row(-1, (b + "k" + k).getBytes(), (b + "v" + batch).getBytes(), -1, false);
+                                txKeyValueStream.row(-1, (b + "k" + k).getBytes(), (b + "v" + batch).getBytes(), -1, false, -1);
                             }
                         }
                         return true;

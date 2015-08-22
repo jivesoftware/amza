@@ -70,7 +70,6 @@ public class AmzaRingStoreReader implements AmzaRingReader {
         return RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
     }
 
-
     @Override
     public RingMember getLeader(byte[] ringName, long waitForLeaderElection) throws Exception {
         // fix me!!
@@ -120,7 +119,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
                 from,
                 null,
                 WALKey.prefixUpperExclusive(from),
-                (prefix, key, value, valueTimestamp, valueTombstone) -> {
+                (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                     if (!valueTombstone) {
                         RingMember ringMember = keyToRingMember(key);
                         return stream.stream(ringMember.toBytes());
@@ -128,7 +127,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
                         return true;
                     }
                 }),
-            (prefix, key, value, valueTimestamp, valueTombstone) -> {
+            (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (value != null && !valueTombstone) {
                     orderedRing.put(RingMember.fromBytes(key), RingHost.fromBytes(value));
                 } else {
@@ -151,7 +150,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             from,
             null,
             WALKey.prefixUpperExclusive(from),
-            (prefix, key, value, valueTimestamp, valueTombstone) -> {
+            (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (!valueTombstone) {
                     RingMember ringMember = keyToRingMember(key);
                     if (!ringMember.equals(rootRingMember)) {
@@ -169,7 +168,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
         Set<IBA> ringNames = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember, (_desiredRingMember) -> {
             Set<IBA> set = new HashSet<>();
             try {
-                ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
+                ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                     if (!valueTombstone) {
                         HeapFiler filer = new HeapFiler(key);
                         byte[] ringName = UIO.readByteArray(filer, "ringName");
@@ -205,7 +204,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     @Override
     public void allRings(RingStream ringStream) throws Exception {
         Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
-        nodeIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
+        nodeIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
                 RingMember ringMember = RingMember.fromBytes(key);
                 RingHost ringHost = RingHost.fromBytes(value);
@@ -214,7 +213,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             return true;
         });
 
-        ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
+        ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
                 HeapFiler filer = new HeapFiler(key);
                 byte[] ringName = UIO.readByteArray(filer, "ringName");
@@ -230,6 +229,5 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             }
         });
     }
-
 
 }

@@ -73,7 +73,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);
-        partitionIndexStore.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
+        partitionIndexStore.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             final PartitionName partitionName = PartitionName.fromBytes(key);
             try {
                 total.incrementAndGet();

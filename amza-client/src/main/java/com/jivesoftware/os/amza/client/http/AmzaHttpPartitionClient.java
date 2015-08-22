@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
@@ -56,13 +57,14 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                             updates.commitable(
                                 (highwater) -> {
                                 },
-                                (rowTxId, key, value, valueTimestamp, valueTombstoned) -> {
+                                (rowTxId, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                                     UIO.writeBoolean(fos, false, "eos");
                                     UIO.writeLong(fos, rowTxId, "rowTxId");
                                     UIO.writeByteArray(fos, key, "key");
                                     UIO.writeByteArray(fos, value, "value");
                                     UIO.writeLong(fos, valueTimestamp, "valueTimestamp");
                                     UIO.writeBoolean(fos, valueTombstoned, "valueTombstoned");
+                                    // valueVersion is only ever generated on the servers.
                                     return true;
                                 });
                             UIO.writeBoolean(fos, true, "eos");
@@ -121,6 +123,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     byte[] latestKey = null;
                     byte[] latestValue = null;
                     long latestTimestamp = -1;
+                    long latestVersion = -1;
                     for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
                         FilerInputStream fis = answer.getAnswer();
                         if (!UIO.readBoolean(fis, "eos")) {
@@ -129,18 +132,21 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                             byte[] v = UIO.readByteArray(fis, "value");
                             long t = UIO.readLong(fis, "timestamp");
                             boolean d = UIO.readBoolean(fis, "tombstone");
+                            long z = UIO.readLong(fis, "version");
 
-                            if (t > latestTimestamp) {
+                            int c = CompareTimestampVersions.compare(t, z, latestTimestamp, latestVersion);
+                            if (c > 0) {
                                 latestPrefix = p;
                                 latestKey = k;
                                 latestValue = v;
                                 latestTimestamp = t;
+                                latestVersion = z;
                             }
                         } else {
                             eos = true;
                         }
                     }
-                    valuesStream.stream(latestPrefix, latestKey, latestValue, latestTimestamp);
+                    valuesStream.stream(latestPrefix, latestKey, latestValue, latestTimestamp, latestVersion);
                 }
                 return null;
             });
@@ -178,7 +184,8 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                             UIO.readByteArray(fis, "prefix"),
                             UIO.readByteArray(fis, "key"),
                             UIO.readByteArray(fis, "value"),
-                            UIO.readLong(fis, "timestampId")
+                            UIO.readLong(fis, "timestampId"),
+                            UIO.readLong(fis, "version")
                         )) {
                             return false;
                         }
@@ -263,7 +270,8 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     UIO.readByteArray(fis, "key"),
                     UIO.readByteArray(fis, "value"),
                     UIO.readLong(fis, "timestampId"),
-                    UIO.readBoolean(fis, "tombstoned"));
+                    UIO.readBoolean(fis, "tombstoned"),
+                    UIO.readLong(fis, "version"));
                 maxTxId = Math.max(maxTxId, rowTxId);
             }
         }

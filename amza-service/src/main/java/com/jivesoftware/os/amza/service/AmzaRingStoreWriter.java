@@ -17,13 +17,13 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
-import com.jivesoftware.os.amza.service.storage.PartitionCreator;
-import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.api.TimestampedValue;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -53,7 +53,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         }
 
         public byte[] toBytes() {
-            return new byte[] { serializedByte };
+            return new byte[]{serializedByte};
         }
 
         static Status fromBytes(byte[] b) {
@@ -104,16 +104,18 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
             return;
         }
+        long timestampAndVersion = orderIdProvider.nextId();
         systemWALStorage.update(PartitionCreator.NODE_INDEX, null,
-            (highwater, scan) -> scan.row(-1, ringMember.toBytes(), ringHost.toBytes(), orderIdProvider.nextId(), false),
+            (highwater, scan) -> scan.row(-1, ringMember.toBytes(), ringHost.toBytes(), timestampAndVersion, false, timestampAndVersion),
             walUpdated);
         LOG.info("register ringMember:{} as ringHost:{}", ringMember, ringHost);
     }
 
     @Override
     public void deregister(RingMember ringMember) throws Exception {
+        long timestampAndVersion = orderIdProvider.nextId();
         systemWALStorage.update(PartitionCreator.NODE_INDEX, null,
-            (highwater, scan) -> scan.row(-1, ringMember.toBytes(), null, orderIdProvider.nextId(), true),
+            (highwater, scan) -> scan.row(-1, ringMember.toBytes(), null, timestampAndVersion, true, timestampAndVersion),
             walUpdated);
         LOG.info("deregister ringMember:{}");
     }
@@ -182,9 +184,9 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
 
         systemWALStorage.update(PartitionCreator.RING_INDEX, null,
             (highwater, scan) -> {
-                long timestamp = orderIdProvider.nextId();
+                long timestampAndVersion = orderIdProvider.nextId();
                 for (RingMember member : members) {
-                    if (!scan.row(-1, ringStoreReader.key(ringName, member), new byte[0], timestamp, false)) {
+                    if (!scan.row(-1, ringStoreReader.key(ringName, member), new byte[0], timestampAndVersion, false, timestampAndVersion)) {
                         return false;
                     }
                 }
@@ -204,8 +206,9 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         byte[] key = ringStoreReader.key(ringName, ringMember);
         TimestampedValue had = systemWALStorage.getTimestampedValue(PartitionCreator.RING_INDEX, null, key);
         if (had != null) {
+            long timestampAndVersion = orderIdProvider.nextId();
             systemWALStorage.update(PartitionCreator.RING_INDEX, null,
-                (highwater, scan) -> scan.row(-1, key, null, orderIdProvider.nextId(), true),
+                (highwater, scan) -> scan.row(-1, key, null, timestampAndVersion, true, timestampAndVersion),
                 walUpdated);
         }
     }

@@ -87,13 +87,13 @@ public class SystemPartition implements Partition {
         byte[] prefix,
         Commitable updates,
         long timeoutInMillis) throws Exception {
-
-        long timestampId = orderIdProvider.nextId();
+        long currentTime = System.currentTimeMillis();
+        long version = orderIdProvider.nextId();
         RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix,
             (highwaters, scan)
-            -> updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
-                long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
-                return scan.row(rowTxId, key, value, timestamp, valueTombstone);
+            -> updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
+                return scan.row(rowTxId, key, value, timestamp, valueTombstone, version);
             }),
             walUpdated);
         amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
@@ -127,16 +127,16 @@ public class SystemPartition implements Partition {
         byte[] toKey,
         KeyValueTimestampStream scan) throws Exception {
         if (fromKey == null && toKey == null) {
-            return systemWALStorage.rowScan(versionedPartitionName, (prefix, key, value, valueTimestamp, valueTombstone)
-                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp));
+            return systemWALStorage.rowScan(versionedPartitionName, (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
         } else {
             return systemWALStorage.rangeScan(versionedPartitionName,
                 fromPrefix,
                 fromKey,
                 toPrefix,
                 toKey,
-                (prefix, key, value, valueTimestamp, valueTombstone)
-                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp));
+                (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
         }
     }
 
@@ -167,13 +167,13 @@ public class SystemPartition implements Partition {
         long[] lastTxId = {-1};
         boolean[] done = {false};
         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-        TxKeyValueStream delegateStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
+        TxKeyValueStream delegateStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
 
             if (done[0] && rowTxId > lastTxId[0]) {
                 return false;
             }
 
-            done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone);
+            done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
             if (rowTxId > lastTxId[0]) {
                 lastTxId[0] = rowTxId;
             }

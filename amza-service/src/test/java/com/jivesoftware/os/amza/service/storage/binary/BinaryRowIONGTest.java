@@ -1,12 +1,12 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.collect.Lists;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import java.io.File;
 import java.util.List;
@@ -67,7 +67,7 @@ public class BinaryRowIONGTest {
                 row.length,
                 stream -> stream.stream(row),
                 stream -> true,
-                (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
+                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
         }
 
         rowIO = reopen.call();
@@ -127,7 +127,7 @@ public class BinaryRowIONGTest {
                 row.length,
                 stream -> stream.stream(row),
                 stream -> true,
-                (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
+                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
             /*if (i % 10_000 == 0) {
              System.out.println("Wrote " + i);
              }*/

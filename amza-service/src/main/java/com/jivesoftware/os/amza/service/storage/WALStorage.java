@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Optional;
+import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -229,7 +230,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             MutableBoolean needKeyHighwaterStripes = new MutableBoolean(true);
             MutableBoolean needHighestTxId = new MutableBoolean(true);
 
-            FpKeyValueStream mergeStripedKeyHighwaters = (fp, prefix, key, value, valueTimestamp, valueTombstoned) -> {
+            FpKeyValueStream mergeStripedKeyHighwaters = (fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 mergeStripedKeyHighwaters(prefix, key, valueTimestamp);
                 return true;
             };
@@ -362,8 +363,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         updates.commitable((_highwater) -> {
             highwater[0] = _highwater;
 
-        }, (transactionId, key, value, valueTimestamp, valueTombstoned) -> {
-            WALValue walValue = new WALValue(value, valueTimestamp, valueTombstoned);
+        }, (transactionId, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            WALValue walValue = new WALValue(value, valueTimestamp, valueTombstoned, valueVersion);
             if (!forceApply) {
                 keys.add(key);
                 values.add(walValue);
@@ -385,20 +386,20 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 wali.getPointers((KeyValueStream stream) -> {
                     for (int k = 0; k < keys.size(); k++) {
                         WALValue value = values.get(k);
-                        if (!stream.stream(prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+                        if (!stream.stream(prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
                             return false;
                         }
                     }
                     return true;
-                }, (_prefix, key, value, valueTimestamp, valueTombstone, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+                }, (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
                     WALKey walKey = new WALKey(prefix, key);
-                    WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone);
+                    WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone, valueVersion);
                     if (pointerFp == -1) {
                         apply.put(walKey, walValue);
                         if (oldestAppliedTimestamp.get() > valueTimestamp) {
                             oldestAppliedTimestamp.set(valueTimestamp);
                         }
-                    } else if (pointerTimestamp < valueTimestamp) {
+                    } else if (CompareTimestampVersions.compare(pointerTimestamp, pointerVersion, valueTimestamp, valueVersion) < 0) {
                         apply.put(walKey, walValue);
                         if (oldestAppliedTimestamp.get() > valueTimestamp) {
                             oldestAppliedTimestamp.set(valueTimestamp);
@@ -438,7 +439,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                 if (!rowStream.stream(primaryRowMarshaller.toRow(row.getKey().compose(),
                                         value.getValue(),
                                         value.getTimestampId(),
-                                        value.getTombstoned()))) {
+                                        value.getTombstoned(),
+                                        value.getVersion()))) {
                                     return false;
                                 }
                             }
@@ -447,7 +449,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         indexableKeyStream -> {
                             for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                                 WALValue value = row.getValue();
-                                if (!indexableKeyStream.stream(row.getKey().prefix, row.getKey().key, value.getTimestampId(), value.getTombstoned())) {
+                                if (!indexableKeyStream.stream(row.getKey().prefix, row.getKey().key,
+                                    value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
                                     return false;
                                 }
                             }
@@ -457,8 +460,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         rowWriter,
                         highwater[0],
                         flushCompactionHint,
-                        (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, fp) -> {
-                            indexables.add(new WALIndexable(rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp));
+                        (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
+                            indexables.add(new WALIndexable(rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
                             return true;
                         });
 
@@ -467,14 +470,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 synchronized (oneIndexerAtATimeLock) {
                     wali.merge((TxKeyPointerStream stream) -> {
                         for (WALIndexable ix : indexables) {
-                            if (!stream.stream(ix.txId, ix.prefix, ix.key, ix.valueTimestamp, ix.valueTombstoned, ix.fp)) {
+                            if (!stream.stream(ix.txId, ix.prefix, ix.key, ix.valueTimestamp, ix.valueTombstoned, ix.valueVersion, ix.fp)) {
                                 return false;
                             }
 
                             mergeStripedKeyHighwaters(ix.prefix, ix.key, ix.valueTimestamp);
                         }
                         return true;
-                    }, (mode, txId, _prefix, key, timestamp, tombstoned, fp) -> {
+                    }, (mode, txId, _prefix, key, timestamp, tombstoned, version, fp) -> {
                         if (mode == WALMergeKeyPointerStream.added) {
                             keyCount.incrementAndGet();
                         } else if (mode == WALMergeKeyPointerStream.clobbered) {
@@ -549,8 +552,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
-            return wali.rowScan((prefix, key, timestamp, tombstoned, fp) -> {
-                return keyValueStream.stream(prefix, key, hydrateRowIndexValue(fp), timestamp, tombstoned);
+            return wali.rowScan((prefix, key, timestamp, tombstoned, version, fp) -> {
+                return keyValueStream.stream(prefix, key, hydrateRowIndexValue(fp), timestamp, tombstoned, version);
             });
         } finally {
             releaseOne();
@@ -566,7 +569,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 fromKey,
                 toPrefix,
                 toKey,
-                (prefix, key, timestamp, tombstoned, fp) -> keyValueStream.stream(prefix, key, hydrateRowIndexValue(fp), timestamp, tombstoned));
+                (prefix, key, timestamp, tombstoned, version, fp)
+                -> keyValueStream.stream(prefix, key, hydrateRowIndexValue(fp), timestamp, tombstoned, version));
         } finally {
             releaseOne();
         }
@@ -577,9 +581,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             TimestampedValue[] values = new TimestampedValue[1];
-            walIndex.get().getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, fp) -> {
+            walIndex.get().getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
                 if (fp != -1 && !tombstoned) {
-                    values[0] = new TimestampedValue(timestamp, hydrateRowIndexValue(fp));
+                    values[0] = new TimestampedValue(timestamp, version, hydrateRowIndexValue(fp));
                 }
                 return true;
             });
@@ -593,17 +597,18 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             return walIndex.get().getPointers(prefix, keys,
-                (_prefix, key, pointerTimestamp, pointerTombstoned, pointerFp) -> {
+                (_prefix, key, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
                     if (pointerFp != -1) {
                         return keyValueStream.stream(prefix,
                             key,
                             (pointerTombstoned) ? null : hydrateRowIndexValue(pointerFp),
                             pointerTimestamp,
-                            pointerTombstoned
+                            pointerTombstoned,
+                            pointerVersion
                         );
 
                     } else {
-                        return keyValueStream.stream(prefix, key, null, -1, false);
+                        return keyValueStream.stream(prefix, key, null, -1, false, -1);
                     }
                 });
         } finally {
@@ -616,11 +621,11 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         try {
             return walIndex.get().getPointers(
                 indexStream -> keyValues.consume(
-                    (prefix, key, value, valueTimestamp, valueTombstone) -> {
+                    (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         if (valueTimestamp > getLargestTimestampForKeyStripe(prefix, key)) {
-                            return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, -1, false, -1);
+                            return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1);
                         } else {
-                            return indexStream.stream(prefix, key, value, valueTimestamp, valueTombstone);
+                            return indexStream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
                         }
                     }),
                 stream);

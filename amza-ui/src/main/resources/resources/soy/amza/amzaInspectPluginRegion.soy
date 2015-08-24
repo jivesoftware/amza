@@ -115,6 +115,7 @@
                             <th>Key</th>
                             <th>Value</th>
                             <th>Timestamp</th>
+                            <th>Version</th>
                             <th>Tombstone</th>
                         </tr>
                     </thead>
@@ -137,6 +138,10 @@
                                     <td>
                                         <p>{$r.timestampAsHex?:''}</p>
                                         <p>{$r.timestamp?:''}</p>
+                                    </td>
+                                    <td>
+                                        <p>{$r.versionAsHex?:''}</p>
+                                        <p>{$r.version?:''}</p>
                                     </td>
                                     <td>{$r.tombstone?:''}</td>
                                 </tr>

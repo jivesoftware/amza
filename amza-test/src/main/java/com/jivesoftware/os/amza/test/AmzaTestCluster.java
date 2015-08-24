@@ -348,7 +348,7 @@ public class AmzaTestCluster {
 
             List<byte[]> got = new ArrayList<>();
             clientProvider.getClient(partitionName).get(Consistency.none, prefix, stream -> stream.stream(key),
-                (_prefix, _key, value, timestamp) -> {
+                (_prefix, _key, value, timestamp, version) -> {
                     got.add(value);
                     return true;
                 });
@@ -462,22 +462,25 @@ public class AmzaTestCluster {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
             a.scan(Consistency.leader, null, null, null, null,
-                (prefix, key, aValue, aTimestamp) -> {
+                (prefix, key, aValue, aTimestamp, aVersion) -> {
                     try {
                         compared.increment();
                         long[] btimestamp = new long[1];
                         byte[][] bvalue = new byte[1][];
+                        long[] bversion = new long[1];
                         b.get(Consistency.leader, prefix, stream -> stream.stream(key),
-                            (_prefix, _key, value, timestamp, tombstoned) -> {
+                            (_prefix, _key, value, timestamp, tombstoned, version) -> {
                                 if (timestamp != -1 && !tombstoned) {
                                     btimestamp[0] = timestamp;
                                     bvalue[0] = value;
+                                    bversion[0] = version;
                                 }
                                 return true;
                             });
 
                         long bTimetamp = btimestamp[0];
                         byte[] bValue = bvalue[0];
+                        long bVersion = bversion[0];
                         String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
                         + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
@@ -494,7 +497,14 @@ public class AmzaTestCluster {
                                 + "' \n" + aValue + " vs " + bValue);
                             passed.setValue(false);
                             System.out.println("----------------------------------");
-
+                            return false;
+                        }
+                        if (aVersion != bVersion) {
+                            System.out.println("INCONSISTENCY: " + comparing + " version:'" + aVersion
+                                + "' != '" + bVersion
+                                + "' \n" + aValue + " vs " + bValue);
+                            passed.setValue(false);
+                            System.out.println("----------------------------------");
                             return false;
                         }
                         if (aValue == null && bValue != null) {

@@ -143,7 +143,7 @@ public class AmzaEndpoints {
                     }
                     return true;
                 },
-                (_prefix, _key, value, timestamp, tombstoned) -> {
+                (_prefix, _key, value, timestamp, tombstoned, version) -> {
                     if (timestamp != -1 && !tombstoned) {
                         got.add(value);
                     }

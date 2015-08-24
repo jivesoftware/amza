@@ -105,7 +105,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         input.key.isEmpty() ? null : hexStringToByteArray(input.key),
                         getPrefix(input.toPrefix),
                         input.toKey.isEmpty() ? null : hexStringToByteArray(input.toKey),
-                        (prefix, key, value, timestamp) -> {
+                        (prefix, key, value, timestamp, version) -> {
                             if (offset.decrementAndGet() >= 0) {
                                 return true;
                             }
@@ -120,6 +120,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("timestampAsHex", Long.toHexString(timestamp));
                                 row.put("timestamp", String.valueOf(timestamp));
                                 row.put("tombstone", "false");
+                                row.put("versionAsHex", Long.toHexString(version));
+                                row.put("version", String.valueOf(version));
                                 rows.add(row);
                                 return true;
                             } else {
@@ -141,7 +143,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         input.key.isEmpty() ? null : hexStringToByteArray(input.key),
                         getPrefix(input.toPrefix),
                         input.toKey.isEmpty() ? null : hexStringToByteArray(input.toKey),
-                        (prefix, key, value, timestamp) -> {
+                        (prefix, key, value, timestamp, version) -> {
                             count.incrementAndGet();
                             if (timestamp < min.get()) {
                                 min.set(timestamp);
@@ -167,7 +169,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         long start = System.currentTimeMillis();
                         partition.get(Consistency.none, getPrefix(input.prefix),
                             walKeysFromList(rawKeys),
-                            (prefix, key, value, timestamp, tombstoned) -> {
+                            (prefix, key, value, timestamp, tombstoned, version) -> {
                                 Map<String, String> row = new HashMap<>();
                                 row.put("prefixAsHex", bytesToHex(prefix));
                                 row.put("prefixAsString", prefix != null ? new String(prefix, StandardCharsets.US_ASCII) : "");
@@ -178,6 +180,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("timestampAsHex", Long.toHexString(timestamp));
                                 row.put("timestamp", String.valueOf(timestamp));
                                 row.put("tombstone", String.valueOf(tombstoned));
+                                row.put("versionAsHex", Long.toHexString(version));
+                                row.put("version", String.valueOf(version));
                                 rows.add(row);
                                 return true;
                             });
@@ -199,7 +203,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         //TODO expose to UI
                         partition.commit(Consistency.none, getPrefix(input.prefix), updates, 30_000);
                         partition.get(Consistency.none, getPrefix(input.prefix), walKeysFromList(rawKeys),
-                            (prefix, key, value, timestamp, tombstoned) -> {
+                            (prefix, key, value, timestamp, tombstoned, version) -> {
                                 Map<String, String> row = new HashMap<>();
                                 row.put("prefixAsHex", bytesToHex(prefix));
                                 row.put("prefixAsString", prefix != null ? new String(prefix, StandardCharsets.US_ASCII) : "");
@@ -210,6 +214,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("timestampAsHex", Long.toHexString(timestamp));
                                 row.put("timestamp", String.valueOf(timestamp));
                                 row.put("tombstone", String.valueOf(tombstoned));
+                                row.put("versionAsHex", Long.toHexString(version));
+                                row.put("version", String.valueOf(version));
                                 rows.add(row);
                                 return true;
                             });
@@ -235,7 +241,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             fromRawKeys.get(0),
                             getPrefix(input.toPrefix),
                             toRawKeys.get(0),
-                            (prefix, key, value, timestamp) -> {
+                            (prefix, key, value, timestamp, version) -> {
                                 if (updates.size() >= input.batchSize || !Arrays.equals(lastPrefix[0], prefix)) {
                                     partition.commit(Consistency.none, lastPrefix[0], updates, 30_000);
                                     updates.reset();
@@ -256,7 +262,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         //TODO expose to UI
                         partition.commit(Consistency.none, getPrefix(input.prefix), updates, 30_000);
                         partition.get(Consistency.none, getPrefix(input.prefix), walKeysFromList(fromRawKeys),
-                            (prefix, key, value, timestamp, tombstoned) -> {
+                            (prefix, key, value, timestamp, tombstoned, version) -> {
                                 Map<String, String> row = new HashMap<>();
                                 row.put("prefixAsHex", bytesToHex(prefix));
                                 row.put("prefixAsString", prefix != null ? new String(prefix, StandardCharsets.US_ASCII) : "");
@@ -267,6 +273,8 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("timestampAsHex", Long.toHexString(timestamp));
                                 row.put("timestamp", String.valueOf(timestamp));
                                 row.put("tombstone", String.valueOf(tombstoned));
+                                row.put("versionAsHex", Long.toHexString(version));
+                                row.put("version", String.valueOf(version));
                                 rows.add(row);
                                 return true;
                             });

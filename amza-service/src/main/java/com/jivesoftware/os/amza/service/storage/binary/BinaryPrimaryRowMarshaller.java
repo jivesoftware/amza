@@ -107,7 +107,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
     @Override
     public byte[] valueFromRow(byte[] row) throws Exception {
         HeapFiler filer = new HeapFiler(row);
-        filer.seek(8 + 1);
+        filer.seek(8 + 1 + 8);
         return UIO.readByteArray(filer, "value");
     }
 

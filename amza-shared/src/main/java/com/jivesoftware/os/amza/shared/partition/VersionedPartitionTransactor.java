@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.shared.partition;
 
+import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import java.util.concurrent.Semaphore;
 
@@ -23,28 +23,28 @@ public class VersionedPartitionTransactor {
     }
 
     public <R> R doWithOne(VersionedPartitionName versionedPartitionName,
-        Status status,
+        PartitionState state,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedPartitionName, status, 1, tx);
+        return doWith(versionedPartitionName, state, 1, tx);
     }
 
     public <R> R doWithAll(VersionedPartitionName versionedPartitionName,
-        Status status,
+        PartitionState state,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedPartitionName, status, numPermits, tx);
+        return doWith(versionedPartitionName, state, numPermits, tx);
     }
 
     private <R> R doWith(VersionedPartitionName versionedPartitionName,
-        Status status,
+        PartitionState state,
         int count,
         PartitionTx<R> tx) throws Exception {
 
         Semaphore semaphore = semaphore(versionedPartitionName);
         semaphore.acquire(count);
         try {
-            return tx.tx(versionedPartitionName, status);
+            return tx.tx(versionedPartitionName, state);
         } finally {
             semaphore.release(count);
         }

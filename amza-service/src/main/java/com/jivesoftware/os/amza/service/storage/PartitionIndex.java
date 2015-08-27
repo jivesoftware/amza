@@ -4,7 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
@@ -60,7 +60,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         this.hardFlush = hardFlush;
     }
 
-    public void open(TxPartitionStatus txPartitionState) throws Exception {
+    public void open(TxPartitionState txPartitionState) throws Exception {
 
         PartitionStore partitionIndexStore = get(PartitionCreator.REGION_INDEX);
         get(PartitionCreator.RING_INDEX);
@@ -79,7 +79,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 total.incrementAndGet();
                 openExecutor.submit(() -> {
                     try {
-                        txPartitionState.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+                        txPartitionState.tx(partitionName, (versionedPartitionName, partitionState) -> {
                             if (versionedPartitionName != null) {
                                 get(versionedPartitionName);
                             }

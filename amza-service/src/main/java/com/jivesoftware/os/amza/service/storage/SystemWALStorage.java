@@ -5,8 +5,9 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.PartitionState;
+import com.jivesoftware.os.amza.api.partition.TxPartitionState;
+import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -61,7 +62,7 @@ public class SystemWALStorage {
         }
         if (!changed.getApply().isEmpty()) {
             //LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
-            updated.updated(versionedPartitionName, Status.ONLINE, changed.getLargestCommittedTxId());
+            updated.updated(versionedPartitionName, PartitionState.ONLINE, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);
         return changed;
@@ -103,7 +104,7 @@ public class SystemWALStorage {
 
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         PartitionStripe.RowStreamer streamer = rowStream -> partitionStore.takeRowUpdatesSince(transactionId, rowStream);
-        return takeRowUpdates.give(versionedPartitionName, TxPartitionStatus.Status.ONLINE, streamer);
+        return takeRowUpdates.give(versionedPartitionName, PartitionState.ONLINE, streamer);
     }
 
     public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName,
@@ -182,7 +183,7 @@ public class SystemWALStorage {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();
-                tx.tx(versionedPartitionName, Status.ONLINE, highestTxId);
+                tx.tx(versionedPartitionName, PartitionState.ONLINE, highestTxId);
             }
         }
     }

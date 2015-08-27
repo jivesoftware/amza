@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -30,20 +30,20 @@ public class PartitionComposter {
     private final PartitionCreator partitionProvider;
     private final AmzaRingStoreReader amzaRingReader;
     private final PartitionStripeProvider partitionStripeProvider;
-    private final PartitionStatusStorage partitionStatusStorage;
+    private final PartitionStateStorage partitionStateStorage;
 
     public PartitionComposter(AmzaStats amzaStats,
         PartitionIndex partitionIndex,
         PartitionCreator partitionProvider,
         AmzaRingStoreReader amzaRingReader,
-        PartitionStatusStorage partitionMemberStatusStorage,
+        PartitionStateStorage partitionStateStorage,
         PartitionStripeProvider partitionStripeProvider) {
 
         this.amzaStats = amzaStats;
         this.partitionIndex = partitionIndex;
         this.partitionProvider = partitionProvider;
         this.amzaRingReader = amzaRingReader;
-        this.partitionStatusStorage = partitionMemberStatusStorage;
+        this.partitionStateStorage = partitionStateStorage;
         this.partitionStripeProvider = partitionStripeProvider;
     }
 
@@ -68,12 +68,12 @@ public class PartitionComposter {
 
     public void compost() throws Exception {
         List<VersionedPartitionName> composted = new ArrayList<>();
-        partitionStatusStorage.streamLocalState((partitionName, ringMember, versionedStatus) -> {
-            if (versionedStatus.status == Status.EXPUNGE) {
+        partitionStateStorage.streamLocalState((partitionName, ringMember, versionedState) -> {
+            if (versionedState.state == PartitionState.EXPUNGE) {
                 try {
-                    amzaStats.beginCompaction("Expunge " + partitionName + " " + versionedStatus);
+                    amzaStats.beginCompaction("Expunge " + partitionName + " " + versionedState);
                     partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, versionedStatus.version);
+                        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.version);
                         if (stripe.expungePartition(versionedPartitionName)) {
                             partitionIndex.remove(versionedPartitionName);
                             highwaterStorage.expunge(versionedPartitionName);
@@ -83,15 +83,15 @@ public class PartitionComposter {
                         return null;
                     });
                 } finally {
-                    amzaStats.endCompaction("Expunge " + partitionName + " " + versionedStatus);
+                    amzaStats.endCompaction("Expunge " + partitionName + " " + versionedState);
                 }
 
             } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName()) || !partitionProvider.hasPartition(partitionName)) {
-                partitionStatusStorage.markForDisposal(new VersionedPartitionName(partitionName, versionedStatus.version), ringMember);
+                partitionStateStorage.markForDisposal(new VersionedPartitionName(partitionName, versionedState.version), ringMember);
             }
             return true;
         });
-        partitionStatusStorage.expunged(composted);
+        partitionStateStorage.expunged(composted);
 
     }
 

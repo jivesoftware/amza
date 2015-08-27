@@ -3,10 +3,10 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.PartitionState;
+import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -133,7 +133,7 @@ public class DeltaStripeWALStorage {
         }
     }
 
-    public void load(TxPartitionStatus txPartitionStatus,
+    public void load(TxPartitionState txPartitionState,
         PartitionIndex partitionIndex,
         PrimaryRowMarshaller<byte[]> primaryRowMarshaller) throws Exception {
 
@@ -150,9 +150,7 @@ public class DeltaStripeWALStorage {
                         mergeDelta(partitionIndex, deltaWAL.get(), () -> wal);
                     }
                     deltaWAL.set(wal);
-                    WALKey.decompose(
-                        (WALKey.TxFpRawKeyValueEntries<VersionedPartitionName>) txRawKeyEntryStream -> primaryRowMarshaller.fromRows(
-                            txFpRowStream -> {
+                    WALKey.decompose((WALKey.TxFpRawKeyValueEntries<VersionedPartitionName>) txRawKeyEntryStream -> primaryRowMarshaller.fromRows(txFpRowStream -> {
                                 wal.load((rowFP, rowTxId, rowType, rawRow) -> {
                                     if (rowType == RowType.primary) {
                                         if (!txFpRowStream.stream(rowTxId, rowFP, rawRow)) {
@@ -165,8 +163,8 @@ public class DeltaStripeWALStorage {
                             },
                             (rowTxId, rowFP, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                                 VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix);
-                                VersionedStatus localStatus = txPartitionStatus.getLocalStatus(versionedPartitionName.getPartitionName());
-                                if (localStatus != null && localStatus.version == versionedPartitionName.getPartitionVersion()) {
+                                VersionedState localState = txPartitionState.getLocalState(versionedPartitionName.getPartitionName());
+                                if (localState != null && localState.version == versionedPartitionName.getPartitionVersion()) {
                                     return txRawKeyEntryStream.stream(rowTxId, rowFP, key,
                                         value, valueTimestamp, valueTombstoned, valueVersion, versionedPartitionName);
                                 }
@@ -341,7 +339,7 @@ public class DeltaStripeWALStorage {
 
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
-        Status partitionStatus,
+        PartitionState partitionState,
         WALStorage storage,
         byte[] prefix,
         Commitable updates,
@@ -438,7 +436,7 @@ public class DeltaStripeWALStorage {
                         clobbers,
                         updateApplied.txId);
                 }
-                updated.updated(versionedPartitionName, partitionStatus, updateApplied.txId);
+                updated.updated(versionedPartitionName, partitionState, updateApplied.txId);
             }
 
             long unmergedUpdates = updateSinceLastMerge.addAndGet(apply.size());

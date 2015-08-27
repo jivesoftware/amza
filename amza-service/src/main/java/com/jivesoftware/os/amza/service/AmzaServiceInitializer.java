@@ -20,11 +20,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.partition.VersionedState;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
-import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
@@ -32,9 +33,9 @@ import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
 import com.jivesoftware.os.amza.service.replication.StripedPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.SystemPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
-import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
@@ -45,7 +46,6 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
@@ -83,7 +83,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = new String[]{"./var/data/"};
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -149,8 +149,8 @@ public class AmzaServiceInitializer {
         ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
         AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
 
-        WALUpdated walUpdated = (versionedPartitionName, status, txId) -> {
-            takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), status, txId);
+        WALUpdated walUpdated = (versionedPartitionName, state, txId) -> {
+            takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), state, txId);
         };
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
@@ -192,7 +192,7 @@ public class AmzaServiceInitializer {
             }
         }
 
-        PartitionStatusStorage partitionStatusStorage = new PartitionStatusStorage(orderIdProvider,
+        PartitionStateStorage partitionStateStorage = new PartitionStateStorage(orderIdProvider,
             ringMember,
             systemWALStorage,
             walUpdated,
@@ -202,17 +202,17 @@ public class AmzaServiceInitializer {
             stripeVersion,
             config.awaitOnlineStripingLevel);
 
-        amzaPartitionWatcher.watch(PartitionCreator.REGION_ONLINE_INDEX.getPartitionName(), partitionStatusStorage);
+        amzaPartitionWatcher.watch(PartitionCreator.REGION_ONLINE_INDEX.getPartitionName(), partitionStateStorage);
 
-        partitionIndex.open(partitionStatusStorage);
+        partitionIndex.open(partitionStateStorage);
         // cold start
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            VersionedStatus status = partitionStatusStorage.getLocalStatus(versionedPartitionName.getPartitionName());
-            if (status != null && status.version == versionedPartitionName.getPartitionVersion()) {
-                takeCoordinator.updated(amzaRingReader, versionedPartitionName, status.status, partitionStore.highestTxId());
+            VersionedState state = partitionStateStorage.getLocalState(versionedPartitionName.getPartitionName());
+            if (state != null && state.version == versionedPartitionName.getPartitionVersion()) {
+                takeCoordinator.updated(amzaRingReader, versionedPartitionName, state.state, partitionStore.highestTxId());
             } else {
-                LOG.warn("Status:{} wasn't aligned with versioned partition:{}", status, versionedPartitionName);
+                LOG.warn("State:{} wasn't aligned with versioned partition:{}", state, versionedPartitionName);
             }
         }
 
@@ -237,7 +237,7 @@ public class AmzaServiceInitializer {
                 deltaWALFactory,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
-            partitionStripes[i] = new PartitionStripe("stripe-" + i, partitionIndex, deltaWALStorage, partitionStatusStorage, amzaPartitionWatcher,
+            partitionStripes[i] = new PartitionStripe("stripe-" + i, partitionIndex, deltaWALStorage, partitionStateStorage, amzaPartitionWatcher,
                 primaryRowMarshaller, highwaterRowMarshaller,
                 (versionedPartitionName) -> {
                     if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
@@ -260,8 +260,8 @@ public class AmzaServiceInitializer {
             walUpdated,
             allRowChanges);
 
-        HighestPartitionTx takeHighestPartitionTx = (versionedPartitionName, partitionStatus, highestTxId)
-            -> takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionStatus, highestTxId);
+        HighestPartitionTx takeHighestPartitionTx = (versionedPartitionName, partitionState, highestTxId)
+            -> takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionState, highestTxId);
 
         systemWALStorage.highestPartitionTxIds(takeHighestPartitionTx);
 
@@ -322,7 +322,7 @@ public class AmzaServiceInitializer {
             systemHighwaterStorage,
             partitionIndex,
             partitionStripeProvider,
-            partitionStatusStorage,
+            partitionStateStorage,
             availableRowsTaker,
             new SystemPartitionCommitChanges(systemWALStorage, systemHighwaterStorage, walUpdated),
             new StripedPartitionCommitChanges(partitionStripeProvider, config.hardFsync, walUpdated),
@@ -337,7 +337,7 @@ public class AmzaServiceInitializer {
             config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
-        PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionProvider, amzaRingReader, partitionStatusStorage,
+        PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionProvider, amzaRingReader, partitionStateStorage,
             partitionStripeProvider);
 
         AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
@@ -350,7 +350,7 @@ public class AmzaServiceInitializer {
             systemWALStorage,
             systemHighwaterStorage,
             takeCoordinator,
-            partitionStatusStorage,
+            partitionStateStorage,
             changeTaker,
             partitionCompactor,
             partitionComposter, // its all about being GREEN!!

@@ -1,29 +1,29 @@
 package com.jivesoftware.os.amza.shared.partition;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.partition.PartitionState;
+import com.jivesoftware.os.amza.api.partition.VersionedState;
 import java.util.Objects;
 
 /**
  *
  * @author jonathan.colt
  */
-public class RemoteVersionedStatus {
+public class RemoteVersionedState {
 
-    public final TxPartitionStatus.Status status;
+    public final PartitionState state;
     public final long version;
 
-    public RemoteVersionedStatus(TxPartitionStatus.Status status, long version) {
-        Preconditions.checkNotNull(status, "Status cannot be null");
-        this.status = status;
+    public RemoteVersionedState(PartitionState state, long version) {
+        Preconditions.checkNotNull(state, "State cannot be null");
+        this.state = state;
         this.version = version;
     }
 
     @Override
     public int hashCode() {
         int hash = 3;
-        hash = 89 * hash + Objects.hashCode(this.status);
+        hash = 89 * hash + Objects.hashCode(this.state);
         hash = 89 * hash + (int) (this.version ^ (this.version >>> 32));
         return hash;
     }
@@ -36,8 +36,8 @@ public class RemoteVersionedStatus {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final VersionedStatus other = (VersionedStatus) obj;
-        if (this.status != other.status) {
+        final VersionedState other = (VersionedState) obj;
+        if (this.state != other.state) {
             return false;
         }
         if (this.version != other.version) {
@@ -48,7 +48,7 @@ public class RemoteVersionedStatus {
 
     @Override
     public String toString() {
-        return "RemoteVersionedStatus{" + "status=" + status + ", version=" + version + '}';
+        return "RemoteVersionedState{" + "state=" + state + ", version=" + version + '}';
     }
 
 }

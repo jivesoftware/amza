@@ -15,10 +15,10 @@
  */
 package com.jivesoftware.os.amza.shared.take;
 
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 
 public interface AvailableRowsTaker {
 
@@ -31,7 +31,7 @@ public interface AvailableRowsTaker {
 
     interface AvailableStream {
 
-        void available(VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception;
+        void available(VersionedPartitionName versionedPartitionName, PartitionState state, long txId) throws Exception;
     }
 
 }

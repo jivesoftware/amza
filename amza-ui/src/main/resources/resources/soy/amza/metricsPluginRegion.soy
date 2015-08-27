@@ -50,7 +50,7 @@
                         <th><span class="glyphicon glyphicon-upload"></span>{sp}Took</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Took Applied</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Version</th>
-                        <th><span class="glyphicon glyphicon-import"></span>{sp}Status</th>
+                        <th><span class="glyphicon glyphicon-import"></span>{sp}State</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Highest TxId</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Highwaters</th>
                     </tr>
@@ -91,7 +91,7 @@
                             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
                             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
                             <td>{$r.version}</td>
-                            <td>{$r.status}</td>
+                            <td>{$r.state}</td>
                             <td>{$r.highestTxId}</td>
                             <td>{$r.highwaters|noAutoescape}</td>
                         </tr>

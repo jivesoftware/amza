@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.shared.take;
 
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus.Status;
+import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -66,19 +66,19 @@ public class TakeRingCoordinator {
         }
     }
 
-    void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception {
+    void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, PartitionState state, long txId) throws Exception {
         VersionedRing ring = ensureVersionedRing(neighbors);
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName,
             key -> new TakeVersionedPartitionCoordinator(versionedPartitionName,
                 timestampedOrderIdProvider,
-                status,
+                state,
                 new AtomicLong(txId),
                 slowTakeInMillis,
                 idPacker.pack(slowTakeInMillis, 0, 0), //TODO need orderIdProvider.deltaMillisToIds()
                 systemReofferDeltaMillis,
                 reofferDeltaMillis));
         PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-        coordinator.updateTxId(ring, status, txId, properties.takeFromFactor);
+        coordinator.updateTxId(ring, state, txId, properties.takeFromFactor);
     }
 
     long availableRowsStream(RingMember ringMember, long takeSessionId, AvailableStream availableStream) throws Exception {

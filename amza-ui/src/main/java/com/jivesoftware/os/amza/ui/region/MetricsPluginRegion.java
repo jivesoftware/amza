@@ -4,20 +4,20 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.TxPartitionStatus;
+import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.partition.VersionedState;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.api.ring.RingHost;
-import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.Partition;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
@@ -290,23 +290,23 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("count", "disabled");
             }
 
-            partition.highestTxId((VersionedPartitionName versionedPartitionName, TxPartitionStatus.Status partitionStatus, long highestTxId) -> {
+            partition.highestTxId((VersionedPartitionName versionedPartitionName, PartitionState partitionState, long highestTxId) -> {
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                map.put("status", partitionStatus.name());
+                map.put("state", partitionState.name());
                 map.put("highestTxId", Long.toHexString(highestTxId));
             });
 
-            PartitionStatusStorage partitionStatusStorage = amzaService.getPartitionStatusStorage();
-            VersionedStatus localStatus = partitionStatusStorage.getLocalStatus(name);
+            PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
+            VersionedState localState = partitionStateStorage.getLocalState(name);
 
             if (name.isSystemPartition()) {
                 HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localStatus.version));
+                WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localState.version));
                 map.put("highwaters", renderHighwaters(partitionHighwater));
             } else {
                 PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
                 partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localStatus.version));
+                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localState.version));
                     map.put("highwaters", renderHighwaters(partitionHighwater));
                     return null;
                 });

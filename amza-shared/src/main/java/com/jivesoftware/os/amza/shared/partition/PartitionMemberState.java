@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.jivesoftware.os.amza.shared.ring;
+package com.jivesoftware.os.amza.shared.partition;
 
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import java.util.ArrayList;
@@ -24,29 +24,29 @@ import java.util.Objects;
  *
  * @author jonathan.colt
  */
-public class RingMemberState implements Comparable<RingMemberState> {
+public class PartitionMemberState implements Comparable<PartitionMemberState> {
 
     private final RingMember ringMember;
     private final State desired;
     private final State current;
 
-    public RingMemberState(RingMember ringMember, State desired, State current) {
+    public PartitionMemberState(RingMember ringMember, State desired, State current) {
         this.ringMember = ringMember;
         this.desired = desired;
         this.current = current;
     }
 
     @Override
-    public int compareTo(RingMemberState o) {
+    public int compareTo(PartitionMemberState o) {
         return ringMember.compareTo(o.ringMember);
     }
 
-    public static List<RingMemberState> progress(RingMember ringMember, List<RingMemberState> ringStates) {
-        List<RingMemberState> progress = new ArrayList<>(ringStates.size());
-        for (RingMemberState ringState : ringStates) {
+    public static List<PartitionMemberState> progress(RingMember ringMember, List<PartitionMemberState> ringStates) {
+        List<PartitionMemberState> progress = new ArrayList<>(ringStates.size());
+        for (PartitionMemberState ringState : ringStates) {
             if (ringState.ringMember.equals(ringMember)) {
                 State desired = ringState.desired;
-                RingMemberState transition = ringState.current.node.transition(ringMember, desired, ringStates);
+                PartitionMemberState transition = ringState.current.node.transition(ringMember, desired, ringStates);
                 if (transition != null) {
                     progress.add(transition);
                 }
@@ -74,7 +74,7 @@ public class RingMemberState implements Comparable<RingMemberState> {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        final RingMemberState other = (RingMemberState) obj;
+        final PartitionMemberState other = (PartitionMemberState) obj;
         if (!Objects.equals(this.ringMember, other.ringMember)) {
             return false;
         }
@@ -89,12 +89,11 @@ public class RingMemberState implements Comparable<RingMemberState> {
 
     public static enum State {
 
-        offline(false, new Offline()),
+        ketchup(false, new Ketchup()),
         elect_leader(true, new ElectLeader()),
         writable_leader(true, new WritableLeader()),
         writable_follower(false, new WritableFollower()),
         read_only(false, new ReadOnly());
-        
 
         Node node;
         boolean leadershipTrack;
@@ -106,32 +105,60 @@ public class RingMemberState implements Comparable<RingMemberState> {
 
     }
 
+    /*
+     // TODO include expunged
+     t=   1         2        3a 3b      4            5         6            7        8          9            10        11
+
+     ACTUAL
+
+     1.  ketchup          > leader     > demoted              > follower                     > ketchup              > follower
+     2.  ketchup                       > nominated  > leader                      > demoted                         > follower
+     3.  ketchup          > follower   > ketchup              > follower                     > nominated  > leader
+
+     DESIRED
+
+     1.          > (1)leader
+     .             (2)follower
+     .             (3)follower
+
+     2.                      > (1)follower
+     .                         (2)leader
+     .                         (3)follower
+
+     3.                                                                  > (1)follower
+     .                                                                     (2)follower
+     .                                                                     (3)leader
+
+     */
+
+
+    
     // Offline -> ElectLeader -> BecomeLeader
-    static class Offline implements Node {
+    static class Ketchup implements Node {
 
         @Override
-        public RingMemberState transition(RingMember ringMember, State desired, List<RingMemberState> ringStates) {
-            if (desired == State.offline) {
-                for (RingMemberState ringState : ringStates) {
+        public PartitionMemberState transition(RingMember ringMember, State desired, List<PartitionMemberState> ringStates) {
+            if (desired == State.ketchup) {
+                for (PartitionMemberState ringState : ringStates) {
                     if (ringState.desired.leadershipTrack) {
-                        return new RingMemberState(ringMember, State.writable_follower, State.offline);
+                        return new PartitionMemberState(ringMember, State.writable_follower, State.ketchup);
                     }
                 }
-                return new RingMemberState(ringMember, State.writable_leader, State.elect_leader);
+                return new PartitionMemberState(ringMember, State.writable_leader, State.elect_leader);
             } else if (desired.leadershipTrack) {
-                for (RingMemberState ringState : ringStates) {
+                for (PartitionMemberState ringState : ringStates) {
                     if (ringState.desired.leadershipTrack && !ringState.ringMember.equals(ringMember)) {
-                        return new RingMemberState(ringMember, State.writable_follower, State.offline);
+                        return new PartitionMemberState(ringMember, State.writable_follower, State.ketchup);
                     }
                 }
-                return new RingMemberState(ringMember, State.writable_leader, State.elect_leader);
+                return new PartitionMemberState(ringMember, State.writable_leader, State.elect_leader);
             } else {
-                for (RingMemberState ringState : ringStates) {
+                for (PartitionMemberState ringState : ringStates) {
                     if (ringState.desired == State.writable_leader && ringState.current == State.writable_leader) {
-                        return new RingMemberState(ringMember, State.writable_follower, State.writable_follower);
+                        return new PartitionMemberState(ringMember, State.writable_follower, State.writable_follower);
                     }
                 }
-                return new RingMemberState(ringMember, State.writable_follower, State.offline);
+                return new PartitionMemberState(ringMember, State.writable_follower, State.ketchup);
             }
         }
     }
@@ -139,51 +166,48 @@ public class RingMemberState implements Comparable<RingMemberState> {
     static class ElectLeader implements Node {
 
         @Override
-        public RingMemberState transition(RingMember ringMember, State desired, List<RingMemberState> ringStates) {
+        public PartitionMemberState transition(RingMember ringMember, State desired, List<PartitionMemberState> ringStates) {
             if (desired == State.writable_leader) {
-                for (RingMemberState ringState : ringStates) {
+                for (PartitionMemberState ringState : ringStates) {
                     if (ringState.desired.leadershipTrack) {
-                        return new RingMemberState(ringMember, State.writable_follower, State.offline);
+                        return new PartitionMemberState(ringMember, State.writable_follower, State.ketchup);
                     }
                 }
-                return new RingMemberState(ringMember, State.writable_leader, State.elect_leader);
+                return new PartitionMemberState(ringMember, State.writable_leader, State.elect_leader);
             }
             return null;
         }
 
     }
-    
+
     static class WritableLeader implements Node {
 
         @Override
-        public RingMemberState transition(RingMember ringMember, State desired, List<RingMemberState> ringStates) {
+        public PartitionMemberState transition(RingMember ringMember, State desired, List<PartitionMemberState> ringStates) {
             return null;
         }
 
     }
-    
+
     static class WritableFollower implements Node {
 
         @Override
-        public RingMemberState transition(RingMember ringMember, State desired, List<RingMemberState> ringStates) {
+        public PartitionMemberState transition(RingMember ringMember, State desired, List<PartitionMemberState> ringStates) {
             return null;
         }
     }
-
 
     static class ReadOnly implements Node {
 
         @Override
-        public RingMemberState transition(RingMember ringMember, State desired, List<RingMemberState> ringStates) {
+        public PartitionMemberState transition(RingMember ringMember, State desired, List<PartitionMemberState> ringStates) {
             return null;
         }
     }
 
-
-
     static interface Node {
 
-        RingMemberState transition(RingMember ringMember, State desired, List<RingMemberState> ringStates);
+        PartitionMemberState transition(RingMember ringMember, State desired, List<PartitionMemberState> ringStates);
     }
 
 }

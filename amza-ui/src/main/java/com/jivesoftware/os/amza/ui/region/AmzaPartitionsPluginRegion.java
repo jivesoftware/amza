@@ -3,18 +3,18 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedStatus;
+import com.jivesoftware.os.amza.api.partition.VersionedState;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
@@ -105,9 +105,9 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             for (PartitionName partitionName : partitionNames) {
 
                 Map<String, Object> row = new HashMap<>();
-                VersionedStatus status = amzaService.getPartitionStatusStorage().getLocalStatus(partitionName);
-                row.put("status", status == null ? "unknown" : status.status.toString());
-                row.put("version", status == null ? "unknown" : Long.toHexString(status.version));
+                VersionedState state = amzaService.getPartitionStateStorage().getLocalState(partitionName);
+                row.put("state", state == null ? "unknown" : state.state.toString());
+                row.put("version", state == null ? "unknown" : Long.toHexString(state.version));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                 row.put("name", new String(partitionName.getName()));
                 row.put("ringName", new String(partitionName.getRingName()));
@@ -138,9 +138,9 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
                 }
 
-                PartitionStatusStorage partitionStatusStorage = amzaService.getPartitionStatusStorage();
-                VersionedStatus localStatus = partitionStatusStorage.getLocalStatus(partitionName);
-                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, localStatus.version);
+                PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
+                VersionedState localState = partitionStateStorage.getLocalState(partitionName);
+                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, localState.version);
 
                 if (partitionName.isSystemPartition()) {
                     HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();

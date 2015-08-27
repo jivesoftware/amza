@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.testng.annotations.Test;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AquariumNGTest {
@@ -58,7 +57,7 @@ public class AquariumNGTest {
         AquariumNode[] alive = new AquariumNode[aquariumNodeCount];
         Future[] aliveFutures = new Future[aquariumNodeCount];
         for (; running < 5; running++) {
-            aliveFutures[running] = service.scheduleWithFixedDelay(nodes[running], 100, 100, TimeUnit.MILLISECONDS);
+            aliveFutures[running] = service.scheduleWithFixedDelay(nodes[running], 10, 10, TimeUnit.MILLISECONDS);
             ringSize.incrementAndGet();
             alive[running] = nodes[running];
         }
@@ -88,9 +87,45 @@ public class AquariumNGTest {
 
         mode = "Add 5 more nodes...";
         for (; running < nodes.length; running++) {
-            aliveFutures[running] = service.scheduleWithFixedDelay(nodes[running], 100, 100, TimeUnit.MILLISECONDS);
+            aliveFutures[running] = service.scheduleWithFixedDelay(nodes[running], 10, 10, TimeUnit.MILLISECONDS);
             ringSize.incrementAndGet();
             alive[running] = nodes[running];
+            awaitLeader(mode, alive, ringSize);
+        }
+
+        mode = "Force each node to bootstrap...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.bootstrap);
+            awaitLeader(mode, alive, ringSize);
+        }
+
+        mode = "Force each node to inactive...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.inactive);
+            awaitLeader(mode, alive, ringSize);
+        }
+
+        mode = "Force each node to nominated...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.nominated);
+            awaitLeader(mode, alive, ringSize);
+        }
+
+        mode = "Force each node to demoted...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.demoted);
+            awaitLeader(mode, alive, ringSize);
+        }
+
+        mode = "Force each node to follower...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.follower);
+            awaitLeader(mode, alive, ringSize);
+        }
+
+        mode = "Force each node to leader...";
+        for (int i = 0; i < running; i++) {
+            nodes[i].forceCurrentState(State.leader);
             awaitLeader(mode, alive, ringSize);
         }
 
@@ -98,7 +133,7 @@ public class AquariumNGTest {
         nodes[nodes.length - 1].forceDesiredState(State.leader);
         awaitLeader(mode, alive, ringSize);
 
-        mode = "Expundge 5 nodes...";
+        mode = "Expunge 5 nodes...";
         for (int i = 0; i < 5; i++) {
             nodes[i].forceDesiredState(State.expunged);
             nodes[i].awaitDesiredState(State.expunged);
@@ -106,6 +141,16 @@ public class AquariumNGTest {
                 alive[i] = null;
                 ringSize.decrementAndGet();
             }
+            awaitLeader(mode, alive, ringSize);
+        }
+
+        mode = "Re-add 5 nodes...";
+        for (int i = 0; i < 5; i++) {
+            nodes[i].forceDesiredState(State.follower);
+            aliveFutures[i] = service.scheduleWithFixedDelay(nodes[i], 10, 10, TimeUnit.MILLISECONDS);
+            ringSize.incrementAndGet();
+            alive[i] = nodes[i];
+            nodes[i].awaitDesiredState(State.follower);
             awaitLeader(mode, alive, ringSize);
         }
 
@@ -122,8 +167,8 @@ public class AquariumNGTest {
         long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < 2_000_000) {
 
-            int[] follower = {0};
-            int[] leaders = {0};
+            int[] follower = { 0 };
+            int[] leaders = { 0 };
 
             for (AquariumNode node : nodes) {
                 if (node == null) {
@@ -145,9 +190,11 @@ public class AquariumNGTest {
                     }
                     System.out.println(UIO.bytesInt(node.member.getMemeber()) + " " + mode);
                     System.out.println("\tCurrent:" + currentWaterline);
-                    //System.out.println("\t\t" + rawStorage.subMap(new Key(node.member, node.member, CURRENT), false, new Key(node.member, MAX, CURRENT), false));
+                    //System.out.println("\t\t" + rawStorage.subMap(new Key(node.member, node.member, CURRENT), false, new Key(node.member, MAX, CURRENT),
+                    // false));
                     System.out.println("\tDesired:" + desiredWaterline);
-                    //System.out.println("\t\t" + rawStorage.subMap(new Key(node.member, node.member, DESIRED), false, new Key(node.member, MAX, DESIRED), false));
+                    //System.out.println("\t\t" + rawStorage.subMap(new Key(node.member, node.member, DESIRED), false, new Key(node.member, MAX, DESIRED),
+                    // false));
                     return true;
                 });
 
@@ -158,7 +205,7 @@ public class AquariumNGTest {
                 break;
             } else {
                 System.out.println("----------------------------------------");
-                Thread.sleep(1000);
+                Thread.sleep(100);
             }
         }
 
@@ -195,19 +242,30 @@ public class AquariumNGTest {
         }
 
         public void forceDesiredState(State state) throws Exception {
-            readWaterlineTx.tx(ringSize.get(), member, (ReadWaterline current, ReadWaterline desired) -> {
+            readWaterlineTx.tx(ringSize.get(), member, (current, desired) -> {
                 ReadWaterline.Waterline currentWaterline = current.get();
                 if (currentWaterline != null) {
-                    System.out.println("FORCING " + state + ":" + member);
+                    System.out.println("FORCING DESIRED " + state + ":" + member);
                     desiredTransitionQuorum.transition(currentWaterline, orderIdProvider.nextId(), state);
                 }
                 return true;
             });
+        }
 
+        public void forceCurrentState(State state) throws Exception {
+            readWaterlineTx.tx(ringSize.get(), member, (current, desired) -> {
+                ReadWaterline.Waterline currentWaterline = current.get();
+                ReadWaterline.Waterline desiredWaterline = desired.get();
+                if (currentWaterline != null && desiredWaterline != null) {
+                    System.out.println("FORCING CURRENT " + state + ":" + member);
+                    currentTransitionQuorum.transition(currentWaterline, desiredWaterline.getTimestamp(), state);
+                }
+                return true;
+            });
         }
 
         public void awaitDesiredState(State state) throws Exception {
-            boolean[] reachedDesired = {false};
+            boolean[] reachedDesired = { false };
             while (!reachedDesired[0]) {
                 readWaterlineTx.tx(ringSize.get(), member, (ReadWaterline current, ReadWaterline desired) -> {
                     ReadWaterline.Waterline currentWaterline = current.get();

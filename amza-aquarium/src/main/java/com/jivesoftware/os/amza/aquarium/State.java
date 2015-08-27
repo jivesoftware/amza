@@ -17,16 +17,11 @@ public enum State {
 
     Transistor transistor;
 
-    private State(Transistor transistor) {
+    State(Transistor transistor) {
         this.transistor = transistor;
     }
 
-    static interface StateTransistor {
-
-        boolean canChange(State state) throws Exception;
-    }
-
-    static interface Transistor {
+    interface Transistor {
 
         boolean advance(Waterline current,
             ReadWaterline readCurrent,
@@ -213,7 +208,6 @@ public enum State {
 
                 Waterline currentLeader = highest(leader, readCurrent, current);
                 if (desiredLeader.isHasQuorum()
-                    && desiredLeader.getTimestamp() > current.getTimestamp()
                     && desiredLeader.equals(currentLeader)) {
                     return transitionCurrent.transition(current, desired.getTimestamp(), inactive);
                 }
@@ -249,19 +243,14 @@ public enum State {
 
     }
 
-    static boolean recoverOrAwaitingQuorum(Waterline current, Waterline desired, ReadWaterline readDesired, TransitionQuorum transitionDesired) throws
-        Exception {
+    static boolean recoverOrAwaitingQuorum(Waterline current,
+        Waterline desired,
+        ReadWaterline readDesired,
+        TransitionQuorum transitionDesired) throws Exception {
         if (recoverFromLackOfDesired(current, desired, readDesired, transitionDesired)) {
             return true;
         }
         return !current.isHasQuorum() || !desired.isHasQuorum();
-    }
-
-    static class OtherInTransition extends Exception {
-
-        public OtherInTransition(Waterline waterline) {
-            super(waterline.toString());
-        }
     }
 
     static boolean atDesiredState(State state, Waterline current, Waterline desired) {

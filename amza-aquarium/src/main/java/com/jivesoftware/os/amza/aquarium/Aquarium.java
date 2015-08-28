@@ -34,7 +34,7 @@ public class Aquarium {
 
             ReadWaterline.Waterline currentWaterline = current.get();
             if (currentWaterline == null) {
-                currentWaterline = new ReadWaterline.Waterline(member, State.bootstrap, versionProvider.nextId(), true);
+                currentWaterline = new ReadWaterline.Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true, Long.MAX_VALUE);
             }
             ReadWaterline.Waterline desiredWaterline = desired.get();
             currentWaterline.getState().transistor.advance(currentWaterline,

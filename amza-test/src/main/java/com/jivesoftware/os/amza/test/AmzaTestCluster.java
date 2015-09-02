@@ -392,6 +392,28 @@ public class AmzaTestCluster {
             }
         }
 
+        public boolean isEmpty() throws Exception {
+            Set<PartitionName> allAPartitions = amzaService.getPartitionNames();
+            if (allAPartitions.isEmpty()) {
+                return true;
+            }
+
+            for (PartitionName partitionName : allAPartitions) {
+                if (!partitionName.isSystemPartition()) {
+                    Partition partition = amzaService.getPartition(partitionName);
+                    int[] count = {0};
+                    partition.scan(Consistency.none, null, null, null, null, (prefix, key, value, timestamp, version) -> {
+                        count[0]++;
+                        return true;
+                    });
+                    if (count[0] > 0) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
         public boolean compare(AmzaNode service) throws Exception {
             if (off || service.off) {
                 return true;

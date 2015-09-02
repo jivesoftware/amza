@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.aquarium;
 import com.google.common.collect.Sets;
 import java.lang.reflect.Array;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jonathan.colt
@@ -11,34 +10,27 @@ import java.util.concurrent.atomic.AtomicLong;
 public class ReadWaterline<T> {
 
     private final StateStorage<T> stateStorage;
-    private final LivelinessStorage livelinessStorage;
+    private final Liveliness liveliness;
     private final MemberLifecycle<T> memberLifecycle;
-    private final RingSize ringSize;
+    private final AtQuorum atQuorum;
     private final Member member;
-    private final long deadAfterMillis;
     private final Class<T> lifecycleType;
-
-    private final AtomicLong firstLivelinessTimestamp = new AtomicLong(-1);
-
+    
     public ReadWaterline(StateStorage<T> stateStorage,
-        LivelinessStorage livelinessStorage,
+        Liveliness liveliness,
         MemberLifecycle<T> memberLifecycle,
-        RingSize ringSize,
+        AtQuorum atQuorum,
         Member member,
-        long deadAfterMillis, Class<T> lifecycleType) {
+        Class<T> lifecycleType) {
         this.stateStorage = stateStorage;
-        this.livelinessStorage = livelinessStorage;
+        this.liveliness = liveliness;
         this.memberLifecycle = memberLifecycle;
-        this.ringSize = ringSize;
+        this.atQuorum = atQuorum;
         this.member = member;
-        this.deadAfterMillis = deadAfterMillis;
         this.lifecycleType = lifecycleType;
     }
 
-    private boolean atQuorum(int acked) throws Exception {
-        return acked > ringSize.get() / 2;
-    }
-
+    
     public Waterline get() throws Exception {
         TimestampedState[] current = new TimestampedState[1];
         Set<Member> acked = Sets.newHashSet();
@@ -55,62 +47,17 @@ public class ReadWaterline<T> {
             return true;
         });
         if (current[0] != null) {
-            boolean atQuorum = atQuorum(acked.size());
             return new Waterline(member,
                 current[0].state,
                 current[0].timestamp,
                 current[0].version,
-                atQuorum,
-                aliveUntilTimestamp());
+                atQuorum.is(acked.size()),
+                liveliness.aliveUntilTimestamp());
         } else {
             return null;
         }
     }
 
-    private long aliveUntilTimestamp() throws Exception {
-        if (deadAfterMillis <= 0) {
-            return Long.MAX_VALUE;
-        }
-
-        long[] currentTimestamp = { -1L };
-        long[] latestAck = { -1 };
-        Set<Member> acked = Sets.newHashSet();
-        livelinessStorage.scan(member, null, (rootRingMember, isSelf, ackRingMember, timestamp, version) -> {
-            if (currentTimestamp[0] == -1L && isSelf) {
-                currentTimestamp[0] = timestamp;
-                acked.add(ackRingMember);
-            } else if (currentTimestamp[0] != -1L) {
-                if (timestamp >= (currentTimestamp[0] - deadAfterMillis)) {
-                    latestAck[0] = Math.max(latestAck[0], timestamp);
-                    acked.add(ackRingMember);
-                }
-            }
-            return true;
-        });
-
-        boolean atQuorum = atQuorum(acked.size());
-        if (currentTimestamp[0] != -1L && atQuorum) {
-            return latestAck[0] + deadAfterMillis;
-        }
-        return -1;
-    }
-
-    private long otherAliveUntilTimestamp(Member other) throws Exception {
-        if (deadAfterMillis <= 0) {
-            return Long.MAX_VALUE;
-        }
-
-        long firstTimestamp = firstLivelinessTimestamp.get();
-        if (firstTimestamp < 0) {
-            return Long.MAX_VALUE;
-        }
-
-        long timestamp = livelinessStorage.get(member, other);
-        if (timestamp > 0) {
-            return timestamp + deadAfterMillis;
-        }
-        return firstTimestamp + deadAfterMillis;
-    }
 
     public void getOthers(StreamQuorumState stream) throws Exception {
         Member[] otherMember = new Member[1];
@@ -120,13 +67,13 @@ public class ReadWaterline<T> {
         Set<Member> acked = Sets.newHashSet();
         stateStorage.scan(null, null, null, (rootMember, isSelf, ackMember, rootLifecycle, state, timestamp, version) -> {
             if (otherMember[0] != null && !otherMember[0].equals(rootMember)) {
-                boolean otherHasQuorum = atQuorum(acked.size());
+                boolean otherHasQuorum = atQuorum.is(acked.size());
                 stream.stream(new Waterline(otherMember[0],
                     otherState[0].state,
                     otherState[0].timestamp,
                     otherState[0].version,
                     otherHasQuorum,
-                    otherAliveUntilTimestamp(otherMember[0])));
+                    liveliness.otherAliveUntilTimestamp(otherMember[0])));
 
                 otherMember[0] = null;
                 otherState[0] = null;
@@ -151,13 +98,13 @@ public class ReadWaterline<T> {
         });
 
         if (otherMember[0] != null) {
-            boolean otherHasQuorum = atQuorum(acked.size());
+            boolean otherHasQuorum = atQuorum.is(acked.size());
             stream.stream(new Waterline(otherMember[0],
                 otherState[0].state,
                 otherState[0].timestamp,
                 otherState[0].version,
                 otherHasQuorum,
-                otherAliveUntilTimestamp(otherMember[0])));
+                liveliness.otherAliveUntilTimestamp(otherMember[0])));
         }
     }
 

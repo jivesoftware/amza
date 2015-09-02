@@ -41,8 +41,8 @@ public class Waterline {
         return atQuorum;
     }
 
-    public boolean isAlive() {
-        return System.currentTimeMillis() <= aliveUntilTimestamp;
+    public boolean isAlive(long currentTimeMillis) {
+        return currentTimeMillis <= aliveUntilTimestamp;
     }
 
     @Override

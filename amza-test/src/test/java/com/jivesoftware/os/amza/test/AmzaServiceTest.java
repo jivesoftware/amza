@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.test;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import junit.framework.Assert;
 import org.testng.annotations.Test;
 
 public class AmzaServiceTest {
@@ -154,6 +155,11 @@ public class AmzaServiceTest {
         for (AmzaNode a : cluster.getAllNodes()) {
             a.stop();
         }
+
+        for (AmzaNode a : cluster.getAllNodes()) {
+            Assert.assertFalse(a.isEmpty());
+        }
+
         System.out.println("\n------PASSED :) ---------");
 
     }

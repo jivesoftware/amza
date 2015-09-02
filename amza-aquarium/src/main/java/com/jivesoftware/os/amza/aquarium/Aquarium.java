@@ -8,6 +8,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 public class Aquarium {
 
     private final OrderIdProvider versionProvider;
+    private final CurrentTimeMillis currentTimeMillis;
     private final ReadWaterlineTx waterlineTx;
     private final Liveliness liveliness;
     private final TransitionQuorum transitionCurrent;
@@ -15,11 +16,13 @@ public class Aquarium {
     private final Member member;
 
     public Aquarium(OrderIdProvider versionProvider,
+        CurrentTimeMillis currentTimeMillis,
         ReadWaterlineTx waterlineTx,
         Liveliness liveliness, TransitionQuorum transitionCurrent,
         TransitionQuorum transitionDesired,
         Member member) {
         this.versionProvider = versionProvider;
+        this.currentTimeMillis = currentTimeMillis;
         this.waterlineTx = waterlineTx;
         this.liveliness = liveliness;
         this.transitionCurrent = transitionCurrent;
@@ -28,7 +31,7 @@ public class Aquarium {
     }
 
     public void feedTheFish() throws Exception {
-        liveliness.blowBubbles();
+        liveliness.blowBubbles(currentTimeMillis);
         liveliness.acknowledgeOther();
     }
 
@@ -42,7 +45,7 @@ public class Aquarium {
                 currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true, Long.MAX_VALUE);
             }
             Waterline desiredWaterline = desired.get();
-            currentWaterline.getState().transistor.advance(currentWaterline,
+            currentWaterline.getState().transistor.advance(currentTimeMillis, currentWaterline,
                 current,
                 transitionCurrent,
                 desiredWaterline,
@@ -51,6 +54,34 @@ public class Aquarium {
 
             return true;
         });
+    }
+
+    /**
+
+     @return null, leader or follower
+     */
+    public State livelyEndState() throws Exception { // TODO consider timeout and wait notify bla...
+        State[] state = {null};
+        waterlineTx.tx(member, (current, desired) -> {
+
+            Waterline currentWaterline = current.get();
+            Waterline desiredWaterline = desired.get();
+
+            if (currentWaterline != null
+                && currentWaterline.isAlive(currentTimeMillis.get())
+                && currentWaterline.isAtQuorum()
+                && State.checkEquals(currentTimeMillis, currentWaterline, desiredWaterline)) {
+
+                if (currentWaterline.getState() == State.leader) {
+                    state[0] = State.leader;
+                }
+                if (currentWaterline.getState() == State.follower) {
+                    state[0] = State.follower;
+                }
+            }
+            return true;
+        });
+        return state[0];
     }
 
     public State getState(Member member) throws Exception {

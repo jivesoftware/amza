@@ -297,7 +297,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             });
 
             PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
-            VersionedState localState = partitionStateStorage.getLocalState(name);
+            VersionedState localState = partitionStateStorage.getLocalVersionedState(name);
 
             if (name.isSystemPartition()) {
                 HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();

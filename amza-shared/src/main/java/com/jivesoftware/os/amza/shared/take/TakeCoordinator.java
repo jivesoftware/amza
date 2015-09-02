@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -125,7 +126,7 @@ public class TakeCoordinator {
         }
     }
 
-    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, PartitionState state, long txId) throws Exception {
+    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, State state, long txId) throws Exception {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
@@ -135,7 +136,7 @@ public class TakeCoordinator {
         awakeRemoteTakers(neighbors);
     }
 
-    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, PartitionState state) throws Exception {
+    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, State state) throws Exception {
         updated(ringReader, versionedPartitionName, state, 0);
     }
 

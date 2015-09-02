@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -69,7 +69,7 @@ public class PartitionComposter {
     public void compost() throws Exception {
         List<VersionedPartitionName> composted = new ArrayList<>();
         partitionStateStorage.streamLocalState((partitionName, ringMember, versionedState) -> {
-            if (versionedState.state == PartitionState.EXPUNGE) {
+            if (versionedState.state == State.expunged) {
                 try {
                     amzaStats.beginCompaction("Expunge " + partitionName + " " + versionedState);
                     partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {

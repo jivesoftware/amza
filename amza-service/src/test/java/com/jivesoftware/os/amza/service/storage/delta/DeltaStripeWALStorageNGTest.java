@@ -90,7 +90,7 @@ public class DeltaStripeWALStorageNGTest {
             }
 
             @Override
-            public VersionedState getLocalState(PartitionName partitionName) throws Exception {
+            public VersionedState getLocalVersionedState(PartitionName partitionName) throws Exception {
                 return new VersionedState(PartitionState.ONLINE, 0, 0);
             }
         };

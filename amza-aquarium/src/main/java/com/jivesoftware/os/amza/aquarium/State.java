@@ -1,24 +1,37 @@
 package com.jivesoftware.os.amza.aquarium;
 
-import com.jivesoftware.os.amza.aquarium.ReadWaterline.Waterline;
-
 /**
  *
  */
 public enum State {
 
-    bootstrap(new Bootstrap()),
-    inactive(new Inactive()),
-    nominated(new Nominated()),
-    leader(new Leader()),
-    follower(new Follower()),
-    demoted(new Demoted()),
-    expunged(new Expunged());
+    bootstrap((byte) 1, new Bootstrap()),
+    inactive((byte) 2, new Inactive()),
+    nominated((byte) 3, new Nominated()),
+    leader((byte) 4, new Leader()),
+    follower((byte) 5, new Follower()),
+    demoted((byte) 6, new Demoted()),
+    expunged((byte) 7, new Expunged());
 
     Transistor transistor;
+    byte serializedForm;
 
-    State(Transistor transistor) {
+    State(byte serializedForm, Transistor transistor) {
         this.transistor = transistor;
+        this.serializedForm = serializedForm;
+    }
+
+    public byte getSerializedForm() {
+        return serializedForm;
+    }
+
+    public static State fromSerializedForm(byte serializedForm) {
+        for (State state : values()) {
+            if (state.serializedForm == serializedForm) {
+                return state;
+            }
+        }
+        return null;
     }
 
     interface Transistor {
@@ -276,7 +289,7 @@ public enum State {
             return true;
         }
 
-        if (!leaderIsLively && current.isAlive() && desired.getState() != leader) {
+        if (!leaderIsLively && current.isAlive() && desired.getState() != leader && desired.getState() != expunged) {
             long desiredTimestamp = (desiredLeader != null) ? desiredLeader.getTimestamp() + 1 : desired.getTimestamp();
             transitionDesired.transition(desired, desiredTimestamp, leader);
             return true;
@@ -293,8 +306,8 @@ public enum State {
 
     static Waterline highest(State state, ReadWaterline readWaterline, Waterline me) throws Exception {
         @SuppressWarnings("unchecked")
-        Waterline[] waterline = (Waterline[]) new Waterline[] { null };
-        ReadWaterline.StreamQuorumState stream = (other) -> {
+        Waterline[] waterline = new Waterline[1];
+        StreamQuorumState stream = (other) -> {
             if (other.getState() == state) {
                 if (waterline[0] == null) {
                     waterline[0] = other;

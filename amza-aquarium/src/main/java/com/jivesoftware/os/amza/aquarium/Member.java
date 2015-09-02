@@ -15,7 +15,7 @@ public class Member implements Comparable<Member> {
         this.member = member;
     }
 
-    public byte[] getMemeber() {
+    public byte[] getMember() {
         return member;
     }
 

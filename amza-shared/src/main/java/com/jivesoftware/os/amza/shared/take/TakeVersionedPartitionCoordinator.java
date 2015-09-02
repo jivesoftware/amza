@@ -4,6 +4,7 @@ import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.shared.take.TakeRingCoordinator.VersionedRing;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -25,7 +26,7 @@ public class TakeVersionedPartitionCoordinator {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     final VersionedPartitionName versionedPartitionName;
     final TimestampedOrderIdProvider timestampedOrderIdProvider;
-    final AtomicReference<PartitionState> state;
+    final AtomicReference<State> state;
     final AtomicLong txId;
     final long slowTakeMillis;
     final long slowTakeId;
@@ -36,7 +37,7 @@ public class TakeVersionedPartitionCoordinator {
 
     public TakeVersionedPartitionCoordinator(VersionedPartitionName versionedPartitionName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
-        PartitionState state,
+        State state,
         AtomicLong txId,
         long slowTakeMillis,
         long slowTakeId,
@@ -54,7 +55,7 @@ public class TakeVersionedPartitionCoordinator {
         this.currentCategory = new AtomicInteger(1);
     }
 
-    void updateTxId(VersionedRing versionedRing, PartitionState state, long txId, int takeFromFactor) {
+    void updateTxId(VersionedRing versionedRing, State state, long txId, int takeFromFactor) {
         this.state.set(state);
         if (this.txId.get() < txId) {
             this.txId.set(txId);
@@ -70,11 +71,11 @@ public class TakeVersionedPartitionCoordinator {
         AvailableStream availableStream) throws Exception {
 
         long offerTxId = txId.get();
-        PartitionState currentState = state.get();
+        State currentState = state.get();
         if (takeFromFactor > 0) {
 
             Integer category = versionedRing.getCategory(ringMember);
-            if (state.get() == PartitionState.KETCHUP || (category != null && category <= currentCategory.get())) {
+            if (state.get() == State.bootstrap || (category != null && category <= currentCategory.get())) {
                 AtomicBoolean available = new AtomicBoolean(false);
                 long reofferDelta = ((versionedPartitionName.getPartitionName().isSystemPartition()) ? systemReofferDeltaMillis : reofferDeltaMillis);
                 long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;
@@ -128,8 +129,14 @@ public class TakeVersionedPartitionCoordinator {
         }
     }
 
+    boolean isOnline() {
+        //TODO need super intelligent checkeroos
+        State currentState = this.state.get();
+        return currentState == State.leader || currentState == State.follower;
+    }
+
     void rowsTaken(VersionedRing versionedRing, RingMember remoteRingMember, long localTxId, int takeFromFactor) {
-        if (state.get() == PartitionState.ONLINE) {
+        if (isOnline()) {
             took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
                 if (existingSessionedTxId != null) {
                     return new SessionedTxId(existingSessionedTxId.sessionId,
@@ -158,7 +165,7 @@ public class TakeVersionedPartitionCoordinator {
 
     private void updateCategory(VersionedRing versionedRing, int takeFromFactor) {
 
-        if (state.get() == PartitionState.ONLINE && takeFromFactor > 0) {
+        if (isOnline() && takeFromFactor > 0) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
             long latestTxId = txId.get();
             int fastEnough = 0;

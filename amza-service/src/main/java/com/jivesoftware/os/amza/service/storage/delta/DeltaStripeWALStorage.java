@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.storage.delta;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
-import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
@@ -11,6 +10,7 @@ import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
@@ -163,7 +163,7 @@ public class DeltaStripeWALStorage {
                             },
                             (rowTxId, rowFP, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                                 VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix);
-                                VersionedState localState = txPartitionState.getLocalState(versionedPartitionName.getPartitionName());
+                                VersionedState localState = txPartitionState.getLocalVersionedState(versionedPartitionName.getPartitionName());
                                 if (localState != null && localState.version == versionedPartitionName.getPartitionVersion()) {
                                     return txRawKeyEntryStream.stream(rowTxId, rowFP, key,
                                         value, valueTimestamp, valueTombstoned, valueVersion, versionedPartitionName);
@@ -339,7 +339,7 @@ public class DeltaStripeWALStorage {
 
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
-        PartitionState partitionState,
+        State partitionState,
         WALStorage storage,
         byte[] prefix,
         Commitable updates,

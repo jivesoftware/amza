@@ -19,10 +19,12 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
@@ -30,6 +32,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
+import com.jivesoftware.os.amza.service.replication.StorageVersionProvider;
 import com.jivesoftware.os.amza.service.replication.StripedPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.SystemPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
@@ -45,6 +48,7 @@ import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
+import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -83,7 +87,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[]{"./var/data/"};
+        public String[] workingDirectories = new String[] { "./var/data/" };
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -110,6 +114,8 @@ public class AmzaServiceInitializer {
         public long takeLongPollTimeoutMillis = 10_000;
         public long takeSystemReofferDeltaMillis = 100;
         public long takeReofferDeltaMillis = 1_000;
+
+        public long aquariumLeaderDeadAfterMillis = 10_000;
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
@@ -163,7 +169,7 @@ public class AmzaServiceInitializer {
         PartitionStripeProvider.PartitionStripeFunction stripeFunction = partitionName -> Math.abs(partitionName.hashCode() % deltaStorageStripes);
 
         File[] walDirs = new File[deltaStorageStripes];
-        long[] stripeVersion = new long[deltaStorageStripes];
+        long[] stripeVersions = new long[deltaStorageStripes];
         for (int i = 0; i < deltaStorageStripes; i++) {
             walDirs[i] = new File(config.workingDirectories[i % config.workingDirectories.length], "delta-wal-" + i);
             if (!walDirs[i].exists()) {
@@ -175,16 +181,16 @@ public class AmzaServiceInitializer {
             if (versionFile.exists()) {
                 try (FileInputStream fileInputStream = new FileInputStream(versionFile)) {
                     DataInput input = new DataInputStream(fileInputStream);
-                    stripeVersion[i] = input.readLong();
-                    LOG.info("Loaded stripeVersion:" + stripeVersion[i] + " for stripe:" + i + " from " + versionFile);
+                    stripeVersions[i] = input.readLong();
+                    LOG.info("Loaded stripeVersion:" + stripeVersions[i] + " for stripe:" + i + " from " + versionFile);
                 }
             } else {
                 if (versionFile.createNewFile()) {
                     try (FileOutputStream fileOutputStream = new FileOutputStream(versionFile)) {
                         DataOutput output = new DataOutputStream(fileOutputStream);
-                        stripeVersion[i] = orderIdProvider.nextId();
-                        output.writeLong(stripeVersion[i]);
-                        LOG.info("Created stripeVersion:" + stripeVersion[i] + " for stripe:" + i + " to " + versionFile);
+                        stripeVersions[i] = orderIdProvider.nextId();
+                        output.writeLong(stripeVersions[i]);
+                        LOG.info("Created stripeVersion:" + stripeVersions[i] + " for stripe:" + i + " to " + versionFile);
                     }
                 } else {
                     throw new IllegalStateException("Please check your file permission. " + versionFile.getAbsolutePath());
@@ -192,24 +198,39 @@ public class AmzaServiceInitializer {
             }
         }
 
-        PartitionStateStorage partitionStateStorage = new PartitionStateStorage(orderIdProvider,
+        AwaitNotify<PartitionName> awaitOnline = new AwaitNotify<>(config.awaitOnlineStripingLevel);
+
+        StorageVersionProvider storageVersionProvider = new StorageVersionProvider(orderIdProvider,
             ringMember,
             systemWALStorage,
+            stripeFunction,
+            stripeVersions,
             walUpdated,
+            awaitOnline);
+
+        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(orderIdProvider,
+            amzaRingReader,
+            systemWALStorage,
+            storageVersionProvider,
+            walUpdated,
+            config.aquariumLeaderDeadAfterMillis);
+
+        PartitionStateStorage partitionStateStorage = new PartitionStateStorage(orderIdProvider,
+            ringMember,
+            aquariumProvider,
+            storageVersionProvider,
             amzaRingReader,
             takeCoordinator,
-            stripeFunction,
-            stripeVersion,
-            config.awaitOnlineStripingLevel);
+            awaitOnline);
 
-        amzaPartitionWatcher.watch(PartitionCreator.REGION_ONLINE_INDEX.getPartitionName(), partitionStateStorage);
+        amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), storageVersionProvider);
 
         partitionIndex.open(partitionStateStorage);
         // cold start
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            VersionedState state = partitionStateStorage.getLocalState(versionedPartitionName.getPartitionName());
-            if (state != null && state.version == versionedPartitionName.getPartitionVersion()) {
+            VersionedState state = partitionStateStorage.getLocalVersionedState(versionedPartitionName.getPartitionName());
+            if (state != null && state.storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()) {
                 takeCoordinator.updated(amzaRingReader, versionedPartitionName, state.state, partitionStore.highestTxId());
             } else {
                 LOG.warn("State:{} wasn't aligned with versioned partition:{}", state, versionedPartitionName);

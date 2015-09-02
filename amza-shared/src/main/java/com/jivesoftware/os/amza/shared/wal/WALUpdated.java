@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.aquarium.State;
 
 /**
  *
@@ -9,6 +10,6 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
  */
 public interface WALUpdated {
 
-    void updated(VersionedPartitionName versionedPartitionName, PartitionState state, long txId) throws Exception;
+    void updated(VersionedPartitionName versionedPartitionName, State state, long txId) throws Exception;
 
 }

@@ -15,15 +15,6 @@
     </properties>
     <dependencies>
         <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-api</artifactId>
-            <version>0.127-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-annotations</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
             <scope>test</scope>
@@ -40,14 +31,6 @@
         <dependency>
             <groupId>com.jivesoftware.os.mlogger</groupId>
             <artifactId>core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>net.sf.trove4j</groupId>
-            <artifactId>trove4j</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.filer</groupId>
-            <artifactId>io</artifactId>
         </dependency>
     </dependencies>
     <name>amza-aquarium</name>

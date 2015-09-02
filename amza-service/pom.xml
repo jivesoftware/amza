@@ -37,7 +37,11 @@
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
             <version>0.127-SNAPSHOT</version>
-            <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-aquarium</artifactId>
+            <version>0.127-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>net.sf.trove4j</groupId>

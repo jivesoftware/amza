@@ -16,6 +16,7 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
@@ -114,6 +115,11 @@ public class PartitionStripe {
         return txPartitionState.tx(partitionName, tx);
     }
 
+    boolean isOnline(State state) {
+        //TODO much more intelligent checkeroos
+        return state == State.follower || state == State.leader;
+    }
+
     public RowsChanged commit(HighwaterStorage highwaterStorage,
         PartitionName partitionName,
         Optional<Long> specificVersion,
@@ -124,7 +130,7 @@ public class PartitionStripe {
 
         return txPartitionState.tx(partitionName,
             (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(partitionState == PartitionState.ONLINE || !requiresOnline, "Partition:%s state:%s is not online.",
+                Preconditions.checkState(isOnline(partitionState) || !requiresOnline, "Partition:%s state:%s is not online.",
                     partitionName,
                     partitionState);
                 if (specificVersion.isPresent() && versionedPartitionName.getPartitionVersion() != specificVersion.get()) {
@@ -156,16 +162,13 @@ public class PartitionStripe {
     public boolean get(PartitionName partitionName, byte[] prefix, byte[] key, KeyValueStream keyValueStream) throws Exception {
         return txPartitionState.tx(partitionName,
             (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(partitionState == PartitionState.ONLINE, "Partition:%s state:%s is not online.", partitionName,
-                    partitionState);
+                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + versionedPartitionName);
                 } else {
-                    return storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, (stream) -> {
-                        return stream.stream(key);
-                    }, keyValueStream);
+                    return storage.get(versionedPartitionName, partitionStore.getWalStorage(), prefix, (stream) -> stream.stream(key), keyValueStream);
                 }
             });
     }
@@ -173,8 +176,7 @@ public class PartitionStripe {
     public boolean get(PartitionName partitionName, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
         return txPartitionState.tx(partitionName,
             (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(partitionState == PartitionState.ONLINE, "Partition:%s state:%s is not online.", partitionName,
-                    partitionState);
+                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -188,8 +190,7 @@ public class PartitionStripe {
     public void rowScan(PartitionName partitionName, KeyValueStream keyValueStream) throws Exception {
         txPartitionState.tx(partitionName,
             (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(partitionState == PartitionState.ONLINE, "Partition:%s state:%s is not online.", partitionName,
-                    partitionState);
+                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -210,7 +211,7 @@ public class PartitionStripe {
 
         txPartitionState.tx(partitionName,
             (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(partitionState == PartitionState.ONLINE, "Partition:%s state:%s is not online.", partitionName,
+                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName,
                     partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
@@ -225,7 +226,7 @@ public class PartitionStripe {
 
     public interface TakeRowUpdates<R> {
 
-        R give(VersionedPartitionName versionedPartitionName, PartitionState partitionState, RowStreamer streamer) throws Exception;
+        R give(VersionedPartitionName versionedPartitionName, State partitionState, RowStreamer streamer) throws Exception;
     }
 
     public interface RowStreamer {
@@ -259,7 +260,7 @@ public class PartitionStripe {
             if (partitionStore == null) {
                 return takeRowUpdates.give(null, null, null);
             } else {
-                RowStreamer streamer = (partitionState == PartitionState.ONLINE)
+                RowStreamer streamer = isOnline(partitionState)
                     ? rowStream -> storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
                     : null;
                 return takeRowUpdates.give(versionedPartitionName, partitionState, streamer);
@@ -277,8 +278,7 @@ public class PartitionStripe {
             (versionedPartitionName, partitionState) -> {
 
                 WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-                Preconditions.checkState(partitionState == PartitionState.ONLINE, "Partition:%s state:%s is not online.", partitionName,
-                    partitionState);
+                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -315,8 +315,7 @@ public class PartitionStripe {
             (versionedPartitionName, partitionState) -> {
 
                 WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-                Preconditions.checkState(partitionState == PartitionState.ONLINE, "Partition:%s state:%s is not online.", partitionName,
-                    partitionState);
+                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -358,8 +357,7 @@ public class PartitionStripe {
     public boolean containsKeys(PartitionName partitionName, byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
         return txPartitionState.tx(partitionName,
             (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(partitionState == PartitionState.ONLINE, "Partition:%s state:%s is not online.", partitionName,
-                    partitionState);
+                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {

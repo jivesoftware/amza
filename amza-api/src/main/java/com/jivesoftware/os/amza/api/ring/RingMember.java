@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.SignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.aquarium.Member;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -64,6 +65,14 @@ public class RingMember implements Comparable<RingMember> {
 
     public String getMember() {
         return member;
+    }
+
+    public Member asAquariumMember() {
+        return new Member(memberAsBytes);
+    }
+
+    public static RingMember fromAquariumMember(Member member) {
+        return new RingMember(new String(member.getMember(), StandardCharsets.UTF_8));
     }
 
     @Override

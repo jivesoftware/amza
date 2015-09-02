@@ -38,8 +38,12 @@ public class PartitionCreator {
         new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_PROPERTIES".getBytes()), 0);
     public static final VersionedPartitionName HIGHWATER_MARK_INDEX = new VersionedPartitionName(
         new PartitionName(true, AmzaRingReader.SYSTEM_RING, "HIGHWATER_MARK_INDEX".getBytes()), 0);
-    public static final VersionedPartitionName REGION_ONLINE_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_ONLINE_INDEX".getBytes()), 0);
+    public static final VersionedPartitionName PARTITION_VERSION_INDEX = new VersionedPartitionName(
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "PARTITION_VERSION_INDEX".getBytes()), 0);
+    public static final VersionedPartitionName AQUARIUM_STATE_INDEX = new VersionedPartitionName(
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "AQUARIUM_STATE_INDEX".getBytes()), 0);
+    public static final VersionedPartitionName AQUARIUM_LIVELINESS_INDEX = new VersionedPartitionName(
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "AQUARIUM_LIVELINESS_INDEX".getBytes()), 0);
 
     private final OrderIdProvider orderIdProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;

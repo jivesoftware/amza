@@ -1,14 +1,15 @@
 package com.jivesoftware.os.amza.aquarium;
 
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import java.util.Arrays;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
-import java.util.Objects;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
@@ -24,8 +25,8 @@ import org.testng.annotations.Test;
  */
 public class AquariumNGTest {
 
-    private static final Member MIN = new Member(UIO.intBytes(0));
-    private static final Member MAX = new Member(UIO.intBytes(Integer.MAX_VALUE));
+    private static final Member MIN = new Member(intBytes(0));
+    private static final Member MAX = new Member(intBytes(Integer.MAX_VALUE));
     private static final byte CURRENT = 0;
     private static final byte DESIRED = 1;
     private static final byte LIVELINESS = 2;
@@ -36,16 +37,77 @@ public class AquariumNGTest {
         NavigableMap<Key, TimestampedState<State>> rawState = new ConcurrentSkipListMap<>();
         NavigableMap<Key, TimestampedState<Void>> rawLiveliness = new ConcurrentSkipListMap<>();
 
+        AtomicInteger rawRingSize = new AtomicInteger();
+        RingSize ringSize = rawRingSize::get;
+        Map<Member, Integer> rawLifecycles = Maps.newConcurrentMap();
+
         int aquariumNodeCount = 10;
-        AtomicInteger ringSize = new AtomicInteger();
         AquariumNode[] nodes = new AquariumNode[aquariumNodeCount];
         for (int i = 0; i < aquariumNodeCount; i++) {
             OrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(i));
-            Storage storage = new Storage(orderIdProvider, rawState, rawLiveliness);
+
+            Member member = new Member(intBytes(i));
+
+            MemberLifecycle<Integer> memberLifecycle = new MemberLifecycle<Integer>() {
+                @Override
+                public Integer get() throws Exception {
+                    return rawLifecycles.computeIfAbsent(member, key -> 0);
+                }
+
+                @Override
+                public Integer getOther(Member other) throws Exception {
+                    return rawLifecycles.computeIfAbsent(other, key -> 0);
+                }
+            };
+
+            LivelinessStorage livelinessStorage = new LivelinessStorage() {
+                @Override
+                public boolean scan(Member rootMember, Member otherMember, LivelinessStream stream) throws Exception {
+                    Member minA = (rootMember == null) ? MIN : rootMember;
+                    Member maxA = (rootMember == null) ? MAX : rootMember;
+                    Member minB = (otherMember == null) ? minA : otherMember;
+                    SortedMap<Key, TimestampedState<Void>> subMap = rawLiveliness.subMap(new Key(LIVELINESS, 0, minA, minB), new Key(LIVELINESS, 0, maxA, MAX));
+                    for (Map.Entry<Key, TimestampedState<Void>> e : subMap.entrySet()) {
+                        Key key = e.getKey();
+                        TimestampedState<Void> v = e.getValue();
+                        if (!stream.stream(key.a, key.isSelf, key.b, v.timestamp, v.version)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                @Override
+                public boolean update(LivelinessUpdates updates) throws Exception {
+                    return updates.updates((rootMember, otherMember, timestamp) -> {
+                        rawLiveliness.compute(new Key(LIVELINESS, 0, rootMember, otherMember), (key, myState) -> {
+                            long version = orderIdProvider.nextId();
+                            if (myState != null && (myState.timestamp > timestamp || (myState.timestamp == timestamp && myState.version > version))) {
+                                return myState;
+                            } else {
+                                return new TimestampedState<>(null, timestamp, version);
+                            }
+                        });
+                        return true;
+                    });
+                }
+
+                @Override
+                public long get(Member rootMember, Member otherMember) throws Exception {
+                    TimestampedState<Void> timestampedState = rawLiveliness.get(new Key(LIVELINESS, 0, rootMember, otherMember));
+                    return timestampedState != null ? timestampedState.timestamp : -1;
+                }
+            };
+
+            StateStorage<Integer> currentStateStorage = new ContextualStateStorage(orderIdProvider, rawState, CURRENT);
+            StateStorage<Integer> desiredStateStorage = new ContextualStateStorage(orderIdProvider, rawState, DESIRED);
+
+            AtomicLong firstLivelinessTimestamp = new AtomicLong(-1);
+            Storage storage = new Storage(currentStateStorage, desiredStateStorage, livelinessStorage, memberLifecycle, ringSize);
             AtomicLong currentCount = new AtomicLong();
             TransitionQuorum ifYoureLuckyCurrentTransitionQuorum = (currentWaterline, desiredVersion, desiredState) -> {
                 if (currentCount.incrementAndGet() % 2 == 0) {
-                    storage.setState(currentWaterline.getMember(), desiredVersion, desiredState, CURRENT);
+                    storage.setCurrentState(currentWaterline.getMember(), desiredVersion, desiredState);
                     return true;
                 }
                 return false;
@@ -53,23 +115,27 @@ public class AquariumNGTest {
             AtomicLong desiredCount = new AtomicLong();
             TransitionQuorum ifYoureLuckyDesiredTransitionQuorum = (currentWaterline, desiredVersion, desiredState) -> {
                 if (desiredCount.incrementAndGet() % 2 == 0) {
-                    storage.setState(currentWaterline.getMember(), desiredVersion, desiredState, DESIRED);
+                    storage.setDesiredState(currentWaterline.getMember(), desiredVersion, desiredState);
                     return true;
                 }
                 return false;
             };
             TransitionQuorum currentTransitionQuorum = (currentWaterline, desiredVersion, desiredState) -> {
-                storage.setState(currentWaterline.getMember(), desiredVersion, desiredState, CURRENT);
+                storage.setCurrentState(currentWaterline.getMember(), desiredVersion, desiredState);
                 return true;
             };
             TransitionQuorum desiredTransitionQuorum = (currentWaterline, desiredVersion, desiredState) -> {
-                storage.setState(currentWaterline.getMember(), desiredVersion, desiredState, DESIRED);
+                storage.setDesiredState(currentWaterline.getMember(), desiredVersion, desiredState);
                 return true;
             };
-            nodes[i] = new AquariumNode(orderIdProvider, new Member(UIO.intBytes(i)), storage,
-                storage, ifYoureLuckyCurrentTransitionQuorum, ifYoureLuckyDesiredTransitionQuorum,
-                currentTransitionQuorum, desiredTransitionQuorum,
-                ringSize);
+            nodes[i] = new AquariumNode(orderIdProvider,
+                member,
+                storage,
+                new Liveliness(livelinessStorage, member, firstLivelinessTimestamp),
+                ifYoureLuckyCurrentTransitionQuorum,
+                ifYoureLuckyDesiredTransitionQuorum,
+                currentTransitionQuorum,
+                desiredTransitionQuorum);
         }
 
         ScheduledExecutorService service = Executors.newScheduledThreadPool(aquariumNodeCount);
@@ -78,8 +144,9 @@ public class AquariumNGTest {
         AquariumNode[] alive = new AquariumNode[aquariumNodeCount];
         Future[] aliveFutures = new Future[aquariumNodeCount];
         for (; running < 5; running++) {
+            rawLifecycles.compute(nodes[running].member, (member, value) -> (value != null) ? (value + 1) : 0);
             aliveFutures[running] = service.scheduleWithFixedDelay(nodes[running], 10, 10, TimeUnit.MILLISECONDS);
-            ringSize.incrementAndGet();
+            rawRingSize.incrementAndGet();
             alive[running] = nodes[running];
         }
         String mode = "Start with 5 nodes...";
@@ -108,8 +175,9 @@ public class AquariumNGTest {
 
         mode = "Add 5 more nodes...";
         for (; running < nodes.length; running++) {
+            rawLifecycles.compute(nodes[running].member, (member, value) -> (value != null) ? (value + 1) : 0);
             aliveFutures[running] = service.scheduleWithFixedDelay(nodes[running], 10, 10, TimeUnit.MILLISECONDS);
-            ringSize.incrementAndGet();
+            rawRingSize.incrementAndGet();
             alive[running] = nodes[running];
             awaitLeader(mode, alive, ringSize);
         }
@@ -156,22 +224,31 @@ public class AquariumNGTest {
 
         mode = "Expunge 5 nodes...";
         for (int i = 0; i < 5; i++) {
+            rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
             nodes[i].forceDesiredState(State.expunged);
             nodes[i].awaitDesiredState(State.expunged);
             if (aliveFutures[i].cancel(true)) {
                 alive[i] = null;
-                ringSize.decrementAndGet();
+                rawRingSize.decrementAndGet();
             }
             awaitLeader(mode, alive, ringSize);
         }
 
         mode = "Re-add 5 nodes...";
         for (int i = 0; i < 5; i++) {
+            rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
             nodes[i].forceDesiredState(State.follower);
             aliveFutures[i] = service.scheduleWithFixedDelay(nodes[i], 10, 10, TimeUnit.MILLISECONDS);
-            ringSize.incrementAndGet();
+            rawRingSize.incrementAndGet();
             alive[i] = nodes[i];
             nodes[i].awaitDesiredState(State.follower);
+            awaitLeader(mode, alive, ringSize);
+        }
+
+        mode = "Change lifecycles...";
+        for (int i = 0; i < running; i++) {
+            rawLifecycles.compute(nodes[i].member, (member, value) -> (value != null) ? (value + 1) : 0);
+            nodes[i].awaitCurrentState(State.leader, State.follower);
             awaitLeader(mode, alive, ringSize);
         }
 
@@ -183,7 +260,7 @@ public class AquariumNGTest {
 //        }
     }
 
-    private void awaitLeader(String mode, AquariumNode[] nodes, AtomicInteger ringSize) throws Exception {
+    private void awaitLeader(String mode, AquariumNode[] nodes, RingSize ringSize) throws Exception {
 
         long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < 2_000_000) {
@@ -195,10 +272,10 @@ public class AquariumNGTest {
                 if (node == null) {
                     continue;
                 }
-                node.readWaterlineTx.tx(node.ringSize.get(), node.member, (current, desired) -> {
+                node.readWaterlineTx.tx(node.member, (current, desired) -> {
 
-                    ReadWaterline.Waterline currentWaterline = current.get();
-                    ReadWaterline.Waterline desiredWaterline = desired.get();
+                    Waterline currentWaterline = current.get();
+                    Waterline desiredWaterline = desired.get();
 
                     if (currentWaterline != null && currentWaterline.isAtQuorum() && State.checkEquals(currentWaterline, desiredWaterline)) {
                         if (currentWaterline.getState() == State.leader) {
@@ -208,7 +285,7 @@ public class AquariumNGTest {
                             follower[0]++;
                         }
                     }
-                    System.out.println(UIO.bytesInt(node.member.getMemeber()) + " " + mode);
+                    System.out.println(bytesInt(node.member.getMember()) + " " + mode);
                     System.out.println("\tCurrent:" + currentWaterline);
                     //System.out.println("\t\t" + rawStorage.subMap(new Key(node.member, node.member, CURRENT), false, new Key(node.member, MAX, CURRENT),
                     // false));
@@ -231,59 +308,60 @@ public class AquariumNGTest {
 
     }
 
-    interface MakeLively {
-        void hitWithPaddle(Member member);
-    }
-
     class AquariumNode implements Runnable {
 
         private final Member member;
         private final OrderIdProvider orderIdProvider;
         private final ReadWaterlineTx readWaterlineTx;
-        private final MakeLively makeLively;
+        private final Liveliness liveliness;
         private final TransitionQuorum currentTransitionQuorum;
         private final TransitionQuorum desiredTransitionQuorum;
-        private final AtomicInteger ringSize;
         private final Aquarium aquarium;
 
         public AquariumNode(OrderIdProvider orderIdProvider,
             Member member,
             ReadWaterlineTx readWaterlineTx,
-            MakeLively makeLively,
+            Liveliness liveliness,
             TransitionQuorum ifYoureLuckyCurrentTransitionQuorum,
             TransitionQuorum ifYoureLuckyDesiredTransitionQuorum,
             TransitionQuorum currentTransitionQuorum,
-            TransitionQuorum desiredTransitionQuorum,
-            AtomicInteger ringSize) {
+            TransitionQuorum desiredTransitionQuorum) {
 
             this.member = member;
             this.orderIdProvider = orderIdProvider;
             this.readWaterlineTx = readWaterlineTx;
-            this.makeLively = makeLively;
+            this.liveliness = liveliness;
             this.currentTransitionQuorum = currentTransitionQuorum;
             this.desiredTransitionQuorum = desiredTransitionQuorum;
-            this.ringSize = ringSize;
 
-            this.aquarium = new Aquarium(orderIdProvider, readWaterlineTx, ifYoureLuckyCurrentTransitionQuorum, ifYoureLuckyDesiredTransitionQuorum, member);
-
+            this.aquarium = new Aquarium(orderIdProvider,
+                readWaterlineTx,
+                liveliness,
+                ifYoureLuckyCurrentTransitionQuorum,
+                ifYoureLuckyDesiredTransitionQuorum,
+                member);
         }
 
         public void forceDesiredState(State state) throws Exception {
-            readWaterlineTx.tx(ringSize.get(), member, (current, desired) -> {
-                ReadWaterline.Waterline currentWaterline = current.get();
-                if (currentWaterline != null) {
-                    System.out.println("FORCING DESIRED " + state + ":" + member);
-                    desiredTransitionQuorum.transition(currentWaterline, orderIdProvider.nextId(), state);
+            readWaterlineTx.tx(member, (current, desired) -> {
+                Waterline currentWaterline = current.get();
+                if (currentWaterline == null) {
+                    currentWaterline = new Waterline(member, State.bootstrap, orderIdProvider.nextId(), -1L, true, Long.MAX_VALUE);
                 }
+                System.out.println("FORCING DESIRED " + state + ":" + member);
+                desiredTransitionQuorum.transition(currentWaterline, orderIdProvider.nextId(), state);
                 return true;
             });
         }
 
         public void forceCurrentState(State state) throws Exception {
-            readWaterlineTx.tx(ringSize.get(), member, (current, desired) -> {
-                ReadWaterline.Waterline currentWaterline = current.get();
-                ReadWaterline.Waterline desiredWaterline = desired.get();
-                if (currentWaterline != null && desiredWaterline != null) {
+            readWaterlineTx.tx(member, (current, desired) -> {
+                Waterline currentWaterline = current.get();
+                if (currentWaterline == null) {
+                    currentWaterline = new Waterline(member, State.bootstrap, orderIdProvider.nextId(), -1L, true, Long.MAX_VALUE);
+                }
+                Waterline desiredWaterline = desired.get();
+                if (desiredWaterline != null) {
                     System.out.println("FORCING CURRENT " + state + ":" + member);
                     currentTransitionQuorum.transition(currentWaterline, desiredWaterline.getTimestamp(), state);
                 }
@@ -291,13 +369,29 @@ public class AquariumNGTest {
             });
         }
 
+        public void awaitCurrentState(State... states) throws Exception {
+            Set<State> acceptable = Sets.newHashSet(states);
+            boolean[] reachedCurrent = { false };
+            while (!reachedCurrent[0]) {
+                readWaterlineTx.tx(member, (current, desired) -> {
+                    Waterline currentWaterline = current.get();
+                    if (currentWaterline != null) {
+                        reachedCurrent[0] = acceptable.contains(currentWaterline.getState()) && currentWaterline.isAtQuorum();
+                    }
+                    return true;
+                });
+                System.out.println(member + " awaitCurrentState " + Arrays.toString(states));
+                Thread.sleep(100);
+            }
+        }
+
         public void awaitDesiredState(State state) throws Exception {
             boolean[] reachedDesired = { false };
             while (!reachedDesired[0]) {
-                readWaterlineTx.tx(ringSize.get(), member, (current, desired) -> {
-                    ReadWaterline.Waterline currentWaterline = current.get();
+                readWaterlineTx.tx(member, (current, desired) -> {
+                    Waterline currentWaterline = current.get();
                     if (currentWaterline != null) {
-                        ReadWaterline.Waterline desiredWaterline = desired.get();
+                        Waterline desiredWaterline = desired.get();
 
                         reachedDesired[0] = currentWaterline.getState() == state &&
                             currentWaterline.isAtQuorum() &&
@@ -308,14 +402,13 @@ public class AquariumNGTest {
                 System.out.println(member + " awaitDesiredState " + state);
                 Thread.sleep(100);
             }
-
         }
 
         @Override
         public void run() {
             try {
-                aquarium.tapTheGlass(ringSize.get());
-                makeLively.hitWithPaddle(member);
+                aquarium.feedTheFish();
+                aquarium.tapTheGlass();
             } catch (Exception x) {
                 x.printStackTrace();
             }
@@ -323,308 +416,127 @@ public class AquariumNGTest {
 
     }
 
-    class Storage implements ReadWaterlineTx, MakeLively {
+    class Storage implements ReadWaterlineTx {
 
-        private final OrderIdProvider idProvider;
-        private final NavigableMap<Key, TimestampedState<State>> stateStorage;
-        private final NavigableMap<Key, TimestampedState<Void>> livelinessStorage;
-        private final AtomicLong firstLivelinessTimestamp = new AtomicLong(-1);
+        private final StateStorage<Integer> currentStateStorage;
+        private final StateStorage<Integer> desiredStateStorage;
+        private final LivelinessStorage livelinessStorage;
+        private final MemberLifecycle<Integer> memberLifecycle;
+        private final RingSize ringSize;
 
-        public Storage(OrderIdProvider idProvider,
-            NavigableMap<Key, TimestampedState<State>> stateStorage,
-            NavigableMap<Key, TimestampedState<Void>> livelinessStorage) {
-            this.idProvider = idProvider;
-            this.stateStorage = stateStorage;
+        public Storage(StateStorage<Integer> currentStateStorage,
+            StateStorage<Integer> desiredStateStorage,
+            LivelinessStorage livelinessStorage,
+            MemberLifecycle<Integer> memberLifecycle,
+            RingSize ringSize) {
+            this.currentStateStorage = currentStateStorage;
+            this.desiredStateStorage = desiredStateStorage;
             this.livelinessStorage = livelinessStorage;
+            this.memberLifecycle = memberLifecycle;
+            this.ringSize = ringSize;
         }
 
-        void setState(Member member, long timestamp, State state, byte context) {
+        void setCurrentState(Member member, long timestamp, State state) throws Exception {
+            currentStateStorage.update(setLiveliness -> setLiveliness.set(member, member, memberLifecycle.get(), state, timestamp));
+        }
 
-            Key key = new Key(member, member, context);
-
-            stateStorage.compute(key, (k, myState) -> {
-                long version = idProvider.nextId();
-                if (myState != null && (myState.timestamp > timestamp || (myState.timestamp == timestamp && myState.version > version))) {
-                    return myState;
-                } else {
-                    return new TimestampedState<>(state, timestamp, version);
-                }
-            });
+        void setDesiredState(Member member, long timestamp, State state) throws Exception {
+            desiredStateStorage.update(setLiveliness -> setLiveliness.set(member, member, memberLifecycle.get(), state, timestamp));
         }
 
         @Override
-        public void hitWithPaddle(Member member) {
-            setLiveliness(member, System.currentTimeMillis());
-        }
-
-        void setLiveliness(Member member, long timestamp) {
-
-            Key key = new Key(member, member, LIVELINESS);
-
-            TimestampedState<Void> timestampedState = livelinessStorage.compute(key, (k, myState) -> {
-                long version = idProvider.nextId();
-                if (myState != null && (myState.timestamp > timestamp || (myState.timestamp == timestamp && myState.version > version))) {
-                    return myState;
-                } else {
-                    return new TimestampedState<>(null, timestamp, version);
-                }
-            });
-            firstLivelinessTimestamp.compareAndSet(-1, timestampedState.timestamp);
-        }
-
-        @Override
-        public void tx(int ringSize, Member member, Tx tx) throws Exception {
-            tx.tx(new ContextualReadWaterline(idProvider, stateStorage, livelinessStorage, ringSize, member, CURRENT, firstLivelinessTimestamp, 10_000),
-                new ContextualReadWaterline(idProvider, stateStorage, livelinessStorage, ringSize, member, DESIRED, firstLivelinessTimestamp, 10_000));
+        public void tx(Member member, Tx tx) throws Exception {
+            tx.tx(new ReadWaterline<>(currentStateStorage, livelinessStorage, memberLifecycle, ringSize, member, 10_000, Integer.class),
+                new ReadWaterline<>(desiredStateStorage, livelinessStorage, memberLifecycle, ringSize, member, 10_000, Integer.class));
         }
 
     }
 
-    class ContextualReadWaterline implements ReadWaterline {
+    private static class ContextualStateStorage implements StateStorage<Integer> {
 
-        private final OrderIdProvider idProvider;
+        private final OrderIdProvider orderIdProvider;
         private final NavigableMap<Key, TimestampedState<State>> stateStorage;
-        private final NavigableMap<Key, TimestampedState<Void>> livelinessStorage;
-        private final int ringSize;
-        private final Member member;
         private final byte context;
-        private final AtomicLong firstLivelinessTimestamp;
-        private final long deadAfterMillis;
 
-        public ContextualReadWaterline(OrderIdProvider idProvider,
+        public ContextualStateStorage(OrderIdProvider orderIdProvider,
             NavigableMap<Key, TimestampedState<State>> stateStorage,
-            NavigableMap<Key, TimestampedState<Void>> livelinessStorage, int ringSize,
-            Member member,
-            byte context,
-            AtomicLong firstLivelinessTimestamp,
-            long deadAfterMillis) {
-            this.idProvider = idProvider;
+            byte context) {
+            this.orderIdProvider = orderIdProvider;
             this.stateStorage = stateStorage;
-            this.livelinessStorage = livelinessStorage;
-            this.ringSize = ringSize;
-            this.member = member;
             this.context = context;
-            this.firstLivelinessTimestamp = firstLivelinessTimestamp;
-            this.deadAfterMillis = deadAfterMillis;
         }
 
         @Override
-        public ReadWaterline.Waterline get() {
-
-            SortedMap<Key, TimestampedState<State>> subMap = stateStorage.subMap(new Key(member, member, context), new Key(member, MAX, context));
-            TimestampedState<State> current = null;
-            int acked = 0;
+        public boolean scan(Member rootMember, Member otherMember, Integer lifecycle, StateStream<Integer> stream) throws Exception {
+            Member minA = (rootMember == null) ? MIN : rootMember;
+            Member maxA = (rootMember == null) ? MAX : rootMember;
+            Member minB = (otherMember == null) ? minA : otherMember;
+            int minLifecycle = (lifecycle != null) ? lifecycle : Integer.MAX_VALUE; // reversed
+            int maxLifecycle = (lifecycle != null) ? lifecycle : Integer.MIN_VALUE; // reversed
+            SortedMap<Key, TimestampedState<State>> subMap = stateStorage.subMap(new Key(context, minLifecycle, minA, minB),
+                new Key(context, maxLifecycle, maxA, MAX));
             for (Map.Entry<Key, TimestampedState<State>> e : subMap.entrySet()) {
-                if (current == null && e.getKey().isSelf()) {
-                    current = e.getValue();
-                    acked++;
-                } else if (current != null) {
-                    TimestampedState<State> v = e.getValue();
-                    if (v.state == current.state && v.timestamp == current.timestamp) {
-                        acked++;
-                    }
+                Key key = e.getKey();
+                TimestampedState<State> v = e.getValue();
+                if (!stream.stream(key.a, key.isSelf, key.b, key.memberVersion, v.state, v.timestamp, v.version)) {
+                    return false;
                 }
             }
-            if (current != null) {
-                boolean atQuorum = acked > ringSize / 2;
-                return new Waterline(member, current.state, current.timestamp, current.version, atQuorum, aliveUntilTimestamp());
-            } else {
-                return null;
-            }
-        }
-
-        private long aliveUntilTimestamp() {
-            if (deadAfterMillis <= 0) {
-                return Long.MAX_VALUE;
-            }
-
-            SortedMap<Key, TimestampedState<Void>> subMap = livelinessStorage.subMap(new Key(member, member, LIVELINESS), new Key(member, MAX, LIVELINESS));
-            TimestampedState<Void> current = null;
-            long latestAck = -1;
-            int acked = 0;
-            for (Map.Entry<Key, TimestampedState<Void>> e : subMap.entrySet()) {
-                if (current == null && e.getKey().isSelf()) {
-                    current = e.getValue();
-                    acked++;
-                } else if (current != null) {
-                    TimestampedState<Void> v = e.getValue();
-                    if (v.state == current.state && v.timestamp >= (current.timestamp - deadAfterMillis)) {
-                        latestAck = Math.max(latestAck, v.timestamp);
-                        acked++;
-                    }
-                }
-            }
-
-            boolean atQuorum = acked > ringSize / 2;
-            if (current != null && atQuorum) {
-                return latestAck + deadAfterMillis;
-            }
-            return -1;
-        }
-
-        private long otherAliveUntilTimestamp(Member other) {
-            if (deadAfterMillis <= 0) {
-                return Long.MAX_VALUE;
-            }
-
-            long firstTimestamp = firstLivelinessTimestamp.get();
-            if (firstTimestamp < 0) {
-                return Long.MAX_VALUE;
-            }
-
-            TimestampedState<Void> timestampedState = livelinessStorage.get(new Key(member, other, LIVELINESS));
-            if (timestampedState != null) {
-                return timestampedState.timestamp + deadAfterMillis;
-            }
-            return firstTimestamp + deadAfterMillis;
+            return true;
         }
 
         @Override
-        public void getOthers(ReadWaterline.StreamQuorumState stream) throws Exception {
-            Member otherMember = null;
-            TimestampedState<State> otherState = null;
-            int acked = 0;
-            for (Map.Entry<Key, TimestampedState<State>> e : stateStorage.subMap(new Key(MIN, MIN, context), new Key(MAX, MAX, context)).entrySet()) {
-                if (otherMember != null && !otherMember.equals(e.getKey().a)) {
-                    boolean otherHasQuorum = acked > ringSize / 2;
-                    stream.stream(new Waterline(otherMember, otherState.state, otherState.timestamp, otherState.version, otherHasQuorum,
-                        otherAliveUntilTimestamp(otherMember)));
-
-                    otherMember = null;
-                    otherState = null;
-                    acked = 0;
-                }
-
-                if (otherMember == null && e.getKey().isSelf() && !member.equals(e.getKey().a)) {
-                    otherMember = e.getKey().a;
-                    otherState = e.getValue();
-                }
-                if (otherMember != null) {
-                    TimestampedState<State> v = e.getValue();
-                    if (v.state == otherState.state && v.timestamp == otherState.timestamp) {
-                        acked++;
-                    }
-                }
-            }
-
-            if (otherMember != null) {
-                boolean otherHasQuorum = acked > ringSize / 2;
-                stream.stream(new Waterline(otherMember, otherState.state, otherState.timestamp, otherState.version, otherHasQuorum,
-                    otherAliveUntilTimestamp(otherMember)));
-            }
-
-        }
-
-        @Override
-        public void acknowledgeOther() throws Exception {
-            acknowledgeOther(stateStorage, context);
-            acknowledgeOther(livelinessStorage, LIVELINESS); //TODO technically only done by one thread per node
-        }
-
-        private <S> void acknowledgeOther(NavigableMap<Key, TimestampedState<S>> storage, byte storageContext) throws Exception {
-            Entry<Key, TimestampedState<S>> otherE = null;
-            boolean coldstart = true;
-            for (Map.Entry<Key, TimestampedState<S>> e : storage.subMap(new Key(MIN, MIN, storageContext), new Key(MAX, MAX, storageContext)).entrySet()) {
-                if (otherE != null && !otherE.getKey().a.equals(e.getKey().a)) {
-                    if (coldstart) {
-                        TimestampedState<S> theirState = otherE.getValue();
-                        storage.compute(new Key(otherE.getKey().a, member, otherE.getKey().context), (k, myState) -> {
-                            if (myState != null && myState.timestamp == theirState.timestamp && myState.state == theirState.state) {
-                                return myState;
-                            } else {
-                                return new TimestampedState<>(theirState.state, theirState.timestamp, idProvider.nextId());
-                            }
-                        });
-                    }
-                    otherE = null;
-                    coldstart = true;
-                }
-
-                if (otherE == null && e.getKey().isSelf() && !member.equals(e.getKey().a)) {
-                    otherE = e;
-                }
-                if (otherE != null
-                    && member.equals(e.getKey().b)
-                    && (e.getValue().state != otherE.getValue().state || e.getValue().timestamp != otherE.getValue().timestamp)) {
-                    coldstart = false;
-
-                    TimestampedState<S> theirState = otherE.getValue();
-                    storage.compute(e.getKey(), (k, myState) -> {
-                        if (myState != null && myState.timestamp == theirState.timestamp && myState.state == theirState.state) {
-                            return myState;
-                        } else {
-                            return new TimestampedState<>(theirState.state, theirState.timestamp, idProvider.nextId());
-                        }
-                    });
-
-                }
-            }
-            if (otherE != null && coldstart) {
-                TimestampedState<S> theirState = otherE.getValue();
-                storage.compute(new Key(otherE.getKey().a, member, otherE.getKey().context), (k, myState) -> {
-                    if (myState != null && myState.timestamp == theirState.timestamp && myState.state == theirState.state) {
+        public boolean update(StateUpdates<Integer> updates) throws Exception {
+            return updates.updates((rootMember, otherMember, lifecycle, state, timestamp) -> {
+                stateStorage.compute(new Key(context, lifecycle, rootMember, otherMember), (key, myState) -> {
+                    long version = orderIdProvider.nextId();
+                    if (myState != null && (myState.timestamp > timestamp || (myState.timestamp == timestamp && myState.version > version))) {
                         return myState;
                     } else {
-                        return new TimestampedState<>(theirState.state, theirState.timestamp, idProvider.nextId());
+                        return new TimestampedState<>(state, timestamp, version);
                     }
                 });
-            }
-
+                return true;
+            });
         }
     }
 
     static class Key implements Comparable<Key> {
 
         final byte context; // current = 0, desired = 1;
+        final int memberVersion;
         final boolean isSelf;
         final Member a;
         final Member b;
 
-        public Key(Member a, Member b, byte context) {
+        public Key(byte context, int memberVersion, Member a, Member b) {
             this.context = context;
-            this.isSelf = (a == b);
+            this.memberVersion = memberVersion;
+            this.isSelf = a.equals(b);
             this.a = a;
             this.b = b;
 
         }
 
-        public boolean isSelf() {
-            return isSelf;
-        }
-
         @Override
         public int hashCode() {
-            int hash = 3;
-            hash = 53 * hash + Objects.hashCode(this.a);
-            hash = 53 * hash + Objects.hashCode(this.b);
-            hash = 53 * hash + this.context;
-            return hash;
+            throw new UnsupportedOperationException("stop");
         }
 
         @Override
         public boolean equals(Object obj) {
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            final Key other = (Key) obj;
-            if (!Objects.equals(this.a, other.a)) {
-                return false;
-            }
-            if (!Objects.equals(this.b, other.b)) {
-                return false;
-            }
-            if (this.context != other.context) {
-                return false;
-            }
-            return true;
+            throw new UnsupportedOperationException("stop");
         }
 
         @Override
         public String toString() {
-            return "Key{" + "a=" + a + ", b=" + b + ", context=" + context + '}';
+            return "Key{" +
+                "context=" + context +
+                ", memberVersion=" + memberVersion +
+                ", isSelf=" + isSelf +
+                ", a=" + a +
+                ", b=" + b +
+                '}';
         }
 
         @Override
@@ -633,7 +545,11 @@ public class AquariumNGTest {
             if (c != 0) {
                 return c;
             }
-            c = UnsignedBytes.lexicographicalComparator().compare(a.getMemeber(), o.a.getMemeber());
+            c = -Integer.compare(memberVersion, o.memberVersion);
+            if (c != 0) {
+                return c;
+            }
+            c = UnsignedBytes.lexicographicalComparator().compare(a.getMember(), o.a.getMember());
             if (c != 0) {
                 return c;
             }
@@ -641,7 +557,7 @@ public class AquariumNGTest {
             if (c != 0) {
                 return c;
             }
-            c = UnsignedBytes.lexicographicalComparator().compare(b.getMemeber(), o.b.getMemeber());
+            c = UnsignedBytes.lexicographicalComparator().compare(b.getMember(), o.b.getMember());
             if (c != 0) {
                 return c;
             }
@@ -673,4 +589,31 @@ public class AquariumNGTest {
 
     }
 
+    static byte[] intBytes(int v) {
+        return intBytes(v, new byte[4], 0);
+    }
+
+    static byte[] intBytes(int v, byte[] _bytes, int _offset) {
+        _bytes[_offset + 0] = (byte) (v >>> 24);
+        _bytes[_offset + 1] = (byte) (v >>> 16);
+        _bytes[_offset + 2] = (byte) (v >>> 8);
+        _bytes[_offset + 3] = (byte) v;
+        return _bytes;
+    }
+
+    static int bytesInt(byte[] _bytes) {
+        return bytesInt(_bytes, 0);
+    }
+
+    static int bytesInt(byte[] bytes, int _offset) {
+        int v = 0;
+        v |= (bytes[_offset + 0] & 0xFF);
+        v <<= 8;
+        v |= (bytes[_offset + 1] & 0xFF);
+        v <<= 8;
+        v |= (bytes[_offset + 2] & 0xFF);
+        v <<= 8;
+        v |= (bytes[_offset + 3] & 0xFF);
+        return v;
+    }
 }

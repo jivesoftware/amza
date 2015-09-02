@@ -4,7 +4,6 @@ import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -12,6 +11,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
+import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
@@ -19,7 +19,6 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
-import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.CommitTo;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -191,7 +190,7 @@ public class RowChangeTaker implements RowChanges {
                         remoteRingHost,
                         sessionId,
                         longPollTimeoutMillis,
-                        (remoteVersionedPartitionName,  remoteState, txId) -> {
+                        (remoteVersionedPartitionName, remoteState, txId) -> {
                             amzaStats.longPollAvailables(remoteRingMember);
 
                             if (disposed.get()) {
@@ -208,13 +207,13 @@ public class RowChangeTaker implements RowChanges {
                             ExecutorService rowTakerThreadPool = partitionStripeProvider.getRowTakerThreadPool(partitionName);
                             RowsTaker rowsTaker = partitionStripeProvider.getRowsTaker(partitionName);
 
-                            partitionStateStorage.remoteState(remoteRingMember,
+                            /*partitionStateStorage.remoteVersion(remoteRingMember,
                                 partitionName,
-                                new RemoteVersionedState(remoteState, remoteVersionedPartitionName.getPartitionVersion()));
+                                remoteVersionedPartitionName.getPartitionVersion());*/
 
                             AtomicLong tookToTxId = new AtomicLong(-1);
                             VersionedPartitionName currentLocalVersionedPartitionName = partitionStateStorage.tx(partitionName,
-                                (localVersionedPartitionName,  partitionState) -> {
+                                (localVersionedPartitionName, partitionState) -> {
                                     if (localVersionedPartitionName == null) {
                                         PartitionProperties properties = partitionIndex.getProperties(partitionName);
                                         if (properties == null) {
@@ -222,8 +221,9 @@ public class RowChangeTaker implements RowChanges {
                                             //      ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                                             return null;
                                         }
-                                        VersionedState versionedState = partitionStateStorage.markAsKetchup(partitionName);
-                                        localVersionedPartitionName = new VersionedPartitionName(partitionName, versionedState.version);
+                                        int ringSize = amzaRingReader.getRingSize(partitionName.getRingName());
+                                        VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName, ringSize);
+                                        localVersionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
                                         //LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} state:{}",
                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                                     }
@@ -233,8 +233,8 @@ public class RowChangeTaker implements RowChanges {
                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                                         return null;
                                     }
-                                    if (partitionState != PartitionState.KETCHUP && partitionState != PartitionState.ONLINE) {
-                                        //LOG.info("INVALID STATE: local:{} remote:{}  txId:{} partition:{} localState:{} remoteState:{}",
+                                    if (partitionState == State.expunged) {
+                                        //LOG.info("EXPUNGED: local:{} remote:{}  txId:{} partition:{} localState:{} remoteState:{}",
                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, partitionState, remoteState);
                                         return null;
                                     }
@@ -455,8 +455,8 @@ public class RowChangeTaker implements RowChanges {
 
                             if (rowsResult.otherHighwaterMarks != null) { // Other highwater are provide when taken fully.
                                 for (Entry<RingMember, Long> otherHighwaterMark : rowsResult.otherHighwaterMarks.entrySet()) {
-                                    highwaterStorage.setIfLarger(otherHighwaterMark.getKey(), localVersionedPartitionName, updates, otherHighwaterMark
-                                        .getValue());
+                                    highwaterStorage.setIfLarger(otherHighwaterMark.getKey(), localVersionedPartitionName, updates,
+                                        otherHighwaterMark.getValue());
                                 }
 
                                 LOG.inc("take>fully>all");
@@ -466,11 +466,13 @@ public class RowChangeTaker implements RowChanges {
                                 if (takeFailureListener.isPresent()) {
                                     takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                 }
-                                partitionStateStorage.markAsOnline(localVersionedPartitionName);
+                                byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
+                                int ringSize = amzaRingReader.getRingSize(ringName);
+                                partitionStateStorage.tookFully(localVersionedPartitionName, remoteRingMember, ringSize);
                             } else if (rowsResult.error == null) {
                                 byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
-                                Set<RingMember> remoteRingMembers = amzaRingReader.getNeighboringRingMembers(ringName);
-                                partitionStateStorage.bootstrap(remoteRingMembers, localVersionedPartitionName);
+                                int ringSize = amzaRingReader.getRingSize(ringName);
+                                partitionStateStorage.tapTheGlass(ringSize, localVersionedPartitionName);
                             }
                             if (updates > 0) {
                                 flushed = true;

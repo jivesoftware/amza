@@ -6,11 +6,11 @@ package com.jivesoftware.os.amza.aquarium;
  */
 public interface ReadWaterlineTx {
 
-    void tx(int ringSize, Member member, Tx tx) throws Exception;
+    void tx(Member member, Tx tx) throws Exception;
 
     interface Tx {
 
-        boolean tx(ReadWaterline current, ReadWaterline desired) throws Exception;
+        boolean tx(ReadWaterline readCurrent, ReadWaterline readDesired) throws Exception;
     }
 
 }

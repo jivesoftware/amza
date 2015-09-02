@@ -19,11 +19,11 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
@@ -53,7 +53,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -188,7 +187,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
         if (!ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
-            throw new IllegalStateException("Not a member of the ring: " + partitionName.getRingName());
+            throw new IllegalStateException("Not a member of the ring for partition: " + partitionName);
         }
 
         PartitionProperties properties = partitionIndex.getProperties(partitionName);
@@ -197,12 +196,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         }
         partitionStateStorage.tx(partitionName, (versionedPartitionName, partitionState) -> {
             if (versionedPartitionName == null) {
-                VersionedState versionedState = partitionStateStorage.markAsKetchup(partitionName);
-                versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.version);
+                int ringSize = ringStoreReader.getRingSize(partitionName.getRingName());
+                VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName, ringSize);
+                versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
                 partitionState = versionedState.state;
-                if (properties.takeFromFactor == 0) {
-                    partitionStateStorage.markAsOnline(versionedPartitionName);
-                }
+                /*if (properties.takeFromFactor == 0) {
+                    partitionStateStorage.markAsOnline(versionedPartitionName, ringSize);
+                }*/
             }
             if (partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
                 takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName, partitionState);
@@ -236,11 +236,12 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             partitionStateStorage.tx(partitionName, (versionedPartitionName, partitionState) -> {
                 if (versionedPartitionName == null) {
-                    VersionedState versionedState = partitionStateStorage.markAsKetchup(partitionName);
-                    versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.version);
-                    if (properties.takeFromFactor == 0) {
-                        partitionStateStorage.markAsOnline(versionedPartitionName);
-                    }
+                    int ringSize = ringStoreReader.getRingSize(partitionName.getRingName());
+                    VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName, ringSize);
+                    versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
+                    /*if (properties.takeFromFactor == 0) {
+                        partitionStateStorage.markAsOnline(versionedPartitionName, ringSize);
+                    }*/
                 }
                 partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
                 return getPartition(partitionName);
@@ -251,12 +252,12 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             if (e.getValue() == RingHost.UNKNOWN_RING_HOST) {
                 unregisteredRingMembers.add(e.getKey());
             }
-            RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteState(e.getKey(), partitionName);
+            RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(e.getKey(), partitionName);
             if (remoteVersionedState == null) {
                 missingRingMembers.add(e.getKey());
-            } else if (remoteVersionedState.state == PartitionState.EXPUNGE) {
+            } else if (remoteVersionedState.state == State.expunged) {
                 expungedRingMembers.add(e.getKey());
-            } else if (remoteVersionedState.state == PartitionState.KETCHUP) {
+            } else if (remoteVersionedState.state == State.bootstrap) {
                 ketchupRingMembers.add(e.getKey());
             } else {
                 orderedPartitionHosts.add(e.getValue());
@@ -349,12 +350,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
         NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
         if (ring.containsKey(ringStoreReader.getRingMember())) {
-            RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteState(ringStoreReader.getRingMember(), partitionName);
+            RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(ringStoreReader.getRingMember(), partitionName);
             if (remoteVersionedState != null) {
                 LOG.info("Handling request to destroy partitionName:{}", partitionName);
                 for (RingMember ringMember : ring.keySet()) {
                     VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, remoteVersionedState.version);
-                    VersionedState versionedState = partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
+                    int ringSize = ringStoreReader.getRingSize(partitionName.getRingName());
+                    VersionedState versionedState = partitionStateStorage.markForDisposal(versionedPartitionName, ringMember, ringSize);
                     LOG.info("Destroyed partitionName:{} versionedState:{} for ringMember:{}", versionedPartitionName, versionedState, ringMember);
                 }
             }
@@ -417,7 +419,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         boolean needsToMarkAsKetchup;
         if (localVersionedPartitionName.getPartitionName().isSystemPartition()) {
             needsToMarkAsKetchup = systemWALStorage.takeRowUpdatesSince(localVersionedPartitionName, localTxId,
-                (versionedPartitionName,  partitionState, rowStreamer) -> {
+                (versionedPartitionName, partitionState, rowStreamer) -> {
                     return streamOnline(remoteRingMember,
                         versionedPartitionName,
                         localTxId,
@@ -427,10 +429,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                         rowStreamer);
                 });
         } else {
-            needsToMarkAsKetchup = partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(), (stripe, highwaterStorage) -> {
-                return stripe.takeRowUpdatesSince(localVersionedPartitionName.getPartitionName(), localTxId,
+            needsToMarkAsKetchup = partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(),
+                (stripe, highwaterStorage) -> stripe.takeRowUpdatesSince(localVersionedPartitionName.getPartitionName(), localTxId,
                     (versionedPartitionName, partitionState, streamer) -> {
-                        if (localVersionedPartitionName.equals(versionedPartitionName) && partitionState == PartitionState.ONLINE) {
+                        if (localVersionedPartitionName.equals(versionedPartitionName) && isOnline(partitionState)) {
                             return streamOnline(remoteRingMember,
                                 versionedPartitionName,
                                 localTxId,
@@ -441,8 +443,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                         } else {
                             return streamOffline(dos, bytes, versionedPartitionName, partitionState);
                         }
-                    });
-            });
+                    }));
         }
 
         amzaStats.netStats.wrote.addAndGet(bytes.longValue());
@@ -451,17 +452,24 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             PartitionName partitionName = localVersionedPartitionName.getPartitionName();
             try {
                 if (ringStoreWriter.isMemberOfRing(partitionName.getRingName()) && partitionProvider.hasPartition(partitionName)) {
-                    partitionStateStorage.markAsKetchup(partitionName);
+                    int ringSize = ringStoreReader.getRingSize(partitionName.getRingName());
+                    partitionStateStorage.markAsBootstrap(partitionName, ringSize);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
             }
         }
     }
 
-    private boolean streamOffline(DataOutputStream dos, MutableLong bytes, VersionedPartitionName versionedPartitionName,
-        PartitionState partitionState)
-        throws IOException, Exception {
+    boolean isOnline(State state) {
+        //TODO far more intelligent checkerooskies
+        return state == State.follower || state == State.leader;
+    }
+
+    private boolean streamOffline(DataOutputStream dos,
+        MutableLong bytes,
+        VersionedPartitionName versionedPartitionName,
+        State partitionState) throws Exception {
         dos.writeLong(-1);
         dos.writeByte(0); // not online
         dos.writeByte(0); // last entry marker

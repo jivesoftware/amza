@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.shared.partition;
 import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.aquarium.State;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -23,21 +24,21 @@ public class VersionedPartitionTransactor {
     }
 
     public <R> R doWithOne(VersionedPartitionName versionedPartitionName,
-        PartitionState state,
+        State state,
         PartitionTx<R> tx) throws Exception {
 
         return doWith(versionedPartitionName, state, 1, tx);
     }
 
     public <R> R doWithAll(VersionedPartitionName versionedPartitionName,
-        PartitionState state,
+        State state,
         PartitionTx<R> tx) throws Exception {
 
         return doWith(versionedPartitionName, state, numPermits, tx);
     }
 
     private <R> R doWith(VersionedPartitionName versionedPartitionName,
-        PartitionState state,
+        State state,
         int count,
         PartitionTx<R> tx) throws Exception {
 

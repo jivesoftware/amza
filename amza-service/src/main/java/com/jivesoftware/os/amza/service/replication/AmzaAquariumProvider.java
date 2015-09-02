@@ -8,12 +8,12 @@ import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.aquarium.Aquarium;
+import com.jivesoftware.os.amza.aquarium.AtQuorum;
 import com.jivesoftware.os.amza.aquarium.Liveliness;
 import com.jivesoftware.os.amza.aquarium.LivelinessStorage;
 import com.jivesoftware.os.amza.aquarium.Member;
 import com.jivesoftware.os.amza.aquarium.MemberLifecycle;
 import com.jivesoftware.os.amza.aquarium.ReadWaterline;
-import com.jivesoftware.os.amza.aquarium.AtQuorum;
 import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.aquarium.StateStorage;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
@@ -66,40 +66,41 @@ public class AmzaAquariumProvider {
     public Aquarium getAquarium(RingMember rootRingMember, VersionedPartitionName versionedPartitionName) throws Exception {
         Member rootMember = rootRingMember.asAquariumMember();
         AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, walUpdated, rootMember, startupVersion);
-        ReadWaterline readCurrent = new ReadWaterline<>(
+        AmzaAtQuorum atQuorum = new AmzaAtQuorum(amzaRingReader, versionedPartitionName);
+        Liveliness liveliness = new Liveliness(livelinessStorage, rootMember, atQuorum, deadAfterMillis, firstLivelinessTimestamp);
+        ReadWaterline readCurrent = new ReadWaterline<Long>(
             new AmzaStateStorage(systemWALStorage, walUpdated, rootMember, versionedPartitionName, CURRENT, startupVersion),
-            livelinessStorage,
+            liveliness,
             new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName),
-            new AmzaRingSize(amzaRingReader, versionedPartitionName),
+            atQuorum,
             rootRingMember.asAquariumMember(),
-            deadAfterMillis,
             Long.class);
         ReadWaterline readDesired = new ReadWaterline<>(
             new AmzaStateStorage(systemWALStorage, walUpdated, rootMember, versionedPartitionName, DESIRED, startupVersion),
-            livelinessStorage,
+            liveliness,
             new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName),
-            new AmzaRingSize(amzaRingReader, versionedPartitionName),
+            atQuorum,
             rootRingMember.asAquariumMember(),
-            deadAfterMillis,
             Long.class);
 
         return new Aquarium(orderIdProvider,
+            System::currentTimeMillis,
             (member, tx) -> tx.tx(readCurrent, readDesired),
-            new Liveliness(livelinessStorage, rootMember, firstLivelinessTimestamp),
+            liveliness,
             (current, desiredTimestamp, state) -> {
                 //TODO make sure this is a valid transition
-                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, versionedPartitionName.getPartitionVersion(),
-                    rootMember, rootMember);
-                byte[] valueBytes = {state.getSerializedForm()};
+                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootMember, versionedPartitionName.getPartitionVersion(),
+                    rootMember);
+                byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
             },
             (current, desiredTimestamp, state) -> {
                 //TODO make sure this is a valid transition
-                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, versionedPartitionName.getPartitionVersion(),
-                    rootMember, rootMember);
-                byte[] valueBytes = {state.getSerializedForm()};
+                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, rootMember, versionedPartitionName.getPartitionVersion(),
+                    rootMember);
+                byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
@@ -109,33 +110,33 @@ public class AmzaAquariumProvider {
 
     private static byte[] stateKey(PartitionName partitionName,
         byte context,
-        Long partitionVersion,
         Member rootRingMember,
+        Long partitionVersion,
         Member ackRingMember) throws Exception {
 
         int partitionSizeInBytes = 4 + partitionName.sizeInBytes();
         if (rootRingMember != null && ackRingMember != null) {
             int rootSizeInBytes = 4 + rootRingMember.getMember().length;
             int ackSizeInBytes = 4 + ackRingMember.getMember().length;
-            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + 8 + rootSizeInBytes + 1 + ackSizeInBytes);
+            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8 + 1 + ackSizeInBytes);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName");
             UIO.write(filer, context, "context");
-            UIO.writeLong(filer, partitionVersion, "partitionVersion");
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember");
+            UIO.writeLong(filer, partitionVersion, "partitionVersion");
             UIO.writeBoolean(filer, !rootRingMember.equals(ackRingMember), "isOther");
             UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember");
             return filer.getBytes();
         } else if (rootRingMember != null) {
             int rootSizeInBytes = 4 + rootRingMember.getMember().length;
-            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + 8 + rootSizeInBytes);
+            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName");
             UIO.write(filer, context, "context");
-            UIO.writeLong(filer, partitionVersion, "partitionVersion");
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember");
+            UIO.writeLong(filer, partitionVersion, "partitionVersion");
             return filer.getBytes();
         } else {
-            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + 8);
-            UIO.writeByteArray(filer, partitionName.toBytes(), "versionedPartitionName");
+            HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1);
+            UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName");
             UIO.write(filer, context, "context");
             return filer.getBytes();
         }
@@ -151,8 +152,7 @@ public class AmzaAquariumProvider {
         byte[] ackRingMemberBytes = UIO.readByteArray(filer, "ackRingMember");
         return stream.stream(PartitionName.fromBytes(partitionNameBytes),
             context,
-            partitionVersion,
-            new Member(rootRingMemberBytes),
+            new Member(rootRingMemberBytes), partitionVersion,
             isSelf,
             new Member(ackRingMemberBytes));
     }
@@ -161,8 +161,7 @@ public class AmzaAquariumProvider {
 
         boolean stream(PartitionName partitionName,
             byte context,
-            long partitionVersion,
-            Member rootRingMember,
+            Member rootRingMember, long partitionVersion,
             boolean isSelf,
             Member ackRingMember) throws Exception;
     }
@@ -225,11 +224,11 @@ public class AmzaAquariumProvider {
 
         @Override
         public boolean scan(Member rootMember, Member otherMember, Long lifecycle, StateStream<Long> stream) throws Exception {
-            byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, lifecycle, rootMember, otherMember);
+            byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
             return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_STATE_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
                 (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     if (valueTimestamp != -1 && !valueTombstoned) {
-                        return streamStateKey(key, (partitionName, context, partitionVersion, rootRingMember, isSelf, ackRingMember) -> {
+                        return streamStateKey(key, (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
                             if (!rootMember.equals(member) || valueVersion > startupVersion) {
                                 State state = State.fromSerializedForm(value[0]);
                                 return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion,
@@ -247,8 +246,8 @@ public class AmzaAquariumProvider {
         public boolean update(StateUpdates<Long> updates) throws Exception {
             AmzaPartitionUpdates amzaPartitionUpdates = new AmzaPartitionUpdates();
             boolean result = updates.updates((rootMember, otherMember, lifecycle, state, timestamp) -> {
-                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), context, lifecycle, rootMember, otherMember);
-                byte[] valueBytes = {state.getSerializedForm()};
+                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
+                byte[] valueBytes = { state.getSerializedForm() };
                 amzaPartitionUpdates.set(keyBytes, valueBytes, timestamp);
                 return true;
             });
@@ -341,19 +340,19 @@ public class AmzaAquariumProvider {
         }
     }
 
-    private static class AmzaRingSize implements AtQuorum {
+    private static class AmzaAtQuorum implements AtQuorum {
 
         private final AmzaRingReader amzaRingReader;
         private final VersionedPartitionName versionedPartitionName;
 
-        public AmzaRingSize(AmzaRingReader amzaRingReader, VersionedPartitionName versionedPartitionName) {
+        public AmzaAtQuorum(AmzaRingReader amzaRingReader, VersionedPartitionName versionedPartitionName) {
             this.amzaRingReader = amzaRingReader;
             this.versionedPartitionName = versionedPartitionName;
         }
 
         @Override
-        public int get() throws Exception {
-            return amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName());
+        public boolean is(int count) throws Exception {
+            return count > amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName()) / 2;
         }
     }
 }

@@ -69,7 +69,7 @@ public class AquariumNGTest {
                     Member minA = (rootMember == null) ? MIN : rootMember;
                     Member maxA = (rootMember == null) ? MAX : rootMember;
                     Member minB = (otherMember == null) ? minA : otherMember;
-                    SortedMap<Key, TimestampedState<Void>> subMap = rawLiveliness.subMap(new Key(LIVELINESS, 0, minA, minB), new Key(LIVELINESS, 0, maxA, MAX));
+                    SortedMap<Key, TimestampedState<Void>> subMap = rawLiveliness.subMap(new Key(LIVELINESS, minA, 0, minB), new Key(LIVELINESS, maxA, 0, MAX));
                     for (Map.Entry<Key, TimestampedState<Void>> e : subMap.entrySet()) {
                         Key key = e.getKey();
                         TimestampedState<Void> v = e.getValue();
@@ -83,7 +83,7 @@ public class AquariumNGTest {
                 @Override
                 public boolean update(LivelinessUpdates updates) throws Exception {
                     return updates.updates((rootMember, otherMember, timestamp) -> {
-                        rawLiveliness.compute(new Key(LIVELINESS, 0, rootMember, otherMember), (key, myState) -> {
+                        rawLiveliness.compute(new Key(LIVELINESS, rootMember, 0, otherMember), (key, myState) -> {
                             long version = orderIdProvider.nextId();
                             if (myState != null && (myState.timestamp > timestamp || (myState.timestamp == timestamp && myState.version > version))) {
                                 return myState;
@@ -97,7 +97,7 @@ public class AquariumNGTest {
 
                 @Override
                 public long get(Member rootMember, Member otherMember) throws Exception {
-                    TimestampedState<Void> timestampedState = rawLiveliness.get(new Key(LIVELINESS, 0, rootMember, otherMember));
+                    TimestampedState<Void> timestampedState = rawLiveliness.get(new Key(LIVELINESS, rootMember, 0, otherMember));
                     return timestampedState != null ? timestampedState.timestamp : -1;
                 }
             };
@@ -187,7 +187,7 @@ public class AquariumNGTest {
 
         mode = "Prove immune to clock drift by moving leader...";
         for (int i = 0; i < 2; i++) {
-            leader.clockDrift.set(20_000 * ((i % 2 == 0) ? - 1 : 1));
+            leader.clockDrift.set(20_000 * ((i % 2 == 0) ? -1 : 1));
             AquariumNode newLeader = awaitLeader(mode, alive, rawRingSize);
             leader.clockDrift.set(0);
             leader = newLeader;
@@ -432,11 +432,8 @@ public class AquariumNGTest {
                     return true;
                 });
                 for (AquariumNode node : nodes) {
-                    if (node == this) {
-                        System.out.println("->");
-                    }
                     if (node != null) {
-                        node.printState("awaitDesiredState " + member + "." + state);
+                        node.printState("awaitDesiredState " + state + " for " + (node == this ? "me" : member));
                     }
                 }
 
@@ -534,8 +531,8 @@ public class AquariumNGTest {
             Member minB = (otherMember == null) ? minA : otherMember;
             int minLifecycle = (lifecycle != null) ? lifecycle : Integer.MAX_VALUE; // reversed
             int maxLifecycle = (lifecycle != null) ? lifecycle : Integer.MIN_VALUE; // reversed
-            SortedMap<Key, TimestampedState<State>> subMap = stateStorage.subMap(new Key(context, minLifecycle, minA, minB),
-                new Key(context, maxLifecycle, maxA, MAX));
+            SortedMap<Key, TimestampedState<State>> subMap = stateStorage.subMap(new Key(context, minA, minLifecycle, minB),
+                new Key(context, maxA, maxLifecycle, MAX));
             for (Map.Entry<Key, TimestampedState<State>> e : subMap.entrySet()) {
                 Key key = e.getKey();
                 TimestampedState<State> v = e.getValue();
@@ -549,7 +546,7 @@ public class AquariumNGTest {
         @Override
         public boolean update(StateUpdates<Integer> updates) throws Exception {
             return updates.updates((rootMember, otherMember, lifecycle, state, timestamp) -> {
-                stateStorage.compute(new Key(context, lifecycle, rootMember, otherMember), (key, myState) -> {
+                stateStorage.compute(new Key(context, rootMember, lifecycle, otherMember), (key, myState) -> {
                     long version = orderIdProvider.nextId();
                     if (myState != null && (myState.timestamp > timestamp || (myState.timestamp == timestamp && myState.version > version))) {
                         return myState;
@@ -562,8 +559,9 @@ public class AquariumNGTest {
         }
 
         public void clear(Member rootMember) {
-            SortedMap<Key, TimestampedState<State>> subMap = stateStorage.subMap(new Key(context, Integer.MAX_VALUE, rootMember, rootMember),
-                new Key(context, Integer.MIN_VALUE, rootMember, MAX));
+
+            SortedMap<Key, TimestampedState<State>> subMap = stateStorage.subMap(new Key(context, rootMember, Integer.MAX_VALUE, rootMember),
+                new Key(context, rootMember, Integer.MIN_VALUE, MAX));
             subMap.clear();
         }
     }
@@ -571,16 +569,16 @@ public class AquariumNGTest {
     static class Key implements Comparable<Key> {
 
         final byte context; // current = 0, desired = 1;
+        final Member a;
         final int memberVersion;
         final boolean isSelf;
-        final Member a;
         final Member b;
 
-        public Key(byte context, int memberVersion, Member a, Member b) {
+        public Key(byte context, Member a, int memberVersion, Member b) {
             this.context = context;
+            this.a = a;
             this.memberVersion = memberVersion;
             this.isSelf = a.equals(b);
-            this.a = a;
             this.b = b;
 
         }
@@ -599,9 +597,9 @@ public class AquariumNGTest {
         public String toString() {
             return "Key{"
                 + "context=" + context
+                + ", a=" + a
                 + ", memberVersion=" + memberVersion
                 + ", isSelf=" + isSelf
-                + ", a=" + a
                 + ", b=" + b
                 + '}';
         }
@@ -612,11 +610,11 @@ public class AquariumNGTest {
             if (c != 0) {
                 return c;
             }
-            c = -Integer.compare(memberVersion, o.memberVersion);
+            c = UnsignedBytes.lexicographicalComparator().compare(a.getMember(), o.a.getMember());
             if (c != 0) {
                 return c;
             }
-            c = UnsignedBytes.lexicographicalComparator().compare(a.getMember(), o.a.getMember());
+            c = -Integer.compare(memberVersion, o.memberVersion);
             if (c != 0) {
                 return c;
             }

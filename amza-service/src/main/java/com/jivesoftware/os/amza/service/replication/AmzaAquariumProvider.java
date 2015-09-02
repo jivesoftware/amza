@@ -146,8 +146,8 @@ public class AmzaAquariumProvider {
         HeapFiler filer = new HeapFiler(keyBytes);
         byte[] partitionNameBytes = UIO.readByteArray(filer, "partitionName");
         byte context = UIO.readByte(filer, "context");
-        long partitionVersion = UIO.readLong(filer, "partitionVersion");
         byte[] rootRingMemberBytes = UIO.readByteArray(filer, "rootRingMember");
+        long partitionVersion = UIO.readLong(filer, "partitionVersion");
         boolean isSelf = !UIO.readBoolean(filer, "isOther");
         byte[] ackRingMemberBytes = UIO.readByteArray(filer, "ackRingMember");
         return stream.stream(PartitionName.fromBytes(partitionNameBytes),
@@ -229,7 +229,7 @@ public class AmzaAquariumProvider {
                 (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     if (valueTimestamp != -1 && !valueTombstoned) {
                         return streamStateKey(key, (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
-                            if (!rootMember.equals(member) || valueVersion > startupVersion) {
+                            if (!rootRingMember.equals(member) || valueVersion > startupVersion) {
                                 State state = State.fromSerializedForm(value[0]);
                                 return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion,
                                     state, valueTimestamp, valueVersion);
@@ -281,7 +281,7 @@ public class AmzaAquariumProvider {
                 (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     if (valueTimestamp != -1 && !valueTombstoned) {
                         return streamLivelinessKey(key, (rootRingMember, isSelf, ackRingMember) -> {
-                            if (!rootMember.equals(member) || valueVersion > startupVersion) {
+                            if (!rootRingMember.equals(member) || valueVersion > startupVersion) {
                                 return stream.stream(rootRingMember, isSelf, ackRingMember, valueTimestamp, valueVersion);
                             } else {
                                 return true;

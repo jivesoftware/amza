@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.shared.take;
 
 import com.google.common.collect.Sets;
-import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.aquarium.State;

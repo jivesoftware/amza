@@ -1,13 +1,11 @@
 package com.jivesoftware.os.amza.shared.partition;
 
-import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.aquarium.State;
 import java.util.concurrent.Semaphore;
 
 /**
- *
  * @author jonathan.colt
  */
 public class VersionedPartitionTransactor {

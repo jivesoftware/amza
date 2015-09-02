@@ -68,7 +68,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         get(PartitionCreator.HIGHWATER_MARK_INDEX);
         get(PartitionCreator.PARTITION_VERSION_INDEX);
         get(PartitionCreator.REGION_PROPERTIES);
-        get(PartitionCreator.AQUARIUM_INDEX);
+        get(PartitionCreator.AQUARIUM_STATE_INDEX);
+        get(PartitionCreator.AQUARIUM_LIVELINESS_INDEX);
 
         final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
         final AtomicInteger numOpened = new AtomicInteger(0);

@@ -196,8 +196,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         }
         partitionStateStorage.tx(partitionName, (versionedPartitionName, partitionState) -> {
             if (versionedPartitionName == null) {
-                int ringSize = ringStoreReader.getRingSize(partitionName.getRingName());
-                VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName, ringSize);
+                VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
                 versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
                 partitionState = versionedState.state;
                 /*if (properties.takeFromFactor == 0) {
@@ -236,8 +235,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             partitionStateStorage.tx(partitionName, (versionedPartitionName, partitionState) -> {
                 if (versionedPartitionName == null) {
-                    int ringSize = ringStoreReader.getRingSize(partitionName.getRingName());
-                    VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName, ringSize);
+                    VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
                     versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
                     /*if (properties.takeFromFactor == 0) {
                         partitionStateStorage.markAsOnline(versionedPartitionName, ringSize);
@@ -355,8 +353,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 LOG.info("Handling request to destroy partitionName:{}", partitionName);
                 for (RingMember ringMember : ring.keySet()) {
                     VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, remoteVersionedState.version);
-                    int ringSize = ringStoreReader.getRingSize(partitionName.getRingName());
-                    VersionedState versionedState = partitionStateStorage.markForDisposal(versionedPartitionName, ringMember, ringSize);
+                    VersionedState versionedState = partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
                     LOG.info("Destroyed partitionName:{} versionedState:{} for ringMember:{}", versionedPartitionName, versionedState, ringMember);
                 }
             }
@@ -452,8 +449,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             PartitionName partitionName = localVersionedPartitionName.getPartitionName();
             try {
                 if (ringStoreWriter.isMemberOfRing(partitionName.getRingName()) && partitionProvider.hasPartition(partitionName)) {
-                    int ringSize = ringStoreReader.getRingSize(partitionName.getRingName());
-                    partitionStateStorage.markAsBootstrap(partitionName, ringSize);
+                    partitionStateStorage.markAsBootstrap(partitionName);
                 }
             } catch (Exception x) {
                 LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);

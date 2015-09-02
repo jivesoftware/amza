@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -290,9 +289,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("count", "disabled");
             }
 
-            partition.highestTxId((VersionedPartitionName versionedPartitionName, PartitionState partitionState, long highestTxId) -> {
+            partition.highestTxId((versionedPartitionName, state, highestTxId) -> {
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                map.put("state", partitionState.name());
+                map.put("state", state.name());
                 map.put("highestTxId", Long.toHexString(highestTxId));
             });
 
@@ -301,12 +300,14 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
             if (name.isSystemPartition()) {
                 HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localState.version));
+                WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(
+                    new VersionedPartitionName(name, localState.storageVersion.partitionVersion));
                 map.put("highwaters", renderHighwaters(partitionHighwater));
             } else {
                 PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
                 partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localState.version));
+                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(
+                        new VersionedPartitionName(name, localState.storageVersion.partitionVersion));
                     map.put("highwaters", renderHighwaters(partitionHighwater));
                     return null;
                 });
@@ -365,7 +366,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -457,7 +458,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

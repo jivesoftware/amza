@@ -107,7 +107,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 Map<String, Object> row = new HashMap<>();
                 VersionedState state = amzaService.getPartitionStateStorage().getLocalVersionedState(partitionName);
                 row.put("state", state == null ? "unknown" : state.state.toString());
-                row.put("version", state == null ? "unknown" : Long.toHexString(state.version));
+                row.put("version", state == null ? "unknown" : Long.toHexString(state.storageVersion.partitionVersion));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                 row.put("name", new String(partitionName.getName()));
                 row.put("ringName", new String(partitionName.getRingName()));
@@ -140,7 +140,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
                 PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
                 VersionedState localState = partitionStateStorage.getLocalVersionedState(partitionName);
-                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, localState.version);
+                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, localState.storageVersion.partitionVersion);
 
                 if (partitionName.isSystemPartition()) {
                     HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();

@@ -221,8 +221,7 @@ public class RowChangeTaker implements RowChanges {
                                             //      ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                                             return null;
                                         }
-                                        int ringSize = amzaRingReader.getRingSize(partitionName.getRingName());
-                                        VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName, ringSize);
+                                        VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
                                         localVersionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
                                         //LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} state:{}",
                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
@@ -466,13 +465,9 @@ public class RowChangeTaker implements RowChanges {
                                 if (takeFailureListener.isPresent()) {
                                     takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                 }
-                                byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
-                                int ringSize = amzaRingReader.getRingSize(ringName);
-                                partitionStateStorage.tookFully(localVersionedPartitionName, remoteRingMember, ringSize);
+                                partitionStateStorage.tookFully(localVersionedPartitionName, remoteRingMember);
                             } else if (rowsResult.error == null) {
-                                byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
-                                int ringSize = amzaRingReader.getRingSize(ringName);
-                                partitionStateStorage.tapTheGlass(ringSize, localVersionedPartitionName);
+                                partitionStateStorage.tapTheGlass(localVersionedPartitionName);
                             }
                             if (updates > 0) {
                                 flushed = true;

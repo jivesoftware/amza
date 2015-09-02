@@ -73,7 +73,8 @@ public class PartitionComposter {
                 try {
                     amzaStats.beginCompaction("Expunge " + partitionName + " " + versionedState);
                     partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.version);
+                        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName,
+                            versionedState.storageVersion.partitionVersion);
                         if (stripe.expungePartition(versionedPartitionName)) {
                             partitionIndex.remove(versionedPartitionName);
                             highwaterStorage.expunge(versionedPartitionName);
@@ -87,7 +88,7 @@ public class PartitionComposter {
                 }
 
             } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName()) || !partitionProvider.hasPartition(partitionName)) {
-                partitionStateStorage.markForDisposal(new VersionedPartitionName(partitionName, versionedState.version), ringMember);
+                partitionStateStorage.markForDisposal(new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion), ringMember);
             }
             return true;
         });

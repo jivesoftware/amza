@@ -56,11 +56,11 @@ public class Aquarium {
     public State getState(Member member) throws Exception {
         State[] state = new State[1];
         waterlineTx.tx(member, (readCurrent, readDesired) -> {
-            State currentState = readCurrent.get().getState();
-            if (currentState == null) {
+            Waterline current = readCurrent.get();
+            if (current == null) {
                 state[0] = State.bootstrap;
             } else {
-                state[0] = currentState;
+                state[0] = current.getState();
             }
             return true;
         });

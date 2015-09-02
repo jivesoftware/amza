@@ -107,7 +107,7 @@ public class AmzaAquariumProvider {
 
     private static byte[] stateKey(PartitionName partitionName,
         byte context,
-        long partitionVersion,
+        Long partitionVersion,
         Member rootRingMember,
         Member ackRingMember) throws Exception {
 
@@ -144,8 +144,8 @@ public class AmzaAquariumProvider {
         byte[] partitionNameBytes = UIO.readByteArray(filer, "partitionName");
         byte context = UIO.readByte(filer, "context");
         long partitionVersion = UIO.readLong(filer, "partitionVersion");
-        boolean isSelf = !UIO.readBoolean(filer, "isOther");
         byte[] rootRingMemberBytes = UIO.readByteArray(filer, "rootRingMember");
+        boolean isSelf = !UIO.readBoolean(filer, "isOther");
         byte[] ackRingMemberBytes = UIO.readByteArray(filer, "ackRingMember");
         return stream.stream(PartitionName.fromBytes(partitionNameBytes),
             context,

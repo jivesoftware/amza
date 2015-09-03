@@ -25,6 +25,11 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -32,51 +37,73 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class AmzaAquariumProvider {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     private static final byte CURRENT = 0;
     private static final byte DESIRED = 1;
 
+    private final RingMember rootRingMember;
+    private final Member rootAquariumMember;
     private final OrderIdProvider orderIdProvider;
     private final AmzaRingReader amzaRingReader;
     private final SystemWALStorage systemWALStorage;
     private final StorageVersionProvider storageVersionProvider;
     private final WALUpdated walUpdated;
-    private final long deadAfterMillis;
-    private final AtomicLong firstLivelinessTimestamp = new AtomicLong(-1);
     private final long startupVersion;
 
-    public AmzaAquariumProvider(OrderIdProvider orderIdProvider,
+    private final Liveliness liveliness;
+    private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+
+    public AmzaAquariumProvider(RingMember rootRingMember,
+        OrderIdProvider orderIdProvider,
         AmzaRingReader amzaRingReader,
         SystemWALStorage systemWALStorage,
         StorageVersionProvider storageVersionProvider,
         WALUpdated walUpdated,
         long deadAfterMillis) {
+        this.rootRingMember = rootRingMember;
+        this.rootAquariumMember = rootRingMember.asAquariumMember();
         this.orderIdProvider = orderIdProvider;
         this.amzaRingReader = amzaRingReader;
         this.systemWALStorage = systemWALStorage;
         this.storageVersionProvider = storageVersionProvider;
         this.walUpdated = walUpdated;
-        this.deadAfterMillis = deadAfterMillis;
         this.startupVersion = orderIdProvider.nextId();
+
+        AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, walUpdated, rootAquariumMember, startupVersion);
+        AtQuorum livelinessAtQuorm = count -> count > amzaRingReader.getRingSize(AmzaRingReader.SYSTEM_RING) / 2;
+        this.liveliness = new Liveliness(System::currentTimeMillis,
+            livelinessStorage,
+            rootAquariumMember,
+            livelinessAtQuorm,
+            deadAfterMillis,
+            new AtomicLong(-1));
     }
 
-    public void tookFully(RingMember rootRingMember, RingMember fromRingMember, VersionedPartitionName versionedPartitionName) throws Exception {
-
+    public void start(long feedEveryMillis) {
+        scheduledExecutorService.scheduleWithFixedDelay(() -> {
+            try {
+                liveliness.feedTheFish();
+            } catch (Exception e) {
+                LOG.error("Failed to feed the fish", e);
+            }
+        }, 0, feedEveryMillis, TimeUnit.MILLISECONDS);
     }
 
-    public Aquarium getAquarium(RingMember rootRingMember, VersionedPartitionName versionedPartitionName) throws Exception {
-        Member rootMember = rootRingMember.asAquariumMember();
-        AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, walUpdated, rootMember, startupVersion);
-        AmzaAtQuorum atQuorum = new AmzaAtQuorum(amzaRingReader, versionedPartitionName);
-        Liveliness liveliness = new Liveliness(livelinessStorage, rootMember, atQuorum, deadAfterMillis, firstLivelinessTimestamp);
-        ReadWaterline readCurrent = new ReadWaterline<Long>(
-            new AmzaStateStorage(systemWALStorage, walUpdated, rootMember, versionedPartitionName, CURRENT, startupVersion),
+    public void tookFully(RingMember fromRingMember, VersionedPartitionName versionedPartitionName) throws Exception {
+    }
+
+    public Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
+        AtQuorum atQuorum = new AmzaAtQuorum(amzaRingReader, versionedPartitionName);
+        ReadWaterline readCurrent = new ReadWaterline<>(
+            new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName, CURRENT, startupVersion),
             liveliness,
             new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName),
             atQuorum,
             rootRingMember.asAquariumMember(),
             Long.class);
         ReadWaterline readDesired = new ReadWaterline<>(
-            new AmzaStateStorage(systemWALStorage, walUpdated, rootMember, versionedPartitionName, DESIRED, startupVersion),
+            new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName, DESIRED, startupVersion),
             liveliness,
             new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName),
             atQuorum,
@@ -86,11 +113,10 @@ public class AmzaAquariumProvider {
         return new Aquarium(orderIdProvider,
             System::currentTimeMillis,
             (member, tx) -> tx.tx(readCurrent, readDesired),
-            liveliness,
             (current, desiredTimestamp, state) -> {
                 //TODO make sure this is a valid transition
-                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootMember, versionedPartitionName.getPartitionVersion(),
-                    rootMember);
+                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
+                    rootAquariumMember);
                 byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
@@ -98,8 +124,8 @@ public class AmzaAquariumProvider {
             },
             (current, desiredTimestamp, state) -> {
                 //TODO make sure this is a valid transition
-                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, rootMember, versionedPartitionName.getPartitionVersion(),
-                    rootMember);
+                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
+                    rootAquariumMember);
                 byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
@@ -186,8 +212,8 @@ public class AmzaAquariumProvider {
 
     private static boolean streamLivelinessKey(byte[] keyBytes, LivelinessKeyStream stream) throws Exception {
         HeapFiler filer = new HeapFiler(keyBytes);
-        boolean isSelf = !UIO.readBoolean(filer, "isOther");
         byte[] rootRingMemberBytes = UIO.readByteArray(filer, "rootRingMember");
+        boolean isSelf = !UIO.readBoolean(filer, "isOther");
         byte[] ackRingMemberBytes = UIO.readByteArray(filer, "ackRingMember");
         return stream.stream(new Member(rootRingMemberBytes),
             isSelf,

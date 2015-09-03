@@ -10,7 +10,6 @@ public class Aquarium {
     private final OrderIdProvider versionProvider;
     private final CurrentTimeMillis currentTimeMillis;
     private final ReadWaterlineTx waterlineTx;
-    private final Liveliness liveliness;
     private final TransitionQuorum transitionCurrent;
     private final TransitionQuorum transitionDesired;
     private final Member member;
@@ -18,21 +17,15 @@ public class Aquarium {
     public Aquarium(OrderIdProvider versionProvider,
         CurrentTimeMillis currentTimeMillis,
         ReadWaterlineTx waterlineTx,
-        Liveliness liveliness, TransitionQuorum transitionCurrent,
+        TransitionQuorum transitionCurrent,
         TransitionQuorum transitionDesired,
         Member member) {
         this.versionProvider = versionProvider;
         this.currentTimeMillis = currentTimeMillis;
         this.waterlineTx = waterlineTx;
-        this.liveliness = liveliness;
         this.transitionCurrent = transitionCurrent;
         this.transitionDesired = transitionDesired;
         this.member = member;
-    }
-
-    public void feedTheFish() throws Exception {
-        liveliness.blowBubbles(currentTimeMillis);
-        liveliness.acknowledgeOther();
     }
 
     public void tapTheGlass() throws Exception {
@@ -57,11 +50,10 @@ public class Aquarium {
     }
 
     /**
-
-     @return null, leader or follower
+     * @return null, leader or follower
      */
     public State livelyEndState() throws Exception { // TODO consider timeout and wait notify bla...
-        State[] state = {null};
+        State[] state = { null };
         waterlineTx.tx(member, (current, desired) -> {
 
             Waterline currentWaterline = current.get();

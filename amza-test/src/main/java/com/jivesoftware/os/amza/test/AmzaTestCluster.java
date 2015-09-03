@@ -114,6 +114,7 @@ public class AmzaTestCluster {
         AmzaServiceConfig config = new AmzaServiceConfig();
         config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.compactTombstoneIfOlderThanNMillis = 100000L;
+        config.aquariumLivelinessFeedEveryMillis = 10;
         //config.useMemMap = true;
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
         OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()), idPacker,

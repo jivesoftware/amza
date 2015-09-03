@@ -116,6 +116,7 @@ public class AmzaServiceInitializer {
         public long takeReofferDeltaMillis = 1_000;
 
         public long aquariumLeaderDeadAfterMillis = 10_000;
+        public long aquariumLivelinessFeedEveryMillis = 500;
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
@@ -208,7 +209,8 @@ public class AmzaServiceInitializer {
             walUpdated,
             awaitOnline);
 
-        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(orderIdProvider,
+        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(ringMember,
+            orderIdProvider,
             amzaRingReader,
             systemWALStorage,
             storageVersionProvider,
@@ -219,7 +221,6 @@ public class AmzaServiceInitializer {
             ringMember,
             aquariumProvider,
             storageVersionProvider,
-            amzaRingReader,
             takeCoordinator,
             awaitOnline);
 
@@ -362,6 +363,9 @@ public class AmzaServiceInitializer {
             partitionStripeProvider);
 
         AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
+
+        // last minute initialization
+        aquariumProvider.start(config.aquariumLivelinessFeedEveryMillis);
 
         return new AmzaService(orderIdProvider,
             amzaStats,

@@ -9,17 +9,20 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class Liveliness {
 
+    private final CurrentTimeMillis currentTimeMillis;
     private final LivelinessStorage livelinessStorage;
     private final Member member;
     private final AtQuorum atQuorum;
     private final long deadAfterMillis;
     private final AtomicLong firstLivelinessTimestamp;
 
-    public Liveliness(LivelinessStorage livelinessStorage,
+    public Liveliness(CurrentTimeMillis currentTimeMillis,
+        LivelinessStorage livelinessStorage,
         Member member,
         AtQuorum atQuorum,
         long deadAfterMillis,
         AtomicLong firstLivelinessTimestamp) {
+        this.currentTimeMillis = currentTimeMillis;
         this.livelinessStorage = livelinessStorage;
         this.atQuorum = atQuorum;
         this.member = member;
@@ -27,16 +30,21 @@ public class Liveliness {
         this.firstLivelinessTimestamp = firstLivelinessTimestamp;
     }
 
-    public void blowBubbles(CurrentTimeMillis currentTimeMillis) throws Exception {
+    public void feedTheFish() throws Exception {
+        blowBubbles();
+        acknowledgeOther();
+    }
+
+    private void blowBubbles() throws Exception {
         long timestamp = currentTimeMillis.get();
         livelinessStorage.update(setLiveliness -> setLiveliness.set(member, member, timestamp));
         firstLivelinessTimestamp.compareAndSet(-1, timestamp);
     }
 
-    public void acknowledgeOther() throws Exception {
+    private void acknowledgeOther() throws Exception {
         livelinessStorage.update(setLiveliness -> {
             LivelinessEntry[] otherE = new LivelinessEntry[1];
-            boolean[] coldstart = {true};
+            boolean[] coldstart = { true };
 
             //byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, versionedPartitionName.getPartitionVersion(), null, null);
             livelinessStorage.scan(null, null, (rootMember, isSelf, ackMember, timestamp, version) -> {
@@ -70,8 +78,8 @@ public class Liveliness {
             return Long.MAX_VALUE;
         }
 
-        long[] currentTimestamp = {-1L};
-        long[] latestAck = {-1};
+        long[] currentTimestamp = { -1L };
+        long[] latestAck = { -1 };
         Set<Member> acked = Sets.newHashSet();
         livelinessStorage.scan(member, null, (rootRingMember, isSelf, ackRingMember, timestamp, version) -> {
             if (currentTimestamp[0] == -1L && isSelf) {

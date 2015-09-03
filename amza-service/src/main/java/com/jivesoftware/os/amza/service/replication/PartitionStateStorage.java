@@ -13,7 +13,6 @@ import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -32,7 +31,6 @@ public class PartitionStateStorage implements TxPartitionState {
     private final RingMember rootRingMember;
     private final AmzaAquariumProvider aquariumProvider;
     private final StorageVersionProvider storageVersionProvider;
-    private final AmzaRingReader amzaRingReader;
     private final TakeCoordinator takeCoordinator;
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
@@ -43,14 +41,12 @@ public class PartitionStateStorage implements TxPartitionState {
         RingMember rootRingMember,
         AmzaAquariumProvider aquariumProvider,
         StorageVersionProvider storageVersionProvider,
-        AmzaRingReader amzaRingReader,
         TakeCoordinator takeCoordinator,
         AwaitNotify<PartitionName> awaitNotify) {
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.aquariumProvider = aquariumProvider;
         this.storageVersionProvider = storageVersionProvider;
-        this.amzaRingReader = amzaRingReader;
         this.takeCoordinator = takeCoordinator;
         this.transactor = new VersionedPartitionTransactor(1024, 1024); // TODO expose to config?
         this.awaitNotify = awaitNotify;
@@ -59,7 +55,7 @@ public class PartitionStateStorage implements TxPartitionState {
     private Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
         return aquariums.computeIfAbsent(versionedPartitionName, key -> {
             try {
-                return aquariumProvider.getAquarium(rootRingMember, key);
+                return aquariumProvider.getAquarium(key);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to get aquarium for partition " + versionedPartitionName, e);
             }
@@ -133,7 +129,7 @@ public class PartitionStateStorage implements TxPartitionState {
 
         StorageVersion storageVersion = storageVersionProvider.getRemote(ringMember, partitionName);
         VersionedPartitionName remoteVersionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-        Aquarium aquarium = aquariumProvider.getAquarium(rootRingMember, remoteVersionedPartitionName);
+        Aquarium aquarium = aquariumProvider.getAquarium(remoteVersionedPartitionName);
         return new RemoteVersionedState(aquarium.getState(ringMember.asAquariumMember()), storageVersion.partitionVersion);
     }
 
@@ -157,7 +153,7 @@ public class PartitionStateStorage implements TxPartitionState {
             return;
         }
 
-        aquariumProvider.tookFully(rootRingMember, fromMember, versionedPartitionName);
+        aquariumProvider.tookFully(fromMember, versionedPartitionName);
 
         // let aquarium do its thing
         getAquarium(versionedPartitionName).tapTheGlass();

@@ -105,8 +105,10 @@ public class AquariumNGTest {
             ContextualStateStorage currentStateStorage = new ContextualStateStorage(orderIdProvider, rawState, CURRENT);
             ContextualStateStorage desiredStateStorage = new ContextualStateStorage(orderIdProvider, rawState, DESIRED);
 
+            AtomicLong clockDrift = new AtomicLong(0);
+            CurrentTimeMillis currentTimeMillis = () -> System.currentTimeMillis() + clockDrift.get();
             AtomicLong firstLivelinessTimestamp = new AtomicLong(-1);
-            Liveliness liveliness = new Liveliness(livelinessStorage, member, atQuorum, deadAfterMillis, firstLivelinessTimestamp);
+            Liveliness liveliness = new Liveliness(currentTimeMillis, livelinessStorage, member, atQuorum, deadAfterMillis, firstLivelinessTimestamp);
             Storage storage = new Storage(currentStateStorage, desiredStateStorage, liveliness, memberLifecycle, atQuorum);
             AtomicLong currentCount = new AtomicLong();
             TransitionQuorum ifYoureLuckyCurrentTransitionQuorum = (currentWaterline, desiredVersion, desiredState) -> {
@@ -135,11 +137,14 @@ public class AquariumNGTest {
             nodes[i] = new AquariumNode(orderIdProvider,
                 member,
                 storage,
-                firstLivelinessTimestamp, liveliness,
+                firstLivelinessTimestamp,
+                liveliness,
                 ifYoureLuckyCurrentTransitionQuorum,
                 ifYoureLuckyDesiredTransitionQuorum,
                 currentTransitionQuorum,
-                desiredTransitionQuorum);
+                desiredTransitionQuorum,
+                currentTimeMillis,
+                clockDrift);
         }
 
         ScheduledExecutorService service = Executors.newScheduledThreadPool(aquariumNodeCount);
@@ -197,7 +202,7 @@ public class AquariumNGTest {
         for (int i = 0; i < running; i++) {
             for (int j = 0; j < running; j++) {
                 if (nodes[j] != leader) {
-                    nodes[j].clockDrift.set(-20_000 * ((i % 2 == 0) ? - 1 : 1));
+                    nodes[j].clockDrift.set(-20_000 * ((i % 2 == 0) ? -1 : 1));
                 }
             }
             AquariumNode newLeader = awaitLeader(mode, alive, rawRingSize);
@@ -341,11 +346,13 @@ public class AquariumNGTest {
         private final OrderIdProvider orderIdProvider;
         private final Storage readWaterlineTx;
         private final AtomicLong firstLivelinessTimestamp;
+        private final Liveliness liveliness;
         private final TransitionQuorum currentTransitionQuorum;
         private final TransitionQuorum desiredTransitionQuorum;
+        private final CurrentTimeMillis currentTimeMillis;
+        private final AtomicLong clockDrift;
+
         private final Aquarium aquarium;
-        public final AtomicLong clockDrift = new AtomicLong(0);
-        private final CurrentTimeMillis currentTimeMillis = () -> System.currentTimeMillis() + clockDrift.get();
 
         public AquariumNode(OrderIdProvider orderIdProvider,
             Member member,
@@ -355,19 +362,23 @@ public class AquariumNGTest {
             TransitionQuorum ifYoureLuckyCurrentTransitionQuorum,
             TransitionQuorum ifYoureLuckyDesiredTransitionQuorum,
             TransitionQuorum currentTransitionQuorum,
-            TransitionQuorum desiredTransitionQuorum) {
+            TransitionQuorum desiredTransitionQuorum,
+            CurrentTimeMillis currentTimeMillis,
+            AtomicLong clockDrift) {
 
             this.member = member;
             this.orderIdProvider = orderIdProvider;
             this.readWaterlineTx = readWaterlineTx;
             this.firstLivelinessTimestamp = firstLivelinessTimestamp;
+            this.liveliness = liveliness;
             this.currentTransitionQuorum = currentTransitionQuorum;
             this.desiredTransitionQuorum = desiredTransitionQuorum;
+            this.currentTimeMillis = currentTimeMillis;
+            this.clockDrift = clockDrift;
 
             this.aquarium = new Aquarium(orderIdProvider,
                 currentTimeMillis,
                 readWaterlineTx,
-                liveliness,
                 ifYoureLuckyCurrentTransitionQuorum,
                 ifYoureLuckyDesiredTransitionQuorum,
                 member);
@@ -402,7 +413,7 @@ public class AquariumNGTest {
 
         public void awaitCurrentState(State... states) throws Exception {
             Set<State> acceptable = Sets.newHashSet(states);
-            boolean[] reachedCurrent = {false};
+            boolean[] reachedCurrent = { false };
             while (!reachedCurrent[0]) {
                 readWaterlineTx.tx(member, (current, desired) -> {
                     Waterline currentWaterline = current.get();
@@ -417,9 +428,9 @@ public class AquariumNGTest {
         }
 
         public void awaitDesiredState(State state, AquariumNode[] nodes) throws Exception {
-            boolean[] reachedDesired = {false};
+            boolean[] reachedDesired = { false };
             while (!reachedDesired[0]) {
-                Waterline[] currentWaterline = {null};
+                Waterline[] currentWaterline = { null };
                 readWaterlineTx.tx(member, (current, desired) -> {
                     currentWaterline[0] = current.get();
                     if (currentWaterline[0] != null) {
@@ -444,7 +455,7 @@ public class AquariumNGTest {
         @Override
         public void run() {
             try {
-                aquarium.feedTheFish();
+                liveliness.feedTheFish();
                 aquarium.tapTheGlass();
             } catch (Exception x) {
                 x.printStackTrace();

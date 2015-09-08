@@ -59,9 +59,11 @@ public class Liveliness {
                 if (otherE[0] == null && isSelf && !member.equals(rootMember)) {
                     otherE[0] = new LivelinessEntry(rootMember, timestamp);
                 }
-                if (otherE[0] != null && member.equals(ackMember) && timestamp != otherE[0].timestamp) {
+                if (otherE[0] != null && member.equals(ackMember)) {
                     coldstart[0] = false;
-                    setLiveliness.set(otherE[0].rootMember, member, otherE[0].timestamp);
+                    if (timestamp != otherE[0].timestamp) {
+                        setLiveliness.set(otherE[0].rootMember, member, otherE[0].timestamp);
+                    }
                 }
                 return true;
             });

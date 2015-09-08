@@ -122,6 +122,7 @@ public class AmzaAquariumProvider implements RowChanges {
                     rootAquariumMember);
                 byte[] valueBytes = {state.getSerializedForm()};
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
+                LOG.info("Current {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
             },
@@ -131,6 +132,7 @@ public class AmzaAquariumProvider implements RowChanges {
                     rootAquariumMember);
                 byte[] valueBytes = {state.getSerializedForm()};
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
+                LOG.info("Desired {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
             },
@@ -280,8 +282,9 @@ public class AmzaAquariumProvider implements RowChanges {
                 amzaPartitionUpdates.set(keyBytes, valueBytes, timestamp);
                 return true;
             });
-            if (result) {
+            if (result && amzaPartitionUpdates.size() > 0) {
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, amzaPartitionUpdates, walUpdated);
+                LOG.info("Context {} {} for {}", context, member, versionedPartitionName);
                 return !rowsChanged.isEmpty();
             } else {
                 return false;
@@ -330,7 +333,7 @@ public class AmzaAquariumProvider implements RowChanges {
                 amzaPartitionUpdates.set(keyBytes, new byte[0], timestamp);
                 return true;
             });
-            if (result) {
+            if (result && amzaPartitionUpdates.size() > 0) {
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, null, amzaPartitionUpdates, walUpdated);
                 return !rowsChanged.isEmpty();
             } else {

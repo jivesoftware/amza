@@ -337,9 +337,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId}));
+                indexCommitedUpToTxId }));
         }
     }
 
@@ -437,10 +437,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                                 WALValue value = row.getValue();
                                 if (!rowStream.stream(primaryRowMarshaller.toRow(row.getKey().compose(),
-                                        value.getValue(),
-                                        value.getTimestampId(),
-                                        value.getTombstoned(),
-                                        value.getVersion()))) {
+                                    value.getValue(),
+                                    value.getTimestampId(),
+                                    value.getTombstoned(),
+                                    value.getVersion()))) {
                                     return false;
                                 }
                             }
@@ -570,7 +570,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 toPrefix,
                 toKey,
                 (prefix, key, timestamp, tombstoned, version, fp)
-                -> keyValueStream.stream(prefix, key, hydrateRowIndexValue(fp), timestamp, tombstoned, version));
+                    -> keyValueStream.stream(prefix, key, hydrateRowIndexValue(fp), timestamp, tombstoned, version));
         } finally {
             releaseOne();
         }
@@ -706,14 +706,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             WALIndex wali = walIndex.get();
             Boolean readFromTransactionId = walTx.read(reader
                 -> reader.read(fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
-                    (rowPointer, rowTxId, rowType, row) -> {
-                        if (rowType != RowType.system && rowTxId > sinceTransactionId) {
-                            return rowStream.row(rowPointer, rowTxId, rowType, row);
-                        } else {
-                            takeMetrics[0]++;
-                        }
-                        return true;
-                    }));
+                (rowPointer, rowTxId, rowType, row) -> {
+                    if (rowType != RowType.system && rowTxId > sinceTransactionId) {
+                        return rowStream.row(rowPointer, rowTxId, rowType, row);
+                    } else {
+                        takeMetrics[0]++;
+                    }
+                    return true;
+                }));
             LOG.inc("excessTakes", takeMetrics[0]);
             return readFromTransactionId;
         } finally {

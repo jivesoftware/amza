@@ -30,11 +30,14 @@ public class ReadWaterline<T> {
         this.lifecycleType = lifecycleType;
     }
 
-    
     public Waterline get() throws Exception {
         TimestampedState[] current = new TimestampedState[1];
         Set<Member> acked = Sets.newHashSet();
-        stateStorage.scan(member, null, memberLifecycle.get(), (rootRingMember, isSelf, ackRingMember, rootLifecycle, state, timestamp, version) -> {
+        T lifecycle = memberLifecycle.get();
+        if (lifecycle == null) {
+            return null;
+        }
+        stateStorage.scan(member, null, lifecycle, (rootRingMember, isSelf, ackRingMember, rootLifecycle, state, timestamp, version) -> {
             if (current[0] == null && isSelf) {
                 current[0] = new TimestampedState(state, timestamp, version);
             }
@@ -57,7 +60,6 @@ public class ReadWaterline<T> {
             return null;
         }
     }
-
 
     public void getOthers(StreamQuorumState stream) throws Exception {
         Member[] otherMember = new Member[1];
@@ -127,9 +129,11 @@ public class ReadWaterline<T> {
                 if (otherE[0] == null && isSelf && !member.equals(rootMember)) {
                     otherE[0] = new StateEntry<>(rootMember, lifecycle, state, timestamp);
                 }
-                if (otherE[0] != null && member.equals(ackMember) && (state != otherE[0].state || timestamp != otherE[0].timestamp)) {
+                if (otherE[0] != null && member.equals(ackMember)) {
                     coldstart[0] = false;
-                    setState.set(otherE[0].rootMember, member, otherE[0].lifecycle, otherE[0].state, otherE[0].timestamp);
+                    if (state != otherE[0].state || timestamp != otherE[0].timestamp) {
+                        setState.set(otherE[0].rootMember, member, otherE[0].lifecycle, otherE[0].state, otherE[0].timestamp);
+                    }
                 }
                 return true;
             });

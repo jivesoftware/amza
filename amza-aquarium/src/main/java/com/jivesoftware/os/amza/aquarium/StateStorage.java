@@ -16,7 +16,7 @@ public interface StateStorage<T> {
 
     interface StateUpdates<T> {
 
-        boolean updates(SetState<T> setLiveliness) throws Exception;
+        boolean updates(SetState<T> setState) throws Exception;
     }
 
     interface SetState<T> {

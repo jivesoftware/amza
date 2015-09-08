@@ -51,6 +51,7 @@
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Took Applied</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Version</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}State</th>
+                        <th><span class="glyphicon glyphicon-import"></span>{sp}Online</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Highest TxId</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Highwaters</th>
                     </tr>
@@ -68,6 +69,7 @@
                         <td><b>{$grandTotals.offers}</b>{sp}<i>{$grandTotals.offersLag}millis lag</i></td>
                         <td><b>{$grandTotals.takes}</b>{sp}<i>{$grandTotals.takesLag}millis lag</i></td>
                         <td><b>{$grandTotals.takeApplies}</b>{sp}<i>{$grandTotals.takeAppliesLag}millis lag</i></td>
+                        <td></td>
                         <td></td>
                         <td></td>
                         <td></td>
@@ -92,6 +94,7 @@
                             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
                             <td>{$r.version}</td>
                             <td>{$r.state}</td>
+                            <td>{$r.isOnline}</td>
                             <td>{$r.highestTxId}</td>
                             <td>{$r.highwaters|noAutoescape}</td>
                         </tr>

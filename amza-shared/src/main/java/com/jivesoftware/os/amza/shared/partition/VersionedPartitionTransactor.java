@@ -23,27 +23,30 @@ public class VersionedPartitionTransactor {
 
     public <R> R doWithOne(VersionedPartitionName versionedPartitionName,
         State state,
+        boolean isOnline,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedPartitionName, state, 1, tx);
+        return doWith(versionedPartitionName, state, isOnline, 1, tx);
     }
 
     public <R> R doWithAll(VersionedPartitionName versionedPartitionName,
         State state,
+        boolean isOnline,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedPartitionName, state, numPermits, tx);
+        return doWith(versionedPartitionName, state, isOnline, numPermits, tx);
     }
 
     private <R> R doWith(VersionedPartitionName versionedPartitionName,
         State state,
+        boolean isOnline,
         int count,
         PartitionTx<R> tx) throws Exception {
 
         Semaphore semaphore = semaphore(versionedPartitionName);
         semaphore.acquire(count);
         try {
-            return tx.tx(versionedPartitionName, state);
+            return tx.tx(versionedPartitionName, state, isOnline);
         } finally {
             semaphore.release(count);
         }

@@ -5,7 +5,7 @@ import com.jivesoftware.os.amza.aquarium.State;
 /**
  * @author jonathan.colt
  */
-public interface HighestPartitionTx {
+public interface HighestPartitionTx<R> {
 
-    void tx(VersionedPartitionName versionedPartitionName, State partitionState, long highestTxId) throws Exception;
+    R tx(VersionedPartitionName versionedPartitionName, State partitionState, boolean isOnline, long highestTxId) throws Exception;
 }

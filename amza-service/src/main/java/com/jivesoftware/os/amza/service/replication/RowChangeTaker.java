@@ -213,7 +213,7 @@ public class RowChangeTaker implements RowChanges {
 
                             AtomicLong tookToTxId = new AtomicLong(-1);
                             VersionedPartitionName currentLocalVersionedPartitionName = partitionStateStorage.tx(partitionName,
-                                (localVersionedPartitionName, partitionState) -> {
+                                (localVersionedPartitionName, partitionState, isOnline) -> {
                                     if (localVersionedPartitionName == null) {
                                         PartitionProperties properties = partitionIndex.getProperties(partitionName);
                                         if (properties == null) {

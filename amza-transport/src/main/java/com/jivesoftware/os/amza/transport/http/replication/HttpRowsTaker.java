@@ -17,8 +17,8 @@ package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
@@ -29,11 +29,13 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientConfig;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientConfiguration;
+import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientFactoryProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelper;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import java.io.BufferedInputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -71,7 +73,7 @@ public class HttpRowsTaker implements RowsTaker {
         try {
             httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
                 "/amza/rows/stream/" + localRingMember.getMember() + "/" + remoteVersionedPartitionName.toBase64() + "/" + remoteTxId);
-        } catch (Exception e) {
+        } catch (IOException | HttpClientException e) {
             return new StreamingRowsResult(e, null, null);
         }
         try {

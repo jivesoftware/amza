@@ -199,11 +199,8 @@ public class StripedPartition implements Partition {
     }
 
     @Override
-    public void highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
-        partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            stripe.highestPartitionTxId(partitionName, highestPartitionTx);
-            return null;
-        });
+    public <R> R highestTxId(HighestPartitionTx<R> highestPartitionTx) throws Exception {
+        return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> stripe.highestPartitionTxId(partitionName, highestPartitionTx));
     }
 
 }

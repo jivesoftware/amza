@@ -341,6 +341,7 @@ public class DeltaStripeWALStorage {
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
         State partitionState,
+        boolean isOnline,
         WALStorage storage,
         byte[] prefix,
         Commitable updates,
@@ -367,7 +368,7 @@ public class DeltaStripeWALStorage {
 
         acquireOne();
         try {
-            DeltaWAL wal = deltaWAL.get();
+            DeltaWAL<?> wal = deltaWAL.get();
             RowsChanged rowsChanged;
 
             getPointers(versionedPartitionName, storage, (stream) -> {
@@ -437,7 +438,7 @@ public class DeltaStripeWALStorage {
                         clobbers,
                         updateApplied.txId);
                 }
-                updated.updated(versionedPartitionName, partitionState, updateApplied.txId);
+                updated.updated(versionedPartitionName, partitionState, isOnline, updateApplied.txId);
             }
 
             long unmergedUpdates = updateSinceLastMerge.addAndGet(apply.size());

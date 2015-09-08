@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
@@ -16,7 +17,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -66,37 +66,44 @@ public class TakeRingCoordinator {
         }
     }
 
-    void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, State state, long txId) throws Exception {
+    void update(List<Entry<RingMember, RingHost>> neighbors,
+        VersionedPartitionName versionedPartitionName,
+        State state,
+        boolean isOnline,
+        long txId) throws Exception {
+
         VersionedRing ring = ensureVersionedRing(neighbors);
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName,
             key -> new TakeVersionedPartitionCoordinator(versionedPartitionName,
                 timestampedOrderIdProvider,
-                state,
-                new AtomicLong(txId),
                 slowTakeInMillis,
                 idPacker.pack(slowTakeInMillis, 0, 0), //TODO need orderIdProvider.deltaMillisToIds()
                 systemReofferDeltaMillis,
                 reofferDeltaMillis));
         PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-        coordinator.updateTxId(ring, state, txId, properties.takeFromFactor);
+        coordinator.updateTxId(ring, properties.takeFromFactor, txId, isOnline);
     }
 
-    long availableRowsStream(RingMember ringMember, long takeSessionId, AvailableStream availableStream) throws Exception {
+    long availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
+        RingMember ringMember,
+        long takeSessionId,
+        AvailableStream availableStream) throws Exception {
+
         long suggestedWaitInMillis = Long.MAX_VALUE;
         VersionedRing ring = versionedRing.get();
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
             suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
-                coordinator.availableRowsStream(takeSessionId, ring, ringMember, properties.takeFromFactor, availableStream));
+                coordinator.availableRowsStream(txHighestPartitionTx, takeSessionId, ring, ringMember, properties.takeFromFactor, availableStream));
         }
         return suggestedWaitInMillis;
     }
 
-    void rowsTaken(RingMember remoteRingMember, VersionedPartitionName localVersionedPartitionName, long localTxId) throws Exception {
+    void rowsTaken(RingMember remoteRingMember, VersionedPartitionName localVersionedPartitionName, long localTxId, boolean isOnline) throws Exception {
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(localVersionedPartitionName);
         if (coordinator != null) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-            coordinator.rowsTaken(versionedRing.get(), remoteRingMember, localTxId, properties.takeFromFactor);
+            coordinator.rowsTaken(versionedRing.get(), remoteRingMember, localTxId, properties.takeFromFactor, isOnline);
         }
     }
 
@@ -142,6 +149,10 @@ public class TakeRingCoordinator {
                     }
                 }
             }
+        }
+
+        public int getTakeFromFactor() {
+            return takeFromFactor;
         }
 
         public Integer getCategory(RingMember ringMember) {

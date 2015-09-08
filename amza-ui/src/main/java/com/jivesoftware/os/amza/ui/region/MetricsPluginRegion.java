@@ -289,10 +289,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("count", "disabled");
             }
 
-            partition.highestTxId((versionedPartitionName, state, highestTxId) -> {
+            partition.highestTxId((versionedPartitionName, state, isOnline, highestTxId) -> {
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
                 map.put("state", state.name());
+                map.put("isOnline", isOnline);
                 map.put("highestTxId", Long.toHexString(highestTxId));
+                return null;
             });
 
             PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
@@ -366,7 +368,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -458,7 +460,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;

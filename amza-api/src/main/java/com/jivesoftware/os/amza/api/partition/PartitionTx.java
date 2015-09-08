@@ -8,5 +8,5 @@ import com.jivesoftware.os.amza.aquarium.State;
  */
 public interface PartitionTx<R> {
 
-    R tx(VersionedPartitionName versionedPartitionName, State state) throws Exception;
+    R tx(VersionedPartitionName versionedPartitionName, State state, boolean isOnline) throws Exception;
 }

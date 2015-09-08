@@ -87,7 +87,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = new String[]{"./var/data/"};
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -156,8 +156,8 @@ public class AmzaServiceInitializer {
         ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
         AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
 
-        WALUpdated walUpdated = (versionedPartitionName, state, txId) -> {
-            takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), state, txId);
+        WALUpdated walUpdated = (versionedPartitionName, state, isOnline, txId) -> {
+            takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), state, isOnline, txId);
         };
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
@@ -232,7 +232,7 @@ public class AmzaServiceInitializer {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             VersionedState state = partitionStateStorage.getLocalVersionedState(versionedPartitionName.getPartitionName());
             if (state != null && state.storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()) {
-                takeCoordinator.updated(amzaRingReader, versionedPartitionName, state.state, partitionStore.highestTxId());
+                takeCoordinator.updated(amzaRingReader, versionedPartitionName, state.state, state.isOnline, partitionStore.highestTxId());
             } else {
                 LOG.warn("State:{} wasn't aligned with versioned partition:{}", state, versionedPartitionName);
             }
@@ -282,8 +282,10 @@ public class AmzaServiceInitializer {
             walUpdated,
             allRowChanges);
 
-        HighestPartitionTx takeHighestPartitionTx = (versionedPartitionName, partitionState, highestTxId)
-            -> takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionState, highestTxId);
+        HighestPartitionTx<Void> takeHighestPartitionTx = (versionedPartitionName, partitionState, isOnline, highestTxId) -> {
+            takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionState, isOnline, highestTxId);
+            return null;
+        };
 
         systemWALStorage.highestPartitionTxIds(takeHighestPartitionTx);
 

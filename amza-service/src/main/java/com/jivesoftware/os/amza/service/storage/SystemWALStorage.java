@@ -60,7 +60,7 @@ public class SystemWALStorage {
         }
         if (!changed.getApply().isEmpty()) {
             //LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
-            updated.updated(versionedPartitionName, State.follower, changed.getLargestCommittedTxId());
+            updated.updated(versionedPartitionName, State.follower, true, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);
         return changed;
@@ -102,7 +102,7 @@ public class SystemWALStorage {
 
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         PartitionStripe.RowStreamer streamer = rowStream -> partitionStore.takeRowUpdatesSince(transactionId, rowStream);
-        return takeRowUpdates.give(versionedPartitionName, State.follower, streamer);
+        return takeRowUpdates.give(versionedPartitionName, State.follower, true, streamer);
     }
 
     public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName,
@@ -176,14 +176,25 @@ public class SystemWALStorage {
         }
     }
 
-    public void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
+    public void highestPartitionTxIds(HighestPartitionTx<Void> tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getAllPartitions(), IS_SYSTEM_PREDICATE)) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();
-                tx.tx(versionedPartitionName, State.follower, highestTxId);
+                tx.tx(versionedPartitionName, State.follower, true, highestTxId);
             }
         }
+    }
+
+    public <R> R highestPartitionTxId(VersionedPartitionName versionedPartitionName, HighestPartitionTx<R> tx) throws Exception {
+        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        if (partitionStore != null) {
+            long highestTxId = partitionStore.getWalStorage().highestTxId();
+            return tx.tx(versionedPartitionName, State.follower, true, highestTxId);
+        } else {
+            return tx.tx(null, null, false, -1);
+        }
+
     }
 
     public long count(VersionedPartitionName versionedPartitionName) throws Exception {

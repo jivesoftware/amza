@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -125,18 +126,18 @@ public class TakeCoordinator {
         }
     }
 
-    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, State state, long txId) throws Exception {
+    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, State state, boolean isOnline, long txId) throws Exception {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
         TakeRingCoordinator ring = ensureRingCoodinator(ringName, neighbors);
-        ring.update(neighbors, versionedPartitionName, state, txId);
+        ring.update(neighbors, versionedPartitionName, state, isOnline, txId);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(neighbors);
     }
 
-    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, State state) throws Exception {
-        updated(ringReader, versionedPartitionName, state, 0);
+    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, State state, boolean isOnline) throws Exception {
+        updated(ringReader, versionedPartitionName, state, isOnline, 0);
     }
 
     private TakeRingCoordinator ensureRingCoodinator(byte[] ringName, List<Entry<RingMember, RingHost>> neighbors) {
@@ -160,7 +161,8 @@ public class TakeCoordinator {
         }
     }
 
-    public void availableRowsStream(AmzaRingReader ringReader,
+    public void availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
+        AmzaRingReader ringReader,
         RingMember remoteRingMember,
         long takeSessionId,
         long heartbeatIntervalMillis,
@@ -181,12 +183,12 @@ public class TakeCoordinator {
             long start = updates.get();
             //LOG.info("CHECKING: remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
 
-            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
+            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                        ring.availableRowsStream(remoteRingMember, takeSessionId, watchAvailableStream));
+                        ring.availableRowsStream(txHighestPartitionTx, remoteRingMember, takeSessionId, watchAvailableStream));
                 }
                 return true;
             });
@@ -219,13 +221,14 @@ public class TakeCoordinator {
 
     public void rowsTaken(RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
-        long localTxId) throws Exception {
+        long localTxId,
+        boolean isOnline) throws Exception {
 
         //LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
         //    remoteRingMember, null, localTxId, localVersionedPartitionName);
         byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
-        ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId);
+        ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId, isOnline);
     }
 
 }

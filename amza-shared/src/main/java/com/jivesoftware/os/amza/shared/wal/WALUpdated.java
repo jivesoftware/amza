@@ -8,6 +8,6 @@ import com.jivesoftware.os.amza.aquarium.State;
  */
 public interface WALUpdated {
 
-    void updated(VersionedPartitionName versionedPartitionName, State state, long txId) throws Exception;
+    void updated(VersionedPartitionName versionedPartitionName, State state, boolean isOnline, long txId) throws Exception;
 
 }

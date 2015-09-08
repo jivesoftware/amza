@@ -85,12 +85,12 @@ public class PartitionStripe {
     public void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getAllPartitions(), predicate)) {
             txPartitionState.tx(versionedPartitionName.getPartitionName(),
-                (currentVersionedPartitionName, partitionState) -> {
+                (currentVersionedPartitionName, partitionState, isOnline) -> {
                     if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
                         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                         if (partitionStore != null) {
                             long highestTxId = storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
-                            tx.tx(currentVersionedPartitionName, partitionState, highestTxId);
+                            tx.tx(currentVersionedPartitionName, partitionState, isOnline, highestTxId);
                         }
                     }
                     return null;
@@ -98,25 +98,21 @@ public class PartitionStripe {
         }
     }
 
-    public void highestPartitionTxId(PartitionName partitionName, HighestPartitionTx tx) throws Exception {
-        txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
+    public <R> R highestPartitionTxId(PartitionName partitionName, HighestPartitionTx<R> tx) throws Exception {
+        return txPartitionState.tx(partitionName,
+            (versionedPartitionName, partitionState, isOnline) -> {
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore != null) {
                     long highestTxId = storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
-                    tx.tx(versionedPartitionName, partitionState, highestTxId);
+                    return tx.tx(versionedPartitionName, partitionState, isOnline, highestTxId);
+                } else {
+                    return tx.tx(null, null, false, -1);
                 }
-                return null;
             });
     }
 
     public <R> R txPartition(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
         return txPartitionState.tx(partitionName, tx);
-    }
-
-    boolean isOnline(State state) {
-        //TODO much more intelligent checkeroos
-        return state == State.follower || state == State.leader;
     }
 
     public RowsChanged commit(HighwaterStorage highwaterStorage,
@@ -128,8 +124,8 @@ public class PartitionStripe {
         WALUpdated updated) throws Exception {
 
         return txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(isOnline(partitionState) || !requiresOnline, "Partition:%s state:%s is not online.",
+            (versionedPartitionName, partitionState, isOnline) -> {
+                Preconditions.checkState(isOnline || !requiresOnline, "Partition:%s state:%s is not online.",
                     partitionName,
                     partitionState);
                 if (specificVersion.isPresent() && versionedPartitionName.getPartitionVersion() != specificVersion.get()) {
@@ -142,6 +138,7 @@ public class PartitionStripe {
                     RowsChanged changes = storage.update(highwaterStorage,
                         versionedPartitionName,
                         partitionState,
+                        isOnline,
                         partitionStore.getWalStorage(),
                         prefix,
                         updates,
@@ -160,8 +157,8 @@ public class PartitionStripe {
 
     public boolean get(PartitionName partitionName, byte[] prefix, byte[] key, KeyValueStream keyValueStream) throws Exception {
         return txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
+            (versionedPartitionName, partitionState, isOnline) -> {
+                Preconditions.checkState(isOnline, "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -174,8 +171,8 @@ public class PartitionStripe {
 
     public boolean get(PartitionName partitionName, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
         return txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
+            (versionedPartitionName, partitionState, isOnline) -> {
+                Preconditions.checkState(isOnline, "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -188,8 +185,8 @@ public class PartitionStripe {
 
     public void rowScan(PartitionName partitionName, KeyValueStream keyValueStream) throws Exception {
         txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
+            (versionedPartitionName, partitionState, isOnline) -> {
+                Preconditions.checkState(isOnline, "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -209,8 +206,8 @@ public class PartitionStripe {
         KeyValueStream keyValueStream) throws Exception {
 
         txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName,
+            (versionedPartitionName, partitionState, isOnline) -> {
+                Preconditions.checkState(isOnline, "Partition:%s state:%s is not online.", partitionName,
                     partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
@@ -225,7 +222,7 @@ public class PartitionStripe {
 
     public interface TakeRowUpdates<R> {
 
-        R give(VersionedPartitionName versionedPartitionName, State partitionState, RowStreamer streamer) throws Exception;
+        R give(VersionedPartitionName versionedPartitionName, State partitionState, boolean isOnline, RowStreamer streamer) throws Exception;
     }
 
     public interface RowStreamer {
@@ -234,7 +231,7 @@ public class PartitionStripe {
     }
 
     public void takeAllRows(PartitionName partitionName, RowStream rowStream) throws Exception {
-        txPartitionState.tx(partitionName, (versionedPartitionName, partitionState) -> {
+        txPartitionState.tx(partitionName, (versionedPartitionName, partitionState, isOnline) -> {
             if (versionedPartitionName == null || partitionState == null) {
                 return true;
             }
@@ -251,18 +248,18 @@ public class PartitionStripe {
         long transactionId,
         TakeRowUpdates<R> takeRowUpdates)
         throws Exception {
-        return txPartitionState.tx(partitionName, (versionedPartitionName, partitionState) -> {
+        return txPartitionState.tx(partitionName, (versionedPartitionName, partitionState, isOnline) -> {
             if (versionedPartitionName == null || partitionState == null) {
-                return takeRowUpdates.give(null, null, null);
+                return takeRowUpdates.give(null, null, false, null);
             }
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore == null) {
-                return takeRowUpdates.give(null, null, null);
+                return takeRowUpdates.give(null, null, false, null);
             } else {
-                RowStreamer streamer = isOnline(partitionState)
+                RowStreamer streamer = isOnline
                     ? rowStream -> storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
                     : null;
-                return takeRowUpdates.give(versionedPartitionName, partitionState, streamer);
+                return takeRowUpdates.give(versionedPartitionName, partitionState, isOnline, streamer);
             }
         });
     }
@@ -274,10 +271,10 @@ public class PartitionStripe {
         TxKeyValueStream txKeyValueStream) throws Exception {
 
         return txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
+            (versionedPartitionName, partitionState, isOnline) -> {
 
                 WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
+                Preconditions.checkState(isOnline, "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -311,10 +308,10 @@ public class PartitionStripe {
         TxKeyValueStream txKeyValueStream) throws Exception {
 
         return txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
+            (versionedPartitionName, partitionState, isOnline) -> {
 
                 WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
-                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
+                Preconditions.checkState(isOnline, "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -342,7 +339,7 @@ public class PartitionStripe {
 
     public long count(PartitionName partitionName) throws Exception {
         return txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
+            (versionedPartitionName, partitionState, isOnline) -> {
                 // any state is OK!
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {
@@ -355,8 +352,8 @@ public class PartitionStripe {
 
     public boolean containsKeys(PartitionName partitionName, byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
         return txPartitionState.tx(partitionName,
-            (versionedPartitionName, partitionState) -> {
-                Preconditions.checkState(isOnline(partitionState), "Partition:%s state:%s is not online.", partitionName, partitionState);
+            (versionedPartitionName, partitionState, isOnline) -> {
+                Preconditions.checkState(isOnline, "Partition:%s state:%s is not online.", partitionName, partitionState);
 
                 PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                 if (partitionStore == null) {

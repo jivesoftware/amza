@@ -11,6 +11,7 @@
         <td></td>
         <td></td>
         <td></td>
+        <td></td>
         <td><b>{$grandTotals.gets}</b>{sp}<i>{$grandTotals.getsLag}millis lag</i></td>
         <td><b>{$grandTotals.scans}</b>{sp}<i>{$grandTotals.scansLag}millis lag</i></td>
         <td><b>{$grandTotals.directApplies}</b>{sp}<i>{$grandTotals.directAppliesLag}millis lag</i></td>
@@ -27,6 +28,23 @@
         <tr>
             <td>
                 <a href="/amza/ui/inspect?regionType={$r.type}&ringName={$r.ringName}&regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search"></span>Inspect</a>
+            </td>
+            <td>
+                {if $r.localState}
+                    Local:<br>
+                    state:{$r.localState.state}<br>
+                    online:{$r.localState.isOnline}<br>
+                    partitionVersion:{$r.localState.partitionVersion}<br>
+                    stripeVersion:{$r.localState.stripeVersion}<br>
+                {/if}
+                {if $r.neighborStates}
+                    {foreach $n in $r.neighborStates}
+                        Remote:<br>
+                        name:{$n.name}<br>
+                        state:{$n.state}<br>
+                        version:{$n.version}<br>
+                    {/foreach}
+                {/if}
             </td>
             <td>{$r.ringName}</td>
             <td>{$r.name}</td>

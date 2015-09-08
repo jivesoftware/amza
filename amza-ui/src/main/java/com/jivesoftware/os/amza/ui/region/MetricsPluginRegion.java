@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.Partition;
+import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.management.Attribute;
@@ -329,6 +331,23 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         map.put("takesLag", getDurationBreakdown(totals.takesLag.get()));
         map.put("takeApplies", numberFormat.format(totals.takeApplies.get()));
         map.put("takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()));
+
+        VersionedState localVersionedState = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
+        map.put("localState", ImmutableMap.of("online", localVersionedState.isOnline,
+            "state", localVersionedState.state.name(),
+            "partitionVersion", String.valueOf(localVersionedState.storageVersion.partitionVersion),
+            "stripeVersion", String.valueOf(localVersionedState.storageVersion.stripeVersion)));
+
+        List<Map<String, Object>> neighborStates = new ArrayList<>();
+        Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
+        for (RingMember ringMember : neighboringRingMembers) {
+
+            RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
+            neighborStates.add(ImmutableMap.of("version", neighborState.version,
+                "state", neighborState.state.name(),
+                "name", ringMember.getMember()));
+        }
+        map.put("neighborStates", neighborStates);
 
         return map;
     }

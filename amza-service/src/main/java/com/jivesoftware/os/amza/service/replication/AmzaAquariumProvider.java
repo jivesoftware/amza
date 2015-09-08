@@ -21,12 +21,15 @@ import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -35,7 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  *
  */
-public class AmzaAquariumProvider {
+public class AmzaAquariumProvider implements RowChanges {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -117,7 +120,7 @@ public class AmzaAquariumProvider {
                 //TODO make sure this is a valid transition
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
-                byte[] valueBytes = { state.getSerializedForm() };
+                byte[] valueBytes = {state.getSerializedForm()};
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
@@ -126,7 +129,7 @@ public class AmzaAquariumProvider {
                 //TODO make sure this is a valid transition
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
-                byte[] valueBytes = { state.getSerializedForm() };
+                byte[] valueBytes = {state.getSerializedForm()};
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
@@ -273,7 +276,7 @@ public class AmzaAquariumProvider {
             AmzaPartitionUpdates amzaPartitionUpdates = new AmzaPartitionUpdates();
             boolean result = updates.updates((rootMember, otherMember, lifecycle, state, timestamp) -> {
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
-                byte[] valueBytes = { state.getSerializedForm() };
+                byte[] valueBytes = {state.getSerializedForm()};
                 amzaPartitionUpdates.set(keyBytes, valueBytes, timestamp);
                 return true;
             });
@@ -340,6 +343,18 @@ public class AmzaAquariumProvider {
             TimestampedValue timestampedValue = systemWALStorage.getTimestampedValue(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, null,
                 livelinessKey(rootMember, otherMember));
             return timestampedValue != null ? timestampedValue.getTimestampId() : -1;
+        }
+    }
+
+    @Override
+    public void changes(RowsChanged changes) throws Exception {
+        if (PartitionCreator.AQUARIUM_STATE_INDEX.equals(changes.getVersionedPartitionName())) {
+            for (Map.Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
+                streamStateKey(change.getKey().key, (partitionName, context, rootRingMember1, partitionVersion, isSelf, ackRingMember) -> {
+                    getAquarium(new VersionedPartitionName(partitionName, partitionVersion)).tapTheGlass();
+                    return true;
+                });
+            }
         }
     }
 

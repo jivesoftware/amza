@@ -187,7 +187,6 @@ public class PartitionStateStorage implements TxPartitionState {
 
     public boolean isOnline(VersionedPartitionName versionedPartitionName,
         State partitionState) throws Exception {
-        //TODO far more intelligent checkerooskies
         if (partitionState == State.follower || partitionState == State.leader) {
             State livelyEndState = getAquarium(versionedPartitionName).livelyEndState();
             return livelyEndState == State.follower || livelyEndState == State.leader;

@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.aquarium.Liveliness;
 import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
@@ -219,7 +220,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             if (!isOnline) {
                 VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
                 versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
-                partitionState = versionedState.state;
+                partitionState = versionedState.waterline;
             }
             if (partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
                 takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName, partitionState, isOnline);
@@ -267,9 +268,9 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(e.getKey(), partitionName);
             if (remoteVersionedState == null) {
                 missingRingMembers.add(e.getKey());
-            } else if (remoteVersionedState.state == State.expunged) {
+            } else if (remoteVersionedState.waterline.getState() == State.expunged) {
                 expungedRingMembers.add(e.getKey());
-            } else if (remoteVersionedState.state == State.bootstrap) {
+            } else if (remoteVersionedState.waterline.getState() == State.bootstrap) {
                 ketchupRingMembers.add(e.getKey());
             } else {
                 orderedPartitionHosts.add(e.getValue());
@@ -392,12 +393,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             remoteRingMember,
             takeSessionId,
             heartbeatIntervalMillis,
-            (partitionName, state, txId) -> {
+            (partitionName, txId) -> {
                 dos.write(1);
                 byte[] bytes = partitionName.toBytes();
                 dos.writeInt(bytes.length);
                 dos.write(bytes);
-                dos.write(state.getSerializedForm());
                 dos.writeLong(txId);
             }, () -> {
                 if (out.size() > 0) {
@@ -455,7 +455,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         } else {
             needsToMarkAsKetchup = partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(),
                 (stripe, highwaterStorage) -> stripe.takeRowUpdatesSince(localVersionedPartitionName.getPartitionName(), localTxId,
-                    (versionedPartitionName, partitionState, isOnline, streamer) -> {
+                    (versionedPartitionName, partitionWaterlineState, isOnline, streamer) -> {
                         if (localVersionedPartitionName.equals(versionedPartitionName) && isOnline) {
                             return streamOnline(remoteRingMember,
                                 versionedPartitionName,
@@ -465,7 +465,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                                 highwaterStorage,
                                 streamer);
                         } else {
-                            return streamOffline(dos, bytes, versionedPartitionName, partitionState);
+                            return streamOffline(dos, bytes, versionedPartitionName, partitionWaterlineState);
                         }
                     }));
         }
@@ -484,21 +484,21 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         }
     }
 
-    boolean isOnline(VersionedPartitionName versionedPartitionName, State state) throws Exception {
-        return partitionStateStorage.isOnline(versionedPartitionName, state);
+    boolean isOnline(VersionedPartitionName versionedPartitionName, Waterline waterline) throws Exception {
+        return partitionStateStorage.isOnline(versionedPartitionName, waterline);
 
     }
 
     private boolean streamOffline(DataOutputStream dos,
         MutableLong bytes,
         VersionedPartitionName versionedPartitionName,
-        State partitionState) throws Exception {
+        Waterline partitionWaterlineState) throws Exception {
         dos.writeLong(-1);
         dos.writeByte(0); // not online
         dos.writeByte(0); // last entry marker
         dos.writeByte(0); // last entry marker
         bytes.add(3);
-        if (versionedPartitionName == null || partitionState == null) {
+        if (versionedPartitionName == null || partitionWaterlineState == null) {
             // someone thinks we're a member for this partition
             return true;
         } else {

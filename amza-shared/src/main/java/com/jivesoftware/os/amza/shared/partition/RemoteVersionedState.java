@@ -1,17 +1,17 @@
 package com.jivesoftware.os.amza.shared.partition;
 
-import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 
 /**
  * @author jonathan.colt
  */
 public class RemoteVersionedState {
 
-    public final State state;
+    public final Waterline waterline;
     public final long version;
 
-    public RemoteVersionedState(State state, long version) {
-        this.state = state;
+    public RemoteVersionedState(Waterline waterline, long version) {
+        this.waterline = waterline;
         this.version = version;
     }
 
@@ -29,7 +29,7 @@ public class RemoteVersionedState {
         if (version != that.version) {
             return false;
         }
-        if (state != that.state) {
+        if (waterline != that.waterline) {
             return false;
         }
 
@@ -38,14 +38,14 @@ public class RemoteVersionedState {
 
     @Override
     public int hashCode() {
-        int result = state != null ? state.hashCode() : 0;
+        int result = waterline != null ? waterline.hashCode() : 0;
         result = 31 * result + (int) (version ^ (version >>> 32));
         return result;
     }
 
     @Override
     public String toString() {
-        return "RemoteVersionedState{" + "state=" + state + ", version=" + version + '}';
+        return "RemoteVersionedState{" + "waterline=" + waterline + ", version=" + version + '}';
     }
 
 }

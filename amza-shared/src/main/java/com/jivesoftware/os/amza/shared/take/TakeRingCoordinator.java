@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.shared.take;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
@@ -68,7 +68,7 @@ public class TakeRingCoordinator {
 
     void update(List<Entry<RingMember, RingHost>> neighbors,
         VersionedPartitionName versionedPartitionName,
-        State state,
+        Waterline waterline,
         boolean isOnline,
         long txId) throws Exception {
 

@@ -137,9 +137,9 @@ public class AmzaTestCluster {
                     amzaNode.takePartitionUpdates(localRingMember,
                         takeSessionId,
                         timeoutMillis,
-                        (versionedPartitionName, state, txId) -> {
+                        (versionedPartitionName, txId) -> {
                             if (versionedPartitionName != null) {
-                                updatedPartitionsStream.available(versionedPartitionName, state, txId);
+                                updatedPartitionsStream.available(versionedPartitionName, txId);
                             }
                         },
                         () -> {

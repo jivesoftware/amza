@@ -106,7 +106,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
                 Map<String, Object> row = new HashMap<>();
                 VersionedState state = amzaService.getPartitionStateStorage().getLocalVersionedState(partitionName);
-                row.put("state", state == null ? "unknown" : state.state.toString());
+                row.put("state", state == null ? "unknown" : state.waterline.toString());
                 row.put("version", state == null ? "unknown" : Long.toHexString(state.storageVersion.partitionVersion));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                 row.put("name", new String(partitionName.getName()));

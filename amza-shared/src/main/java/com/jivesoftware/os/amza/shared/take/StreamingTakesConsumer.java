@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.shared.take;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.aquarium.State;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import java.io.DataInputStream;
@@ -26,10 +25,8 @@ public class StreamingTakesConsumer {
                 }
                 byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
                 dis.readFully(versionedPartitionNameBytes);
-                byte stateByte = (byte) dis.read();
-                State state = State.fromSerializedForm(stateByte);
                 long txId = dis.readLong();
-                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), state, txId);
+                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), txId);
             }
         }
     }

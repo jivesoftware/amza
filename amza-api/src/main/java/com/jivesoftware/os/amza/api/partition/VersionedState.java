@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.api.partition;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import java.util.Objects;
 
 /**
@@ -9,14 +9,14 @@ import java.util.Objects;
  */
 public class VersionedState {
 
-    public final State state;
+    public final Waterline waterline;
     public final boolean isOnline;
     public final StorageVersion storageVersion;
 
-    public VersionedState(State state, boolean isOnline, StorageVersion storageVersion) {
-        Preconditions.checkNotNull(state, "State cannot be null");
+    public VersionedState(Waterline waterline, boolean isOnline, StorageVersion storageVersion) {
+        Preconditions.checkNotNull(waterline, "Waterline cannot be null");
         Preconditions.checkNotNull(storageVersion, "StorageVersion cannot be null");
-        this.state = state;
+        this.waterline = waterline;
         this.isOnline = isOnline;
         this.storageVersion = storageVersion;
     }
@@ -24,7 +24,7 @@ public class VersionedState {
     @Override
     public int hashCode() {
         int hash = 7;
-        hash = 29 * hash + Objects.hashCode(this.state);
+        hash = 29 * hash + Objects.hashCode(this.waterline);
         hash = 29 * hash + (this.isOnline ? 1 : 0);
         hash = 29 * hash + Objects.hashCode(this.storageVersion);
         return hash;
@@ -39,7 +39,7 @@ public class VersionedState {
             return false;
         }
         final VersionedState other = (VersionedState) obj;
-        if (this.state != other.state) {
+        if (this.waterline != other.waterline) {
             return false;
         }
         if (this.isOnline != other.isOnline) {
@@ -53,7 +53,7 @@ public class VersionedState {
 
     @Override
     public String toString() {
-        return "VersionedState{" + "state=" + state + ", isOnline=" + isOnline + ", storageVersion=" + storageVersion + '}';
+        return "VersionedState{" + "waterline=" + waterline + ", isOnline=" + isOnline + ", storageVersion=" + storageVersion + '}';
     }
 
 }

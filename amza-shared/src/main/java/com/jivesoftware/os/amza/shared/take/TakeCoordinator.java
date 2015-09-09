@@ -6,7 +6,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -126,18 +126,19 @@ public class TakeCoordinator {
         }
     }
 
-    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, State state, boolean isOnline, long txId) throws Exception {
+    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, Waterline waterline, boolean isOnline, long txId) throws
+        Exception {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
         TakeRingCoordinator ring = ensureRingCoodinator(ringName, neighbors);
-        ring.update(neighbors, versionedPartitionName, state, isOnline, txId);
+        ring.update(neighbors, versionedPartitionName, waterline, isOnline, txId);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(neighbors);
     }
 
-    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, State state, boolean isOnline) throws Exception {
-        updated(ringReader, versionedPartitionName, state, isOnline, 0);
+    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, Waterline waterline, boolean isOnline) throws Exception {
+        updated(ringReader, versionedPartitionName, waterline, isOnline, 0);
     }
 
     private TakeRingCoordinator ensureRingCoodinator(byte[] ringName, List<Entry<RingMember, RingHost>> neighbors) {
@@ -171,11 +172,11 @@ public class TakeCoordinator {
         Callable<Void> pingCallback) throws Exception {
 
         AtomicLong offered = new AtomicLong();
-        AvailableStream watchAvailableStream = (versionedPartitionName, state, txId) -> {
+        AvailableStream watchAvailableStream = (versionedPartitionName, txId) -> {
             //LOG.info("OFFER:local:{} remote:{} txId:{} partition:{} state:{}",
             //    ringReader.getRingMember(), remoteRingMember, txId, versionedPartitionName, state);
             offered.incrementAndGet();
-            availableStream.available(versionedPartitionName, state, txId);
+            availableStream.available(versionedPartitionName, txId);
             amzaStats.offers(remoteRingMember, versionedPartitionName.getPartitionName(), 1, txId);
         };
 

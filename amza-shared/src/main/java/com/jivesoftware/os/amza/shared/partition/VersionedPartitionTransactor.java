@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.shared.partition;
 
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -22,23 +22,23 @@ public class VersionedPartitionTransactor {
     }
 
     public <R> R doWithOne(VersionedPartitionName versionedPartitionName,
-        State state,
+        Waterline waterline,
         boolean isOnline,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedPartitionName, state, isOnline, 1, tx);
+        return doWith(versionedPartitionName, waterline, isOnline, 1, tx);
     }
 
     public <R> R doWithAll(VersionedPartitionName versionedPartitionName,
-        State state,
+        Waterline waterline,
         boolean isOnline,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedPartitionName, state, isOnline, numPermits, tx);
+        return doWith(versionedPartitionName, waterline, isOnline, numPermits, tx);
     }
 
     private <R> R doWith(VersionedPartitionName versionedPartitionName,
-        State state,
+        Waterline waterline,
         boolean isOnline,
         int count,
         PartitionTx<R> tx) throws Exception {
@@ -46,7 +46,7 @@ public class VersionedPartitionTransactor {
         Semaphore semaphore = semaphore(versionedPartitionName);
         semaphore.acquire(count);
         try {
-            return tx.tx(versionedPartitionName, state, isOnline);
+            return tx.tx(versionedPartitionName, waterline, isOnline);
         } finally {
             semaphore.release(count);
         }

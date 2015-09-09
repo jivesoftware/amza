@@ -61,13 +61,13 @@ public class TakeVersionedPartitionCoordinator {
 
         if (takeFromFactor > 0) {
             return txHighestPartitionTx.tx(versionedPartitionName.getPartitionName(),
-                (VersionedPartitionName versionedPartitionName1, State partitionState, boolean isOnline, long highestTxId) -> {
+                ( versionedPartitionName1,  partitionWaterlineState,  isOnline,  highestTxId) -> {
                     if (versionedPartitionName1.getPartitionVersion() != versionedPartitionName.getPartitionVersion()) {
                         return Long.MAX_VALUE;
                     }
 
                     Integer category = versionedRing.getCategory(ringMember);
-                    if (partitionState == State.bootstrap || (category != null && category <= currentCategory.get())) {
+                    if (partitionWaterlineState.getState() == State.bootstrap || (category != null && category <= currentCategory.get())) {
                         AtomicBoolean available = new AtomicBoolean(false);
                         long reofferDelta = ((versionedPartitionName.getPartitionName().isSystemPartition()) ? systemReofferDeltaMillis : reofferDeltaMillis);
                         long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;
@@ -106,7 +106,7 @@ public class TakeVersionedPartitionCoordinator {
                             }
                         });
                         if (available.get()) {
-                            availableStream.available(versionedPartitionName, partitionState, highestTxId);
+                            availableStream.available(versionedPartitionName, highestTxId);
                             return reofferDelta;
                         } else {
                             return Long.MAX_VALUE;

@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -60,7 +61,8 @@ public class SystemWALStorage {
         }
         if (!changed.getApply().isEmpty()) {
             //LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
-            updated.updated(versionedPartitionName, State.follower, true, changed.getLargestCommittedTxId());
+            Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+            updated.updated(versionedPartitionName, waterline, true, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);
         return changed;
@@ -102,7 +104,8 @@ public class SystemWALStorage {
 
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         PartitionStripe.RowStreamer streamer = rowStream -> partitionStore.takeRowUpdatesSince(transactionId, rowStream);
-        return takeRowUpdates.give(versionedPartitionName, State.follower, true, streamer);
+        Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+        return takeRowUpdates.give(versionedPartitionName, waterline, true, streamer);
     }
 
     public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName,
@@ -181,7 +184,8 @@ public class SystemWALStorage {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();
-                tx.tx(versionedPartitionName, State.follower, true, highestTxId);
+                Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+                tx.tx(versionedPartitionName, waterline, true, highestTxId);
             }
         }
     }
@@ -190,7 +194,8 @@ public class SystemWALStorage {
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         if (partitionStore != null) {
             long highestTxId = partitionStore.getWalStorage().highestTxId();
-            return tx.tx(versionedPartitionName, State.follower, true, highestTxId);
+            Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+            return tx.tx(versionedPartitionName, waterline, true, highestTxId);
         } else {
             return tx.tx(null, null, false, -1);
         }

@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.aquarium.Member;
 import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
@@ -55,16 +56,18 @@ public class AmzaStateStorageNGTest {
             indexedWALStorageProvider,
             partitionPropertyMarshaller,
             false);
+
+        Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
         TxPartitionState txPartitionState = new TxPartitionState() {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                return tx.tx(new VersionedPartitionName(partitionName, 0), State.follower, true);
+                return tx.tx(new VersionedPartitionName(partitionName, 0), waterline, true);
             }
 
             @Override
             public VersionedState getLocalVersionedState(PartitionName partitionName) throws Exception {
-                return new VersionedState(State.follower, true, new StorageVersion(0, 0));
+                return new VersionedState(waterline, true, new StorageVersion(0, 0));
             }
         };
 

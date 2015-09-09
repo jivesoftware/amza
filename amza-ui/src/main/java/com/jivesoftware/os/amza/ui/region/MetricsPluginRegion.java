@@ -291,9 +291,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("count", "disabled");
             }
 
-            partition.highestTxId((versionedPartitionName, state, isOnline, highestTxId) -> {
+            partition.highestTxId((versionedPartitionName, waterline, isOnline, highestTxId) -> {
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                map.put("state", state.name());
+                map.put("state", waterline.getState().name());
                 map.put("isOnline", isOnline);
                 map.put("highestTxId", Long.toHexString(highestTxId));
                 return null;
@@ -333,12 +333,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         map.put("takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()));
 
         if (name != null) {
-            VersionedState localVersionedState = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
-            map.put("localState", ImmutableMap.of("online", localVersionedState.isOnline,
-                "state", localVersionedState.state.name(),
+            VersionedState localVersionedWaterline = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
+            map.put("localState", ImmutableMap.of("online", localVersionedWaterline.isOnline,
+                "state", localVersionedWaterline.waterline.getState().name(),
                 "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
-                "partitionVersion", String.valueOf(localVersionedState.storageVersion.partitionVersion),
-                "stripeVersion", String.valueOf(localVersionedState.storageVersion.stripeVersion)));
+                "partitionVersion", String.valueOf(localVersionedWaterline.storageVersion.partitionVersion),
+                "stripeVersion", String.valueOf(localVersionedWaterline.storageVersion.stripeVersion)));
 
             List<Map<String, Object>> neighborStates = new ArrayList<>();
             Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
@@ -346,7 +346,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
                 RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
                 neighborStates.add(ImmutableMap.of("version", String.valueOf(neighborState.version),
-                    "state", neighborState.state.name(),
+                    "state", neighborState.waterline.getState().name(),
                     "name", new String(ringMember.getMember().getBytes())));
             }
             map.put("neighborStates", neighborStates);

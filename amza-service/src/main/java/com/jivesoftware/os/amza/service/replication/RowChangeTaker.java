@@ -190,7 +190,7 @@ public class RowChangeTaker implements RowChanges {
                         remoteRingHost,
                         sessionId,
                         longPollTimeoutMillis,
-                        (remoteVersionedPartitionName, remoteState, txId) -> {
+                        (remoteVersionedPartitionName, txId) -> {
                             amzaStats.longPollAvailables(remoteRingMember);
 
                             if (disposed.get()) {
@@ -199,8 +199,8 @@ public class RowChangeTaker implements RowChanges {
 
                             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
                             if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
-                                LOG.info("NOT A MEMBER: local:{} remote:{}  txId:{} partition:{} state:{}",
-                                    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
+                                LOG.info("NOT A MEMBER: local:{} remote:{}  txId:{} partition:{}",
+                                    ringHost, remoteRingHost, txId, remoteVersionedPartitionName);
                                 return;
                             }
 
@@ -213,7 +213,7 @@ public class RowChangeTaker implements RowChanges {
 
                             AtomicLong tookToTxId = new AtomicLong(-1);
                             VersionedPartitionName currentLocalVersionedPartitionName = partitionStateStorage.tx(partitionName,
-                                (localVersionedPartitionName, partitionState, isOnline) -> {
+                                (localVersionedPartitionName, partitionWaterlineState, isOnline) -> {
                                     if (localVersionedPartitionName == null) {
                                         PartitionProperties properties = partitionIndex.getProperties(partitionName);
                                         if (properties == null) {
@@ -232,7 +232,7 @@ public class RowChangeTaker implements RowChanges {
                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                                         return null;
                                     }
-                                    if (partitionState == State.expunged) {
+                                    if (partitionWaterlineState.getState() == State.expunged) {
                                         //LOG.info("EXPUNGED: local:{} remote:{}  txId:{} partition:{} localState:{} remoteState:{}",
                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, partitionState, remoteState);
                                         return null;

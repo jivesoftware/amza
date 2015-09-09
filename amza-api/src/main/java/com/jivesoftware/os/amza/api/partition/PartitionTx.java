@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.api.partition;
 
-import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 
 /**
  *
@@ -8,5 +8,5 @@ import com.jivesoftware.os.amza.aquarium.State;
  */
 public interface PartitionTx<R> {
 
-    R tx(VersionedPartitionName versionedPartitionName, State state, boolean isOnline) throws Exception;
+    R tx(VersionedPartitionName versionedPartitionName, Waterline waterline, boolean isOnline) throws Exception;
 }

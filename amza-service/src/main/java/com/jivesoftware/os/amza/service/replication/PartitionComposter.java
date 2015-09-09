@@ -69,7 +69,7 @@ public class PartitionComposter {
     public void compost() throws Exception {
         List<VersionedPartitionName> composted = new ArrayList<>();
         partitionStateStorage.streamLocalState((partitionName, ringMember, versionedState) -> {
-            if (versionedState.state == State.expunged) {
+            if (versionedState.waterline.getState() == State.expunged) {
                 try {
                     amzaStats.beginCompaction("Expunge " + partitionName + " " + versionedState);
                     partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {

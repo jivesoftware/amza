@@ -86,14 +86,14 @@ public class Aquarium {
         return state[0];
     }
 
-    public State getState(Member member) throws Exception {
-        State[] state = new State[1];
+    public Waterline getState(Member member) throws Exception {
+        Waterline[] state = new Waterline[1];
         waterlineTx.tx(member, (readCurrent, readDesired) -> {
             Waterline current = readCurrent.get();
             if (current == null) {
-                state[0] = State.bootstrap;
+                state[0] = new Waterline(member, State.bootstrap, -1, -1, false, -1);
             } else {
-                state[0] = current.getState();
+                state[0] = current;
             }
             return true;
         });

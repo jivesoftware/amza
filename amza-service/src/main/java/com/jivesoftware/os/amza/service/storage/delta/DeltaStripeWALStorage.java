@@ -10,7 +10,7 @@ import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
@@ -340,7 +340,7 @@ public class DeltaStripeWALStorage {
 
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
-        State partitionState,
+        Waterline partitionState,
         boolean isOnline,
         WALStorage storage,
         byte[] prefix,

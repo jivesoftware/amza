@@ -24,7 +24,11 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.aquarium.AtQuorum;
+import com.jivesoftware.os.amza.aquarium.Liveliness;
+import com.jivesoftware.os.amza.aquarium.Member;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
+import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider.AmzaLivelinessStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
@@ -80,6 +84,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaServiceInitializer {
 
@@ -209,13 +214,25 @@ public class AmzaServiceInitializer {
             walUpdated,
             awaitOnline);
 
-        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(ringMember,
+        long startupVersion = orderIdProvider.nextId();
+        Member rootAquariumMember = ringMember.asAquariumMember();
+        AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, walUpdated, rootAquariumMember, startupVersion);
+        AtQuorum livelinessAtQuorm = count -> count > amzaRingReader.getRingSize(AmzaRingReader.SYSTEM_RING) / 2;
+        Liveliness liveliness = new Liveliness(System::currentTimeMillis,
+            livelinessStorage,
+            rootAquariumMember,
+            livelinessAtQuorm,
+            config.aquariumLeaderDeadAfterMillis,
+            new AtomicLong(-1));
+
+        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(startupVersion,
+            ringMember,
             orderIdProvider,
             amzaRingReader,
             systemWALStorage,
             storageVersionProvider,
             walUpdated,
-            config.aquariumLeaderDeadAfterMillis);
+            liveliness);
 
         PartitionStateStorage partitionStateStorage = new PartitionStateStorage(orderIdProvider,
             ringMember,
@@ -226,7 +243,6 @@ public class AmzaServiceInitializer {
 
         amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), storageVersionProvider);
         amzaPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
-
 
         partitionIndex.open(partitionStateStorage);
         // cold start
@@ -387,6 +403,9 @@ public class AmzaServiceInitializer {
             partitionProvider,
             partitionStripeProvider,
             walUpdated,
-            amzaPartitionWatcher);
+            amzaPartitionWatcher,
+            aquariumProvider,
+            liveliness
+        );
     }
 }

@@ -33,7 +33,7 @@
                 {if $r.localState}
                     Local:<br>
                     state:{$r.localState.state}<br>
-                    online:{$r.localState.isOnline}<br>
+                    online:{$r.localState.online}<br>
                     partitionVersion:{$r.localState.partitionVersion}<br>
                     stripeVersion:{$r.localState.stripeVersion}<br>
                 {/if}
@@ -57,7 +57,11 @@
             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
             <td>{$r.version}</td>
-            <td>{$r.status}</td>
+            <td>
+                {if $r.status}
+                    {$r.status}
+                {/if}
+            </td>
             <td>{$r.highestTxId}</td>
             <td>{$r.highwaters|noAutoescape}</td>
         </tr>

@@ -125,15 +125,18 @@ public class PartitionStateStorage implements TxPartitionState {
         return new VersionedState(localState, isOnline(versionedPartitionName, localState), storageVersion);
     }
 
-    public RemoteVersionedState getRemoteVersionedState(RingMember ringMember, PartitionName partitionName) throws Exception {
+    public RemoteVersionedState getRemoteVersionedState(RingMember remoteRingMember, PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return new RemoteVersionedState(State.follower, 0);
         }
 
-        StorageVersion storageVersion = storageVersionProvider.getRemote(ringMember, partitionName);
-        VersionedPartitionName remoteVersionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-        Aquarium aquarium = aquariumProvider.getAquarium(remoteVersionedPartitionName);
-        return new RemoteVersionedState(aquarium.getState(ringMember.asAquariumMember()), storageVersion.partitionVersion);
+        StorageVersion localStorageVersion = storageVersionProvider.get(partitionName);
+        VersionedPartitionName localVersionedPartitionName = new VersionedPartitionName(partitionName, localStorageVersion.partitionVersion);
+        Aquarium aquarium = aquariumProvider.getAquarium(localVersionedPartitionName);
+        State remoteState = aquarium.getState(remoteRingMember.asAquariumMember());
+        
+        StorageVersion remoteStorageVersion = storageVersionProvider.getRemote(remoteRingMember, partitionName);
+        return new RemoteVersionedState(remoteState, remoteStorageVersion.partitionVersion);
     }
 
     public VersionedState markAsBootstrap(PartitionName partitionName) throws Exception {

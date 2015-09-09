@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.aquarium;
 
+import com.jivesoftware.os.amza.aquarium.ReadWaterlineTx.Tx;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 
 /**
@@ -28,6 +29,10 @@ public class Aquarium {
         this.member = member;
     }
 
+    public void inspectState(Member member, Tx tx) throws Exception {
+        waterlineTx.tx(member, tx);
+    }
+
     public void tapTheGlass() throws Exception {
         waterlineTx.tx(member, (current, desired) -> {
             current.acknowledgeOther();
@@ -53,7 +58,7 @@ public class Aquarium {
      * @return null, leader or follower
      */
     public State livelyEndState() throws Exception { // TODO consider timeout and wait notify bla...
-        State[] state = { null };
+        State[] state = {null};
         waterlineTx.tx(member, (current, desired) -> {
 
             Waterline currentWaterline = current.get();

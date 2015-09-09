@@ -23,7 +23,9 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.aquarium.Liveliness;
 import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
@@ -91,6 +93,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final PartitionStripeProvider partitionStripeProvider;
     private final WALUpdated walUpdated;
     private final AmzaPartitionWatcher partitionWatcher;
+    private final AmzaAquariumProvider aquariumProvider;
+    private final Liveliness liveliness;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
         AmzaStats amzaStats,
@@ -108,7 +112,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         PartitionCreator partitionProvider,
         PartitionStripeProvider partitionStripeProvider,
         WALUpdated walUpdated,
-        AmzaPartitionWatcher partitionWatcher) {
+        AmzaPartitionWatcher partitionWatcher,
+        AmzaAquariumProvider aquariumProvider,
+        Liveliness liveliness) {
+
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
         this.ringStoreReader = ringReader;
@@ -126,6 +133,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         this.partitionStripeProvider = partitionStripeProvider;
         this.walUpdated = walUpdated;
         this.partitionWatcher = partitionWatcher;
+        this.aquariumProvider = aquariumProvider;
+        this.liveliness = liveliness;
     }
 
     public PartitionIndex getPartitionIndex() {
@@ -158,6 +167,14 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public HighwaterStorage getSystemHighwaterStorage() {
         return systemHighwaterStorage;
+    }
+
+    public AmzaAquariumProvider getAquariumProvider() {
+        return aquariumProvider;
+    }
+
+    public Liveliness getLiveliness() {
+        return liveliness;
     }
 
     public void start() throws Exception {

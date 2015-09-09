@@ -1,0 +1,175 @@
+{namespace soy.page}
+
+/**
+ * 
+ * @param? ringName
+ * @param? partitionName
+ * @param? partitionVersion
+ * @param? liveliness
+ * @param? aquarium
+ */
+{template .aquariumPluginRegion}
+   
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Cluster</div>
+            <div class="panel-body">
+
+                 <table class="table table-condensed">
+                    <thead>
+                        <tr>
+                            <th>Member</th>
+                            <th>Host</th>
+                            <th>Liveliness</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {if $liveliness}
+                            {foreach $l in $liveliness}
+                                <tr>    
+                                    <td>{$l.member}</td>
+                                    <td>{$l.host}</td>
+                                    <td>{$l.liveliness}</td>
+                                </tr>
+                            {/foreach}
+                        {/if}
+                    </tbody>
+                </table>
+                <hr>
+                <table class="table table-condensed">
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>Current</th>
+                            <th>Desired</th>
+                            <th>Name</th>
+                            <th>Ring</th>
+                            <th>Version</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
+                            method="post" name="addRingHost">
+                            <tr style="background-color:#ddd;">
+                                <td><button title="Add" type="submit" name="action" value="find" class="btn btn-default"><span class="glyphicon glyphicon-search"></span></button></td>
+                                <td></td>
+                                <td></td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                    class="form-control" placeholder="Partition Name" value="{$partitionName}"
+                                    name="partitionName" title="">
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                    class="form-control" placeholder="Ring Name" value="{$ringName}"
+                                    name="ringName"  title="">
+                                </td>
+                                <td>
+                                    <input type="text" name="partitionVersion" padding-left:10px;"
+                                    class="form-control" placeholder="Partition Version" value="{$partitionVersion}" title="">
+                                </td>
+                                <input type="hidden" name="action" value="search">
+                            </tr>
+                        </form>
+                        
+                        {if $aquarium}
+                            {foreach $a in $aquarium}
+                                <tr>
+                                    <td></td>
+                                    <td>
+                                        <table class="table table-condensed">
+                                            <thead>
+                                                <tr>
+                                                    <th>State</th>
+                                                    <th>Alive</th>
+                                                    <th>Quorum</th>
+                                                    <th>Timestamp</th>
+                                                    <th>Version</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {if $a.current}
+                                                    <tr>
+                                                        <td>{$a.current.state}</td>
+                                                        <td>{$a.current.alive}</td>
+                                                        <td>{$a.current.quorum}</td>
+                                                        <td>{$a.current.timestamp}</td>
+                                                        <td>{$a.current.version}</td>
+                                                    </tr>
+                                                {else}
+                                                    <tr>
+                                                        <td>null</td>
+                                                        <td>null</td>
+                                                        <td>null</td>
+                                                        <td>null</td>
+                                                        <td>null</td>
+                                                    </tr>
+                                                {/if}
+                                                {if $a.othersCurrent}
+                                                    {foreach $oc in $a.othersCurrent}
+                                                        <tr>
+                                                            <td>{$oc.state}</td>
+                                                            <td>{$oc.alive}</td>
+                                                            <td>{$oc.quorum}</td>
+                                                            <td>{$oc.timestamp}</td>
+                                                            <td>{$oc.version}</td>
+                                                        </tr>
+                                                    {/foreach}
+                                                {/if}
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                    <td>
+                                        <table class="table table-condensed">
+                                            <thead>
+                                                <tr>
+                                                    <th>State</th>
+                                                    <th>Alive</th>
+                                                    <th>Quorum</th>
+                                                    <th>Timestamp</th>
+                                                    <th>Version</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {if $a.desired}
+                                                    <tr>
+                                                        <td>{$a.desired.state}</td>
+                                                        <td>{$a.desired.alive}</td>
+                                                        <td>{$a.desired.quorum}</td>
+                                                        <td>{$a.desired.timestamp}</td>
+                                                        <td>{$a.desired.version}</td>
+                                                    </tr>
+                                                {else}
+                                                    <tr>
+                                                        <td>null</td>
+                                                        <td>null</td>
+                                                        <td>null</td>
+                                                        <td>null</td>
+                                                        <td>null</td>
+                                                    </tr>
+                                                {/if}
+                                                {if $a.othersDesired}
+                                                    {foreach $od in $a.othersDesired}
+                                                        <tr>
+                                                            <td>{$od.state}</td>
+                                                            <td>{$od.alive}</td>
+                                                            <td>{$od.quorum}</td>
+                                                            <td>{$od.timestamp}</td>
+                                                            <td>{$od.version}</td>
+                                                        </tr>
+                                                    {/foreach}
+                                                {/if}
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                    <td>{$a.partitionName}</td>
+                                    <td>{$a.ringName}</td>
+                                    <td>{$a.partitionVersion}</td>
+                                </tr>
+                            {/foreach}
+                        {/if}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{/template}

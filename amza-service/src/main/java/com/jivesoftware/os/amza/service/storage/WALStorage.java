@@ -359,12 +359,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         List<byte[]> keys = new ArrayList<>();
         List<WALValue> values = new ArrayList<>();
         WALHighwater[] highwater = new WALHighwater[1];
+        long updateVersion = orderIdProvider.nextId();
 
         updates.commitable((_highwater) -> {
             highwater[0] = _highwater;
 
         }, (transactionId, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-            WALValue walValue = new WALValue(value, valueTimestamp, valueTombstoned, valueVersion);
+            WALValue walValue = new WALValue(value, valueTimestamp, valueTombstoned, valueVersion != -1 ? valueVersion : updateVersion);
             if (!forceApply) {
                 keys.add(key);
                 values.add(walValue);

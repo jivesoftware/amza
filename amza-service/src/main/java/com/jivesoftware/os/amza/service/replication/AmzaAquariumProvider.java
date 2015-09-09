@@ -14,8 +14,6 @@ import com.jivesoftware.os.amza.aquarium.LivelinessStorage;
 import com.jivesoftware.os.amza.aquarium.Member;
 import com.jivesoftware.os.amza.aquarium.MemberLifecycle;
 import com.jivesoftware.os.amza.aquarium.ReadWaterline;
-import com.jivesoftware.os.amza.aquarium.State;
-import com.jivesoftware.os.amza.aquarium.StateStorage;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
@@ -23,17 +21,15 @@ import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
@@ -57,13 +53,15 @@ public class AmzaAquariumProvider implements RowChanges {
     private final Liveliness liveliness;
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
 
-    public AmzaAquariumProvider(RingMember rootRingMember,
+    public AmzaAquariumProvider(long startupVersion,
+        RingMember rootRingMember,
         OrderIdProvider orderIdProvider,
         AmzaRingReader amzaRingReader,
         SystemWALStorage systemWALStorage,
         StorageVersionProvider storageVersionProvider,
         WALUpdated walUpdated,
-        long deadAfterMillis) {
+        Liveliness liveliness) {
+        this.startupVersion = startupVersion;
         this.rootRingMember = rootRingMember;
         this.rootAquariumMember = rootRingMember.asAquariumMember();
         this.orderIdProvider = orderIdProvider;
@@ -71,16 +69,7 @@ public class AmzaAquariumProvider implements RowChanges {
         this.systemWALStorage = systemWALStorage;
         this.storageVersionProvider = storageVersionProvider;
         this.walUpdated = walUpdated;
-        this.startupVersion = orderIdProvider.nextId();
-
-        AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, walUpdated, rootAquariumMember, startupVersion);
-        AtQuorum livelinessAtQuorm = count -> count > amzaRingReader.getRingSize(AmzaRingReader.SYSTEM_RING) / 2;
-        this.liveliness = new Liveliness(System::currentTimeMillis,
-            livelinessStorage,
-            rootAquariumMember,
-            livelinessAtQuorm,
-            deadAfterMillis,
-            new AtomicLong(-1));
+        this.liveliness = liveliness;
     }
 
     public void start(long feedEveryMillis) {
@@ -105,6 +94,7 @@ public class AmzaAquariumProvider implements RowChanges {
             atQuorum,
             rootRingMember.asAquariumMember(),
             Long.class);
+
         ReadWaterline readDesired = new ReadWaterline<>(
             new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName, DESIRED, startupVersion),
             liveliness,
@@ -139,7 +129,7 @@ public class AmzaAquariumProvider implements RowChanges {
             rootRingMember.asAquariumMember());
     }
 
-    private static byte[] stateKey(PartitionName partitionName,
+    static byte[] stateKey(PartitionName partitionName,
         byte context,
         Member rootRingMember,
         Long partitionVersion,
@@ -173,7 +163,7 @@ public class AmzaAquariumProvider implements RowChanges {
         }
     }
 
-    private static boolean streamStateKey(byte[] keyBytes, StateKeyStream stream) throws Exception {
+    static boolean streamStateKey(byte[] keyBytes, StateKeyStream stream) throws Exception {
         HeapFiler filer = new HeapFiler(keyBytes);
         byte[] partitionNameBytes = UIO.readByteArray(filer, "partitionName");
         byte context = UIO.readByte(filer, "context");
@@ -230,69 +220,8 @@ public class AmzaAquariumProvider implements RowChanges {
         boolean stream(Member rootRingMember, boolean isSelf, Member ackRingMember) throws Exception;
     }
 
-    private static class AmzaStateStorage implements StateStorage<Long> {
 
-        private final SystemWALStorage systemWALStorage;
-        private final WALUpdated walUpdated;
-        private final Member member;
-        private final VersionedPartitionName versionedPartitionName;
-        private final byte context;
-        private final long startupVersion;
-
-        public AmzaStateStorage(SystemWALStorage systemWALStorage,
-            WALUpdated walUpdated,
-            Member member,
-            VersionedPartitionName versionedPartitionName,
-            byte context,
-            long startupVersion) {
-            this.systemWALStorage = systemWALStorage;
-            this.walUpdated = walUpdated;
-            this.member = member;
-            this.versionedPartitionName = versionedPartitionName;
-            this.context = context;
-            this.startupVersion = startupVersion;
-        }
-
-        @Override
-        public boolean scan(Member rootMember, Member otherMember, Long lifecycle, StateStream<Long> stream) throws Exception {
-            byte[] fromKey = stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
-            return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_STATE_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
-                (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                    if (valueTimestamp != -1 && !valueTombstoned) {
-                        return streamStateKey(key, (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
-                            if (!rootRingMember.equals(member) || valueVersion > startupVersion) {
-                                State state = State.fromSerializedForm(value[0]);
-                                return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion,
-                                    state, valueTimestamp, valueVersion);
-                            } else {
-                                return true;
-                            }
-                        });
-                    }
-                    return true;
-                });
-        }
-
-        @Override
-        public boolean update(StateUpdates<Long> updates) throws Exception {
-            AmzaPartitionUpdates amzaPartitionUpdates = new AmzaPartitionUpdates();
-            boolean result = updates.updates((rootMember, otherMember, lifecycle, state, timestamp) -> {
-                byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
-                byte[] valueBytes = {state.getSerializedForm()};
-                amzaPartitionUpdates.set(keyBytes, valueBytes, timestamp);
-                return true;
-            });
-            if (result && amzaPartitionUpdates.size() > 0) {
-                RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, amzaPartitionUpdates, walUpdated);
-                LOG.info("Context {} {} for {}", context, member, versionedPartitionName);
-                return !rowsChanged.isEmpty();
-            } else {
-                return false;
-            }
-        }
-    }
-
-    private static class AmzaLivelinessStorage implements LivelinessStorage {
+    public static class AmzaLivelinessStorage implements LivelinessStorage {
 
         private final SystemWALStorage systemWALStorage;
         private final WALUpdated walUpdated;
@@ -308,21 +237,26 @@ public class AmzaAquariumProvider implements RowChanges {
 
         @Override
         public boolean scan(Member rootMember, Member otherMember, LivelinessStream stream) throws Exception {
-            byte[] fromKey = livelinessKey(member, null);
-            return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
-                (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                    if (valueTimestamp != -1 && !valueTombstoned) {
-                        return streamLivelinessKey(key, (rootRingMember, isSelf, ackRingMember) -> {
-                            if (!rootRingMember.equals(member) || valueVersion > startupVersion) {
-                                return stream.stream(rootRingMember, isSelf, ackRingMember, valueTimestamp, valueVersion);
-                            } else {
-                                return true;
-                            }
+            KeyValueStream keyValueStream = (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                if (valueTimestamp != -1 && !valueTombstoned) {
+                    return streamLivelinessKey(key, (rootRingMember, isSelf, ackRingMember) -> {
+                        if (!rootRingMember.equals(member) || valueVersion > startupVersion) {
+                            return stream.stream(rootRingMember, isSelf, ackRingMember, valueTimestamp, valueVersion);
+                        } else {
+                            return true;
+                        }
+                    });
+                }
+                return true;
+            };
 
-                        });
-                    }
-                    return true;
-                });
+            if (rootMember == null && otherMember == null) {
+                return systemWALStorage.rowScan(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, keyValueStream);
+            } else {
+                byte[] fromKey = livelinessKey(rootMember, otherMember);
+                return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
+                    keyValueStream);
+            }
         }
 
         @Override
@@ -351,14 +285,15 @@ public class AmzaAquariumProvider implements RowChanges {
 
     @Override
     public void changes(RowsChanged changes) throws Exception {
-        if (PartitionCreator.AQUARIUM_STATE_INDEX.equals(changes.getVersionedPartitionName())) {
-            for (Map.Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
-                streamStateKey(change.getKey().key, (partitionName, context, rootRingMember1, partitionVersion, isSelf, ackRingMember) -> {
-                    getAquarium(new VersionedPartitionName(partitionName, partitionVersion)).tapTheGlass();
-                    return true;
-                });
-            }
-        }
+        /*
+         if (PartitionCreator.AQUARIUM_STATE_INDEX.equals(changes.getVersionedPartitionName())) {
+         for (Map.Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
+         streamStateKey(change.getKey().key, (partitionName, context, rootRingMember1, partitionVersion, isSelf, ackRingMember) -> {
+         getAquarium(new VersionedPartitionName(partitionName, partitionVersion)).tapTheGlass();
+         return true;
+         });
+         }
+         }*/
     }
 
     private static class AmzaMemberLifecycle implements MemberLifecycle<Long> {

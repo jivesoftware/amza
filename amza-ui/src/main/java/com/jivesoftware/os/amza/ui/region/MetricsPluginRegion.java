@@ -332,22 +332,24 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         map.put("takeApplies", numberFormat.format(totals.takeApplies.get()));
         map.put("takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()));
 
-        VersionedState localVersionedState = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
-        map.put("localState", ImmutableMap.of("online", localVersionedState.isOnline,
-            "state", localVersionedState.state.name(),
-            "partitionVersion", String.valueOf(localVersionedState.storageVersion.partitionVersion),
-            "stripeVersion", String.valueOf(localVersionedState.storageVersion.stripeVersion)));
+        if (name != null) {
+            VersionedState localVersionedState = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
+            map.put("localState", ImmutableMap.of("online", localVersionedState.isOnline,
+                "state", localVersionedState.state.name(),
+                "partitionVersion", String.valueOf(localVersionedState.storageVersion.partitionVersion),
+                "stripeVersion", String.valueOf(localVersionedState.storageVersion.stripeVersion)));
 
-        List<Map<String, Object>> neighborStates = new ArrayList<>();
-        Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
-        for (RingMember ringMember : neighboringRingMembers) {
+            List<Map<String, Object>> neighborStates = new ArrayList<>();
+            Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
+            for (RingMember ringMember : neighboringRingMembers) {
 
-            RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
-            neighborStates.add(ImmutableMap.of("version", neighborState.version,
-                "state", neighborState.state.name(),
-                "name", ringMember.getMember()));
+                RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
+                neighborStates.add(ImmutableMap.of("version", String.valueOf(neighborState.version),
+                    "state", neighborState.state.name(),
+                    "name", ringMember.getMember()));
+            }
+            map.put("neighborStates", neighborStates);
         }
-        map.put("neighborStates", neighborStates);
 
         return map;
     }

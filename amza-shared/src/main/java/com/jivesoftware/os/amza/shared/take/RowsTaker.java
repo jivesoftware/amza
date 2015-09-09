@@ -16,8 +16,8 @@
 package com.jivesoftware.os.amza.shared.take;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import java.util.Map;
 
@@ -28,6 +28,7 @@ public interface RowsTaker {
         RingHost remoteRingHost,
         VersionedPartitionName remoteVersionedPartitionName,
         long remoteTxId,
+        long localLeadershipToken,
         RowStream rowStream);
 
     class StreamingRowsResult {
@@ -49,6 +50,7 @@ public interface RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         VersionedPartitionName versionedPartitionName,
-        long txId);
+        long txId,
+        long localLeadershipToken);
 
 }

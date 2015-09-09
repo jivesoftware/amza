@@ -164,6 +164,7 @@ public class AmzaTestCluster {
                 RingHost remoteRingHost,
                 VersionedPartitionName remoteVersionedPartitionName,
                 long remoteTxId,
+                long localLeadershipToken,
                 RowStream rowStream) {
 
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
@@ -173,6 +174,7 @@ public class AmzaTestCluster {
                     StreamingTakesConsumer.StreamingTakeConsumed consumed = amzaNode.rowsStream(localRingMember,
                         remoteVersionedPartitionName,
                         remoteTxId,
+                        localLeadershipToken,
                         rowStream);
                     return new StreamingRowsResult(null, null, consumed.isOnline ? new HashMap<>() : null);
                 }
@@ -183,13 +185,14 @@ public class AmzaTestCluster {
                 RingMember remoteRingMember,
                 RingHost remoteRingHost,
                 VersionedPartitionName remoteVersionedPartitionName,
-                long remoteTxId) {
+                long remoteTxId,
+                long localLeadershipToken) {
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
                 if (amzaNode == null) {
                     throw new IllegalStateException("Service doesn't exists for " + localRingMember);
                 } else {
                     try {
-                        amzaNode.remoteMemberTookToTxId(localRingMember, remoteVersionedPartitionName, remoteTxId);
+                        amzaNode.remoteMemberTookToTxId(localRingMember, remoteVersionedPartitionName, remoteTxId, localLeadershipToken);
                         return true;
                     } catch (Exception x) {
                         throw new RuntimeException("Issue while applying acks.", x);
@@ -359,13 +362,14 @@ public class AmzaTestCluster {
 
         void remoteMemberTookToTxId(RingMember remoteRingMember,
             VersionedPartitionName remoteVersionedPartitionName,
-            long localTxId) throws Exception {
-            amzaService.rowsTaken(remoteRingMember, remoteVersionedPartitionName, localTxId);
+            long localTxId, long leadershipToken) throws Exception {
+            amzaService.rowsTaken(remoteRingMember, remoteVersionedPartitionName, localTxId, leadershipToken);
         }
 
         public StreamingTakeConsumed rowsStream(RingMember remoteRingMember,
             VersionedPartitionName localVersionedPartitionName,
             long localTxId,
+            long leadershipToken,
             RowStream rowStream) {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
@@ -377,7 +381,7 @@ public class AmzaTestCluster {
             try {
                 ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
                 Future<Object> submit = asIfOverTheWire.submit(() -> {
-                    amzaService.rowsStream(new DataOutputStream(bytesOut), remoteRingMember, localVersionedPartitionName, localTxId);
+                    amzaService.rowsStream(new DataOutputStream(bytesOut), remoteRingMember, localVersionedPartitionName, localTxId, leadershipToken);
                     return null;
                 });
                 submit.get();
@@ -514,14 +518,14 @@ public class AmzaTestCluster {
                         if (bValue == null) {
                             System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)
                                 + " != null"
-                                + "' \n" +  Arrays.toString(aValue) + " vs null");
+                                + "' \n" + Arrays.toString(aValue) + " vs null");
                             passed.setValue(false);
                             return false;
                         }
                         if (aTimestamp != bTimetamp) {
                             System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + aTimestamp
                                 + "' != '" + bTimetamp
-                                + "' \n" +  Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
+                                + "' \n" + Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
                             passed.setValue(false);
                             System.out.println("----------------------------------");
                             return false;
@@ -529,7 +533,7 @@ public class AmzaTestCluster {
                         if (aVersion != bVersion) {
                             System.out.println("INCONSISTENCY: " + comparing + " version:'" + aVersion
                                 + "' != '" + bVersion
-                                + "' \n" +  Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
+                                + "' \n" + Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
                             passed.setValue(false);
                             System.out.println("----------------------------------");
                             return false;
@@ -537,14 +541,14 @@ public class AmzaTestCluster {
                         if (aValue == null && bValue != null) {
                             System.out.println("INCONSISTENCY: " + comparing + " null"
                                 + " != '" + Arrays.toString(bValue)
-                                + "' \n" +  "null" + " vs " + Arrays.toString(bValue));
+                                + "' \n" + "null" + " vs " + Arrays.toString(bValue));
                             passed.setValue(false);
                             return false;
                         }
                         if (aValue != null && !Arrays.equals(aValue, bValue)) {
                             System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(aValue)
                                 + "' != '" + Arrays.toString(bValue)
-                                + "' \n" +  Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
+                                + "' \n" + Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
                             passed.setValue(false);
                             return false;
                         }

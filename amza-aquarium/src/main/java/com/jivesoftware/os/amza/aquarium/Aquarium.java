@@ -70,8 +70,8 @@ public class Aquarium {
     /**
      * @return null, leader or follower
      */
-    public State livelyEndState() throws Exception { // TODO consider timeout and wait notify bla...
-        State[] state = { null };
+    public Waterline livelyEndState() throws Exception {
+        Waterline[] waterline = {null};
         waterlineTx.tx(member, (current, desired) -> {
 
             Waterline currentWaterline = current.get();
@@ -82,19 +82,28 @@ public class Aquarium {
                 && currentWaterline.isAtQuorum()
                 && State.checkEquals(currentTimeMillis, currentWaterline, desiredWaterline)) {
 
-                if (currentWaterline.getState() == State.leader) {
-                    state[0] = State.leader;
+                if (desiredWaterline.getState() == State.leader) {
+                    waterline[0] = desiredWaterline;
                 }
-                if (currentWaterline.getState() == State.follower) {
-                    state[0] = State.follower;
+                if (desiredWaterline.getState() == State.follower) {
+                    waterline[0] = desiredWaterline;
                 }
             }
             return true;
         });
-        return state[0];
+        return waterline[0];
     }
 
-    public State awaitLivelyEndState(long timeoutMillis) throws Exception {
+    public Waterline getLeader() throws Exception {
+        Waterline[] leader = {null};
+        waterlineTx.tx(member, (current, desired) -> {
+            leader[0] = State.highest(currentTimeMillis, State.leader, desired, desired.get());
+            return true;
+        });
+        return leader[0];
+    }
+
+    public Waterline awaitLivelyEndState(long timeoutMillis) throws Exception {
         return awaitLivelyEndState.awaitChange(this::livelyEndState, timeoutMillis);
     }
 
@@ -119,4 +128,5 @@ public class Aquarium {
         });
         tapTheGlass();
     }
+
 }

@@ -148,7 +148,7 @@ public class AmzaAquariumProvider implements RowChanges {
                 //TODO make sure this is a valid transition
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
-                byte[] valueBytes = { state.getSerializedForm() };
+                byte[] valueBytes = {state.getSerializedForm()};
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 LOG.info("Current {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
@@ -158,7 +158,7 @@ public class AmzaAquariumProvider implements RowChanges {
                 //TODO make sure this is a valid transition
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
-                byte[] valueBytes = { state.getSerializedForm() };
+                byte[] valueBytes = {state.getSerializedForm()};
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 LOG.info("Desired {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
@@ -167,10 +167,10 @@ public class AmzaAquariumProvider implements RowChanges {
             rootRingMember.asAquariumMember(),
             new AwaitLivelyEndState() {
                 @Override
-                public State awaitChange(Callable<State> awaiter, long timeoutMillis) throws Exception {
+                public Waterline awaitChange(Callable<Waterline> awaiter, long timeoutMillis) throws Exception {
                     return awaitLivelyEndState.awaitChange(versionedPartitionName.getPartitionName(),
                         () -> {
-                            State state = awaiter.call();
+                            Waterline state = awaiter.call();
                             return state != null ? Optional.of(state) : null;
                         },
                         timeoutMillis);
@@ -178,7 +178,9 @@ public class AmzaAquariumProvider implements RowChanges {
 
                 @Override
                 public void notifyChange(Callable<Boolean> change) throws Exception {
-                    awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
+                    awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), () -> {
+                        return change.call();
+                    });
                 }
             });
     }
@@ -186,7 +188,7 @@ public class AmzaAquariumProvider implements RowChanges {
     public boolean isOnline(VersionedPartitionName versionedPartitionName,
         Waterline waterline) throws Exception {
         if (waterline.getState() == State.follower || waterline.getState() == State.leader) {
-            State livelyEndState = getAquarium(versionedPartitionName).livelyEndState();
+            Waterline livelyEndState = getAquarium(versionedPartitionName).livelyEndState();
             return isOnlineState(livelyEndState);
         } else {
             return false;
@@ -194,14 +196,14 @@ public class AmzaAquariumProvider implements RowChanges {
     }
 
     public void awaitOnline(VersionedPartitionName versionedPartitionName, long timeoutMillis) throws Exception {
-        State livelyEndState = getAquarium(versionedPartitionName).awaitLivelyEndState(timeoutMillis);
+        Waterline livelyEndState = getAquarium(versionedPartitionName).awaitLivelyEndState(timeoutMillis);
         if (!isOnlineState(livelyEndState)) {
             throw new IllegalStateException("Partition did not reach an online state: " + livelyEndState);
         }
     }
 
-    static boolean isOnlineState(State livelyEndState) {
-        return livelyEndState == State.follower || livelyEndState == State.leader;
+    static boolean isOnlineState(Waterline livelyEndState) {
+        return livelyEndState.getState() == State.follower || livelyEndState.getState() == State.leader;
     }
 
     static byte[] stateKey(PartitionName partitionName,
@@ -294,7 +296,6 @@ public class AmzaAquariumProvider implements RowChanges {
 
         boolean stream(Member rootRingMember, boolean isSelf, Member ackRingMember) throws Exception;
     }
-
 
     public static class AmzaLivelinessStorage implements LivelinessStorage {
 

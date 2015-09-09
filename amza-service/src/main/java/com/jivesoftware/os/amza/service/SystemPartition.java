@@ -106,7 +106,7 @@ public class SystemPartition implements Partition {
                 throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
             } else {
                 LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-                int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), ringMembers, takeQuorum, timeoutInMillis);
+                int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), ringMembers, takeQuorum, timeoutInMillis, -1);
                 if (takenBy < takeQuorum) {
                     throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
                 }

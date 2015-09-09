@@ -67,12 +67,16 @@ public class HttpRowsTaker implements RowsTaker {
         RingHost remoteRingHost,
         VersionedPartitionName remoteVersionedPartitionName,
         long remoteTxId,
+        long localLeadershipToken,
         RowStream rowStream) {
 
         HttpStreamResponse httpStreamResponse;
         try {
             httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
-                "/amza/rows/stream/" + localRingMember.getMember() + "/" + remoteVersionedPartitionName.toBase64() + "/" + remoteTxId);
+                "/amza/rows/stream/" + localRingMember.getMember()
+                + "/" + remoteVersionedPartitionName.toBase64()
+                + "/" + remoteTxId
+                + "/" + localLeadershipToken);
         } catch (IOException | HttpClientException e) {
             return new StreamingRowsResult(e, null, null);
         }
@@ -93,17 +97,18 @@ public class HttpRowsTaker implements RowsTaker {
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         VersionedPartitionName versionedPartitionName,
-        long txId) {
+        long txId,
+        long localLeadershipToken) {
         try {
             return getRequestHelper(remoteRingHost).executeRequest(null,
-                "/amza/rows/taken/"
-                    + localRingMember.getMember() + "/"
-                    + versionedPartitionName.toBase64() + "/"
-                    + txId,
+                "/amza/rows/taken/" + localRingMember.getMember()
+                + "/" + versionedPartitionName.toBase64()
+                + "/" + txId
+                + "/" + localLeadershipToken,
                 Boolean.class, false);
         } catch (Exception x) {
             LOG.warn("Failed to deliver acks for local:{} remote:{} partition:{} tx:{}",
-                new Object[] { localRingMember, remoteRingHost, versionedPartitionName, txId }, x);
+                new Object[]{localRingMember, remoteRingHost, versionedPartitionName, txId}, x);
             return false;
         }
     }

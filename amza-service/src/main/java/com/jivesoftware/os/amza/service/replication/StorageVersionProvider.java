@@ -132,7 +132,6 @@ public class StorageVersionProvider implements RowChanges {
         return StorageVersion.fromBytes(rawState.getValue());
     }
 
-
     private StorageVersion set(PartitionName partitionName, long partitionVersion) throws Exception {
         StorageVersion storageVersion = new StorageVersion(partitionVersion, stripeVersions[partitionStripeFunction.stripe(partitionName)]);
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, partitionVersion);

@@ -37,10 +37,12 @@ public interface AmzaInstance {
     void rowsStream(DataOutputStream dos,
         RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
-        long localTxId) throws Exception;
+        long localTxId,
+        long leadershipToken) throws Exception;
 
     void rowsTaken(RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
-        long localTxId) throws Exception;
+        long localTxId,
+        long leadershipToken) throws Exception;
 
 }

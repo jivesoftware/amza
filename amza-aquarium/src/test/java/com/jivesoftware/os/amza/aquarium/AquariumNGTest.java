@@ -316,13 +316,15 @@ public class AquariumNGTest {
                     continue;
                 }
 
-                State state = node.aquarium.livelyEndState();
-                if (state == State.follower) {
-                    follower++;
-                }
-                if (state == State.leader) {
-                    leader = node;
-                    leaders++;
+                Waterline waterline = node.aquarium.livelyEndState();
+                if (waterline != null) {
+                    if (waterline.getState() == State.follower) {
+                        follower++;
+                    }
+                    if (waterline.getState() == State.leader) {
+                        leader = node;
+                        leaders++;
+                    }
                 }
 
                 node.printState(mode);
@@ -385,7 +387,7 @@ public class AquariumNGTest {
                 member,
                 new AwaitLivelyEndState() {
                     @Override
-                    public State awaitChange(Callable<State> awaiter, long timeoutMillis) throws Exception {
+                    public Waterline awaitChange(Callable<Waterline> awaiter, long timeoutMillis) throws Exception {
                         return awaiter.call();
                     }
 
@@ -425,7 +427,7 @@ public class AquariumNGTest {
 
         public void awaitCurrentState(State... states) throws Exception {
             Set<State> acceptable = Sets.newHashSet(states);
-            boolean[] reachedCurrent = { false };
+            boolean[] reachedCurrent = {false};
             while (!reachedCurrent[0]) {
                 readWaterlineTx.tx(member, (current, desired) -> {
                     Waterline currentWaterline = current.get();
@@ -440,9 +442,9 @@ public class AquariumNGTest {
         }
 
         public void awaitDesiredState(State state, AquariumNode[] nodes) throws Exception {
-            boolean[] reachedDesired = { false };
+            boolean[] reachedDesired = {false};
             while (!reachedDesired[0]) {
-                Waterline[] currentWaterline = { null };
+                Waterline[] currentWaterline = {null};
                 readWaterlineTx.tx(member, (current, desired) -> {
                     currentWaterline[0] = current.get();
                     if (currentWaterline[0] != null) {

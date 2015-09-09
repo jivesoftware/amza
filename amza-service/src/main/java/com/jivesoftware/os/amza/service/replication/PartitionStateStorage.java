@@ -14,7 +14,6 @@ import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
-import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.List;
@@ -26,7 +25,6 @@ public class PartitionStateStorage implements TxPartitionState {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final AmzaAquariumProvider aquariumProvider;
     private final StorageVersionProvider storageVersionProvider;
@@ -34,13 +32,11 @@ public class PartitionStateStorage implements TxPartitionState {
     private final VersionedPartitionTransactor transactor;
     private final AwaitNotify<PartitionName> awaitNotify;
 
-    public PartitionStateStorage(OrderIdProvider orderIdProvider,
-        RingMember rootRingMember,
+    public PartitionStateStorage(RingMember rootRingMember,
         AmzaAquariumProvider aquariumProvider,
         StorageVersionProvider storageVersionProvider,
         TakeCoordinator takeCoordinator,
         AwaitNotify<PartitionName> awaitNotify) {
-        this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.aquariumProvider = aquariumProvider;
         this.storageVersionProvider = storageVersionProvider;
@@ -149,20 +145,14 @@ public class PartitionStateStorage implements TxPartitionState {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
             return;
         }
-
         aquariumProvider.tookFully(fromMember, versionedPartitionName);
-
-        // let aquarium do its thing
-        aquariumProvider.getAquarium(versionedPartitionName).tapTheGlass();
     }
 
-    public void markAsOnline(VersionedPartitionName versionedPartitionName) throws Exception {
+    public Waterline getLeader(VersionedPartitionName versionedPartitionName) throws Exception {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return;
+            return null;
         }
-
-        // let aquarium do its thing
-        aquariumProvider.getAquarium(versionedPartitionName).tapTheGlass();
+        return aquariumProvider.getAquarium(versionedPartitionName).getLeader();
     }
 
     public VersionedState markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
@@ -197,7 +187,10 @@ public class PartitionStateStorage implements TxPartitionState {
             Waterline waterline = getLocalWaterline(compost);
             if (waterline.getState() == State.expunged) {
                 transactor.doWithAll(compost, waterline, aquariumProvider.isOnline(compost, waterline), (versionedPartitionName, partitionState, isOnline) -> {
-                    awaitNotify.notifyChange(compost.getPartitionName(), () -> storageVersionProvider.remove(rootRingMember, compost));
+                    awaitNotify.notifyChange(compost.getPartitionName(), () -> {
+                        storageVersionProvider.remove(rootRingMember, compost);
+                        return true;
+                    });
                     return null;
                 });
             }

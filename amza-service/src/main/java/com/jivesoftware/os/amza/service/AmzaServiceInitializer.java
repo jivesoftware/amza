@@ -235,8 +235,7 @@ public class AmzaServiceInitializer {
             liveliness,
             awaitOnline);
 
-        PartitionStateStorage partitionStateStorage = new PartitionStateStorage(orderIdProvider,
-            ringMember,
+        PartitionStateStorage partitionStateStorage = new PartitionStateStorage(ringMember,
             aquariumProvider,
             storageVersionProvider,
             takeCoordinator,

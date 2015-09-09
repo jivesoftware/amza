@@ -56,10 +56,11 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/rows/stream/{ringMemberString}/{versionedPartitionName}/{txId}")
+    @Path("/rows/stream/{ringMemberString}/{versionedPartitionName}/{txId}/{leadershipToken}")
     public Response rowsStream(@PathParam("ringMemberString") String ringMemberString,
         @PathParam("versionedPartitionName") String versionedPartitionName,
-        @PathParam("txId") long txId) {
+        @PathParam("txId") long txId,
+        @PathParam("leadershipToken") long leadershipToken) {
 
         try {
             amzaStats.rowsStream.incrementAndGet();
@@ -72,7 +73,8 @@ public class AmzaReplicationRestEndpoints {
                     amzaInstance.rowsStream(dos,
                         new RingMember(ringMemberString),
                         VersionedPartitionName.fromBase64(versionedPartitionName),
-                        txId);
+                        txId,
+                        leadershipToken);
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);
@@ -127,15 +129,17 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @Path("/rows/taken/{memberName}/{versionedPartitionName}/{txId}")
+    @Path("/rows/taken/{memberName}/{versionedPartitionName}/{txId}/{leadershipToken}")
     public Response rowsTaken(@PathParam("memberName") String ringMemberName,
         @PathParam("versionedPartitionName") String versionedPartitionName,
-        @PathParam("txId") long txId) {
+        @PathParam("txId") long txId,
+        @PathParam("leadershipToken") long leadershipToken) {
         try {
             amzaStats.rowsTaken.incrementAndGet();
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
                 VersionedPartitionName.fromBase64(versionedPartitionName),
-                txId);
+                txId,
+                leadershipToken);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to ack for member:{} partition:{} txId:{}",

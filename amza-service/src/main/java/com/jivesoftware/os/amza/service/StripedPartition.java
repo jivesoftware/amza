@@ -28,6 +28,10 @@ import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.aquarium.Aquarium;
+import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
+import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
@@ -53,6 +57,7 @@ public class StripedPartition implements Partition {
     private final PartitionStripeProvider partitionStripeProvider;
     private final AckWaters ackWaters;
     private final AmzaRingStoreReader ringReader;
+    private final AmzaAquariumProvider aquariumProvider;
 
     public StripedPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
@@ -61,7 +66,8 @@ public class StripedPartition implements Partition {
         PartitionName partitionName,
         PartitionStripeProvider partitionStripeProvider,
         AckWaters ackWaters,
-        AmzaRingStoreReader ringReader) {
+        AmzaRingStoreReader ringReader,
+        AmzaAquariumProvider aquariumProvider) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
@@ -71,6 +77,7 @@ public class StripedPartition implements Partition {
         this.partitionStripeProvider = partitionStripeProvider;
         this.ackWaters = ackWaters;
         this.ringReader = ringReader;
+        this.aquariumProvider = aquariumProvider;
     }
 
     public PartitionName getPartitionName() {
@@ -92,26 +99,39 @@ public class StripedPartition implements Partition {
                     return stream.row(rowTxId, key, value, timestamp, valueTombstone, version);
                 });
             }, walUpdated);
+
             amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
 
             Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(partitionName.getRingName());
 
+            Aquarium aquarium = aquariumProvider.getAquarium(commit.getVersionedPartitionName());
             int takeQuorum = consistency.quorum(ringMembers.size());
             if (takeQuorum > 0) {
+                Waterline livelyEndState = aquarium.livelyEndState();
+                if (consistency.requiresLeader() && (livelyEndState == null || livelyEndState.getState() != State.leader)) {
+                    throw new FailedToAchieveQuorumException("Leader has changed.");
+                }
+
                 if (ringMembers.size() < takeQuorum) {
                     throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
                 } else {
+                    long leadershipToken = -1;
+                    if (consistency.requiresLeader()) {
+                        leadershipToken = livelyEndState.getTimestamp();
+                    }
                     LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
                     int takenBy = ackWaters.await(commit.getVersionedPartitionName(),
                         commit.getLargestCommittedTxId(),
                         ringMembers,
                         takeQuorum,
-                        timeoutInMillis);
+                        timeoutInMillis,
+                        leadershipToken);
                     if (takenBy < takeQuorum) {
                         throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
                     }
                 }
             }
+            aquarium.tapTheGlass();
             return null;
         });
 

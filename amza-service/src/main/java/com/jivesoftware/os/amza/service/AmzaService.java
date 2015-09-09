@@ -335,7 +335,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 partitionName,
                 partitionStripeProvider,
                 ackWaters,
-                ringStoreReader);
+                ringStoreReader,
+                aquariumProvider);
         }
     }
 
@@ -439,7 +440,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     public void rowsStream(DataOutputStream dos,
         RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
-        long localTxId) throws Exception {
+        long localTxId,
+        long leadershipToken) throws Exception {
 
         MutableLong bytes = new MutableLong(0);
         boolean needsToMarkAsKetchup;
@@ -449,6 +451,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     return streamOnline(remoteRingMember,
                         versionedPartitionName,
                         localTxId,
+                        leadershipToken,
                         dos,
                         bytes,
                         systemHighwaterStorage,
@@ -462,6 +465,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                             return streamOnline(remoteRingMember,
                                 versionedPartitionName,
                                 localTxId,
+                                leadershipToken,
                                 dos,
                                 bytes,
                                 highwaterStorage,
@@ -481,7 +485,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     partitionStateStorage.markAsBootstrap(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
             }
         }
     }
@@ -512,12 +516,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private boolean streamOnline(RingMember ringMember,
         VersionedPartitionName versionedPartitionName,
         long highestTransactionId,
+        long leadershipToken,
         DataOutputStream dos,
         MutableLong bytes,
         HighwaterStorage highwaterStorage,
         PartitionStripe.RowStreamer streamer) throws Exception {
 
-        ackWaters.set(ringMember, versionedPartitionName, highestTransactionId);
+        ackWaters.set(ringMember, versionedPartitionName, highestTransactionId, leadershipToken);
         dos.writeLong(versionedPartitionName.getPartitionVersion());
         dos.writeByte(1); // fully online
         bytes.increment();
@@ -554,8 +559,9 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public void rowsTaken(RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
-        long localTxId) throws Exception {
-        ackWaters.set(remoteRingMember, localVersionedPartitionName, localTxId);
+        long localTxId,
+        long leadershipToken) throws Exception {
+        ackWaters.set(remoteRingMember, localVersionedPartitionName, localTxId, leadershipToken);
 
         VersionedState localVersionedState = partitionStateStorage.getLocalVersionedState(localVersionedPartitionName.getPartitionName());
         if (localVersionedState.storageVersion.partitionVersion == localVersionedPartitionName.getPartitionVersion()) {

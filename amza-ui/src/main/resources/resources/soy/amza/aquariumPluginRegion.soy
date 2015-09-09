@@ -11,12 +11,12 @@
 {template .aquariumPluginRegion}
    
     <div class="panel panel-default">
-        <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Cluster</div>
+        <div class="panel-heading"><span class="glyphicon glyphicon-piggy-bank"></span>{sp}Liveliness</div>
             <div class="panel-body">
 
-                 <table class="table table-condensed">
+                 <table class="table table-bordered table-condensed">
                     <thead>
-                        <tr>
+                        <tr class="active">
                             <th>Member</th>
                             <th>Host</th>
                             <th>Liveliness</th>
@@ -34,10 +34,9 @@
                         {/if}
                     </tbody>
                 </table>
-                <hr>
                 <table class="table table-condensed">
                     <thead>
-                        <tr>
+                        <tr class="active">
                             <th>Action</th>
                             <th>Current</th>
                             <th>Desired</th>
@@ -76,9 +75,10 @@
                                 <tr>
                                     <td></td>
                                     <td>
-                                        <table class="table table-condensed">
+                                        <table class="table table-bordered table-condensed">
                                             <thead>
-                                                <tr>
+                                                <tr class="active">
+                                                    <th>Member</th>
                                                     <th>State</th>
                                                     <th>Alive</th>
                                                     <th>Quorum</th>
@@ -88,7 +88,8 @@
                                             </thead>
                                             <tbody>
                                                 {if $a.current}
-                                                    <tr>
+                                                    <tr class="success">
+                                                        <td>{$a.current.member}</td>
                                                         <td>{$a.current.state}</td>
                                                         <td>{$a.current.alive}</td>
                                                         <td>{$a.current.quorum}</td>
@@ -96,7 +97,8 @@
                                                         <td>{$a.current.version}</td>
                                                     </tr>
                                                 {else}
-                                                    <tr>
+                                                    <tr  class="success">
+                                                        <td>null</td>
                                                         <td>null</td>
                                                         <td>null</td>
                                                         <td>null</td>
@@ -106,7 +108,8 @@
                                                 {/if}
                                                 {if $a.othersCurrent}
                                                     {foreach $oc in $a.othersCurrent}
-                                                        <tr>
+                                                        <tr class="info">
+                                                            <td>{$oc.member}</td>
                                                             <td>{$oc.state}</td>
                                                             <td>{$oc.alive}</td>
                                                             <td>{$oc.quorum}</td>
@@ -119,9 +122,10 @@
                                         </table>
                                     </td>
                                     <td>
-                                        <table class="table table-condensed">
+                                        <table class="table table-bordered table-condensed">
                                             <thead>
-                                                <tr>
+                                                <tr class="active">
+                                                    <th>Member</th>
                                                     <th>State</th>
                                                     <th>Alive</th>
                                                     <th>Quorum</th>
@@ -131,7 +135,8 @@
                                             </thead>
                                             <tbody>
                                                 {if $a.desired}
-                                                    <tr>
+                                                    <tr class="success">
+                                                        <td>{$a.desired.member}</td>
                                                         <td>{$a.desired.state}</td>
                                                         <td>{$a.desired.alive}</td>
                                                         <td>{$a.desired.quorum}</td>
@@ -139,7 +144,8 @@
                                                         <td>{$a.desired.version}</td>
                                                     </tr>
                                                 {else}
-                                                    <tr>
+                                                    <tr class="success">
+                                                        <td>null</td>
                                                         <td>null</td>
                                                         <td>null</td>
                                                         <td>null</td>
@@ -149,7 +155,8 @@
                                                 {/if}
                                                 {if $a.othersDesired}
                                                     {foreach $od in $a.othersDesired}
-                                                        <tr>
+                                                        <tr class="info">
+                                                            <td>{$od.member}</td>
                                                             <td>{$od.state}</td>
                                                             <td>{$od.alive}</td>
                                                             <td>{$od.quorum}</td>

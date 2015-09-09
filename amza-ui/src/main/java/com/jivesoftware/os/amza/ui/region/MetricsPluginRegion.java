@@ -336,6 +336,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             VersionedState localVersionedState = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
             map.put("localState", ImmutableMap.of("online", localVersionedState.isOnline,
                 "state", localVersionedState.state.name(),
+                "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
                 "partitionVersion", String.valueOf(localVersionedState.storageVersion.partitionVersion),
                 "stripeVersion", String.valueOf(localVersionedState.storageVersion.stripeVersion)));
 
@@ -346,7 +347,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
                 neighborStates.add(ImmutableMap.of("version", String.valueOf(neighborState.version),
                     "state", neighborState.state.name(),
-                    "name", ringMember.getMember()));
+                    "name", new String(ringMember.getMember().getBytes())));
             }
             map.put("neighborStates", neighborStates);
         }

@@ -31,19 +31,46 @@
             </td>
             <td>
                 {if $r.localState}
-                    Local:<br>
-                    state:{$r.localState.state}<br>
-                    online:{$r.localState.online}<br>
-                    partitionVersion:{$r.localState.partitionVersion}<br>
-                    stripeVersion:{$r.localState.stripeVersion}<br>
+                    <table class="table table-bordered table-condensed">
+                        <thead>
+                            <tr class="active">
+                                <th>Local</th>
+                                <th>State</th>
+                                <th>Online</th>
+                                <th>Partition Version</th>
+                                <th>Stripe Version</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>{$r.localState.name}</td>
+                                <td>{$r.localState.state}</td>
+                                <td>{$r.localState.online}</td>
+                                <td>{$r.localState.partitionVersion}</td>
+                                <td>{$r.localState.stripeVersion}</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 {/if}
                 {if $r.neighborStates}
-                    {foreach $n in $r.neighborStates}
-                        Remote:<br>
-                        name:{$n.name}<br>
-                        state:{$n.state}<br>
-                        version:{$n.version}<br>
-                    {/foreach}
+                    <table class="table table-bordered table-condensed">
+                        <thead>
+                            <tr class="active">
+                                <th>Remote</th>
+                                <th>State</th>
+                                <th>Version</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {foreach $n in $r.neighborStates}
+                                <tr>
+                                    <td>{$n.name}</td>
+                                    <td>{$n.state}</td>
+                                    <td>{$n.version}</td>
+                                </tr>
+                            {/foreach}
+                        </tbody>
+                    </table>
                 {/if}
             </td>
             <td>{$r.ringName}</td>
@@ -57,11 +84,6 @@
             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
             <td>{$r.version}</td>
-            <td>
-                {if $r.status}
-                    {$r.status}
-                {/if}
-            </td>
             <td>{$r.highestTxId}</td>
             <td>{$r.highwaters|noAutoescape}</td>
         </tr>

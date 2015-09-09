@@ -14,7 +14,7 @@
             
             <table class="table table-condensed">
                 <thead>
-                    <tr>
+                    <tr class="active">
                         <th><span class="glyphicon glyphicon-open"></span>{sp}Member</th>
                         <th><span class="glyphicon glyphicon-sort-by-order"></span>{sp}Polled</th>
                         <th><span class="glyphicon glyphicon-save"></span>{sp}Available</th>
@@ -37,9 +37,11 @@
         <div class="panel-body">
              <table class="table table-condensed">
                 <thead>
-                    <tr>
+                    <tr class="active">
                         <th>Action</th>
-                        <th>Ring</th>
+                        <th><span class="glyphicon glyphicon-flag"></span>{sp}State</th>
+                        <th><span class="glyphicon glyphicon-off"></span>{sp}Online</th>
+                        <th><th>Ring</th>
                         <th>Name</th>
                         <th>Count</th>
                         <th><span class="glyphicon glyphicon-open"></span>{sp}Get</th>
@@ -50,14 +52,14 @@
                         <th><span class="glyphicon glyphicon-upload"></span>{sp}Took</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Took Applied</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Version</th>
-                        <th><span class="glyphicon glyphicon-import"></span>{sp}State</th>
-                        <th><span class="glyphicon glyphicon-import"></span>{sp}Online</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Highest TxId</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Highwaters</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
+                        <td></td>
+                        <td></td>
                         <td></td>
                         <td></td>
                         <td></td>
@@ -72,8 +74,6 @@
                         <td></td>
                         <td></td>
                         <td></td>
-                        <td></td>
-                        <td></td>
                     </tr>
                     {foreach $r in $regionTotals}
                         <tr>
@@ -82,6 +82,8 @@
                                 <a href="/amza/ui/metrics?partitionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-sunglasses"></span>Watch</a>
                                 <a href="/amza/ui/metrics?ringName={$r.ringName}&partitionName={$r.name}&visualize=true" class="btn btn-default"><span class="glyphicon glyphicon-hdd"></span>Visualize</a>
                             </td>
+                            <td>{$r.state}</td>
+                            <td>{$r.isOnline}</td>
                             <td>{$r.ringName}</td>
                             <td>{$r.name}</td>
                             <td><b>{$r.count}</b></td>
@@ -93,8 +95,6 @@
                             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
                             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
                             <td>{$r.version}</td>
-                            <td>{$r.state}</td>
-                            <td>{$r.isOnline}</td>
                             <td>{$r.highestTxId}</td>
                             <td>{$r.highwaters|noAutoescape}</td>
                         </tr>

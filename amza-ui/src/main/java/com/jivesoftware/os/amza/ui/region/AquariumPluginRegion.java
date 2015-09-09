@@ -107,27 +107,25 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
                             Waterline current = readCurrent.get();
                             if (current != null) {
                                 state.put("current", asMap(current, now));
+                                List<Map<String, Object>> others = new ArrayList<>();
+                                readCurrent.getOthers((Waterline waterline) -> {
+                                    others.add(asMap(waterline, now));
+                                    return true;
+                                });
+                                state.put("othersCurrent", others);
                             }
-
-                            List<Map<String, Object>> others = new ArrayList<>();
-                            readCurrent.getOthers((Waterline waterline) -> {
-                                others.add(asMap(waterline, now));
-                                return true;
-                            });
-                            state.put("othersCurrent", others);
                         }
                         if (readDesired != null) {
                             Waterline desired = readDesired.get();
                             if (desired != null) {
                                 state.put("desired", asMap(desired, now));
+                                List<Map<String, Object>> others = new ArrayList<>();
+                                readDesired.getOthers((Waterline waterline) -> {
+                                    others.add(asMap(waterline, now));
+                                    return true;
+                                });
+                                state.put("othersDesired", others);
                             }
-
-                            List<Map<String, Object>> others = new ArrayList<>();
-                            readDesired.getOthers((Waterline waterline) -> {
-                                others.add(asMap(waterline, now));
-                                return true;
-                            });
-                            state.put("othersDesired", others);
                         }
                         states.add(state);
                         return true;
@@ -142,14 +140,16 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
         return renderer.render(template, data);
     }
 
-    private static ImmutableMap<String, Object> asMap(Waterline waterline, long now) {
+    private static Map<String, Object> asMap(Waterline waterline, long now) {
         State state = waterline.getState();
-        return ImmutableMap.of("state", state == null ? "null" : state.name(),
-            "timestamp", String.valueOf(waterline.getTimestamp()),
-            "version", String.valueOf(waterline.getVersion()),
-            "alive", String.valueOf(waterline.isAlive(now)),
-            "quorum", waterline.isAtQuorum()
-        );
+        Map<String, Object> map = new HashMap<>();
+        map.put("state", state == null ? "null" : state.name());
+        map.put("member", new String(waterline.getMember().getMember()));
+        map.put("timestamp", String.valueOf(waterline.getTimestamp()));
+        map.put("version", String.valueOf(waterline.getVersion()));
+        map.put("alive", String.valueOf(waterline.isAlive(now)));
+        map.put("quorum", waterline.isAtQuorum());
+        return map;
     }
 
     @Override

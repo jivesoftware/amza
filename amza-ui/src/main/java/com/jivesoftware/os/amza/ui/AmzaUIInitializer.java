@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.ui.endpoints.AmzaUIEndpoints.AmzaClusterName;
 import com.jivesoftware.os.amza.ui.endpoints.AquariumPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.CompactionsPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.MetricsPluginEndpoints;
+import com.jivesoftware.os.amza.ui.endpoints.OverviewPluginEndpoints;
 import com.jivesoftware.os.amza.ui.region.AmzaClusterPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaInspectPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion;
@@ -28,6 +29,7 @@ import com.jivesoftware.os.amza.ui.region.HeaderRegion;
 import com.jivesoftware.os.amza.ui.region.HomeRegion;
 import com.jivesoftware.os.amza.ui.region.ManagePlugin;
 import com.jivesoftware.os.amza.ui.region.MetricsPluginRegion;
+import com.jivesoftware.os.amza.ui.region.OverviewRegion;
 import com.jivesoftware.os.amza.ui.soy.SoyDataUtils;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
@@ -63,12 +65,17 @@ public class AmzaUIInitializer {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaStressPluginRegion.soy"), "amzaStress.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaInspectPluginRegion.soy"), "amzaInspect.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/aquariumPluginRegion.soy"), "aquarium.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/overviewRegion.soy"), "overview.soy");
 
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();
         SoyRenderer renderer = new SoyRenderer(tofu, new SoyDataUtils());
         SoyService soyService = new SoyService(renderer, new HeaderRegion("soy.chrome.headerRegion", renderer),
             new HomeRegion("soy.page.homeRegion", renderer));
+
+        ManagePlugin overviewPlugin = new ManagePlugin("dashboard", "Overview", "/amza/ui/overview",
+            OverviewPluginEndpoints.class,
+            new OverviewRegion("soy.page.overviewRegion", renderer));
 
         ManagePlugin inspectPlugin = new ManagePlugin("search", "Inspect", "/amza/ui/inspect",
             AmzaInspectPluginEndpoints.class,
@@ -104,12 +111,13 @@ public class AmzaUIInitializer {
             AmzaStressPluginEndpoints.class,
             new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService));
 
-        List<ManagePlugin> plugins = Lists.newArrayList(inspectPlugin,
-            metricsPlugin,
-            compactionsPlugin,
+        List<ManagePlugin> plugins = Lists.newArrayList(overviewPlugin,
+            aquariumPlugin,
             ringsPlugin,
             partitionsPlugin,
-            aquariumPlugin,
+            metricsPlugin,
+            inspectPlugin,
+            compactionsPlugin,
             clusterPlugin,
             stressPlugin);
 

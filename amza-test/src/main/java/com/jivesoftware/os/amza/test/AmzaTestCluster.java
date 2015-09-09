@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.test;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableSet;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -415,6 +416,9 @@ public class AmzaTestCluster {
             return true;
         }
 
+        private final Set<PartitionName> IGNORED_PARTITION_NAMES = ImmutableSet.of(PartitionCreator.HIGHWATER_MARK_INDEX.getPartitionName(),
+            PartitionCreator.AQUARIUM_LIVELINESS_INDEX.getPartitionName());
+
         public boolean compare(AmzaNode service) throws Exception {
             if (off || service.off) {
                 return true;
@@ -441,7 +445,7 @@ public class AmzaTestCluster {
             }
 
             for (PartitionName partitionName : partitionNames) {
-                if (partitionName.equals(PartitionCreator.HIGHWATER_MARK_INDEX.getPartitionName())) {
+                if (IGNORED_PARTITION_NAMES.contains(partitionName)) {
                     continue;
                 }
 

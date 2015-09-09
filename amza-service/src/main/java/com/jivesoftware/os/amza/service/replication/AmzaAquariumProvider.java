@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -9,14 +10,18 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.aquarium.Aquarium;
 import com.jivesoftware.os.amza.aquarium.AtQuorum;
+import com.jivesoftware.os.amza.aquarium.AwaitLivelyEndState;
 import com.jivesoftware.os.amza.aquarium.Liveliness;
 import com.jivesoftware.os.amza.aquarium.LivelinessStorage;
 import com.jivesoftware.os.amza.aquarium.Member;
 import com.jivesoftware.os.amza.aquarium.MemberLifecycle;
 import com.jivesoftware.os.amza.aquarium.ReadWaterline;
+import com.jivesoftware.os.amza.aquarium.State;
+import com.jivesoftware.os.amza.aquarium.Waterline;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -32,6 +37,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -47,6 +53,7 @@ public class AmzaAquariumProvider implements RowChanges {
     private static final byte CURRENT = 0;
     private static final byte DESIRED = 1;
 
+    private final long startupVersion;
     private final RingMember rootRingMember;
     private final Member rootAquariumMember;
     private final OrderIdProvider orderIdProvider;
@@ -54,9 +61,10 @@ public class AmzaAquariumProvider implements RowChanges {
     private final SystemWALStorage systemWALStorage;
     private final StorageVersionProvider storageVersionProvider;
     private final WALUpdated walUpdated;
-    private final long startupVersion;
-
     private final Liveliness liveliness;
+    private final AwaitNotify<PartitionName> awaitLivelyEndState;
+
+    private final ConcurrentHashMap<VersionedPartitionName, Aquarium> aquariums = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
     private final Set<VersionedPartitionName> smellsFishy = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
@@ -67,7 +75,8 @@ public class AmzaAquariumProvider implements RowChanges {
         SystemWALStorage systemWALStorage,
         StorageVersionProvider storageVersionProvider,
         WALUpdated walUpdated,
-        Liveliness liveliness) {
+        Liveliness liveliness,
+        AwaitNotify<PartitionName> awaitLivelyEndState) {
         this.startupVersion = startupVersion;
         this.rootRingMember = rootRingMember;
         this.rootAquariumMember = rootRingMember.asAquariumMember();
@@ -77,6 +86,7 @@ public class AmzaAquariumProvider implements RowChanges {
         this.storageVersionProvider = storageVersionProvider;
         this.walUpdated = walUpdated;
         this.liveliness = liveliness;
+        this.awaitLivelyEndState = awaitLivelyEndState;
     }
 
     public void start(long feedEveryMillis) {
@@ -104,6 +114,16 @@ public class AmzaAquariumProvider implements RowChanges {
     }
 
     public Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
+        return aquariums.computeIfAbsent(versionedPartitionName, key -> {
+            try {
+                return buildAquarium(key);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to build aquarium for partition " + versionedPartitionName, e);
+            }
+        });
+    }
+
+    private Aquarium buildAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
         AtQuorum atQuorum = new AmzaAtQuorum(amzaRingReader, versionedPartitionName);
         ReadWaterline readCurrent = new ReadWaterline<>(
             new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName, CURRENT, startupVersion),
@@ -144,7 +164,44 @@ public class AmzaAquariumProvider implements RowChanges {
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
             },
-            rootRingMember.asAquariumMember());
+            rootRingMember.asAquariumMember(),
+            new AwaitLivelyEndState() {
+                @Override
+                public State awaitChange(Callable<State> awaiter, long timeoutMillis) throws Exception {
+                    return awaitLivelyEndState.awaitChange(versionedPartitionName.getPartitionName(),
+                        () -> {
+                            State state = awaiter.call();
+                            return state != null ? Optional.of(state) : null;
+                        },
+                        timeoutMillis);
+                }
+
+                @Override
+                public void notifyChange(Callable<Boolean> change) throws Exception {
+                    awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
+                }
+            });
+    }
+
+    public boolean isOnline(VersionedPartitionName versionedPartitionName,
+        Waterline waterline) throws Exception {
+        if (waterline.getState() == State.follower || waterline.getState() == State.leader) {
+            State livelyEndState = getAquarium(versionedPartitionName).livelyEndState();
+            return isOnlineState(livelyEndState);
+        } else {
+            return false;
+        }
+    }
+
+    public void awaitOnline(VersionedPartitionName versionedPartitionName, long timeoutMillis) throws Exception {
+        State livelyEndState = getAquarium(versionedPartitionName).awaitLivelyEndState(timeoutMillis);
+        if (!isOnlineState(livelyEndState)) {
+            throw new IllegalStateException("Partition did not reach an online state: " + livelyEndState);
+        }
+    }
+
+    static boolean isOnlineState(State livelyEndState) {
+        return livelyEndState == State.follower || livelyEndState == State.leader;
     }
 
     static byte[] stateKey(PartitionName partitionName,

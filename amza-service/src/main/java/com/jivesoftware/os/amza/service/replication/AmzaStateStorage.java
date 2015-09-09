@@ -68,8 +68,10 @@ class AmzaStateStorage implements StateStorage<Long> {
             (rootMember, otherMember, lifecycle, state, timestamp) -> {
                 byte[] keyBytes = AmzaAquariumProvider.stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
                 byte[] valueBytes = { state.getSerializedForm() };
+                /*
                 LOG.info("Context {} me:{} root:{} other:{} lifecycle:{} state:{} timestamp:{} on {}", context, member, rootMember, otherMember, lifecycle,
                     state, timestamp, versionedPartitionName);
+                */
                 amzaPartitionUpdates.set(keyBytes, valueBytes, timestamp);
                 return true;
             });

@@ -216,6 +216,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         if (properties == null) {
             throw new IllegalStateException("No properties for partition: " + partitionName);
         }
+
         partitionStateStorage.tx(partitionName, (versionedPartitionName, partitionState, isOnline) -> {
             if (!isOnline) {
                 VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
@@ -225,10 +226,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             if (partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
                 takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName, partitionState, isOnline);
             }
+            long start = System.currentTimeMillis();
+            aquariumProvider.awaitOnline(versionedPartitionName, timeoutMillis);
+            //LOG.info("Finished awaiting online in {} ms", System.currentTimeMillis() - start);
             return null;
         });
-
-        partitionStateStorage.awaitOnline(partitionName, timeoutMillis);
     }
 
     public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName) throws Exception {
@@ -479,14 +481,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     partitionStateStorage.markAsBootstrap(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
             }
         }
     }
 
     boolean isOnline(VersionedPartitionName versionedPartitionName, Waterline waterline) throws Exception {
-        return partitionStateStorage.isOnline(versionedPartitionName, waterline);
-
+        return aquariumProvider.isOnline(versionedPartitionName, waterline);
     }
 
     private boolean streamOffline(DataOutputStream dos,

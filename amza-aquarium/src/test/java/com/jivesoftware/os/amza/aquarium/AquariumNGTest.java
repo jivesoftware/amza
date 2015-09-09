@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -381,7 +382,18 @@ public class AquariumNGTest {
                 readWaterlineTx,
                 ifYoureLuckyCurrentTransitionQuorum,
                 ifYoureLuckyDesiredTransitionQuorum,
-                member);
+                member,
+                new AwaitLivelyEndState() {
+                    @Override
+                    public State awaitChange(Callable<State> awaiter, long timeoutMillis) throws Exception {
+                        return awaiter.call();
+                    }
+
+                    @Override
+                    public void notifyChange(Callable<Boolean> change) throws Exception {
+                        change.call();
+                    }
+                });
         }
 
         public void forceDesiredState(State state) throws Exception {

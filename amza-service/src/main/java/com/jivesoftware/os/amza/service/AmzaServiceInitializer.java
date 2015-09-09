@@ -232,7 +232,8 @@ public class AmzaServiceInitializer {
             systemWALStorage,
             storageVersionProvider,
             walUpdated,
-            liveliness);
+            liveliness,
+            awaitOnline);
 
         PartitionStateStorage partitionStateStorage = new PartitionStateStorage(orderIdProvider,
             ringMember,

@@ -18,19 +18,22 @@ public class Aquarium {
     private final TransitionQuorum transitionCurrent;
     private final TransitionQuorum transitionDesired;
     private final Member member;
+    private final AwaitLivelyEndState awaitLivelyEndState;
 
     public Aquarium(OrderIdProvider versionProvider,
         CurrentTimeMillis currentTimeMillis,
         ReadWaterlineTx waterlineTx,
         TransitionQuorum transitionCurrent,
         TransitionQuorum transitionDesired,
-        Member member) {
+        Member member,
+        AwaitLivelyEndState awaitLivelyEndState) {
         this.versionProvider = versionProvider;
         this.currentTimeMillis = currentTimeMillis;
         this.waterlineTx = waterlineTx;
         this.transitionCurrent = transitionCurrent;
         this.transitionDesired = transitionDesired;
         this.member = member;
+        this.awaitLivelyEndState = awaitLivelyEndState;
     }
 
     public void inspectState(Member member, Tx tx) throws Exception {
@@ -42,18 +45,23 @@ public class Aquarium {
             current.acknowledgeOther();
             desired.acknowledgeOther();
 
-            Waterline currentWaterline = current.get();
-            if (currentWaterline == null) {
-                currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true, Long.MAX_VALUE);
-            }
-            Waterline desiredWaterline = desired.get();
-            LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
-            currentWaterline.getState().transistor.advance(currentTimeMillis, currentWaterline,
-                current,
-                transitionCurrent,
-                desiredWaterline,
-                desired,
-                transitionDesired);
+            awaitLivelyEndState.notifyChange(() -> {
+                Waterline currentWaterline = current.get();
+                if (currentWaterline == null) {
+                    currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true, Long.MAX_VALUE);
+                }
+                Waterline desiredWaterline = desired.get();
+                //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
+
+                boolean advanced = currentWaterline.getState().transistor.advance(currentTimeMillis,
+                    currentWaterline,
+                    current,
+                    transitionCurrent,
+                    desiredWaterline,
+                    desired,
+                    transitionDesired);
+                return advanced || (desiredWaterline != null && desiredWaterline.isAtQuorum() && desiredWaterline.isAlive(currentTimeMillis.get()));
+            });
 
             return true;
         });
@@ -63,7 +71,7 @@ public class Aquarium {
      * @return null, leader or follower
      */
     public State livelyEndState() throws Exception { // TODO consider timeout and wait notify bla...
-        State[] state = {null};
+        State[] state = { null };
         waterlineTx.tx(member, (current, desired) -> {
 
             Waterline currentWaterline = current.get();
@@ -84,6 +92,10 @@ public class Aquarium {
             return true;
         });
         return state[0];
+    }
+
+    public State awaitLivelyEndState(long timeoutMillis) throws Exception {
+        return awaitLivelyEndState.awaitChange(this::livelyEndState, timeoutMillis);
     }
 
     public Waterline getState(Member member) throws Exception {

@@ -106,25 +106,37 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
                         if (readCurrent != null) {
                             Waterline current = readCurrent.get();
                             if (current != null) {
-                                state.put("current", asMap(current, now));
+                                if (current.getMember().equals(e.getKey().asAquariumMember())) {
+                                    state.put("current", asMap(current, now));
+                                }
                                 List<Map<String, Object>> others = new ArrayList<>();
                                 readCurrent.getOthers((Waterline waterline) -> {
-                                    others.add(asMap(waterline, now));
+                                    if (waterline.getMember().equals(e.getKey().asAquariumMember())) {
+                                        others.add(asMap(waterline, now));
+                                    }
                                     return true;
                                 });
-                                state.put("othersCurrent", others);
+                                if (!others.isEmpty()) {
+                                    state.put("othersCurrent", others);
+                                }
                             }
                         }
                         if (readDesired != null) {
                             Waterline desired = readDesired.get();
                             if (desired != null) {
-                                state.put("desired", asMap(desired, now));
+                                if (desired.getMember().equals(e.getKey().asAquariumMember())) {
+                                    state.put("desired", asMap(desired, now));
+                                }
                                 List<Map<String, Object>> others = new ArrayList<>();
                                 readDesired.getOthers((Waterline waterline) -> {
-                                    others.add(asMap(waterline, now));
+                                    if (waterline.getMember().equals(e.getKey().asAquariumMember())) {
+                                        others.add(asMap(waterline, now));
+                                    }
                                     return true;
                                 });
-                                state.put("othersDesired", others);
+                                if (!others.isEmpty()) {
+                                    state.put("othersDesired", others);
+                                }
                             }
                         }
                         states.add(state);

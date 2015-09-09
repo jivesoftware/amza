@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.client.http;
 
-import com.google.common.io.BaseEncoding;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -41,7 +40,7 @@ public class PartitionHostsProvider {
         return tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 
             HttpStreamResponse got = client.streamingPost("/amza/v1/ring/"
-                + BaseEncoding.base64Url().encode(partitionName.getRingName()) + "/" + waitForLeaderElection, null, null);
+                + partitionName.toBase64() + "/" + waitForLeaderElection, null, null);
             if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
                 try {
                     FilerInputStream fis = new FilerInputStream(got.getInputStream());

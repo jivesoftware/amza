@@ -340,6 +340,16 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         }
     }
 
+    @Override
+    public RingMember awaitLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception {
+        if (partitionName.isSystemPartition()) {
+            throw new IllegalArgumentException("System partitions do not have leaders. " + partitionName);
+        } else {
+            Waterline leader = partitionStateStorage.awaitLeader(partitionName, waitForLeaderElection);
+            return (leader != null) ? RingMember.fromAquariumMember(leader.getMember()) : null;
+        }
+    }
+
     public boolean hasPartition(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return true;

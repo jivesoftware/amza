@@ -83,9 +83,11 @@ public class AmzaHttpPartitionClient implements PartitionClient {
     private void handleLeaderStatusCodes(Consistency consistency, int statusCode) {
         if (consistency.requiresLeader()) {
             if (statusCode == 503) {
+                partitionCallRouter.invalidateRouting(partitionName);
                 throw new LeaderElectionInProgressException(partitionName + " " + consistency);
             }
             if (statusCode == 409) {
+                partitionCallRouter.invalidateRouting(partitionName);
                 throw new NoLongerTheLeaderException(partitionName + " " + consistency);
             }
         }

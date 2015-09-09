@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
-import com.google.common.io.BaseEncoding;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -73,7 +72,7 @@ public class AmzaClientRestEndpoints {
             try {
                 RingMember expectedLeader = RingMember.fromBytes(UIO.readByteArray(fis, "leader"));
                 if (expectedLeader != null) {
-                    RingMember leader = ringReader.getLeader(partitionName.getRingName(), 0);
+                    RingMember leader = partitionProvider.awaitLeader(partitionName, 0);
                     if (leader == null) {
                         return Response.status(503).build();
                     }
@@ -95,16 +94,16 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/ring/{base64RingName}/{waitForLeaderElection}")
-    public ChunkedOutput<byte[]> ring(@PathParam("base64RingName") String base64RingName,
+    @Path("/ring/{base64PartitionName}/{waitForLeaderElection}")
+    public ChunkedOutput<byte[]> ring(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("waitForLeaderElection") long waitForLeaderElection) {
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
             try {
-                byte[] ringName = BaseEncoding.base64Url().decode(base64RingName);
-                RingMember leader = ringReader.getLeader(ringName, waitForLeaderElection);
-                NavigableMap<RingMember, RingHost> ring = ringReader.getRing(ringName);
+                PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+                RingMember leader = partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
+                NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
 
                 ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
                 Set<Map.Entry<RingMember, RingHost>> memebers = ring.entrySet();

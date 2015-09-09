@@ -146,6 +146,7 @@ public class AmzaAquariumProvider implements RowChanges {
             (member, tx) -> tx.tx(readCurrent, readDesired),
             (current, desiredTimestamp, state) -> {
                 //TODO make sure this is a valid transition
+
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
                 byte[] valueBytes = {state.getSerializedForm()};
@@ -201,7 +202,7 @@ public class AmzaAquariumProvider implements RowChanges {
             throw new IllegalStateException("Partition did not reach an online state: " + livelyEndState);
         }
     }
-
+    
     static boolean isOnlineState(Waterline livelyEndState) {
         return livelyEndState.getState() == State.follower || livelyEndState.getState() == State.leader;
     }

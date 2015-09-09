@@ -71,12 +71,6 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     }
 
     @Override
-    public RingMember getLeader(byte[] ringName, long waitForLeaderElection) throws Exception {
-        // fix me!!
-        return null;
-    }
-
-    @Override
     public RingMember getRingMember() {
         return rootRingMember;
     }

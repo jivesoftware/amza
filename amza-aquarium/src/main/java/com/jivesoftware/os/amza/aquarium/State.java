@@ -186,13 +186,16 @@ public enum State {
 
             Waterline currentLeader = highest(currentTimeMillis, leader, readCurrent, current);
             Waterline desiredLeader = highest(currentTimeMillis, leader, readDesired, desired);
+            boolean isFollower = false;
             if (currentLeader == null
                 || desiredLeader == null
                 || !desiredLeader.getMember().equals(current.getMember())) {
                 transitionDesired.transition(desired, desired.getTimestamp(), follower);
+                isFollower = true;
             }
 
-            if (currentLeader == null
+            if (isFollower
+                || currentLeader == null
                 || desiredLeader == null
                 || !desiredLeader.isAtQuorum()
                 || !checkEquals(currentTimeMillis, currentLeader, desiredLeader)) {

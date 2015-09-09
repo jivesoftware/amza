@@ -47,7 +47,7 @@ public class AwaitNotify<K> {
                 }
             }
         }
-        while (timeoutMillis <= 0 || System.currentTimeMillis() - startTime < timeoutMillis);
+        while (timeoutMillis < 0 || System.currentTimeMillis() - startTime < timeoutMillis);
 
         throw new TimeoutException("Timed out awaiting changes after ms: " + timeoutMillis);
     }

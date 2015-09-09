@@ -46,21 +46,27 @@ public class Aquarium {
             desired.acknowledgeOther();
 
             awaitLivelyEndState.notifyChange(() -> {
-                Waterline currentWaterline = current.get();
-                if (currentWaterline == null) {
-                    currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true, Long.MAX_VALUE);
-                }
-                Waterline desiredWaterline = desired.get();
-                //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
 
-                boolean advanced = currentWaterline.getState().transistor.advance(currentTimeMillis,
-                    currentWaterline,
-                    current,
-                    transitionCurrent,
-                    desiredWaterline,
-                    desired,
-                    transitionDesired);
-                return advanced || (desiredWaterline != null && desiredWaterline.isAtQuorum() && desiredWaterline.isAlive(currentTimeMillis.get()));
+                while (true) {
+                    Waterline currentWaterline = current.get();
+                    if (currentWaterline == null) {
+                        currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true, Long.MAX_VALUE);
+                    }
+                    Waterline desiredWaterline = desired.get();
+                    //LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
+
+                    boolean advanced = currentWaterline.getState().transistor.advance(currentTimeMillis,
+                        currentWaterline,
+                        current,
+                        transitionCurrent,
+                        desiredWaterline,
+                        desired,
+                        transitionDesired);
+                    if (!advanced) {
+                        break;
+                    }
+                };
+                return captureEndState(current, desired) != null;
             });
 
             return true;
@@ -73,25 +79,26 @@ public class Aquarium {
     public Waterline livelyEndState() throws Exception {
         Waterline[] waterline = {null};
         waterlineTx.tx(member, (current, desired) -> {
-
-            Waterline currentWaterline = current.get();
-            Waterline desiredWaterline = desired.get();
-
-            if (currentWaterline != null
-                && currentWaterline.isAlive(currentTimeMillis.get())
-                && currentWaterline.isAtQuorum()
-                && State.checkEquals(currentTimeMillis, currentWaterline, desiredWaterline)) {
-
-                if (desiredWaterline.getState() == State.leader) {
-                    waterline[0] = desiredWaterline;
-                }
-                if (desiredWaterline.getState() == State.follower) {
-                    waterline[0] = desiredWaterline;
-                }
-            }
+            waterline[0] = captureEndState(current, desired);
             return true;
         });
         return waterline[0];
+    }
+
+    private Waterline captureEndState(ReadWaterline current, ReadWaterline desired) throws Exception {
+        Waterline currentWaterline = current.get();
+        Waterline desiredWaterline = desired.get();
+
+        if (currentWaterline != null
+            && currentWaterline.isAlive(currentTimeMillis.get())
+            && currentWaterline.isAtQuorum()
+            && State.checkEquals(currentTimeMillis, currentWaterline, desiredWaterline)) {
+
+            if (desiredWaterline.getState() == State.leader || desiredWaterline.getState() == State.follower) {
+                return desiredWaterline;
+            }
+        }
+        return null;
     }
 
     public Waterline getLeader() throws Exception {
@@ -105,6 +112,11 @@ public class Aquarium {
 
     public Waterline awaitLivelyEndState(long timeoutMillis) throws Exception {
         return awaitLivelyEndState.awaitChange(this::livelyEndState, timeoutMillis);
+    }
+
+    public Waterline awaitLeader(long timeoutMillis) throws Exception {
+        awaitLivelyEndState.awaitChange(this::livelyEndState, timeoutMillis);
+        return getLeader();
     }
 
     public Waterline getState(Member member) throws Exception {

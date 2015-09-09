@@ -68,11 +68,13 @@ public class AmzaHttpClientCallRouter {
         if (consistency.requiresLeader()) {
             try {
                 RingMemberAndHost leader = ring.leader();
-                return solve(partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis, leader.ringMember, leader);
+                return solve(partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis, leader.ringMember,
+                    leader);
             } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
                 ring = ring(partitionName, consistency, Optional.of(ring.leader()), waitForLeaderElection);
                 RingMemberAndHost leader = ring.leader();
-                return solve(partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis, leader.ringMember, leader);
+                return solve(partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis, leader.ringMember,
+                    leader);
             }
         } else if (consistency == Consistency.quorum || consistency == Consistency.write_all_read_one) {
             return solve(partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis, null, ring.randomizeRing());
@@ -80,6 +82,10 @@ public class AmzaHttpClientCallRouter {
             throw new IllegalStateException("Unsupported write consistency:" + consistency.name());
         }
 
+    }
+
+    public void invalidateRouting(PartitionName partitionName) {
+        partitionRoutingCache.invalidate(partitionName);
     }
 
     public <R, A> R read(PartitionName partitionName,
@@ -162,7 +168,7 @@ public class AmzaHttpClientCallRouter {
         Optional<RingMemberAndHost> useHost,
         long waitForLeaderElection) throws HttpClientException, ExecutionException,
         LeaderElectionInProgressException {
-        
+
         Ring ring = partitionRoutingCache.get(partitionName, null);
         if (ring == null || consistency.requiresLeader() && ring.leader() == null) {
             ring = partitionHostsProvider.getPartitionHosts(partitionName, useHost, waitForLeaderElection);

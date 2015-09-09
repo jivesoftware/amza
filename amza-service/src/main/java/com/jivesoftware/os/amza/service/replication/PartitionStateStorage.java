@@ -155,6 +155,14 @@ public class PartitionStateStorage implements TxPartitionState {
         return aquariumProvider.getAquarium(versionedPartitionName).getLeader();
     }
 
+    public Waterline awaitLeader(PartitionName partitionName, long timeoutMillis) throws Exception {
+        if (partitionName.isSystemPartition()) {
+            return null;
+        }
+        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+        return aquariumProvider.getAquarium(new VersionedPartitionName(partitionName, storageVersion.partitionVersion)).awaitLeader(timeoutMillis);
+    }
+
     public VersionedState markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
             Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);

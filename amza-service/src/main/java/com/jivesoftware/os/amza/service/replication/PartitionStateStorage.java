@@ -116,10 +116,7 @@ public class PartitionStateStorage implements TxPartitionState {
             return new VersionedState(State.follower, true, new StorageVersion(0, 0));
         }
 
-        StorageVersion storageVersion = storageVersionProvider.get(partitionName);
-        if (storageVersion == null) {
-            return null;
-        }
+        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
         State localState = getLocalState(versionedPartitionName);
         return new VersionedState(localState, isOnline(versionedPartitionName, localState), storageVersion);
@@ -130,11 +127,11 @@ public class PartitionStateStorage implements TxPartitionState {
             return new RemoteVersionedState(State.follower, 0);
         }
 
-        StorageVersion localStorageVersion = storageVersionProvider.get(partitionName);
+        StorageVersion localStorageVersion = storageVersionProvider.createIfAbsent(partitionName);
         VersionedPartitionName localVersionedPartitionName = new VersionedPartitionName(partitionName, localStorageVersion.partitionVersion);
         Aquarium aquarium = aquariumProvider.getAquarium(localVersionedPartitionName);
         State remoteState = aquarium.getState(remoteRingMember.asAquariumMember());
-        
+
         StorageVersion remoteStorageVersion = storageVersionProvider.getRemote(remoteRingMember, partitionName);
         return new RemoteVersionedState(remoteState, remoteStorageVersion.partitionVersion);
     }
@@ -144,8 +141,7 @@ public class PartitionStateStorage implements TxPartitionState {
             return new VersionedState(State.follower, true, new StorageVersion(0, 0));
         }
 
-        long partitionVersion = orderIdProvider.nextId();
-        StorageVersion storageVersion = storageVersionProvider.set(rootRingMember, partitionName, partitionVersion);
+        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
 
         // let aquarium do its thing
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
@@ -182,10 +178,7 @@ public class PartitionStateStorage implements TxPartitionState {
 
         getAquarium(versionedPartitionName).expunge(ringMember.asAquariumMember());
 
-        StorageVersion storageVersion = storageVersionProvider.set(ringMember, versionedPartitionName.getPartitionName(),
-            versionedPartitionName.getPartitionVersion());
-        State localState = getLocalState(versionedPartitionName);
-        return new VersionedState(localState, isOnline(versionedPartitionName, localState), storageVersion);
+        return getLocalVersionedState(versionedPartitionName.getPartitionName());
     }
 
     public boolean isOnline(VersionedPartitionName versionedPartitionName,

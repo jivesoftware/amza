@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.aquarium;
 
 import com.google.common.collect.Sets;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.lang.reflect.Array;
 import java.util.Set;
 
@@ -9,13 +11,15 @@ import java.util.Set;
  */
 public class ReadWaterline<T> {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     private final StateStorage<T> stateStorage;
     private final Liveliness liveliness;
     private final MemberLifecycle<T> memberLifecycle;
     private final AtQuorum atQuorum;
     private final Member member;
     private final Class<T> lifecycleType;
-    
+
     public ReadWaterline(StateStorage<T> stateStorage,
         Liveliness liveliness,
         MemberLifecycle<T> memberLifecycle,
@@ -35,6 +39,7 @@ public class ReadWaterline<T> {
         Set<Member> acked = Sets.newHashSet();
         T lifecycle = memberLifecycle.get();
         if (lifecycle == null) {
+            LOG.info("Null lifecycle for {}", member);
             return null;
         }
         stateStorage.scan(member, null, lifecycle, (rootRingMember, isSelf, ackRingMember, rootLifecycle, state, timestamp, version) -> {

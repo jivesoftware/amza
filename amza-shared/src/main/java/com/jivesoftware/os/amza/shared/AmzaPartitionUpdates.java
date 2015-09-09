@@ -100,4 +100,11 @@ public class AmzaPartitionUpdates implements Commitable {
         }
         return true;
     }
+
+    @Override
+    public String toString() {
+        return "AmzaPartitionUpdates{" +
+            "changes=" + changes +
+            '}';
+    }
 }

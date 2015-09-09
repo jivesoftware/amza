@@ -2,11 +2,15 @@ package com.jivesoftware.os.amza.aquarium;
 
 import com.jivesoftware.os.amza.aquarium.ReadWaterlineTx.Tx;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 
 /**
  * @author jonathan.colt
  */
 public class Aquarium {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final OrderIdProvider versionProvider;
     private final CurrentTimeMillis currentTimeMillis;
@@ -43,6 +47,7 @@ public class Aquarium {
                 currentWaterline = new Waterline(member, State.bootstrap, versionProvider.nextId(), -1L, true, Long.MAX_VALUE);
             }
             Waterline desiredWaterline = desired.get();
+            LOG.info("Tap {} current:{} desired:{}", member, currentWaterline, desiredWaterline);
             currentWaterline.getState().transistor.advance(currentTimeMillis, currentWaterline,
                 current,
                 transitionCurrent,

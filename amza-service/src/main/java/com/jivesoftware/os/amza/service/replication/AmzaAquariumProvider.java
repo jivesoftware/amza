@@ -24,9 +24,15 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +58,7 @@ public class AmzaAquariumProvider implements RowChanges {
 
     private final Liveliness liveliness;
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+    private final Set<VersionedPartitionName> smellsFishy = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public AmzaAquariumProvider(long startupVersion,
         RingMember rootRingMember,
@@ -76,10 +83,21 @@ public class AmzaAquariumProvider implements RowChanges {
         scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
                 liveliness.feedTheFish();
+                Iterator<VersionedPartitionName> iter = smellsFishy.iterator();
+                while (iter.hasNext()) {
+                    VersionedPartitionName versionedPartitionName = iter.next();
+                    iter.remove();
+                    StorageVersion storageVersion = storageVersionProvider.createIfAbsent(versionedPartitionName.getPartitionName());
+                    getAquarium(new VersionedPartitionName(versionedPartitionName.getPartitionName(), storageVersion.partitionVersion)).tapTheGlass();
+                }
             } catch (Exception e) {
                 LOG.error("Failed to feed the fish", e);
             }
         }, 0, feedEveryMillis, TimeUnit.MILLISECONDS);
+    }
+
+    public void stop() {
+        scheduledExecutorService.shutdownNow();
     }
 
     public void tookFully(RingMember fromRingMember, VersionedPartitionName versionedPartitionName) throws Exception {
@@ -110,7 +128,7 @@ public class AmzaAquariumProvider implements RowChanges {
                 //TODO make sure this is a valid transition
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
-                byte[] valueBytes = {state.getSerializedForm()};
+                byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 LOG.info("Current {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
@@ -120,7 +138,7 @@ public class AmzaAquariumProvider implements RowChanges {
                 //TODO make sure this is a valid transition
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
-                byte[] valueBytes = {state.getSerializedForm()};
+                byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 LOG.info("Desired {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
@@ -285,15 +303,14 @@ public class AmzaAquariumProvider implements RowChanges {
 
     @Override
     public void changes(RowsChanged changes) throws Exception {
-        /*
-         if (PartitionCreator.AQUARIUM_STATE_INDEX.equals(changes.getVersionedPartitionName())) {
-         for (Map.Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
-         streamStateKey(change.getKey().key, (partitionName, context, rootRingMember1, partitionVersion, isSelf, ackRingMember) -> {
-         getAquarium(new VersionedPartitionName(partitionName, partitionVersion)).tapTheGlass();
-         return true;
-         });
-         }
-         }*/
+        if (PartitionCreator.AQUARIUM_STATE_INDEX.equals(changes.getVersionedPartitionName())) {
+            for (Map.Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
+                streamStateKey(change.getKey().key, (partitionName, context, rootRingMember1, partitionVersion, isSelf, ackRingMember) -> {
+                    smellsFishy.add(new VersionedPartitionName(partitionName, partitionVersion));
+                    return true;
+                });
+            }
+        }
     }
 
     private static class AmzaMemberLifecycle implements MemberLifecycle<Long> {
@@ -308,8 +325,8 @@ public class AmzaAquariumProvider implements RowChanges {
 
         @Override
         public Long get() throws Exception {
-            StorageVersion storageVersion = storageVersionProvider.get(versionedPartitionName.getPartitionName());
-            return storageVersion != null ? storageVersion.partitionVersion : null;
+            StorageVersion storageVersion = storageVersionProvider.createIfAbsent(versionedPartitionName.getPartitionName());
+            return storageVersion.partitionVersion;
         }
 
         @Override

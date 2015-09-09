@@ -508,16 +508,16 @@ public class AmzaTestCluster {
                         + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                         if (bValue == null) {
-                            System.out.println("INCONSISTENCY: " + comparing + " " + aValue
+                            System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)
                                 + " != null"
-                                + "' \n" + aValue + " vs null");
+                                + "' \n" +  Arrays.toString(aValue) + " vs null");
                             passed.setValue(false);
                             return false;
                         }
                         if (aTimestamp != bTimetamp) {
-                            System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + aValue
+                            System.out.println("INCONSISTENCY: " + comparing + " timestamp:'" + aTimestamp
                                 + "' != '" + bTimetamp
-                                + "' \n" + aValue + " vs " + bValue);
+                                + "' \n" +  Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
                             passed.setValue(false);
                             System.out.println("----------------------------------");
                             return false;
@@ -525,7 +525,7 @@ public class AmzaTestCluster {
                         if (aVersion != bVersion) {
                             System.out.println("INCONSISTENCY: " + comparing + " version:'" + aVersion
                                 + "' != '" + bVersion
-                                + "' \n" + aValue + " vs " + bValue);
+                                + "' \n" +  Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
                             passed.setValue(false);
                             System.out.println("----------------------------------");
                             return false;
@@ -533,14 +533,14 @@ public class AmzaTestCluster {
                         if (aValue == null && bValue != null) {
                             System.out.println("INCONSISTENCY: " + comparing + " null"
                                 + " != '" + Arrays.toString(bValue)
-                                + "' \n" + aValue + " vs " + bValue);
+                                + "' \n" +  "null" + " vs " + Arrays.toString(bValue));
                             passed.setValue(false);
                             return false;
                         }
                         if (aValue != null && !Arrays.equals(aValue, bValue)) {
                             System.out.println("INCONSISTENCY: " + comparing + " value:'" + Arrays.toString(aValue)
                                 + "' != '" + Arrays.toString(bValue)
-                                + "' \n" + aValue + " vs " + bValue);
+                                + "' \n" +  Arrays.toString(aValue) + " vs " + Arrays.toString(bValue));
                             passed.setValue(false);
                             return false;
                         }

@@ -288,7 +288,7 @@ public class RowChangeTaker implements RowChanges {
                                         remoteVersionedPartitionName,
                                         rowsTaker,
                                         (initialRowTaker, changed, startVersion, version) -> {
-                                            versionedPartitionRowTakers.compute(remoteVersionedPartitionName, (key2, latestRowerTaker) -> {
+                                            versionedPartitionRowTakers.computeIfPresent(remoteVersionedPartitionName, (key2, latestRowerTaker) -> {
                                                 long initialVersion = initialRowTaker.localVersionedPartitionName.getPartitionVersion();
                                                 long latestVersion = latestRowerTaker.localVersionedPartitionName.getPartitionVersion();
                                                 if (!disposed.get() && initialVersion == latestVersion && (changed || startVersion < version.get())) {

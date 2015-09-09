@@ -16,6 +16,7 @@ import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
+import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -75,24 +76,28 @@ public class StorageVersionProvider implements RowChanges {
         }
     }
 
-    public StorageVersion get(PartitionName partitionName) {
-        StorageVersion storageVersion = localVersionCache.computeIfAbsent(partitionName, key -> {
-            try {
-                TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
-                    walKey(rootRingMember, partitionName));
-                if (rawState != null) {
-                    return StorageVersion.fromBytes(rawState.getValue());
-                } else {
-                    return null;
+    private final StripingLocksProvider<PartitionName> versionStripingLocks = new StripingLocksProvider<>(1024);
+
+    public StorageVersion createIfAbsent(PartitionName partitionName) throws Exception {
+        synchronized (versionStripingLocks.lock(partitionName, 0)) {
+            StorageVersion storageVersion = localVersionCache.computeIfAbsent(partitionName, key -> {
+                try {
+                    TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
+                        walKey(rootRingMember, partitionName));
+                    if (rawState != null) {
+                        return StorageVersion.fromBytes(rawState.getValue());
+                    } else {
+                        return null;
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to deserialize version", e);
                 }
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to deserialize version", e);
+            });
+            if (storageVersion == null || storageVersion.stripeVersion != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
+                storageVersion = set(partitionName, orderIdProvider.nextId());
             }
-        });
-        if (storageVersion != null && storageVersion.stripeVersion != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
-            return null;
+            return storageVersion;
         }
-        return storageVersion;
     }
 
     public interface PartitionMemberStorageVersionStream {
@@ -128,7 +133,7 @@ public class StorageVersionProvider implements RowChanges {
     }
 
 
-    public StorageVersion set(RingMember ringMember, PartitionName partitionName, long partitionVersion) throws Exception {
+    private StorageVersion set(PartitionName partitionName, long partitionVersion) throws Exception {
         StorageVersion storageVersion = new StorageVersion(partitionVersion, stripeVersions[partitionStripeFunction.stripe(partitionName)]);
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, partitionVersion);
         StorageVersion cachedVersion = localVersionCache.get(partitionName);
@@ -141,71 +146,19 @@ public class StorageVersionProvider implements RowChanges {
             long timestampAndVersion = orderIdProvider.nextId();
             RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.PARTITION_VERSION_INDEX, null,
                 (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
-                    walKey(ringMember, partitionName),
+                    walKey(rootRingMember, partitionName),
                     versionedStateBytes, timestampAndVersion, false, timestampAndVersion),
                 walUpdated);
             return !rowsChanged.isEmpty();
         });
 
-        if (rootRingMember.equals(ringMember)) {
-            LOG.info("Storage version: {} {} was updated to {}", rootRingMember, versionedPartitionName, partitionVersion);
-            localVersionCache.put(partitionName, storageVersion);
-            //TODO anything to notify?
-            //takeCoordinator.stateChanged(amzaRingReader, versionedPartitionName, commitableStorageVersion.state);
-            //takeCoordinator.awakeCya();
-        }
+        LOG.info("Storage version: {} {} was updated to {}", rootRingMember, versionedPartitionName, partitionVersion);
+        localVersionCache.put(partitionName, storageVersion);
+        //TODO anything to notify?
+        //takeCoordinator.stateChanged(amzaRingReader, versionedPartitionName, commitableStorageVersion.state);
+        //takeCoordinator.awakeCya();
 
         return storageVersion;
-
-        /*State state = getLocalState(partitionName);
-        return transactor.doWithAll(versionedPartitionName, state,
-            (currentVersionedPartitionName, partitionState) -> {
-
-                TimestampedValue rawVersion = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
-                    walKey(ringMember, partitionName));
-                StorageVersion commitableStorageVersion = null;
-                StorageVersion returnableState = null;
-                long stripeVersion = stripeVersions[partitionStripeFunction.stripe(partitionName)];
-                StorageVersion currentStorageVersion = rawVersion == null ? null : StorageVersion.fromBytes(rawVersion.getValue());
-                if (currentStorageVersion == null || currentStorageVersion.stripeVersion != stripeVersion) {
-                    if (partitionState == State.bootstrap) {
-                        commitableStorageVersion = storageVersion;
-                        returnableState = storageVersion;
-                    }
-                } else {
-                    if (currentStorageVersion.version == storageVersion.version && isValidTransition(currentStorageVersion, storageVersion)) {
-                        commitableStorageVersion = storageVersion;
-                        returnableState = storageVersion;
-                    } else {
-                        returnableState = currentStorageVersion;
-                    }
-                }
-                if (commitableStorageVersion != null) {
-                    byte[] versionedStateBytes = commitableStorageVersion.toBytes();
-                    awaitNotify.notifyChange(partitionName, () -> {
-                        long timestampAndVersion = orderIdProvider.nextId();
-                        RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.PARTITION_VERSION_INDEX, null,
-                            (highwaters, scan) -> scan.row(orderIdProvider.nextId(),
-                                walKey(ringMember, partitionName),
-                                versionedStateBytes, timestampAndVersion, false, timestampAndVersion), walUpdated);
-                        return !rowsChanged.isEmpty();
-                    });
-                    LOG.info("STATE {}: {} versionedPartitionName:{} was updated to {}",
-                        rootRingMember, ringMember, versionedPartitionName, commitableStorageVersion);
-                    if (rootRingMember.equals(ringMember)) {
-                        takeCoordinator.stateChanged(amzaRingReader, versionedPartitionName, commitableStorageVersion.state);
-                        takeCoordinator.awakeCya();
-                    }
-                }
-                if (rootRingMember.equals(ringMember)) {
-                    if (returnableState != null) {
-                        localStateCache.put(partitionName, returnableState);
-                    } else {
-                        localStateCache.remove(partitionName);
-                    }
-                }
-                return returnableState;
-            });*/
     }
 
     public boolean remove(RingMember rootRingMember, VersionedPartitionName versionedPartitionName) throws Exception {

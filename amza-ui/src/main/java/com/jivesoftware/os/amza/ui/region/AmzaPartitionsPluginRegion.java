@@ -100,14 +100,23 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     amzaService.destroyPartition(partitionName);
                 }
             }
+            long now = System.currentTimeMillis();
             List<Map<String, Object>> rows = new ArrayList<>();
             Set<PartitionName> partitionNames = amzaService.getPartitionNames();
             for (PartitionName partitionName : partitionNames) {
 
                 Map<String, Object> row = new HashMap<>();
                 VersionedState state = amzaService.getPartitionStateStorage().getLocalVersionedState(partitionName);
-                row.put("state", state == null ? "unknown" : state.waterline.toString());
-                row.put("version", state == null ? "unknown" : Long.toHexString(state.storageVersion.partitionVersion));
+
+
+                row.put("alive", state == null ? "unknown" : state.waterline.isAlive(now));
+                row.put("state", state == null ? "unknown" : state.waterline.getState());
+                row.put("quorum", state == null ? "unknown" : state.waterline.isAtQuorum());
+                row.put("timestamp", state == null ? "unknown" : String.valueOf(state.waterline.getTimestamp()));
+                row.put("version", state == null ? "unknown" : String.valueOf(state.waterline.getVersion()));
+                
+              
+                row.put("storageVersion", state == null ? "unknown" : Long.toHexString(state.storageVersion.partitionVersion));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                 row.put("name", new String(partitionName.getName()));
                 row.put("ringName", new String(partitionName.getRingName()));

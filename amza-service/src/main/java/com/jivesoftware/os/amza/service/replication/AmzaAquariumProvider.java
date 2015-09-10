@@ -23,6 +23,8 @@ import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -34,6 +36,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -60,6 +63,7 @@ public class AmzaAquariumProvider implements RowChanges {
     private final AmzaRingReader amzaRingReader;
     private final SystemWALStorage systemWALStorage;
     private final StorageVersionProvider storageVersionProvider;
+    private final VersionedPartitionProvider versionedPartitionProvider;
     private final WALUpdated walUpdated;
     private final Liveliness liveliness;
     private final AwaitNotify<PartitionName> awaitLivelyEndState;
@@ -68,12 +72,15 @@ public class AmzaAquariumProvider implements RowChanges {
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
     private final Set<VersionedPartitionName> smellsFishy = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
+    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileNominated = new ConcurrentHashMap<>();
+
     public AmzaAquariumProvider(long startupVersion,
         RingMember rootRingMember,
         OrderIdProvider orderIdProvider,
         AmzaRingReader amzaRingReader,
         SystemWALStorage systemWALStorage,
         StorageVersionProvider storageVersionProvider,
+        VersionedPartitionProvider versionedPartitionProvider,
         WALUpdated walUpdated,
         Liveliness liveliness,
         AwaitNotify<PartitionName> awaitLivelyEndState) {
@@ -84,6 +91,7 @@ public class AmzaAquariumProvider implements RowChanges {
         this.amzaRingReader = amzaRingReader;
         this.systemWALStorage = systemWALStorage;
         this.storageVersionProvider = storageVersionProvider;
+        this.versionedPartitionProvider = versionedPartitionProvider;
         this.walUpdated = walUpdated;
         this.liveliness = liveliness;
         this.awaitLivelyEndState = awaitLivelyEndState;
@@ -110,7 +118,24 @@ public class AmzaAquariumProvider implements RowChanges {
         scheduledExecutorService.shutdownNow();
     }
 
-    public void tookFully(RingMember fromRingMember, VersionedPartitionName versionedPartitionName) throws Exception {
+    public void tookFully(RingMember fromRingMember, long leadershipToken, VersionedPartitionName versionedPartitionName) throws Exception {
+        Aquarium aquarium = getAquarium(versionedPartitionName);
+        Waterline leader = aquarium.getLeader();
+        if (leader != null
+            && rootAquariumMember.equals(leader.getMember())
+            && aquarium.isLivelyState(rootAquariumMember, State.nominated)
+            && leadershipToken == leader.getTimestamp()) {
+
+            tookFullyWhileNominated.compute(versionedPartitionName, (key, current) -> {
+                if (current == null || current.leadershipToken < leader.getTimestamp()) {
+                    current = new LeadershipTokenAndTookFully(leader.getTimestamp());
+                }
+                current.add(fromRingMember);
+                return current;
+            });
+        } else {
+            tookFullyWhileNominated.remove(versionedPartitionName);
+        }
     }
 
     public Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -124,7 +149,8 @@ public class AmzaAquariumProvider implements RowChanges {
     }
 
     private Aquarium buildAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
-        AtQuorum atQuorum = new AmzaAtQuorum(amzaRingReader, versionedPartitionName);
+        AtQuorum atQuorum = new AmzaAtQuorum(versionedPartitionProvider, amzaRingReader, versionedPartitionName);
+
         ReadWaterline readCurrent = new ReadWaterline<>(
             new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName, CURRENT, startupVersion),
             liveliness,
@@ -145,7 +171,23 @@ public class AmzaAquariumProvider implements RowChanges {
             System::currentTimeMillis,
             (member, tx) -> tx.tx(readCurrent, readDesired),
             (current, desiredTimestamp, state) -> {
-                //TODO make sure this is a valid transition
+                if (current.getState() == State.nominated && state == State.leader) {
+                    PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
+                    int ringSize = amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName());
+                    int quorum = properties.consistency.quorum(ringSize - 1);
+                    if (quorum > 0) {
+                        LeadershipTokenAndTookFully leadershipTokenAndTookFully = tookFullyWhileNominated.get(versionedPartitionName);
+                        if (leadershipTokenAndTookFully == null
+                        || leadershipTokenAndTookFully.leadershipToken != desiredTimestamp
+                        || leadershipTokenAndTookFully.tookFully() < quorum) {
+                            LOG.info("{} is nominated for version {} and has taken fully {} out of {}.", versionedPartitionName,
+                                leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.leadershipToken,
+                                leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.tookFully(),
+                                quorum);
+                            return false;
+                        }
+                    }
+                }
 
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
@@ -156,7 +198,6 @@ public class AmzaAquariumProvider implements RowChanges {
                 return !rowsChanged.isEmpty();
             },
             (current, desiredTimestamp, state) -> {
-                //TODO make sure this is a valid transition
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
                 byte[] valueBytes = {state.getSerializedForm()};
@@ -202,7 +243,7 @@ public class AmzaAquariumProvider implements RowChanges {
             throw new IllegalStateException("Partition did not reach an online state: " + livelyEndState);
         }
     }
-    
+
     static boolean isOnlineState(Waterline livelyEndState) {
         return livelyEndState.getState() == State.follower || livelyEndState.getState() == State.leader;
     }
@@ -397,17 +438,51 @@ public class AmzaAquariumProvider implements RowChanges {
 
     private static class AmzaAtQuorum implements AtQuorum {
 
+        private final VersionedPartitionProvider versionedPartitionProvider;
         private final AmzaRingReader amzaRingReader;
         private final VersionedPartitionName versionedPartitionName;
 
-        public AmzaAtQuorum(AmzaRingReader amzaRingReader, VersionedPartitionName versionedPartitionName) {
+        public AmzaAtQuorum(VersionedPartitionProvider versionedPartitionProvider,
+            AmzaRingReader amzaRingReader,
+            VersionedPartitionName versionedPartitionName) {
+
+            this.versionedPartitionProvider = versionedPartitionProvider;
             this.amzaRingReader = amzaRingReader;
             this.versionedPartitionName = versionedPartitionName;
         }
 
         @Override
         public boolean is(int count) throws Exception {
-            return count > amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName()) / 2;
+            PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
+            if (properties.takeFromFactor > 0) {
+                return count > amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName()) / 2;
+            } else {
+                return true;
+            }
         }
+    }
+
+    static class LeadershipTokenAndTookFully {
+
+        final long leadershipToken;
+        final Set<RingMember> tookFully = new HashSet<>();
+
+        public LeadershipTokenAndTookFully(long leadershipToken) {
+            this.leadershipToken = leadershipToken;
+        }
+
+        void add(RingMember ringMember) {
+            tookFully.add(ringMember);
+        }
+
+        int tookFully() {
+            return tookFully.size();
+        }
+
+        @Override
+        public String toString() {
+            return "LeadershipTokenAndTookFully{" + "leadershipToken=" + leadershipToken + ", tookFully=" + tookFully + '}';
+        }
+
     }
 }

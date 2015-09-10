@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
@@ -59,12 +60,14 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
         final String action;
         final String ringName;
         final String partitionName;
+        final String consistency;
         final int takeFromFactor;
 
-        public AmzaPartitionsPluginRegionInput(String action, String ringName, String partitionName, int takeFromFactor) {
+        public AmzaPartitionsPluginRegionInput(String action, String ringName, String partitionName, String consistency, int takeFromFactor) {
             this.action = action;
             this.ringName = ringName;
             this.partitionName = partitionName;
+            this.consistency = consistency;
             this.takeFromFactor = takeFromFactor;
         }
 
@@ -90,7 +93,10 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                         null, 1000, 1000);
 
                     PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
-                    amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, input.takeFromFactor, false));
+                    amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor,
+                        Consistency.valueOf(input.consistency),
+                        input.takeFromFactor,
+                        false));
                     amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
                 }
             } else if (input.action.equals("remove")) {
@@ -108,14 +114,12 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 Map<String, Object> row = new HashMap<>();
                 VersionedState state = amzaService.getPartitionStateStorage().getLocalVersionedState(partitionName);
 
-
                 row.put("alive", state == null ? "unknown" : state.waterline.isAlive(now));
                 row.put("state", state == null ? "unknown" : state.waterline.getState());
                 row.put("quorum", state == null ? "unknown" : state.waterline.isAtQuorum());
                 row.put("timestamp", state == null ? "unknown" : String.valueOf(state.waterline.getTimestamp()));
                 row.put("version", state == null ? "unknown" : String.valueOf(state.waterline.getVersion()));
-                
-              
+
                 row.put("storageVersion", state == null ? "unknown" : Long.toHexString(state.storageVersion.partitionVersion));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                 row.put("name", new String(partitionName.getName()));

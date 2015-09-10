@@ -49,9 +49,9 @@
                                 class="form-control" placeholder="Key Prefixes" value="1"
                                 data-original-title="" title="">
                         </td></tr>
-                        <tr><td>Desired Quorum</td><td>
-                            <input type="number" name="desiredQuorum" min="0" style="padding-left:10px;"
-                                class="form-control" placeholder="Desired Quorum" value="1" title="">
+                        <tr><td>Consistency</td><td>
+                            <input type="number" name="consistency" min="0" style="padding-left:10px;"
+                                class="form-control" placeholder="Consistency" value="1" title="">
                         </td></tr>
                         <tr><td>Ordered Insertion</td><td>
                             <input type="text" name="orderedInsertion" style="padding-left:10px;"
@@ -151,10 +151,10 @@
                         {/foreach}
                     {/if}
                 </tr>
-                <tr><td>Desired Quorum</td>
+                <tr><td>Consistency</td>
                     {if $stress}
                         {foreach $s in $stress}
-                            <td>{$s.desiredQuorum}</td>
+                            <td>{$s.consistency}</td>
                         {/foreach}
                     {/if}
                 </tr>

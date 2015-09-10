@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
@@ -212,11 +213,11 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (partitionName.equals(HIGHWATER_MARK_INDEX.getPartitionName())) {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new PartitionProperties(storageDescriptor, 0, false);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, 0, false);
         } else {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new PartitionProperties(storageDescriptor, 2, false);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, 2, false);
         }
         return properties;
     }

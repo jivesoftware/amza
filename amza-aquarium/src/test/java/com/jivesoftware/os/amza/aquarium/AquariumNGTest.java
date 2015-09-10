@@ -500,18 +500,18 @@ public class AquariumNGTest {
         private final ContextualStateStorage desiredStateStorage;
         private final Liveliness liveliness;
         private final MemberLifecycle<Integer> memberLifecycle;
-        private final AtQuorum ringSize;
+        private final AtQuorum atQuorum;
 
         public Storage(ContextualStateStorage currentStateStorage,
             ContextualStateStorage desiredStateStorage,
             Liveliness liveliness,
             MemberLifecycle<Integer> memberLifecycle,
-            AtQuorum ringSize) {
+            AtQuorum atQuorum) {
             this.currentStateStorage = currentStateStorage;
             this.desiredStateStorage = desiredStateStorage;
             this.liveliness = liveliness;
             this.memberLifecycle = memberLifecycle;
-            this.ringSize = ringSize;
+            this.atQuorum = atQuorum;
         }
 
         void setCurrentState(Member member, long timestamp, State state) throws Exception {
@@ -524,8 +524,8 @@ public class AquariumNGTest {
 
         @Override
         public void tx(Member member, Tx tx) throws Exception {
-            tx.tx(new ReadWaterline<>(currentStateStorage, liveliness, memberLifecycle, ringSize, member, Integer.class),
-                new ReadWaterline<>(desiredStateStorage, liveliness, memberLifecycle, ringSize, member, Integer.class));
+            tx.tx(new ReadWaterline<>(currentStateStorage, liveliness, memberLifecycle, atQuorum, member, Integer.class),
+                new ReadWaterline<>(desiredStateStorage, liveliness, memberLifecycle, atQuorum, member, Integer.class));
         }
 
         public void clear(Member rootMember) {

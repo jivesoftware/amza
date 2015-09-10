@@ -60,10 +60,11 @@ public class AmzaEndpoints {
     @Path("/set")
     public Response set(@QueryParam("ring") @DefaultValue("default") String ring,
         @QueryParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            Partition partition = createPartitionIfAbsent(ring, partitionName);
+            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency));
             String[] keys = key.split(",");
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
@@ -83,9 +84,10 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/multiSet/{partition}")
     public Response multiSet(@PathParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
         Map<String, String> values) {
         try {
-            Partition partition = createPartitionIfAbsent("default", partitionName);
+            Partition partition = createPartitionIfAbsent("default", partitionName, Consistency.valueOf(consistency));
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
@@ -105,10 +107,11 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/multiSet/{ring}/{partition}")
     public Response multiSet(@PathParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
         @PathParam("ring") String ring,
         Map<String, String> values) {
         try {
-            Partition partition = createPartitionIfAbsent(ring, partitionName);
+            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency));
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
@@ -129,9 +132,10 @@ public class AmzaEndpoints {
     @Path("/get")
     public Response get(@QueryParam("ring") @DefaultValue("default") String ring,
         @QueryParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("key") String key) {
         try {
-            Partition partition = createPartitionIfAbsent(ring, partitionName);
+            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency));
             List<byte[]> got = new ArrayList<>();
             //TODO prefix
             partition.get(Consistency.quorum, null,
@@ -161,9 +165,10 @@ public class AmzaEndpoints {
     @Path("/remove")
     public Response remove(@QueryParam("ring") @DefaultValue("default") String ring,
         @QueryParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("key") String key) {
         try {
-            Partition partition = createPartitionIfAbsent(ring, partitionName);
+            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency));
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             //TODO prefix
             updates.remove(key.getBytes(), -1);
@@ -175,7 +180,7 @@ public class AmzaEndpoints {
         }
     }
 
-    Partition createPartitionIfAbsent(String ringName, String simplePartitionName) throws Exception {
+    Partition createPartitionIfAbsent(String ringName, String simplePartitionName, Consistency consistency) throws Exception {
 
         int ringSize = amzaService.getRingReader().getRingSize(ringName.getBytes());
         int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
@@ -187,7 +192,7 @@ public class AmzaEndpoints {
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, false));
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, 1, false));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);
         return amzaService.getPartition(partitionName);

@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.aquarium.Waterline;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
+import com.jivesoftware.os.amza.shared.take.IsNominated;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -21,7 +22,7 @@ import java.util.List;
 /**
  * @author jonathan.colt
  */
-public class PartitionStateStorage implements TxPartitionState {
+public class PartitionStateStorage implements TxPartitionState, IsNominated {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -141,11 +142,11 @@ public class PartitionStateStorage implements TxPartitionState {
         return new VersionedState(localWaterline, aquariumProvider.isOnline(versionedPartitionName, localWaterline), storageVersion);
     }
 
-    public void tookFully(VersionedPartitionName versionedPartitionName, RingMember fromMember) throws Exception {
+    public void tookFully(RingMember fromMember, long leadershipToken, VersionedPartitionName versionedPartitionName) throws Exception {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
             return;
         }
-        aquariumProvider.tookFully(fromMember, versionedPartitionName);
+        aquariumProvider.tookFully(fromMember, leadershipToken, versionedPartitionName);
     }
 
     public Waterline getLeader(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -161,6 +162,11 @@ public class PartitionStateStorage implements TxPartitionState {
         }
         StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
         return aquariumProvider.getAquarium(new VersionedPartitionName(partitionName, storageVersion.partitionVersion)).awaitLeader(timeoutMillis);
+    }
+
+    @Override
+    public boolean isNominated(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception {
+        return aquariumProvider.getAquarium(versionedPartitionName).isLivelyState(ringMember.asAquariumMember(), State.nominated);
     }
 
     public VersionedState markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {

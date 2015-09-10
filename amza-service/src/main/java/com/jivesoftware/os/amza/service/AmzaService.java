@@ -404,6 +404,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         takeCoordinator.availableRowsStream(txHighestPartitionTx,
             ringStoreReader,
             remoteRingMember,
+            partitionStateStorage,
             takeSessionId,
             heartbeatIntervalMillis,
             (partitionName, txId) -> {
@@ -439,6 +440,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         takeCoordinator.availableRowsStream(txHighestPartitionTx,
             ringStoreReader,
             remoteRingMember,
+            partitionStateStorage,
             takeSessionId,
             timeoutMillis,
             availableStream,
@@ -509,6 +511,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         VersionedPartitionName versionedPartitionName,
         Waterline partitionWaterlineState) throws Exception {
         dos.writeLong(-1);
+        dos.writeLong(-1);
         dos.writeByte(0); // not online
         dos.writeByte(0); // last entry marker
         dos.writeByte(0); // last entry marker
@@ -533,6 +536,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         PartitionStripe.RowStreamer streamer) throws Exception {
 
         ackWaters.set(ringMember, versionedPartitionName, highestTransactionId, leadershipToken);
+        dos.writeLong(leadershipToken);
         dos.writeLong(versionedPartitionName.getPartitionVersion());
         dos.writeByte(1); // fully online
         bytes.increment();

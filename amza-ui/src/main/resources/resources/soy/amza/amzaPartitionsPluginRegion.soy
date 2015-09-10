@@ -8,19 +8,7 @@
     {if $partitions}
         <div class="panel panel-default">
             <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Partitions</div>
-                <div class="panel-body">
-
-/*
- row.put("alive", state == null ? "unknown" : state.waterline.isAlive(now));
-                row.put("state", state == null ? "unknown" : state.waterline.getState());
-                row.put("quorum", state == null ? "unknown" : state.waterline.isAtQuorum());
-                row.put("timestamp", state == null ? "unknown" : state.waterline.getTimestamp());
-                row.put("version", state == null ? "unknown" : state.waterline.getVersion());
-                
-              
-                row.put("storageVersion", state == null ? "unknown" : Long.toHexString(state.storageVersion.partitionVersion));
-*/
-                    
+                <div class="panel-body">                    
                     <table class="table table-condensed">
                         <thead>
                             <tr class="active">
@@ -37,6 +25,7 @@
                                 <th>RingName</th>
                                 <th>Disabled</th>
                                 <th>Index</th>
+                                <th>Consistency</th>
                                 <th>TakeFromFactor</th>
                                 <th>Highwaters</th>
                             </tr>
@@ -71,6 +60,11 @@
                                         name="disabled" id="disabledPicker"  title="">
                                     </td>
                                     <td>TODO</td>
+                                    <td>
+                                        <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                            class="form-control" placeholder="Consistency" value=""
+                                            name="consistency"  title="">
+                                    </td>
                                     <td>
                                         <input type="number" name="takeFromFactor" min="0" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
                                         class="form-control" placeholder="takeFromFactor" value=""   title="">

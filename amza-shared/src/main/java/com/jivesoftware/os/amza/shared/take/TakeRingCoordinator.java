@@ -86,6 +86,7 @@ public class TakeRingCoordinator {
 
     long availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
         RingMember ringMember,
+        IsNominated isNominated,
         long takeSessionId,
         AvailableStream availableStream) throws Exception {
 
@@ -94,7 +95,13 @@ public class TakeRingCoordinator {
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
             suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
-                coordinator.availableRowsStream(txHighestPartitionTx, takeSessionId, ring, ringMember, properties.takeFromFactor, availableStream));
+                coordinator.availableRowsStream(txHighestPartitionTx,
+                    takeSessionId,
+                    ring,
+                    ringMember,
+                    isNominated.isNominated(ringMember, coordinator.versionedPartitionName),
+                    properties.takeFromFactor,
+                    availableStream));
         }
         return suggestedWaitInMillis;
     }

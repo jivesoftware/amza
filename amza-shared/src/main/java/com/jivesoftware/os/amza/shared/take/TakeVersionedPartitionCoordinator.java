@@ -56,18 +56,19 @@ public class TakeVersionedPartitionCoordinator {
         long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
+        boolean isNominated,
         int takeFromFactor,
         AvailableStream availableStream) throws Exception {
 
         if (takeFromFactor > 0) {
             return txHighestPartitionTx.tx(versionedPartitionName.getPartitionName(),
-                ( versionedPartitionName1,  partitionWaterlineState,  isOnline,  highestTxId) -> {
+                (versionedPartitionName1, partitionWaterlineState, isOnline, highestTxId) -> {
                     if (versionedPartitionName1.getPartitionVersion() != versionedPartitionName.getPartitionVersion()) {
                         return Long.MAX_VALUE;
                     }
 
                     Integer category = versionedRing.getCategory(ringMember);
-                    if (partitionWaterlineState.getState() == State.bootstrap || (category != null && category <= currentCategory.get())) {
+                    if (isNominated || partitionWaterlineState.getState() == State.bootstrap || (category != null && category <= currentCategory.get())) {
                         AtomicBoolean available = new AtomicBoolean(false);
                         long reofferDelta = ((versionedPartitionName.getPartitionName().isSystemPartition()) ? systemReofferDeltaMillis : reofferDeltaMillis);
                         long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;

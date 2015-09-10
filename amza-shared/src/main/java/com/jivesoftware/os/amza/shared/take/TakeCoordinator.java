@@ -165,6 +165,7 @@ public class TakeCoordinator {
     public void availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
         AmzaRingReader ringReader,
         RingMember remoteRingMember,
+        IsNominated isNominated,
         long takeSessionId,
         long heartbeatIntervalMillis,
         AvailableStream availableStream,
@@ -189,7 +190,11 @@ public class TakeCoordinator {
                 TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                        ring.availableRowsStream(txHighestPartitionTx, remoteRingMember, takeSessionId, watchAvailableStream));
+                        ring.availableRowsStream(txHighestPartitionTx, 
+                            remoteRingMember,
+                            isNominated,
+                            takeSessionId,
+                            watchAvailableStream));
                 }
                 return true;
             });

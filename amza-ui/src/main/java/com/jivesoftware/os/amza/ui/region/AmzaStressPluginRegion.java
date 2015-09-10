@@ -66,7 +66,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         final int numPartitions;
         final int numThreadsPerPartition;
         final int numKeyPrefixes;
-        final int desiredQuorum;
+        final String consistency;
         final boolean orderedInsertion;
         final String action;
 
@@ -77,7 +77,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             int numPartitions,
             int numThreadsPerRegion,
             int numKeyPrefixes,
-            int desiredQuorum,
+            String consistency,
             boolean orderedInsertion,
             String action) {
             this.name = name;
@@ -87,7 +87,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             this.numPartitions = numPartitions;
             this.numThreadsPerPartition = numThreadsPerRegion;
             this.numKeyPrefixes = numKeyPrefixes;
-            this.desiredQuorum = desiredQuorum;
+            this.consistency = consistency;
             this.orderedInsertion = orderedInsertion;
             this.action = action;
         }
@@ -137,7 +137,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 row.put("numPartitions", String.valueOf(stress.input.numPartitions));
                 row.put("numThreadsPerRegion", String.valueOf(stress.input.numThreadsPerPartition));
                 row.put("numKeyPrefixes", String.valueOf(stress.input.numKeyPrefixes));
-                row.put("desiredQuorum", String.valueOf(stress.input.desiredQuorum));
+                row.put("consistency", String.valueOf(stress.input.consistency));
                 row.put("orderedInsertion", String.valueOf(stress.input.orderedInsertion));
 
                 row.put("elapsed", MetricsPluginRegion.getDurationBreakdown(elapsed));
@@ -178,7 +178,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 String regionName = input.regionPrefix + i;
                 int numThread = input.orderedInsertion ? 1 : input.numThreadsPerPartition;
                 for (int j = 0; j < numThread; j++) {
-                    executor.submit(new Feeder(regionName, j, input.orderedInsertion));
+                    executor.submit(new Feeder(regionName, Consistency.valueOf(input.consistency), j, input.orderedInsertion));
                 }
             }
         }
@@ -187,11 +187,13 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
             AtomicInteger batch = new AtomicInteger();
             private final String regionName;
+            private final Consistency consistency;
             private final int threadIndex;
             private final boolean orderedInsertion;
 
-            public Feeder(String regionName, int threadIndex, boolean orderedInsertion) {
+            public Feeder(String regionName, Consistency consistency, int threadIndex, boolean orderedInsertion) {
                 this.regionName = regionName;
+                this.consistency = consistency;
                 this.threadIndex = threadIndex;
                 this.orderedInsertion = orderedInsertion;
             }
@@ -201,7 +203,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 try {
                     int b = batch.incrementAndGet();
                     if (b <= input.numBatches && !forcedStop.get()) {
-                        feed(regionName, b, threadIndex);
+                        feed(regionName, consistency, b, threadIndex);
                         executor.submit(this);
                     } else {
                         completed();
@@ -224,18 +226,12 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             return executor.awaitTermination(timeout, unit);
         }
 
-        private void feed(String regionName, int batch, int threadIndex) throws Exception {
-            Partition partition = createPartitionIfAbsent(regionName);
+        private void feed(String regionName, Consistency consistency, int batch, int threadIndex) throws Exception {
+            Partition partition = createPartitionIfAbsent(regionName, consistency);
 
             while (true) {
                 try {
                     byte[] prefix = input.numKeyPrefixes > 0 ? UIO.intBytes(batch % input.numKeyPrefixes) : null;
-                    Consistency consistency = Consistency.leader;
-                    if (input.desiredQuorum == 1) {
-                        consistency = Consistency.leader_plus_one;
-                    } else if (input.desiredQuorum > 1) {
-                        consistency = Consistency.leader_quorum;
-                    }
                     partition.commit(consistency, prefix, (Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) -> {
                         if (input.orderedInsertion) {
                             String max = String.valueOf(input.numBatches * input.batchSize);
@@ -267,7 +263,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         }
     }
 
-    private Partition createPartitionIfAbsent(String simplePartitionName) throws Exception {
+    private Partition createPartitionIfAbsent(String simplePartitionName, Consistency consistency) throws Exception {
 
         NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default".getBytes());
         if (ring.isEmpty()) {
@@ -278,7 +274,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, 2, false));
 
         long timeoutMillis = 10_000;
         while (true) {

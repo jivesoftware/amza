@@ -252,14 +252,19 @@ public class RowChangeTaker implements RowChanges {
                                         return partitionStripeProvider.txPartition(partitionName,
                                             (stripe, highwaterStorage) -> {
                                                 Long highwater = highwaterStorage.get(remoteRingMember, txLocalVersionPartitionName);
+
                                                 if (highwater != null && highwater >= txId) {
-                                                    //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
-                                                    //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
-                                                    tookToTxId.set(highwater);
-                                                    return null;
-                                                } else {
-                                                    return txLocalVersionPartitionName;
+                                                    boolean nominated = partitionStateStorage.isNominated(amzaRingReader.getRingMember(),
+                                                        txLocalVersionPartitionName);
+                                                    if (!nominated) {
+                                                        //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
+                                                        //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
+                                                        tookToTxId.set(highwater);
+                                                        return null;
+                                                    }
                                                 }
+                                                return txLocalVersionPartitionName;
+
                                             });
                                     }
                                 });
@@ -469,7 +474,7 @@ public class RowChangeTaker implements RowChanges {
                                 if (takeFailureListener.isPresent()) {
                                     takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                 }
-                                partitionStateStorage.tookFully(localVersionedPartitionName, remoteRingMember);
+                                partitionStateStorage.tookFully(remoteRingMember, rowsResult.leadershipToken, localVersionedPartitionName);
                                 partitionStateStorage.tapTheGlass(localVersionedPartitionName);
                             } else if (rowsResult.error == null) {
                                 partitionStateStorage.tapTheGlass(localVersionedPartitionName);

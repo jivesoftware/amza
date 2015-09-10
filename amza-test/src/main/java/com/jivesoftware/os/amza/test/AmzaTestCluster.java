@@ -176,7 +176,7 @@ public class AmzaTestCluster {
                         remoteTxId,
                         localLeadershipToken,
                         rowStream);
-                    return new StreamingRowsResult(null, null, consumed.isOnline ? new HashMap<>() : null);
+                    return new StreamingRowsResult(null, null, localLeadershipToken, consumed.isOnline ? new HashMap<>() : null);
                 }
             }
 
@@ -326,7 +326,8 @@ public class AmzaTestCluster {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
 
-            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
+            // TODO test other consistencies. Hehe
+            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, Consistency.none, 2, false));
             amzaService.awaitOnline(partitionName, 10_000);
         }
 

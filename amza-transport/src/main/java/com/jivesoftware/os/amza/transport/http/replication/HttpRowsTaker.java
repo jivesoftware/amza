@@ -78,15 +78,15 @@ public class HttpRowsTaker implements RowsTaker {
                 + "/" + remoteTxId
                 + "/" + localLeadershipToken);
         } catch (IOException | HttpClientException e) {
-            return new StreamingRowsResult(e, null, null);
+            return new StreamingRowsResult(e, null, -1, null);
         }
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
             StreamingTakeConsumed consumed = streamingTakesConsumer.consume(bis, rowStream);
             amzaStats.netStats.read.addAndGet(consumed.bytes);
-            return new StreamingRowsResult(null, null, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
+            return new StreamingRowsResult(null, null, consumed.leadershipToken, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
         } catch (Exception e) {
-            return new StreamingRowsResult(null, e, null);
+            return new StreamingRowsResult(null, e, -1, null);
         } finally {
             httpStreamResponse.close();
         }

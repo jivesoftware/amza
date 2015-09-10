@@ -231,6 +231,7 @@ public class AmzaServiceInitializer {
             amzaRingReader,
             systemWALStorage,
             storageVersionProvider,
+            partitionIndex,
             walUpdated,
             liveliness,
             awaitOnline);

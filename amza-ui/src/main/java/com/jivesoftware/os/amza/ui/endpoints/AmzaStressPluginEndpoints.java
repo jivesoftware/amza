@@ -35,7 +35,7 @@ public class AmzaStressPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new AmzaStressPluginRegionInput("", "", 0, 0, 0, 0, 0, 1, false, ""));
+            new AmzaStressPluginRegionInput("", "", 0, 0, 0, 0, 0, "none", false, ""));
         return Response.ok(rendered).build();
     }
 
@@ -50,12 +50,12 @@ public class AmzaStressPluginEndpoints {
         @FormParam("numPartitions") @DefaultValue("1") int numPartitions,
         @FormParam("numThreadsPerRegion") @DefaultValue("1") int numThreadsPerRegion,
         @FormParam("numKeyPrefixes") @DefaultValue("0") int numKeyPrefixes,
-        @FormParam("desiredQuorum") @DefaultValue("1") int desiredQuorum,
+        @FormParam("consistency") @DefaultValue("none") String consistency,
         @FormParam("orderedInsertion") @DefaultValue("false") boolean orderedInsertion,
         @FormParam("action") @DefaultValue("") String action) {
         String rendered = soyService.renderPlugin(pluginRegion,
             new AmzaStressPluginRegionInput(name.trim(), regionPrefix.trim(), numBatches, batchSize, numPartitions, numThreadsPerRegion,
-                numKeyPrefixes, desiredQuorum, orderedInsertion, action));
+                numKeyPrefixes, consistency, orderedInsertion, action));
         return Response.ok(rendered).build();
     }
 }

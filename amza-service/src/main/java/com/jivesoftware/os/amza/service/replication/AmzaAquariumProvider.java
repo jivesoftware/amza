@@ -27,8 +27,6 @@ import com.jivesoftware.os.aquarium.AtQuorum;
 import com.jivesoftware.os.aquarium.AwaitLivelyEndState;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.LivelinessStorage;
-import com.jivesoftware.os.aquarium.LivelinessStorage.LivelinessStream;
-import com.jivesoftware.os.aquarium.LivelinessStorage.LivelinessUpdates;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.MemberLifecycle;
 import com.jivesoftware.os.aquarium.ReadWaterline;
@@ -72,7 +70,7 @@ public class AmzaAquariumProvider implements RowChanges {
 
     private final ConcurrentHashMap<VersionedPartitionName, Aquarium> aquariums = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
-    private final Set<VersionedPartitionName> smellsFishy = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<PartitionName> smellsFishy = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileNominated = new ConcurrentHashMap<>();
 
@@ -103,12 +101,12 @@ public class AmzaAquariumProvider implements RowChanges {
         scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
                 liveliness.feedTheFish();
-                Iterator<VersionedPartitionName> iter = smellsFishy.iterator();
+                Iterator<PartitionName> iter = smellsFishy.iterator();
                 while (iter.hasNext()) {
-                    VersionedPartitionName versionedPartitionName = iter.next();
+                    PartitionName partitionName = iter.next();
                     iter.remove();
-                    StorageVersion storageVersion = storageVersionProvider.createIfAbsent(versionedPartitionName.getPartitionName());
-                    getAquarium(new VersionedPartitionName(versionedPartitionName.getPartitionName(), storageVersion.partitionVersion)).tapTheGlass();
+                    StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+                    getAquarium(new VersionedPartitionName(partitionName, storageVersion.partitionVersion)).tapTheGlass();
                 }
             } catch (Exception e) {
                 LOG.error("Failed to feed the fish", e);
@@ -180,8 +178,8 @@ public class AmzaAquariumProvider implements RowChanges {
                     if (quorum > 0) {
                         LeadershipTokenAndTookFully leadershipTokenAndTookFully = tookFullyWhileNominated.get(versionedPartitionName);
                         if (leadershipTokenAndTookFully == null
-                        || leadershipTokenAndTookFully.leadershipToken != desiredTimestamp
-                        || leadershipTokenAndTookFully.tookFully() < quorum) {
+                            || leadershipTokenAndTookFully.leadershipToken != desiredTimestamp
+                            || leadershipTokenAndTookFully.tookFully() < quorum) {
                             LOG.info("{} is nominated for version {} and has taken fully {} out of {}.", versionedPartitionName,
                                 leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.leadershipToken,
                                 leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.tookFully(),
@@ -193,7 +191,7 @@ public class AmzaAquariumProvider implements RowChanges {
 
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), CURRENT, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
-                byte[] valueBytes = {state.getSerializedForm()};
+                byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 LOG.info("Current {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
@@ -202,7 +200,7 @@ public class AmzaAquariumProvider implements RowChanges {
             (current, desiredTimestamp, state) -> {
                 byte[] keyBytes = stateKey(versionedPartitionName.getPartitionName(), DESIRED, rootAquariumMember, versionedPartitionName.getPartitionVersion(),
                     rootAquariumMember);
-                byte[] valueBytes = {state.getSerializedForm()};
+                byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
                 LOG.info("Desired {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
@@ -247,7 +245,7 @@ public class AmzaAquariumProvider implements RowChanges {
     }
 
     static boolean isOnlineState(Waterline livelyEndState) {
-        return livelyEndState.getState() == State.follower || livelyEndState.getState() == State.leader;
+        return livelyEndState != null && (livelyEndState.getState() == State.follower || livelyEndState.getState() == State.leader);
     }
 
     static byte[] stateKey(PartitionName partitionName,
@@ -303,7 +301,8 @@ public class AmzaAquariumProvider implements RowChanges {
 
         boolean stream(PartitionName partitionName,
             byte context,
-            Member rootRingMember, long partitionVersion,
+            Member rootRingMember,
+            long partitionVersion,
             boolean isSelf,
             Member ackRingMember) throws Exception;
     }
@@ -407,8 +406,8 @@ public class AmzaAquariumProvider implements RowChanges {
     public void changes(RowsChanged changes) throws Exception {
         if (PartitionCreator.AQUARIUM_STATE_INDEX.equals(changes.getVersionedPartitionName())) {
             for (Map.Entry<WALKey, WALValue> change : changes.getApply().entrySet()) {
-                streamStateKey(change.getKey().key, (partitionName, context, rootRingMember1, partitionVersion, isSelf, ackRingMember) -> {
-                    smellsFishy.add(new VersionedPartitionName(partitionName, partitionVersion));
+                streamStateKey(change.getKey().key, (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
+                    smellsFishy.add(partitionName);
                     return true;
                 });
             }

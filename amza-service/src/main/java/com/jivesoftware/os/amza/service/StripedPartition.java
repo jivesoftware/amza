@@ -102,17 +102,17 @@ public class StripedPartition implements Partition {
 
             amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
 
-            Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(partitionName.getRingName());
+            Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(partitionName.getRingName());
 
             Aquarium aquarium = aquariumProvider.getAquarium(commit.getVersionedPartitionName());
-            int takeQuorum = consistency.quorum(ringMembers.size());
+            int takeQuorum = consistency.quorum(neighbors.size());
             if (takeQuorum > 0) {
                 Waterline livelyEndState = aquarium.livelyEndState();
                 if (consistency.requiresLeader() && (livelyEndState == null || livelyEndState.getState() != State.leader)) {
                     throw new FailedToAchieveQuorumException("Leader has changed.");
                 }
 
-                if (ringMembers.size() < takeQuorum) {
+                if (neighbors.size() < takeQuorum) {
                     throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
                 } else {
                     long leadershipToken = -1;
@@ -122,7 +122,7 @@ public class StripedPartition implements Partition {
                     LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
                     int takenBy = ackWaters.await(commit.getVersionedPartitionName(),
                         commit.getLargestCommittedTxId(),
-                        ringMembers,
+                        neighbors,
                         takeQuorum,
                         timeoutInMillis,
                         leadershipToken);

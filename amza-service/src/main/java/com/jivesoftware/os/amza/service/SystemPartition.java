@@ -98,15 +98,15 @@ public class SystemPartition implements Partition {
             walUpdated);
         amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
 
-        Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
+        Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
 
-        int takeQuorum = consistency.quorum(ringMembers.size());
+        int takeQuorum = consistency.quorum(neighbors.size());
         if (takeQuorum > 0) {
-            if (ringMembers.size() < takeQuorum) {
+            if (neighbors.size() < takeQuorum) {
                 throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
             } else {
                 LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-                int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), ringMembers, takeQuorum, timeoutInMillis, -1);
+                int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), neighbors, takeQuorum, timeoutInMillis, -1);
                 if (takenBy < takeQuorum) {
                     throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
                 }

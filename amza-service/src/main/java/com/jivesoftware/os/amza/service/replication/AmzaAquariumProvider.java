@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -25,6 +26,7 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.aquarium.Aquarium;
 import com.jivesoftware.os.aquarium.AtQuorum;
 import com.jivesoftware.os.aquarium.AwaitLivelyEndState;
+import com.jivesoftware.os.aquarium.CurrentTimeMillis;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.LivelinessStorage;
 import com.jivesoftware.os.aquarium.Member;
@@ -167,19 +169,40 @@ public class AmzaAquariumProvider implements RowChanges {
             rootRingMember.asAquariumMember(),
             Long.class);
 
+        CurrentTimeMillis currentTimeMillis = System::currentTimeMillis;
         return new Aquarium(orderIdProvider,
-            System::currentTimeMillis,
+            currentTimeMillis,
             (member, tx) -> tx.tx(readCurrent, readDesired),
             (current, desiredTimestamp, state) -> {
                 if (current.getState() == State.nominated && state == State.leader) {
                     PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
                     int ringSize = amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName());
-                    int quorum = properties.consistency.quorum(ringSize - 1);
-                    if (quorum > 0) {
+                    int quorum;
+                    boolean needsRepair;
+                    if (properties.consistency == Consistency.leader) {
+                        quorum = Integer.MAX_VALUE;
+                        needsRepair = true;
+                    } else {
+                        quorum = properties.consistency.repairQuorum(ringSize - 1);
+                        needsRepair = quorum > 0;
+                    }
+                    if (needsRepair) {
                         LeadershipTokenAndTookFully leadershipTokenAndTookFully = tookFullyWhileNominated.get(versionedPartitionName);
+                        boolean repairedFromDemoted = false;
+                        if (leadershipTokenAndTookFully != null
+                            && !leadershipTokenAndTookFully.tookFully.isEmpty()
+                            && properties.consistency.requiresLeader()) {
+                            Waterline demoted = State.highest(currentTimeMillis, State.demoted, readCurrent, current);
+                            if (demoted != null
+                                && demoted.isAtQuorum()
+                                && demoted.isAlive(currentTimeMillis.get())
+                                && leadershipTokenAndTookFully.tookFully.contains(RingMember.fromAquariumMember(demoted.getMember()))) {
+                                repairedFromDemoted = true;
+                            }
+                        }
                         if (leadershipTokenAndTookFully == null
                             || leadershipTokenAndTookFully.leadershipToken != desiredTimestamp
-                            || leadershipTokenAndTookFully.tookFully() < quorum) {
+                            || (leadershipTokenAndTookFully.tookFully() < quorum && !repairedFromDemoted)) {
                             LOG.info("{} is nominated for version {} and has taken fully {} out of {}.", versionedPartitionName,
                                 leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.leadershipToken,
                                 leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.tookFully(),
@@ -220,9 +243,7 @@ public class AmzaAquariumProvider implements RowChanges {
 
                 @Override
                 public void notifyChange(Callable<Boolean> change) throws Exception {
-                    awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), () -> {
-                        return change.call();
-                    });
+                    awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
                 }
             });
     }

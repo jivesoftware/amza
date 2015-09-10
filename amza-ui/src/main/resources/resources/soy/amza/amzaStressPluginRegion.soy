@@ -50,8 +50,16 @@
                                 data-original-title="" title="">
                         </td></tr>
                         <tr><td>Consistency</td><td>
-                            <input type="number" name="consistency" min="0" style="padding-left:10px;"
-                                class="form-control" placeholder="Consistency" value="1" title="">
+                            <select style="width:120px; padding-left:10px;" class="form-control"
+                                placeholder="Consistency" name="consistency" id="consistencyPicker">
+                                <option value="none" selected="selected">None</option>
+                                <option value="leader">Leader</option>
+                                <option value="leader_plus_one">Leader Plus One</option>
+                                <option value="leader_quorum">Leader Quorum</option>
+                                <option value="quorum">Quorum</option>
+                                <option value="write_all_read_one">Write All Read One</option>
+                                <option value="write_one_read_all">Write One Read All</option>
+                            </select>
                         </td></tr>
                         <tr><td>Ordered Insertion</td><td>
                             <input type="text" name="orderedInsertion" style="padding-left:10px;"

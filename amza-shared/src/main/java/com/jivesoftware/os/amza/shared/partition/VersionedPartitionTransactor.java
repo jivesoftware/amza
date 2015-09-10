@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.shared.partition;
 
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.Waterline;
 import java.util.concurrent.Semaphore;
 
 /**

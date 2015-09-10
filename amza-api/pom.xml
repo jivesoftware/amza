@@ -36,9 +36,8 @@
             <artifactId>io</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-aquarium</artifactId>
-            <version>0.127-SNAPSHOT</version>
+            <groupId>com.jivesoftware.os.aquarium</groupId>
+            <artifactId>aquarium</artifactId>
         </dependency>
     </dependencies>
     <name>amza-api</name>

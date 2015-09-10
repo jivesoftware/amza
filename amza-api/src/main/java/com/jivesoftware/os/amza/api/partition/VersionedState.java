@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.api.partition;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.Waterline;
 import java.util.Objects;
 
 /**

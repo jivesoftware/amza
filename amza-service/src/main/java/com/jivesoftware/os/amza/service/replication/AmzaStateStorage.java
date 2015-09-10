@@ -1,15 +1,17 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.aquarium.Member;
-import com.jivesoftware.os.amza.aquarium.State;
-import com.jivesoftware.os.amza.aquarium.StateStorage;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.aquarium.Member;
+import com.jivesoftware.os.aquarium.State;
+import com.jivesoftware.os.aquarium.StateStorage;
+import com.jivesoftware.os.aquarium.StateStorage.StateStream;
+import com.jivesoftware.os.aquarium.StateStorage.StateUpdates;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 

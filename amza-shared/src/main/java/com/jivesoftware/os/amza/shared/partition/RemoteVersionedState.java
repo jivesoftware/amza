@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.shared.partition;
 
-import com.jivesoftware.os.amza.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.Waterline;
 
 /**
  * @author jonathan.colt

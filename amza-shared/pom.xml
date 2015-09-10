@@ -20,9 +20,8 @@
             <version>0.127-SNAPSHOT</version>
         </dependency>
         <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-aquarium</artifactId>
-            <version>0.127-SNAPSHOT</version>
+            <groupId>com.jivesoftware.os.aquarium</groupId>
+            <artifactId>aquarium</artifactId>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

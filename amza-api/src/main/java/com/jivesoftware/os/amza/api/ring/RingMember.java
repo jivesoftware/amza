@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.SignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.aquarium.Member;
+import com.jivesoftware.os.aquarium.Member;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 

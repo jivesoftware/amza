@@ -61,7 +61,7 @@ public class SystemWALStorage {
         }
         if (!changed.getApply().isEmpty()) {
             //LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
-            Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+            Waterline waterline = new Waterline(null, State.follower, 0, 0, true, Long.MAX_VALUE);
             updated.updated(versionedPartitionName, waterline, true, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);
@@ -104,8 +104,8 @@ public class SystemWALStorage {
 
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         PartitionStripe.RowStreamer streamer = rowStream -> partitionStore.takeRowUpdatesSince(transactionId, rowStream);
-        Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
-        return takeRowUpdates.give(versionedPartitionName, waterline, true, streamer);
+        Waterline waterline = new Waterline(null, State.follower, 0, 0, true, Long.MAX_VALUE);
+        return takeRowUpdates.give(versionedPartitionName, waterline, streamer);
     }
 
     public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName,
@@ -184,7 +184,7 @@ public class SystemWALStorage {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();
-                Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+                Waterline waterline = new Waterline(null, State.follower, 0, 0, true, Long.MAX_VALUE);
                 tx.tx(versionedPartitionName, waterline, true, highestTxId);
             }
         }
@@ -194,7 +194,7 @@ public class SystemWALStorage {
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         if (partitionStore != null) {
             long highestTxId = partitionStore.getWalStorage().highestTxId();
-            Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+            Waterline waterline = new Waterline(null, State.follower, 0, 0, true, Long.MAX_VALUE);
             return tx.tx(versionedPartitionName, waterline, true, highestTxId);
         } else {
             return tx.tx(null, null, false, -1);

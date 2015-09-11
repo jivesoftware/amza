@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -11,6 +12,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -33,6 +35,7 @@ public class StorageVersionProvider implements RowChanges {
     private final OrderIdProvider orderIdProvider;
     private final RingMember rootRingMember;
     private final SystemWALStorage systemWALStorage;
+    private final VersionedPartitionProvider versionedPartitionProvider;
     private final PartitionStripeFunction partitionStripeFunction;
     private final long[] stripeVersions;
     private final WALUpdated walUpdated;
@@ -43,6 +46,7 @@ public class StorageVersionProvider implements RowChanges {
     public StorageVersionProvider(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
         SystemWALStorage systemWALStorage,
+        VersionedPartitionProvider versionedPartitionProvider,
         PartitionStripeFunction partitionStripeFunction,
         long[] stripeVersions,
         WALUpdated walUpdated,
@@ -50,6 +54,7 @@ public class StorageVersionProvider implements RowChanges {
         this.orderIdProvider = orderIdProvider;
         this.rootRingMember = rootRingMember;
         this.systemWALStorage = systemWALStorage;
+        this.versionedPartitionProvider = versionedPartitionProvider;
         this.partitionStripeFunction = partitionStripeFunction;
         this.stripeVersions = stripeVersions;
         this.walUpdated = walUpdated;
@@ -79,6 +84,10 @@ public class StorageVersionProvider implements RowChanges {
     private final StripingLocksProvider<PartitionName> versionStripingLocks = new StripingLocksProvider<>(1024);
 
     public StorageVersion createIfAbsent(PartitionName partitionName) throws Exception {
+        if (partitionName.isSystemPartition()) {
+            return new StorageVersion(0, 0);
+        }
+        Preconditions.checkNotNull(versionedPartitionProvider.getProperties(partitionName), "Properties missing for %s", partitionName);
         synchronized (versionStripingLocks.lock(partitionName, 0)) {
             StorageVersion storageVersion = localVersionCache.computeIfAbsent(partitionName, key -> {
                 try {

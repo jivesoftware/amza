@@ -87,13 +87,12 @@ public class SystemPartition implements Partition {
         byte[] prefix,
         Commitable updates,
         long timeoutInMillis) throws Exception {
-        long currentTime = System.currentTimeMillis();
-        long version = orderIdProvider.nextId();
+        long timestampAndVersion = orderIdProvider.nextId();
         RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix,
             (highwaters, scan)
             -> updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
-                return scan.row(rowTxId, key, value, timestamp, valueTombstone, version);
+                long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampAndVersion;
+                return scan.row(rowTxId, key, value, timestamp, valueTombstone, timestampAndVersion);
             }),
             walUpdated);
         amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());

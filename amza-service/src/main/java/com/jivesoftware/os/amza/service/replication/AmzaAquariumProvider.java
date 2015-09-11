@@ -68,6 +68,7 @@ public class AmzaAquariumProvider implements RowChanges {
     private final VersionedPartitionProvider versionedPartitionProvider;
     private final WALUpdated walUpdated;
     private final Liveliness liveliness;
+    private final long feedEveryMillis;
     private final AwaitNotify<PartitionName> awaitLivelyEndState;
 
     private final ConcurrentHashMap<VersionedPartitionName, Aquarium> aquariums = new ConcurrentHashMap<>();
@@ -85,6 +86,7 @@ public class AmzaAquariumProvider implements RowChanges {
         VersionedPartitionProvider versionedPartitionProvider,
         WALUpdated walUpdated,
         Liveliness liveliness,
+        long feedEveryMillis,
         AwaitNotify<PartitionName> awaitLivelyEndState) {
         this.startupVersion = startupVersion;
         this.rootRingMember = rootRingMember;
@@ -96,10 +98,11 @@ public class AmzaAquariumProvider implements RowChanges {
         this.versionedPartitionProvider = versionedPartitionProvider;
         this.walUpdated = walUpdated;
         this.liveliness = liveliness;
+        this.feedEveryMillis = feedEveryMillis;
         this.awaitLivelyEndState = awaitLivelyEndState;
     }
 
-    public void start(long feedEveryMillis) {
+    public void start() {
         scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
                 liveliness.feedTheFish();
@@ -141,6 +144,11 @@ public class AmzaAquariumProvider implements RowChanges {
     }
 
     public Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
+        Preconditions.checkNotNull(versionedPartitionProvider.getProperties(partitionName), "Properties missing for %s", partitionName);
+        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(versionedPartitionName.getPartitionName());
+        Preconditions.checkArgument(storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion(), "Version mismatch for %s: %s != %s",
+            partitionName, versionedPartitionName.getPartitionVersion(), storageVersion.partitionVersion);
         return aquariums.computeIfAbsent(versionedPartitionName, key -> {
             try {
                 return buildAquarium(key);

@@ -176,7 +176,8 @@ public class AmzaTestCluster {
                         remoteTxId,
                         localLeadershipToken,
                         rowStream);
-                    return new StreamingRowsResult(null, null, localLeadershipToken, consumed.isOnline ? new HashMap<>() : null);
+                    HashMap<RingMember, Long> otherHighwaterMarks = consumed.isOnline ? new HashMap<>() : null;
+                    return new StreamingRowsResult(null, null, consumed.leadershipToken, consumed.partitionVersion, otherHighwaterMarks);
                 }
             }
 

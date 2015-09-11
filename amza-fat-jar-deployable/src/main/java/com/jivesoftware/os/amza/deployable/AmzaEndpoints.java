@@ -72,7 +72,7 @@ public class AmzaEndpoints {
                 //TODO prefix
                 updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
             }
-            partition.commit(Consistency.quorum, null, updates, 30000);
+            partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to set partition:" + partitionName + " key:" + key + " value:" + value, x);
@@ -94,7 +94,7 @@ public class AmzaEndpoints {
                 //TODO prefix
                 updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
             }
-            partition.commit(Consistency.quorum, null, updates, 30000);
+            partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -118,7 +118,7 @@ public class AmzaEndpoints {
                 //TODO prefix
                 updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
             }
-            partition.commit(Consistency.quorum, null, updates, 30000);
+            partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -138,7 +138,7 @@ public class AmzaEndpoints {
             Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency));
             List<byte[]> got = new ArrayList<>();
             //TODO prefix
-            partition.get(Consistency.quorum, null,
+            partition.get(Consistency.valueOf(consistency), null,
                 stream -> {
                     for (String s : Splitter.on(',').split(key)) {
                         if (!stream.stream(s.getBytes())) {
@@ -172,7 +172,7 @@ public class AmzaEndpoints {
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             //TODO prefix
             updates.remove(key.getBytes(), -1);
-            partition.commit(Consistency.quorum, null, updates, 30000);
+            partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
             LOG.warn("Failed to remove partition:" + partitionName + " key:" + key, x);

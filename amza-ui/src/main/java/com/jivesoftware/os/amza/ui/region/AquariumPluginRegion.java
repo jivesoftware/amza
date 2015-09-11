@@ -85,15 +85,18 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
                     "member", e.getKey().getMember(),
                     "host", e.getValue().toCanonicalString(),
                     "liveliness", (aliveUntilTimestamp > now) ? "alive for " + String.valueOf(aliveUntilTimestamp - now) : "dead for " + String.valueOf(
-                            aliveUntilTimestamp - now)
+                        aliveUntilTimestamp - now)
                 ));
             }
             data.put("liveliness", live);
 
-            PartitionName partitionName = new PartitionName(false, input.ringName.getBytes(), input.partitionName.getBytes());
+            byte[] ringNameBytes = input.ringName.getBytes();
+            byte[] partitionNameBytes = input.partitionName.getBytes();
+            PartitionName partitionName = (ringNameBytes.length > 0 && partitionNameBytes.length > 0)
+                ? new PartitionName(false, ringNameBytes, partitionNameBytes) : null;
             long partitionVersion = Long.parseLong(input.hexPartitionVersion, 16);
-            VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, partitionVersion);
-            Aquarium aquarium = aquariumProvider.getAquarium(versionedPartitionName);
+            VersionedPartitionName versionedPartitionName = partitionName != null ? new VersionedPartitionName(partitionName, partitionVersion) : null;
+            Aquarium aquarium = versionedPartitionName != null ? aquariumProvider.getAquarium(versionedPartitionName) : null;
             if (aquarium != null) {
                 List<Map<String, Object>> states = new ArrayList<>();
                 for (Map.Entry<RingMember, RingHost> e : ringReader.getRing(AmzaRingReader.SYSTEM_RING).entrySet()) {

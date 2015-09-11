@@ -37,6 +37,7 @@ import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class HttpRowsTaker implements RowsTaker {
@@ -78,15 +79,16 @@ public class HttpRowsTaker implements RowsTaker {
                 + "/" + remoteTxId
                 + "/" + localLeadershipToken);
         } catch (IOException | HttpClientException e) {
-            return new StreamingRowsResult(e, null, -1, null);
+            return new StreamingRowsResult(e, null, -1, -1, null);
         }
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
             StreamingTakeConsumed consumed = streamingTakesConsumer.consume(bis, rowStream);
             amzaStats.netStats.read.addAndGet(consumed.bytes);
-            return new StreamingRowsResult(null, null, consumed.leadershipToken, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
+            Map<RingMember, Long> otherHighwaterMarks = consumed.isOnline ? consumed.neighborsHighwaterMarks : null;
+            return new StreamingRowsResult(null, null, consumed.leadershipToken, consumed.partitionVersion, otherHighwaterMarks);
         } catch (Exception e) {
-            return new StreamingRowsResult(null, e, -1, null);
+            return new StreamingRowsResult(null, e, -1, -1, null);
         } finally {
             httpStreamResponse.close();
         }

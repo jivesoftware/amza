@@ -113,7 +113,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 if (partitionName.isSystemPartition()) {
                     return coldstartSystemPartitionProperties(partitionName);
                 } else {
-                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionCreator.REGION_PROPERTIES).getTimestampedValue(null, partitionName.toBytes());
+                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionCreator.REGION_PROPERTIES)
+                        .getTimestampedValue(null, partitionName.toBytes());
                     if (rawPartitionProperties == null) {
                         return null;
                     }

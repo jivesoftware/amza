@@ -61,9 +61,16 @@
                                     </td>
                                     <td>TODO</td>
                                     <td>
-                                        <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                            class="form-control" placeholder="Consistency" value=""
-                                            name="consistency"  title="">
+                                        <select style="width:120px; padding-left:10px;" class="form-control"
+                                            placeholder="Consistency" name="consistency">
+                                            <option value="none" selected="selected">None</option>
+                                            <option value="leader">Leader</option>
+                                            <option value="leader_plus_one">Leader Plus One</option>
+                                            <option value="leader_quorum">Leader Quorum</option>
+                                            <option value="quorum">Quorum</option>
+                                            <option value="write_all_read_one">Write All Read One</option>
+                                            <option value="write_one_read_all">Write One Read All</option>
+                                        </select>
                                     </td>
                                     <td>
                                         <input type="number" name="takeFromFactor" min="0" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
@@ -93,22 +100,54 @@
                                         <td>{$r.storageVersion}</td>
                                         <td>{$r.type}</td>
                                         <td>
-                                            <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
-                                            placeholder="name" value="{$r.name}" name="name"  class="form-control">
+                                            {if $r.type == 'SYSTEM'}
+                                                {$r.name}
+                                            {else}
+                                                <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                                placeholder="name" value="{$r.name}" name="name"  class="form-control">
+                                            {/if}
                                         </td>
                                         <td>
-                                            <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
-                                            placeholder="ringName" value="{$r.ringName}" name="ringName"  class="form-control">
+                                            {if $r.type == 'SYSTEM'}
+                                                {$r.ringName}
+                                            {else}
+                                                <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
+                                                placeholder="ringName" value="{$r.ringName}" name="ringName"  class="form-control">
+                                            {/if}
                                         </td>
                                         <td>
-                                            <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                            class="form-control" placeholder="Name" value="{$r.disabled}"
-                                            name="name" id="hostPicker"  title="{$r.disabled}">
+                                            {if $r.type == 'SYSTEM'}
+                                                {$r.disabled}
+                                            {else}
+                                                <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                                class="form-control" placeholder="Name" value="{$r.disabled}"
+                                                name="name" id="hostPicker"  title="{$r.disabled}">
+                                            {/if}
                                         </td>
                                         <td>TODO</td>
                                         <td>
-                                            <input type="number" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
-                                            placeholder="takeFromFactor" value="{$r.takeFromFactor}" name="takeFromFactor" class="form-control">
+                                            {if $r.type == 'SYSTEM'}
+                                                {$r.consistency}
+                                            {else}
+                                                <select style="width:120px; padding-left:10px;" class="form-control"
+                                                    placeholder="Consistency" name="consistency">
+                                                    <option value="none" {if $r.consistency == 'none'}selected="selected"{/if}>None</option>
+                                                    <option value="leader" {if $r.consistency == 'leader'}selected="selected"{/if}>Leader</option>
+                                                    <option value="leader_plus_one" {if $r.consistency == 'leader_plus_one'}selected="selected"{/if}>Leader Plus One</option>
+                                                    <option value="leader_quorum" {if $r.consistency == 'leader_quorum'}selected="selected"{/if}>Leader Quorum</option>
+                                                    <option value="quorum" {if $r.consistency == 'quorum'}selected="quorum"{/if}>Quorum</option>
+                                                    <option value="write_all_read_one" {if $r.consistency == 'write_all_read_one'}selected="selected"{/if}>Write All Read One</option>
+                                                    <option value="write_one_read_all" {if $r.consistency == 'write_one_read_all'}selected="selected"{/if}>Write One Read All</option>
+                                                </select>
+                                            {/if}
+                                        </td>
+                                        <td>
+                                            {if $r.type == 'SYSTEM'}
+                                                {$r.takeFromFactor}
+                                            {else}
+                                                <input type="number" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
+                                                placeholder="takeFromFactor" value="{$r.takeFromFactor}" name="takeFromFactor" class="form-control">
+                                            {/if}
                                         </td>
                                         <td>{$r.highwaters|noAutoescape}</td>
                                     </tr>

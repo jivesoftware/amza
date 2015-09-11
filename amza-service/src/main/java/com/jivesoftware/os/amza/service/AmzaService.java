@@ -183,6 +183,9 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         changeTaker.start();
         partitionTombstoneCompactor.start();
         partitionComposter.start();
+
+        // last minute initialization
+        aquariumProvider.start();
     }
 
     public void stop() throws Exception {
@@ -453,17 +456,21 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
-        long leadershipToken) throws Exception {
+        long remoteLeadershipToken) throws Exception {
+
+        // TODO could avoid leadership lookup for partitions that have been configs to not care about leadership.
+        Waterline leader = partitionStateStorage.getLeader(localVersionedPartitionName);
+        long localLeadershipToken = (leader != null) ? leader.getTimestamp() : -1;
 
         MutableLong bytes = new MutableLong(0);
         boolean needsToMarkAsKetchup;
         if (localVersionedPartitionName.getPartitionName().isSystemPartition()) {
             needsToMarkAsKetchup = systemWALStorage.takeRowUpdatesSince(localVersionedPartitionName, localTxId,
-                (versionedPartitionName, partitionState, isOnline, rowStreamer) -> {
+                (versionedPartitionName, partitionState, rowStreamer) -> {
                     return streamOnline(remoteRingMember,
                         versionedPartitionName,
                         localTxId,
-                        leadershipToken,
+                        localLeadershipToken,
                         dos,
                         bytes,
                         systemHighwaterStorage,
@@ -472,18 +479,18 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         } else {
             needsToMarkAsKetchup = partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(),
                 (stripe, highwaterStorage) -> stripe.takeRowUpdatesSince(localVersionedPartitionName.getPartitionName(), localTxId,
-                    (versionedPartitionName, partitionWaterlineState, isOnline, streamer) -> {
-                        if (localVersionedPartitionName.equals(versionedPartitionName) && isOnline) {
+                    (versionedPartitionName, partitionWaterlineState, streamer) -> {
+                        if (streamer != null && localVersionedPartitionName.equals(versionedPartitionName)) {
                             return streamOnline(remoteRingMember,
                                 versionedPartitionName,
                                 localTxId,
-                                leadershipToken,
+                                localLeadershipToken,
                                 dos,
                                 bytes,
                                 highwaterStorage,
                                 streamer);
                         } else {
-                            return streamOffline(dos, bytes, versionedPartitionName, partitionWaterlineState);
+                            return streamBootstrap(localLeadershipToken, dos, bytes, versionedPartitionName, partitionWaterlineState);
                         }
                     }));
         }
@@ -506,11 +513,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         return aquariumProvider.isOnline(versionedPartitionName, waterline);
     }
 
-    private boolean streamOffline(DataOutputStream dos,
+    private boolean streamBootstrap(long leadershipToken, DataOutputStream dos,
         MutableLong bytes,
         VersionedPartitionName versionedPartitionName,
         Waterline partitionWaterlineState) throws Exception {
-        dos.writeLong(-1);
+        dos.writeLong(leadershipToken);
         dos.writeLong(-1);
         dos.writeByte(0); // not online
         dos.writeByte(0); // last entry marker

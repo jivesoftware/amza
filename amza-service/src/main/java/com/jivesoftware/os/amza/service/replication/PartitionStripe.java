@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -222,7 +223,7 @@ public class PartitionStripe {
 
     public interface TakeRowUpdates<R> {
 
-        R give(VersionedPartitionName versionedPartitionName, Waterline partitionWaterlineState, boolean isOnline, RowStreamer streamer) throws Exception;
+        R give(VersionedPartitionName versionedPartitionName, Waterline partitionWaterlineState, RowStreamer streamer) throws Exception;
     }
 
     public interface RowStreamer {
@@ -250,16 +251,16 @@ public class PartitionStripe {
         throws Exception {
         return txPartitionState.tx(partitionName, (versionedPartitionName, partitionWaterlineState, isOnline) -> {
             if (versionedPartitionName == null || partitionWaterlineState == null) {
-                return takeRowUpdates.give(null, null, false, null);
+                return takeRowUpdates.give(null, null, null);
             }
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore == null) {
-                return takeRowUpdates.give(null, null, false, null);
+                return takeRowUpdates.give(null, null, null);
             } else {
-                RowStreamer streamer = isOnline
+                RowStreamer streamer = (partitionWaterlineState.getState() != State.bootstrap)
                     ? rowStream -> storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
                     : null;
-                return takeRowUpdates.give(versionedPartitionName, partitionWaterlineState, isOnline, streamer);
+                return takeRowUpdates.give(versionedPartitionName, partitionWaterlineState, streamer);
             }
         });
     }

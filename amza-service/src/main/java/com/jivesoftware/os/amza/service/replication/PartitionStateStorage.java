@@ -50,7 +50,7 @@ public class PartitionStateStorage implements TxPartitionState, IsNominated {
     public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
         if (partitionName.isSystemPartition()) {
             return tx.tx(new VersionedPartitionName(partitionName, 0),
-                new Waterline(rootRingMember.asAquariumMember(), State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE), true);
+                new Waterline(rootRingMember.asAquariumMember(), State.follower, 0, 0, true, Long.MAX_VALUE), true);
         }
 
         VersionedState versionedState = getLocalVersionedState(partitionName);
@@ -71,26 +71,6 @@ public class PartitionStateStorage implements TxPartitionState, IsNominated {
         }
 
         aquariumProvider.getAquarium(versionedPartitionName).tapTheGlass();
-
-        /*ConcurrentHashMap<RingMember, RemoteVersionedState> ringMemberState = remoteStateCache.get(localVersionedPartitionName.getPartitionName());
-         if (ringMemberState != null) {
-         int inKetchup = 0;
-         for (RingMember ringMember : remoteRingMembers) {
-         RemoteVersionedState remoteRingMemberState = ringMemberState.get(ringMember);
-         if (remoteRingMemberState == null) {
-         remoteRingMemberState = getRemoteVersionedState(ringMember, localVersionedPartitionName.getPartitionName());
-         }
-         if (remoteRingMemberState != null && State.bootstrap == remoteRingMemberState.state) {
-         inKetchup++;
-         }
-         }
-         if (inKetchup == remoteRingMembers.size()) {
-         markAsOnline(localVersionedPartitionName);
-         LOG.info(
-         "Resolving cold start stalemate. " + rootRingMember + " was elected as online for " + localVersionedPartitionName
-         + " ring size (" + remoteRingMembers.size() + ")");
-         }
-         }*/
     }
 
     private Waterline getLocalWaterline(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -101,7 +81,7 @@ public class PartitionStateStorage implements TxPartitionState, IsNominated {
     @Override
     public VersionedState getLocalVersionedState(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+            Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, 0, 0, true, Long.MAX_VALUE);
             return new VersionedState(waterline, true, new StorageVersion(0, 0));
         }
 
@@ -113,7 +93,7 @@ public class PartitionStateStorage implements TxPartitionState, IsNominated {
 
     public RemoteVersionedState getRemoteVersionedState(RingMember remoteRingMember, PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+            Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, 0, 0, true, Long.MAX_VALUE);
             return new RemoteVersionedState(waterline, 0);
         }
 
@@ -128,7 +108,7 @@ public class PartitionStateStorage implements TxPartitionState, IsNominated {
 
     public VersionedState markAsBootstrap(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
-            Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+            Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, 0, 0, true, Long.MAX_VALUE);
             return new VersionedState(waterline, true, new StorageVersion(0, 0));
         }
 
@@ -171,7 +151,7 @@ public class PartitionStateStorage implements TxPartitionState, IsNominated {
 
     public VersionedState markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+            Waterline waterline = new Waterline(rootRingMember.asAquariumMember(), State.follower, 0, 0, true, Long.MAX_VALUE);
             return new VersionedState(waterline, true, new StorageVersion(0, 0));
         }
 

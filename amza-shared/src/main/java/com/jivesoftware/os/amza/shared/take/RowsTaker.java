@@ -36,15 +36,18 @@ public interface RowsTaker {
         public final Throwable unreachable;
         public final Throwable error;
         public final long leadershipToken;
+        public final long partitionVersion;
         public final Map<RingMember, Long> otherHighwaterMarks;
 
         public StreamingRowsResult(Exception unreachable,
             Exception error,
             long leadershipToken,
+            long partitionVersion,
             Map<RingMember, Long> otherHighwaterMarks) {
             this.unreachable = unreachable;
             this.error = error;
             this.leadershipToken = leadershipToken;
+            this.partitionVersion = partitionVersion;
             this.otherHighwaterMarks = otherHighwaterMarks;
         }
     }

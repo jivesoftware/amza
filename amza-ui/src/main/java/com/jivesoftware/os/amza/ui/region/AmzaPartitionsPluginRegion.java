@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.ui.region;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -24,6 +26,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,7 +111,23 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             }
             long now = System.currentTimeMillis();
             List<Map<String, Object>> rows = new ArrayList<>();
-            Set<PartitionName> partitionNames = amzaService.getPartitionNames();
+            Set<PartitionName> allPartitionNames = amzaService.getPartitionNames();
+            List<PartitionName> partitionNames = Lists.newArrayList(allPartitionNames);
+            Collections.sort(partitionNames, (o1, o2) -> {
+                int i = -Boolean.compare(o1.isSystemPartition(), o2.isSystemPartition());
+                if (i != 0) {
+                    return i;
+                }
+                i = UnsignedBytes.lexicographicalComparator().compare(o1.getRingName(), o2.getRingName());
+                if (i != 0) {
+                    return i;
+                }
+                i = UnsignedBytes.lexicographicalComparator().compare(o1.getName(), o2.getName());
+                if (i != 0) {
+                    return i;
+                }
+                return i;
+            });
             for (PartitionName partitionName : partitionNames) {
 
                 Map<String, Object> row = new HashMap<>();
@@ -139,6 +158,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 PartitionProperties partitionProperties = amzaService.getPartitionProperties(partitionName);
                 if (partitionProperties == null) {
                     row.put("disabled", "?");
+                    row.put("consistency", "none");
                     row.put("takeFromFactor", "?");
 
                     WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
@@ -148,6 +168,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 } else {
                     row.put("disabled", partitionProperties.disabled);
                     row.put("takeFromFactor", partitionProperties.takeFromFactor);
+                    row.put("consistency", partitionProperties.consistency.name());
                     row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
                 }
 

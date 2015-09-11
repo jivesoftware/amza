@@ -92,7 +92,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[]{"./var/data/"};
+        public String[] workingDirectories = new String[] { "./var/data/" };
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -209,6 +209,7 @@ public class AmzaServiceInitializer {
         StorageVersionProvider storageVersionProvider = new StorageVersionProvider(orderIdProvider,
             ringMember,
             systemWALStorage,
+            partitionIndex,
             stripeFunction,
             stripeVersions,
             walUpdated,
@@ -234,6 +235,7 @@ public class AmzaServiceInitializer {
             partitionIndex,
             walUpdated,
             liveliness,
+            config.aquariumLivelinessFeedEveryMillis,
             awaitOnline);
 
         PartitionStateStorage partitionStateStorage = new PartitionStateStorage(ringMember,
@@ -384,9 +386,6 @@ public class AmzaServiceInitializer {
             partitionStripeProvider);
 
         AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
-
-        // last minute initialization
-        aquariumProvider.start(config.aquariumLivelinessFeedEveryMillis);
 
         return new AmzaService(orderIdProvider,
             amzaStats,

@@ -375,11 +375,11 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     public String renderOverview() throws Exception {
 
         StringBuilder sb = new StringBuilder();
-        sb.append("<p>uptime<span class=\"badge\">" + getDurationBreakdown(runtimeBean.getUptime()) + "</span>");
-        sb.append("&nbsp&nbsp&nbsp&nbspdiskR<span class=\"badge\">" + humanReadableByteCount(amzaStats.ioStats.read.get(), false) + "</span>");
-        sb.append("&nbsp&nbsp&nbsp&nbspdiskW<span class=\"badge\">" + humanReadableByteCount(amzaStats.ioStats.wrote.get(), false) + "</span>");
-        sb.append("&nbsp&nbsp&nbsp&nbspnetR<span class=\"badge\">" + humanReadableByteCount(amzaStats.netStats.read.get(), false) + "</span>");
-        sb.append("&nbsp&nbsp&nbsp&nbspnetW<span class=\"badge\">" + humanReadableByteCount(amzaStats.netStats.wrote.get(), false) + "</span>");
+        sb.append("<p>uptime<span class=\"badge\">").append(getDurationBreakdown(runtimeBean.getUptime())).append("</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspdiskR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.read.get(), false)).append("</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspdiskW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.wrote.get(), false)).append("</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspnetR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.read.get(), false)).append("</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspnetW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.wrote.get(), false)).append("</span>");
 
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",

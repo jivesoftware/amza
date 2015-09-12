@@ -45,10 +45,7 @@ public class VersionedState {
         if (this.isOnline != other.isOnline) {
             return false;
         }
-        if (!Objects.equals(this.storageVersion, other.storageVersion)) {
-            return false;
-        }
-        return true;
+        return Objects.equals(this.storageVersion, other.storageVersion);
     }
 
     @Override

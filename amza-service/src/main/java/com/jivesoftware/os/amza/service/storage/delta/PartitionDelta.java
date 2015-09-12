@@ -150,7 +150,7 @@ class PartitionDelta {
         orderedIndex.put(walKey.compose(), pointer);
     }
 
-    private AtomicBoolean firstAndOnlyOnce = new AtomicBoolean(true);
+    private final AtomicBoolean firstAndOnlyOnce = new AtomicBoolean(true);
 
     public boolean shouldWriteHighwater() {
         long got = updatesSinceLastHighwaterFlush.get();
@@ -387,10 +387,7 @@ class PartitionDelta {
                                     }
                                     return true;
                                 }));
-                        if (eos.booleanValue()) {
-                            return false;
-                        }
-                        return true;
+                        return !eos.booleanValue();
                     });
                     partitionStore.getWalStorage().commitIndex();
                     LOG.info("Merged deltas for {}", merge.versionedPartitionName);

@@ -124,10 +124,7 @@ public class PartitionName implements Comparable<PartitionName> {
         if (!Arrays.equals(this.name, other.name)) {
             return false;
         }
-        if (this.hash != other.hash) {
-            return false;
-        }
-        return true;
+        return this.hash == other.hash;
     }
 
     @Override

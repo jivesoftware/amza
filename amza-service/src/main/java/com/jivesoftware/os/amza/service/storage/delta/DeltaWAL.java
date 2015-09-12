@@ -267,10 +267,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
             return false;
         }
         final DeltaWAL other = (DeltaWAL) obj;
-        if (this.id != other.id) {
-            return false;
-        }
-        return true;
+        return this.id == other.id;
     }
 
     public static class KeyValueHighwater {

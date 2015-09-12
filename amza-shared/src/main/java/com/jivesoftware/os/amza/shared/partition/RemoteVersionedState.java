@@ -29,11 +29,7 @@ public class RemoteVersionedState {
         if (version != that.version) {
             return false;
         }
-        if (waterline != that.waterline) {
-            return false;
-        }
-
-        return true;
+        return waterline == that.waterline;
     }
 
     @Override

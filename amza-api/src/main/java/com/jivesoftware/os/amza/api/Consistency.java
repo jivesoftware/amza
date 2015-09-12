@@ -96,8 +96,8 @@ public enum Consistency {
         numberOfNeighbors -> 0,
         numberOfNeighbors -> 0);
 
-    private static Set<Consistency>[] WRITES_SUPPORT;
-    private static Set<Consistency>[] READS_SUPPORT;
+    private static final Set<Consistency>[] WRITES_SUPPORT;
+    private static final Set<Consistency>[] READS_SUPPORT;
 
     static {
         @SuppressWarnings("unchecked")

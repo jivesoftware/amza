@@ -95,10 +95,7 @@ public class RingHost {
         if (!Objects.equals(this.host, other.host)) {
             return false;
         }
-        if (this.port != other.port) {
-            return false;
-        }
-        return true;
+        return this.port == other.port;
     }
 
 }

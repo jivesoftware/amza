@@ -49,11 +49,7 @@ public class StorageVersion {
         if (partitionVersion != that.partitionVersion) {
             return false;
         }
-        if (stripeVersion != that.stripeVersion) {
-            return false;
-        }
-
-        return true;
+        return stripeVersion == that.stripeVersion;
     }
 
     @Override

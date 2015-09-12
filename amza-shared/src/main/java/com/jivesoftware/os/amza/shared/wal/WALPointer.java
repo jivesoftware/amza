@@ -83,11 +83,7 @@ public class WALPointer {
         if (version != that.version) {
             return false;
         }
-        if (fp != that.fp) {
-            return false;
-        }
-
-        return true;
+        return fp == that.fp;
     }
 
     @Override

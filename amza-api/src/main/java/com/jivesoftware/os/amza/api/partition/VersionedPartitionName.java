@@ -89,10 +89,7 @@ public class VersionedPartitionName implements Comparable<VersionedPartitionName
         if (!Objects.equals(this.partitionName, other.partitionName)) {
             return false;
         }
-        if (this.partitionVersion != other.partitionVersion) {
-            return false;
-        }
-        return true;
+        return this.partitionVersion == other.partitionVersion;
     }
 
     @Override

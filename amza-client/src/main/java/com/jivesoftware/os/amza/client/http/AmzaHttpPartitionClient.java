@@ -70,7 +70,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }, null);
 
                 handleLeaderStatusCodes(consistency, got.getStatusCode());
-                return new PartitionCall.PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             }, (answers) -> {
                 return true;
             }, timeoutInMillis);
@@ -112,7 +112,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }, null);
                 handleLeaderStatusCodes(consistency, got.getStatusCode());
                 FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                return new PartitionCall.PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             }, (answers) -> {
 
                 boolean eos = false;
@@ -158,11 +158,15 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] toPrefix,
         byte[] toKey,
         KeyValueTimestampStream stream) throws Exception {
+        boolean merge;
         if (consistency == Consistency.leader_plus_one || consistency == Consistency.leader_quorum) {
             // leader is the only safe consistency
             consistency = Consistency.leader;
+            merge = false;
         } else if (consistency == Consistency.quorum || consistency == Consistency.write_one_read_all) {
-            throw new UnsupportedOperationException("Needs merge strategy");
+            merge = true;
+        } else {
+            merge = false;
         }
         return partitionCallRouter.read(partitionName, consistency, "scan",
             (leader, ringMember, client) -> {
@@ -178,23 +182,50 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }, null);
 
                 FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                return new PartitionCall.PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             }, (answers) -> {
-                for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
-                    FilerInputStream fis = answer.getAnswer();
-                    while (!UIO.readBoolean(fis, "eos")) {
-                        if (!stream.stream(
-                            UIO.readByteArray(fis, "prefix"),
-                            UIO.readByteArray(fis, "key"),
-                            UIO.readByteArray(fis, "value"),
-                            UIO.readLong(fis, "timestampId"),
-                            UIO.readLong(fis, "version")
-                        )) {
-                            return false;
+                if (merge) {
+                    int size = answers.size();
+                    boolean[] eos = new boolean[size];
+                    QuorumScan quorumScan = new QuorumScan(size, stream);
+                    boolean filled = true;
+                    while (filled) {
+                        filled = false;
+                        for (int i = 0; i < size; i++) {
+                            if (!quorumScan.used(i) && !eos[i]) {
+                                FilerInputStream fis = answers.get(i).getAnswer();
+                                eos[i] = UIO.readBoolean(fis, "eos");
+                                if (!eos[i]) {
+                                    filled = true;
+                                    quorumScan.fill(i, UIO.readByteArray(fis, "prefix"),
+                                        UIO.readByteArray(fis, "key"),
+                                        UIO.readByteArray(fis, "value"),
+                                        UIO.readLong(fis, "timestampId"),
+                                        UIO.readLong(fis, "version"));
+                                }
+                            }
                         }
+                        quorumScan.stream();
                     }
-                    //TODO quorum cursor scan read lookup mumbo jumbo oh my god I want to die
-                    return true;
+
+                    while (quorumScan.stream()) {
+                    }
+
+                } else {
+                    for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
+                        FilerInputStream fis = answer.getAnswer();
+                        while (!UIO.readBoolean(fis, "eos")) {
+                            if (!stream.stream(UIO.readByteArray(fis, "prefix"),
+                                UIO.readByteArray(fis, "key"),
+                                UIO.readByteArray(fis, "value"),
+                                UIO.readLong(fis, "timestampId"),
+                                UIO.readLong(fis, "version"))) {
+                                return false;
+                            }
+                        }
+                        //TODO quorum cursor scan read lookup mumbo jumbo oh my god I want to die
+                        return true;
+                    }
                 }
                 throw new RuntimeException("Failed to scan.");
             });
@@ -217,7 +248,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }, null);
 
                 FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                return new PartitionCall.PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             }, (answers) -> {
                 for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
                     return take(answer.getAnswer(), highwaters, stream);
@@ -245,7 +276,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }, null);
 
                 FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                return new PartitionCall.PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             }, (answers) -> {
                 for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
                     return take(answer.getAnswer(), highwaters, stream);

@@ -35,7 +35,7 @@ public class PartitionHostsProvider {
 
     Ring getPartitionHosts(PartitionName partitionName, Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws HttpClientException {
 
-        NextClientStrategy strategy = useHost.map((value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
+        NextClientStrategy strategy = useHost.map((com.jivesoftware.os.amza.client.http.RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
             new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
         })).orElse(roundRobinStrategy);
 
@@ -124,24 +124,4 @@ public class PartitionHostsProvider {
         }
     }
 
-    public static class RingMemberAndHost {
-
-        public final RingMember ringMember;
-        public final RingHost ringHost;
-
-        public RingMemberAndHost(RingMember ringMember, RingHost ringHost) {
-            this.ringMember = ringMember;
-            this.ringHost = ringHost;
-        }
-    }
 }
-
-/*
- UIO.writeInt(cf, memebers.size(), "ringSize");
- for (Map.Entry<RingMember, RingHost> r : memebers) {
- UIO.writeByteArray(cf, r.getKey().toBytes(), "ringMember");
- UIO.writeByteArray(cf, r.getValue().toBytes(), "ringMember");
- boolean isLeader = leader != null && Arrays.equals(r.getKey().toBytes(), leader.toBytes());
- UIO.writeBoolean(cf, isLeader, "leader");
- }
- */

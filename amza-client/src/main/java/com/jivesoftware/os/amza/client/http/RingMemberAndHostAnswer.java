@@ -1,7 +1,5 @@
 package com.jivesoftware.os.amza.client.http;
 
-import com.jivesoftware.os.amza.client.http.PartitionHostsProvider.RingMemberAndHost;
-
 /**
  *
  * @author jonathan.colt

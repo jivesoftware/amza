@@ -8,7 +8,6 @@ import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.client.http.PartitionHostsProvider.Ring;
-import com.jivesoftware.os.amza.client.http.PartitionHostsProvider.RingMemberAndHost;
 import com.jivesoftware.os.amza.client.http.exceptions.LeaderElectionInProgressException;
 import com.jivesoftware.os.amza.client.http.exceptions.NoLongerTheLeaderException;
 import com.jivesoftware.os.amza.client.http.exceptions.NotSolveableException;
@@ -226,9 +225,8 @@ public class AmzaHttpClientCallRouter {
         RingMember leader,
         RingMemberAndHost... ringMemberAndHosts) throws Exception {
         try {
-            Iterable<Callable<RingMemberAndHostAnswer<A>>> callOrder = Iterables.transform(
-                Iterables.filter(Arrays.asList(ringMemberAndHosts), Predicates.notNull()),
-                (ringMemberAndHost) -> () -> {
+            Iterable<Callable<RingMemberAndHostAnswer<A>>> callOrder = Iterables.transform(Iterables.filter(Arrays.asList(ringMemberAndHosts), Predicates.notNull()),
+                (com.jivesoftware.os.amza.client.http.RingMemberAndHost ringMemberAndHost) -> () -> {
                     A answer = clientProvider.call(partitionName, leader, ringMemberAndHost, family, partitionCall);
                     return new RingMemberAndHostAnswer<>(ringMemberAndHost, answer);
                 });

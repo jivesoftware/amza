@@ -56,7 +56,7 @@ public class TakeVersionedPartitionCoordinator {
         long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
-        boolean isNominated,
+        boolean takerIsOnline,
         int takeFromFactor,
         AvailableStream availableStream) throws Exception {
 
@@ -68,7 +68,7 @@ public class TakeVersionedPartitionCoordinator {
                     }
 
                     Integer category = versionedRing.getCategory(ringMember);
-                    if (isNominated || partitionWaterlineState.getState() == State.bootstrap || (category != null && category <= currentCategory.get())) {
+                    if (!takerIsOnline || partitionWaterlineState.getState() == State.bootstrap || (category != null && category <= currentCategory.get())) {
                         AtomicBoolean available = new AtomicBoolean(false);
                         long reofferDelta = ((versionedPartitionName.getPartitionName().isSystemPartition()) ? systemReofferDeltaMillis : reofferDeltaMillis);
                         long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;

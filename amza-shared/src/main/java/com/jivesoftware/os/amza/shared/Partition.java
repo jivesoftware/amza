@@ -11,7 +11,6 @@ import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 
 /**
- *
  * @author jonathan.colt
  */
 public interface Partition {
@@ -23,28 +22,25 @@ public interface Partition {
     boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception;
 
     /**
-     * @param fromPrefix   nullable (inclusive)
-     * @param fromKey      nullable (inclusive)
-     * @param toPrefix     nullable (exclusive)
-     * @param toKey        nullable (exclusive)
+     * @param fromPrefix nullable (inclusive)
+     * @param fromKey    nullable (inclusive)
+     * @param toPrefix   nullable (exclusive)
+     * @param toKey      nullable (exclusive)
      * @param scan
      * @throws Exception
      */
-    boolean scan(Consistency consistency,
-        byte[] fromPrefix,
+    boolean scan(byte[] fromPrefix,
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
         KeyValueTimestampStream scan) throws Exception;
 
-    TakeResult takeFromTransactionId(Consistency consistency,
-        long txId,
+    TakeResult takeFromTransactionId(long txId,
         Highwaters highwaters,
         TxKeyValueStream stream) throws
         Exception;
 
-    TakeResult takePrefixFromTransactionId(Consistency consistency,
-        byte[] prefix,
+    TakeResult takePrefixFromTransactionId(byte[] prefix,
         long txId,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception;

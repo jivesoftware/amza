@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
+import com.jivesoftware.os.amza.shared.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
@@ -20,6 +21,7 @@ import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
@@ -51,7 +53,7 @@ import java.util.concurrent.TimeUnit;
 /**
  *
  */
-public class AmzaAquariumProvider implements RowChanges {
+public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions, RowChanges {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -145,7 +147,9 @@ public class AmzaAquariumProvider implements RowChanges {
 
     public Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
-        Preconditions.checkNotNull(versionedPartitionProvider.getProperties(partitionName), "Properties missing for %s", partitionName);
+        if (versionedPartitionProvider.getProperties(partitionName) == null) {
+            throw new PropertiesNotPresentException("Properties missing for " + partitionName);
+        }
         StorageVersion storageVersion = storageVersionProvider.createIfAbsent(versionedPartitionName.getPartitionName());
         Preconditions.checkArgument(storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion(), "Version mismatch for %s: %s != %s",
             partitionName, versionedPartitionName.getPartitionVersion(), storageVersion.partitionVersion);
@@ -233,7 +237,7 @@ public class AmzaAquariumProvider implements RowChanges {
                     rootAquariumMember);
                 byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
-                LOG.info("Desired {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
+                LOG.info("Desired {} for {} = {} at {}, current = {}", rootAquariumMember, versionedPartitionName, state, desiredTimestamp, current);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
             },
@@ -254,6 +258,20 @@ public class AmzaAquariumProvider implements RowChanges {
                     awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
                 }
             });
+    }
+
+    @Override
+    public boolean bootstrap(TakeCoordinator.PartitionStream partitionStream) throws Exception {
+        for (Map.Entry<VersionedPartitionName, Aquarium> entry : aquariums.entrySet()) {
+            VersionedPartitionName versionedPartitionName = entry.getKey();
+            Waterline waterline = entry.getValue().getState(rootAquariumMember);
+            if (!isOnline(versionedPartitionName, waterline)) {
+                if (!partitionStream.stream(versionedPartitionName, waterline)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     public boolean isOnline(VersionedPartitionName versionedPartitionName,

@@ -333,6 +333,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         } else {
             return new StripedPartition(amzaStats,
                 orderIdProvider,
+                partitionIndex,
                 walUpdated,
                 ringStoreReader.getRingMember(),
                 partitionName,

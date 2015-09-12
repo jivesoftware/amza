@@ -1,12 +1,14 @@
 package com.jivesoftware.os.amza.api;
 
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -28,7 +30,7 @@ public interface PartitionClient {
     */
 
     void commit(Consistency consistency, byte[] prefix,
-        Commitable updates,
+        ClientUpdates updates,
         long timeoutInMillis) throws Exception;
 
     boolean get(Consistency consistency,
@@ -51,13 +53,13 @@ public interface PartitionClient {
         byte[] toKey,
         KeyValueTimestampStream scan) throws Exception;
 
-    TakeResult takeFromTransactionId(Consistency consistency,
+    TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
         TxKeyValueStream stream) throws
         Exception;
 
-    TakeResult takePrefixFromTransactionId(Consistency consistency,
+    TakeResult takePrefixFromTransactionId(List<RingMember> membersInOrder,
         byte[] prefix,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,

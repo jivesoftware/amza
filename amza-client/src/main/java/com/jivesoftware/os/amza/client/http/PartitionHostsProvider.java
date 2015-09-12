@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -14,11 +15,12 @@ import com.jivesoftware.os.routing.bird.shared.ClientCall;
 import com.jivesoftware.os.routing.bird.shared.HostPort;
 import com.jivesoftware.os.routing.bird.shared.NextClientStrategy;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 
 /**
- *
  * @author jonathan.colt
  */
 public class PartitionHostsProvider {
@@ -33,7 +35,7 @@ public class PartitionHostsProvider {
 
     Ring getPartitionHosts(PartitionName partitionName, Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws HttpClientException {
 
-        NextClientStrategy strategy = useHost.map((value) -> (NextClientStrategy)new ConnectionDescriptorSelectiveStrategy(new HostPort[]{
+        NextClientStrategy strategy = useHost.map((value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
             new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
         })).orElse(roundRobinStrategy);
 
@@ -76,7 +78,6 @@ public class PartitionHostsProvider {
 
         private final int leaderIndex;
         private final RingMemberAndHost[] members;
-        private RingMemberAndHost[] leaderLessMembers;
 
         public Ring(int leaderIndex, RingMemberAndHost[] members) {
             this.leaderIndex = leaderIndex;
@@ -91,10 +92,17 @@ public class PartitionHostsProvider {
             return members;
         }
 
+        public RingMemberAndHost[] orderedRing(List<RingMember> membersInOrder) {
+            Map<RingMember, RingMemberAndHost> memberHosts = Maps.uniqueIndex(Arrays.asList(members), input -> input.ringMember);
+            RingMemberAndHost[] ordered = new RingMemberAndHost[membersInOrder.size()];
+            for (int i = 0; i < membersInOrder.size(); i++) {
+                ordered[i] = memberHosts.get(membersInOrder.get(i));
+            }
+            return ordered;
+        }
+
         public RingMemberAndHost[] leaderlessRing() {
-            if (leaderLessMembers != null) {
-                return Arrays.copyOf(leaderLessMembers, leaderLessMembers.length);
-            } else if (leaderIndex == -1) {
+            if (leaderIndex == -1) {
                 return Arrays.copyOf(members, members.length);
             } else {
                 RingMemberAndHost[] memberAndHosts = new RingMemberAndHost[members.length - 1];

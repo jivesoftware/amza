@@ -81,20 +81,19 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
             return r[0];
         }
 
-        public void scan(Consistency consistency,
-            byte[] fromPrefix,
+        public void scan(byte[] fromPrefix,
             byte[] fromKey,
             byte[] toPrefix,
             byte[] toKey,
             KeyValueTimestampStream stream) throws Exception {
             // TODO impl WTF quorum scan? Really
-            partitionProvider.getPartition(partitionName).scan(consistency, fromPrefix, fromKey, toPrefix, toKey, stream);
+            partitionProvider.getPartition(partitionName).scan(fromPrefix, fromKey, toPrefix, toKey, stream);
         }
 
-        public TakeCursors takeFromTransactionId(Consistency consistency, long transactionId, TxKeyValueStream stream) throws Exception {
+        public TakeCursors takeFromTransactionId(long transactionId, TxKeyValueStream stream) throws Exception {
 
             Map<RingMember, Long> ringMemberToMaxTxId = Maps.newHashMap();
-            TakeResult takeResult = partitionProvider.getPartition(partitionName).takeFromTransactionId(consistency, transactionId,
+            TakeResult takeResult = partitionProvider.getPartition(partitionName).takeFromTransactionId(transactionId,
                 (highwater) -> {
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                         ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);
@@ -117,10 +116,10 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
             return new TakeCursors(cursors, tookToEnd);
         }
 
-        public TakeCursors takeFromTransactionId(Consistency consistency, byte[] prefix, long transactionId, TxKeyValueStream stream) throws Exception {
+        public TakeCursors takeFromTransactionId(byte[] prefix, long transactionId, TxKeyValueStream stream) throws Exception {
 
             Map<RingMember, Long> ringMemberToMaxTxId = Maps.newHashMap();
-            TakeResult takeResult = partitionProvider.getPartition(partitionName).takePrefixFromTransactionId(consistency, prefix, transactionId,
+            TakeResult takeResult = partitionProvider.getPartition(partitionName).takePrefixFromTransactionId(prefix, transactionId,
                 (highwater) -> {
                     for (WALHighwater.RingMemberHighwater memberHighwater : highwater.ringMemberHighwater) {
                         ringMemberToMaxTxId.merge(memberHighwater.ringMember, memberHighwater.transactionId, Math::max);

@@ -32,7 +32,10 @@ public class StripedPartitionCommitChanges implements CommitChanges {
                 Optional.of(versionedPartitionName.getPartitionVersion()),
                 false,
                 prefix,
+                versionedPartitionName1 -> -1,
                 commitable,
+                (versionedPartitionName1, leadershipToken, largestCommittedTxId) -> {
+                },
                 walUpdated));
         });
         partitionStripeProvider.flush(partitionName, hardFlush);

@@ -87,28 +87,28 @@ public class SystemPartition implements Partition {
         byte[] prefix,
         Commitable updates,
         long timeoutInMillis) throws Exception {
-        long timestampAndVersion = orderIdProvider.nextId();
-        RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix,
-            (highwaters, scan)
-            -> updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampAndVersion;
-                return scan.row(rowTxId, key, value, timestamp, valueTombstone, timestampAndVersion);
-            }),
-            walUpdated);
-        amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
 
         Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
 
         int takeQuorum = consistency.quorum(neighbors.size());
+        if (takeQuorum > 0 && neighbors.size() < takeQuorum) {
+            throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
+        }
+
+        long timestampAndVersion = orderIdProvider.nextId();
+        RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix, (highwaters, scan) ->
+                updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampAndVersion;
+                    return scan.row(rowTxId, key, value, timestamp, valueTombstone, timestampAndVersion);
+                }),
+            walUpdated);
+        amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
+
         if (takeQuorum > 0) {
-            if (neighbors.size() < takeQuorum) {
-                throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
-            } else {
-                LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-                int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), neighbors, takeQuorum, timeoutInMillis, -1);
-                if (takenBy < takeQuorum) {
-                    throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
-                }
+            LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
+            int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), neighbors, takeQuorum, timeoutInMillis, -1);
+            if (takenBy < takeQuorum) {
+                throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
             }
         }
     }
@@ -119,8 +119,7 @@ public class SystemPartition implements Partition {
     }
 
     @Override
-    public boolean scan(Consistency consistency,
-        byte[] fromPrefix,
+    public boolean scan(byte[] fromPrefix,
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
@@ -135,21 +134,19 @@ public class SystemPartition implements Partition {
                 toPrefix,
                 toKey,
                 (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
         }
     }
 
     @Override
-    public TakeResult takeFromTransactionId(Consistency consistency,
-        long txId,
+    public TakeResult takeFromTransactionId(long txId,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
         return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
     }
 
     @Override
-    public TakeResult takePrefixFromTransactionId(Consistency consistency,
-        byte[] prefix,
+    public TakeResult takePrefixFromTransactionId(byte[] prefix,
         long txId,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
@@ -163,8 +160,8 @@ public class SystemPartition implements Partition {
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
 
-        long[] lastTxId = {-1};
-        boolean[] done = {false};
+        long[] lastTxId = { -1 };
+        boolean[] done = { false };
         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
         TxKeyValueStream delegateStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
 

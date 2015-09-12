@@ -83,7 +83,7 @@ public class AmzaClientRestEndpoints {
                     // Some one failed to interacting with to leader..
                 }
             } catch (Exception x) {
-                Object[] vals = new Object[]{partitionName, consistency};
+                Object[] vals = new Object[] { partitionName, consistency };
                 LOG.warn("Failed while determining leader {} at {}. ", vals, x);
                 return ResponseHelper.INSTANCE.errorResponse("Failed while determining leader: " + Arrays.toString(vals), x);
             }
@@ -167,7 +167,7 @@ public class AmzaClientRestEndpoints {
 
             return Response.ok("success").build();
         } catch (Exception x) {
-            Object[] vals = new Object[]{base64PartitionName, consistencyName};
+            Object[] vals = new Object[] { base64PartitionName, consistencyName };
             LOG.warn("Failed to commit to {} at {}. ", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         }
@@ -237,18 +237,13 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/scan/{base64PartitionName}/{consistency}")
+    @Path("/scan/{base64PartitionName}")
     public Object scan(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("consistency") String consistencyName,
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        Consistency consistency = Consistency.valueOf(consistencyName);
         FilerInputStream fis = new FilerInputStream(inputStream);
-        Response response = failOnNotTheLeader(partitionName, consistency, fis);
-        if (response != null) {
-            return response;
-        }
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
@@ -260,7 +255,7 @@ public class AmzaClientRestEndpoints {
                 byte[] toKey = UIO.readByteArray(fis, "toKey");
 
                 ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                partition.scan(consistency, fromPrefix, fromKey, toPrefix, toKey,
+                partition.scan(fromPrefix, fromKey, toPrefix, toKey,
                     (prefix, key, value, timestamp, version) -> {
                         UIO.writeBoolean(cf, false, "eos");
                         UIO.writeByteArray(cf, prefix, "prefix");
@@ -291,18 +286,12 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/takeFromTransactionId/{base64PartitionName}/{consistency}")
+    @Path("/takeFromTransactionId/{base64PartitionName}")
     public Object takeFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
-        @PathParam("consistency") String consistencyName,
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        Consistency consistency = Consistency.valueOf(consistencyName);
         FilerInputStream fis = new FilerInputStream(inputStream);
-        Response response = failOnNotTheLeader(partitionName, consistency, fis);
-        if (response != null) {
-            return response;
-        }
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
@@ -310,7 +299,7 @@ public class AmzaClientRestEndpoints {
                 long transactionId = UIO.readLong(fis, "transactionId");
 
                 Partition partition = partitionProvider.getPartition(partitionName);
-                take(consistency, chunkedOutput, partition, false, null, transactionId);
+                take(chunkedOutput, partition, false, null, transactionId);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takeFromTransactionId", x);
 
@@ -328,18 +317,12 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/takePrefixFromTransactionId/{base64PartitionName}/{consistency}")
+    @Path("/takePrefixFromTransactionId/{base64PartitionName}")
     public Object takePrefixFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
-        @PathParam("consistency") String consistencyName,
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        Consistency consistency = Consistency.valueOf(consistencyName);
         FilerInputStream fis = new FilerInputStream(inputStream);
-        Response response = failOnNotTheLeader(partitionName, consistency, fis);
-        if (response != null) {
-            return response;
-        }
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
@@ -347,7 +330,7 @@ public class AmzaClientRestEndpoints {
                 Partition partition = partitionProvider.getPartition(partitionName);
                 byte[] prefix = UIO.readByteArray(fis, "prefix");
                 long txId = UIO.readLong(fis, "txId");
-                take(consistency, chunkedOutput, partition, true, prefix, txId);
+                take(chunkedOutput, partition, true, prefix, txId);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takePrefixFromTransactionId", x);
 
@@ -362,8 +345,7 @@ public class AmzaClientRestEndpoints {
         return chunkedOutput;
     }
 
-    private void take(Consistency consistency,
-        ChunkedOutput<byte[]> chunkedOutput,
+    private void take(ChunkedOutput<byte[]> chunkedOutput,
         Partition partition,
         boolean usePrefix,
         byte[] prefix,
@@ -391,9 +373,9 @@ public class AmzaClientRestEndpoints {
         };
         TakeResult takeResult;
         if (usePrefix) {
-            takeResult = partition.takePrefixFromTransactionId(consistency, prefix, txId, streamHighwater, stream);
+            takeResult = partition.takePrefixFromTransactionId(prefix, txId, streamHighwater, stream);
         } else {
-            takeResult = partition.takeFromTransactionId(consistency, txId, streamHighwater, stream);
+            takeResult = partition.takeFromTransactionId(txId, streamHighwater, stream);
         }
         UIO.writeBoolean(cf, true, "eos");
 

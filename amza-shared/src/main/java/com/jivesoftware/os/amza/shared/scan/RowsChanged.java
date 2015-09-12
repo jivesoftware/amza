@@ -81,12 +81,14 @@ public class RowsChanged {
 
     @Override
     public String toString() {
-        return "RowsChanged{"
-            + "versionedPartitionName=" + versionedPartitionName
-            + ", oldestApply=" + oldestApply
-            + ", apply=" + apply
-            + ", remove=" + remove
-            + ", clobber=" + clobber + '}';
+        return "RowsChanged{" +
+            "versionedPartitionName=" + versionedPartitionName +
+            ", oldestApply=" + oldestApply +
+            ", apply=" + apply +
+            ", remove=" + remove +
+            ", clobber=" + clobber +
+            ", largestCommittedTxId=" + largestCommittedTxId +
+            '}';
     }
 
 }

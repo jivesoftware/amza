@@ -72,7 +72,15 @@ public class TakeCoordinator {
         }
     }
 
-    public void start(AmzaRingReader ringReader) {
+    public interface BootstrapPartitions {
+        boolean bootstrap(PartitionStream partitionStream) throws Exception;
+    }
+
+    public interface PartitionStream {
+        boolean stream(VersionedPartitionName versionedPartitionName, Waterline waterline) throws Exception;
+    }
+
+    public void start(AmzaRingReader ringReader, BootstrapPartitions bootstrapPartitions) {
         ExecutorService cya = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("cya-%d").build());
         cya.submit(() -> {
             while (true) {
@@ -85,7 +93,7 @@ public class TakeCoordinator {
                         if (takeRingCoordinator != null) {
                             neighborsChanged = takeRingCoordinator.cya(neighbors);
                         } else {
-                            ensureRingCoodinator(ringName.getBytes(), neighbors);
+                            ensureRingCoordinator(ringName.getBytes(), neighbors);
                             neighborsChanged = true;
                         }
                         if (neighborsChanged) {
@@ -96,6 +104,13 @@ public class TakeCoordinator {
                 } catch (Exception x) {
                     LOG.error("Failed while ensuring alignment.", x);
                 }
+
+                bootstrapPartitions.bootstrap((versionedPartitionName, waterline) -> {
+                    byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
+                    List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
+                    takeRingCoordinators.get(new IBA(ringName)).update(neighbors, versionedPartitionName, waterline, false, -1);
+                    return true;
+                });
 
                 try {
                     synchronized (cyaLock) {
@@ -131,7 +146,7 @@ public class TakeCoordinator {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
-        TakeRingCoordinator ring = ensureRingCoodinator(ringName, neighbors);
+        TakeRingCoordinator ring = ensureRingCoordinator(ringName, neighbors);
         ring.update(neighbors, versionedPartitionName, waterline, isOnline, txId);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(neighbors);
@@ -141,7 +156,7 @@ public class TakeCoordinator {
         updated(ringReader, versionedPartitionName, waterline, isOnline, 0);
     }
 
-    private TakeRingCoordinator ensureRingCoodinator(byte[] ringName, List<Entry<RingMember, RingHost>> neighbors) {
+    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, List<Entry<RingMember, RingHost>> neighbors) {
         return takeRingCoordinators.computeIfAbsent(new IBA(ringName),
             key -> new TakeRingCoordinator(ringName,
                 timestampedOrderIdProvider,
@@ -165,7 +180,7 @@ public class TakeCoordinator {
     public void availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
         AmzaRingReader ringReader,
         RingMember remoteRingMember,
-        IsNominated isNominated,
+        CheckState checkState,
         long takeSessionId,
         long heartbeatIntervalMillis,
         AvailableStream availableStream,
@@ -185,14 +200,14 @@ public class TakeCoordinator {
             long start = updates.get();
             //LOG.info("CHECKING: remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
 
-            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
+            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                        ring.availableRowsStream(txHighestPartitionTx, 
+                        ring.availableRowsStream(txHighestPartitionTx,
                             remoteRingMember,
-                            isNominated,
+                            checkState,
                             takeSessionId,
                             watchAvailableStream));
                 }

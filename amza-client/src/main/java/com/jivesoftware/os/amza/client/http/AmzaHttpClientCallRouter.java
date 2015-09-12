@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.google.common.base.Predicates;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Iterables;
@@ -30,7 +31,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaHttpClientCallRouter {
@@ -148,6 +148,18 @@ public class AmzaHttpClientCallRouter {
                     Long.MAX_VALUE,
                     null,
                     leaderlessRing);
+            } else if (consistency == Consistency.leader_all) {
+                RingMemberAndHost[] leaderlessRing = ring.leaderlessRing();
+                return solve(partitionName,
+                    family,
+                    call,
+                    1,
+                    true,
+                    merger,
+                    additionalSolverAfterNMillis,
+                    Long.MAX_VALUE,
+                    null,
+                    leaderlessRing);
             } else {
                 throw new RuntimeException("Unsupported leader read consistency:" + consistency);
             }
@@ -158,9 +170,30 @@ public class AmzaHttpClientCallRouter {
         } else if (consistency == Consistency.write_one_read_all) {
             RingMemberAndHost[] actualRing = ring.actualRing();
             return solve(partitionName, family, call, actualRing.length, false, merger, additionalSolverAfterNMillis, Long.MAX_VALUE, null, actualRing);
+        } else if (consistency == Consistency.write_all_read_one) {
+            RingMemberAndHost[] randomizeRing = ring.randomizeRing();
+            return solve(partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, Long.MAX_VALUE, null, randomizeRing);
+        } else if (consistency == Consistency.none) {
+            RingMemberAndHost[] randomizeRing = ring.randomizeRing();
+            return solve(partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, Long.MAX_VALUE, null, randomizeRing);
         } else {
             throw new IllegalStateException("Unsupported read consistency:" + consistency.name());
         }
+    }
+
+    public <R, A> R take(PartitionName partitionName,
+        List<RingMember> membersInOrder,
+        String family,
+        PartitionCall<HttpClient, A, HttpClientException> call,
+        Merger<R, A> merger) throws Exception {
+
+        long waitForLeaderElection = 1000; // TODO config?
+        Ring ring = ring(partitionName, Consistency.none, Optional.empty(), waitForLeaderElection);
+
+        long additionalSolverAfterNMillis = 1000; // TODO who controls this
+
+        RingMemberAndHost[] orderedRing = ring.orderedRing(membersInOrder);
+        return solve(partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, Long.MAX_VALUE, null, orderedRing);
     }
 
     private Ring ring(PartitionName partitionName,
@@ -169,7 +202,7 @@ public class AmzaHttpClientCallRouter {
         long waitForLeaderElection) throws HttpClientException, ExecutionException,
         LeaderElectionInProgressException {
 
-        Ring ring = partitionRoutingCache.get(partitionName, null);
+        Ring ring = partitionRoutingCache.getIfPresent(partitionName);
         if (ring == null || consistency.requiresLeader() && ring.leader() == null) {
             ring = partitionHostsProvider.getPartitionHosts(partitionName, useHost, waitForLeaderElection);
             if (consistency.requiresLeader()) {
@@ -191,9 +224,10 @@ public class AmzaHttpClientCallRouter {
         long addAdditionalSolverAfterNMillis,
         long abandonAfterNMillis,
         RingMember leader,
-        RingMemberAndHost... ringMemberAndHosts) throws InterruptedException, Exception {
+        RingMemberAndHost... ringMemberAndHosts) throws Exception {
         try {
-            Iterable<Callable<RingMemberAndHostAnswer<A>>> callOrder = Iterables.transform(Arrays.asList(ringMemberAndHosts),
+            Iterable<Callable<RingMemberAndHostAnswer<A>>> callOrder = Iterables.transform(
+                Iterables.filter(Arrays.asList(ringMemberAndHosts), Predicates.notNull()),
                 (ringMemberAndHost) -> () -> {
                     A answer = clientProvider.call(partitionName, leader, ringMemberAndHost, family, partitionCall);
                     return new RingMemberAndHostAnswer<>(ringMemberAndHost, answer);

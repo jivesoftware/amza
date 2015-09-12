@@ -4,6 +4,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
@@ -19,6 +20,7 @@ import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -116,16 +118,29 @@ public class PartitionStripe {
         return txPartitionState.tx(partitionName, tx);
     }
 
+    public interface PartitionLeadershipToken {
+
+        long getLeadershipToken(VersionedPartitionName versionedPartitionName) throws Exception;
+    }
+
+    public interface PostCommit {
+
+        void committed(VersionedPartitionName versionedPartitionName, long leadershipToken, long largestCommittedTxId) throws Exception;
+    }
+
     public RowsChanged commit(HighwaterStorage highwaterStorage,
         PartitionName partitionName,
         Optional<Long> specificVersion,
         boolean requiresOnline,
         byte[] prefix,
+        PartitionLeadershipToken partitionLeadershipToken,
         Commitable updates,
+        PostCommit postCommit,
         WALUpdated updated) throws Exception {
 
         return txPartitionState.tx(partitionName,
             (versionedPartitionName, partitionWaterlineState, isOnline) -> {
+                long leadershipToken = partitionLeadershipToken.getLeadershipToken(versionedPartitionName);
                 Preconditions.checkState(isOnline || !requiresOnline, "Partition:%s state:%s is not online.",
                     partitionName,
                     partitionWaterlineState);
@@ -147,6 +162,7 @@ public class PartitionStripe {
                     if (allRowChanges != null && !changes.isEmpty()) {
                         allRowChanges.changes(changes);
                     }
+                    postCommit.committed(versionedPartitionName, leadershipToken, changes.getLargestCommittedTxId());
                     return changes;
                 }
             });

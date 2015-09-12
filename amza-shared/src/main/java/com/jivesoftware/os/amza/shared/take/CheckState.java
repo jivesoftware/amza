@@ -7,7 +7,9 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
  *
  * @author jonathan.colt
  */
-public interface IsNominated {
+public interface CheckState {
 
     boolean isNominated(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
+
+    boolean isOnline(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
 }

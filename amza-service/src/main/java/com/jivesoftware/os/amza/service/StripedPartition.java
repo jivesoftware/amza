@@ -33,6 +33,8 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.Partition;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
@@ -51,6 +53,7 @@ public class StripedPartition implements Partition {
 
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
+    private final VersionedPartitionProvider versionedPartitionProvider;
     private final WALUpdated walUpdated;
     private final RingMember ringMember;
     private final PartitionName partitionName;
@@ -61,6 +64,7 @@ public class StripedPartition implements Partition {
 
     public StripedPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
+        VersionedPartitionProvider versionedPartitionProvider,
         WALUpdated walUpdated,
         RingMember ringMember,
         PartitionName partitionName,
@@ -71,6 +75,7 @@ public class StripedPartition implements Partition {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
+        this.versionedPartitionProvider = versionedPartitionProvider;
         this.walUpdated = walUpdated;
         this.ringMember = ringMember;
         this.partitionName = partitionName;
@@ -90,62 +95,82 @@ public class StripedPartition implements Partition {
         Commitable updates,
         long timeoutInMillis) throws Exception {
 
+        PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
+        if (!properties.consistency.supportsWrites(consistency)) {
+            throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency +
+                " which does not support writes at consistency " + consistency);
+        }
+
+        Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(partitionName.getRingName());
+        int takeQuorum = consistency.quorum(neighbors.size());
+        if (neighbors.size() < takeQuorum) {
+            throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
+        }
+
         long currentTime = System.currentTimeMillis();
         long version = orderIdProvider.nextId();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix, (highwaters, stream) -> {
-                return updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                    long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
-                    return stream.row(rowTxId, key, value, timestamp, valueTombstone, version);
-                });
-            }, walUpdated);
+            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix,
+                (versionedPartitionName) -> {
+                    if (takeQuorum > 0) {
+                        Aquarium aquarium = aquariumProvider.getAquarium(versionedPartitionName);
+                        Waterline livelyEndState = aquarium.livelyEndState();
+                        if (consistency.requiresLeader() && (livelyEndState == null || livelyEndState.getState() != State.leader)) {
+                            throw new FailedToAchieveQuorumException("Leader has changed.");
+                        }
+                    }
+                    return -1;
+                },
+                (highwaters, stream) -> updates.commitable(highwaters,
+                    (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                        long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
+                        return stream.row(rowTxId, key, value, timestamp, valueTombstone, version);
+                    }),
+                (versionedPartitionName, leadershipToken, largestCommittedTxId) -> {
+                    if (takeQuorum > 0) {
+                        LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
+                        int takenBy = ackWaters.await(versionedPartitionName,
+                            largestCommittedTxId,
+                            neighbors,
+                            takeQuorum,
+                            timeoutInMillis,
+                            leadershipToken);
+                        if (takenBy < takeQuorum) {
+                            throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
+                        }
+                    }
+                    //TODO necessary? aquarium.tapTheGlass();
+                },
+                walUpdated);
 
             amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
 
-            Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(partitionName.getRingName());
-
-            Aquarium aquarium = aquariumProvider.getAquarium(commit.getVersionedPartitionName());
-            int takeQuorum = consistency.quorum(neighbors.size());
-            if (takeQuorum > 0) {
-                Waterline livelyEndState = aquarium.livelyEndState();
-                if (consistency.requiresLeader() && (livelyEndState == null || livelyEndState.getState() != State.leader)) {
-                    throw new FailedToAchieveQuorumException("Leader has changed.");
-                }
-
-                if (neighbors.size() < takeQuorum) {
-                    throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
-                } else {
-                    long leadershipToken = -1;
-                    if (consistency.requiresLeader()) {
-                        leadershipToken = livelyEndState.getTimestamp();
-                    }
-                    LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-                    int takenBy = ackWaters.await(commit.getVersionedPartitionName(),
-                        commit.getLargestCommittedTxId(),
-                        neighbors,
-                        takeQuorum,
-                        timeoutInMillis,
-                        leadershipToken);
-                    if (takenBy < takeQuorum) {
-                        throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
-                    }
-                }
-            }
-            aquarium.tapTheGlass();
             return null;
         });
 
     }
 
+    private void checkReadConsistencySupport(Consistency consistency) throws Exception {
+        PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
+        if (!properties.consistency.supportsReads(consistency)) {
+            throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency +
+                " which does not support reads at consistency " + consistency);
+        }
+    }
+
     @Override
     public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
+        checkReadConsistencySupport(consistency);
         return partitionStripeProvider.txPartition(partitionName,
             (stripe, highwaterStorage) -> stripe.get(partitionName, prefix, keys, stream));
     }
 
     @Override
-    public boolean scan(Consistency consistency, byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, KeyValueTimestampStream scan) throws
-        Exception {
+    public boolean scan(byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
+        KeyValueTimestampStream scan) throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             if (fromKey == null && toKey == null) {
                 stripe.rowScan(partitionName, (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
@@ -157,23 +182,21 @@ public class StripedPartition implements Partition {
                     toPrefix,
                     toKey,
                     (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                        -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             }
             return true;
         });
     }
 
     @Override
-    public TakeResult takeFromTransactionId(Consistency consistency,
-        long txId,
+    public TakeResult takeFromTransactionId(long txId,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
         return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
     }
 
     @Override
-    public TakeResult takePrefixFromTransactionId(Consistency consistency,
-        byte[] prefix,
+    public TakeResult takePrefixFromTransactionId(byte[] prefix,
         long txId,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
@@ -189,8 +212,8 @@ public class StripedPartition implements Partition {
         TxKeyValueStream stream) throws Exception {
 
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            long[] lastTxId = {-1};
-            boolean[] done = {false};
+            long[] lastTxId = { -1 };
+            boolean[] done = { false };
             TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (done[0] && rowTxId > lastTxId[0]) {
                     return false;

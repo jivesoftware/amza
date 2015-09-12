@@ -3,8 +3,11 @@ package com.jivesoftware.os.amza.shared.take;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.shared.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -15,18 +18,25 @@ import java.util.Map;
  */
 public class StreamingTakesConsumer {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     public void consume(InputStream bis, AvailableStream updatedPartitionsStream) throws Exception {
-        try (DataInputStream dis = new DataInputStream(bis)) {
-            while (dis.read() == 1) {
-                int partitionNameLength = dis.readInt();
-                if (partitionNameLength == 0) {
-                    // this is a ping
-                    continue;
-                }
-                byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
-                dis.readFully(versionedPartitionNameBytes);
-                long txId = dis.readLong();
+        DataInputStream dis = new DataInputStream(bis);
+        while (dis.read() == 1) {
+            int partitionNameLength = dis.readInt();
+            if (partitionNameLength == 0) {
+                // this is a ping
+                continue;
+            }
+            byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
+            dis.readFully(versionedPartitionNameBytes);
+            long txId = dis.readLong();
+            try {
                 updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), txId);
+            } catch (PropertiesNotPresentException e) {
+                LOG.warn(e.getMessage());
+            } catch (Throwable t) {
+                LOG.error("Encountered problem while streaming available rows", t);
             }
         }
     }

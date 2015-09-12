@@ -259,7 +259,7 @@ public class AmzaServiceInitializer {
             }
         }
 
-        takeCoordinator.start(amzaRingReader);
+        takeCoordinator.start(amzaRingReader, aquariumProvider);
 
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 

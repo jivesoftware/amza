@@ -86,7 +86,7 @@ public class TakeRingCoordinator {
 
     long availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
         RingMember ringMember,
-        IsNominated isNominated,
+        CheckState checkState,
         long takeSessionId,
         AvailableStream availableStream) throws Exception {
 
@@ -99,7 +99,7 @@ public class TakeRingCoordinator {
                     takeSessionId,
                     ring,
                     ringMember,
-                    isNominated.isNominated(ringMember, coordinator.versionedPartitionName),
+                    checkState.isOnline(ringMember, coordinator.versionedPartitionName),
                     properties.takeFromFactor,
                     availableStream));
         }

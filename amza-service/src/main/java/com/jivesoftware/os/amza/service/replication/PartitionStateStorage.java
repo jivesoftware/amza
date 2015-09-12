@@ -10,7 +10,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
-import com.jivesoftware.os.amza.shared.take.IsNominated;
+import com.jivesoftware.os.amza.shared.take.CheckState;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.Aquarium;
 import com.jivesoftware.os.aquarium.State;
@@ -22,7 +22,7 @@ import java.util.List;
 /**
  * @author jonathan.colt
  */
-public class PartitionStateStorage implements TxPartitionState, IsNominated {
+public class PartitionStateStorage implements TxPartitionState, CheckState {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -146,7 +146,18 @@ public class PartitionStateStorage implements TxPartitionState, IsNominated {
 
     @Override
     public boolean isNominated(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception {
+        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
+            return false;
+        }
         return aquariumProvider.getAquarium(versionedPartitionName).isLivelyState(ringMember.asAquariumMember(), State.nominated);
+    }
+
+    @Override
+    public boolean isOnline(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception {
+        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
+            return true;
+        }
+        return aquariumProvider.getAquarium(versionedPartitionName).isLivelyEndState(ringMember.asAquariumMember());
     }
 
     public VersionedState markForDisposal(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {

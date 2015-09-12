@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.replication;
 
-import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -11,6 +10,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider.Part
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
+import com.jivesoftware.os.amza.shared.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -87,7 +87,9 @@ public class StorageVersionProvider implements RowChanges {
         if (partitionName.isSystemPartition()) {
             return new StorageVersion(0, 0);
         }
-        Preconditions.checkNotNull(versionedPartitionProvider.getProperties(partitionName), "Properties missing for %s", partitionName);
+        if (versionedPartitionProvider.getProperties(partitionName) == null) {
+            throw new PropertiesNotPresentException("Properties missing for " + partitionName);
+        }
         synchronized (versionStripingLocks.lock(partitionName, 0)) {
             StorageVersion storageVersion = localVersionCache.computeIfAbsent(partitionName, key -> {
                 try {

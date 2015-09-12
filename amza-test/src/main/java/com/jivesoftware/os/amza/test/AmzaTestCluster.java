@@ -410,7 +410,7 @@ public class AmzaTestCluster {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
                     int[] count = {0};
-                    partition.scan(Consistency.none, null, null, null, null, (prefix, key, value, timestamp, version) -> {
+                    partition.scan(null, null, null, null, (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
                     });
@@ -494,7 +494,7 @@ public class AmzaTestCluster {
         private boolean compare(PartitionName partitionName, Partition a, Partition b) throws Exception {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
-            a.scan(Consistency.leader, null, null, null, null,
+            a.scan(null, null, null, null,
                 (prefix, key, aValue, aTimestamp, aVersion) -> {
                     try {
                         compared.increment();

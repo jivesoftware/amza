@@ -11,9 +11,6 @@ public enum Consistency {
     /**
      * Writes are routed to an elected node. No synchronous replication is performed.
      * Reads are routed to an elected node.
-     * <p>
-     * Supports writes at: leader, leader_plus_one, leader_quorum, leader_all, write_all_read_one
-     * Supports reads at: leader, write_one_read_all, none
      */
     leader((byte) 1, true,
         numberOfNeighbors -> 0,
@@ -23,9 +20,6 @@ public enum Consistency {
     /**
      * Writes are routed to an elected node. Each write will be synchronously replicated to at least one other node.
      * Reads are routed to an elected node. If elected node is offline then a read request will re-routed to all other nodes and merged at the client.
-     * <p>
-     * Supports writes at: leader_plus_one, leader_quorum, leader_all, write_all_read_one
-     * Supports reads at: leader, leader_plus_one, write_one_read_all, none
      */
     leader_plus_one((byte) 2, true,
         numberOfNeighbors -> {
@@ -38,9 +32,6 @@ public enum Consistency {
     /**
      * Writes are routed to an elected node. Each write will be synchronously replicated to an additional quorum of nodes based on ring size at write time.
      * Reads are routed to an elected node. If elected node is offline then a read request will re-routed to a quorum of other nodes and merged at the client.
-     * <p>
-     * Supports writes at: leader_quorum, write_all_read_one
-     * Supports reads at: leader, leader_quorum, write_one_read_all, none
      */
     leader_quorum((byte) 3, true,
         numberOfNeighbors -> (numberOfNeighbors + 1) / 2,
@@ -48,9 +39,6 @@ public enum Consistency {
     /**
      * Writes are routed to an elected node. Each write will be synchronously replicated to all nodes based on ring size at write time.
      * Reads are routed to an elected node. If elected node is offline then a read request will re-routed to a random node.
-     * <p>
-     * Supports writes at: leader_all, write_all_read_one
-     * Supports reads at: anything
      */
     leader_all((byte) 4, true,
         numberOfNeighbors -> numberOfNeighbors,
@@ -58,9 +46,6 @@ public enum Consistency {
     /**
      * Writes are synchronously replicated to a quorum of nodes based on ring size at write time.
      * Reads are routed to a quorum of nodes and merged at the client.
-     * <p>
-     * Supports writes at: quorum, leader_quorum, write_all_read_one
-     * Supports reads at: quorum, write_one_read_all, none
      */
     quorum((byte) 11, false,
         numberOfNeighbors -> (numberOfNeighbors + 1) / 2,
@@ -68,9 +53,6 @@ public enum Consistency {
     /**
      * Writes are synchronously written to all nodes based on ring size at write time.
      * Reads are routed to a random node.
-     * <p>
-     * Supports writes at: write_all_read_one
-     * Supports reads at: anything
      */
     write_all_read_one((byte) 21, false,
         numberOfNeighbors -> numberOfNeighbors,
@@ -78,9 +60,6 @@ public enum Consistency {
     /**
      * Writes are to a random node based on ring size at write time.
      * Reads are routed to all nodes and merged at the client.
-     * <p>
-     * Supports writes at: anything
-     * Supports reads at: write_one_read_all, none
      */
     write_one_read_all((byte) 22, false,
         numberOfNeighbors -> 0,
@@ -88,9 +67,6 @@ public enum Consistency {
     /**
      * Writes are to a random node based on ring size at write time.
      * Reads are to a random node based on ring size at write time.
-     * <p>
-     * Supports writes at: anything (no consistency repair)
-     * Supports reads at: anything (no consistency repair)
      */
     none((byte) 127, false,
         numberOfNeighbors -> 0,

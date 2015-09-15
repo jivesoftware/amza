@@ -67,6 +67,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         final int numThreadsPerPartition;
         final int numKeyPrefixes;
         final String consistency;
+        final boolean requireConsistency;
         final boolean orderedInsertion;
         final String action;
 
@@ -78,6 +79,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             int numThreadsPerRegion,
             int numKeyPrefixes,
             String consistency,
+            boolean requireConsistency,
             boolean orderedInsertion,
             String action) {
             this.name = name;
@@ -88,6 +90,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             this.numThreadsPerPartition = numThreadsPerRegion;
             this.numKeyPrefixes = numKeyPrefixes;
             this.consistency = consistency;
+            this.requireConsistency = requireConsistency;
             this.orderedInsertion = orderedInsertion;
             this.action = action;
         }
@@ -178,7 +181,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 String regionName = input.regionPrefix + i;
                 int numThread = input.orderedInsertion ? 1 : input.numThreadsPerPartition;
                 for (int j = 0; j < numThread; j++) {
-                    executor.submit(new Feeder(regionName, Consistency.valueOf(input.consistency), j, input.orderedInsertion));
+                    executor.submit(new Feeder(regionName, Consistency.valueOf(input.consistency), input.requireConsistency, j, input.orderedInsertion));
                 }
             }
         }
@@ -188,12 +191,14 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             AtomicInteger batch = new AtomicInteger();
             private final String regionName;
             private final Consistency consistency;
+            private final boolean requireConsistency;
             private final int threadIndex;
             private final boolean orderedInsertion;
 
-            public Feeder(String regionName, Consistency consistency, int threadIndex, boolean orderedInsertion) {
+            public Feeder(String regionName, Consistency consistency, boolean requireConsistency, int threadIndex, boolean orderedInsertion) {
                 this.regionName = regionName;
                 this.consistency = consistency;
+                this.requireConsistency = requireConsistency;
                 this.threadIndex = threadIndex;
                 this.orderedInsertion = orderedInsertion;
             }
@@ -203,7 +208,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 try {
                     int b = batch.incrementAndGet();
                     if (b <= input.numBatches && !forcedStop.get()) {
-                        feed(regionName, consistency, b, threadIndex);
+                        feed(regionName, consistency, requireConsistency, b, threadIndex);
                         executor.submit(this);
                     } else {
                         completed();
@@ -226,8 +231,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             return executor.awaitTermination(timeout, unit);
         }
 
-        private void feed(String regionName, Consistency consistency, int batch, int threadIndex) throws Exception {
-            Partition partition = createPartitionIfAbsent(regionName, consistency);
+        private void feed(String regionName, Consistency consistency, boolean requireConsistency, int batch, int threadIndex) throws Exception {
+            Partition partition = createPartitionIfAbsent(regionName, consistency, requireConsistency);
 
             while (true) {
                 try {
@@ -263,7 +268,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         }
     }
 
-    private Partition createPartitionIfAbsent(String simplePartitionName, Consistency consistency) throws Exception {
+    private Partition createPartitionIfAbsent(String simplePartitionName, Consistency consistency, boolean requireConsistency) throws Exception {
 
         NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default".getBytes());
         if (ring.isEmpty()) {
@@ -274,7 +279,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, 2, false));
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, requireConsistency, 2, false));
 
         long timeoutMillis = 10_000;
         while (true) {

@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.apache.http.HttpStatus;
 
 /**
  * @author jonathan.colt
@@ -41,15 +42,28 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         this.partitionCallRouter = partitionCallRouter;
     }
 
+    private void handleLeaderStatusCodes(Consistency consistency, int statusCode) {
+        if (consistency.requiresLeader()) {
+            if (statusCode == HttpStatus.SC_SERVICE_UNAVAILABLE) {
+                partitionCallRouter.invalidateRouting(partitionName);
+                throw new LeaderElectionInProgressException(partitionName + " " + consistency);
+            }
+            if (statusCode == HttpStatus.SC_CONFLICT) {
+                partitionCallRouter.invalidateRouting(partitionName);
+                throw new NoLongerTheLeaderException(partitionName + " " + consistency);
+            }
+        }
+    }
+
     @Override
     public void commit(Consistency consistency, byte[] prefix, ClientUpdates updates, long timeoutInMillis) throws Exception {
         partitionCallRouter.write(partitionName, consistency, "commit",
             (leader, ringMember, client) -> {
-                HttpResponse got = client.postStreamableRequest("/amza/v1/commit/" + base64PartitionName + "/" + consistency.name(),
+                boolean checkLeader = ringMember.equals(leader);
+                HttpResponse got = client.postStreamableRequest("/amza/v1/commit/" + base64PartitionName + "/" + consistency.name() + "/" + checkLeader,
                     (out) -> {
                         try {
                             FilerOutputStream fos = new FilerOutputStream(out);
-                            UIO.writeByteArray(fos, leader == null ? null : leader.toBytes(), "leader");
                             UIO.writeByteArray(fos, prefix, "prefix");
                             UIO.writeLong(fos, timeoutInMillis, "timeoutInMillis");
 
@@ -76,29 +90,15 @@ public class AmzaHttpPartitionClient implements PartitionClient {
             }, timeoutInMillis);
     }
 
-    private void handleLeaderStatusCodes(Consistency consistency, int statusCode) {
-        if (consistency.requiresLeader()) {
-            if (statusCode == 503) {
-                partitionCallRouter.invalidateRouting(partitionName);
-                throw new LeaderElectionInProgressException(partitionName + " " + consistency);
-            }
-            if (statusCode == 409) {
-                partitionCallRouter.invalidateRouting(partitionName);
-                throw new NoLongerTheLeaderException(partitionName + " " + consistency);
-            }
-        }
-    }
-
     @Override
     public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueTimestampStream valuesStream) throws Exception {
         partitionCallRouter.read(partitionName, consistency, "get",
             (leader, ringMember, client) -> {
                 HttpStreamResponse got = client.streamingPostStreamableRequest(
-                    "/amza/v1/get/" + base64PartitionName + "/" + consistency.name(),
+                    "/amza/v1/get/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
                     (out) -> {
                         try {
                             FilerOutputStream fos = new FilerOutputStream(out);
-                            UIO.writeByteArray(fos, leader == null ? null : leader.toBytes(), "leader");
                             UIO.writeByteArray(fos, prefix, "prefix");
                             keys.consume((key) -> {
                                 UIO.writeBoolean(fos, false, "eos");
@@ -115,13 +115,13 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                 return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             }, (answers) -> {
 
-                boolean eos = false;
-                while (!eos) {
+                int eosed = 0;
+                while (answers.size() > 0 && eosed == 0) {
                     byte[] latestPrefix = null;
                     byte[] latestKey = null;
                     byte[] latestValue = null;
-                    long latestTimestamp = -1;
-                    long latestVersion = -1;
+                    long latestTimestamp = Long.MIN_VALUE;
+                    long latestVersion = Long.MIN_VALUE;
                     for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
                         FilerInputStream fis = answer.getAnswer();
                         if (!UIO.readBoolean(fis, "eos")) {
@@ -141,10 +141,15 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                                 latestVersion = z;
                             }
                         } else {
-                            eos = true;
+                            eosed++;
                         }
                     }
-                    valuesStream.stream(latestPrefix, latestKey, latestValue, latestTimestamp, latestVersion);
+                    if (eosed > 0 && eosed < answers.size()) {
+                        throw new RuntimeException("Mismatched response lengths");
+                    }
+                    if (eosed == 0 && !valuesStream.stream(latestPrefix, latestKey, latestValue, latestTimestamp, latestVersion)) {
+                        break;
+                    }
                 }
                 return null;
             });
@@ -170,10 +175,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         return partitionCallRouter.read(partitionName, consistency, "scan",
             (leader, ringMember, client) -> {
                 HttpStreamResponse got = client.streamingPostStreamableRequest(
-                    "/amza/v1/scan/" + base64PartitionName,
+                    "/amza/v1/scan/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
                     (out) -> {
                         FilerOutputStream fos = new FilerOutputStream(out);
-                        UIO.writeByteArray(fos, leader == null ? null : leader.toBytes(), "leader");
                         UIO.writeByteArray(fos, fromPrefix, "fromPrefix");
                         UIO.writeByteArray(fos, fromKey, "fromKey");
                         UIO.writeByteArray(fos, toPrefix, "toPrefix");
@@ -248,7 +252,6 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     "/amza/v1/takeFromTransactionId/" + base64PartitionName,
                     (out) -> {
                         FilerOutputStream fos = new FilerOutputStream(out);
-                        UIO.writeByteArray(fos, leader == null ? null : leader.toBytes(), "leader");
                         UIO.writeLong(fos, transactionId, "transactionId");
                     }, null);
 
@@ -275,7 +278,6 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     "/amza/v1/takePrefixFromTransactionId/" + base64PartitionName,
                     (out) -> {
                         FilerOutputStream fos = new FilerOutputStream(out);
-                        UIO.writeByteArray(fos, leader == null ? null : leader.toBytes(), "leader");
                         UIO.writeByteArray(fos, prefix, "prefix");
                         UIO.writeLong(fos, transactionId, "transactionId");
                     }, null);

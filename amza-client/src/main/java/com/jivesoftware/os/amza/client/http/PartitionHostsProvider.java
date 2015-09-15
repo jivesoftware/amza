@@ -42,7 +42,7 @@ public class PartitionHostsProvider {
         return tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 
             HttpStreamResponse got = client.streamingPost("/amza/v1/ring/"
-                + partitionName.toBase64() + "/" + waitForLeaderElection, null, null);
+                + partitionName.toBase64() + "/" + waitForLeaderElection, "", null);
             if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
                 try {
                     FilerInputStream fis = new FilerInputStream(got.getInputStream());

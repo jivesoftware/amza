@@ -20,9 +20,14 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
+import com.jivesoftware.os.amza.client.http.AmzaHttpClientProvider;
+import com.jivesoftware.os.amza.client.http.PartitionHostsProvider;
+import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -31,12 +36,15 @@ import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpRowsTaker;
+import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaClientRestEndpoints;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -44,11 +52,24 @@ import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
+import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
+import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
+import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.InitializeRestfulServer;
 import com.jivesoftware.os.routing.bird.server.JerseyEndpoints;
 import com.jivesoftware.os.routing.bird.server.RestfulServer;
+import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptor;
+import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptorsProvider;
+import com.jivesoftware.os.routing.bird.shared.ConnectionDescriptorsResponse;
+import com.jivesoftware.os.routing.bird.shared.HostPort;
+import com.jivesoftware.os.routing.bird.shared.InstanceDescriptor;
+import com.jivesoftware.os.routing.bird.shared.TenantsServiceConnectionDescriptorProvider;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.NavigableMap;
 import java.util.Random;
+import java.util.concurrent.Executors;
 
 public class Main {
 
@@ -121,21 +142,47 @@ public class Main {
             partitionPropertyMarshaller,
             indexProviderRegistry,
             availableRowsTaker,
-            () -> {
-                return new HttpRowsTaker(amzaStats);
-            },
+            () -> new HttpRowsTaker(amzaStats),
             Optional.<TakeFailureListener>absent(),
             (RowsChanged changes) -> {
             });
+
+        InstanceDescriptor instanceDescriptor = new InstanceDescriptor("", "", "", "", "", "", "", "", 0, "", "", 0L, true);
+        ConnectionDescriptorsProvider connectionsProvider = connectionDescriptorsRequest -> {
+            try {
+                NavigableMap<RingMember, RingHost> systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
+                List<ConnectionDescriptor> descriptors = Lists.newArrayList(Iterables.transform(systemRing.values(),
+                    input -> new ConnectionDescriptor(instanceDescriptor, new HostPort(input.getHost(), input.getPort()), Collections.emptyMap())));
+                return new ConnectionDescriptorsResponse(200, Collections.emptyList(), "", descriptors);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+        TenantAwareHttpClient<String> httpClient = new TenantRoutingHttpClientInitializer<String>().initialize(
+            new TenantsServiceConnectionDescriptorProvider<>("",
+                connectionsProvider,
+                "",
+                ""),
+            new HttpDeliveryClientHealthProvider("", null, "", 5000, 100),
+            10,
+            10_000);
+
+        AmzaHttpClientProvider clientProvider = new AmzaHttpClientProvider(
+            new PartitionHostsProvider(httpClient),
+            new RingHostHttpClientProvider(httpClient),
+            Executors.newCachedThreadPool());
 
         final JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
             .addEndpoint(AmzaEndpoints.class)
             .addInjectable(AmzaService.class, amzaService)
             .addEndpoint(AmzaReplicationRestEndpoints.class)
             .addInjectable(AmzaInstance.class, amzaService)
-            .addInjectable(AmzaStats.class, amzaStats);
+            .addInjectable(AmzaStats.class, amzaStats)
+            .addEndpoint(AmzaClientRestEndpoints.class)
+            .addInjectable(AmzaRingReader.class, amzaService.getRingReader())
+            .addInjectable(PartitionProvider.class, amzaService);
 
-        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, amzaStats, new AmzaUIInitializer.InjectionCallback() {
+        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, new AmzaUIInitializer.InjectionCallback() {
 
             @Override
             public void addEndpoint(Class clazz) {

@@ -367,7 +367,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
     public Map<String, Object> renderPartition(PartitionName partitionName, long startFp, long endFp) {
         Map<String, Object> partitionViz = new HashMap<>();
-        //amzaService.getPartitionProvider().
+        //amzaService.getPartitionCreator().
 
         return partitionViz;
     }

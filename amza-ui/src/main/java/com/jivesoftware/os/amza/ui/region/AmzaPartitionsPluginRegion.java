@@ -64,13 +64,20 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
         final String ringName;
         final String partitionName;
         final String consistency;
+        final boolean requireConsistency;
         final int takeFromFactor;
 
-        public AmzaPartitionsPluginRegionInput(String action, String ringName, String partitionName, String consistency, int takeFromFactor) {
+        public AmzaPartitionsPluginRegionInput(String action,
+            String ringName,
+            String partitionName,
+            String consistency,
+            boolean requireConsistency,
+            int takeFromFactor) {
             this.action = action;
             this.ringName = ringName;
             this.partitionName = partitionName;
             this.consistency = consistency;
+            this.requireConsistency = requireConsistency;
             this.takeFromFactor = takeFromFactor;
         }
 
@@ -96,10 +103,12 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                         null, 1000, 1000);
 
                     PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
-                    amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor,
-                        Consistency.valueOf(input.consistency),
-                        input.takeFromFactor,
-                        false));
+                    amzaService.setPropertiesIfAbsent(partitionName,
+                        new PartitionProperties(storageDescriptor,
+                            Consistency.valueOf(input.consistency),
+                            input.requireConsistency,
+                            input.takeFromFactor,
+                            false));
                     amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
                 }
             } else if (input.action.equals("remove")) {
@@ -159,6 +168,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 if (partitionProperties == null) {
                     row.put("disabled", "?");
                     row.put("consistency", "none");
+                    row.put("requireConsistency", "true");
                     row.put("takeFromFactor", "?");
 
                     WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
@@ -169,6 +179,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     row.put("disabled", partitionProperties.disabled);
                     row.put("takeFromFactor", partitionProperties.takeFromFactor);
                     row.put("consistency", partitionProperties.consistency.name());
+                    row.put("requireConsistency", partitionProperties.requireConsistency);
                     row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
                 }
 

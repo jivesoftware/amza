@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.ui;
 import com.google.common.collect.Lists;
 import com.google.template.soy.SoyFileSet;
 import com.google.template.soy.tofu.SoyTofu;
+import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
@@ -47,7 +48,12 @@ public class AmzaUIInitializer {
         void addInjectable(Class clazz, Object instance);
     }
 
-    public void initialize(String clusterName, RingHost host, AmzaService amzaService, AmzaStats amzaStats, InjectionCallback injectionCallback) {
+    public void initialize(String clusterName,
+        RingHost host,
+        AmzaService amzaService,
+        PartitionClientProvider clientProvider,
+        AmzaStats amzaStats,
+        InjectionCallback injectionCallback) {
 
         SoyFileSet.Builder soyFileSetBuilder = new SoyFileSet.Builder();
 
@@ -79,7 +85,7 @@ public class AmzaUIInitializer {
 
         ManagePlugin inspectPlugin = new ManagePlugin("search", "Inspect", "/amza/ui/inspect",
             AmzaInspectPluginEndpoints.class,
-            new AmzaInspectPluginRegion("soy.page.amzaInspectPluginRegion", renderer, amzaService));
+            new AmzaInspectPluginRegion("soy.page.amzaInspectPluginRegion", renderer, amzaService, clientProvider));
 
         ManagePlugin metricsPlugin = new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
             MetricsPluginEndpoints.class,

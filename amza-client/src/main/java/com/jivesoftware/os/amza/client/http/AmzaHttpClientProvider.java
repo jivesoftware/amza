@@ -14,12 +14,15 @@ import java.util.concurrent.ExecutorService;
 public class AmzaHttpClientProvider implements PartitionClientProvider {
 
     private final PartitionHostsProvider partitionHostsProvider;
+    private final RingHostHttpClientProvider clientProvider;
     private final ExecutorService callerThreads;
     private final Map<PartitionName, AmzaHttpPartitionClient> cache = new ConcurrentHashMap<>();
 
     public AmzaHttpClientProvider(PartitionHostsProvider partitionHostsProvider,
+        RingHostHttpClientProvider clientProvider,
         ExecutorService callerThreads) {
         this.partitionHostsProvider = partitionHostsProvider;
+        this.clientProvider = clientProvider;
         this.callerThreads = callerThreads;
     }
 
@@ -28,7 +31,7 @@ public class AmzaHttpClientProvider implements PartitionClientProvider {
 
         return cache.computeIfAbsent(partitionName, (key) -> {
             try {
-                AmzaHttpClientCallRouter partitionCallRouter = new AmzaHttpClientCallRouter(callerThreads, partitionHostsProvider, null);
+                AmzaHttpClientCallRouter partitionCallRouter = new AmzaHttpClientCallRouter(callerThreads, partitionHostsProvider, clientProvider);
                 return new AmzaHttpPartitionClient(key, partitionCallRouter);
             } catch (Exception x) {
                 throw new RuntimeException(x);

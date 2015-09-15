@@ -328,7 +328,7 @@ public class AmzaTestCluster {
                 new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
 
             // TODO test other consistencies. Hehe
-            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, Consistency.none, 2, false));
+            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false));
             amzaService.awaitOnline(partitionName, 10_000);
         }
 

@@ -9,7 +9,7 @@
         <div class="panel panel-default">
             <div class="panel-heading"><span class="glyphicon glyphicon-leaf"></span>{sp}Partitions</div>
                 <div class="panel-body">                    
-                    <table class="table table-condensed">
+                    <table class="table table-condensed table-responsive">
                         <thead>
                             <tr class="active">
                                 <th>Action</th>
@@ -26,6 +26,7 @@
                                 <th>Disabled</th>
                                 <th>Index</th>
                                 <th>Consistency</th>
+                                <th>Require Consistency</th>
                                 <th>TakeFromFactor</th>
                                 <th>Highwaters</th>
                             </tr>
@@ -71,6 +72,11 @@
                                             <option value="write_all_read_one">Write All Read One</option>
                                             <option value="write_one_read_all">Write One Read All</option>
                                         </select>
+                                    </td>
+                                    <td>
+                                        <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                        class="form-control" placeholder="Require Consistency" value=""
+                                        name="requireConsistency" id="requireConsistencyPicker"  title="">
                                     </td>
                                     <td>
                                         <input type="number" name="takeFromFactor" min="0" autocomplete="off" role="combobox" style="width:100px; padding-left:10px;"
@@ -120,8 +126,8 @@
                                                 {$r.disabled}
                                             {else}
                                                 <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                                class="form-control" placeholder="Name" value="{$r.disabled}"
-                                                name="name" id="hostPicker"  title="{$r.disabled}">
+                                                class="form-control" placeholder="Name" value="true"
+                                                name="name" id="hostPicker"  title="{$r.disabled}" {if $r.disabled}checked="checked"{/if}>
                                             {/if}
                                         </td>
                                         <td>TODO</td>
@@ -139,6 +145,15 @@
                                                     <option value="write_all_read_one" {if $r.consistency == 'write_all_read_one'}selected="selected"{/if}>Write All Read One</option>
                                                     <option value="write_one_read_all" {if $r.consistency == 'write_one_read_all'}selected="selected"{/if}>Write One Read All</option>
                                                 </select>
+                                            {/if}
+                                        </td>
+                                        <td>
+                                            {if $r.type == 'SYSTEM'}
+                                                {$r.requireConsistency}
+                                            {else}
+                                                <input type="checkbox" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                                class="form-control" placeholder="Require Consistency" value="true"
+                                                name="requireConsistency" id="requireConsistencyPicker"  title="" {if $r.requireConsistency}checked="checked"{/if}>
                                             {/if}
                                         </td>
                                         <td>

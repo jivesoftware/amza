@@ -96,7 +96,7 @@ public class StripedPartition implements Partition {
         long timeoutInMillis) throws Exception {
 
         PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
-        if (!properties.consistency.supportsWrites(consistency)) {
+        if (properties.requireConsistency && !properties.consistency.supportsWrites(consistency)) {
             throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency +
                 " which does not support writes at consistency " + consistency);
         }
@@ -152,7 +152,7 @@ public class StripedPartition implements Partition {
 
     private void checkReadConsistencySupport(Consistency consistency) throws Exception {
         PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
-        if (!properties.consistency.supportsReads(consistency)) {
+        if (properties.requireConsistency && !properties.consistency.supportsReads(consistency)) {
             throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency +
                 " which does not support reads at consistency " + consistency);
         }

@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 
 /**
- *
  * @author jonathan.colt
  */
 @JsonInclude(Include.NON_NULL)
@@ -14,6 +13,7 @@ public class PartitionProperties {
 
     public WALStorageDescriptor walStorageDescriptor = new WALStorageDescriptor();
     public Consistency consistency;
+    public boolean requireConsistency = true;
     public int takeFromFactor = 0;
     public boolean disabled = false;
 
@@ -22,11 +22,12 @@ public class PartitionProperties {
 
     public PartitionProperties(WALStorageDescriptor walStorageDescriptor,
         Consistency consistency,
+        boolean requireConsistency,
         int takeFromFactor,
-        boolean disabled
-    ) {
+        boolean disabled) {
         this.walStorageDescriptor = walStorageDescriptor;
         this.consistency = consistency;
+        this.requireConsistency = requireConsistency;
         this.takeFromFactor = takeFromFactor;
         this.disabled = disabled;
     }

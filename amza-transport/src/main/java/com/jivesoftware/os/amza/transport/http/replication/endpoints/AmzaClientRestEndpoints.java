@@ -50,6 +50,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import org.apache.http.HttpStatus;
 import org.glassfish.jersey.server.ChunkedOutput;
 
 @Singleton
@@ -67,20 +68,15 @@ public class AmzaClientRestEndpoints {
         this.partitionProvider = partitionProvider;
     }
 
-    private Response failOnNotTheLeader(PartitionName partitionName, Consistency consistency, FilerInputStream fis) {
+    private Response failOnNotTheLeader(PartitionName partitionName, Consistency consistency) {
         if (consistency.requiresLeader()) {
             try {
-                RingMember expectedLeader = RingMember.fromBytes(UIO.readByteArray(fis, "leader"));
-                if (expectedLeader != null) {
-                    RingMember leader = partitionProvider.awaitLeader(partitionName, 0);
-                    if (leader == null) {
-                        return Response.status(503).build();
-                    }
-                    if (!expectedLeader.equals(leader)) {
-                        return Response.status(409).build();
-                    }
-                } else {
-                    // Some one failed to interacting with to leader..
+                RingMember leader = partitionProvider.awaitLeader(partitionName, 0);
+                if (leader == null) {
+                    return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
+                }
+                if (!leader.equals(ringReader.getRingMember())) {
+                    return Response.status(HttpStatus.SC_CONFLICT).build();
                 }
             } catch (Exception x) {
                 Object[] vals = new Object[] { partitionName, consistency };
@@ -92,7 +88,7 @@ public class AmzaClientRestEndpoints {
     }
 
     @POST
-    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    //@Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/ring/{base64PartitionName}/{waitForLeaderElection}")
     public ChunkedOutput<byte[]> ring(@PathParam("base64PartitionName") String base64PartitionName,
@@ -102,7 +98,7 @@ public class AmzaClientRestEndpoints {
         chunkExecutors.submit(() -> {
             try {
                 PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-                RingMember leader = partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
+                RingMember leader = partitionName.isSystemPartition() ? null : partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
                 NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
 
                 ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
@@ -117,12 +113,12 @@ public class AmzaClientRestEndpoints {
                 cf.flush(true);
 
             } catch (Exception x) {
-                LOG.warn("Failed to stream gets", x);
+                LOG.warn("Failed to stream ring", x);
             } finally {
                 try {
                     chunkedOutput.close();
                 } catch (IOException x) {
-                    LOG.warn("Failed to close get stream", x);
+                    LOG.warn("Failed to close ring stream", x);
                 }
             }
         });
@@ -132,9 +128,10 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.TEXT_PLAIN)
-    @Path("/commit/{base64PartitionName}/{consistency}")
+    @Path("/commit/{base64PartitionName}/{consistency}/{checkLeader}")
     public Response commit(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
         try {
@@ -142,7 +139,7 @@ public class AmzaClientRestEndpoints {
             PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
             Consistency consistency = Consistency.valueOf(consistencyName);
             FilerInputStream fis = new FilerInputStream(inputStream);
-            Response response = failOnNotTheLeader(partitionName, consistency, fis);
+            Response response = checkLeader ? failOnNotTheLeader(partitionName, consistency) : null;
             if (response != null) {
                 return response;
             }
@@ -158,7 +155,7 @@ public class AmzaClientRestEndpoints {
                         UIO.readByteArray(fis, "value"),
                         UIO.readLong(fis, "valueTimestamp"),
                         UIO.readBoolean(fis, "valueTombstoned"),
-                        UIO.readLong(fis, "valueVersion"))) {
+                        -1)) {
                         return false;
                     }
                 }
@@ -176,15 +173,16 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/get/{base64PartitionName}/{consistency}")
+    @Path("/get/{base64PartitionName}/{consistency}/{checkLeader}")
     public Object get(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         Consistency consistency = Consistency.valueOf(consistencyName);
         FilerInputStream fis = new FilerInputStream(inputStream);
-        Response response = failOnNotTheLeader(partitionName, consistency, fis);
+        Response response = checkLeader ? failOnNotTheLeader(partitionName, consistency) : null;
         if (response != null) {
             return response;
         }
@@ -210,10 +208,17 @@ public class AmzaClientRestEndpoints {
                         UIO.writeBoolean(cf, false, "eos");
                         UIO.writeByteArray(cf, prefix1, "prefix");
                         UIO.writeByteArray(cf, key, "key");
-                        UIO.writeByteArray(cf, value, "value");
-                        UIO.writeLong(cf, timestamp, "timestamp");
-                        UIO.writeBoolean(cf, tombstoned, "tombstoned");
-                        UIO.writeLong(cf, version, "version");
+                        if (tombstoned) {
+                            UIO.writeByteArray(cf, null, "value");
+                            UIO.writeLong(cf, -1L, "timestamp");
+                            UIO.writeBoolean(cf, true, "tombstoned");
+                            UIO.writeLong(cf, -1L, "version");
+                        } else {
+                            UIO.writeByteArray(cf, value, "value");
+                            UIO.writeLong(cf, timestamp, "timestamp");
+                            UIO.writeBoolean(cf, false, "tombstoned");
+                            UIO.writeLong(cf, version, "version");
+                        }
                         return true;
                     });
 
@@ -237,13 +242,19 @@ public class AmzaClientRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/scan/{base64PartitionName}")
+    @Path("/scan/{base64PartitionName}/{consistency}/{checkLeader}")
     public Object scan(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("consistency") String consistencyName,
+        @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        Consistency consistency = Consistency.valueOf(consistencyName);
         FilerInputStream fis = new FilerInputStream(inputStream);
+        Response response = checkLeader ? failOnNotTheLeader(partitionName, consistency) : null;
+        if (response != null) {
+            return response;
+        }
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {

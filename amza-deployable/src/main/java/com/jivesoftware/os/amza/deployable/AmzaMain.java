@@ -24,6 +24,9 @@ import com.google.common.base.Strings;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
+import com.jivesoftware.os.amza.client.http.AmzaHttpClientProvider;
+import com.jivesoftware.os.amza.client.http.PartitionHostsProvider;
+import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -31,12 +34,15 @@ import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
+import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpRowsTaker;
+import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaClientRestEndpoints;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -52,10 +58,15 @@ import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
+import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
+import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelperUtils;
+import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
+import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
 import com.jivesoftware.os.routing.bird.server.util.Resource;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.concurrent.Executors;
 
 public class AmzaMain {
 
@@ -157,6 +168,21 @@ public class AmzaMain {
                 (RowsChanged changes) -> {
                 });
 
+            HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceConfig.getInstanceKey(),
+                HttpRequestHelperUtils.buildRequestHelper(instanceConfig.getRoutesHost(), instanceConfig.getRoutesPort()),
+                instanceConfig.getConnectionsHealth(), 5_000, 100);
+
+            TenantRoutingHttpClientInitializer<String> tenantRoutingHttpClientInitializer = new TenantRoutingHttpClientInitializer<>();
+            TenantAwareHttpClient<String> httpClient = tenantRoutingHttpClientInitializer.initialize(
+                deployable.getTenantRoutingProvider().getConnections(instanceConfig.getServiceName(), "main"),
+                clientHealthProvider,
+                10, 10_000); // TODO expose to conf
+
+            AmzaHttpClientProvider clientProvider = new AmzaHttpClientProvider(
+                new PartitionHostsProvider(httpClient),
+                new RingHostHttpClientProvider(httpClient),
+                Executors.newCachedThreadPool());
+
             System.out.println("-----------------------------------------------------------------------");
             System.out.println("|      Tcp Replication Service Online");
             System.out.println("-----------------------------------------------------------------------");
@@ -165,19 +191,23 @@ public class AmzaMain {
             deployable.addInjectables(AmzaService.class, amzaService);
             deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
             deployable.addInjectables(AmzaInstance.class, amzaService);
+            deployable.addEndpoints(AmzaClientRestEndpoints.class);
+            deployable.addInjectables(AmzaRingReader.class, amzaService.getRingReader());
+            deployable.addInjectables(PartitionProvider.class, amzaService);
 
-            new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, amzaStats, new AmzaUIInitializer.InjectionCallback() {
+            new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
+                new AmzaUIInitializer.InjectionCallback() {
 
-                @Override
-                public void addEndpoint(Class clazz) {
-                    deployable.addEndpoints(clazz);
-                }
+                    @Override
+                    public void addEndpoint(Class clazz) {
+                        deployable.addEndpoints(clazz);
+                    }
 
-                @Override
-                public void addInjectable(Class clazz, Object instance) {
-                    deployable.addInjectables(clazz, instance);
-                }
-            });
+                    @Override
+                    public void addInjectable(Class clazz, Object instance) {
+                        deployable.addInjectables(clazz, instance);
+                    }
+                });
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());

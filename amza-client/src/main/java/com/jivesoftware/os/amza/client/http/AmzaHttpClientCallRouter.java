@@ -36,10 +36,10 @@ public class AmzaHttpClientCallRouter {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final PartitionHostsProvider partitionHostsProvider;
-    private final Cache<PartitionName, Ring> partitionRoutingCache;
-    private final RingHostHttpClientProvider clientProvider;
     private final ExecutorService callerThreads;
+    private final PartitionHostsProvider partitionHostsProvider;
+    private final RingHostHttpClientProvider clientProvider;
+    private final Cache<PartitionName, Ring> partitionRoutingCache;
 
     public AmzaHttpClientCallRouter(ExecutorService callerThreads,
         PartitionHostsProvider partitionHostsProvider,
@@ -225,8 +225,9 @@ public class AmzaHttpClientCallRouter {
         RingMember leader,
         RingMemberAndHost... ringMemberAndHosts) throws Exception {
         try {
-            Iterable<Callable<RingMemberAndHostAnswer<A>>> callOrder = Iterables.transform(Iterables.filter(Arrays.asList(ringMemberAndHosts), Predicates.notNull()),
-                (com.jivesoftware.os.amza.client.http.RingMemberAndHost ringMemberAndHost) -> () -> {
+            Iterable<Callable<RingMemberAndHostAnswer<A>>> callOrder = Iterables.transform(
+                Iterables.filter(Arrays.asList(ringMemberAndHosts), Predicates.notNull()),
+                (ringMemberAndHost) -> () -> {
                     A answer = clientProvider.call(partitionName, leader, ringMemberAndHost, family, partitionCall);
                     return new RingMemberAndHostAnswer<>(ringMemberAndHost, answer);
                 });
@@ -281,6 +282,7 @@ public class AmzaHttpClientCallRouter {
                             answers.add(r);
                         }
                     } catch (ExecutionException ignore) {
+                        LOG.warn("Failed to solve", ignore.getCause());
                         if (solvers.hasNext()) {
                             pending++;
                             futures.add(completionService.submit(solvers.next()));

@@ -90,7 +90,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final PartitionTombstoneCompactor partitionTombstoneCompactor;
     private final PartitionComposter partitionComposter;
     private final PartitionIndex partitionIndex;
-    private final PartitionCreator partitionProvider;
+    private final PartitionCreator partitionCreator;
     private final PartitionStripeProvider partitionStripeProvider;
     private final WALUpdated walUpdated;
     private final AmzaPartitionWatcher partitionWatcher;
@@ -110,7 +110,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         PartitionTombstoneCompactor partitionTombstoneCompactor,
         PartitionComposter partitionComposter,
         PartitionIndex partitionIndex,
-        PartitionCreator partitionProvider,
+        PartitionCreator partitionCreator,
         PartitionStripeProvider partitionStripeProvider,
         WALUpdated walUpdated,
         AmzaPartitionWatcher partitionWatcher,
@@ -130,7 +130,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         this.partitionTombstoneCompactor = partitionTombstoneCompactor;
         this.partitionComposter = partitionComposter;
         this.partitionIndex = partitionIndex;
-        this.partitionProvider = partitionProvider;
+        this.partitionCreator = partitionCreator;
         this.partitionStripeProvider = partitionStripeProvider;
         this.walUpdated = walUpdated;
         this.partitionWatcher = partitionWatcher;
@@ -158,8 +158,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         return partitionComposter;
     }
 
-    public PartitionCreator getPartitionProvider() {
-        return partitionProvider;
+    public PartitionCreator getPartitionCreator() {
+        return partitionCreator;
     }
 
     public PartitionStripeProvider getPartitionStripeProvider() {
@@ -206,7 +206,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     public void setPropertiesIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception {
         PartitionProperties properties = partitionIndex.getProperties(partitionName);
         if (properties == null) {
-            partitionProvider.updatePartitionProperties(partitionName, partitionProperties);
+            partitionCreator.updatePartitionProperties(partitionName, partitionProperties);
         }
     }
 
@@ -226,7 +226,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
                 partitionState = versionedState.waterline;
             }
-            if (partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
+            if (partitionCreator.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
                 takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName, partitionState, isOnline);
             }
             long start = System.currentTimeMillis();
@@ -261,7 +261,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
                     versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
                 }
-                partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName, properties);
+                partitionCreator.createPartitionStoreIfAbsent(versionedPartitionName, properties);
                 return getPartition(partitionName);
             });
         }
@@ -501,7 +501,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         if (needsToMarkAsKetchup) {
             PartitionName partitionName = localVersionedPartitionName.getPartitionName();
             try {
-                if (ringStoreWriter.isMemberOfRing(partitionName.getRingName()) && partitionProvider.hasPartition(partitionName)) {
+                if (ringStoreWriter.isMemberOfRing(partitionName.getRingName()) && partitionCreator.hasPartition(partitionName)) {
                     partitionStateStorage.markAsBootstrap(partitionName);
                 }
             } catch (Exception x) {

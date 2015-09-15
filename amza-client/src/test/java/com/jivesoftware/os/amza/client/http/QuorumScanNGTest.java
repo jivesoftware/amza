@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.client.http;
 
 import com.google.common.primitives.UnsignedBytes;
+import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -29,7 +30,7 @@ public class QuorumScanNGTest {
 
         int numStreams = 10;
 
-        QuorumScan quorumScannable = new QuorumScan(numStreams, (prefix, key, value, timestamp, version) -> {
+        KeyValueTimestampStream capture = (prefix, key, value, timestamp, version) -> {
             outputPrefixes.add(prefix);
             outputKeys.add(key);
             outputValues.add(value);
@@ -43,7 +44,9 @@ public class QuorumScanNGTest {
                 + " version:" + version);
 
             return true;
-        });
+        };
+
+        QuorumScan quorumScannable = new QuorumScan(numStreams);
 
         Random r = new Random();
 
@@ -108,9 +111,18 @@ public class QuorumScanNGTest {
                     }
                 }
             }
-            quorumScannable.stream();
+            int wi = quorumScannable.findWinningIndex();
+            if (wi != -1) {
+                if (!quorumScannable.stream(wi, capture)) {
+                    throw new IllegalStateException("Shouldn't be false.");
+                }
+            }
         }
-        while (quorumScannable.stream()) {
+        int wi;
+        while ((wi = quorumScannable.findWinningIndex()) > -1) {
+            if (!quorumScannable.stream(wi, capture)) {
+                throw new IllegalStateException("Shouldn't be false.");
+            }
         }
 
         for (int j = 0; j < outputKeys.size(); j++) {

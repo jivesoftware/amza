@@ -159,11 +159,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] toKey,
         KeyValueTimestampStream stream) throws Exception {
         boolean merge;
-        if (consistency == Consistency.leader_plus_one || consistency == Consistency.leader_quorum) {
-            // leader is the only safe consistency
-            consistency = Consistency.leader;
-            merge = false;
-        } else if (consistency == Consistency.quorum || consistency == Consistency.write_one_read_all) {
+        if (consistency == Consistency.leader_plus_one
+            || consistency == Consistency.leader_quorum
+            || consistency == Consistency.quorum
+            || consistency == Consistency.write_one_read_all) {
             merge = true;
         } else {
             merge = false;
@@ -184,32 +183,39 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                 FilerInputStream fis = new FilerInputStream(got.getInputStream());
                 return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             }, (answers) -> {
-                if (merge) {
-                    int size = answers.size();
+                int size = answers.size();
+                if (merge && size > 1) {
                     boolean[] eos = new boolean[size];
-                    QuorumScan quorumScan = new QuorumScan(size, stream);
-                    boolean filled = true;
-                    while (filled) {
-                        filled = false;
+                    QuorumScan quorumScan = new QuorumScan(size);
+                    int eosed = 0;
+                    while (eosed < size) {
                         for (int i = 0; i < size; i++) {
                             if (!quorumScan.used(i) && !eos[i]) {
                                 FilerInputStream fis = answers.get(i).getAnswer();
                                 eos[i] = UIO.readBoolean(fis, "eos");
                                 if (!eos[i]) {
-                                    filled = true;
                                     quorumScan.fill(i, UIO.readByteArray(fis, "prefix"),
                                         UIO.readByteArray(fis, "key"),
                                         UIO.readByteArray(fis, "value"),
                                         UIO.readLong(fis, "timestampId"),
                                         UIO.readLong(fis, "version"));
+                                } else {
+                                    eosed++;
                                 }
                             }
                         }
-                        quorumScan.stream();
+                        int wi = quorumScan.findWinningIndex();
+                        if (wi == -1 || !quorumScan.stream(wi, stream)) {
+                            return false;
+                        }
                     }
-
-                    while (quorumScan.stream()) {
+                    int wi;
+                    while ((wi = quorumScan.findWinningIndex()) > -1) {
+                        if (!quorumScan.stream(wi, stream)) {
+                            return false;
+                        }
                     }
+                    return true;
 
                 } else {
                     for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
@@ -223,7 +229,6 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                                 return false;
                             }
                         }
-                        //TODO quorum cursor scan read lookup mumbo jumbo oh my god I want to die
                         return true;
                     }
                 }

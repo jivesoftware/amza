@@ -10,15 +10,14 @@ import java.util.Arrays;
  */
 class QuorumScan {
 
-    private final KeyValueTimestampStream stream;
     private final boolean[] used;
     private final byte[][] prefix;
     private final byte[][] key;
     private final byte[][] value;
     private final long[] timestamp;
     private final long[] version;
-    
-    QuorumScan(int streamerCount, KeyValueTimestampStream stream) {
+
+    QuorumScan(int streamerCount) {
         this.used = new boolean[streamerCount];
         Arrays.fill(this.used, true);
         this.prefix = new byte[streamerCount][];
@@ -26,7 +25,6 @@ class QuorumScan {
         this.value = new byte[streamerCount][];
         this.timestamp = new long[streamerCount];
         this.version = new long[streamerCount];
-        this.stream = stream;
     }
 
     boolean used(int index) {
@@ -42,23 +40,17 @@ class QuorumScan {
         this.version[index] = version;
     }
 
-    boolean stream() throws Exception {
-        int wi = findWinningIndex();
-        if (wi > -1) {
-            this.used[wi] = true;
-            if (!stream.stream(this.prefix[wi],
-                this.key[wi],
-                this.value[wi],
-                this.timestamp[wi],
-                this.version[wi])) {
-                return false;
-            }
-        }
-        return wi != -1;
+    boolean stream(int wi, KeyValueTimestampStream stream) throws Exception {
+        this.used[wi] = true;
+        return stream.stream(this.prefix[wi],
+            this.key[wi],
+            this.value[wi],
+            this.timestamp[wi],
+            this.version[wi]);
     }
 
     @SuppressWarnings(value = "AssignmentToMethodParameter")
-    private int findWinningIndex() {
+    int findWinningIndex() {
         int wi = -1;
         for (int i = 0; i < used.length; i++) {
             if (used[i]) {
@@ -75,7 +67,7 @@ class QuorumScan {
 
     // Smallest lex ordered key with largest timestamp and largest version
     private int winner(int indexA, int indexB) {
-        
+
         if (used[indexA] && used[indexB]) {
             return -1;
         } else if (used[indexA]) {

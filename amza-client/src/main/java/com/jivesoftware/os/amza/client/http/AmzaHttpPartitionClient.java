@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.PartitionClient;
@@ -85,9 +86,11 @@ public class AmzaHttpPartitionClient implements PartitionClient {
 
                 handleLeaderStatusCodes(consistency, got.getStatusCode());
                 return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
-            }, (answers) -> {
-                return true;
-            }, timeoutInMillis);
+            },
+            answers -> true,
+            answers -> {
+            },
+            timeoutInMillis);
     }
 
     @Override
@@ -111,19 +114,18 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         }
                     }, null);
                 handleLeaderStatusCodes(consistency, got.getStatusCode());
-                FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
-            }, (answers) -> {
-
+                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+            },
+            (answers) -> {
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
                 int eosed = 0;
-                while (answers.size() > 0 && eosed == 0) {
+                while (streams.size() > 0 && eosed == 0) {
                     byte[] latestPrefix = null;
                     byte[] latestKey = null;
                     byte[] latestValue = null;
                     long latestTimestamp = Long.MIN_VALUE;
                     long latestVersion = Long.MIN_VALUE;
-                    for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
-                        FilerInputStream fis = answer.getAnswer();
+                    for (FilerInputStream fis : streams) {
                         if (!UIO.readBoolean(fis, "eos")) {
                             byte[] p = UIO.readByteArray(fis, "prefix");
                             byte[] k = UIO.readByteArray(fis, "key");
@@ -152,7 +154,8 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }
                 }
                 return null;
-            });
+            },
+            answers -> answers.forEach(HttpStreamResponse::close));
         return true;
     }
 
@@ -184,10 +187,11 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeByteArray(fos, toKey, "toKey");
                     }, null);
 
-                FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
-            }, (answers) -> {
-                int size = answers.size();
+                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+            },
+            (answers) -> {
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                int size = streams.size();
                 if (merge && size > 1) {
                     boolean[] eos = new boolean[size];
                     QuorumScan quorumScan = new QuorumScan(size);
@@ -195,7 +199,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     while (eosed < size) {
                         for (int i = 0; i < size; i++) {
                             if (!quorumScan.used(i) && !eos[i]) {
-                                FilerInputStream fis = answers.get(i).getAnswer();
+                                FilerInputStream fis = streams.get(i);
                                 eos[i] = UIO.readBoolean(fis, "eos");
                                 if (!eos[i]) {
                                     quorumScan.fill(i, UIO.readByteArray(fis, "prefix"),
@@ -222,8 +226,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     return true;
 
                 } else {
-                    for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
-                        FilerInputStream fis = answer.getAnswer();
+                    for (FilerInputStream fis : streams) {
                         while (!UIO.readBoolean(fis, "eos")) {
                             if (!stream.stream(UIO.readByteArray(fis, "prefix"),
                                 UIO.readByteArray(fis, "key"),
@@ -237,7 +240,8 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }
                 }
                 throw new RuntimeException("Failed to scan.");
-            });
+            },
+            answers -> answers.forEach(HttpStreamResponse::close));
     }
 
     @Override
@@ -255,14 +259,16 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeLong(fos, transactionId, "transactionId");
                     }, null);
 
-                FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
-            }, (answers) -> {
-                for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
-                    return take(answer.getAnswer(), highwaters, stream);
+                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+            },
+            (answers) -> {
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                for (FilerInputStream fis : streams) {
+                    return take(fis, highwaters, stream);
                 }
                 throw new RuntimeException("Failed to takePrefixFromTransactionId.");
-            });
+            },
+            answers -> answers.forEach(HttpStreamResponse::close));
     }
 
     @Override
@@ -282,14 +288,16 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeLong(fos, transactionId, "transactionId");
                     }, null);
 
-                FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                return new PartitionResponse<>(fis, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
-            }, (answers) -> {
-                for (RingMemberAndHostAnswer<FilerInputStream> answer : answers) {
-                    return take(answer.getAnswer(), highwaters, stream);
+                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+            },
+            (answers) -> {
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                for (FilerInputStream fis : streams) {
+                    return take(fis, highwaters, stream);
                 }
                 throw new RuntimeException("Failed to takePrefixFromTransactionId.");
-            });
+            },
+            answers -> answers.forEach(HttpStreamResponse::close));
     }
 
     private TakeResult take(FilerInputStream fis, Highwaters highwaters, TxKeyValueStream stream) throws Exception {

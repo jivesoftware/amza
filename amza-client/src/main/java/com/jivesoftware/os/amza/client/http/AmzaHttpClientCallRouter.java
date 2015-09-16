@@ -54,7 +54,8 @@ public class AmzaHttpClientCallRouter {
             .build();
     }
 
-    public <R, A> R write(PartitionName partitionName,
+    public <R, A> R write(List<String> solutionLog,
+        PartitionName partitionName,
         Consistency consistency,
         String family,
         PartitionCall<HttpClient, A, HttpClientException> partitionCall,
@@ -69,16 +70,23 @@ public class AmzaHttpClientCallRouter {
         if (consistency.requiresLeader()) {
             try {
                 RingMemberAndHost leader = ring.leader();
-                return solve(partitionName, family, partitionCall, 1, false, merger, complete, additionalSolverAfterNMillis, abandonAfterNMillis,
+                if (solutionLog != null) {
+                    solutionLog.add("Writing to " + leader);
+                }
+                return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, complete, additionalSolverAfterNMillis, abandonAfterNMillis,
                     leader.ringMember, leader);
             } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
+                LOG.inc("reattempts>write>" + e.getClass().getSimpleName() + ">" + consistency.name() + ">" + partitionName.toBase64());
                 ring = ring(partitionName, consistency, Optional.of(ring.leader()), waitForLeaderElection);
                 RingMemberAndHost leader = ring.leader();
-                return solve(partitionName, family, partitionCall, 1, false, merger, complete, additionalSolverAfterNMillis, abandonAfterNMillis,
+                if (solutionLog != null) {
+                    solutionLog.add("Leader changed. Reattempting WRITE against " + leader);
+                }
+                return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, complete, additionalSolverAfterNMillis, abandonAfterNMillis,
                     leader.ringMember, leader);
             }
         } else if (consistency == Consistency.quorum || consistency == Consistency.write_all_read_one) {
-            return solve(partitionName, family, partitionCall, 1, false, merger, complete, additionalSolverAfterNMillis, abandonAfterNMillis, null,
+            return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, complete, additionalSolverAfterNMillis, abandonAfterNMillis, null,
                 ring.randomizeRing());
         } else {
             throw new IllegalStateException("Unsupported write consistency:" + consistency.name());
@@ -90,7 +98,8 @@ public class AmzaHttpClientCallRouter {
         partitionRoutingCache.invalidate(partitionName);
     }
 
-    public <R, A> R read(PartitionName partitionName,
+    public <R, A> R read(List<String> solutionLog,
+        PartitionName partitionName,
         Consistency consistency,
         String family,
         PartitionCall<HttpClient, A, HttpClientException> call,
@@ -103,15 +112,22 @@ public class AmzaHttpClientCallRouter {
         long additionalSolverAfterNMillis = 1000; // TODO who controls this
 
         if (consistency.requiresLeader()) {
-            RingMemberAndHost leader = null;
+            RingMemberAndHost leader;
             try {
                 leader = ring.leader();
                 A answer;
                 try {
+                    if (solutionLog != null) {
+                        solutionLog.add("Reading from " + leader);
+                    }
                     answer = clientProvider.call(partitionName, leader.ringMember, leader, family, call);
                 } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
+                    LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name() + ">" + partitionName.toBase64());
                     ring = ring(partitionName, consistency, Optional.of(ring.leader()), waitForLeaderElection);
                     leader = ring.leader();
+                    if (solutionLog != null) {
+                        solutionLog.add("Leader changed. Reattempting READ against " + leader);
+                    }
                     answer = clientProvider.call(partitionName, leader.ringMember, leader, family, call);
                 }
                 R merge = merger.merge(Collections.singletonList(new RingMemberAndHostAnswer<>(leader, answer)));
@@ -124,13 +140,18 @@ public class AmzaHttpClientCallRouter {
                     LOG.error("Failed to read from leader.", x);
                     throw x;
                 } else {
+                    LOG.inc("failover>read>" + consistency.name() + ">" + partitionName.toBase64());
                     LOG.warn("Failed to read from leader.", x);
                 }
             }
 
             if (consistency == Consistency.leader_plus_one) {
                 RingMemberAndHost[] leaderlessRing = ring.leaderlessRing();
-                return solve(partitionName,
+                if (solutionLog != null) {
+                    solutionLog.add("Failing over READ to all " + leaderlessRing.length + " members.");
+                }
+                return solve(solutionLog,
+                    partitionName,
                     family,
                     call,
                     leaderlessRing.length,
@@ -144,7 +165,11 @@ public class AmzaHttpClientCallRouter {
             } else if (consistency == Consistency.leader_quorum) {
                 RingMemberAndHost[] leaderlessRing = ring.leaderlessRing();
                 int neighborQuorum = consistency.quorum(leaderlessRing.length);
-                return solve(partitionName,
+                if (solutionLog != null) {
+                    solutionLog.add("Failing over READ to " + neighborQuorum + " out of" + leaderlessRing.length + " members.");
+                }
+                return solve(solutionLog,
+                    partitionName,
                     family,
                     call,
                     neighborQuorum,
@@ -157,7 +182,11 @@ public class AmzaHttpClientCallRouter {
                     leaderlessRing);
             } else if (consistency == Consistency.leader_all) {
                 RingMemberAndHost[] leaderlessRing = ring.leaderlessRing();
-                return solve(partitionName,
+                if (solutionLog != null) {
+                    solutionLog.add("Failing over READ to 1 out of" + leaderlessRing.length + " members.");
+                }
+                return solve(solutionLog,
+                    partitionName,
                     family,
                     call,
                     1,
@@ -174,24 +203,29 @@ public class AmzaHttpClientCallRouter {
         } else if (consistency == Consistency.quorum) {
             RingMemberAndHost[] randomizeRing = ring.randomizeRing();
             int neighborQuorum = consistency.quorum(randomizeRing.length - 1);
-            return solve(partitionName, family, call, 1 + neighborQuorum, true, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE, null,
+            return solve(solutionLog, partitionName, family, call, 1 + neighborQuorum, true, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE,
+                null,
                 randomizeRing);
         } else if (consistency == Consistency.write_one_read_all) {
             RingMemberAndHost[] actualRing = ring.actualRing();
-            return solve(partitionName, family, call, actualRing.length, false, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE, null,
+            return solve(solutionLog, partitionName, family, call, actualRing.length, false, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE,
+                null,
                 actualRing);
         } else if (consistency == Consistency.write_all_read_one) {
             RingMemberAndHost[] randomizeRing = ring.randomizeRing();
-            return solve(partitionName, family, call, 1, true, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE, null, randomizeRing);
+            return solve(solutionLog, partitionName, family, call, 1, true, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE, null,
+                randomizeRing);
         } else if (consistency == Consistency.none) {
             RingMemberAndHost[] randomizeRing = ring.randomizeRing();
-            return solve(partitionName, family, call, 1, true, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE, null, randomizeRing);
+            return solve(solutionLog, partitionName, family, call, 1, true, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE, null,
+                randomizeRing);
         } else {
             throw new IllegalStateException("Unsupported read consistency:" + consistency.name());
         }
     }
 
-    public <R, A> R take(PartitionName partitionName,
+    public <R, A> R take(List<String> solutionLog,
+        PartitionName partitionName,
         List<RingMember> membersInOrder,
         String family,
         PartitionCall<HttpClient, A, HttpClientException> call,
@@ -204,7 +238,7 @@ public class AmzaHttpClientCallRouter {
         long additionalSolverAfterNMillis = 1000; // TODO who controls this
 
         RingMemberAndHost[] orderedRing = ring.orderedRing(membersInOrder);
-        return solve(partitionName, family, call, 1, true, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE, null, orderedRing);
+        return solve(solutionLog, partitionName, family, call, 1, true, merger, complete, additionalSolverAfterNMillis, Long.MAX_VALUE, null, orderedRing);
     }
 
     private Ring ring(PartitionName partitionName,
@@ -226,7 +260,8 @@ public class AmzaHttpClientCallRouter {
         return ring;
     }
 
-    private <R, A> R solve(PartitionName partitionName,
+    private <R, A> R solve(List<String> solutionLog,
+        PartitionName partitionName,
         String family,
         PartitionCall<HttpClient, A, HttpClientException> partitionCall,
         int mandatory,
@@ -237,25 +272,54 @@ public class AmzaHttpClientCallRouter {
         long abandonAfterNMillis,
         RingMember leader,
         RingMemberAndHost... ringMemberAndHosts) throws Exception {
+        long start = System.currentTimeMillis();
         try {
+            if (solutionLog != null) {
+                solutionLog.add("Solving...");
+                solutionLog.add("family:" + family);
+                solutionLog.add("partitionName:" + partitionName);
+                solutionLog.add("mandatory:" + mandatory);
+                solutionLog.add("addNewSolverOnTimeout:" + addNewSolverOnTimeout);
+                solutionLog.add("addAdditionalSolverAfterNMillis:" + addAdditionalSolverAfterNMillis);
+                solutionLog.add("abandonAfterNMillis:" + abandonAfterNMillis);
+            }
+
             Iterable<Callable<RingMemberAndHostAnswer<A>>> callOrder = Iterables.transform(
                 Iterables.filter(Arrays.asList(ringMemberAndHosts), Predicates.notNull()),
-                (ringMemberAndHost) -> () -> {
-                    A answer = clientProvider.call(partitionName, leader, ringMemberAndHost, family, partitionCall);
-                    return new RingMemberAndHostAnswer<>(ringMemberAndHost, answer);
+                (ringMemberAndHost) -> {
+                    if (solutionLog != null) {
+                        solutionLog.add("Adding solver " + ringMemberAndHost);
+                    }
+                    return () -> {
+                        A answer = clientProvider.call(partitionName, leader, ringMemberAndHost, family, partitionCall);
+                        return new RingMemberAndHostAnswer<>(ringMemberAndHost, answer);
+                    };
                 });
-            List<RingMemberAndHostAnswer<A>> solutions = solve(callerThreads, callOrder.iterator(), mandatory,
+            List<RingMemberAndHostAnswer<A>> solutions = solve(solutionLog, callerThreads, callOrder.iterator(), mandatory,
                 addNewSolverOnTimeout, addAdditionalSolverAfterNMillis, abandonAfterNMillis);
             R result = merger.merge(solutions);
             complete.complete(Iterables.transform(solutions, input -> input.getAnswer()));
+            if (solutionLog != null) {
+                solutionLog.add("Solved. " + (System.currentTimeMillis() - start) + "millis");
+            }
             return result;
         } catch (NotSolveableException nse) {
+            LOG.inc("notSolveable>" + partitionName.toBase64());
             partitionRoutingCache.invalidate(partitionName);
+            if (solutionLog != null) {
+                solutionLog.add("Not solvable. " + (System.currentTimeMillis() - start) + "millis");
+            }
             throw nse;
+        } catch (Throwable t) {
+            if (solutionLog != null) {
+                solutionLog.add("Failed to solve." + t + " " + (System.currentTimeMillis() - start) + "millis");
+            }
+            throw t;
         }
     }
 
-    private <A> List<RingMemberAndHostAnswer<A>> solve(Executor executor,
+    private <A> List<RingMemberAndHostAnswer<A>> solve(List<String> solutionLog,
+        Executor executor,
         Iterator<Callable<RingMemberAndHostAnswer<A>>> solvers,
         int mandatory,
         boolean addNewSolverOnTimeout,
@@ -272,6 +336,9 @@ public class AmzaHttpClientCallRouter {
                     pending++;
                     futures.add(completionService.submit(solvers.next()));
                 } else {
+                    if (solutionLog != null) {
+                        solutionLog.add("Not enough solveable available. desire:" + mandatory);
+                    }
                     throw new NotSolveableException("Not enough solveable available. desire:" + mandatory);
                 }
             }
@@ -280,6 +347,9 @@ public class AmzaHttpClientCallRouter {
                 long elapsed = System.currentTimeMillis() - start;
                 long remaining = abandonAfterNMillis - elapsed;
                 if (remaining <= 0) {
+                    if (solutionLog != null) {
+                        solutionLog.add("Abandoned solution because it took more than " + abandonAfterNMillis + "millis.");
+                    }
                     throw new RuntimeException("Abandoned solution because it took more than " + abandonAfterNMillis + "millis.");
                 }
                 Future<RingMemberAndHostAnswer<A>> future = completionService.poll(Math.min(remaining, addAdditionalSoverAfterNMillis), TimeUnit.MILLISECONDS);
@@ -287,16 +357,23 @@ public class AmzaHttpClientCallRouter {
                     if (addNewSolverOnTimeout) {
                         if (solvers.hasNext()) {
                             pending++;
-                            futures.add(completionService.submit(solvers.next()));
+                            Callable<RingMemberAndHostAnswer<A>> next = solvers.next();
+                            futures.add(completionService.submit(next));
                         }
                     }
                 } else {
                     try {
                         RingMemberAndHostAnswer<A> r = future.get();
                         if (r != null) {
+                            if (solutionLog != null) {
+                                solutionLog.add("solving with " + r.getRingMemberAndHost());
+                            }
                             answers.add(r);
                         }
                     } catch (ExecutionException ignore) {
+                        if (solutionLog != null) {
+                            solutionLog.add("solver faild to with " + ignore.getCause());
+                        }
                         LOG.warn("Failed to solve", ignore.getCause());
                         if (solvers.hasNext()) {
                             pending++;

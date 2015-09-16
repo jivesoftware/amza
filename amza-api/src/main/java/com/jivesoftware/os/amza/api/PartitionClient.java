@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * @author jonathan.colt
@@ -16,26 +17,26 @@ import java.util.Map;
 public interface PartitionClient {
 
     /*
-    // TODO impl a blob commit and get.
-    // Blobs are chunked as rows and are typically larger than anything you would like to keep in ram.
-    void commitBlob(Consistency consistency, byte[] prefix,
-        byte[] key, InputStream value, long valueTimestamp,  boolean valueTombstoned, long valueVersion,
-        long timeoutInMillis) throws Exception;
+     // TODO impl a blob commit and get.
+     // Blobs are chunked as rows and are typically larger than anything you would like to keep in ram.
+     void commitBlob(Consistency consistency, byte[] prefix,
+     byte[] key, InputStream value, long valueTimestamp,  boolean valueTombstoned, long valueVersion,
+     long timeoutInMillis) throws Exception;
 
      boolean getBlob(Consistency consistency,
-        byte[] prefix,
-        byte[] keys,
-        ValueStream valueStream) throws Exception;
-    */
-
+     byte[] prefix,
+     byte[] keys,
+     ValueStream valueStream) throws Exception;
+     */
     void commit(Consistency consistency, byte[] prefix,
         ClientUpdates updates,
-        long timeoutInMillis) throws Exception;
+        long timeoutInMillis, Optional<List<String>> solutionLog) throws Exception;
 
     boolean get(Consistency consistency,
         byte[] prefix,
         UnprefixedWALKeys keys,
-        KeyValueTimestampStream valuesStream) throws Exception;
+        KeyValueTimestampStream valuesStream,
+        Optional<List<String>> solutionLog) throws Exception;
 
     /**
      * @param fromPrefix   nullable (inclusive)
@@ -50,18 +51,21 @@ public interface PartitionClient {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        KeyValueTimestampStream scan) throws Exception;
+        KeyValueTimestampStream scan,
+        Optional<List<String>> solutionLog) throws Exception;
 
     TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
-        TxKeyValueStream stream) throws
+        TxKeyValueStream stream,
+        Optional<List<String>> solutionLog) throws
         Exception;
 
     TakeResult takePrefixFromTransactionId(List<RingMember> membersInOrder,
         byte[] prefix,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
-        TxKeyValueStream stream) throws Exception;
+        TxKeyValueStream stream,
+        Optional<List<String>> solutionLog) throws Exception;
 
 }

@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.http.HttpStatus;
 
 /**
@@ -57,8 +58,13 @@ public class AmzaHttpPartitionClient implements PartitionClient {
     }
 
     @Override
-    public void commit(Consistency consistency, byte[] prefix, ClientUpdates updates, long timeoutInMillis) throws Exception {
-        partitionCallRouter.write(partitionName, consistency, "commit",
+    public void commit(Consistency consistency,
+        byte[] prefix,
+        ClientUpdates updates,
+        long timeoutInMillis,
+        Optional<List<String>> solutionLog) throws Exception {
+
+        partitionCallRouter.write(solutionLog.orElse(null), partitionName, consistency, "commit",
             (leader, ringMember, client) -> {
                 boolean checkLeader = ringMember.equals(leader);
                 HttpResponse got = client.postStreamableRequest("/amza/v1/commit/" + base64PartitionName + "/" + consistency.name() + "/" + checkLeader,
@@ -94,8 +100,12 @@ public class AmzaHttpPartitionClient implements PartitionClient {
     }
 
     @Override
-    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueTimestampStream valuesStream) throws Exception {
-        partitionCallRouter.read(partitionName, consistency, "get",
+    public boolean get(Consistency consistency,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyValueTimestampStream valuesStream,
+        Optional<List<String>> solutionLog) throws Exception {
+        partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "get",
             (leader, ringMember, client) -> {
                 HttpStreamResponse got = client.streamingPostStreamableRequest(
                     "/amza/v1/get/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
@@ -165,7 +175,8 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        KeyValueTimestampStream stream) throws Exception {
+        KeyValueTimestampStream stream,
+        Optional<List<String>> solutionLog) throws Exception {
         boolean merge;
         if (consistency == Consistency.leader_plus_one
             || consistency == Consistency.leader_quorum
@@ -175,7 +186,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         } else {
             merge = false;
         }
-        return partitionCallRouter.read(partitionName, consistency, "scan",
+        return partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "scan",
             (leader, ringMember, client) -> {
                 HttpStreamResponse got = client.streamingPostStreamableRequest(
                     "/amza/v1/scan/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
@@ -248,8 +259,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
     public TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> membersTxId,
         Highwaters highwaters,
-        TxKeyValueStream stream) throws Exception {
-        return partitionCallRouter.take(partitionName, membersInOrder, "takeFromTransactionId",
+        TxKeyValueStream stream,
+        Optional<List<String>> solutionLog) throws Exception {
+        return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takeFromTransactionId",
             (leader, ringMember, client) -> {
                 long transactionId = membersTxId.getOrDefault(ringMember, -1L);
                 HttpStreamResponse got = client.streamingPostStreamableRequest(
@@ -276,8 +288,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] prefix,
         Map<RingMember, Long> membersTxId,
         Highwaters highwaters,
-        TxKeyValueStream stream) throws Exception {
-        return partitionCallRouter.take(partitionName, membersInOrder, "takePrefixFromTransactionId",
+        TxKeyValueStream stream,
+        Optional<List<String>> solutionLog) throws Exception {
+        return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takePrefixFromTransactionId",
             (leader, ringMember, client) -> {
                 long transactionId = membersTxId.getOrDefault(ringMember, -1L);
                 HttpStreamResponse got = client.streamingPostStreamableRequest(

@@ -14,6 +14,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  *
@@ -31,12 +32,20 @@ public class EmbeddedPartitionClient implements PartitionClient {
     }
 
     @Override
-    public void commit(Consistency consistency, byte[] prefix, ClientUpdates updates, long timeoutInMillis) throws Exception {
+    public void commit(Consistency consistency,
+        byte[] prefix,
+        ClientUpdates updates,
+        long timeoutInMillis,
+        Optional<List<String>> solutionLog) throws Exception {
         partition.commit(consistency, prefix, (highwaters, txKeyValueStream) -> updates.updates(txKeyValueStream), timeoutInMillis);
     }
 
     @Override
-    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueTimestampStream valuesStream) throws Exception {
+    public boolean get(Consistency consistency,
+        byte[] prefix,
+        UnprefixedWALKeys keys,
+        KeyValueTimestampStream valuesStream,
+        Optional<List<String>> solutionLog) throws Exception {
         return partition.get(consistency, prefix, keys, (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (valueTimestamp == -1 || valueTombstoned) {
                 return valuesStream.stream(prefix1, key, null, -1, -1);
@@ -52,7 +61,8 @@ public class EmbeddedPartitionClient implements PartitionClient {
         byte[] fromKey,
         byte[] toPrefix,
         byte[] toKey,
-        KeyValueTimestampStream scan) throws Exception {
+        KeyValueTimestampStream scan,
+        Optional<List<String>> solutionLog) throws Exception {
         return partition.scan(fromPrefix, fromKey, toPrefix, toKey, scan);
     }
 
@@ -60,7 +70,8 @@ public class EmbeddedPartitionClient implements PartitionClient {
     public TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
-        TxKeyValueStream stream) throws Exception {
+        TxKeyValueStream stream,
+        Optional<List<String>> solutionLog) throws Exception {
         if (!membersInOrder.contains(rootRingMember)) {
             LOG.warn("Took from {} but not in desired members {}", rootRingMember, membersInOrder);
             return new TakeResult(rootRingMember, -1L, null);
@@ -74,7 +85,8 @@ public class EmbeddedPartitionClient implements PartitionClient {
         byte[] prefix,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
-        TxKeyValueStream stream) throws Exception {
+        TxKeyValueStream stream,
+        Optional<List<String>> solutionLog) throws Exception {
         if (!membersInOrder.contains(rootRingMember)) {
             LOG.warn("Took with prefix from {} but not in desired members {}", rootRingMember, membersInOrder);
             return new TakeResult(rootRingMember, -1L, null);

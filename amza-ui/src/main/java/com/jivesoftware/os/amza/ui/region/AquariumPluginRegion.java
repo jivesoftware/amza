@@ -13,7 +13,7 @@ import com.jivesoftware.os.amza.ui.region.AquariumPluginRegion.AquariumPluginReg
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.aquarium.Aquarium;
 import com.jivesoftware.os.aquarium.Liveliness;
-import com.jivesoftware.os.aquarium.ReadWaterline;
+import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -74,12 +74,7 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
             long now = System.currentTimeMillis();
             List<Map<String, Object>> live = new ArrayList<>();
             for (Map.Entry<RingMember, RingHost> e : ringReader.getRing(AmzaRingReader.SYSTEM_RING).entrySet()) {
-                long aliveUntilTimestamp;
-                if (e.getKey().equals(ringReader.getRingMember())) {
-                    aliveUntilTimestamp = liveliness.aliveUntilTimestamp();
-                } else {
-                    aliveUntilTimestamp = liveliness.otherAliveUntilTimestamp(e.getKey().asAquariumMember());
-                }
+                long aliveUntilTimestamp = liveliness.aliveUntilTimestamp(e.getKey().asAquariumMember());
 
                 live.add(ImmutableMap.of(
                     "member", e.getKey().getMember(),
@@ -100,46 +95,23 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
             if (aquarium != null) {
                 List<Map<String, Object>> states = new ArrayList<>();
                 for (Map.Entry<RingMember, RingHost> e : ringReader.getRing(AmzaRingReader.SYSTEM_RING).entrySet()) {
-                    aquarium.inspectState(e.getKey().asAquariumMember(), (ReadWaterline readCurrent, ReadWaterline readDesired) -> {
+                    Member asMember = e.getKey().asAquariumMember();
+                    aquarium.inspectState((readCurrent, readDesired) -> {
 
                         Map<String, Object> state = new HashMap<>();
                         state.put("partitionName", input.partitionName);
                         state.put("ringName", input.ringName);
                         state.put("partitionVersion", input.hexPartitionVersion);
                         if (readCurrent != null) {
-                            Waterline current = readCurrent.get();
+                            Waterline current = readCurrent.get(asMember);
                             if (current != null) {
-                                if (current.getMember().equals(e.getKey().asAquariumMember())) {
-                                    state.put("current", asMap(current, now));
-                                }
-                                List<Map<String, Object>> others = new ArrayList<>();
-                                readCurrent.getOthers((Waterline waterline) -> {
-                                    if (waterline.getMember().equals(e.getKey().asAquariumMember())) {
-                                        others.add(asMap(waterline, now));
-                                    }
-                                    return true;
-                                });
-                                if (!others.isEmpty()) {
-                                    state.put("othersCurrent", others);
-                                }
+                                state.put("current", asMap(current, now));
                             }
                         }
                         if (readDesired != null) {
-                            Waterline desired = readDesired.get();
+                            Waterline desired = readDesired.get(asMember);
                             if (desired != null) {
-                                if (desired.getMember().equals(e.getKey().asAquariumMember())) {
-                                    state.put("desired", asMap(desired, now));
-                                }
-                                List<Map<String, Object>> others = new ArrayList<>();
-                                readDesired.getOthers((Waterline waterline) -> {
-                                    if (waterline.getMember().equals(e.getKey().asAquariumMember())) {
-                                        others.add(asMap(waterline, now));
-                                    }
-                                    return true;
-                                });
-                                if (!others.isEmpty()) {
-                                    state.put("othersDesired", others);
-                                }
+                                state.put("desired", asMap(desired, now));
                             }
                         }
                         states.add(state);

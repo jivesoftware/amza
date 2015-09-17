@@ -80,12 +80,7 @@ class QuorumScan {
                 c = Long.compare(timestamp[indexA], timestamp[indexB]);
                 if (c == 0) {
                     c = Long.compare(version[indexA], version[indexB]);
-                    if (c == 0) {
-                        throw new RuntimeException("This should be impossible."
-                            + " key:" + Arrays.toString(key[indexA]) + " vs " + Arrays.toString(key[indexB])
-                            + " timestamp:" + timestamp[indexA] + " vs " + timestamp[indexB]
-                            + " version:" + version[indexA] + " vs " + version[indexB]);
-                    } else if (c < 0) {
+                    if (c <= 0) {
                         used[indexA] = true;
                         return indexB;
                     } else {

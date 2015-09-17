@@ -76,27 +76,35 @@ public class TakeVersionedPartitionCoordinator {
                         took.compute(ringMember, (RingMember t, SessionedTxId u) -> {
                             try {
                                 if (u == null) {
-                                    //LOG.info("NEW (MISSING): candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} state:{} txId:{}",
-                                    //    category, currentCategory.get(), ringMember, versionedPartitionName, currentState, offerTxId);
+                                    /*LOG.info("NEW (MISSING): candidateCategory:{} currentCategory:{} ringMember:{} " +
+                                            "nudged:{} state:{} txId:{} takerIsOnline:{}",
+                                        category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, highestTxId,
+                                        takerIsOnline);*/
                                     available.set(true);
                                     return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, -1);
                                 } else {
                                     if (u.sessionId != takeSessionId) {
-                                        /*
-                                         LOG.info(
-                                         "NEW (SESSION): oldSession:{} newSession:{} " +
-                                         "candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} state:{} txId:{}",
-                                         u.sessionId, takeSessionId,
-                                         category, currentCategory.get(), ringMember, versionedPartitionName, currentState, offerTxId);
-                                         */
+                                        /*LOG.info("NEW (SESSION): oldSession:{} newSession:{} " +
+                                                "candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} state:{} txId:{}",
+                                            u.sessionId, takeSessionId,
+                                            category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, highestTxId);*/
                                         available.set(true);
                                         return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, -1);
                                     } else {
                                         if (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u.reofferAtTimeInMillis)) {
-                                            //LOG.info("NEW (TX): candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} state:{} tookTxId:{} offerTxId:{}",
-                                            //    category, currentCategory.get(), ringMember, versionedPartitionName, currentState, u.tookTxId, offerTxId);
+                                            /*LOG.info("NEW (TX): candidateCategory:{} currentCategory:{} ringMember:{} " +
+                                                    "nudged:{} state:{} tookTxId:{} txId:{}",
+                                                category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,
+                                                highestTxId);*/
                                             available.set(true);
                                             return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, u.tookTxId);
+                                        } else if (!takerIsOnline) {
+                                            /*LOG.info("NEW (OFFLINE): candidateCategory:{} currentCategory:{} ringMember:{} " +
+                                                    "nudged:{} state:{} tookTxId:{} txId:{}",
+                                                category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,
+                                                highestTxId);*/
+                                            available.set(true);
+                                            return u;
                                         } else {
                                             return u;
                                         }
@@ -125,25 +133,19 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     void rowsTaken(VersionedRing versionedRing, RingMember remoteRingMember, long localTxId, int takeFromFactor, boolean isOnline) {
-        if (isOnline) {
-            took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
-                if (existingSessionedTxId != null) {
-                    return new SessionedTxId(existingSessionedTxId.sessionId,
-                        existingSessionedTxId.offeredTxId,
-                        existingSessionedTxId.reofferAtTimeInMillis,
-                        Math.max(localTxId, existingSessionedTxId.tookTxId));
-                } else {
-                    //LOG.info("NO SESSION: remote:{} partition:{} state:{} txId:{}",
-                    //    remoteRingMember, versionedPartitionName, state.get(), localTxId);
-                }
-                return null;
-            });
-        } else {
-            //LOG.info("NOT ONLINE: remote:{} partition:{} state:{} txId:{}",
-            //    remoteRingMember, versionedPartitionName, state.get(), localTxId);
-        }
+        took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
+            if (existingSessionedTxId != null) {
+                return new SessionedTxId(existingSessionedTxId.sessionId,
+                    existingSessionedTxId.offeredTxId,
+                    existingSessionedTxId.reofferAtTimeInMillis,
+                    Math.max(localTxId, existingSessionedTxId.tookTxId));
+            } else {
+                //LOG.info("NO SESSION: remote:{} partition:{} state:{} txId:{}",
+                //    remoteRingMember, versionedPartitionName, state.get(), localTxId);
+            }
+            return null;
+        });
         updateCategory(versionedRing, takeFromFactor, localTxId, isOnline);
-
     }
 
     //TODO call this?

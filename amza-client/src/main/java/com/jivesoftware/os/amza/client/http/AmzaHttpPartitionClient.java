@@ -20,6 +20,8 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.client.http.exceptions.LeaderElectionInProgressException;
 import com.jivesoftware.os.amza.client.http.exceptions.NoLongerTheLeaderException;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpResponse;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import java.io.IOException;
@@ -33,6 +35,8 @@ import org.apache.http.HttpStatus;
  * @author jonathan.colt
  */
 public class AmzaHttpPartitionClient implements PartitionClient {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final String base64PartitionName;
     private final PartitionName partitionName;
@@ -54,6 +58,31 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                 partitionCallRouter.invalidateRouting(partitionName);
                 throw new NoLongerTheLeaderException(partitionName + " " + consistency);
             }
+        }
+    }
+
+    private static class CloseableHttpResponse implements Closeable {
+        public final HttpResponse response;
+
+        public CloseableHttpResponse(HttpResponse response) {
+            this.response = response;
+        }
+
+        @Override
+        public void close() throws Exception {
+        }
+    }
+
+    private static class CloseableHttpStreamResponse implements Closeable {
+        public final HttpStreamResponse response;
+
+        public CloseableHttpStreamResponse(HttpStreamResponse response) {
+            this.response = response;
+        }
+
+        @Override
+        public void close() throws Exception {
+            response.close();
         }
     }
 
@@ -91,11 +120,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }, null);
 
                 handleLeaderStatusCodes(consistency, got.getStatusCode());
-                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(new CloseableHttpResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },
-            answers -> true,
-            answers -> {
-            },
+            answer -> true,
             timeoutInMillis);
     }
 
@@ -124,10 +151,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         }
                     }, null);
                 handleLeaderStatusCodes(consistency, got.getStatusCode());
-                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
                 int eosed = 0;
                 while (streams.size() > 0 && eosed == 0) {
                     byte[] latestPrefix = null;
@@ -164,8 +191,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }
                 }
                 return null;
-            },
-            answers -> answers.forEach(HttpStreamResponse::close));
+            });
         return true;
     }
 
@@ -198,10 +224,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeByteArray(fos, toKey, "toKey");
                     }, null);
 
-                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
                 int size = streams.size();
                 if (merge && size > 1) {
                     boolean[] eos = new boolean[size];
@@ -209,7 +235,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     int eosed = 0;
                     while (eosed < size) {
                         for (int i = 0; i < size; i++) {
-                            if (!quorumScan.used(i) && !eos[i]) {
+                            if (quorumScan.used(i) && !eos[i]) {
                                 FilerInputStream fis = streams.get(i);
                                 eos[i] = UIO.readBoolean(fis, "eos");
                                 if (!eos[i]) {
@@ -234,6 +260,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                             return false;
                         }
                     }
+                    LOG.info("Merged {}", answers.size());
                     return true;
 
                 } else {
@@ -251,8 +278,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }
                 }
                 throw new RuntimeException("Failed to scan.");
-            },
-            answers -> answers.forEach(HttpStreamResponse::close));
+            });
     }
 
     @Override
@@ -271,16 +297,15 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeLong(fos, transactionId, "transactionId");
                     }, null);
 
-                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
                 for (FilerInputStream fis : streams) {
                     return take(fis, highwaters, stream);
                 }
                 throw new RuntimeException("Failed to takePrefixFromTransactionId.");
-            },
-            answers -> answers.forEach(HttpStreamResponse::close));
+            });
     }
 
     @Override
@@ -301,16 +326,15 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         UIO.writeLong(fos, transactionId, "transactionId");
                     }, null);
 
-                return new PartitionResponse<>(got, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
                 for (FilerInputStream fis : streams) {
                     return take(fis, highwaters, stream);
                 }
                 throw new RuntimeException("Failed to takePrefixFromTransactionId.");
-            },
-            answers -> answers.forEach(HttpStreamResponse::close));
+            });
     }
 
     private TakeResult take(FilerInputStream fis, Highwaters highwaters, TxKeyValueStream stream) throws Exception {

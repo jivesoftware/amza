@@ -32,8 +32,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
-                                method="post" name="addRingHost">
+                            <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm" method="post">
                                 <tr style="background-color:#ddd;">
                                     <td>
                                         <button title="Add" type="submit" name="action" value="add" class="btn btn-default"><span class="glyphicon glyphicon-plus"></span></button>
@@ -87,16 +86,20 @@
                             </form>
 
                             {foreach $r in $partitions}
-                                <form id="add-ring-host" class="j-form" data-active-class="btn-default"
-                                    method="post" name="removeRingHost">
+                                <form class="j-form" data-active-class="btn-default" method="post">
                                     <tr>    
                                         <td>
-                                            <a href="/amza/ui/inspect?regionType={$r.type}&amp;ringName={$r.ringName}&amp;regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search">Inspect</a>
+                                            <a href="/amza/ui/inspect?regionType={$r.type}&amp;ringName={$r.ringName}&amp;regionName={$r.name}" class="btn btn-default" title="Inspect"><span class="glyphicon glyphicon-search"></a>
                                             <input type="hidden" name="ringName" value="{$r.ringName}">
                                             <input type="hidden" name="partitionName" value="{$r.name}">
-                                            <div class="btn-group" role="group" aria-label="...">
-                                                <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default"><span class="glyphicon glyphicon-trash"></span></button>
-                                            </div>
+                                            {if $r.type != 'SYSTEM'}
+                                                <div class="btn-group" role="group" aria-label="...">
+                                                    <button title="Promote" type="submit" name="action" value="promote" class="btn btn-default"><span class="glyphicon glyphicon-king"></span></button>
+                                                </div>
+                                                <div class="btn-group" role="group" aria-label="...">
+                                                    <button title="Remove" type="submit" name="action" value="remove" class="btn btn-default"><span class="glyphicon glyphicon-trash"></span></button>
+                                                </div>
+                                            {/if}
                                         </td>
                                         <td>{$r.alive}</td>
                                         <td>{$r.state}</td>

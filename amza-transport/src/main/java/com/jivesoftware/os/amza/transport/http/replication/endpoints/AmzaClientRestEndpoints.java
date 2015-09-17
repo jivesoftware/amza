@@ -68,8 +68,13 @@ public class AmzaClientRestEndpoints {
         this.partitionProvider = partitionProvider;
     }
 
-    private Response failOnNotTheLeader(PartitionName partitionName, Consistency consistency) {
-        if (consistency.requiresLeader()) {
+    private Response checkForReadyState(PartitionName partitionName, Consistency consistency, boolean checkLeader) {
+        try {
+            partitionProvider.awaitOnline(partitionName, 10_000L); //TODO config
+        } catch (Exception e) {
+            return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
+        }
+        if (checkLeader && consistency.requiresLeader()) {
             try {
                 RingMember leader = partitionProvider.awaitLeader(partitionName, 0);
                 if (leader == null) {
@@ -139,7 +144,7 @@ public class AmzaClientRestEndpoints {
             PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
             Consistency consistency = Consistency.valueOf(consistencyName);
             FilerInputStream fis = new FilerInputStream(inputStream);
-            Response response = checkLeader ? failOnNotTheLeader(partitionName, consistency) : null;
+            Response response = checkForReadyState(partitionName, consistency, checkLeader);
             if (response != null) {
                 return response;
             }
@@ -182,7 +187,7 @@ public class AmzaClientRestEndpoints {
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         Consistency consistency = Consistency.valueOf(consistencyName);
         FilerInputStream fis = new FilerInputStream(inputStream);
-        Response response = checkLeader ? failOnNotTheLeader(partitionName, consistency) : null;
+        Response response = checkForReadyState(partitionName, consistency, checkLeader);
         if (response != null) {
             return response;
         }
@@ -251,7 +256,8 @@ public class AmzaClientRestEndpoints {
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         Consistency consistency = Consistency.valueOf(consistencyName);
         FilerInputStream fis = new FilerInputStream(inputStream);
-        Response response = checkLeader ? failOnNotTheLeader(partitionName, consistency) : null;
+
+        Response response = checkForReadyState(partitionName, consistency, checkLeader);
         if (response != null) {
             return response;
         }

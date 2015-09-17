@@ -111,6 +111,12 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                             false));
                     amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
                 }
+            } else if (input.action.equals("promote")) {
+                if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
+                    PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
+                    log.info("Promoting {}", partitionName);
+                    amzaService.promotePartition(partitionName);
+                }
             } else if (input.action.equals("remove")) {
                 if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
                     PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);

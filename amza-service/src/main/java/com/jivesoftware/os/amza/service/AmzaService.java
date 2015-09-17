@@ -375,6 +375,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         return partitionIndex.getProperties(partitionName);
     }
 
+    public boolean promotePartition(PartitionName partitionName) throws Exception {
+        return partitionStateStorage.tx(partitionName,
+            (versionedPartitionName, waterline, isOnline) -> aquariumProvider.getAquarium(versionedPartitionName).suggestState(State.leader));
+    }
+
     @Override
     public void destroyPartition(PartitionName partitionName) throws Exception {
 
@@ -505,7 +510,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     partitionStateStorage.markAsBootstrap(partitionName);
                 }
             } catch (Exception x) {
-                LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
+                LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
             }
         }
     }

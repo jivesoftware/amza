@@ -16,4 +16,11 @@ public class RingMemberAndHost {
         this.ringHost = ringHost;
     }
 
+    @Override
+    public String toString() {
+        return "RingMemberAndHost{" +
+            "ringMember=" + ringMember +
+            ", ringHost=" + ringHost +
+            '}';
+    }
 }

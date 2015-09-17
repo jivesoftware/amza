@@ -78,6 +78,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
     private final Set<PartitionName> smellsFishy = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileNominated = new ConcurrentHashMap<>();
+    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileInactive = new ConcurrentHashMap<>();
 
     public AmzaAquariumProvider(long startupVersion,
         RingMember rootRingMember,
@@ -129,9 +130,9 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         Aquarium aquarium = getAquarium(versionedPartitionName);
         Waterline leader = aquarium.getLeader();
         if (leader != null
+            && leadershipToken == leader.getTimestamp()
             && rootAquariumMember.equals(leader.getMember())
-            && aquarium.isLivelyState(rootAquariumMember, State.nominated)
-            && leadershipToken == leader.getTimestamp()) {
+            && aquarium.isLivelyState(rootAquariumMember, State.nominated)) {
 
             tookFullyWhileNominated.compute(versionedPartitionName, (key, current) -> {
                 if (current == null || current.leadershipToken < leader.getTimestamp()) {
@@ -142,6 +143,21 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
             });
         } else {
             tookFullyWhileNominated.remove(versionedPartitionName);
+        }
+
+        if (leader != null
+            && leadershipToken == leader.getTimestamp()
+            && aquarium.isLivelyState(rootAquariumMember, State.inactive)) {
+
+            tookFullyWhileInactive.compute(versionedPartitionName, (key, current) -> {
+                if (current == null || current.leadershipToken < leader.getTimestamp()) {
+                    current = new LeadershipTokenAndTookFully(leader.getTimestamp());
+                }
+                current.add(fromRingMember);
+                return current;
+            });
+        } else {
+            tookFullyWhileInactive.remove(versionedPartitionName);
         }
     }
 
@@ -168,30 +184,29 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         ReadWaterline readCurrent = new ReadWaterline<>(
             new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName, CURRENT, startupVersion),
             liveliness,
-            new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName),
+            new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName, rootAquariumMember),
             atQuorum,
-            rootRingMember.asAquariumMember(),
             Long.class);
 
         ReadWaterline readDesired = new ReadWaterline<>(
             new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName, DESIRED, startupVersion),
             liveliness,
-            new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName),
+            new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName, rootAquariumMember),
             atQuorum,
-            rootRingMember.asAquariumMember(),
             Long.class);
 
         CurrentTimeMillis currentTimeMillis = System::currentTimeMillis;
         return new Aquarium(orderIdProvider,
             currentTimeMillis,
-            (member, tx) -> tx.tx(readCurrent, readDesired),
+            (tx) -> tx.tx(readCurrent, readDesired),
             (current, desiredTimestamp, state) -> {
+                PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
                 if (current.getState() == State.nominated && state == State.leader) {
-                    PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
                     int ringSize = amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName());
                     int quorum;
                     boolean needsRepair;
                     if (properties.consistency == Consistency.leader) {
+                        // taking from demoted is the only way to repair
                         quorum = Integer.MAX_VALUE;
                         needsRepair = true;
                     } else {
@@ -204,7 +219,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
                         if (leadershipTokenAndTookFully != null
                             && !leadershipTokenAndTookFully.tookFully.isEmpty()
                             && properties.consistency.requiresLeader()) {
-                            Waterline demoted = State.highest(currentTimeMillis, State.demoted, readCurrent, current);
+                            Waterline demoted = State.highest(rootAquariumMember, currentTimeMillis, State.demoted, readCurrent, current);
                             if (demoted != null
                                 && demoted.isAtQuorum()
                                 && demoted.isAlive(currentTimeMillis.get())
@@ -220,7 +235,60 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
                                 leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.tookFully(),
                                 quorum);
                             return false;
+                        } else if (repairedFromDemoted) {
+                            LOG.info("{} is nominated for version {} and has taken fully from the demoted member.", versionedPartitionName,
+                                leadershipTokenAndTookFully.leadershipToken);
+                        } else {
+                            LOG.info("{} is nominated for version {} and has taken fully {} out of {}.", versionedPartitionName,
+                                leadershipTokenAndTookFully.leadershipToken, leadershipTokenAndTookFully.tookFully(), quorum);
                         }
+                    } else {
+                        LOG.info("{} is nominated and does not need repair.", versionedPartitionName);
+                    }
+                } else if (current.getState() == State.inactive && state == State.follower) {
+                    //TODO consider merging with the above condition
+                    int ringSize = amzaRingReader.getRingSize(versionedPartitionName.getPartitionName().getRingName());
+                    int quorum;
+                    boolean needsRepair;
+                    if (properties.consistency == Consistency.leader) {
+                        // taking from leader is the only way to repair
+                        quorum = Integer.MAX_VALUE;
+                        needsRepair = true;
+                    } else {
+                        quorum = properties.consistency.repairQuorum(ringSize - 1);
+                        needsRepair = quorum > 0;
+                    }
+                    if (needsRepair) {
+                        LeadershipTokenAndTookFully leadershipTokenAndTookFully = tookFullyWhileInactive.get(versionedPartitionName);
+                        Waterline leader = State.highest(rootAquariumMember, currentTimeMillis, State.leader, readDesired, readDesired.get(rootAquariumMember));
+                        boolean repairedFromLeader = false;
+                        if (leader != null
+                            && leadershipTokenAndTookFully != null
+                            && properties.consistency.requiresLeader()
+                            && leader.getTimestamp() == leadershipTokenAndTookFully.leadershipToken
+                            && leader.isAtQuorum()
+                            && leader.isAlive(currentTimeMillis.get())
+                            && leadershipTokenAndTookFully.tookFully.contains(RingMember.fromAquariumMember(leader.getMember()))) {
+                            repairedFromLeader = true;
+                        }
+                        if (leader == null
+                            || leadershipTokenAndTookFully == null
+                            || leadershipTokenAndTookFully.leadershipToken != leader.getTimestamp()
+                            || (leadershipTokenAndTookFully.tookFully() < quorum && !repairedFromLeader)) {
+                            LOG.info("{} is inactive for version {} and has taken fully {} out of {}.", versionedPartitionName,
+                                leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.leadershipToken,
+                                leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.tookFully(),
+                                quorum);
+                            return false;
+                        } else if (repairedFromLeader) {
+                            LOG.info("{} is inactive for version {} and has taken fully from the leader.", versionedPartitionName,
+                                leadershipTokenAndTookFully.leadershipToken);
+                        } else {
+                            LOG.info("{} is inactive for version {} and has taken fully {} out of {}.", versionedPartitionName,
+                                leadershipTokenAndTookFully.leadershipToken, leadershipTokenAndTookFully.tookFully(), quorum);
+                        }
+                    } else {
+                        LOG.info("{} is inactive and does not need repair.", versionedPartitionName);
                     }
                 }
 
@@ -465,21 +533,19 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
 
         private final StorageVersionProvider storageVersionProvider;
         private final VersionedPartitionName versionedPartitionName;
+        private final Member rootMember;
 
-        public AmzaMemberLifecycle(StorageVersionProvider storageVersionProvider, VersionedPartitionName versionedPartitionName) {
+        public AmzaMemberLifecycle(StorageVersionProvider storageVersionProvider, VersionedPartitionName versionedPartitionName, Member rootMember) {
             this.storageVersionProvider = storageVersionProvider;
             this.versionedPartitionName = versionedPartitionName;
+            this.rootMember = rootMember;
         }
 
         @Override
-        public Long get() throws Exception {
-            StorageVersion storageVersion = storageVersionProvider.createIfAbsent(versionedPartitionName.getPartitionName());
-            return storageVersion.partitionVersion;
-        }
-
-        @Override
-        public Long getOther(Member other) throws Exception {
-            StorageVersion storageVersion = storageVersionProvider.getRemote(RingMember.fromAquariumMember(other), versionedPartitionName.getPartitionName());
+        public Long get(Member member) throws Exception {
+            StorageVersion storageVersion = member.equals(rootMember)
+                ? storageVersionProvider.createIfAbsent(versionedPartitionName.getPartitionName())
+                : storageVersionProvider.getRemote(RingMember.fromAquariumMember(member), versionedPartitionName.getPartitionName());
             return storageVersion != null ? storageVersion.partitionVersion : null;
         }
     }

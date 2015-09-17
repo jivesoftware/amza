@@ -211,7 +211,6 @@ public class RowChangeTaker implements RowChanges {
                             /*partitionStateStorage.remoteVersion(remoteRingMember,
                              partitionName,
                              remoteVersionedPartitionName.getPartitionVersion());*/
-                            AtomicLong tookToTxId = new AtomicLong(-1);
                             VersionedPartitionName currentLocalVersionedPartitionName = partitionStateStorage.tx(partitionName,
                                 (localVersionedPartitionName, partitionWaterlineState, isOnline) -> {
                                     if (localVersionedPartitionName == null) {
@@ -242,8 +241,7 @@ public class RowChangeTaker implements RowChanges {
                                         if (highwater != null && highwater >= txId) {
                                             //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
                                             //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
-                                            tookToTxId.set(highwater);
-                                            return null; // TODO ack OFFER?
+                                            return localVersionedPartitionName; // TODO ack OFFER?
                                         } else {
                                             return localVersionedPartitionName;
                                         }
@@ -253,15 +251,10 @@ public class RowChangeTaker implements RowChanges {
                                             (stripe, highwaterStorage) -> {
                                                 Long highwater = highwaterStorage.get(remoteRingMember, txLocalVersionPartitionName);
 
-                                                if (highwater != null && highwater >= txId) {
-                                                    boolean nominated = partitionStateStorage.isNominated(amzaRingReader.getRingMember(),
-                                                        txLocalVersionPartitionName);
-                                                    if (!nominated) {
-                                                        //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
-                                                        //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
-                                                        tookToTxId.set(highwater);
-                                                        return null;
-                                                    }
+                                                if (highwater != null && highwater >= txId && isOnline) {
+                                                    //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
+                                                    //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
+                                                    return txLocalVersionPartitionName;
                                                 }
                                                 return txLocalVersionPartitionName;
 
@@ -485,16 +478,16 @@ public class RowChangeTaker implements RowChanges {
                             }
                             if (updates > 0) {
                                 flushed = true;
-                                try {
-                                    //LOG.info("ACK: local:{} remote:{}  txId:{} partition:{} state:{}",
-                                    //    ringHost, remoteRingHost, takeRowStream.largestFlushedTxId(), remoteVersionedPartitionName);
-                                    rowsTaker.rowsTaken(amzaRingReader.getRingMember(), remoteRingMember, remoteRingHost, remoteVersionedPartitionName,
-                                        takeRowStream.largestFlushedTxId(),
-                                        (leader != null) ? leader.getTimestamp() : -1);
-                                } catch (Exception x) {
-                                    LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                                        new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
-                                }
+                            }
+                            try {
+                                //LOG.info("ACK: local:{} remote:{}  txId:{} partition:{} state:{}",
+                                //    ringHost, remoteRingHost, takeRowStream.largestFlushedTxId(), remoteVersionedPartitionName);
+                                rowsTaker.rowsTaken(amzaRingReader.getRingMember(), remoteRingMember, remoteRingHost, remoteVersionedPartitionName,
+                                    Math.max(highwaterMark, takeRowStream.largestFlushedTxId()),
+                                    (leader != null) ? leader.getTimestamp() : -1);
+                            } catch (Exception x) {
+                                LOG.warn("Failed to ack for member:{} host:{} partition:{}",
+                                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
                             }
 
                         } finally {

@@ -296,7 +296,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
                     rootAquariumMember);
                 byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
-                LOG.info("Current {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
+                //LOG.info("Current {} for {} = {}", rootAquariumMember, versionedPartitionName, state);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
             },
@@ -305,7 +305,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
                     rootAquariumMember);
                 byte[] valueBytes = { state.getSerializedForm() };
                 AmzaPartitionUpdates updates = new AmzaPartitionUpdates().set(keyBytes, valueBytes, desiredTimestamp);
-                LOG.info("Desired {} for {} = {} at {}, current = {}", rootAquariumMember, versionedPartitionName, state, desiredTimestamp, current);
+                //LOG.info("Desired {} for {} = {} at {}, current = {}", rootAquariumMember, versionedPartitionName, state, desiredTimestamp, current);
                 RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, updates, walUpdated);
                 return !rowsChanged.isEmpty();
             },

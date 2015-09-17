@@ -41,6 +41,7 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -96,38 +97,44 @@ public class AmzaClientRestEndpoints {
     //@Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/ring/{base64PartitionName}/{waitForLeaderElection}")
-    public ChunkedOutput<byte[]> ring(@PathParam("base64PartitionName") String base64PartitionName,
+    public Object ring(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("waitForLeaderElection") long waitForLeaderElection) {
 
-        ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-        chunkExecutors.submit(() -> {
-            try {
-                PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-                RingMember leader = partitionName.isSystemPartition() ? null : partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
-                NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
+        try {
+            PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+            RingMember leader = partitionName.isSystemPartition() ? null : partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
+            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
 
-                ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                Set<Map.Entry<RingMember, RingHost>> memebers = ring.entrySet();
-                UIO.writeInt(cf, memebers.size(), "ringSize");
-                for (Map.Entry<RingMember, RingHost> r : memebers) {
-                    UIO.writeByteArray(cf, r.getKey().toBytes(), "ringMember");
-                    UIO.writeByteArray(cf, r.getValue().toBytes(), "ringHost");
-                    boolean isLeader = leader != null && Arrays.equals(r.getKey().toBytes(), leader.toBytes());
-                    UIO.writeBoolean(cf, isLeader, "leader");
-                }
-                cf.flush(true);
-
-            } catch (Exception x) {
-                LOG.warn("Failed to stream ring", x);
-            } finally {
+            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
+            chunkExecutors.submit(() -> {
                 try {
-                    chunkedOutput.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close ring stream", x);
+                    ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                    Set<Map.Entry<RingMember, RingHost>> memebers = ring.entrySet();
+                    UIO.writeInt(cf, memebers.size(), "ringSize");
+                    for (Map.Entry<RingMember, RingHost> r : memebers) {
+                        UIO.writeByteArray(cf, r.getKey().toBytes(), "ringMember");
+                        UIO.writeByteArray(cf, r.getValue().toBytes(), "ringHost");
+                        boolean isLeader = leader != null && Arrays.equals(r.getKey().toBytes(), leader.toBytes());
+                        UIO.writeBoolean(cf, isLeader, "leader");
+                    }
+                    cf.flush(true);
+
+                } catch (Exception x) {
+                    LOG.warn("Failed to stream ring", x);
+                } finally {
+                    try {
+                        chunkedOutput.close();
+                    } catch (IOException x) {
+                        LOG.warn("Failed to close ring stream", x);
+                    }
                 }
-            }
-        });
-        return chunkedOutput;
+            });
+            return chunkedOutput;
+        } catch (TimeoutException e) {
+            return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
+        } catch (Exception e) {
+            return Response.serverError().build();
+        }
     }
 
     @POST

@@ -115,7 +115,7 @@ public class AmzaUIInitializer {
 
         ManagePlugin stressPlugin = new ManagePlugin("scale", "Stress", "/amza/ui/stress",
             AmzaStressPluginEndpoints.class,
-            new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService));
+            new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService, clientProvider));
 
         List<ManagePlugin> plugins = Lists.newArrayList(overviewPlugin,
             aquariumPlugin,

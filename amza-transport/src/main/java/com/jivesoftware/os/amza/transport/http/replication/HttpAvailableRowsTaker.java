@@ -31,8 +31,10 @@ import com.jivesoftware.os.routing.bird.http.client.HttpClientFactoryProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelper;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
+import org.xerial.snappy.SnappyInputStream;
 
 public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
@@ -58,7 +60,8 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
             "/amza/rows/available/" + localRingMember.getMember() + "/" + takeSessionId + "/" + timeoutMillis);
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
-            streamingTakesConsumer.consume(bis, availableStream);
+            DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
+            streamingTakesConsumer.consume(dis, availableStream);
         } finally {
             httpStreamResponse.close();
         }

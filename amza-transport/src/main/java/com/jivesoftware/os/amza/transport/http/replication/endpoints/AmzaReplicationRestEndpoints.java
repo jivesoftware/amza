@@ -38,6 +38,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
 import org.glassfish.jersey.server.ChunkedOutput;
+import org.xerial.snappy.SnappyOutputStream;
 
 @Singleton
 @Path("/amza")
@@ -68,7 +69,7 @@ public class AmzaReplicationRestEndpoints {
             StreamingOutput stream = (OutputStream os) -> {
                 os.flush();
                 BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
-                final DataOutputStream dos = new DataOutputStream(bos);
+                final DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(bos));
                 try {
                     amzaInstance.rowsStream(dos,
                         new RingMember(ringMemberString),

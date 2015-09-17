@@ -48,13 +48,23 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         this.partitionCallRouter = partitionCallRouter;
     }
 
-    private void handleLeaderStatusCodes(Consistency consistency, int statusCode) {
+    private void handleLeaderStatusCodes(Consistency consistency, int statusCode, Closeable closeable) {
         if (consistency.requiresLeader()) {
             if (statusCode == HttpStatus.SC_SERVICE_UNAVAILABLE) {
+                try {
+                    closeable.close();
+                } catch (Exception e) {
+                    LOG.warn("Failed to close {}", closeable);
+                }
                 partitionCallRouter.invalidateRouting(partitionName);
                 throw new LeaderElectionInProgressException(partitionName + " " + consistency);
             }
             if (statusCode == HttpStatus.SC_CONFLICT) {
+                try {
+                    closeable.close();
+                } catch (Exception e) {
+                    LOG.warn("Failed to close {}", closeable);
+                }
                 partitionCallRouter.invalidateRouting(partitionName);
                 throw new NoLongerTheLeaderException(partitionName + " " + consistency);
             }
@@ -119,8 +129,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         }
                     }, null);
 
-                handleLeaderStatusCodes(consistency, got.getStatusCode());
-                return new PartitionResponse<>(new CloseableHttpResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                CloseableHttpResponse closeableHttpResponse = new CloseableHttpResponse(got);
+                handleLeaderStatusCodes(consistency, got.getStatusCode(), closeableHttpResponse);
+                return new PartitionResponse<>(closeableHttpResponse, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },
             answer -> true,
             timeoutInMillis);
@@ -150,8 +161,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                             throw new RuntimeException("Failed while streaming keys.", x);
                         }
                     }, null);
-                handleLeaderStatusCodes(consistency, got.getStatusCode());
-                return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                CloseableHttpStreamResponse closeableHttpStreamResponse = new CloseableHttpStreamResponse(got);
+                handleLeaderStatusCodes(consistency, got.getStatusCode(), closeableHttpStreamResponse);
+                return new PartitionResponse<>(closeableHttpStreamResponse, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },
             (answers) -> {
                 List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));

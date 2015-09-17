@@ -91,7 +91,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     private final AtomicLong keyCount = new AtomicLong(0);
     private final AtomicLong clobberCount = new AtomicLong(0);
     private final AtomicLong indexUpdates = new AtomicLong(0);
-    private final AtomicLong highestTxId = new AtomicLong(0);
+    private final AtomicLong highestTxId = new AtomicLong(-1);
     private final int tombstoneCompactionFactor;
 
     private final ThreadLocal<Integer> reentrant = new ReentrantTheadLocal();
@@ -224,7 +224,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
             walIndex.compareAndSet(null, walTx.load(versionedPartitionName));
 
-            MutableLong lastTxId = new MutableLong(0);
+            MutableLong lastTxId = new MutableLong(-1);
             MutableLong rowsVisited = new MutableLong(maxUpdatesBetweenCompactionHintMarker.get());
             MutableBoolean needCompactionHints = new MutableBoolean(true);
             MutableBoolean needKeyHighwaterStripes = new MutableBoolean(true);
@@ -285,7 +285,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             keyCount.set(keys.longValue());
             clobberCount.set(clobbers.longValue());
 
-            if (!highestTxId.compareAndSet(0, lastTxId.longValue())) {
+            if (!highestTxId.compareAndSet(-1, lastTxId.longValue())) {
                 throw new RuntimeException("Load should have completed before highestTxId:" + highestTxId.get() + " is modified.");
             }
             LOG.info("Loaded partition:{} with a highestTxId:{}", versionedPartitionName, lastTxId.longValue());

@@ -12,6 +12,7 @@ import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import org.xerial.snappy.SnappyInputStream;
 
 /**
  *
@@ -20,8 +21,7 @@ public class StreamingTakesConsumer {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    public void consume(InputStream bis, AvailableStream updatedPartitionsStream) throws Exception {
-        DataInputStream dis = new DataInputStream(bis);
+    public void consume(DataInputStream dis, AvailableStream updatedPartitionsStream) throws Exception {
         while (dis.read() == 1) {
             int partitionNameLength = dis.readInt();
             if (partitionNameLength == 0) {
@@ -41,13 +41,13 @@ public class StreamingTakesConsumer {
         }
     }
 
-    public StreamingTakeConsumed consume(InputStream bis, RowStream tookRowUpdates) throws Exception {
+    public StreamingTakeConsumed consume(DataInputStream is, RowStream tookRowUpdates) throws Exception {
         Map<RingMember, Long> neighborsHighwaterMarks = new HashMap<>();
         long leadershipToken;
         long partitionVersion;
         boolean isOnline;
         long bytes = 0;
-        try (DataInputStream dis = new DataInputStream(bis)) {
+        try (DataInputStream dis = is) {
             leadershipToken = dis.readLong();
             partitionVersion = dis.readLong();
             isOnline = dis.readByte() == 1;

@@ -85,7 +85,10 @@ public class AmzaHttpClientCallRouter {
                 return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis,
                     leader.ringMember, leader);
             }
-        } else if (consistency == Consistency.quorum || consistency == Consistency.write_all_read_one) {
+        } else if (consistency == Consistency.quorum
+            || consistency == Consistency.write_all_read_one
+            || consistency == Consistency.write_one_read_all
+            || consistency == Consistency.none) {
             return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis, null,
                 ring.randomizeRing());
         } else {

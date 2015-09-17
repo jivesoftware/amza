@@ -91,7 +91,8 @@ public class TakeVersionedPartitionCoordinator {
                                         available.set(true);
                                         return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, -1);
                                     } else {
-                                        if (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u.reofferAtTimeInMillis)) {
+                                        if (highestTxId > -1
+                                            && (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u.reofferAtTimeInMillis))) {
                                             /*LOG.info("NEW (TX): candidateCategory:{} currentCategory:{} ringMember:{} " +
                                                     "nudged:{} state:{} tookTxId:{} txId:{}",
                                                 category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,

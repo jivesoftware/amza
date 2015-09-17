@@ -19,6 +19,11 @@
                                 class="form-control" placeholder="Name" value=""
                                 name="name" id="namePicker" data-original-title="" title="">
                         </td></tr>
+                        <tr><td>Client</td><td>
+                            <input type="checkbox" autocomplete="off" style="padding-left:10px;"
+                                class="form-control" placeholder="Client" value="true"
+                                name="client" id="clientPicker" data-original-title="" title="">
+                        </td></tr>
                         <tr><td>Region Prefix</td><td>
                             <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
                                 class="form-control" placeholder="Region Prefix" value=""
@@ -118,6 +123,13 @@
                     {if $stress}
                         {foreach $s in $stress}
                             <td>{$s.name}</td>
+                        {/foreach}
+                    {/if}
+                </tr>
+                <tr><td>Client</td>
+                    {if $stress}
+                        {foreach $s in $stress}
+                            <td>{$s.client}</td>
                         {/foreach}
                     {/if}
                 </tr>

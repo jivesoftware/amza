@@ -35,38 +35,42 @@ public class PartitionHostsProvider {
 
     Ring getPartitionHosts(PartitionName partitionName, Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws HttpClientException {
 
-        NextClientStrategy strategy = useHost.map((com.jivesoftware.os.amza.client.http.RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
-            new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
-        })).orElse(roundRobinStrategy);
+        NextClientStrategy strategy = useHost.map(
+            (com.jivesoftware.os.amza.client.http.RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
+                new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
+            })).orElse(roundRobinStrategy);
 
         return tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 
             HttpStreamResponse got = client.streamingPost("/amza/v1/ring/"
                 + partitionName.toBase64() + "/" + waitForLeaderElection, "", null);
-            if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
-                try {
-                    FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                    int ringSize = UIO.readInt(fis, "ringSize");
-                    int leaderIndex = -1;
-                    RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
-                    for (int i = 0; i < ringSize; i++) {
-                        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember"));
-                        RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost"));
-                        ring[i] = new RingMemberAndHost(ringMember, ringHost);
-                        if (UIO.readBoolean(fis, "leader")) {
-                            if (leaderIndex == -1) {
-                                leaderIndex = i;
-                            } else {
-                                throw new RuntimeException("We suck! Gave back more than one leader!");
+            try {
+                if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
+                    try {
+                        FilerInputStream fis = new FilerInputStream(got.getInputStream());
+                        int ringSize = UIO.readInt(fis, "ringSize");
+                        int leaderIndex = -1;
+                        RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
+                        for (int i = 0; i < ringSize; i++) {
+                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember"));
+                            RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost"));
+                            ring[i] = new RingMemberAndHost(ringMember, ringHost);
+                            if (UIO.readBoolean(fis, "leader")) {
+                                if (leaderIndex == -1) {
+                                    leaderIndex = i;
+                                } else {
+                                    throw new RuntimeException("We suck! Gave back more than one leader!");
+                                }
                             }
                         }
+                        return new ClientCall.ClientResponse<>(new Ring(leaderIndex, ring), true);
+
+                    } catch (Exception x) {
+                        throw new RuntimeException("Failed loading routes for " + partitionName, x);
                     }
-                    return new ClientCall.ClientResponse<>(new Ring(leaderIndex, ring), true);
-
-                } catch (Exception x) {
-                    throw new RuntimeException("Failed loading routes for " + partitionName, x);
                 }
-
+            } finally {
+                got.close();
             }
             throw new RuntimeException("No routes to partition:" + partitionName);
         });

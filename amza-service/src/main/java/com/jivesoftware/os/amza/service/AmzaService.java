@@ -57,6 +57,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +66,7 @@ import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import org.apache.commons.lang.mutable.MutableLong;
+import org.xerial.snappy.SnappyOutputStream;
 
 /**
  * Amza pronounced (AH m z ah )
@@ -408,7 +410,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public void availableRowsStream(ChunkWriteable writeable, RingMember remoteRingMember, long takeSessionId, long heartbeatIntervalMillis) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        DataOutputStream dos = new DataOutputStream(out);
+        DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(out));
 
         takeCoordinator.availableRowsStream(txHighestPartitionTx,
             ringStoreReader,
@@ -423,7 +425,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 dos.write(bytes);
                 dos.writeLong(txId);
             }, () -> {
-                if (out.size() > 0) {
+                if (dos.size() > 0) {
+                    dos.flush();
                     writeable.write(out.toByteArray());
                     out.reset();
                 }
@@ -431,11 +434,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             }, () -> {
                 dos.write(1);
                 dos.writeInt(0);
+                dos.flush();
                 writeable.write(out.toByteArray());
                 out.reset();
                 return null;
             });
         dos.write(0);
+        dos.flush();
         writeable.write(out.toByteArray());
     }
 

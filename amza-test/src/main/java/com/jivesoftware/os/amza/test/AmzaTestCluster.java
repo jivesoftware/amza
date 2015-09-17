@@ -54,6 +54,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -74,6 +75,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
+import org.xerial.snappy.SnappyInputStream;
+import org.xerial.snappy.SnappyOutputStream;
 
 public class AmzaTestCluster {
 
@@ -113,7 +116,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         config.aquariumLivelinessFeedEveryMillis = 10;
         //config.useMemMap = true;
@@ -383,12 +386,18 @@ public class AmzaTestCluster {
             try {
                 ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
                 Future<Object> submit = asIfOverTheWire.submit(() -> {
-                    amzaService.rowsStream(new DataOutputStream(bytesOut), remoteRingMember, localVersionedPartitionName, localTxId, leadershipToken);
+                    DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(bytesOut));
+                    amzaService.rowsStream(dos,
+                        remoteRingMember,
+                        localVersionedPartitionName,
+                        localTxId,
+                        leadershipToken);
+                    dos.flush();
                     return null;
                 });
                 submit.get();
                 StreamingTakesConsumer streamingTakesConsumer = new StreamingTakesConsumer();
-                return streamingTakesConsumer.consume(new ByteArrayInputStream(bytesOut.toByteArray()), rowStream);
+                return streamingTakesConsumer.consume(new DataInputStream(new SnappyInputStream(new ByteArrayInputStream(bytesOut.toByteArray()))), rowStream);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -409,7 +418,7 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = {0};
+                    int[] count = { 0 };
                     partition.scan(null, null, null, null, (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
@@ -515,7 +524,7 @@ public class AmzaTestCluster {
                         byte[] bValue = bvalue[0];
                         long bVersion = bversion[0];
                         String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                        + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                         if (bValue == null) {
                             System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)

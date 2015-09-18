@@ -150,11 +150,12 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 VersionedState state = amzaService.getPartitionStateStorage().getLocalVersionedState(partitionName);
                 LivelyEndState livelyEndState = state.getLivelyEndState();
 
-                row.put("alive", state == null ? "unknown" : livelyEndState.currentWaterline.isAlive(now));
-                row.put("state", state == null ? "unknown" : livelyEndState.currentWaterline.getState());
-                row.put("quorum", state == null ? "unknown" : livelyEndState.currentWaterline.isAtQuorum());
-                row.put("timestamp", state == null ? "unknown" : String.valueOf(livelyEndState.currentWaterline.getTimestamp()));
-                row.put("version", state == null ? "unknown" : String.valueOf(livelyEndState.currentWaterline.getVersion()));
+
+                row.put("alive", state == null ? "unknown" : livelyEndState.getCurrentWaterline().isAlive(now));
+                row.put("state", state == null ? "unknown" : livelyEndState.getCurrentWaterline().getState());
+                row.put("quorum", state == null ? "unknown" : livelyEndState.getCurrentWaterline().isAtQuorum());
+                row.put("timestamp", state == null ? "unknown" : String.valueOf(livelyEndState.getCurrentWaterline().getTimestamp()));
+                row.put("version", state == null ? "unknown" : String.valueOf(livelyEndState.getCurrentWaterline().getVersion()));
 
                 row.put("storageVersion", state == null ? "unknown" : Long.toHexString(state.getPartitionVersion()));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");

@@ -263,14 +263,14 @@ public class PartitionStripe {
         TakeRowUpdates<R> takeRowUpdates)
         throws Exception {
         return txPartitionState.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
-            if (versionedPartitionName == null || livelyEndState == null || livelyEndState.currentWaterline == null) {
+            if (versionedPartitionName == null || livelyEndState == null || livelyEndState.getCurrentState() == null) {
                 return takeRowUpdates.give(null, null, null);
             }
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore == null) {
                 return takeRowUpdates.give(null, null, null);
             } else {
-                RowStreamer streamer = (livelyEndState.currentWaterline.getState() != State.bootstrap)
+                RowStreamer streamer = (livelyEndState.getCurrentState() != State.bootstrap)
                     ? rowStream -> storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
                     : null;
                 return takeRowUpdates.give(versionedPartitionName, livelyEndState, streamer);

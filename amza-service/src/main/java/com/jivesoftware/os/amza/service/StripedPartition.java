@@ -97,8 +97,8 @@ public class StripedPartition implements Partition {
 
         PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
         if (properties.requireConsistency && !properties.consistency.supportsWrites(consistency)) {
-            throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency +
-                " which does not support writes at consistency " + consistency);
+            throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency
+                + " which does not support writes at consistency " + consistency);
         }
 
         Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(partitionName.getRingName());
@@ -115,7 +115,7 @@ public class StripedPartition implements Partition {
                     if (takeQuorum > 0) {
                         Aquarium aquarium = aquariumProvider.getAquarium(versionedPartitionName);
                         LivelyEndState livelyEndState = aquarium.livelyEndState();
-                        if (consistency.requiresLeader() && (livelyEndState == null || livelyEndState.currentWaterline.getState() != State.leader)) {
+                        if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
                             throw new FailedToAchieveQuorumException("Leader has changed.");
                         }
                     }
@@ -153,8 +153,8 @@ public class StripedPartition implements Partition {
     private void checkReadConsistencySupport(Consistency consistency) throws Exception {
         PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
         if (properties.requireConsistency && !properties.consistency.supportsReads(consistency)) {
-            throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency +
-                " which does not support reads at consistency " + consistency);
+            throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency
+                + " which does not support reads at consistency " + consistency);
         }
     }
 
@@ -182,7 +182,7 @@ public class StripedPartition implements Partition {
                     toPrefix,
                     toKey,
                     (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                        -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             }
             return true;
         });
@@ -212,8 +212,8 @@ public class StripedPartition implements Partition {
         TxKeyValueStream stream) throws Exception {
 
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            long[] lastTxId = { -1 };
-            boolean[] done = { false };
+            long[] lastTxId = {-1};
+            boolean[] done = {false};
             TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (done[0] && rowTxId > lastTxId[0]) {
                     return false;

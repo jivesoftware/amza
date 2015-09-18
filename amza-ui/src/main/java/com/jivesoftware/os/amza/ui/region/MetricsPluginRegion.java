@@ -294,7 +294,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
             partition.highestTxId((versionedPartitionName, livelyEndState, highestTxId) -> {
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                map.put("state", livelyEndState.currentWaterline.getState().name());
+                map.put("state", livelyEndState.getCurrentWaterline().getState().name());
                 map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
                 return null;
@@ -337,7 +337,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             VersionedState localVersionedWaterline = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
             LivelyEndState livelyEndState = localVersionedWaterline.getLivelyEndState();
             map.put("localState", ImmutableMap.of("online", livelyEndState.isOnline(),
-                "state", livelyEndState.currentWaterline.getState().name(),
+                "state", livelyEndState.getCurrentWaterline().getState().name(),
                 "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
                 "partitionVersion", String.valueOf(localVersionedWaterline.getPartitionVersion()),
                 "stripeVersion", String.valueOf(localVersionedWaterline.getStorageVersion().stripeVersion)));

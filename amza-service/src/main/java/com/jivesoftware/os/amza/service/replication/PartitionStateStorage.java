@@ -128,8 +128,9 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
         if (partitionName.isSystemPartition()) {
             return null;
         }
+
         StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-        return aquariumProvider.getAquarium(new VersionedPartitionName(partitionName, storageVersion.partitionVersion)).awaitLeader(timeoutMillis);
+        return aquariumProvider.awaitOnline(new VersionedPartitionName(partitionName, storageVersion.partitionVersion), timeoutMillis).getLeaderWaterline();
     }
 
     @Override
@@ -175,7 +176,7 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
     public void expunged(List<VersionedPartitionName> composted) throws Exception {
         for (VersionedPartitionName compost : composted) {
             LivelyEndState livelyEndState = aquariumProvider.getLivelyEndState(compost);
-            if (livelyEndState.currentWaterline.getState() == State.expunged) {
+            if (livelyEndState.getCurrentState() == State.expunged) {
                 transactor.doWithAll(compost, livelyEndState,
                     (versionedPartitionName, livelyEndState1) -> {
                         awaitNotify.notifyChange(compost.getPartitionName(), () -> {

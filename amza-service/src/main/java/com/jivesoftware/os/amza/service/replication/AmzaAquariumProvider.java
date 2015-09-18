@@ -354,11 +354,8 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         return getAquarium(versionedPartitionName).livelyEndState();
     }
 
-    public void awaitOnline(VersionedPartitionName versionedPartitionName, long timeoutMillis) throws Exception {
-        LivelyEndState livelyEndState = getAquarium(versionedPartitionName).awaitLivelyEndState(timeoutMillis);
-        if (!livelyEndState.isOnline()) {
-            throw new IllegalStateException("Partition did not reach an online state: " + livelyEndState);
-        }
+    public LivelyEndState awaitOnline(VersionedPartitionName versionedPartitionName, long timeoutMillis) throws Exception {
+        return getAquarium(versionedPartitionName).awaitOnline(timeoutMillis);
     }
 
     static byte[] stateKey(PartitionName partitionName,

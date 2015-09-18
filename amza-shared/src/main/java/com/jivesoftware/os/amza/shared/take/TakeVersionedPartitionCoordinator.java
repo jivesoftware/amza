@@ -70,7 +70,7 @@ public class TakeVersionedPartitionCoordinator {
 
                     Integer category = versionedRing.getCategory(ringMember);
                     if (!takerIsOnline
-                    || livelyEndState.currentWaterline.getState() == State.bootstrap
+                    || livelyEndState.getCurrentState() == State.bootstrap
                     || (category != null && category <= currentCategory.get())) {
                         
                         AtomicBoolean available = new AtomicBoolean(false);

@@ -28,7 +28,7 @@ public class VersionedState {
     }
 
     public boolean isCurrentState(State state) {
-        return livelyEndState.currentWaterline.getState() == state;
+        return livelyEndState.getCurrentState() == state;
     }
 
     public long getPartitionVersion() {

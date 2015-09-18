@@ -23,6 +23,7 @@ import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.aquarium.LivelyEndState;
+import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.text.NumberFormat;
@@ -148,14 +149,14 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
                 Map<String, Object> row = new HashMap<>();
                 VersionedState state = amzaService.getPartitionStateStorage().getLocalVersionedState(partitionName);
-                LivelyEndState livelyEndState = state.getLivelyEndState();
+                LivelyEndState livelyEndState = state != null ? state.getLivelyEndState() : null;
+                Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
 
-
-                row.put("alive", state == null ? "unknown" : livelyEndState.getCurrentWaterline().isAlive(now));
-                row.put("state", state == null ? "unknown" : livelyEndState.getCurrentWaterline().getState());
-                row.put("quorum", state == null ? "unknown" : livelyEndState.getCurrentWaterline().isAtQuorum());
-                row.put("timestamp", state == null ? "unknown" : String.valueOf(livelyEndState.getCurrentWaterline().getTimestamp()));
-                row.put("version", state == null ? "unknown" : String.valueOf(livelyEndState.getCurrentWaterline().getVersion()));
+                row.put("alive", currentWaterline == null ? "unknown" : currentWaterline.isAlive(now));
+                row.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
+                row.put("quorum", currentWaterline == null ? "unknown" : currentWaterline.isAtQuorum());
+                row.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
+                row.put("version", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getVersion()));
 
                 row.put("storageVersion", state == null ? "unknown" : Long.toHexString(state.getPartitionVersion()));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");

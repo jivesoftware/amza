@@ -22,6 +22,7 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.text.NumberFormat;
@@ -147,14 +148,15 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
                 Map<String, Object> row = new HashMap<>();
                 VersionedState state = amzaService.getPartitionStateStorage().getLocalVersionedState(partitionName);
+                LivelyEndState livelyEndState = state.getLivelyEndState();
 
-                row.put("alive", state == null ? "unknown" : state.waterline.isAlive(now));
-                row.put("state", state == null ? "unknown" : state.waterline.getState());
-                row.put("quorum", state == null ? "unknown" : state.waterline.isAtQuorum());
-                row.put("timestamp", state == null ? "unknown" : String.valueOf(state.waterline.getTimestamp()));
-                row.put("version", state == null ? "unknown" : String.valueOf(state.waterline.getVersion()));
+                row.put("alive", state == null ? "unknown" : livelyEndState.currentWaterline.isAlive(now));
+                row.put("state", state == null ? "unknown" : livelyEndState.currentWaterline.getState());
+                row.put("quorum", state == null ? "unknown" : livelyEndState.currentWaterline.isAtQuorum());
+                row.put("timestamp", state == null ? "unknown" : String.valueOf(livelyEndState.currentWaterline.getTimestamp()));
+                row.put("version", state == null ? "unknown" : String.valueOf(livelyEndState.currentWaterline.getVersion()));
 
-                row.put("storageVersion", state == null ? "unknown" : Long.toHexString(state.storageVersion.partitionVersion));
+                row.put("storageVersion", state == null ? "unknown" : Long.toHexString(state.getPartitionVersion()));
                 row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                 row.put("name", new String(partitionName.getName()));
                 row.put("ringName", new String(partitionName.getRingName()));
@@ -191,7 +193,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
                 PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
                 VersionedState localState = partitionStateStorage.getLocalVersionedState(partitionName);
-                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, localState.storageVersion.partitionVersion);
+                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, localState.getPartitionVersion());
 
                 if (partitionName.isSystemPartition()) {
                     HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();

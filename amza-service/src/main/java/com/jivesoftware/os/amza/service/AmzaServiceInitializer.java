@@ -161,8 +161,8 @@ public class AmzaServiceInitializer {
         ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
         AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
 
-        WALUpdated walUpdated = (versionedPartitionName, waterline, isOnline, txId) -> {
-            takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), waterline, isOnline, txId);
+        WALUpdated walUpdated = (versionedPartitionName, livelyEndState, txId) -> {
+            takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), livelyEndState, txId);
         };
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
@@ -252,8 +252,8 @@ public class AmzaServiceInitializer {
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             VersionedState state = partitionStateStorage.getLocalVersionedState(versionedPartitionName.getPartitionName());
-            if (state != null && state.storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()) {
-                takeCoordinator.updated(amzaRingReader, versionedPartitionName, state.waterline, state.isOnline, partitionStore.highestTxId());
+            if (state != null && state.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
+                takeCoordinator.updated(amzaRingReader, versionedPartitionName, state.getLivelyEndState(), partitionStore.highestTxId());
             } else {
                 LOG.warn("State:{} wasn't aligned with versioned partition:{}", state, versionedPartitionName);
             }
@@ -303,8 +303,8 @@ public class AmzaServiceInitializer {
             walUpdated,
             allRowChanges);
 
-        HighestPartitionTx<Void> takeHighestPartitionTx = (versionedPartitionName, partitionState, isOnline, highestTxId) -> {
-            takeCoordinator.updated(amzaRingReader, versionedPartitionName, partitionState, isOnline, highestTxId);
+        HighestPartitionTx<Void> takeHighestPartitionTx = (versionedPartitionName, livelyEndState, highestTxId) -> {
+            takeCoordinator.updated(amzaRingReader, versionedPartitionName, livelyEndState, highestTxId);
             return null;
         };
 

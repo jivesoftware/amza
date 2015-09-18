@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.api.partition;
 
-import com.jivesoftware.os.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 
 /**
  * @author jonathan.colt
  */
 public interface HighestPartitionTx<R> {
 
-    R tx(VersionedPartitionName versionedPartitionName, Waterline waterlineState, boolean isOnline, long highestTxId) throws Exception;
+    R tx(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState, long highestTxId) throws Exception;
 }

@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
@@ -58,16 +59,17 @@ public class AmzaStateStorageNGTest {
             false);
 
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+        LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
         TxPartitionState txPartitionState = new TxPartitionState() {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                return tx.tx(new VersionedPartitionName(partitionName, 0), waterline, true);
+                return tx.tx(new VersionedPartitionName(partitionName, 0), livelyEndState);
             }
 
             @Override
             public VersionedState getLocalVersionedState(PartitionName partitionName) throws Exception {
-                return new VersionedState(waterline, true, new StorageVersion(0, 0));
+                return new VersionedState(livelyEndState, new StorageVersion(0, 0));
             }
         };
 
@@ -79,7 +81,7 @@ public class AmzaStateStorageNGTest {
             null,
             false);
 
-        WALUpdated updated = (versionedPartitionName, state, isOnline, txId) -> {
+        WALUpdated updated = (versionedPartitionName, livelyEndState1, txId) -> {
         };
 
         Member root = new Member(new byte[]{1});

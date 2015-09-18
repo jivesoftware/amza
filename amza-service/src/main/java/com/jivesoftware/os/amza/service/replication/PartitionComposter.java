@@ -69,12 +69,12 @@ public class PartitionComposter {
     public void compost() throws Exception {
         List<VersionedPartitionName> composted = new ArrayList<>();
         partitionStateStorage.streamLocalState((partitionName, ringMember, versionedState) -> {
-            if (versionedState.waterline.getState() == State.expunged) {
+            if (versionedState.isCurrentState(State.expunged)) {
                 try {
                     amzaStats.beginCompaction("Expunge " + partitionName + " " + versionedState);
                     partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
                         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName,
-                            versionedState.storageVersion.partitionVersion);
+                            versionedState.getPartitionVersion());
                         if (stripe.expungePartition(versionedPartitionName)) {
                             partitionIndex.remove(versionedPartitionName);
                             highwaterStorage.expunge(versionedPartitionName);
@@ -88,7 +88,7 @@ public class PartitionComposter {
                 }
 
             } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName()) || !partitionProvider.hasPartition(partitionName)) {
-                partitionStateStorage.markForDisposal(new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion), ringMember);
+                partitionStateStorage.markForDisposal(new VersionedPartitionName(partitionName, versionedState.getPartitionVersion()), ringMember);
             }
             return true;
         });

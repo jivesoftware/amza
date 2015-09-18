@@ -82,7 +82,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 total.incrementAndGet();
                 openExecutor.submit(() -> {
                     try {
-                        txPartitionState.tx(partitionName, (versionedPartitionName, partitionState, isOnline) -> {
+                        txPartitionState.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
                             if (versionedPartitionName != null) {
                                 get(versionedPartitionName);
                             }

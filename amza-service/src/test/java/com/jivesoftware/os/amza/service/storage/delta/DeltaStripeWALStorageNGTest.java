@@ -40,6 +40,7 @@ import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -54,7 +55,7 @@ import org.testng.annotations.Test;
  */
 public class DeltaStripeWALStorageNGTest {
 
-    private final WALUpdated updated = (versionedPartitionName, state, isOnline, txId) -> {
+    private final WALUpdated updated = (versionedPartitionName, livelyEndState, txId) -> {
     };
 
     private final VersionedPartitionName versionedPartitionName =
@@ -85,18 +86,20 @@ public class DeltaStripeWALStorageNGTest {
             indexedWALStorageProvider,
             partitionPropertyMarshaller,
             false);
+
+        Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+        LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
+
         TxPartitionState txPartitionState = new TxPartitionState() {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
-                return tx.tx(new VersionedPartitionName(partitionName, 0), waterline, true);
+                return tx.tx(new VersionedPartitionName(partitionName, 0), livelyEndState);
             }
 
             @Override
             public VersionedState getLocalVersionedState(PartitionName partitionName) throws Exception {
-                Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
-                return new VersionedState(waterline, true, new StorageVersion(0, 0));
+                return new VersionedState(livelyEndState, new StorageVersion(0, 0));
             }
         };
 
@@ -138,7 +141,8 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNull(storage.getTimestampedValue(walKey.prefix, walKey.key));
 
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefix, new IntUpdate(1, 1, 1, false), updated);
+        LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefix, new IntUpdate(1, 1, 1, false), updated);
 
         deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, keyStream -> keyStream.stream(walKey.key),
             (_prefix, key, value, timestamp, tombstoned, version) -> {
@@ -160,7 +164,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(1, 1, UIO.intBytes(1)));
         Assert.assertEquals(storage.count(keyStream -> true), 1);
 
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefix, new IntUpdate(1, 1, 0, false), updated);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefix, new IntUpdate(1, 1, 0, false), updated);
         Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName, storage, walKey.prefix, walKey.key), new WALValue(UIO.intBytes(1), 1, false, 1));
         deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(1), assertKeyIsContained(true));
         Assert.assertEquals(storage.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(1, 1, UIO.intBytes(1)));
@@ -168,7 +172,7 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.merge(partitionIndex, false);
 
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefix, new IntUpdate(1, 1, 2, true), updated);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefix, new IntUpdate(1, 1, 2, true), updated);
         Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName, storage, walKey.prefix, walKey.key).getTombstoned());
         deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(1), assertKeyIsContained(false));
         Assert.assertEquals(storage.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(1, 1, UIO.intBytes(1)));
@@ -201,9 +205,10 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNull(storage.getTimestampedValue(prefix, key2));
 
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+        LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
 
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefix, new IntUpdate(1, 1, 1, false), updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefix, new IntUpdate(2, 2, 1, false), updated);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefix, new IntUpdate(1, 1, 1, false), updated);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefix, new IntUpdate(2, 2, 1, false), updated);
 
         Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key1), new WALValue(UIO.intBytes(1), 1, false, 1));
         Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key2), new WALValue(UIO.intBytes(2), 1, false, 1));
@@ -225,8 +230,8 @@ public class DeltaStripeWALStorageNGTest {
 
         deltaStripeWALStorage.merge(partitionIndex, false);
 
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefix, new IntUpdate(1, 1, 2, true), updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefix, new IntUpdate(2, 2, 2, true), updated);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefix, new IntUpdate(1, 1, 2, true), updated);
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefix, new IntUpdate(2, 2, 2, true), updated);
 
         Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key1).getTombstoned());
         Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName, storage, prefix, key2).getTombstoned());
@@ -256,22 +261,23 @@ public class DeltaStripeWALStorageNGTest {
         byte[] prefixB = "b".getBytes();
 
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true, Long.MAX_VALUE);
+        LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
 
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefixA, new IntUpdate(1, 101, 1001, false),
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefixA, new IntUpdate(1, 101, 1001, false),
             updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefixB, new IntUpdate(1, 201, 2001, false),
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefixB, new IntUpdate(1, 201, 2001, false),
             updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefixA, new IntUpdate(2, 102, 1002, false),
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefixA, new IntUpdate(2, 102, 1002, false),
             updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefixB, new IntUpdate(2, 202, 2002, false),
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefixB, new IntUpdate(2, 202, 2002, false),
             updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefixA, new IntUpdate(3, 103, 1003, false),
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefixA, new IntUpdate(3, 103, 1003, false),
             updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefixB, new IntUpdate(3, 203, 2003, false),
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefixB, new IntUpdate(3, 203, 2003, false),
             updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefixA, new IntUpdate(4, 104, 1004, false),
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefixA, new IntUpdate(4, 104, 1004, false),
             updated);
-        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, waterline, true, storage, prefixB, new IntUpdate(4, 204, 2004, false),
+        deltaStripeWALStorage.update(highwaterStorage, versionedPartitionName, livelyEndState, storage, prefixB, new IntUpdate(4, 204, 2004, false),
             updated);
 
         int[] index = new int[1];

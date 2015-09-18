@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
-import com.jivesoftware.os.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -68,8 +68,7 @@ public class TakeRingCoordinator {
 
     void update(List<Entry<RingMember, RingHost>> neighbors,
         VersionedPartitionName versionedPartitionName,
-        Waterline waterline,
-        boolean isOnline,
+        LivelyEndState livelyEndState,
         long txId) throws Exception {
 
         VersionedRing ring = ensureVersionedRing(neighbors);
@@ -81,7 +80,7 @@ public class TakeRingCoordinator {
                 systemReofferDeltaMillis,
                 reofferDeltaMillis));
         PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-        coordinator.updateTxId(ring, properties.takeFromFactor, txId, isOnline);
+        coordinator.updateTxId(ring, properties.takeFromFactor, txId, livelyEndState);
     }
 
     long availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
@@ -106,11 +105,11 @@ public class TakeRingCoordinator {
         return suggestedWaitInMillis;
     }
 
-    void rowsTaken(RingMember remoteRingMember, VersionedPartitionName localVersionedPartitionName, long localTxId, boolean isOnline) throws Exception {
+    void rowsTaken(RingMember remoteRingMember, VersionedPartitionName localVersionedPartitionName, long localTxId, LivelyEndState livelyEndState) throws Exception {
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(localVersionedPartitionName);
         if (coordinator != null) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-            coordinator.rowsTaken(versionedRing.get(), remoteRingMember, localTxId, properties.takeFromFactor, isOnline);
+            coordinator.rowsTaken(versionedRing.get(), remoteRingMember, localTxId, properties.takeFromFactor, livelyEndState);
         }
     }
 

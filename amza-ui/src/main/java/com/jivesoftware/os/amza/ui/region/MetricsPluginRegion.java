@@ -23,6 +23,7 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -291,10 +292,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("count", "disabled");
             }
 
-            partition.highestTxId((versionedPartitionName, waterline, isOnline, highestTxId) -> {
+            partition.highestTxId((versionedPartitionName, livelyEndState, highestTxId) -> {
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                map.put("state", waterline.getState().name());
-                map.put("isOnline", isOnline);
+                map.put("state", livelyEndState.currentWaterline.getState().name());
+                map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
                 return null;
             });
@@ -305,13 +306,13 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             if (name.isSystemPartition()) {
                 HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
                 WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(
-                    new VersionedPartitionName(name, localState.storageVersion.partitionVersion));
+                    new VersionedPartitionName(name, localState.getPartitionVersion()));
                 map.put("highwaters", renderHighwaters(partitionHighwater));
             } else {
                 PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
                 partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
                     WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(
-                        new VersionedPartitionName(name, localState.storageVersion.partitionVersion));
+                        new VersionedPartitionName(name, localState.getPartitionVersion()));
                     map.put("highwaters", renderHighwaters(partitionHighwater));
                     return null;
                 });
@@ -334,11 +335,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         if (name != null) {
             VersionedState localVersionedWaterline = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
-            map.put("localState", ImmutableMap.of("online", localVersionedWaterline.isOnline,
-                "state", localVersionedWaterline.waterline.getState().name(),
+            LivelyEndState livelyEndState = localVersionedWaterline.getLivelyEndState();
+            map.put("localState", ImmutableMap.of("online", livelyEndState.isOnline(),
+                "state", livelyEndState.currentWaterline.getState().name(),
                 "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
-                "partitionVersion", String.valueOf(localVersionedWaterline.storageVersion.partitionVersion),
-                "stripeVersion", String.valueOf(localVersionedWaterline.storageVersion.stripeVersion)));
+                "partitionVersion", String.valueOf(localVersionedWaterline.getPartitionVersion()),
+                "stripeVersion", String.valueOf(localVersionedWaterline.getStorageVersion().stripeVersion)));
 
             List<Map<String, Object>> neighborStates = new ArrayList<>();
             Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());

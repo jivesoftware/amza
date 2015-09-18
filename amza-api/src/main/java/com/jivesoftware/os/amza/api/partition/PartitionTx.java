@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.api.partition;
 
-import com.jivesoftware.os.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 
 /**
  *
@@ -8,5 +8,5 @@ import com.jivesoftware.os.aquarium.Waterline;
  */
 public interface PartitionTx<R> {
 
-    R tx(VersionedPartitionName versionedPartitionName, Waterline waterline, boolean isOnline) throws Exception;
+    R tx(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception;
 }

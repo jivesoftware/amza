@@ -1,56 +1,53 @@
 package com.jivesoftware.os.amza.api.partition;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.aquarium.Waterline;
-import java.util.Objects;
+import com.jivesoftware.os.aquarium.LivelyEndState;
+import com.jivesoftware.os.aquarium.State;
 
 /**
  * @author jonathan.colt
  */
 public class VersionedState {
 
-    public final Waterline waterline;
-    public final boolean isOnline;
-    public final StorageVersion storageVersion;
+    private final LivelyEndState livelyEndState;
+    private final StorageVersion storageVersion;
 
-    public VersionedState(Waterline waterline, boolean isOnline, StorageVersion storageVersion) {
-        Preconditions.checkNotNull(waterline, "Waterline cannot be null");
+    public VersionedState(LivelyEndState livelyEndState, StorageVersion storageVersion) {
+        Preconditions.checkNotNull(livelyEndState, "LivelyEndState cannot be null");
         Preconditions.checkNotNull(storageVersion, "StorageVersion cannot be null");
-        this.waterline = waterline;
-        this.isOnline = isOnline;
+        this.livelyEndState = livelyEndState;
         this.storageVersion = storageVersion;
     }
 
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 29 * hash + Objects.hashCode(this.waterline);
-        hash = 29 * hash + (this.isOnline ? 1 : 0);
-        hash = 29 * hash + Objects.hashCode(this.storageVersion);
-        return hash;
+    public LivelyEndState getLivelyEndState() {
+        return livelyEndState;
+    }
+
+    public StorageVersion getStorageVersion() {
+        return storageVersion;
+    }
+
+    public boolean isCurrentState(State state) {
+        return livelyEndState.currentWaterline.getState() == state;
+    }
+
+    public long getPartitionVersion() {
+        return storageVersion.partitionVersion;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final VersionedState other = (VersionedState) obj;
-        if (this.waterline != other.waterline) {
-            return false;
-        }
-        if (this.isOnline != other.isOnline) {
-            return false;
-        }
-        return Objects.equals(this.storageVersion, other.storageVersion);
+        throw new UnsupportedOperationException("Stop that");
+    }
+
+    @Override
+    public int hashCode() {
+        throw new UnsupportedOperationException("Stop that");
     }
 
     @Override
     public String toString() {
-        return "VersionedState{" + "waterline=" + waterline + ", isOnline=" + isOnline + ", storageVersion=" + storageVersion + '}';
+        return "VersionedState{" + "livelyEndState=" + livelyEndState + ", storageVersion=" + storageVersion + '}';
     }
 
 }

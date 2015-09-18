@@ -11,7 +11,7 @@ import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
-import com.jivesoftware.os.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -73,11 +73,13 @@ public class TakeCoordinator {
     }
 
     public interface BootstrapPartitions {
+
         boolean bootstrap(PartitionStream partitionStream) throws Exception;
     }
 
     public interface PartitionStream {
-        boolean stream(VersionedPartitionName versionedPartitionName, Waterline waterline) throws Exception;
+
+        boolean stream(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception;
     }
 
     public void start(AmzaRingReader ringReader, BootstrapPartitions bootstrapPartitions) {
@@ -105,10 +107,10 @@ public class TakeCoordinator {
                     LOG.error("Failed while ensuring alignment.", x);
                 }
 
-                bootstrapPartitions.bootstrap((versionedPartitionName, waterline) -> {
+                bootstrapPartitions.bootstrap((versionedPartitionName, livelyEndState) -> {
                     byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
                     List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
-                    takeRingCoordinators.get(new IBA(ringName)).update(neighbors, versionedPartitionName, waterline, false, -1);
+                    takeRingCoordinators.get(new IBA(ringName)).update(neighbors, versionedPartitionName, livelyEndState, -1);
                     return true;
                 });
 
@@ -141,19 +143,19 @@ public class TakeCoordinator {
         }
     }
 
-    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, Waterline waterline, boolean isOnline, long txId) throws
+    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState, long txId) throws
         Exception {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
         TakeRingCoordinator ring = ensureRingCoordinator(ringName, neighbors);
-        ring.update(neighbors, versionedPartitionName, waterline, isOnline, txId);
+        ring.update(neighbors, versionedPartitionName, livelyEndState, txId);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(neighbors);
     }
 
-    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, Waterline waterline, boolean isOnline) throws Exception {
-        updated(ringReader, versionedPartitionName, waterline, isOnline, 0);
+    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception {
+        updated(ringReader, versionedPartitionName, livelyEndState, 0);
     }
 
     private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, List<Entry<RingMember, RingHost>> neighbors) {
@@ -200,7 +202,7 @@ public class TakeCoordinator {
             long start = updates.get();
             //LOG.info("CHECKING: remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
 
-            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
+            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
                 if (ring != null) {
@@ -243,13 +245,13 @@ public class TakeCoordinator {
     public void rowsTaken(RingMember remoteRingMember,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
-        boolean isOnline) throws Exception {
+        LivelyEndState livelyEndState) throws Exception {
 
         //LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
         //    remoteRingMember, null, localTxId, localVersionedPartitionName);
         byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
-        ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId, isOnline);
+        ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId, livelyEndState);
     }
 
 }

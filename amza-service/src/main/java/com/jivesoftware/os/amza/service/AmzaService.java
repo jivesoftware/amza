@@ -50,6 +50,7 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.aquarium.Liveliness;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -57,7 +58,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -222,14 +222,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             throw new IllegalStateException("No properties for partition: " + partitionName);
         }
 
-        partitionStateStorage.tx(partitionName, (versionedPartitionName, partitionState, isOnline) -> {
-            if (!isOnline) {
+        partitionStateStorage.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
+            if (!livelyEndState.isOnline()) {
                 VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
-                versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
-                partitionState = versionedState.waterline;
+                versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.getPartitionVersion());
             }
             if (partitionCreator.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
-                takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName, partitionState, isOnline);
+                takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName, livelyEndState);
             }
             long start = System.currentTimeMillis();
             aquariumProvider.awaitOnline(versionedPartitionName, timeoutMillis);
@@ -258,10 +257,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         List<RingMember> missingRingMembers = new ArrayList<>();
 
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
-            partitionStateStorage.tx(partitionName, (versionedPartitionName, partitionState, isOnline) -> {
-                if (!isOnline) {
+            partitionStateStorage.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
+                if (!livelyEndState.isOnline()) {
                     VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
-                    versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.storageVersion.partitionVersion);
+                    versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.getPartitionVersion());
                 }
                 partitionCreator.createPartitionStoreIfAbsent(versionedPartitionName, properties);
                 return getPartition(partitionName);
@@ -379,7 +378,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public boolean promotePartition(PartitionName partitionName) throws Exception {
         return partitionStateStorage.tx(partitionName,
-            (versionedPartitionName, waterline, isOnline) -> aquariumProvider.getAquarium(versionedPartitionName).suggestState(State.leader));
+            (versionedPartitionName, livelyEndState) -> aquariumProvider.getAquarium(versionedPartitionName).suggestState(State.leader));
     }
 
     @Override
@@ -490,7 +489,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         } else {
             needsToMarkAsKetchup = partitionStripeProvider.txPartition(localVersionedPartitionName.getPartitionName(),
                 (stripe, highwaterStorage) -> stripe.takeRowUpdatesSince(localVersionedPartitionName.getPartitionName(), localTxId,
-                    (versionedPartitionName, partitionWaterlineState, streamer) -> {
+                    (versionedPartitionName, livelyEndState, streamer) -> {
                         if (streamer != null && localVersionedPartitionName.equals(versionedPartitionName)) {
                             return streamOnline(remoteRingMember,
                                 versionedPartitionName,
@@ -501,7 +500,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                                 highwaterStorage,
                                 streamer);
                         } else {
-                            return streamBootstrap(localLeadershipToken, dos, bytes, versionedPartitionName, partitionWaterlineState);
+                            return streamBootstrap(localLeadershipToken, dos, bytes, versionedPartitionName, livelyEndState);
                         }
                     }));
         }
@@ -520,21 +519,22 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         }
     }
 
-    boolean isOnline(VersionedPartitionName versionedPartitionName, Waterline waterline) throws Exception {
-        return aquariumProvider.isOnline(versionedPartitionName, waterline);
+    LivelyEndState getLivelyEndState(VersionedPartitionName versionedPartitionName) throws Exception {
+        return aquariumProvider.getAquarium(versionedPartitionName).livelyEndState();
     }
 
     private boolean streamBootstrap(long leadershipToken, DataOutputStream dos,
         MutableLong bytes,
         VersionedPartitionName versionedPartitionName,
-        Waterline partitionWaterlineState) throws Exception {
+        LivelyEndState livelyEndState) throws Exception {
+
         dos.writeLong(leadershipToken);
         dos.writeLong(-1);
         dos.writeByte(0); // not online
         dos.writeByte(0); // last entry marker
         dos.writeByte(0); // last entry marker
         bytes.add(3);
-        if (versionedPartitionName == null || partitionWaterlineState == null) {
+        if (versionedPartitionName == null || livelyEndState == null) {
             // someone thinks we're a member for this partition
             return true;
         } else {
@@ -596,8 +596,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         ackWaters.set(remoteRingMember, localVersionedPartitionName, localTxId, leadershipToken);
 
         VersionedState localVersionedState = partitionStateStorage.getLocalVersionedState(localVersionedPartitionName.getPartitionName());
-        if (localVersionedState.storageVersion.partitionVersion == localVersionedPartitionName.getPartitionVersion()) {
-            takeCoordinator.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId, localVersionedState.isOnline);
+        if (localVersionedState.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
+            takeCoordinator.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId, localVersionedState.getLivelyEndState());
         }
     }
 

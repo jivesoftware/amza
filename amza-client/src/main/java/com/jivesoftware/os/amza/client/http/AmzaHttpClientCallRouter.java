@@ -244,7 +244,7 @@ public class AmzaHttpClientCallRouter {
 
         Ring ring = partitionRoutingCache.getIfPresent(partitionName);
         if (ring == null || consistency.requiresLeader() && ring.leader() == null) {
-            ring = partitionHostsProvider.getPartitionHosts(partitionName, useHost, waitForLeaderElection);
+            ring = partitionHostsProvider.getPartitionHosts(partitionName, useHost, consistency.requiresLeader() ? waitForLeaderElection : 0);
             if (consistency.requiresLeader()) {
                 if (ring.leader() == null) {
                     throw new LeaderElectionInProgressException("It took to long for a leader to be elected.");
@@ -315,7 +315,7 @@ public class AmzaHttpClientCallRouter {
                 try {
                     closeable.close();
                 } catch (Throwable t) {
-                    LOG.warn("Failed to close {}", new Object[] { closeable }, t);
+                    LOG.warn("Failed to close {}", new Object[]{closeable}, t);
                 }
             }
         }

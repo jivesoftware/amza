@@ -40,8 +40,8 @@ import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.aquarium.Aquarium;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
-import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -114,8 +114,8 @@ public class StripedPartition implements Partition {
                 (versionedPartitionName) -> {
                     if (takeQuorum > 0) {
                         Aquarium aquarium = aquariumProvider.getAquarium(versionedPartitionName);
-                        Waterline livelyEndState = aquarium.livelyEndState();
-                        if (consistency.requiresLeader() && (livelyEndState == null || livelyEndState.getState() != State.leader)) {
+                        LivelyEndState livelyEndState = aquarium.livelyEndState();
+                        if (consistency.requiresLeader() && (livelyEndState == null || livelyEndState.currentWaterline.getState() != State.leader)) {
                             throw new FailedToAchieveQuorumException("Leader has changed.");
                         }
                     }

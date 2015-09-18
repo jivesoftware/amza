@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.shared.take.TakeRingCoordinator.VersionedRing;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -47,8 +48,8 @@ public class TakeVersionedPartitionCoordinator {
         this.currentCategory = new AtomicInteger(1);
     }
 
-    void updateTxId(VersionedRing versionedRing, int takeFromFactor, long updateTxId, boolean isOnline) {
-        updateCategory(versionedRing, takeFromFactor, updateTxId, isOnline);
+    void updateTxId(VersionedRing versionedRing, int takeFromFactor, long updateTxId, LivelyEndState livelyEndState) {
+        updateCategory(versionedRing, takeFromFactor, updateTxId, livelyEndState);
         //LOG.info("UPDATE: partition:{} state:{} txId:{} ", versionedPartitionName, state, txId);
     }
 
@@ -62,13 +63,16 @@ public class TakeVersionedPartitionCoordinator {
 
         if (takeFromFactor > 0) {
             return txHighestPartitionTx.tx(versionedPartitionName.getPartitionName(),
-                (versionedPartitionName1, partitionWaterlineState, isOnline, highestTxId) -> {
+                (versionedPartitionName1, livelyEndState, highestTxId) -> {
                     if (versionedPartitionName1.getPartitionVersion() != versionedPartitionName.getPartitionVersion()) {
                         return Long.MAX_VALUE;
                     }
 
                     Integer category = versionedRing.getCategory(ringMember);
-                    if (!takerIsOnline || partitionWaterlineState.getState() == State.bootstrap || (category != null && category <= currentCategory.get())) {
+                    if (!takerIsOnline
+                    || livelyEndState.currentWaterline.getState() == State.bootstrap
+                    || (category != null && category <= currentCategory.get())) {
+                        
                         AtomicBoolean available = new AtomicBoolean(false);
                         long reofferDelta = ((versionedPartitionName.getPartitionName().isSystemPartition()) ? systemReofferDeltaMillis : reofferDeltaMillis);
                         long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;
@@ -77,33 +81,33 @@ public class TakeVersionedPartitionCoordinator {
                             try {
                                 if (u == null) {
                                     /*LOG.info("NEW (MISSING): candidateCategory:{} currentCategory:{} ringMember:{} " +
-                                            "nudged:{} state:{} txId:{} takerIsOnline:{}",
-                                        category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, highestTxId,
-                                        takerIsOnline);*/
+                                     "nudged:{} state:{} txId:{} takerIsOnline:{}",
+                                     category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, highestTxId,
+                                     takerIsOnline);*/
                                     available.set(true);
                                     return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, -1);
                                 } else {
                                     if (u.sessionId != takeSessionId) {
                                         /*LOG.info("NEW (SESSION): oldSession:{} newSession:{} " +
-                                                "candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} state:{} txId:{}",
-                                            u.sessionId, takeSessionId,
-                                            category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, highestTxId);*/
+                                         "candidateCategory:{} currentCategory:{} ringMember:{} nudged:{} state:{} txId:{}",
+                                         u.sessionId, takeSessionId,
+                                         category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, highestTxId);*/
                                         available.set(true);
                                         return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, -1);
                                     } else {
                                         if (highestTxId > -1
-                                            && (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u.reofferAtTimeInMillis))) {
+                                        && (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u.reofferAtTimeInMillis))) {
                                             /*LOG.info("NEW (TX): candidateCategory:{} currentCategory:{} ringMember:{} " +
-                                                    "nudged:{} state:{} tookTxId:{} txId:{}",
-                                                category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,
-                                                highestTxId);*/
+                                             "nudged:{} state:{} tookTxId:{} txId:{}",
+                                             category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,
+                                             highestTxId);*/
                                             available.set(true);
                                             return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, u.tookTxId);
                                         } else if (!takerIsOnline) {
                                             /*LOG.info("NEW (OFFLINE): candidateCategory:{} currentCategory:{} ringMember:{} " +
-                                                    "nudged:{} state:{} tookTxId:{} txId:{}",
-                                                category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,
-                                                highestTxId);*/
+                                             "nudged:{} state:{} tookTxId:{} txId:{}",
+                                             category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,
+                                             highestTxId);*/
                                             available.set(true);
                                             return u;
                                         } else {
@@ -133,7 +137,7 @@ public class TakeVersionedPartitionCoordinator {
         }
     }
 
-    void rowsTaken(VersionedRing versionedRing, RingMember remoteRingMember, long localTxId, int takeFromFactor, boolean isOnline) {
+    void rowsTaken(VersionedRing versionedRing, RingMember remoteRingMember, long localTxId, int takeFromFactor, LivelyEndState livelyEndState) {
         took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
             if (existingSessionedTxId != null) {
                 return new SessionedTxId(existingSessionedTxId.sessionId,
@@ -146,7 +150,7 @@ public class TakeVersionedPartitionCoordinator {
             }
             return null;
         });
-        updateCategory(versionedRing, takeFromFactor, localTxId, isOnline);
+        updateCategory(versionedRing, takeFromFactor, localTxId, livelyEndState);
     }
 
     //TODO call this?
@@ -155,8 +159,8 @@ public class TakeVersionedPartitionCoordinator {
         keySet.removeAll(Sets.difference(keySet, retain));
     }
 
-    private void updateCategory(VersionedRing versionedRing, int takeFromFactor, long latestTxId, boolean isOnline) {
-        if (isOnline && takeFromFactor > 0) {
+    private void updateCategory(VersionedRing versionedRing, int takeFromFactor, long latestTxId, LivelyEndState livelyEndState) {
+        if (livelyEndState.isOnline() && takeFromFactor > 0) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
             int fastEnough = 0;
             int worstCategory = 1;

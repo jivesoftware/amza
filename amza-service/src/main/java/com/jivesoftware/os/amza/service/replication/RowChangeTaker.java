@@ -238,7 +238,7 @@ public class RowChangeTaker implements RowChanges {
                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                                         return null;
                                     }
-                                    if (livelyEndState.currentWaterline.getState() == State.expunged) {
+                                    if (livelyEndState.currentWaterline != null && livelyEndState.currentWaterline.getState() == State.expunged) {
                                         //LOG.info("EXPUNGED: local:{} remote:{}  txId:{} partition:{} localState:{} remoteState:{}",
                                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, partitionState, remoteState);
                                         return null;

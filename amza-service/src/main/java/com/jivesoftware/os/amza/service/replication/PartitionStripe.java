@@ -263,7 +263,7 @@ public class PartitionStripe {
         TakeRowUpdates<R> takeRowUpdates)
         throws Exception {
         return txPartitionState.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
-            if (versionedPartitionName == null || livelyEndState == null) {
+            if (versionedPartitionName == null || livelyEndState == null || livelyEndState.currentWaterline == null) {
                 return takeRowUpdates.give(null, null, null);
             }
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);

@@ -1,4 +1,4 @@
-![Amza](https://github.com/jivesoftware/amza/wiki/images/amza/amza-logo.png)
+![Amza](https://github.com/jivesoftware/amza/wiki/images/amza-logo.png)
 =========
 
 #### What It Is

@@ -70,9 +70,9 @@ public class TakeVersionedPartitionCoordinator {
 
                     Integer category = versionedRing.getCategory(ringMember);
                     if (!takerIsOnline
-                    || livelyEndState.getCurrentState() == State.bootstrap
-                    || (category != null && category <= currentCategory.get())) {
-                        
+                        || livelyEndState.getCurrentState() == State.bootstrap
+                        || (category != null && category <= currentCategory.get())) {
+
                         AtomicBoolean available = new AtomicBoolean(false);
                         long reofferDelta = ((versionedPartitionName.getPartitionName().isSystemPartition()) ? systemReofferDeltaMillis : reofferDeltaMillis);
                         long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;
@@ -96,7 +96,8 @@ public class TakeVersionedPartitionCoordinator {
                                         return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, -1);
                                     } else {
                                         if (highestTxId > -1
-                                        && (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u.reofferAtTimeInMillis))) {
+                                            && (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u
+                                            .reofferAtTimeInMillis))) {
                                             /*LOG.info("NEW (TX): candidateCategory:{} currentCategory:{} ringMember:{} " +
                                              "nudged:{} state:{} tookTxId:{} txId:{}",
                                              category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,
@@ -105,9 +106,9 @@ public class TakeVersionedPartitionCoordinator {
                                             return new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, u.tookTxId);
                                         } else if (!takerIsOnline) {
                                             /*LOG.info("NEW (OFFLINE): candidateCategory:{} currentCategory:{} ringMember:{} " +
-                                             "nudged:{} state:{} tookTxId:{} txId:{}",
-                                             category, currentCategory.get(), ringMember, versionedPartitionName, partitionWaterlineState, u.tookTxId,
-                                             highestTxId);*/
+                                              "nudged:{} state:{} tookTxId:{} txId:{}",
+                                              category, currentCategory.get(), ringMember, versionedPartitionName, livelyEndState, u.tookTxId,
+                                              highestTxId);*/
                                             available.set(true);
                                             return u;
                                         } else {

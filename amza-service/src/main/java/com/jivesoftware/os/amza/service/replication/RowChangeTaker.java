@@ -268,9 +268,15 @@ public class RowChangeTaker implements RowChanges {
                                             });
                                     }
                                 });
+
+                            /*if (currentLocalVersionedPartitionName == null) {
+                                LOG.info("PUSHBACK: remote:{} partition:{}",
+                                    remoteRingMember, remoteVersionedPartitionName);
+                            } else {
+                                LOG.info("TAKE: remote:{} partition:{}",
+                                    remoteRingMember, remoteVersionedPartitionName);
+                            }*/
                             if (currentLocalVersionedPartitionName == null) {
-                                //LOG.info("PUSHBACK: local:{} told remote:{} partition:{} state:{} txId:{} is available.",
-                                //    ringHost, remoteRingHost, remoteVersionedPartitionName, remoteState, tookToTxId.get());
                                 rowsTaker.rowsTaken(amzaRingReader.getRingMember(),
                                     remoteRingMember,
                                     remoteRingHost,

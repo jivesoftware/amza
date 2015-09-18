@@ -91,14 +91,7 @@ public class TakeCoordinator {
                     for (IBA ringName : takeRingCoordinators.keySet()) {
                         TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
                         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName.getBytes());
-                        boolean neighborsChanged;
-                        if (takeRingCoordinator != null) {
-                            neighborsChanged = takeRingCoordinator.cya(neighbors);
-                        } else {
-                            ensureRingCoordinator(ringName.getBytes(), neighbors);
-                            neighborsChanged = true;
-                        }
-                        if (neighborsChanged) {
+                        if (takeRingCoordinator.cya(neighbors)) {
                             awakeRemoteTakers(neighbors);
                         }
                     }
@@ -148,7 +141,7 @@ public class TakeCoordinator {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
-        TakeRingCoordinator ring = ensureRingCoordinator(ringName, neighbors);
+        TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> neighbors);
         ring.update(neighbors, versionedPartitionName, livelyEndState, txId);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(neighbors);
@@ -158,7 +151,11 @@ public class TakeCoordinator {
         updated(ringReader, versionedPartitionName, livelyEndState, 0);
     }
 
-    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, List<Entry<RingMember, RingHost>> neighbors) {
+    interface NeighborsSupplier {
+        List<Entry<RingMember, RingHost>> get();
+    }
+
+    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, NeighborsSupplier neighborsSupplier) {
         return takeRingCoordinators.computeIfAbsent(new IBA(ringName),
             key -> new TakeRingCoordinator(ringName,
                 timestampedOrderIdProvider,
@@ -167,7 +164,7 @@ public class TakeCoordinator {
                 slowTakeInMillis,
                 systemReofferDeltaMillis,
                 reofferDeltaMillis,
-                neighbors));
+                neighborsSupplier.get()));
     }
 
     private void awakeRemoteTakers(List<Entry<RingMember, RingHost>> neighbors) {
@@ -204,7 +201,13 @@ public class TakeCoordinator {
 
             long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
-                TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
+                TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> {
+                    try {
+                        return ringReader.getNeighbors(ringName);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
                         ring.availableRowsStream(txHighestPartitionTx,

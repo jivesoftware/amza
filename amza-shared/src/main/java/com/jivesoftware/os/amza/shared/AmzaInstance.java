@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.shared;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import java.io.DataOutputStream;
 import java.util.Set;
 
@@ -31,6 +32,7 @@ public interface AmzaInstance {
 
     void availableRowsStream(ChunkWriteable writeable,
         RingMember remoteRingMember,
+        TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
         long timeoutMillis) throws Exception;
 
@@ -41,6 +43,7 @@ public interface AmzaInstance {
         long leadershipToken) throws Exception;
 
     void rowsTaken(RingMember remoteRingMember,
+        long takeSessionId,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
         long leadershipToken) throws Exception;

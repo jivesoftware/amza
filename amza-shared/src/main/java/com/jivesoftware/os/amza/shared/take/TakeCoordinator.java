@@ -4,11 +4,11 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.SetMultimap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.aquarium.LivelyEndState;
@@ -18,7 +18,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -90,9 +89,9 @@ public class TakeCoordinator {
                 try {
                     for (IBA ringName : takeRingCoordinators.keySet()) {
                         TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
-                        List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName.getBytes());
-                        if (takeRingCoordinator.cya(neighbors)) {
-                            awakeRemoteTakers(neighbors);
+                        RingTopology ring = ringReader.getRing(ringName.getBytes());
+                        if (takeRingCoordinator.cya(ring)) {
+                            awakeRemoteTakers(ring);
                         }
                     }
 
@@ -100,12 +99,12 @@ public class TakeCoordinator {
                     LOG.error("Failed while ensuring alignment.", x);
                 }
 
-                bootstrapPartitions.bootstrap((versionedPartitionName, livelyEndState) -> {
+                /*bootstrapPartitions.bootstrap((versionedPartitionName) -> {
                     byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
                     List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
-                    takeRingCoordinators.get(new IBA(ringName)).update(neighbors, versionedPartitionName, livelyEndState, -1);
+                    ensureRingCoordinator(ringName, () -> neighbors).update(neighbors, versionedPartitionName, -1);
                     return true;
-                });
+                });*/
 
                 try {
                     synchronized (cyaLock) {
@@ -136,26 +135,24 @@ public class TakeCoordinator {
         }
     }
 
-    public void updated(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState, long txId) throws
-        Exception {
+    public void update(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, long txId) throws Exception {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
-        List<Entry<RingMember, RingHost>> neighbors = ringReader.getNeighbors(ringName);
-        TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> neighbors);
-        ring.update(neighbors, versionedPartitionName, livelyEndState, txId);
+        RingTopology ring = ringReader.getRing(ringName);
+        ensureRingCoordinator(ringName, () -> ring).update(ring, versionedPartitionName, txId);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
-        awakeRemoteTakers(neighbors);
+        awakeRemoteTakers(ring);
     }
 
-    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception {
-        updated(ringReader, versionedPartitionName, livelyEndState, 0);
+    public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName) throws Exception {
+        update(ringReader, versionedPartitionName, 0);
     }
 
-    interface NeighborsSupplier {
-        List<Entry<RingMember, RingHost>> get();
+    interface RingSupplier {
+        RingTopology get();
     }
 
-    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, NeighborsSupplier neighborsSupplier) {
+    private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, RingSupplier ringSupplier) {
         return takeRingCoordinators.computeIfAbsent(new IBA(ringName),
             key -> new TakeRingCoordinator(ringName,
                 timestampedOrderIdProvider,
@@ -164,14 +161,16 @@ public class TakeCoordinator {
                 slowTakeInMillis,
                 systemReofferDeltaMillis,
                 reofferDeltaMillis,
-                neighborsSupplier.get()));
+                ringSupplier.get()));
     }
 
-    private void awakeRemoteTakers(List<Entry<RingMember, RingHost>> neighbors) {
-        for (Entry<RingMember, RingHost> r : neighbors) {
-            Object lock = ringMembersLocks.computeIfAbsent(r.getKey(), (ringMember) -> new Object());
-            synchronized (lock) {
-                lock.notifyAll();
+    private void awakeRemoteTakers(RingTopology ring) {
+        for (int i = 0; i < ring.entries.size(); i++) {
+            if (ring.rootMemberIndex != i) {
+                Object lock = ringMembersLocks.computeIfAbsent(ring.entries.get(i).ringMember, (ringMember) -> new Object());
+                synchronized (lock) {
+                    lock.notifyAll();
+                }
             }
         }
     }
@@ -197,13 +196,15 @@ public class TakeCoordinator {
 
         while (true) {
             long start = updates.get();
+            /*LOG.info("Checking available for {}...", remoteRingMember);
+            long timestamp = System.currentTimeMillis();*/
             //LOG.info("CHECKING: remote:{} local:{}", remoteRingMember, ringReader.getRingMember());
 
-            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
+            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> {
                     try {
-                        return ringReader.getNeighbors(ringName);
+                        return ringReader.getRing(ringName);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -221,6 +222,10 @@ public class TakeCoordinator {
             if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
                 suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
             }
+
+            /*LOG.info("Checked available for {} in {}", remoteRingMember, System.currentTimeMillis() - timestamp);
+            LOG.info("Streaming available for {}...", remoteRingMember);
+            timestamp = System.currentTimeMillis();*/
 
             Object lock = ringMembersLocks.computeIfAbsent(remoteRingMember, (key) -> new Object());
             synchronized (lock) {
@@ -242,19 +247,22 @@ public class TakeCoordinator {
                     }
                 }
             }
+
+            /*LOG.info("Streamed available for {} in {}", remoteRingMember, System.currentTimeMillis() - timestamp);*/
         }
     }
 
-    public void rowsTaken(RingMember remoteRingMember,
+    public void rowsTaken(TxHighestPartitionTx<Long> txHighestPartitionTx,
+        RingMember remoteRingMember,
+        long takeSessionId,
         VersionedPartitionName localVersionedPartitionName,
-        long localTxId,
-        LivelyEndState livelyEndState) throws Exception {
+        long localTxId) throws Exception {
 
         //LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
         //    remoteRingMember, null, localTxId, localVersionedPartitionName);
         byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
-        ring.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId, livelyEndState);
+        ring.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, localVersionedPartitionName, localTxId);
     }
 
 }

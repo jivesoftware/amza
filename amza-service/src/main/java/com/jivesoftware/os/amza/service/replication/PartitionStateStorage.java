@@ -70,6 +70,10 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
         aquariumProvider.getAquarium(versionedPartitionName).tapTheGlass();
     }
 
+    public long getPartitionVersion(PartitionName partitionName) throws Exception {
+        return storageVersionProvider.createIfAbsent(partitionName).partitionVersion;
+    }
+
     @Override
     public VersionedState getLocalVersionedState(PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {

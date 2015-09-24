@@ -4,11 +4,11 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.ring.RingHost;
-import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.ui.region.AquariumPluginRegion.AquariumPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.aquarium.Aquarium;
@@ -73,12 +73,13 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
 
             long now = System.currentTimeMillis();
             List<Map<String, Object>> live = new ArrayList<>();
-            for (Map.Entry<RingMember, RingHost> e : ringReader.getRing(AmzaRingReader.SYSTEM_RING).entrySet()) {
-                long aliveUntilTimestamp = liveliness.aliveUntilTimestamp(e.getKey().asAquariumMember());
+            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
+            for (RingMemberAndHost entry : ring.entries) {
+                long aliveUntilTimestamp = liveliness.aliveUntilTimestamp(entry.ringMember.asAquariumMember());
 
                 live.add(ImmutableMap.of(
-                    "member", e.getKey().getMember(),
-                    "host", e.getValue().toCanonicalString(),
+                    "member", entry.ringMember.getMember(),
+                    "host", entry.ringHost.toCanonicalString(),
                     "liveliness", (aliveUntilTimestamp > now) ? "alive for " + String.valueOf(aliveUntilTimestamp - now) : "dead for " + String.valueOf(
                         aliveUntilTimestamp - now)
                 ));
@@ -94,9 +95,9 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
             Aquarium aquarium = versionedPartitionName != null ? aquariumProvider.getAquarium(versionedPartitionName) : null;
             if (aquarium != null) {
                 List<Map<String, Object>> states = new ArrayList<>();
-                for (Map.Entry<RingMember, RingHost> e : ringReader.getRing(AmzaRingReader.SYSTEM_RING).entrySet()) {
-                    Member asMember = e.getKey().asAquariumMember();
-                    aquarium.inspectState((readCurrent, readDesired) -> {
+                for (RingMemberAndHost entry : ring.entries) {
+                    Member asMember = entry.ringMember.asAquariumMember();
+                    aquarium.tx((readCurrent, readDesired, writeCurrent, writeDesired) -> {
 
                         Map<String, Object> state = new HashMap<>();
                         state.put("partitionName", input.partitionName);
@@ -105,13 +106,13 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
                         if (readCurrent != null) {
                             Waterline current = readCurrent.get(asMember);
                             if (current != null) {
-                                state.put("current", asMap(current, now));
+                                state.put("current", asMap(liveliness, current));
                             }
                         }
                         if (readDesired != null) {
                             Waterline desired = readDesired.get(asMember);
                             if (desired != null) {
-                                state.put("desired", asMap(desired, now));
+                                state.put("desired", asMap(liveliness, desired));
                             }
                         }
                         states.add(state);
@@ -127,14 +128,14 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
         return renderer.render(template, data);
     }
 
-    private static Map<String, Object> asMap(Waterline waterline, long now) {
+    private static Map<String, Object> asMap(Liveliness liveliness, Waterline waterline) throws Exception {
         State state = waterline.getState();
         Map<String, Object> map = new HashMap<>();
         map.put("state", state == null ? "null" : state.name());
         map.put("member", new String(waterline.getMember().getMember()));
         map.put("timestamp", String.valueOf(waterline.getTimestamp()));
         map.put("version", String.valueOf(waterline.getVersion()));
-        map.put("alive", String.valueOf(waterline.isAlive(now)));
+        map.put("alive", String.valueOf(liveliness.isAlive(waterline.getMember())));
         map.put("quorum", waterline.isAtQuorum());
         return map;
     }

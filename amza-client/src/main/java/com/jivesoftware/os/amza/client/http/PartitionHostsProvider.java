@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.routing.bird.http.client.ConnectionDescriptorSelectiveStrategy;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
@@ -36,7 +37,7 @@ public class PartitionHostsProvider {
     Ring getPartitionHosts(PartitionName partitionName, Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws HttpClientException {
 
         NextClientStrategy strategy = useHost.map(
-            (com.jivesoftware.os.amza.client.http.RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
+            (RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
                 new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
             })).orElse(roundRobinStrategy);
 

@@ -21,7 +21,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
@@ -30,6 +29,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStor
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeFunction;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
@@ -45,12 +45,16 @@ import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
+import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.CacheId;
+import com.jivesoftware.os.amza.shared.ring.RingSet;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
@@ -76,9 +80,9 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -120,8 +124,12 @@ public class AmzaServiceInitializer {
         public long takeSystemReofferDeltaMillis = 100;
         public long takeReofferDeltaMillis = 1_000;
 
-        public long aquariumLeaderDeadAfterMillis = 10_000;
+        public long aquariumLeaderDeadAfterMillis = 60_000;
         public long aquariumLivelinessFeedEveryMillis = 500;
+    }
+
+    public interface IndexProviderRegistryCallback {
+        void call(WALIndexProviderRegistry indexProviderRegistry, RowIOProvider<?> ephemeralRowIOProvider, RowIOProvider<?> persistentRowIOProvider);
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
@@ -133,7 +141,7 @@ public class AmzaServiceInitializer {
         TimestampedOrderIdProvider orderIdProvider,
         IdPacker idPacker,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
-        IndexedWALStorageProvider partitionsWALStorageProvider,
+        IndexProviderRegistryCallback indexProviderRegistryCallback,
         AvailableRowsTaker availableRowsTaker,
         RowsTakerFactory rowsTakerFactory,
         Optional<TakeFailureListener> takeFailureListener,
@@ -141,10 +149,24 @@ public class AmzaServiceInitializer {
 
         AmzaPartitionWatcher amzaPartitionWatcher = new AmzaPartitionWatcher(allRowChanges);
 
-        RowIOProvider ioProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
+        //TODO configure
+        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(config.workingDirectories,
+            amzaStats.ioStats,
+            config.corruptionParanoiaFactor,
+            1_024 * 1_024,
+            1_024 * 1_024 * 1_024,
+            capacity -> ByteBuffer.allocateDirect(capacity.intValue()));
+        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(config.workingDirectories,
+            amzaStats.ioStats,
+            config.corruptionParanoiaFactor,
+            config.useMemMap);
+        WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
+        indexProviderRegistryCallback.call(indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider);
 
-        PartitionIndex partitionIndex = new PartitionIndex(config.workingDirectories, "amza/stores",
-            partitionsWALStorageProvider, partitionPropertyMarshaller, config.hardFsync);
+        int tombstoneCompactionFactor = 2; // TODO expose to config;
+        IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller,
+            orderIdProvider, tombstoneCompactionFactor);
+        PartitionIndex partitionIndex = new PartitionIndex(walStorageProvider, partitionPropertyMarshaller, config.hardFsync);
 
         TakeCoordinator takeCoordinator = new TakeCoordinator(amzaStats,
             orderIdProvider,
@@ -157,12 +179,13 @@ public class AmzaServiceInitializer {
 
         PartitionStore ringIndex = partitionIndex.get(PartitionCreator.RING_INDEX);
         PartitionStore nodeIndex = partitionIndex.get(PartitionCreator.NODE_INDEX);
-        ConcurrentMap<IBA, Integer> ringSizesCache = new ConcurrentHashMap<>();
-        ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
-        AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringSizesCache, ringMemberRingNamesCache);
+        ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache = new ConcurrentHashMap<>();
+        ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
+        AtomicLong nodeCacheId = new AtomicLong(0);
+        AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringsCache, ringMemberRingNamesCache, nodeCacheId);
 
-        WALUpdated walUpdated = (versionedPartitionName, livelyEndState, txId) -> {
-            takeCoordinator.updated(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), livelyEndState, txId);
+        WALUpdated walUpdated = (versionedPartitionName, txId) -> {
+            takeCoordinator.update(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), txId);
         };
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
@@ -172,7 +195,7 @@ public class AmzaServiceInitializer {
             config.hardFsync);
 
         final int deltaStorageStripes = config.numberOfDeltaStripes;
-        PartitionStripeProvider.PartitionStripeFunction stripeFunction = partitionName -> Math.abs(partitionName.hashCode() % deltaStorageStripes);
+        PartitionStripeFunction partitionStripeFunction = new PartitionStripeFunction(deltaStorageStripes);
 
         File[] walDirs = new File[deltaStorageStripes];
         long[] stripeVersions = new long[deltaStorageStripes];
@@ -210,7 +233,7 @@ public class AmzaServiceInitializer {
             ringMember,
             systemWALStorage,
             partitionIndex,
-            stripeFunction,
+            partitionStripeFunction,
             stripeVersions,
             walUpdated,
             awaitOnline);
@@ -233,6 +256,7 @@ public class AmzaServiceInitializer {
             systemWALStorage,
             storageVersionProvider,
             partitionIndex,
+            takeCoordinator,
             walUpdated,
             liveliness,
             config.aquariumLivelinessFeedEveryMillis,
@@ -251,11 +275,11 @@ public class AmzaServiceInitializer {
         // cold start
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            VersionedState state = partitionStateStorage.getLocalVersionedState(versionedPartitionName.getPartitionName());
-            if (state != null && state.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                takeCoordinator.updated(amzaRingReader, versionedPartitionName, state.getLivelyEndState(), partitionStore.highestTxId());
+            long partitionVersion = partitionStateStorage.getPartitionVersion(versionedPartitionName.getPartitionName());
+            if (partitionVersion == versionedPartitionName.getPartitionVersion()) {
+                takeCoordinator.update(amzaRingReader, versionedPartitionName, partitionStore.highestTxId());
             } else {
-                LOG.warn("State:{} wasn't aligned with versioned partition:{}", state, versionedPartitionName);
+                LOG.warn("Version:{} wasn't aligned with versioned partition:{}", partitionVersion, versionedPartitionName);
             }
         }
 
@@ -273,6 +297,10 @@ public class AmzaServiceInitializer {
 
             rowsTakers[i] = rowsTakerFactory.create();
 
+            RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[] { walDirs[i].getAbsolutePath() },
+                amzaStats.ioStats,
+                config.corruptionParanoiaFactor,
+                config.useMemMap);
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
                 i,
@@ -288,11 +316,15 @@ public class AmzaServiceInitializer {
                     }
                     return false;
                 });
-            highwaterStorages[i] = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemWALStorage, walUpdated,
+            highwaterStorages[i] = new PartitionBackedHighwaterStorage(orderIdProvider,
+                ringMember,
+                partitionIndex,
+                systemWALStorage,
+                walUpdated,
                 config.flushHighwatersAfterNUpdates);
         }
 
-        PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(stripeFunction,
+        PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(partitionStripeFunction,
             partitionStripes, highwaterStorages, rowTakerThreadPools, rowsTakers);
 
         PartitionCreator partitionProvider = new PartitionCreator(
@@ -304,7 +336,7 @@ public class AmzaServiceInitializer {
             allRowChanges);
 
         HighestPartitionTx<Void> takeHighestPartitionTx = (versionedPartitionName, livelyEndState, highestTxId) -> {
-            takeCoordinator.updated(amzaRingReader, versionedPartitionName, livelyEndState, highestTxId);
+            takeCoordinator.update(amzaRingReader, versionedPartitionName, highestTxId);
             return null;
         };
 
@@ -353,20 +385,27 @@ public class AmzaServiceInitializer {
             systemWALStorage,
             orderIdProvider,
             walUpdated,
-            ringSizesCache,
-            ringMemberRingNamesCache);
+            ringsCache,
+            ringMemberRingNamesCache,
+            nodeCacheId);
         amzaPartitionWatcher.watch(PartitionCreator.RING_INDEX.getPartitionName(), amzaRingWriter);
-        amzaRingWriter.register(ringMember, ringHost);
-        amzaRingWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
+        amzaPartitionWatcher.watch(PartitionCreator.NODE_INDEX.getPartitionName(), amzaRingWriter);
+        amzaRingWriter.register(ringMember, ringHost, -1);
 
-        PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider, ringMember, systemWALStorage, walUpdated,
+        PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider,
+            ringMember,
+            partitionIndex,
+            systemWALStorage,
+            walUpdated,
             config.flushHighwatersAfterNUpdates);
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             amzaRingReader,
             ringHost,
             systemHighwaterStorage,
+            rowsTakerFactory.create(),
             partitionIndex,
             partitionStripeProvider,
+            partitionStripeFunction,
             partitionStateStorage,
             availableRowsTaker,
             new SystemPartitionCommitChanges(systemWALStorage, systemHighwaterStorage, walUpdated),

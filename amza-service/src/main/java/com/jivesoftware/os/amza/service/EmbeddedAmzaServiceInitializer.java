@@ -8,8 +8,6 @@ import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
-import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
@@ -29,7 +27,7 @@ public class EmbeddedAmzaServiceInitializer {
         TimestampedOrderIdProvider orderIdProvider,
         IdPacker idPacker,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
-        WALIndexProviderRegistry indexProviderRegistry,
+        AmzaServiceInitializer.IndexProviderRegistryCallback indexProviderRegistryCallback,
         AvailableRowsTaker availableRowsTaker,
         RowsTakerFactory rowsTakerFactory,
         Optional<TakeFailureListener> takeFailureListener,
@@ -37,12 +35,6 @@ public class EmbeddedAmzaServiceInitializer {
 
         BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller(); // hehe you cant change this :)
         BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
-        RowIOProvider rowIOProvider = new BinaryRowIOProvider(amzaStats.ioStats, config.corruptionParanoiaFactor, config.useMemMap);
-
-        int tombstoneCompactionFactor = 2; // TODO expose to config;
-
-        IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry,
-            rowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, orderIdProvider, tombstoneCompactionFactor);
 
         AmzaService service = new AmzaServiceInitializer().initialize(config,
             amzaStats,
@@ -53,7 +45,7 @@ public class EmbeddedAmzaServiceInitializer {
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,
-            walStorageProvider,
+            indexProviderRegistryCallback,
             availableRowsTaker,
             rowsTakerFactory,
             takeFailureListener,

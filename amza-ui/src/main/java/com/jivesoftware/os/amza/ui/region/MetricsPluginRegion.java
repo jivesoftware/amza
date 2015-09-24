@@ -6,8 +6,8 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
@@ -24,6 +25,7 @@ import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
 import com.jivesoftware.os.aquarium.LivelyEndState;
+import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -38,7 +40,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -276,12 +277,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             map.put("type", name.isSystemPartition() ? "SYSTEM" : "USER");
             map.put("name", new String(name.getName()));
             map.put("ringName", new String(name.getRingName()));
-            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(name.getRingName());
+            RingTopology ring = ringReader.getRing(name.getRingName());
             List<Map<String, String>> ringMaps = new ArrayList<>();
-            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
-                ringMaps.add(ImmutableMap.of("member", r.getKey().getMember(),
-                    "host", r.getValue().getHost(),
-                    "port", String.valueOf(r.getValue().getPort())));
+            for (RingMemberAndHost entry : ring.entries) {
+                ringMaps.add(ImmutableMap.of("member", entry.ringMember.getMember(),
+                    "host", entry.ringHost.getHost(),
+                    "port", String.valueOf(entry.ringHost.getPort())));
             }
             map.put("ring", ringMaps);
 
@@ -293,8 +294,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
 
             partition.highestTxId((versionedPartitionName, livelyEndState, highestTxId) -> {
+                State currentState = livelyEndState.getCurrentState();
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                map.put("state", livelyEndState.getCurrentWaterline().getState().name());
+                map.put("state", currentState != null ? currentState.name() : "unknown");
                 map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
                 return null;
@@ -336,8 +338,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         if (name != null) {
             VersionedState localVersionedWaterline = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
             LivelyEndState livelyEndState = localVersionedWaterline.getLivelyEndState();
+            State currentState = livelyEndState.getCurrentState();
             map.put("localState", ImmutableMap.of("online", livelyEndState.isOnline(),
-                "state", livelyEndState.getCurrentWaterline().getState().name(),
+                "state", currentState != null ? currentState.name() : "unknown",
                 "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
                 "partitionVersion", String.valueOf(localVersionedWaterline.getPartitionVersion()),
                 "stripeVersion", String.valueOf(localVersionedWaterline.getStorageVersion().stripeVersion)));
@@ -392,7 +395,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -484,7 +487,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.client.http;
 
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 

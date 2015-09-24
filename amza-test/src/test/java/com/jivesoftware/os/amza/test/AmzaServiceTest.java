@@ -120,11 +120,19 @@ public class AmzaServiceTest {
                             System.out.println(x.getMessage());
                         }
                     }
-
                 }
                 latch.countDown();
             }
         });
+
+        /*System.out.println("---------------------------------------------------------------------\n\n\n\n");
+        while (latch.getCount() > 0) {
+            for (AmzaNode node : cluster.getAllNodes()) {
+                node.printRings();
+            }
+            Thread.sleep(1000);
+            System.out.println("---------------------------------------------------------------------\n\n\n\n");
+        }*/
 
         latch.await();
 

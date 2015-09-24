@@ -22,7 +22,8 @@ public class BerkeleyDBWALIndexTest {
     @Test
     public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
-        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
+        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
         BerkeleyDBWALIndex index = getIndex(dir0, partitionName);
         index.merge(stream -> stream.stream(1L, UIO.longBytes(-1), UIO.longBytes(1), System.currentTimeMillis(), false, Long.MAX_VALUE, 1L),
             null);
@@ -66,7 +67,8 @@ public class BerkeleyDBWALIndexTest {
     public void testRangesNoPrefix() throws Exception {
 
         File dir0 = Files.createTempDir();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
         BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {
@@ -96,7 +98,8 @@ public class BerkeleyDBWALIndexTest {
     public void testRangesPrefixed() throws Exception {
 
         File dir0 = Files.createTempDir();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
         BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {
@@ -127,7 +130,8 @@ public class BerkeleyDBWALIndexTest {
     public void testTakePrefixed() throws Exception {
 
         File dir0 = Files.createTempDir();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
         BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {
@@ -155,7 +159,8 @@ public class BerkeleyDBWALIndexTest {
     public void testCompact() throws Exception {
 
         File dir0 = Files.createTempDir();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
         BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {

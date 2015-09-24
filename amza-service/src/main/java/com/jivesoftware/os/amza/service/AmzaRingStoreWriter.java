@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -24,6 +25,9 @@ import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
+import com.jivesoftware.os.amza.shared.ring.CacheId;
+import com.jivesoftware.os.amza.shared.ring.RingSet;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -32,13 +36,15 @@ import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
-import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
 
@@ -53,7 +59,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         }
 
         public byte[] toBytes() {
-            return new byte[]{serializedByte};
+            return new byte[] { serializedByte };
         }
 
         static Status fromBytes(byte[] b) {
@@ -70,63 +76,82 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     private final AmzaRingStoreReader ringStoreReader;
     private final SystemWALStorage systemWALStorage;
     private final TimestampedOrderIdProvider orderIdProvider;
-    private final ConcurrentMap<IBA, Integer> ringSizes;
-    private final ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache;
     private final WALUpdated walUpdated;
+    private final ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache;
+    private final ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache;
+    private final AtomicLong nodeCacheId;
 
     public AmzaRingStoreWriter(AmzaRingStoreReader ringStoreReader,
         SystemWALStorage systemWALStorage,
         TimestampedOrderIdProvider orderIdProvider,
         WALUpdated walUpdated,
-        ConcurrentMap<IBA, Integer> ringSizes,
-        ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache) {
+        ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache,
+        ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache,
+        AtomicLong nodeCacheId) {
         this.ringStoreReader = ringStoreReader;
         this.systemWALStorage = systemWALStorage;
         this.orderIdProvider = orderIdProvider;
         this.walUpdated = walUpdated;
-        this.ringSizes = ringSizes;
+        this.ringsCache = ringsCache;
         this.ringMemberRingNamesCache = ringMemberRingNamesCache;
+        this.nodeCacheId = nodeCacheId;
     }
 
     @Override
     public void changes(RowsChanged changes) throws Exception {
         if (PartitionCreator.RING_INDEX.equals(changes.getVersionedPartitionName())) {
             for (WALKey walKey : changes.getApply().keySet()) {
-                ringSizes.remove(new IBA(ringStoreReader.keyToRingName(walKey)));
-                ringMemberRingNamesCache.remove(ringStoreReader.keyToRingMember(walKey.key));
+                byte[] ringBytes = ringStoreReader.keyToRingName(walKey);
+                ringsCache.compute(new IBA(ringBytes), (iba, cacheIdRingTopology) -> {
+                    if (cacheIdRingTopology == null) {
+                        cacheIdRingTopology = new CacheId<>(null);
+                    }
+                    cacheIdRingTopology.currentCacheId++;
+                    /*LOG.info("Rings advanced {} to {}", Arrays.toString(ringBytes), cacheIdRingTopology.currentCacheId);*/
+                    return cacheIdRingTopology;
+                });
+                RingMember ringMember = ringStoreReader.keyToRingMember(walKey.key);
+                ringMemberRingNamesCache.compute(ringMember, (ringMember1, cacheIdRingSet) -> {
+                    if (cacheIdRingSet == null) {
+                        cacheIdRingSet = new CacheId<>(null);
+                    }
+                    cacheIdRingSet.currentCacheId++;
+                    /*LOG.info("Members advanced {} to {}", ringMember, cacheIdRingSet.currentCacheId);*/
+                    return cacheIdRingSet;
+                });
+            }
+        } else if (PartitionCreator.NODE_INDEX.equals(changes.getVersionedPartitionName())) {
+            if (!changes.getApply().isEmpty()) {
+                nodeCacheId.incrementAndGet();
+                /*LOG.info("Node advanced to {}", nodeCacheId.get());*/
             }
         }
     }
 
     @Override
-    public void register(RingMember ringMember, RingHost ringHost) throws Exception {
+    public void register(RingMember ringMember, RingHost ringHost, long timestampId) throws Exception {
         TimestampedValue registeredHost = systemWALStorage.getTimestampedValue(PartitionCreator.NODE_INDEX, null, ringMember.toBytes());
-        if (registeredHost != null && ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
-            return;
+        if (registeredHost == null || !ringHost.equals(RingHost.fromBytes(registeredHost.getValue()))) {
+            long version = orderIdProvider.nextId();
+            long timestamp = (timestampId == -1) ? version : timestampId;
+            systemWALStorage.update(PartitionCreator.NODE_INDEX, null,
+                (highwater, scan) -> scan.row(-1, ringMember.toBytes(), ringHost.toBytes(), timestamp, false, version),
+                walUpdated);
+            LOG.info("register ringMember:{} as ringHost:{}", ringMember, ringHost);
         }
-        long timestampAndVersion = orderIdProvider.nextId();
-        systemWALStorage.update(PartitionCreator.NODE_INDEX, null,
-            (highwater, scan) -> scan.row(-1, ringMember.toBytes(), ringHost.toBytes(), timestampAndVersion, false, timestampAndVersion),
-            walUpdated);
-        LOG.info("register ringMember:{} as ringHost:{}", ringMember, ringHost);
+
+        addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
     }
 
     @Override
     public void deregister(RingMember ringMember) throws Exception {
+        removeRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
+
         long timestampAndVersion = orderIdProvider.nextId();
         systemWALStorage.update(PartitionCreator.NODE_INDEX, null,
             (highwater, scan) -> scan.row(-1, ringMember.toBytes(), null, timestampAndVersion, true, timestampAndVersion),
             walUpdated);
         LOG.info("deregister ringMember:{}");
-    }
-
-    public RingHost getRingHost() throws Exception {
-        TimestampedValue registeredHost = systemWALStorage.getTimestampedValue(PartitionCreator.NODE_INDEX, null, ringStoreReader.getRingMember().toBytes());
-        if (registeredHost != null) {
-            return RingHost.fromBytes(registeredHost.getValue());
-        } else {
-            return RingHost.UNKNOWN_RING_HOST;
-        }
     }
 
     public boolean isMemberOfRing(byte[] ringName) throws Exception {
@@ -152,17 +177,23 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }
-        NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
-        if (ring.size() < desiredRingSize) {
+        RingTopology ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
+        if (ring.entries.size() < desiredRingSize) {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
-        List<RingMember> ringAsList = new ArrayList<>(ring.keySet());
-        Collections.sort(ringAsList, (RingMember o1, RingMember o2) -> {
-            return Integer.compare(Objects.hash(o1, ringName), Objects.hash(o2, ringName));
-        });
+        List<RingMember> ringAsList = Lists.newArrayList(Lists.transform(ring.entries, input -> input.ringMember));
+        Collections.sort(ringAsList, (o1, o2) -> Integer.compare(Objects.hash(o1, ringName), Objects.hash(o2, ringName)));
 
-        NavigableMap<RingMember, RingHost> existingRing = ringStoreReader.getRing(ringName);
-        setInternal(ringName, Iterables.concat(existingRing.keySet(), Iterables.limit(ringAsList, desiredRingSize)));
+        RingTopology existingRing = ringStoreReader.getRing(ringName);
+        Set<RingMember> orderedRing = new HashSet<>();
+        orderedRing.addAll(Lists.transform(existingRing.entries, input -> input.ringMember));
+
+        Iterator<RingMember> ringIter = ringAsList.iterator();
+        while (orderedRing.size() < desiredRingSize && ringIter.hasNext()) {
+            orderedRing.add(ringIter.next());
+        }
+
+        setInternal(ringName, orderedRing);
     }
 
     @Override
@@ -172,8 +203,8 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         byte[] key = ringStoreReader.key(ringName, ringMember);
         TimestampedValue had = systemWALStorage.getTimestampedValue(PartitionCreator.RING_INDEX, null, key);
         if (had == null) {
-            NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(ringName);
-            setInternal(ringName, Iterables.concat(ring.keySet(), Collections.singleton(ringMember)));
+            RingTopology ring = ringStoreReader.getRing(ringName);
+            setInternal(ringName, Iterables.concat(Iterables.transform(ring.entries, input -> input.ringMember), Collections.singleton(ringMember)));
         }
     }
 
@@ -181,7 +212,6 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         /*
          We deliberately do a slab update of rings to ensure "all at once" ring visibility.
          */
-
         systemWALStorage.update(PartitionCreator.RING_INDEX, null,
             (highwater, scan) -> {
                 long timestampAndVersion = orderIdProvider.nextId();
@@ -192,7 +222,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
                 }
                 return true;
             }, walUpdated);
-        ringSizes.remove(new IBA(ringName));
+        ringsCache.remove(new IBA(ringName));
 
         if (LOG.isInfoEnabled()) {
             LOG.info("Ring update:{} -> {}", new String(ringName), members);

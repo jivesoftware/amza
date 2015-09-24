@@ -18,23 +18,25 @@ public class BinaryRowIO<K> implements RowIO<K> {
     private static final int MAX_LEAPS = 64; //TODO config?
     public static final int UPDATES_BETWEEN_LEAPS = 4_096; //TODO config?
 
-    private final ManageRowIO<K> manageRowIO;
-    private final K filerKey;
+    private final K key;
     private final BinaryRowReader rowReader;
     private final BinaryRowWriter rowWriter;
 
     private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
 
-    public BinaryRowIO(ManageRowIO<K> manageRowIO,
-        K filerKey,
+    public BinaryRowIO(K key,
         BinaryRowReader rowReader,
         BinaryRowWriter rowWriter) throws Exception {
 
-        this.manageRowIO = manageRowIO;
-        this.filerKey = filerKey;
+        this.key = key;
         this.rowReader = rowReader;
         this.rowWriter = rowWriter;
+    }
+
+    @Override
+    public K getKey() {
+        return key;
     }
 
     @Override
@@ -143,11 +145,6 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public void move(K destination) throws Exception {
-        manageRowIO.move(filerKey, destination);
-    }
-
-    @Override
     public long sizeInBytes() throws Exception {
         return rowWriter.length();
     }
@@ -160,11 +157,6 @@ public class BinaryRowIO<K> implements RowIO<K> {
     @Override
     public void close() throws IOException {
         rowWriter.close();
-    }
-
-    @Override
-    public void delete() throws Exception {
-        manageRowIO.delete(filerKey);
     }
 
     static private Leaps computeNextLeaps(long lastTransactionId, BinaryRowIO.LeapFrog latest) {

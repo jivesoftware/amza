@@ -16,9 +16,9 @@ public interface AmzaRingReader {
 
     RingMember getRingMember();
 
-    List<Entry<RingMember, RingHost>> getNeighbors(byte[] ringName) throws Exception;
+    /*List<Entry<RingMember, RingHost>> getNeighbors(byte[] ringName) throws Exception;*/
 
-    NavigableMap<RingMember, RingHost> getRing(byte[] ringName) throws Exception;
+    RingTopology getRing(byte[] ringName) throws Exception;
 
     int getRingSize(byte[] ringName) throws Exception;
 

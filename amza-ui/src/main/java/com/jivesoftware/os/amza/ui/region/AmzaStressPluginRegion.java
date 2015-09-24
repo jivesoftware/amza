@@ -7,14 +7,13 @@ import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.ring.RingHost;
-import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.EmbeddedPartitionClient;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -24,7 +23,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -291,12 +289,13 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         Consistency consistency,
         boolean requireConsistency) throws Exception {
 
-        NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default".getBytes());
-        if (ring.isEmpty()) {
+        RingTopology ring = amzaService.getRingReader().getRing("default".getBytes());
+        if (ring.entries.isEmpty()) {
             amzaService.getRingWriter().buildRandomSubRing("default".getBytes(), amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING));
         }
 
-        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
+            new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());

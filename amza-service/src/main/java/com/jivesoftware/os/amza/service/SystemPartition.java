@@ -71,7 +71,7 @@ public class SystemPartition implements Partition {
         this.orderIdProvider = orderIdProvider;
         this.walUpdated = walUpdated;
         this.ringMember = ringMember;
-        this.versionedPartitionName = new VersionedPartitionName(partitionName, 0);
+        this.versionedPartitionName = new VersionedPartitionName(partitionName, VersionedPartitionName.STATIC_VERSION);
         this.systemWALStorage = systemWALStorage;
         this.systemHighwaterStorage = systemHighwaterStorage;
         this.ackWaters = ackWaters;

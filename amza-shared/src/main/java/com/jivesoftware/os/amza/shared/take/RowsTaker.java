@@ -55,6 +55,7 @@ public interface RowsTaker {
     boolean rowsTaken(RingMember localRingMember,
         RingMember remoteRingMember,
         RingHost remoteRingHost,
+        long takeSessionId,
         VersionedPartitionName versionedPartitionName,
         long txId,
         long localLeadershipToken);

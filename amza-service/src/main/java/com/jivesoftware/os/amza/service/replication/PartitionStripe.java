@@ -151,7 +151,6 @@ public class PartitionStripe {
                 } else {
                     RowsChanged changes = storage.update(highwaterStorage,
                         versionedPartitionName,
-                        livelyEndState,
                         partitionStore.getWalStorage(),
                         prefix,
                         updates,

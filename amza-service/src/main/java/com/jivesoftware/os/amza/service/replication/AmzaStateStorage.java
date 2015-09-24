@@ -10,8 +10,6 @@ import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.StateStorage;
-import com.jivesoftware.os.aquarium.StateStorage.StateStream;
-import com.jivesoftware.os.aquarium.StateStorage.StateUpdates;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 
@@ -47,7 +45,7 @@ class AmzaStateStorage implements StateStorage<Long> {
     public boolean scan(Member rootMember, Member otherMember, Long lifecycle, StateStream<Long> stream) throws Exception {
         byte[] fromKey = AmzaAquariumProvider.stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
         return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_STATE_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
-            (byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) -> {
+            (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
                     return AmzaAquariumProvider.streamStateKey(key,
                         (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {

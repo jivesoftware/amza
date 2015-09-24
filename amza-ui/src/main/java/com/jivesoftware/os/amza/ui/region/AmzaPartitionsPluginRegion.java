@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
@@ -18,10 +19,12 @@ import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
+import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -101,7 +104,8 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                         amzaService.getRingWriter().buildRandomSubRing(ringNameBytes, systemRingSize);
                     }
 
-                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
+                        new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
                         null, 1000, 1000);
 
                     PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
@@ -126,7 +130,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     amzaService.destroyPartition(partitionName);
                 }
             }
-            long now = System.currentTimeMillis();
+            Liveliness liveliness = amzaService.getLiveliness();
             List<Map<String, Object>> rows = new ArrayList<>();
             Set<PartitionName> allPartitionNames = amzaService.getPartitionNames();
             List<PartitionName> partitionNames = Lists.newArrayList(allPartitionNames);
@@ -152,7 +156,6 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 LivelyEndState livelyEndState = state != null ? state.getLivelyEndState() : null;
                 Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
 
-                row.put("alive", currentWaterline == null ? "unknown" : currentWaterline.isAlive(now));
                 row.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
                 row.put("quorum", currentWaterline == null ? "unknown" : currentWaterline.isAtQuorum());
                 row.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
@@ -163,13 +166,13 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 row.put("name", new String(partitionName.getName()));
                 row.put("ringName", new String(partitionName.getRingName()));
 
-                NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
+                RingTopology ring = ringReader.getRing(partitionName.getRingName());
                 List<Map<String, Object>> ringHosts = new ArrayList<>();
-                for (Map.Entry<RingMember, RingHost> r : ring.entrySet()) {
+                for (RingMemberAndHost entry : ring.entries) {
                     Map<String, Object> ringHost = new HashMap<>();
-                    ringHost.put("member", r.getKey().getMember());
-                    ringHost.put("host", r.getValue().getHost());
-                    ringHost.put("port", String.valueOf(r.getValue().getPort()));
+                    ringHost.put("member", entry.ringMember.getMember());
+                    ringHost.put("host", entry.ringHost.getHost());
+                    ringHost.put("port", String.valueOf(entry.ringHost.getPort()));
                     ringHosts.add(ringHost);
                 }
                 row.put("ring", ringHosts);
@@ -181,8 +184,8 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     row.put("requireConsistency", "true");
                     row.put("takeFromFactor", "?");
 
-                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                        new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
+                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
+                        new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 1000, 1000);
                     row.put("walStorageDescriptor", walStorageDescriptor(storageDescriptor));
 
                 } else {

@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider.PartitionStripeFunction;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
@@ -42,6 +41,7 @@ public class StorageVersionProvider implements RowChanges {
     private final AwaitNotify<PartitionName> awaitNotify;
 
     private final ConcurrentHashMap<PartitionName, StorageVersion> localVersionCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMemberAndPartitionName, StorageVersion> remoteVersionCache = new ConcurrentHashMap<>();
 
     public StorageVersionProvider(OrderIdProvider orderIdProvider,
         RingMember rootRingMember,
@@ -136,11 +136,18 @@ public class StorageVersionProvider implements RowChanges {
     }
 
     public StorageVersion getRemote(RingMember ringMember, PartitionName partitionName) throws Exception {
-        TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null, walKey(ringMember, partitionName));
-        if (rawState == null) {
-            return null;
-        }
-        return StorageVersion.fromBytes(rawState.getValue());
+        return remoteVersionCache.computeIfAbsent(new RingMemberAndPartitionName(ringMember, partitionName), key -> {
+            try {
+                TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
+                    walKey(ringMember, partitionName));
+                if (rawState == null) {
+                    return null;
+                }
+                return StorageVersion.fromBytes(rawState.getValue());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     private StorageVersion set(PartitionName partitionName, long partitionVersion) throws Exception {
@@ -204,6 +211,10 @@ public class StorageVersionProvider implements RowChanges {
         });
     }
 
+    private void invalidateRemoteVersionCache(RingMember ringMember, PartitionName partitionName) {
+        remoteVersionCache.remove(new RingMemberAndPartitionName(ringMember, partitionName));
+    }
+
     void clearCache(byte[] walKey, byte[] walValue) throws Exception {
         HeapFiler filer = new HeapFiler(walKey);
         UIO.readByte(filer, "serializationVersion");
@@ -213,7 +224,44 @@ public class StorageVersionProvider implements RowChanges {
             if (ringMember.equals(rootRingMember)) {
                 StorageVersion storageVersion = StorageVersion.fromBytes(walValue);
                 invalidateLocalVersionCache(new VersionedPartitionName(partitionName, storageVersion.partitionVersion));
+            } else {
+                invalidateRemoteVersionCache(ringMember, partitionName);
             }
+        }
+    }
+
+    private static class RingMemberAndPartitionName {
+        private final RingMember ringMember;
+        private final PartitionName partitionName;
+
+        public RingMemberAndPartitionName(RingMember ringMember, PartitionName partitionName) {
+            this.ringMember = ringMember;
+            this.partitionName = partitionName;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            RingMemberAndPartitionName that = (RingMemberAndPartitionName) o;
+
+            if (ringMember != null ? !ringMember.equals(that.ringMember) : that.ringMember != null) {
+                return false;
+            }
+            return !(partitionName != null ? !partitionName.equals(that.partitionName) : that.partitionName != null);
+
+        }
+
+        @Override
+        public int hashCode() {
+            int result = ringMember != null ? ringMember.hashCode() : 0;
+            result = 31 * result + (partitionName != null ? partitionName.hashCode() : 0);
+            return result;
         }
     }
 

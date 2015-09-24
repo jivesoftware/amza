@@ -340,7 +340,6 @@ public class DeltaStripeWALStorage {
 
     public RowsChanged update(HighwaterStorage highwaterStorage,
         VersionedPartitionName versionedPartitionName,
-        LivelyEndState livelyEndState,
         WALStorage storage,
         byte[] prefix,
         Commitable updates,
@@ -437,7 +436,7 @@ public class DeltaStripeWALStorage {
                         clobbers,
                         updateApplied.txId);
                 }
-                updated.updated(versionedPartitionName, livelyEndState, updateApplied.txId);
+                updated.updated(versionedPartitionName, updateApplied.txId);
             }
 
             long unmergedUpdates = updateSinceLastMerge.addAndGet(apply.size());

@@ -2,8 +2,10 @@ package com.jivesoftware.os.amza.service.storage.filer;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
+import com.jivesoftware.os.amza.shared.filer.AutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
@@ -11,23 +13,24 @@ import java.io.IOException;
  */
 public class MemoryBackedWALFiler implements WALFiler, IReadable, IWriteable {
 
-    private final HeapFiler filer;
+    private final AutoGrowingByteBufferBackedFiler filer;
+    private final AtomicLong size = new AtomicLong(0);
 
-    public MemoryBackedWALFiler(HeapFiler filer) {
+    public MemoryBackedWALFiler(AutoGrowingByteBufferBackedFiler filer) {
         this.filer = filer;
     }
 
     @Override
     public IReadable fileChannelFiler() throws IOException {
-        return filer.createReadOnlyClone();
+        return filer.duplicateAll();
     }
 
     @Override
     public IReadable bestFiler(IReadable current, long boundaryFp) throws IOException {
-        if (current != null) {
+        if (current != null && current.length() >= boundaryFp) {
             return current;
         }
-        return filer.createReadOnlyClone();
+        return filer.duplicateAll();
     }
 
     @Override
@@ -62,7 +65,7 @@ public class MemoryBackedWALFiler implements WALFiler, IReadable, IWriteable {
 
     @Override
     public long length() throws IOException {
-        return filer.length();
+        return size.get();
     }
 
     @Override
@@ -73,16 +76,20 @@ public class MemoryBackedWALFiler implements WALFiler, IReadable, IWriteable {
     @Override
     public void write(int b) throws IOException {
         filer.write(b);
+        size.incrementAndGet();
+
     }
 
     @Override
     public void write(byte[] b) throws IOException {
         filer.write(b);
+        size.addAndGet(b.length);
     }
 
     @Override
     public void write(byte[] b, int _offset, int _len) throws IOException {
         filer.write(b, _offset, _len);
+        size.addAndGet(_len);
     }
 
     @Override

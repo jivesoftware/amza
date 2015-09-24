@@ -23,6 +23,8 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
@@ -42,6 +44,7 @@ import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -61,8 +64,6 @@ import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -228,7 +229,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.getPartitionVersion());
             }
             if (partitionCreator.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
-                takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName, livelyEndState);
+                takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName);
             }
             long start = System.currentTimeMillis();
             aquariumProvider.awaitOnline(versionedPartitionName, timeoutMillis);
@@ -239,10 +240,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName) throws Exception {
 
-        NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
+        RingTopology ring = ringStoreReader.getRing(partitionName.getRingName());
         PartitionProperties properties = partitionIndex.getProperties(partitionName);
         if (properties == null) {
-            return new AmzaPartitionRoute(new ArrayList<>(ring.values()),
+            return new AmzaPartitionRoute(Lists.transform(ring.entries, input -> input.ringHost),
                 Collections.emptyList(),
                 Collections.emptyList(),
                 Collections.emptyList(),
@@ -267,19 +268,19 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             });
         }
 
-        for (Entry<RingMember, RingHost> e : ring.entrySet()) {
-            if (e.getValue() == RingHost.UNKNOWN_RING_HOST) {
-                unregisteredRingMembers.add(e.getKey());
+        for (RingMemberAndHost entry : ring.entries) {
+            if (entry.ringHost == RingHost.UNKNOWN_RING_HOST) {
+                unregisteredRingMembers.add(entry.ringMember);
             }
-            RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(e.getKey(), partitionName);
+            RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(entry.ringMember, partitionName);
             if (remoteVersionedState == null) {
-                missingRingMembers.add(e.getKey());
+                missingRingMembers.add(entry.ringMember);
             } else if (remoteVersionedState.waterline.getState() == State.expunged) {
-                expungedRingMembers.add(e.getKey());
+                expungedRingMembers.add(entry.ringMember);
             } else if (remoteVersionedState.waterline.getState() == State.bootstrap) {
-                ketchupRingMembers.add(e.getKey());
+                ketchupRingMembers.add(entry.ringMember);
             } else {
-                orderedPartitionHosts.add(e.getValue());
+                orderedPartitionHosts.add(entry.ringHost);
             }
         }
         return new AmzaPartitionRoute(Collections.emptyList(), orderedPartitionHosts, unregisteredRingMembers, ketchupRingMembers, expungedRingMembers,
@@ -384,15 +385,16 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     @Override
     public void destroyPartition(PartitionName partitionName) throws Exception {
 
-        NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(partitionName.getRingName());
-        if (ring.containsKey(ringStoreReader.getRingMember())) {
-            RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(ringStoreReader.getRingMember(), partitionName);
-            if (remoteVersionedState != null) {
+        RingTopology ring = ringStoreReader.getRing(partitionName.getRingName());
+        if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
+            VersionedState versionedState = partitionStateStorage.getLocalVersionedState(partitionName);
+            if (versionedState != null) {
                 LOG.info("Handling request to destroy partitionName:{}", partitionName);
-                for (RingMember ringMember : ring.keySet()) {
-                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, remoteVersionedState.version);
-                    VersionedState versionedState = partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
-                    LOG.info("Destroyed partitionName:{} versionedState:{} for ringMember:{}", versionedPartitionName, versionedState, ringMember);
+                for (RingMemberAndHost entry : ring.entries) {
+                    VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.getPartitionVersion());
+                    VersionedState disposedVersionedState = partitionStateStorage.markForDisposal(versionedPartitionName, entry.ringMember);
+                    LOG.info("Destroyed partitionName:{} versionedState:{} for ringMember:{}",
+                        versionedPartitionName, disposedVersionedState, entry.ringMember);
                 }
             }
         }
@@ -407,7 +409,14 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     @Override
-    public void availableRowsStream(ChunkWriteable writeable, RingMember remoteRingMember, long takeSessionId, long heartbeatIntervalMillis) throws Exception {
+    public void availableRowsStream(ChunkWriteable writeable,
+        RingMember remoteRingMember,
+        TimestampedRingHost remoteTimestampedRingHost,
+        long takeSessionId,
+        long heartbeatIntervalMillis) throws Exception {
+
+        ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId);
+
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(out));
 
@@ -426,7 +435,9 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             }, () -> {
                 if (dos.size() > 0) {
                     dos.flush();
-                    writeable.write(out.toByteArray());
+                    byte[] chunk = out.toByteArray();
+                    writeable.write(chunk);
+                    /*LOG.info("Offered rows for {} length={}", remoteRingMember, chunk.length);*/
                     out.reset();
                 }
                 return null;
@@ -445,11 +456,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     // for testing only
     public void availableRowsStream(RingMember remoteRingMember,
+        TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
         long timeoutMillis,
         AvailableStream availableStream,
         Callable<Void> deliverCallback,
         Callable<Void> pingCallback) throws Exception {
+        ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId);
         takeCoordinator.availableRowsStream(txHighestPartitionTx,
             ringStoreReader,
             remoteRingMember,
@@ -558,15 +571,19 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         dos.writeLong(versionedPartitionName.getPartitionVersion());
         dos.writeByte(1); // fully online
         bytes.increment();
-        for (Entry<RingMember, RingHost> node : ringStoreReader.getNeighbors(versionedPartitionName.getPartitionName().getRingName())) {
-            Long highwatermark = highwaterStorage.get(node.getKey(), versionedPartitionName);
-            if (highwatermark != null) {
-                byte[] ringMemberBytes = node.getKey().toBytes();
-                dos.writeByte(1);
-                dos.writeInt(ringMemberBytes.length);
-                dos.write(ringMemberBytes);
-                dos.writeLong(highwatermark);
-                bytes.add(1 + 4 + ringMemberBytes.length + 8);
+        RingTopology ring = ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName());
+        for (int i = 0; i < ring.entries.size(); i++) {
+            if (ring.rootMemberIndex != i) {
+                RingMemberAndHost entry = ring.entries.get(i);
+                Long highwatermark = highwaterStorage.get(entry.ringMember, versionedPartitionName);
+                if (highwatermark != null) {
+                    byte[] ringMemberBytes = entry.ringMember.toBytes();
+                    dos.writeByte(1);
+                    dos.writeInt(ringMemberBytes.length);
+                    dos.write(ringMemberBytes);
+                    dos.writeLong(highwatermark);
+                    bytes.add(1 + 4 + ringMemberBytes.length + 8);
+                }
             }
         }
 
@@ -590,14 +607,15 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     @Override
     public void rowsTaken(RingMember remoteRingMember,
+        long takeSessionId,
         VersionedPartitionName localVersionedPartitionName,
         long localTxId,
         long leadershipToken) throws Exception {
         ackWaters.set(remoteRingMember, localVersionedPartitionName, localTxId, leadershipToken);
 
-        VersionedState localVersionedState = partitionStateStorage.getLocalVersionedState(localVersionedPartitionName.getPartitionName());
-        if (localVersionedState.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
-            takeCoordinator.rowsTaken(remoteRingMember, localVersionedPartitionName, localTxId, localVersionedState.getLivelyEndState());
+        long partitionVersion = partitionStateStorage.getPartitionVersion(localVersionedPartitionName.getPartitionName());
+        if (partitionVersion == localVersionedPartitionName.getPartitionVersion()) {
+            takeCoordinator.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, localVersionedPartitionName, localTxId);
         }
     }
 

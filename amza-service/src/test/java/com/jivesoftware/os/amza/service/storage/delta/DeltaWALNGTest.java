@@ -31,12 +31,16 @@ public class DeltaWALNGTest {
 
     @Test
     public void testLoad() throws Exception {
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(true, "test".getBytes(), "test".getBytes()), 1);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(true, "test".getBytes(), "test".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
         File tmp = Files.createTempDir();
         final PrimaryRowMarshaller<byte[]> primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
 
-        WALTx<NoOpWALIndex> walTX = new BinaryWALTx<>(tmp, "test", new BinaryRowIOProvider(new IoStats(), 1, false), primaryRowMarshaller,
+        WALTx<NoOpWALIndex> walTX = new BinaryWALTx<>(tmp,
+            "test",
+            new BinaryRowIOProvider(new String[] { tmp.getAbsolutePath() }, new IoStats(), 1, false),
+            primaryRowMarshaller,
             new NoOpWALIndexProvider());
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         DeltaWAL<NoOpWALIndex> deltaWAL = new DeltaWAL<>(0, ids, primaryRowMarshaller, highwaterRowMarshaller, walTX);

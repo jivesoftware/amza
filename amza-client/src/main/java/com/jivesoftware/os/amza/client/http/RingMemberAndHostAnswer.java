@@ -1,5 +1,7 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+
 /**
  *
  * @author jonathan.colt

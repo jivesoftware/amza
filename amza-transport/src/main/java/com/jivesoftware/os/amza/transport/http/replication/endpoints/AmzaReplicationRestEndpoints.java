@@ -16,7 +16,9 @@
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -95,8 +97,10 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/rows/available/{ringMember}/{takeSessionId}/{timeoutMillis}")
+    @Path("/rows/available/{ringMember}/{ringHost}/{ringTimestampId}/{takeSessionId}/{timeoutMillis}")
     public ChunkedOutput<byte[]> availableRowsStream(@PathParam("ringMember") String ringMemberString,
+        @PathParam("ringHost") String ringHost,
+        @PathParam("ringTimestampId") long ringTimestampId,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
         try {
@@ -108,6 +112,7 @@ public class AmzaReplicationRestEndpoints {
                     amzaInstance.availableRowsStream(
                         chunkedOutput::write,
                         new RingMember(ringMemberString),
+                        new TimestampedRingHost(RingHost.fromCanonicalString(ringHost), ringTimestampId),
                         takeSessionId,
                         timeoutMillis);
                 } catch (Exception x) {
@@ -130,14 +135,16 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @Path("/rows/taken/{memberName}/{versionedPartitionName}/{txId}/{leadershipToken}")
+    @Path("/rows/taken/{memberName}/{takeSessionId}/{versionedPartitionName}/{txId}/{leadershipToken}")
     public Response rowsTaken(@PathParam("memberName") String ringMemberName,
+        @PathParam("takeSessionId") long takeSessionId,
         @PathParam("versionedPartitionName") String versionedPartitionName,
         @PathParam("txId") long txId,
         @PathParam("leadershipToken") long leadershipToken) {
         try {
             amzaStats.rowsTaken.incrementAndGet();
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
+                takeSessionId,
                 VersionedPartitionName.fromBase64(versionedPartitionName),
                 txId,
                 leadershipToken);

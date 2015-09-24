@@ -19,8 +19,6 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.io.File;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -28,6 +26,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.jivesoftware.os.amza.service.storage.PartitionCreator.AQUARIUM_LIVELINESS_INDEX;
+import static com.jivesoftware.os.amza.service.storage.PartitionCreator.AQUARIUM_STATE_INDEX;
 import static com.jivesoftware.os.amza.service.storage.PartitionCreator.HIGHWATER_MARK_INDEX;
 import static com.jivesoftware.os.amza.service.storage.PartitionCreator.REGION_PROPERTIES;
 
@@ -42,20 +42,14 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     private final ConcurrentHashMap<PartitionName, PartitionProperties> partitionProperties = new ConcurrentHashMap<>();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
 
-    private final String[] workingDirectories;
-    private final String domain;
     private final IndexedWALStorageProvider walStorageProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;
     private final boolean hardFlush;
 
-    public PartitionIndex(String[] workingDirectories,
-        String domain,
-        IndexedWALStorageProvider walStorageProvider,
+    public PartitionIndex(IndexedWALStorageProvider walStorageProvider,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         boolean hardFlush) {
 
-        this.workingDirectories = Arrays.copyOf(workingDirectories, workingDirectories.length);
-        this.domain = domain;
         this.walStorageProvider = walStorageProvider;
         this.partitionPropertyMarshaller = partitionPropertyMarshaller;
         this.hardFlush = hardFlush;
@@ -149,7 +143,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     private PartitionStore getSystemPartition(VersionedPartitionName versionedPartitionName) {
-        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Should ony be called by system partitions.");
+        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Should only be called by system partitions.");
         ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(versionedPartitionName.getPartitionName());
         PartitionStore store = versionedPartitionStores == null ? null : versionedPartitionStores.get(0L);
         if (store == null) {
@@ -176,8 +170,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 return partitionStore;
             }
 
-            File workingDirectory = new File(workingDirectories[Math.abs(versionedPartitionName.hashCode() % workingDirectories.length)]);
-            WALStorage<?> walStorage = walStorageProvider.create(workingDirectory, domain, versionedPartitionName, properties.walStorageDescriptor);
+            WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, properties.walStorageDescriptor);
             partitionStore = new PartitionStore(walStorage, hardFlush);
             partitionStore.load();
 
@@ -213,11 +206,27 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         PartitionProperties properties;
         if (partitionName.equals(HIGHWATER_MARK_INDEX.getPartitionName())) {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
+                false,
+                new PrimaryIndexDescriptor("memory_persistent", 0, false, null),
+                null,
+                1000,
+                1000);
             properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 0, false);
+        } else if (partitionName.equals(AQUARIUM_LIVELINESS_INDEX.getPartitionName()) || partitionName.equals(AQUARIUM_STATE_INDEX.getPartitionName())) {
+            WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
+                true,
+                new PrimaryIndexDescriptor("memory_ephemeral", 0, false, null),
+                null,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false);
         } else {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
+                false,
+                new PrimaryIndexDescriptor("memory_persistent", 0, false, null),
+                null,
+                1000,
+                1000);
             properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false);
         }
         return properties;

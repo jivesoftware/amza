@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
+import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
@@ -17,6 +18,7 @@ import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -39,12 +41,13 @@ public class RowPartitionNGTest {
         File walDir = Files.createTempDir();
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
+        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[] { walDir.getAbsolutePath() }, ioStats, 1, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
+        VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
 
-        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
+        BinaryWALTx<MemoryWALIndex, ?> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         WALStorage<MemoryWALIndex> indexedWAL = new WALStorage<>(
@@ -120,38 +123,43 @@ public class RowPartitionNGTest {
     }
 
     @Test
-    public void diskBackedEventualConsitencyTest() throws Exception {
+    public void diskBackedEventualConsistencyTest() throws Exception {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
 
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, false);
+        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[] { walDir.getAbsolutePath() }, ioStats, 1, false);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
 
-        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
+        BinaryWALTx<MemoryWALIndex, ?> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx);
     }
 
     @Test
-    public void memoryBackedEventualConsitencyTest() throws Exception {
+    public void memoryBackedEventualConsistencyTest() throws Exception {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
 
-        RowIOProvider binaryRowIOProvider = new MemoryBackedRowIOProvider(ioStats, 1);
+        RowIOProvider<File> binaryRowIOProvider = new MemoryBackedRowIOProvider(new String[] { walDir.getAbsolutePath() }, ioStats, 1, 4_096, 4_096,
+            size -> ByteBuffer.allocate(size.intValue()));
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()), 0);
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
+            VersionedPartitionName.STATIC_VERSION);
 
-        BinaryWALTx<MemoryWALIndex> binaryWALTx = new BinaryWALTx<>(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
+        BinaryWALTx<MemoryWALIndex, ?> binaryWALTx = new BinaryWALTx<>(null, "booya", binaryRowIOProvider, primaryRowMarshaller, indexProvider);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx);
     }
 
-    private void testEventualConsitency(VersionedPartitionName versionedPartitionName, OrderIdProviderImpl idProvider, BinaryWALTx<MemoryWALIndex> binaryWALTx)
+    private void testEventualConsitency(VersionedPartitionName versionedPartitionName,
+        OrderIdProviderImpl idProvider,
+        BinaryWALTx<MemoryWALIndex, ?> binaryWALTx)
         throws Exception {
         WALStorage<MemoryWALIndex> indexedWAL = new WALStorage<>(
             versionedPartitionName,

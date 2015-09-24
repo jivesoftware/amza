@@ -77,9 +77,9 @@ public class HttpRowsTaker implements RowsTaker {
         try {
             httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
                 "/amza/rows/stream/" + localRingMember.getMember()
-                + "/" + remoteVersionedPartitionName.toBase64()
-                + "/" + remoteTxId
-                + "/" + localLeadershipToken);
+                    + "/" + remoteVersionedPartitionName.toBase64()
+                    + "/" + remoteTxId
+                    + "/" + localLeadershipToken);
         } catch (IOException | HttpClientException e) {
             return new StreamingRowsResult(e, null, -1, -1, null);
         }
@@ -101,19 +101,21 @@ public class HttpRowsTaker implements RowsTaker {
     public boolean rowsTaken(RingMember localRingMember,
         RingMember remoteRingMember,
         RingHost remoteRingHost,
+        long takeSessionId,
         VersionedPartitionName versionedPartitionName,
         long txId,
         long localLeadershipToken) {
         try {
             return getRequestHelper(remoteRingHost).executeRequest(null,
                 "/amza/rows/taken/" + localRingMember.getMember()
-                + "/" + versionedPartitionName.toBase64()
-                + "/" + txId
-                + "/" + localLeadershipToken,
+                    + "/" + takeSessionId
+                    + "/" + versionedPartitionName.toBase64()
+                    + "/" + txId
+                    + "/" + localLeadershipToken,
                 Boolean.class, false);
         } catch (Exception x) {
             LOG.warn("Failed to deliver acks for local:{} remote:{} partition:{} tx:{}",
-                new Object[]{localRingMember, remoteRingHost, versionedPartitionName, txId}, x);
+                new Object[] { localRingMember, remoteRingHost, versionedPartitionName, txId }, x);
             return false;
         }
     }

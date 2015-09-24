@@ -1744,17 +1744,16 @@ public class UIO {
 
     /**
      *
-     * @param _length
+     * @param length
      * @param _minPower
      * @return
      */
-    public static long chunkPower(long _length, int _minPower) {
-        for (long i = _minPower; i < 65; i++) { // 2^64 == long so why go anyfuther
-            if (_length < Math.pow(2, i)) {
-                return i;
-            }
+    public static int chunkPower(long length, int _minPower) {
+        if (length == 0) {
+            return 0;
         }
-        return 64;
+        int numberOfTrailingZeros = Long.numberOfLeadingZeros(length - 1);
+        return Math.max(_minPower, 64 - numberOfTrailingZeros);
     }
 
     /**
@@ -1762,8 +1761,8 @@ public class UIO {
      * @param _chunkPower
      * @return
      */
-    public static long chunkLength(long _chunkPower) {
-        return (long) Math.pow(2, _chunkPower);
+    public static long chunkLength(int _chunkPower) {
+        return 1L << _chunkPower;
     }
 
     public static void bytes(byte[] value, byte[] destination, int offset) {

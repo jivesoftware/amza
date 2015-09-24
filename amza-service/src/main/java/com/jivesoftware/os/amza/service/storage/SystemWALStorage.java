@@ -60,7 +60,7 @@ public class SystemWALStorage {
         }
         if (!changed.getApply().isEmpty()) {
             //LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
-            updated.updated(versionedPartitionName, LivelyEndState.ALWAYS_ONLINE, changed.getLargestCommittedTxId());
+            updated.updated(versionedPartitionName, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);
         return changed;

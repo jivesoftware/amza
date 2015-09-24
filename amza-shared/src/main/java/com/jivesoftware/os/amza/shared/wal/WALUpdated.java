@@ -8,6 +8,6 @@ import com.jivesoftware.os.aquarium.LivelyEndState;
  */
 public interface WALUpdated {
 
-    void updated(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState, long txId) throws Exception;
+    void updated(VersionedPartitionName versionedPartitionName, long txId) throws Exception;
 
 }

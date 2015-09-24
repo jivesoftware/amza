@@ -13,6 +13,8 @@ import java.util.Objects;
  */
 public class VersionedPartitionName implements Comparable<VersionedPartitionName> {
 
+    public static final long STATIC_VERSION = 0;
+
     private final PartitionName partitionName;
     private final long partitionVersion;
     private transient int hash = 0;

@@ -193,7 +193,8 @@ public class AmzaEndpoints {
             amzaService.getRingWriter().buildRandomSubRing(ringName.getBytes(), systemRingSize);
         }
 
-        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
+            new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());

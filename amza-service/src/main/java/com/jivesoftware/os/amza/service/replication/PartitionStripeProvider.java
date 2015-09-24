@@ -18,11 +18,6 @@ public class PartitionStripeProvider {
     private final ExecutorService[] rowTakerThreadPools;
     private final RowsTaker[] rowsTakers;
 
-    public interface PartitionStripeFunction {
-
-        int stripe(PartitionName partitionName);
-    }
-
     public PartitionStripeProvider(PartitionStripeFunction partitionStripeFunction,
         PartitionStripe[] deltaStripes,
         HighwaterStorage[] highwaterStorages,

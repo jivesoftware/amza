@@ -29,21 +29,29 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 public class PartitionCreator {
 
     public static final VersionedPartitionName NODE_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "NODE_INDEX".getBytes()), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "NODE_INDEX".getBytes()),
+        VersionedPartitionName.STATIC_VERSION);
     public static final VersionedPartitionName RING_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "RING_INDEX".getBytes()), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "RING_INDEX".getBytes()),
+        VersionedPartitionName.STATIC_VERSION);
     public static final VersionedPartitionName REGION_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_INDEX".getBytes()), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_INDEX".getBytes()),
+        VersionedPartitionName.STATIC_VERSION);
     public static final VersionedPartitionName REGION_PROPERTIES = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_PROPERTIES".getBytes()), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "REGION_PROPERTIES".getBytes()),
+        VersionedPartitionName.STATIC_VERSION);
     public static final VersionedPartitionName HIGHWATER_MARK_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "HIGHWATER_MARK_INDEX".getBytes()), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "HIGHWATER_MARK_INDEX".getBytes()),
+        VersionedPartitionName.STATIC_VERSION);
     public static final VersionedPartitionName PARTITION_VERSION_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "PARTITION_VERSION_INDEX".getBytes()), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "PARTITION_VERSION_INDEX".getBytes()),
+        VersionedPartitionName.STATIC_VERSION);
     public static final VersionedPartitionName AQUARIUM_STATE_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "AQUARIUM_STATE_INDEX".getBytes()), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "AQUARIUM_STATE_INDEX".getBytes()),
+        VersionedPartitionName.STATIC_VERSION);
     public static final VersionedPartitionName AQUARIUM_LIVELINESS_INDEX = new VersionedPartitionName(
-        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "AQUARIUM_LIVELINESS_INDEX".getBytes()), 0);
+        new PartitionName(true, AmzaRingReader.SYSTEM_RING, "AQUARIUM_LIVELINESS_INDEX".getBytes()),
+        VersionedPartitionName.STATIC_VERSION);
 
     private final OrderIdProvider orderIdProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;

@@ -31,7 +31,6 @@ import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
-import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
@@ -39,6 +38,7 @@ import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
@@ -67,7 +67,6 @@ import com.jivesoftware.os.routing.bird.shared.TenantsServiceConnectionDescripto
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.NavigableMap;
 import java.util.Random;
 import java.util.concurrent.Executors;
 
@@ -107,9 +106,6 @@ public class Main {
             .split(",");
         amzaServiceConfig.workingDirectories = workingDirs;
 
-        WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry();
-        indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length));
-
         AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats);
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
@@ -140,7 +136,9 @@ public class Main {
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,
-            indexProviderRegistry,
+            (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider) -> {
+                indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+            },
             availableRowsTaker,
             () -> new HttpRowsTaker(amzaStats),
             Optional.<TakeFailureListener>absent(),
@@ -150,9 +148,11 @@ public class Main {
         InstanceDescriptor instanceDescriptor = new InstanceDescriptor("", "", "", "", "", "", "", "", 0, "", "", 0L, true);
         ConnectionDescriptorsProvider connectionsProvider = connectionDescriptorsRequest -> {
             try {
-                NavigableMap<RingMember, RingHost> systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
-                List<ConnectionDescriptor> descriptors = Lists.newArrayList(Iterables.transform(systemRing.values(),
-                    input -> new ConnectionDescriptor(instanceDescriptor, new HostPort(input.getHost(), input.getPort()), Collections.emptyMap())));
+                RingTopology systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
+                List<ConnectionDescriptor> descriptors = Lists.newArrayList(Iterables.transform(systemRing.entries,
+                    input -> new ConnectionDescriptor(instanceDescriptor,
+                        new HostPort(input.ringHost.getHost(), input.ringHost.getPort()),
+                        Collections.emptyMap())));
                 return new ConnectionDescriptorsResponse(200, Collections.emptyList(), "", descriptors);
             } catch (Exception e) {
                 throw new RuntimeException(e);

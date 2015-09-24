@@ -19,8 +19,8 @@ import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
@@ -30,15 +30,13 @@ import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
@@ -103,18 +101,17 @@ public class AmzaClientRestEndpoints {
         try {
             PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
             RingMember leader = partitionName.isSystemPartition() ? null : partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
-            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(partitionName.getRingName());
+            RingTopology ring = ringReader.getRing(partitionName.getRingName());
 
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
                 try {
                     ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                    Set<Map.Entry<RingMember, RingHost>> memebers = ring.entrySet();
-                    UIO.writeInt(cf, memebers.size(), "ringSize");
-                    for (Map.Entry<RingMember, RingHost> r : memebers) {
-                        UIO.writeByteArray(cf, r.getKey().toBytes(), "ringMember");
-                        UIO.writeByteArray(cf, r.getValue().toBytes(), "ringHost");
-                        boolean isLeader = leader != null && Arrays.equals(r.getKey().toBytes(), leader.toBytes());
+                    UIO.writeInt(cf, ring.entries.size(), "ringSize");
+                    for (RingMemberAndHost entry : ring.entries) {
+                        UIO.writeByteArray(cf, entry.ringMember.toBytes(), "ringMember");
+                        UIO.writeByteArray(cf, entry.ringHost.toBytes(), "ringHost");
+                        boolean isLeader = leader != null && Arrays.equals(entry.ringMember.toBytes(), leader.toBytes());
                         UIO.writeBoolean(cf, isLeader, "leader");
                     }
                     cf.flush(true);

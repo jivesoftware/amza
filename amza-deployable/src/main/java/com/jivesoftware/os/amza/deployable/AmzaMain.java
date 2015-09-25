@@ -173,12 +173,14 @@ public class AmzaMain {
             TenantAwareHttpClient<String> httpClient = tenantRoutingHttpClientInitializer.initialize(
                 deployable.getTenantRoutingProvider().getConnections(instanceConfig.getServiceName(), "main"),
                 clientHealthProvider,
-                10, 10_000); // TODO expose to conf
+                10,
+                10_000); // TODO expose to conf
 
             AmzaHttpClientProvider clientProvider = new AmzaHttpClientProvider(
                 new PartitionHostsProvider(httpClient),
                 new RingHostHttpClientProvider(httpClient),
-                Executors.newCachedThreadPool());
+                Executors.newCachedThreadPool(),
+                10_000); //TODO expose to conf
 
             System.out.println("-----------------------------------------------------------------------");
             System.out.println("|      Tcp Replication Service Online");

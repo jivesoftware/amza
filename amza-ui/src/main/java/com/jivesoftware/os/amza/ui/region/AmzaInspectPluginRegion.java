@@ -144,7 +144,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             } else {
                                 return false;
                             }
-                        }, Optional.of(msg));
+                        },
+                        30_000L,
+                        30_000L,
+                        30_000L,
+                        Optional.of(msg));
 
                     msg.add("elapse=" + (System.currentTimeMillis() - start));
                 }
@@ -170,7 +174,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 max.set(timestamp);
                             }
                             return true;
-                        }, Optional.of(msg));
+                        },
+                        30_000L,
+                        30_000L,
+                        30_000L,
+                        Optional.of(msg));
 
                     msg.add("Count=" + count.get()
                         + " minTimestamp=" + min.get()
@@ -203,7 +211,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("version", String.valueOf(version));
                                 rows.add(row);
                                 return true;
-                            }, Optional.of(msg));
+                            },
+                            30_000L,
+                            30_000L,
+                            30_000L,
+                            Optional.of(msg));
                         msg.add("elapse=" + (System.currentTimeMillis() - start));
                     }
                 }
@@ -223,6 +235,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             getPrefix(input.prefix),
                             new AmzaClientUpdates(updates),
                             30_000,
+                            30_000,
                             Optional.of(msg));
                         partition.get(Consistency.none, getPrefix(input.prefix), walKeysFromList(rawKeys),
                             (prefix, key, value, timestamp, version) -> {
@@ -240,7 +253,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("version", String.valueOf(version));
                                 rows.add(row);
                                 return true;
-                            }, Optional.of(msg));
+                            },
+                            30_000L,
+                            30_000L,
+                            30_000L,
+                            Optional.of(msg));
                         msg.add("elapse=" + (System.currentTimeMillis() - start));
                     }
                 }
@@ -266,15 +283,19 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                             toRawKeys.get(0),
                             (prefix, key, value, timestamp, version) -> {
                                 if (updates.size() >= input.batchSize || !Arrays.equals(lastPrefix[0], prefix)) {
-                                    partition.commit(Consistency.none, lastPrefix[0], clientUpdates, 30_000, Optional.of(msg));
+                                    partition.commit(Consistency.none, lastPrefix[0], clientUpdates, 30_000, 30_000, Optional.of(msg));
                                     updates.reset();
                                 }
                                 lastPrefix[0] = prefix;
                                 updates.remove(key);
                                 return true;
-                            }, Optional.of(msg));
+                            },
+                            30_000L,
+                            30_000L,
+                            30_000L,
+                            Optional.of(msg));
                         if (updates.size() > 0) {
-                            partition.commit(Consistency.none, lastPrefix[0], clientUpdates, 30_000, Optional.of(msg));
+                            partition.commit(Consistency.none, lastPrefix[0], clientUpdates, 30_000, 30_000, Optional.of(msg));
                         }
                     } else {
                         long start = System.currentTimeMillis();
@@ -283,7 +304,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         for (byte[] rawKey : fromRawKeys) {
                             updates.remove(rawKey, -1);
                         }
-                        partition.commit(input.consistency, getPrefix(input.prefix), clientUpdates, 30_000, Optional.of(msg));
+                        partition.commit(input.consistency, getPrefix(input.prefix), clientUpdates, 30_000, 30_000, Optional.of(msg));
                         partition.get(input.consistency, getPrefix(input.prefix), walKeysFromList(fromRawKeys),
                             (prefix, key, value, timestamp, version) -> {
                                 Map<String, String> row = new HashMap<>();
@@ -300,7 +321,11 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 row.put("version", String.valueOf(version));
                                 rows.add(row);
                                 return true;
-                            }, Optional.of(msg));
+                            },
+                            30_000L,
+                            30_000L,
+                            30_000L,
+                            Optional.of(msg));
                         msg.add("elapse=" + (System.currentTimeMillis() - start));
                     }
                 }

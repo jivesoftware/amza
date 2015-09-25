@@ -54,8 +54,9 @@ public class RingMember implements Comparable<RingMember> {
         return fromBytes(BaseEncoding.base64Url().decode(base64));
     }
 
-    private final String member;
     private final byte[] memberAsBytes;
+
+    private transient String member;
 
     @JsonCreator
     public RingMember(@JsonProperty("member") String member) {
@@ -63,7 +64,14 @@ public class RingMember implements Comparable<RingMember> {
         this.memberAsBytes = member.getBytes(StandardCharsets.UTF_8);
     }
 
+    private RingMember(byte[] memberAsBytes) {
+        this.memberAsBytes = memberAsBytes;
+    }
+
     public String getMember() {
+        if (member == null) {
+            member = new String(memberAsBytes, StandardCharsets.UTF_8);
+        }
         return member;
     }
 
@@ -72,7 +80,7 @@ public class RingMember implements Comparable<RingMember> {
     }
 
     public static RingMember fromAquariumMember(Member member) {
-        return new RingMember(new String(member.getMember(), StandardCharsets.UTF_8));
+        return new RingMember(member.getMember());
     }
 
     @Override
@@ -96,7 +104,7 @@ public class RingMember implements Comparable<RingMember> {
 
     @Override
     public String toString() {
-        return "RingMember{" + "member=" + member + '}';
+        return "RingMember{" + "member=" + getMember() + '}';
     }
 
     @Override

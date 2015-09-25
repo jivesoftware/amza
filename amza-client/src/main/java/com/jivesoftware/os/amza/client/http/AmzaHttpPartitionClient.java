@@ -41,11 +41,16 @@ public class AmzaHttpPartitionClient implements PartitionClient {
     private final String base64PartitionName;
     private final PartitionName partitionName;
     private final AmzaHttpClientCallRouter partitionCallRouter;
+    private final long awaitLeaderElectionForNMillis;
 
-    public AmzaHttpPartitionClient(PartitionName partitionName, AmzaHttpClientCallRouter partitionCallRouter) throws IOException {
+    public AmzaHttpPartitionClient(PartitionName partitionName,
+        AmzaHttpClientCallRouter partitionCallRouter,
+        long awaitLeaderElectionForNMillis) throws IOException {
+
         this.base64PartitionName = partitionName.toBase64();
         this.partitionName = partitionName;
         this.partitionCallRouter = partitionCallRouter;
+        this.awaitLeaderElectionForNMillis = awaitLeaderElectionForNMillis;
     }
 
     private void handleLeaderStatusCodes(Consistency consistency, int statusCode, Closeable closeable) {
@@ -100,7 +105,8 @@ public class AmzaHttpPartitionClient implements PartitionClient {
     public void commit(Consistency consistency,
         byte[] prefix,
         ClientUpdates updates,
-        long timeoutInMillis,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
 
         partitionCallRouter.write(solutionLog.orElse(null), partitionName, consistency, "commit",
@@ -111,7 +117,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                         try {
                             FilerOutputStream fos = new FilerOutputStream(out);
                             UIO.writeByteArray(fos, prefix, "prefix");
-                            UIO.writeLong(fos, timeoutInMillis, "timeoutInMillis");
+                            UIO.writeLong(fos, abandonSolutionAfterNMillis, "timeoutInMillis");
 
                             updates.updates((rowTxId, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                                 UIO.writeBoolean(fos, false, "eos");
@@ -134,7 +140,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                 return new PartitionResponse<>(closeableHttpResponse, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },
             answer -> true,
-            timeoutInMillis);
+            awaitLeaderElectionForNMillis,
+            additionalSolverAfterNMillis,
+            abandonSolutionAfterNMillis);
     }
 
     @Override
@@ -142,6 +150,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] prefix,
         UnprefixedWALKeys keys,
         KeyValueTimestampStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
         partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "get",
             (leader, ringMember, client) -> {
@@ -203,7 +214,11 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }
                 }
                 return null;
-            });
+            },
+            awaitLeaderElectionForNMillis,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis);
         return true;
     }
 
@@ -214,6 +229,9 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] toPrefix,
         byte[] toKey,
         KeyValueTimestampStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
         boolean merge;
         if (consistency == Consistency.leader_plus_one
@@ -290,7 +308,11 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }
                 }
                 throw new RuntimeException("Failed to scan.");
-            });
+            },
+            awaitLeaderElectionForNMillis,
+            additionalSolverAfterNMillis,
+            abandonLeaderSolutionAfterNMillis,
+            abandonSolutionAfterNMillis);
     }
 
     @Override
@@ -298,6 +320,8 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         Map<RingMember, Long> membersTxId,
         Highwaters highwaters,
         TxKeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
         return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takeFromTransactionId",
             (leader, ringMember, client) -> {
@@ -317,7 +341,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     return take(fis, highwaters, stream);
                 }
                 throw new RuntimeException("Failed to takePrefixFromTransactionId.");
-            });
+            },
+            awaitLeaderElectionForNMillis,
+            additionalSolverAfterNMillis,
+            abandonSolutionAfterNMillis);
     }
 
     @Override
@@ -326,6 +353,8 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         Map<RingMember, Long> membersTxId,
         Highwaters highwaters,
         TxKeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
         return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takePrefixFromTransactionId",
             (leader, ringMember, client) -> {
@@ -346,7 +375,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     return take(fis, highwaters, stream);
                 }
                 throw new RuntimeException("Failed to takePrefixFromTransactionId.");
-            });
+            },
+            awaitLeaderElectionForNMillis,
+            additionalSolverAfterNMillis,
+            abandonSolutionAfterNMillis);
     }
 
     private TakeResult take(FilerInputStream fis, Highwaters highwaters, TxKeyValueStream stream) throws Exception {

@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.storage.delta;
+package com.jivesoftware.os.amza.api;
 
 /**
  *

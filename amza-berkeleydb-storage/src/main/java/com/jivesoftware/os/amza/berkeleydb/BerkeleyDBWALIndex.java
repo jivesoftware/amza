@@ -80,7 +80,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
         System.arraycopy(valueBytes, 0, entryBytes, 0, valueBytes.length);
         UIO.longBytes(timestamp, entryBytes, valueBytes.length);
         entryBytes[valueBytes.length + 8] = tombstoned ? (byte) 1 : (byte) 0;
-        UIO.longBytes(timestamp, entryBytes, valueBytes.length + 8 + 1);
+        UIO.longBytes(version, entryBytes, valueBytes.length + 8 + 1);
         dbValue.setData(entryBytes);
     }
 
@@ -89,17 +89,17 @@ public class BerkeleyDBWALIndex implements WALIndex {
         System.arraycopy(entryBytes, 0, valueBytes, 0, valueBytes.length);
         long timestamp = UIO.bytesLong(entryBytes, valueBytes.length);
         boolean tombstoned = (entryBytes[valueBytes.length + 8] == (byte) 1);
-        long version = UIO.bytesLong(entryBytes, valueBytes.length + 1 + 8);
+        long version = UIO.bytesLong(entryBytes, valueBytes.length + 8 + 1);
         return stream.stream(prefix, key, timestamp, tombstoned, version, UIO.bytesLong(valueBytes));
     }
 
     private boolean entryToWALPointer(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
         byte[] entryBytes, KeyValuePointerStream stream) throws Exception {
-        byte[] valueBytes = new byte[entryBytes.length - 8 - 1];
+        byte[] valueBytes = new byte[entryBytes.length - 8 - 1 - 8];
         System.arraycopy(entryBytes, 0, valueBytes, 0, valueBytes.length);
         long timestamp = UIO.bytesLong(entryBytes, valueBytes.length);
         boolean tombstoned = (entryBytes[valueBytes.length + 8] == (byte) 1);
-        long version = UIO.bytesLong(entryBytes, valueBytes.length + 1 + 8);
+        long version = UIO.bytesLong(entryBytes, valueBytes.length + 8 + 1);
         return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, UIO.bytesLong(valueBytes));
     }
 

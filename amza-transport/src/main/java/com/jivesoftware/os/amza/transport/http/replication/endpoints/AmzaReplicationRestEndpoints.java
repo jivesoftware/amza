@@ -29,6 +29,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.concurrent.TimeoutException;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -78,6 +79,13 @@ public class AmzaReplicationRestEndpoints {
                         VersionedPartitionName.fromBase64(versionedPartitionName),
                         txId,
                         leadershipToken);
+                } catch (IOException x) {
+                    if (x.getCause() instanceof TimeoutException) {
+                        LOG.error("Timed out while streaming takes");
+                    } else {
+                        LOG.error("Failed to stream takes.", x);
+                    }
+                    throw x;
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);
@@ -119,7 +127,9 @@ public class AmzaReplicationRestEndpoints {
                     LOG.warn("Failed to stream available rows", x);
                 } finally {
                     try {
-                        chunkedOutput.close();
+                        if (!chunkedOutput.isClosed()) {
+                            chunkedOutput.close();
+                        }
                     } catch (IOException x) {
                         LOG.warn("Failed to close stream for available rows", x);
                     }

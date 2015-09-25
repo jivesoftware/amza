@@ -7,9 +7,10 @@ import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.client.http.exceptions.NotSolveableException;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.EmbeddedPartitionClient;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
+import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -270,12 +271,16 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                             return true;
                         },
                         30_000,
+                        60_000,
                         Optional.<List<String>>empty());
                     break;
 
                 } catch (DeltaOverCapacityException de) {
                     Thread.sleep(100);
-                    LOG.warn("Slowing stress for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
+                    LOG.warn("Delta over capacity for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
+                } catch (NotSolveableException e) {
+                    Thread.sleep(100);
+                    LOG.warn("Not solveable for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
                 } catch (Exception x) {
                     LOG.warn("Failed to set region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex }, x);
                 }

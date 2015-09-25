@@ -61,11 +61,9 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
 
     @Override
     public int read(byte[] b, int _offset, int _len) throws IOException {
-        ByteBuffer bb = ByteBuffer.allocate(_len);
+        ByteBuffer bb = ByteBuffer.wrap(b, _offset, _len);
         fc.read(bb, fp);
         fp += _len;
-        bb.position(0);
-        System.arraycopy(bb.array(), 0, b, _offset, _len);
         return _len;
     }
 

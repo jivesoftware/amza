@@ -165,12 +165,13 @@ public class Main {
                 ""),
             new HttpDeliveryClientHealthProvider("", null, "", 5000, 100),
             10,
-            10_000);
+            10_000); //TODO expose to conf
 
         AmzaHttpClientProvider clientProvider = new AmzaHttpClientProvider(
             new PartitionHostsProvider(httpClient),
             new RingHostHttpClientProvider(httpClient),
-            Executors.newCachedThreadPool());
+            Executors.newCachedThreadPool(),
+            10_000); //TODO expose to conf
 
         final JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()
             .addEndpoint(AmzaEndpoints.class)

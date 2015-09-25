@@ -31,6 +31,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * @author jonathan.colt
@@ -62,35 +63,35 @@ public class AmzaHttpClientCallRouter {
         String family,
         PartitionCall<HttpClient, A, HttpClientException> partitionCall,
         Merger<R, A> merger,
-        long abandonAfterNMillis) throws Exception {
+        long awaitLeaderElectionForNMillis,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis) throws Exception {
 
-        long waitForLeaderElection = 1000; // TODO config?
-        Ring ring = ring(partitionName, consistency, Optional.empty(), waitForLeaderElection);
+        Ring ring = ring(partitionName, consistency, Optional.empty(), awaitLeaderElectionForNMillis);
 
-        long additionalSolverAfterNMillis = 1000; // TODO who controls this
         if (consistency.requiresLeader()) {
             try {
                 RingMemberAndHost leader = ring.leader();
                 if (solutionLog != null) {
                     solutionLog.add("Writing to " + leader);
                 }
-                return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis,
+                return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis,
                     leader.ringMember, leader);
             } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
                 LOG.inc("reattempts>write>" + e.getClass().getSimpleName() + ">" + consistency.name() + ">" + partitionName.toBase64());
-                ring = ring(partitionName, consistency, Optional.of(ring.leader()), waitForLeaderElection);
+                ring = ring(partitionName, consistency, Optional.of(ring.leader()), awaitLeaderElectionForNMillis);
                 RingMemberAndHost leader = ring.leader();
                 if (solutionLog != null) {
                     solutionLog.add("Leader changed. Reattempting WRITE against " + leader);
                 }
-                return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis,
+                return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis,
                     leader.ringMember, leader);
             }
         } else if (consistency == Consistency.quorum
             || consistency == Consistency.write_all_read_one
             || consistency == Consistency.write_one_read_all
             || consistency == Consistency.none) {
-            return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonAfterNMillis, null,
+            return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis, null,
                 ring.randomizeRing());
         } else {
             throw new IllegalStateException("Unsupported write consistency:" + consistency.name());
@@ -107,35 +108,51 @@ public class AmzaHttpClientCallRouter {
         Consistency consistency,
         String family,
         PartitionCall<HttpClient, A, HttpClientException> call,
-        Merger<R, A> merger) throws Exception {
+        Merger<R, A> merger,
+        long awaitLeaderElectionForNMillis,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis) throws Exception {
 
-        long waitForLeaderElection = 1000; // TODO config?
-        Ring ring = ring(partitionName, consistency, Optional.empty(), waitForLeaderElection);
-
-        long additionalSolverAfterNMillis = 1000; // TODO who controls this
+        Ring ring = ring(partitionName, consistency, Optional.empty(), awaitLeaderElectionForNMillis);
 
         if (consistency.requiresLeader()) {
-            RingMemberAndHost leader;
+            Future<A> future = null;
             try {
-                leader = ring.leader();
+                RingMemberAndHost leader = ring.leader();
                 A answer;
                 try {
+                    RingMemberAndHost initialLeader = leader;
                     if (solutionLog != null) {
-                        solutionLog.add("Reading from " + leader);
+                        solutionLog.add("Reading from " + initialLeader);
                     }
-                    answer = clientProvider.call(partitionName, leader.ringMember, leader, family, call);
+                    future = callerThreads.submit(() -> clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call));
+                    answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
                 } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
                     LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name() + ">" + partitionName.toBase64());
-                    ring = ring(partitionName, consistency, Optional.of(ring.leader()), waitForLeaderElection);
+                    ring = ring(partitionName, consistency, Optional.of(ring.leader()), awaitLeaderElectionForNMillis);
                     leader = ring.leader();
+                    RingMemberAndHost nextLeader = leader;
                     if (solutionLog != null) {
                         solutionLog.add("Leader changed. Reattempting READ against " + leader);
                     }
-                    answer = clientProvider.call(partitionName, leader.ringMember, leader, family, call);
+                    if (future != null) {
+                        future.cancel(true);
+                    }
+                    future = callerThreads.submit(() -> clientProvider.call(partitionName, nextLeader.ringMember, nextLeader, family, call));
+                    answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
                 }
-                R merge = merger.merge(Collections.singletonList(new RingMemberAndHostAnswer<>(leader, answer)));
-                return merge;
+                return merger.merge(Collections.singletonList(new RingMemberAndHostAnswer<>(leader, answer)));
 
+            } catch (TimeoutException x) {
+                future.cancel(true);
+                if (consistency == Consistency.leader) {
+                    LOG.error("Timed out reading from leader.", x);
+                    throw x;
+                } else {
+                    LOG.inc("timeout>read>" + consistency.name() + ">" + partitionName.toBase64());
+                    LOG.warn("Timed out reading from leader.", x);
+                }
             } catch (Exception x) {
                 partitionRoutingCache.invalidate(partitionName);
                 if (consistency == Consistency.leader) {
@@ -160,7 +177,7 @@ public class AmzaHttpClientCallRouter {
                     false,
                     merger,
                     additionalSolverAfterNMillis,
-                    Long.MAX_VALUE,
+                    abandonSolutionAfterNMillis,
                     null,
                     leaderlessRing);
             } else if (consistency == Consistency.leader_quorum) {
@@ -177,7 +194,7 @@ public class AmzaHttpClientCallRouter {
                     true,
                     merger,
                     additionalSolverAfterNMillis,
-                    Long.MAX_VALUE,
+                    abandonSolutionAfterNMillis,
                     null,
                     leaderlessRing);
             } else if (consistency == Consistency.leader_all) {
@@ -193,7 +210,7 @@ public class AmzaHttpClientCallRouter {
                     true,
                     merger,
                     additionalSolverAfterNMillis,
-                    Long.MAX_VALUE,
+                    abandonSolutionAfterNMillis,
                     null,
                     leaderlessRing);
             } else {
@@ -202,19 +219,19 @@ public class AmzaHttpClientCallRouter {
         } else if (consistency == Consistency.quorum) {
             RingMemberAndHost[] randomizeRing = ring.randomizeRing();
             int neighborQuorum = consistency.quorum(randomizeRing.length - 1);
-            return solve(solutionLog, partitionName, family, call, 1 + neighborQuorum, true, merger, additionalSolverAfterNMillis, Long.MAX_VALUE,
+            return solve(solutionLog, partitionName, family, call, 1 + neighborQuorum, true, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis,
                 null, randomizeRing);
         } else if (consistency == Consistency.write_one_read_all) {
             RingMemberAndHost[] actualRing = ring.actualRing();
-            return solve(solutionLog, partitionName, family, call, actualRing.length, false, merger, additionalSolverAfterNMillis, Long.MAX_VALUE,
+            return solve(solutionLog, partitionName, family, call, actualRing.length, false, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis,
                 null, actualRing);
         } else if (consistency == Consistency.write_all_read_one) {
             RingMemberAndHost[] randomizeRing = ring.randomizeRing();
-            return solve(solutionLog, partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, Long.MAX_VALUE, null,
+            return solve(solutionLog, partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis, null,
                 randomizeRing);
         } else if (consistency == Consistency.none) {
             RingMemberAndHost[] randomizeRing = ring.randomizeRing();
-            return solve(solutionLog, partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, Long.MAX_VALUE, null,
+            return solve(solutionLog, partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis, null,
                 randomizeRing);
         } else {
             throw new IllegalStateException("Unsupported read consistency:" + consistency.name());
@@ -226,15 +243,15 @@ public class AmzaHttpClientCallRouter {
         List<RingMember> membersInOrder,
         String family,
         PartitionCall<HttpClient, A, HttpClientException> call,
-        Merger<R, A> merger) throws Exception {
+        Merger<R, A> merger,
+        long awaitLeaderElectionForNMillis,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis) throws Exception {
 
-        long waitForLeaderElection = 1000; // TODO config?
-        Ring ring = ring(partitionName, Consistency.none, Optional.empty(), waitForLeaderElection);
-
-        long additionalSolverAfterNMillis = 1000; // TODO who controls this
+        Ring ring = ring(partitionName, Consistency.none, Optional.empty(), awaitLeaderElectionForNMillis);
 
         RingMemberAndHost[] orderedRing = ring.orderedRing(membersInOrder);
-        return solve(solutionLog, partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, Long.MAX_VALUE, null, orderedRing);
+        return solve(solutionLog, partitionName, family, call, 1, true, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis, null, orderedRing);
     }
 
     private Ring ring(PartitionName partitionName,
@@ -264,7 +281,7 @@ public class AmzaHttpClientCallRouter {
         boolean addNewSolverOnTimeout,
         Merger<R, A> merger,
         long addAdditionalSolverAfterNMillis,
-        long abandonAfterNMillis,
+        long abandonSolutionAfterNMillis,
         RingMember leader,
         RingMemberAndHost... ringMemberAndHosts) throws Exception {
         long start = System.currentTimeMillis();
@@ -277,7 +294,7 @@ public class AmzaHttpClientCallRouter {
                 solutionLog.add("mandatory:" + mandatory);
                 solutionLog.add("addNewSolverOnTimeout:" + addNewSolverOnTimeout);
                 solutionLog.add("addAdditionalSolverAfterNMillis:" + addAdditionalSolverAfterNMillis);
-                solutionLog.add("abandonAfterNMillis:" + abandonAfterNMillis);
+                solutionLog.add("abandonSolutionAfterNMillis:" + abandonSolutionAfterNMillis);
             }
 
             Iterable<Callable<RingMemberAndHostAnswer<A>>> callOrder = Iterables.transform(
@@ -293,7 +310,7 @@ public class AmzaHttpClientCallRouter {
                     };
                 });
             List<RingMemberAndHostAnswer<A>> solutions = solve(solutionLog, callerThreads, callOrder.iterator(), mandatory,
-                addNewSolverOnTimeout, addAdditionalSolverAfterNMillis, abandonAfterNMillis);
+                addNewSolverOnTimeout, addAdditionalSolverAfterNMillis, abandonSolutionAfterNMillis);
             R result = merger.merge(solutions);
             if (solutionLog != null) {
                 solutionLog.add("Solved. " + (System.currentTimeMillis() - start) + "millis");
@@ -316,7 +333,7 @@ public class AmzaHttpClientCallRouter {
                 try {
                     closeable.close();
                 } catch (Throwable t) {
-                    LOG.warn("Failed to close {}", new Object[]{closeable}, t);
+                    LOG.warn("Failed to close {}", new Object[] { closeable }, t);
                 }
             }
         }
@@ -328,7 +345,7 @@ public class AmzaHttpClientCallRouter {
         int mandatory,
         boolean addNewSolverOnTimeout,
         long addAdditionalSoverAfterNMillis,
-        long abandonAfterNMillis) throws InterruptedException {
+        long abandonSolutionAfterNMillis) throws InterruptedException {
 
         CompletionService<RingMemberAndHostAnswer<A>> completionService = new ExecutorCompletionService<>(executor);
         List<Future<RingMemberAndHostAnswer<A>>> futures = new ArrayList<>();
@@ -349,12 +366,12 @@ public class AmzaHttpClientCallRouter {
             long start = System.currentTimeMillis();
             while (answers.size() < mandatory && (solvers.hasNext() || pending > 0)) {
                 long elapsed = System.currentTimeMillis() - start;
-                long remaining = abandonAfterNMillis - elapsed;
+                long remaining = abandonSolutionAfterNMillis - elapsed;
                 if (remaining <= 0) {
                     if (solutionLog != null) {
-                        solutionLog.add("Abandoned solution because it took more than " + abandonAfterNMillis + "millis.");
+                        solutionLog.add("Abandoned solution because it took more than " + abandonSolutionAfterNMillis + "millis.");
                     }
-                    throw new RuntimeException("Abandoned solution because it took more than " + abandonAfterNMillis + "millis.");
+                    throw new RuntimeException("Abandoned solution because it took more than " + abandonSolutionAfterNMillis + "millis.");
                 }
                 Future<RingMemberAndHostAnswer<A>> future = completionService.poll(Math.min(remaining, addAdditionalSoverAfterNMillis), TimeUnit.MILLISECONDS);
                 if (future == null) {
@@ -370,15 +387,15 @@ public class AmzaHttpClientCallRouter {
                         RingMemberAndHostAnswer<A> r = future.get();
                         if (r != null) {
                             if (solutionLog != null) {
-                                solutionLog.add("solving with " + r.getRingMemberAndHost());
+                                solutionLog.add("Solving with " + r.getRingMemberAndHost());
                             }
                             answers.add(r);
                         }
                     } catch (ExecutionException ignore) {
                         if (solutionLog != null) {
-                            solutionLog.add("solver faild to with " + ignore.getCause());
+                            solutionLog.add("Solver failed: " + ignore.getCause());
                         }
-                        LOG.warn("Failed to solve", ignore.getCause());
+                        LOG.debug("Failed to solve", ignore.getCause());
                         if (solvers.hasNext()) {
                             pending++;
                             futures.add(completionService.submit(solvers.next()));

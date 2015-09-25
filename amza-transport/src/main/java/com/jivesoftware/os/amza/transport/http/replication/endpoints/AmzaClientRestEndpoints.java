@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -172,9 +173,12 @@ public class AmzaClientRestEndpoints {
             }, timeoutInMillis);
 
             return Response.ok("success").build();
+        } catch (DeltaOverCapacityException x) {
+            LOG.info("Delta over capacity for {}", base64PartitionName);
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "Delta over capacity");
         } catch (Exception x) {
             Object[] vals = new Object[] { base64PartitionName, consistencyName };
-            LOG.warn("Failed to commit to {} at {}. ", vals, x);
+            LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         }
     }

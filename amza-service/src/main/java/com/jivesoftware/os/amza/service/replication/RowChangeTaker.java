@@ -16,7 +16,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
+import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.CommitTo;
@@ -762,7 +762,7 @@ public class RowChangeTaker implements RowChanges {
                         amzaStats.backPressure.set(0);
                         break;
                     } catch (DeltaOverCapacityException x) {
-                        Thread.sleep(100); // TODO cofig;
+                        Thread.sleep(100); // TODO configure!
                         amzaStats.backPressure.incrementAndGet();
                         amzaStats.pushBacks.incrementAndGet();
                     } catch (Exception x) {

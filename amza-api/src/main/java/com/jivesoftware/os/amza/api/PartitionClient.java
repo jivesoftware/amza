@@ -30,12 +30,17 @@ public interface PartitionClient {
      */
     void commit(Consistency consistency, byte[] prefix,
         ClientUpdates updates,
-        long timeoutInMillis, Optional<List<String>> solutionLog) throws Exception;
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
+        Optional<List<String>> solutionLog) throws Exception;
 
     boolean get(Consistency consistency,
         byte[] prefix,
         UnprefixedWALKeys keys,
         KeyValueTimestampStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception;
 
     /**
@@ -52,12 +57,17 @@ public interface PartitionClient {
         byte[] toPrefix,
         byte[] toKey,
         KeyValueTimestampStream scan,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception;
 
     TakeResult takeFromTransactionId(List<RingMember> membersInOrder,
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
         TxKeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws
         Exception;
 
@@ -66,6 +76,8 @@ public interface PartitionClient {
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
         TxKeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception;
 
 }

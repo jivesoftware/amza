@@ -35,9 +35,10 @@ public class EmbeddedPartitionClient implements PartitionClient {
     public void commit(Consistency consistency,
         byte[] prefix,
         ClientUpdates updates,
-        long timeoutInMillis,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        partition.commit(consistency, prefix, (highwaters, txKeyValueStream) -> updates.updates(txKeyValueStream), timeoutInMillis);
+        partition.commit(consistency, prefix, (highwaters, txKeyValueStream) -> updates.updates(txKeyValueStream), abandonSolutionAfterNMillis);
     }
 
     @Override
@@ -45,6 +46,9 @@ public class EmbeddedPartitionClient implements PartitionClient {
         byte[] prefix,
         UnprefixedWALKeys keys,
         KeyValueTimestampStream valuesStream,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
         return partition.get(consistency, prefix, keys, (prefix1, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (valueTimestamp == -1 || valueTombstoned) {
@@ -62,6 +66,9 @@ public class EmbeddedPartitionClient implements PartitionClient {
         byte[] toPrefix,
         byte[] toKey,
         KeyValueTimestampStream scan,
+        long additionalSolverAfterNMillis,
+        long abandonLeaderSolutionAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
         return partition.scan(fromPrefix, fromKey, toPrefix, toKey, scan);
     }
@@ -71,6 +78,8 @@ public class EmbeddedPartitionClient implements PartitionClient {
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
         TxKeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
         if (!membersInOrder.contains(rootRingMember)) {
             LOG.warn("Took from {} but not in desired members {}", rootRingMember, membersInOrder);
@@ -86,6 +95,8 @@ public class EmbeddedPartitionClient implements PartitionClient {
         Map<RingMember, Long> memberTxIds,
         Highwaters highwaters,
         TxKeyValueStream stream,
+        long additionalSolverAfterNMillis,
+        long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
         if (!membersInOrder.contains(rootRingMember)) {
             LOG.warn("Took with prefix from {} but not in desired members {}", rootRingMember, membersInOrder);

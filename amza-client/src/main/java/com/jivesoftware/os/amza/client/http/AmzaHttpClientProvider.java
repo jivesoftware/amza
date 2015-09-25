@@ -16,14 +16,17 @@ public class AmzaHttpClientProvider implements PartitionClientProvider {
     private final PartitionHostsProvider partitionHostsProvider;
     private final RingHostHttpClientProvider clientProvider;
     private final ExecutorService callerThreads;
+    private final long awaitLeaderElectionForNMillis;
     private final Map<PartitionName, AmzaHttpPartitionClient> cache = new ConcurrentHashMap<>();
 
     public AmzaHttpClientProvider(PartitionHostsProvider partitionHostsProvider,
         RingHostHttpClientProvider clientProvider,
-        ExecutorService callerThreads) {
+        ExecutorService callerThreads,
+        long awaitLeaderElectionForNMillis) {
         this.partitionHostsProvider = partitionHostsProvider;
         this.clientProvider = clientProvider;
         this.callerThreads = callerThreads;
+        this.awaitLeaderElectionForNMillis = awaitLeaderElectionForNMillis;
     }
 
     @Override
@@ -32,7 +35,7 @@ public class AmzaHttpClientProvider implements PartitionClientProvider {
         return cache.computeIfAbsent(partitionName, (key) -> {
             try {
                 AmzaHttpClientCallRouter partitionCallRouter = new AmzaHttpClientCallRouter(callerThreads, partitionHostsProvider, clientProvider);
-                return new AmzaHttpPartitionClient(key, partitionCallRouter);
+                return new AmzaHttpPartitionClient(key, partitionCallRouter, awaitLeaderElectionForNMillis);
             } catch (Exception x) {
                 throw new RuntimeException(x);
             }

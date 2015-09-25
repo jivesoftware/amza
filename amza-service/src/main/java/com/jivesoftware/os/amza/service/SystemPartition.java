@@ -102,7 +102,7 @@ public class SystemPartition implements Partition {
                     return scan.row(rowTxId, key, value, timestamp, valueTombstone, timestampAndVersion);
                 }),
             walUpdated);
-        amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
+        amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getSmallestCommittedTxId());
 
         if (takeQuorum > 0) {
             LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);

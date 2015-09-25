@@ -349,8 +349,6 @@ public class DeltaStripeWALStorage {
             throw new DeltaOverCapacityException();
         }
 
-        final AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
-
         final Map<WALKey, WALValue> apply = new LinkedHashMap<>();
 
         final List<KeyedTimestampId> removes = new ArrayList<>();
@@ -383,14 +381,8 @@ public class DeltaStripeWALStorage {
                 WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone, valueVersion);
                 if (pointerFp == -1) {
                     apply.put(walKey, walValue);
-                    if (oldestAppliedTimestamp.get() > valueTimestamp) {
-                        oldestAppliedTimestamp.set(valueTimestamp);
-                    }
                 } else if (CompareTimestampVersions.compare(pointerTimestamp, pointerVersion, valueTimestamp, valueVersion) < 0) {
                     apply.put(walKey, walValue);
-                    if (oldestAppliedTimestamp.get() > valueTimestamp) {
-                        oldestAppliedTimestamp.set(valueTimestamp);
-                    }
                     WALTimestampId walTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
                     KeyedTimestampId keyedTimestampId = new KeyedTimestampId(prefix, key, walTimestampId.getTimestampId(), walTimestampId.getTombstoned());
                     clobbers.add(keyedTimestampId);
@@ -402,7 +394,7 @@ public class DeltaStripeWALStorage {
             });
 
             if (apply.isEmpty()) {
-                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), Collections.emptyMap(), removes, clobbers, -1);
+                rowsChanged = new RowsChanged(versionedPartitionName, Collections.emptyMap(), removes, clobbers, -1, -1);
             } else {
                 PartitionDelta delta = getPartitionDelta(versionedPartitionName);
                 WALHighwater partitionHighwater = null;
@@ -430,10 +422,10 @@ public class DeltaStripeWALStorage {
                     }
                     delta.appendTxFps(prefix, updateApplied.txId, updateApplied.fps);
                     rowsChanged = new RowsChanged(versionedPartitionName,
-                        oldestAppliedTimestamp.get(),
                         apply,
                         removes,
                         clobbers,
+                        updateApplied.txId,
                         updateApplied.txId);
                 }
                 updated.updated(versionedPartitionName, updateApplied.txId);

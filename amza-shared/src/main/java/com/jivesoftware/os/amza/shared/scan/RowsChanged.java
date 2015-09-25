@@ -25,32 +25,28 @@ import java.util.Map;
 public class RowsChanged {
 
     private final VersionedPartitionName versionedPartitionName;
-    private final long oldestApply;
     private final Map<WALKey, WALValue> apply;
     private final List<KeyedTimestampId> remove;
     private final List<KeyedTimestampId> clobber;
+    private final long smallestCommittedTxId;
     private final long largestCommittedTxId;
 
     public RowsChanged(VersionedPartitionName versionedPartitionName,
-        long oldestApply,
         Map<WALKey, WALValue> apply,
         List<KeyedTimestampId> remove,
         List<KeyedTimestampId> clobber,
+        long smallestCommittedTxId,
         long largestCommittedTxId) {
         this.versionedPartitionName = versionedPartitionName;
-        this.oldestApply = oldestApply;
         this.apply = apply;
         this.remove = remove;
         this.clobber = clobber;
+        this.smallestCommittedTxId = smallestCommittedTxId;
         this.largestCommittedTxId = largestCommittedTxId;
     }
 
     public VersionedPartitionName getVersionedPartitionName() {
         return versionedPartitionName;
-    }
-
-    public long getOldestRowTxId() {
-        return oldestApply;
     }
 
     public Map<WALKey, WALValue> getApply() {
@@ -75,6 +71,10 @@ public class RowsChanged {
         return !(clobber != null && !clobber.isEmpty());
     }
 
+    public long getSmallestCommittedTxId() {
+        return smallestCommittedTxId;
+    }
+
     public long getLargestCommittedTxId() {
         return largestCommittedTxId;
     }
@@ -83,10 +83,10 @@ public class RowsChanged {
     public String toString() {
         return "RowsChanged{" +
             "versionedPartitionName=" + versionedPartitionName +
-            ", oldestApply=" + oldestApply +
             ", apply=" + apply +
             ", remove=" + remove +
             ", clobber=" + clobber +
+            ", smallestCommittedTxId=" + smallestCommittedTxId +
             ", largestCommittedTxId=" + largestCommittedTxId +
             '}';
     }

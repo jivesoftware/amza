@@ -351,7 +351,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     public RowsChanged update(long forceTxId, boolean forceApply, byte[] prefix, Commitable updates) throws Exception {
 
-        AtomicLong oldestAppliedTimestamp = new AtomicLong(Long.MAX_VALUE);
         Map<WALKey, WALValue> apply = new LinkedHashMap<>();
         List<KeyedTimestampId> removes = new ArrayList<>();
         List<KeyedTimestampId> clobbers = new ArrayList<>();
@@ -380,7 +379,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             WALIndex wali = walIndex.get();
             RowsChanged rowsChanged;
             MutableBoolean flushCompactionHint = new MutableBoolean(false);
-            MutableLong indexCommitedUpToTxId = new MutableLong();
+            MutableLong indexCommittedFromTxId = new MutableLong(Long.MAX_VALUE);
+            MutableLong indexCommittedUpToTxId = new MutableLong();
 
             if (!forceApply) {
                 MutableInt i = new MutableInt(0);
@@ -397,14 +397,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     WALValue walValue = new WALValue(value, valueTimestamp, valueTombstone, valueVersion);
                     if (pointerFp == -1) {
                         apply.put(walKey, walValue);
-                        if (oldestAppliedTimestamp.get() > valueTimestamp) {
-                            oldestAppliedTimestamp.set(valueTimestamp);
-                        }
                     } else if (CompareTimestampVersions.compare(pointerTimestamp, pointerVersion, valueTimestamp, valueVersion) < 0) {
                         apply.put(walKey, walValue);
-                        if (oldestAppliedTimestamp.get() > valueTimestamp) {
-                            oldestAppliedTimestamp.set(valueTimestamp);
-                        }
                         //TODO do we REALLY need the old value? WALValue value = hydrateRowIndexValue(currentPointer);
                         WALTimestampId currentTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
                         KeyedTimestampId keyedTimestampId = new KeyedTimestampId(walKey.prefix,
@@ -422,7 +416,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             }
 
             if (apply.isEmpty()) {
-                rowsChanged = new RowsChanged(versionedPartitionName, oldestAppliedTimestamp.get(), apply, removes, clobbers, -1);
+                rowsChanged = new RowsChanged(versionedPartitionName, apply, removes, clobbers, -1, -1);
             } else {
                 List<WALIndexable> indexables = new ArrayList<>(apply.size());
                 walTx.write((WALWriter rowWriter) -> {
@@ -457,7 +451,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             }
                             return true;
                         },
-                        indexCommitedUpToTxId,
+                        indexCommittedFromTxId,
+                        indexCommittedUpToTxId,
                         rowWriter,
                         highwater[0],
                         flushCompactionHint,
@@ -490,11 +485,11 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     });
 
                     rowsChanged = new RowsChanged(versionedPartitionName,
-                        oldestAppliedTimestamp.get(),
                         apply,
                         removes,
                         clobbers,
-                        indexCommitedUpToTxId.longValue());
+                        indexCommittedFromTxId.longValue(),
+                        indexCommittedUpToTxId.longValue());
                 }
             }
 
@@ -509,7 +504,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         writeCompactionHintMarker(writer);
                     }
                     if (commitAndWriteMarker) {
-                        writeIndexCommitMarker(writer, indexCommitedUpToTxId.longValue());
+                        writeIndexCommitMarker(writer, indexCommittedUpToTxId.longValue());
                     }
                     return null;
                 });
@@ -525,6 +520,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys,
+        MutableLong indexCommittedFromTxId,
         MutableLong indexCommitedUpToTxId,
         WALWriter rowWriter,
         WALHighwater highwater,
@@ -535,6 +531,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         synchronized (oneTransactionAtATimeLock) {
             if (txId == -1) {
                 txId = orderIdProvider.nextId();
+            }
+            if (indexCommittedFromTxId.longValue() > txId) {
+                indexCommittedFromTxId.setValue(txId);
             }
             indexCommitedUpToTxId.setValue(txId);
             count = rowWriter.write(txId, RowType.primary, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream);

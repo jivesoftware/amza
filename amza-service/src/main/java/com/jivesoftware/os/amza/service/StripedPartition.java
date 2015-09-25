@@ -143,7 +143,7 @@ public class StripedPartition implements Partition {
                 },
                 walUpdated);
 
-            amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
+            amzaStats.direct(partitionName, commit.getApply().size(), commit.getSmallestCommittedTxId());
 
             return null;
         });

@@ -202,7 +202,7 @@ public class AmzaStats {
         totals.takeApplies.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.takeAppliesLag.set(lag);
-        grandTotals.takesLag.set((grandTotals.takesLag.get() + lag) / 2);
+        grandTotals.takeAppliesLag.set((grandTotals.takeAppliesLag.get() + lag) / 2);
     }
 
     public void direct(PartitionName partitionName, int count, long smallestTxId) {
@@ -228,7 +228,7 @@ public class AmzaStats {
     }
 
     long lag(RowsChanged changed) {
-        return lag(changed.getOldestRowTxId());
+        return lag(changed.getSmallestCommittedTxId());
     }
 
     long lag(long oldest) {

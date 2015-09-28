@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.lsm;
+package com.jivesoftware.os.amza.lsm.api;
 
 import java.io.IOException;
 
@@ -8,7 +8,9 @@ import java.io.IOException;
  */
 public interface ConcurrentReadablePointerIndex {
 
-    ReadablePointerIndex concurrent() throws Exception;
+    //IReadable mergeReader() throws Exception;
+
+    PointerIndex concurrent() throws Exception;
 
     void destroy() throws IOException;
 

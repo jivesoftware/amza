@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.lsm;
+package com.jivesoftware.os.amza.lsm.api;
 
 /**
  *

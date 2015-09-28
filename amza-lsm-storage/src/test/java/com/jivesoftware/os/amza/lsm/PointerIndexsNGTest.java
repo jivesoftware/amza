@@ -1,5 +1,7 @@
 package com.jivesoftware.os.amza.lsm;
 
+import com.jivesoftware.os.amza.lsm.api.PointerStream;
+import com.jivesoftware.os.amza.lsm.api.NextPointer;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -24,13 +26,13 @@ public class PointerIndexsNGTest {
         int step = 100;
         int indexes = 4;
 
-        PointerIndexs indexs = new PointerIndexs();
+        MergeablePointerIndexs indexs = new MergeablePointerIndexs();
         for (int wi = 0; wi < indexes; wi++) {
 
             File indexFiler = File.createTempFile("a-index-" + wi, ".tmp");
             File keysFile = File.createTempFile("a-keys-" + wi, ".tmp");
 
-            PointerIndex walIndex = new PointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+            DiskBackedPointerIndex walIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
                 new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
             PointerIndexUtils.append(walIndex, 0, step, count, desired);
@@ -46,12 +48,12 @@ public class PointerIndexsNGTest {
             File indexFiler = File.createTempFile("a-index-merged", ".tmp");
             File keysFile = File.createTempFile("a-keys-merged", ".tmp");
 
-            return new PointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+            return new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
                 new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
         });
     }
 
-    private void assertions(PointerIndexs indexs,
+    private void assertions(MergeablePointerIndexs indexs,
         int count, int step,
         ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws
         Exception {

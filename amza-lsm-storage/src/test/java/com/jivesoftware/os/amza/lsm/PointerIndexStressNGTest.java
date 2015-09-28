@@ -19,7 +19,7 @@ public class PointerIndexStressNGTest {
     @Test(enabled = false)
     public void stress() throws Exception {
         long start = System.currentTimeMillis();
-        PointerIndexs indexs = new PointerIndexs();
+        MergeablePointerIndexs indexs = new MergeablePointerIndexs();
         int maxDepthBeforeMerging = 4;
         int count = 0;
         int batchSize = 10_000;
@@ -36,7 +36,7 @@ public class PointerIndexStressNGTest {
                         File mergeIndexFiler = File.createTempFile("d-index-merged-" + merge.intValue(), ".tmp");
                         File mergeKeysFile = File.createTempFile("d-keys-merged-" + merge.intValue(), ".tmp");
 
-                        return new PointerIndex(
+                        return new DiskBackedPointerIndex(
                             new DiskBackedPointerIndexFiler(mergeIndexFiler.getAbsolutePath(), "rw", false),
                             new DiskBackedPointerIndexFiler(mergeKeysFile.getAbsolutePath(), "rw", false)
                         );
@@ -63,7 +63,7 @@ public class PointerIndexStressNGTest {
             //MemoryPointerIndex index = new MemoryPointerIndex();
             long startMerge = System.currentTimeMillis();
 
-            PointerIndex index = new PointerIndex(
+            DiskBackedPointerIndex index = new DiskBackedPointerIndex(
                 new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
                 new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 

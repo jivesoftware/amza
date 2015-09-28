@@ -2,6 +2,9 @@ package com.jivesoftware.os.amza.lsm;
 
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.lsm.api.AppendablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.PointerStream;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -32,7 +35,7 @@ public class PointerIndexUtils {
                 byte[] key = UIO.longBytes(k);
                 long time = timeProvider.nextId();
                 if (desired != null) {
-                    desired.compute(key, (byte[] t, TimestampedValue u) -> {
+                    desired.compute(key, (t, u) -> {
                         if (u == null) {
                             return new TimestampedValue(time, Long.MAX_VALUE, UIO.longBytes(walFp));
                         } else {
@@ -49,7 +52,7 @@ public class PointerIndexUtils {
         });
     }
 
-    static void assertions(PointerIndexs indexs,
+    static void assertions(MergeablePointerIndexs indexs,
         int count, int step,
         ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws
         Exception {

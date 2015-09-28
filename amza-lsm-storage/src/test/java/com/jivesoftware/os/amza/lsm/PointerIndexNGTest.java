@@ -1,5 +1,8 @@
 package com.jivesoftware.os.amza.lsm;
 
+import com.jivesoftware.os.amza.lsm.api.PointerStream;
+import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -25,7 +28,7 @@ public class PointerIndexNGTest {
         int count = 10;
         int step = 10;
 
-        PointerIndex pointerIndex = new PointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+        DiskBackedPointerIndex pointerIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
             new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
         PointerIndexUtils.append(pointerIndex, 0, step, count, desired);
@@ -61,7 +64,7 @@ public class PointerIndexNGTest {
 
         File indexFiler = File.createTempFile("c-index", ".tmp");
         File keysFile = File.createTempFile("c-keys", ".tmp");
-        PointerIndex disIndex = new PointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+        DiskBackedPointerIndex disIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
             new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
         disIndex.append(memoryIndex);

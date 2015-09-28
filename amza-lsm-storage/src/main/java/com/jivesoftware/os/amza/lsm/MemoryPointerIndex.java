@@ -1,6 +1,13 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.primitives.UnsignedBytes;
+import com.jivesoftware.os.amza.lsm.api.AppendablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.Pointer;
+import com.jivesoftware.os.amza.lsm.api.PointerIndex;
+import com.jivesoftware.os.amza.lsm.api.PointerStream;
+import com.jivesoftware.os.amza.lsm.api.Pointers;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
@@ -17,9 +24,9 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
 
     @Override
     public boolean consume(PointerStream stream) throws Exception {
-        for (Map.Entry<byte[], Pointer> i : index.entrySet()) {
-            Pointer walp = i.getValue();
-            if (!stream.stream(walp.sortIndex, i.getKey(), walp.timestamp, walp.tombstone, walp.walFp)) {
+        for (Map.Entry<byte[], Pointer> e : index.entrySet()) {
+            Pointer pointer = e.getValue();
+            if (!stream.stream(pointer.sortIndex, e.getKey(), pointer.timestamp, pointer.tombstone, pointer.walFp)) {
                 return false;
             }
         }
@@ -41,17 +48,17 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
     }
 
     @Override
-    public ReadablePointerIndex concurrent() throws Exception {
-        return new ReadablePointerIndex() {
+    public PointerIndex concurrent() throws Exception {
+        return new PointerIndex() {
 
             @Override
             public NextPointer getPointer(byte[] key) throws Exception {
                 return (stream) -> {
-                    Pointer walp = index.get(key);
-                    if (walp == null) {
+                    Pointer pointer = index.get(key);
+                    if (pointer == null) {
                         stream.stream(Integer.MIN_VALUE, key, -1, false, -1);
                     } else {
-                        stream.stream(walp.sortIndex, key, walp.timestamp, walp.tombstone, walp.walFp);
+                        stream.stream(pointer.sortIndex, key, pointer.timestamp, pointer.tombstone, pointer.walFp);
                     }
                     return false;
                 };
@@ -64,8 +71,8 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
                 return (stream) -> {
                     if (iterator.hasNext()) {
                         Map.Entry<byte[], Pointer> next = iterator.next();
-                        Pointer walp = next.getValue();
-                        stream.stream(walp.sortIndex, next.getKey(), walp.timestamp, walp.tombstone, walp.walFp);
+                        Pointer pointer = next.getValue();
+                        stream.stream(pointer.sortIndex, next.getKey(), pointer.timestamp, pointer.tombstone, pointer.walFp);
                         return true;
                     }
                     return false;
@@ -78,8 +85,8 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
                 return (stream) -> {
                     if (iterator.hasNext()) {
                         Map.Entry<byte[], Pointer> next = iterator.next();
-                        Pointer walp = next.getValue();
-                        stream.stream(walp.sortIndex, next.getKey(), walp.timestamp, walp.tombstone, walp.walFp);
+                        Pointer pointer = next.getValue();
+                        stream.stream(pointer.sortIndex, next.getKey(), pointer.timestamp, pointer.tombstone, pointer.walFp);
                         return true;
                     }
                     return false;

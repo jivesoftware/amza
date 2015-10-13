@@ -4,7 +4,6 @@ import com.jivesoftware.os.amza.api.filer.IFiler;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 /**
@@ -23,25 +22,43 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
     private int fpFilerIndex;
     private long length = 0;
 
+    private final int fShift;
+    private final long fseekMask;
+
     public AutoGrowingByteBufferBackedFiler(long initialBufferSegmentSize,
         long maxBufferSegmentSize,
         Function<Long, ByteBuffer> byteBufferFactory) throws IOException {
         this.initialBufferSegmentSize = UIO.chunkLength(UIO.chunkPower(initialBufferSegmentSize, 0));
-        this.maxBufferSegmentSize = Math.min(UIO.chunkLength(UIO.chunkPower(maxBufferSegmentSize, 0)), MAX_BUFFER_SEGMENT_SIZE);
+
+        maxBufferSegmentSize = Math.min(UIO.chunkLength(UIO.chunkPower(maxBufferSegmentSize, 0)), MAX_BUFFER_SEGMENT_SIZE);
+        this.maxBufferSegmentSize = maxBufferSegmentSize;
+
         this.byteBufferFactory = byteBufferFactory;
         this.filers = new ByteBufferBackedFiler[0];
+
+        // test power of 2
+        if ((maxBufferSegmentSize & (maxBufferSegmentSize - 1)) == 0) {
+            this.fShift = Long.numberOfTrailingZeros(maxBufferSegmentSize);
+            this.fseekMask = maxBufferSegmentSize - 1;
+        } else {
+            throw new IllegalArgumentException("It's hard to ensure powers of 2");
+        }
     }
 
     private AutoGrowingByteBufferBackedFiler(long maxBufferSegmentSize,
         Function<Long, ByteBuffer> byteBufferFactory,
         ByteBufferBackedFiler[] filers,
-        long length) {
+        long length,
+        int fShift,
+        long fseekMask) {
         this.initialBufferSegmentSize = -1;
         this.maxBufferSegmentSize = maxBufferSegmentSize;
         this.byteBufferFactory = byteBufferFactory;
         this.filers = filers;
         this.fpFilerIndex = -1;
         this.length = length;
+        this.fShift = fShift;
+        this.fseekMask = fseekMask;
     }
 
     public AutoGrowingByteBufferBackedFiler duplicate(long startFP, long endFp) {
@@ -52,7 +69,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
             }
             duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
         }
-        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length);
+        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
     }
 
     public AutoGrowingByteBufferBackedFiler duplicateNew(AutoGrowingByteBufferBackedFiler current) {
@@ -61,7 +78,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
         for (int i = current.filers.length - 1; i < duplicate.length; i++) {
             duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
         }
-        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length);
+        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
     }
 
     public AutoGrowingByteBufferBackedFiler duplicateAll() {
@@ -69,7 +86,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
         for (int i = 0; i < duplicate.length; i++) {
             duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
         }
-        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length);
+        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
     }
 
     final long ensure(long bytesToWrite) throws IOException {
@@ -87,8 +104,8 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
         if (position > MAX_POSITION) {
             throw new IllegalStateException("Encountered a likely runaway file position! position=" + position);
         }
-        int f = (int) (position / maxBufferSegmentSize); // TODO can/should convert to bitshifts?
-        long fseek = position % maxBufferSegmentSize; // TODO can/should  convert to bitshifts?
+        int f = (int) (position >> fShift);
+        long fseek = position & fseekMask;
         if (f >= filers.length) {
             int lastFilerIndex = filers.length - 1;
             if (lastFilerIndex > -1 && filers[lastFilerIndex].length() < maxBufferSegmentSize) {

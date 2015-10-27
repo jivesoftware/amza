@@ -15,7 +15,8 @@
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.12</mlogger.version>
         <filer.version>0.74</filer.version>
-        <routing.bird.version>0.29-SNAPSHOT</routing.bird.version>
+        <routing.bird.version>0.29</routing.bird.version>
+        <aquarium.version>0.3</aquarium.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>
@@ -23,7 +24,7 @@
             <dependency>
                 <groupId>com.jivesoftware.os.aquarium</groupId>
                 <artifactId>aquarium</artifactId>
-                <version>0.3-SNAPSHOT</version>
+                <version>${aquarium.version}</version>
             </dependency>
             
             <dependency>

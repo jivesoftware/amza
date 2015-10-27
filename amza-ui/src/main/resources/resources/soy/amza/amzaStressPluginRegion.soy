@@ -24,6 +24,17 @@
                                 class="form-control" placeholder="Client" value="true"
                                 name="client" id="clientPicker" data-original-title="" title="">
                         </td></tr>
+                        <tr><td>Index Type</td><td>
+                            <select style="width:120px; padding-left:10px;" class="form-control"
+                                placeholder="Index Type" name="indexClassName" id="indexClassNamePicker">
+                                <option value="berkeleydb" selected="selected">berkeleydb</option>
+                                <option value="lsmpointerindex">lsmpointerindex</option>
+                                <option value="memory_ephemeral">memory_ephemeral</option>
+                                <option value="memory_persistent">memory_persistent</option>
+                                <option value="noop_persistent">memory_ephemeral</option>
+                            </select>
+                        </td></tr>
+
                         <tr><td>Region Prefix</td><td>
                             <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
                                 class="form-control" placeholder="Region Prefix" value=""

@@ -122,6 +122,10 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
-        
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-lsm-storage</artifactId>
+            <version>0.129-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 </project>

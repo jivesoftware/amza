@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.client.http.AmzaHttpClientProvider;
 import com.jivesoftware.os.amza.client.http.PartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amza.lsm.LSMPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -155,8 +156,14 @@ public class AmzaMain {
                 orderIdProvider,
                 idPacker,
                 partitionPropertyMarshaller,
-                (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider)
-                    -> indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider),
+                (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider) -> {
+                    indexProviderRegistry.register(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME,
+                        new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+
+                    indexProviderRegistry.register(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                        new LSMPointerIndexWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+
+                },
                 availableRowsTaker,
                 () -> {
                     return new HttpRowsTaker(amzaStats);
@@ -197,16 +204,16 @@ public class AmzaMain {
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
                 new AmzaUIInitializer.InjectionCallback() {
 
-                    @Override
-                    public void addEndpoint(Class clazz) {
-                        deployable.addEndpoints(clazz);
-                    }
+                @Override
+                public void addEndpoint(Class clazz) {
+                    deployable.addEndpoints(clazz);
+                }
 
-                    @Override
-                    public void addInjectable(Class clazz, Object instance) {
-                        deployable.addInjectables(clazz, instance);
-                    }
-                });
+                @Override
+                public void addInjectable(Class clazz, Object instance) {
+                    deployable.addInjectables(clazz, instance);
+                }
+            });
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());

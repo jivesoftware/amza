@@ -7,8 +7,6 @@ import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
-import com.jivesoftware.os.amza.api.ring.RingHost;
-import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -35,7 +33,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -67,6 +64,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
         final String action;
         final String ringName;
+        final String indexClassName;
         final String partitionName;
         final String consistency;
         final boolean requireConsistency;
@@ -74,12 +72,14 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
         public AmzaPartitionsPluginRegionInput(String action,
             String ringName,
+            String indexClassName,
             String partitionName,
             String consistency,
             boolean requireConsistency,
             int takeFromFactor) {
             this.action = action;
             this.ringName = ringName;
+            this.indexClassName = indexClassName;
             this.partitionName = partitionName;
             this.consistency = consistency;
             this.requireConsistency = requireConsistency;
@@ -105,7 +105,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     }
 
                     WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-                        new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+                        new PrimaryIndexDescriptor(input.indexClassName, 0, false, null),
                         null, 1000, 1000);
 
                     PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);

@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -10,7 +11,6 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.client.http.exceptions.NotSolveableException;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.EmbeddedPartitionClient;
-import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -64,6 +64,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
         final String name;
         final boolean client;
+        final String indexClassName;
         final String regionPrefix;
         final int numBatches;
         final int batchSize;
@@ -77,6 +78,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
         public AmzaStressPluginRegionInput(String name,
             boolean client,
+            String indexClassName,
             String regionPrefix,
             int numBatches,
             int batchSize,
@@ -89,6 +91,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             String action) {
             this.name = name;
             this.client = client;
+            this.indexClassName = indexClassName;
             this.regionPrefix = regionPrefix;
             this.numBatches = numBatches;
             this.batchSize = batchSize;
@@ -189,6 +192,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 int numThread = input.orderedInsertion ? 1 : input.numThreadsPerPartition;
                 for (int j = 0; j < numThread; j++) {
                     executor.submit(new Feeder(input.client,
+                        input.indexClassName,
                         regionName,
                         Consistency.valueOf(input.consistency),
                         input.requireConsistency,
@@ -202,14 +206,22 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
             AtomicInteger batch = new AtomicInteger();
             private final boolean client;
+            private final String indexClassName;
             private final String regionName;
             private final Consistency consistency;
             private final boolean requireConsistency;
             private final int threadIndex;
             private final boolean orderedInsertion;
 
-            public Feeder(boolean client, String regionName, Consistency consistency, boolean requireConsistency, int threadIndex, boolean orderedInsertion) {
+            public Feeder(boolean client,
+                String indexClassName,
+                String regionName,
+                Consistency consistency,
+                boolean requireConsistency,
+                int threadIndex,
+                boolean orderedInsertion) {
                 this.client = client;
+                this.indexClassName = indexClassName;
                 this.regionName = regionName;
                 this.consistency = consistency;
                 this.requireConsistency = requireConsistency;
@@ -222,13 +234,13 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 try {
                     int b = batch.incrementAndGet();
                     if (b <= input.numBatches && !forcedStop.get()) {
-                        feed(client, regionName, consistency, requireConsistency, b, threadIndex);
+                        feed(client, indexClassName, regionName, consistency, requireConsistency, b, threadIndex);
                         executor.submit(this);
                     } else {
                         completed();
                     }
                 } catch (Exception x) {
-                    LOG.error("Failed to feed for region {}", new Object[] { regionName }, x);
+                    LOG.error("Failed to feed for region {}", new Object[]{regionName}, x);
                 }
             }
         }
@@ -245,8 +257,13 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             return executor.awaitTermination(timeout, unit);
         }
 
-        private void feed(boolean client, String regionName, Consistency consistency, boolean requireConsistency, int batch, int threadIndex) throws Exception {
-            PartitionClient partition = createPartitionIfAbsent(client, regionName, consistency, requireConsistency);
+        private void feed(boolean client,
+            String indexClassName,
+            String regionName,
+            Consistency consistency,
+            boolean requireConsistency,
+            int batch, int threadIndex) throws Exception {
+            PartitionClient partition = createPartitionIfAbsent(client, indexClassName, regionName, consistency, requireConsistency);
 
             while (true) {
                 try {
@@ -277,12 +294,12 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
                 } catch (DeltaOverCapacityException de) {
                     Thread.sleep(100);
-                    LOG.warn("Delta over capacity for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
+                    LOG.warn("Delta over capacity for region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex});
                 } catch (NotSolveableException e) {
                     Thread.sleep(100);
-                    LOG.warn("Not solveable for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
+                    LOG.warn("Not solveable for region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex});
                 } catch (Exception x) {
-                    LOG.warn("Failed to set region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex }, x);
+                    LOG.warn("Failed to set region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex}, x);
                 }
             }
             added.addAndGet(input.batchSize);
@@ -290,6 +307,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
     }
 
     private PartitionClient createPartitionIfAbsent(boolean client,
+        String indexClassName,
         String simplePartitionName,
         Consistency consistency,
         boolean requireConsistency) throws Exception {
@@ -300,7 +318,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-            new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+            new PrimaryIndexDescriptor(indexClassName, 0, false, null),
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());

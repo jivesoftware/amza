@@ -28,6 +28,7 @@ import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.client.http.AmzaHttpClientProvider;
 import com.jivesoftware.os.amza.client.http.PartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amza.lsm.LSMPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -137,7 +138,11 @@ public class Main {
             idPacker,
             partitionPropertyMarshaller,
             (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider) -> {
-                indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+                indexProviderRegistry.register(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME,
+                    new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+
+                indexProviderRegistry.register(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                    new LSMPointerIndexWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
             },
             availableRowsTaker,
             () -> new HttpRowsTaker(amzaStats),

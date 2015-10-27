@@ -10,6 +10,8 @@ import java.io.File;
  */
 public class LSMPointerIndexWALIndexProvider implements WALIndexProvider<LSMPointerIndexWALIndex> {
 
+    public static final String INDEX_CLASS_NAME = "lsmpointerindex";
+
     private final LSMPointerIndexEnvironment[] environments;
 
     public LSMPointerIndexWALIndexProvider(String[] baseDirs, int stripes) {
@@ -18,7 +20,7 @@ public class LSMPointerIndexWALIndexProvider implements WALIndexProvider<LSMPoin
             File active = new File(
                 new File(
                     new File(baseDirs[i % baseDirs.length], AmzaVersionConstants.LATEST_VERSION),
-                    "lsm"),
+                    INDEX_CLASS_NAME),
                 String.valueOf(i));
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);

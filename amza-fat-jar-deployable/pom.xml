@@ -39,7 +39,6 @@
         <dependency>
             <groupId>javax.inject</groupId>
             <artifactId>javax.inject</artifactId>
-            <version>1</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -104,6 +103,11 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-lsm-storage</artifactId>
+            <version>0.129-SNAPSHOT</version>
         </dependency>
     </dependencies>
     <name>amza-fat-jar-deployable</name>

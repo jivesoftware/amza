@@ -15,8 +15,15 @@ import java.io.IOException;
  */
 public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, AppendablePointerIndex {
 
-    // sortIndex + keyFp+ keyLength + timestamp + tombstone + walPointer
-    public static final int INDEX_ENTRY_SIZE = 4 + 8 + 4 + 8 + 1 + 8; 
+    public static final byte SORT_INDEX = 4;
+    public static final byte KEY_FP = 8;
+    public static final byte KEY_LENGTH = 4;
+    public static final byte TIMESTAMP = 8;
+    public static final byte TOMBSTONE = 1;
+    public static final byte VERSION = 8;
+    public static final byte WAL_POINTER = 8;
+
+    public static final int INDEX_ENTRY_SIZE = SORT_INDEX + KEY_FP + KEY_LENGTH + TIMESTAMP + TOMBSTONE + VERSION + WAL_POINTER;
 
     private final DiskBackedPointerIndexFiler index;
     private final DiskBackedPointerIndexFiler keys;
@@ -28,12 +35,18 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
 
     @Override
     public void destroy() throws IOException {
-        // TODO aquireAll
-        index.close();
-        keys.close();
+        // TODO aquireAll?
+        close();
 
         new File(index.getFileName()).delete();
         new File(keys.getFileName()).delete();
+    }
+
+    @Override
+    public void close() throws IOException {
+        // TODO aquireAll?
+        index.close();
+        keys.close();
     }
 
     @Override
@@ -45,31 +58,45 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
         writeIndex.seek(0);
 
         long[] keyFp = new long[]{keys.getFilePointer()};
-        pointers.consume((sortIndex, key, timestamp, tombstoned, walPointer) -> {
+
+        pointers.consume((sortIndex, key, timestamp, tombstoned, version, walPointer) -> {
             UIO.writeInt(writeIndex, sortIndex, "sortIndex");
             UIO.writeLong(writeIndex, keyFp[0], "keyFp");
             UIO.writeInt(writeIndex, key.length, "keyLength");
             UIO.writeLong(writeIndex, timestamp, "timestamp");
             UIO.writeBoolean(writeIndex, tombstoned, "tombstone");
+            UIO.writeLong(writeIndex, version, "version");
             UIO.writeLong(writeIndex, walPointer, "walPointerFp");
 
+            UIO.writeInt(writeKeys, key.length, "keyLength");
             UIO.write(writeKeys, key);
-            keyFp[0] += key.length;
-
+            keyFp[0] += (4 + key.length);
             return true;
         });
 
         writeKeys.flush(false);
         writeIndex.flush(false);
 
-        System.out.println("index:" + writeIndex.length() + "bytes keys:" + writeKeys.length() + "bytes");
     }
-
 
     @Override
     public ReadablePointerIndex concurrent() throws Exception {
         IReadable readableIndex = index.fileChannelFiler();
         IReadable readableKeys = keys.fileChannelFiler();
         return new ReadablePointerIndex((int) (readableIndex.length() / INDEX_ENTRY_SIZE), readableIndex, readableKeys);
+    }
+
+    @Override
+    public boolean isEmpty() throws IOException {
+        return index.length() == 0;
+    }
+
+    @Override
+    public long count() throws IOException {
+        return index.length() / INDEX_ENTRY_SIZE;
+    }
+
+    @Override
+    public void flush() throws Exception {
     }
 }

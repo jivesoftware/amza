@@ -8,10 +8,14 @@ import java.io.IOException;
  */
 public interface ConcurrentReadablePointerIndex {
 
-    //IReadable mergeReader() throws Exception;
-
-    PointerIndex concurrent() throws Exception;
+    ReadPointerIndex concurrent() throws Exception;
 
     void destroy() throws IOException;
+
+    boolean isEmpty() throws IOException;
+
+    long count() throws IOException;
+
+    void close() throws IOException;
 
 }

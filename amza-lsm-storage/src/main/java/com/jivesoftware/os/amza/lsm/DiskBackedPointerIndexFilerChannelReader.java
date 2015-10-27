@@ -45,10 +45,10 @@ public class DiskBackedPointerIndexFilerChannelReader implements IReadable {
     @Override
     public int read() throws IOException {
         ByteBuffer bb = ByteBuffer.allocate(1);
-        fc.read(bb, fp);
+        int read = fc.read(bb, fp);
         fp++;
         bb.position(0);
-        return (int) bb.get();
+        return read != 1 ? -1 : bb.get();
     }
 
     @Override

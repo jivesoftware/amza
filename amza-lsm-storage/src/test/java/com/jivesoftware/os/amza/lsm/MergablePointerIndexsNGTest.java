@@ -1,10 +1,10 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.lsm.api.PointerStream;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.PointerStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -15,7 +15,7 @@ import org.testng.annotations.Test;
  *
  * @author jonathan.colt
  */
-public class PointerIndexsNGTest {
+public class MergablePointerIndexsNGTest {
 
     @Test(enabled = true)
     public void testTx() throws Exception {
@@ -62,7 +62,7 @@ public class PointerIndexsNGTest {
 
         int[] index = new int[1];
         NextPointer rowScan = indexs.rowScan();
-        PointerStream stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+        PointerStream stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
             //System.out.println(UIO.bytesLong(keys.get(index[0]))+" "+UIO.bytesLong(key));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
@@ -75,7 +75,7 @@ public class PointerIndexsNGTest {
         for (int i = 0; i < count * step; i++) {
             long k = i;
             NextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
                 TimestampedValue expectedFP = desired.get(key);
                 if (expectedFP == null) {
                     Assert.assertTrue(expectedFP == null && fp == -1);
@@ -94,7 +94,7 @@ public class PointerIndexsNGTest {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     System.out.println("Streamed:" + UIO.bytesLong(key));
                     streamed[0]++;
@@ -114,7 +114,7 @@ public class PointerIndexsNGTest {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     streamed[0]++;
                 }

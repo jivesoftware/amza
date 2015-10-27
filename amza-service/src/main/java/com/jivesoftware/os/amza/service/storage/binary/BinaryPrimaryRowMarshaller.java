@@ -90,7 +90,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller<byte[]> 
     }
 
     @Override
-    public boolean fromRows(TxFpRows txFpRows, WALKey.TxFpKeyValueEntryStream<byte[]> txFpKeyValueStream) throws Exception {
+    public boolean fromRows(TxFpRows txFpRows, WALKey.TxFpKeyValueEntryStream txFpKeyValueStream) throws Exception {
         return WALKey.decompose(
             txFpRawKeyValueEntryStream -> txFpRows.consume((txId, fp, row) -> {
                 HeapFiler filer = new HeapFiler(row);

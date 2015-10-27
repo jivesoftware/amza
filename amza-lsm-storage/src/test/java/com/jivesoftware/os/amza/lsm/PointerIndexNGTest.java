@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.lsm.api.PointerStream;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
-import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.PointerStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -79,7 +79,7 @@ public class PointerIndexNGTest {
 
         int[] index = new int[1];
         NextPointer rowScan = walIndex.concurrent().rowScan();
-        PointerStream stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+        PointerStream stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
             return true;
@@ -90,24 +90,28 @@ public class PointerIndexNGTest {
         for (int i = 0; i < count * step; i++) {
             long k = i;
             NextPointer getPointer = walIndex.concurrent().getPointer(UIO.longBytes(k));
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
-                TimestampedValue d = desired.get(key);
-                if (d == null) {
-                    Assert.assertTrue(d == null && fp == -1);
-                } else {
-                    Assert.assertEquals(UIO.bytesLong(d.getValue()), fp);
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+                if (fp != -1) {
+                    TimestampedValue d = desired.get(key);
+                    if (d == null) {
+                        Assert.assertTrue(d == null && fp == -1);
+                    } else {
+                        Assert.assertEquals(UIO.bytesLong(d.getValue()), fp);
+                    }
                 }
-                return true;
+                return fp != -1;
             };
 
-            while (getPointer.next(stream));
+            while (getPointer.next(stream)) {
+                System.out.println("k:" + k + " " + System.currentTimeMillis());
+            }
         }
 
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     System.out.println("Streamed:" + UIO.bytesLong(key));
                     streamed[0]++;
@@ -125,11 +129,11 @@ public class PointerIndexNGTest {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     streamed[0]++;
                 }
-                return true;
+                return fp != -1;
             };
             NextPointer rangeScan = walIndex.concurrent().rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
             while (rangeScan.next(stream));

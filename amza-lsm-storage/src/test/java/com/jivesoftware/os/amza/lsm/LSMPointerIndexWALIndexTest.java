@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.berkeleydb;
+package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.io.Files;
 import com.google.common.primitives.UnsignedBytes;
@@ -7,7 +7,6 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import java.io.File;
 import java.util.Arrays;
 import org.testng.Assert;
@@ -18,14 +17,14 @@ import static org.testng.Assert.assertEquals;
 /**
  *
  */
-public class BerkeleyDBWALIndexTest {
+public class LSMPointerIndexWALIndexTest {
 
     @Test
     public void testPut() throws Exception {
         File dir0 = Files.createTempDir();
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
-        BerkeleyDBWALIndex index = getIndex(dir0, partitionName);
+        LSMPointerIndexWALIndex index = getIndex(dir0, partitionName);
         index.merge(stream -> stream.stream(1L, UIO.longBytes(-1), UIO.longBytes(1), System.currentTimeMillis(), false, Long.MAX_VALUE, 1L),
             null);
 
@@ -70,7 +69,7 @@ public class BerkeleyDBWALIndexTest {
         File dir0 = Files.createTempDir();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
-        BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
+        LSMPointerIndexWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 0; i < 64; i++) {
@@ -87,9 +86,9 @@ public class BerkeleyDBWALIndexTest {
         byte[] toKey = {0, 2, 0, 0};
         index.rangeScan(null, fromKey, null, toKey, (prefix, key, timestamp, tombstoned, version, fp) -> {
             count[0]++;
+            System.out.println("prefix: " + Arrays.toString(prefix) + " key: " + Arrays.toString(key));
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(fromKey, key) <= 0);
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(key, toKey) < 0);
-            //System.out.println("prefix: " + Arrays.toString(prefix) + " key: " + Arrays.toString(key));
             return true;
         });
         Assert.assertEquals(count[0], 16);
@@ -101,7 +100,7 @@ public class BerkeleyDBWALIndexTest {
         File dir0 = Files.createTempDir();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
-        BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
+        LSMPointerIndexWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 0; i < 64; i++) {
@@ -119,9 +118,9 @@ public class BerkeleyDBWALIndexTest {
         byte[] toPrefix = {0, 2};
         index.rangeScan(fromPrefix, new byte[0], toPrefix, new byte[0], (prefix, key, timestamp, tombstoned, version, fp) -> {
             count[0]++;
+            System.out.println("prefix: " + Arrays.toString(prefix) + " key: " + Arrays.toString(key));
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(fromPrefix, prefix) <= 0);
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(prefix, toPrefix) < 0);
-            //System.out.println("prefix: " + Arrays.toString(prefix) + " key: " + Arrays.toString(key));
             return true;
         });
         Assert.assertEquals(count[0], 16);
@@ -133,7 +132,7 @@ public class BerkeleyDBWALIndexTest {
         File dir0 = Files.createTempDir();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
-        BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
+        LSMPointerIndexWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 0; i < 64; i++) {
@@ -162,7 +161,7 @@ public class BerkeleyDBWALIndexTest {
         File dir0 = Files.createTempDir();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
-        BerkeleyDBWALIndex index = getIndex(dir0, versionedPartitionName);
+        LSMPointerIndexWALIndex index = getIndex(dir0, versionedPartitionName);
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 0; i < 50; i++) {
@@ -182,7 +181,7 @@ public class BerkeleyDBWALIndexTest {
         }
 
         CompactionWALIndex compactionWALIndex = index.startCompaction();
-        compactionWALIndex.merge((TxKeyPointerStream stream) -> {
+        compactionWALIndex.merge((stream) -> {
             for (long i = 100; i < 200; i++) {
                 if (!stream.stream(i, UIO.longBytes(-i), UIO.longBytes(i), System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
                     return false;
@@ -203,8 +202,8 @@ public class BerkeleyDBWALIndexTest {
         }
     }
 
-    private BerkeleyDBWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
+    private LSMPointerIndexWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
+        return new LSMPointerIndexWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
     }
 
 }

@@ -27,7 +27,8 @@ public class PointerIndexStressNGTest {
         MutableLong merge = new MutableLong();
         MutableBoolean running = new MutableBoolean(true);
         Future<Object> merger = Executors.newSingleThreadExecutor().submit(() -> {
-            while (running.isTrue() || indexs.mergeDebut() > maxDepthBeforeMerging) {
+            while ((running.isTrue() || indexs.mergeDebut() != 1)
+                || (indexs.mergeDebut() > maxDepthBeforeMerging)) {
                 try {
                     long startMerge = System.currentTimeMillis();
                     if (indexs.merge(maxDepthBeforeMerging, () -> {
@@ -41,10 +42,10 @@ public class PointerIndexStressNGTest {
                             new DiskBackedPointerIndexFiler(mergeKeysFile.getAbsolutePath(), "rw", false)
                         );
                     })) {
-                        System.out.println("Merge (" + merge.intValue() + ") elapse:" + format.format((System.currentTimeMillis() - startMerge)));
+                        System.out.println("Merge (" + merge.intValue() + ") elapse:" + format.format((System.currentTimeMillis() - startMerge)) + "millis");
                     } else {
-                        System.out.println("Nothing to merge. Sleeping.");
-                        Thread.sleep(1000);
+                        //System.out.println("Nothing to merge. Sleeping.");
+                        Thread.sleep(10);
                     }
                 } catch (Exception x) {
                     x.printStackTrace();
@@ -55,7 +56,7 @@ public class PointerIndexStressNGTest {
 
         });
 
-        for (int b = 0; b < 1000; b++) {
+        for (int b = 0; b < 100; b++) {
 
             File indexFiler = File.createTempFile("s-index-merged-" + b, ".tmp");
             File keysFile = File.createTempFile("s-keys-merged-" + b, ".tmp");
@@ -72,7 +73,7 @@ public class PointerIndexStressNGTest {
             count += batchSize;
 
             System.out.println("Insertions:" + format.format(count) + " ips:" + format.format(
-                (((double) count / (double) (System.currentTimeMillis() - start))) * 1000) + " elapse:" + format.format(
+                ((count / (double) (System.currentTimeMillis() - start))) * 1000) + " elapse:" + format.format(
                     (System.currentTimeMillis() - startMerge)) + " mergeDebut:" + indexs.mergeDebut());
         }
 

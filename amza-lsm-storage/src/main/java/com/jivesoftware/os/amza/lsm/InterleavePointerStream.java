@@ -34,8 +34,8 @@ class InterleavePointerStream implements PointerStream, NextPointer {
     }
 
     @Override
-    public boolean stream(int sortIndex, byte[] key, long timestamp, boolean tombstone, long fp) throws Exception {
-        queue.add(new Pointer(sortIndex, activeFeedsI, key, timestamp, tombstone, fp));
+    public boolean stream(int sortIndex, byte[] key, long timestamp, boolean tombstone, long version, long fp) throws Exception {
+        queue.add(new Pointer(sortIndex, activeFeedsI, key, timestamp, tombstone, version, fp));
         return true;
     }
 
@@ -43,7 +43,7 @@ class InterleavePointerStream implements PointerStream, NextPointer {
     public boolean next(PointerStream stream) throws Exception {
         Pointer poll = queue.poll();
         if (poll != null) {
-            stream.stream(poll.sortIndex, poll.key, poll.timestamps, poll.tombstones, poll.fps);
+            stream.stream(poll.sortIndex, poll.key, poll.timestamps, poll.tombstones, poll.version, poll.fps);
             feedNext(poll.fi);
             Pointer peek = queue.peek();
             while (peek != null && Arrays.equals(peek.key, poll.key)) {

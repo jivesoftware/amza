@@ -6,5 +6,5 @@ package com.jivesoftware.os.amza.lsm.api;
  */
 public interface PointerStream {
 
-    boolean stream(int sortIndex, byte[] key, long timestamp, boolean tombstoned, long pointer) throws Exception;
+    boolean stream(int sortIndex, byte[] key, long timestamp, boolean tombstoned, long version, long pointer) throws Exception;
 }

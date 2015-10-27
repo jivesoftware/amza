@@ -58,34 +58,43 @@ public class WALKey {
         return 2 + sizeOfPrefix + sizeOfKey;
     }
 
-    public interface TxFpRawKeyValueEntries<R> {
+    public interface TxFpRawKeyValueEntries<E> {
 
-        boolean consume(TxFpRawKeyValueEntryStream<R> txFpRawKeyValueEntryStream) throws Exception;
+        boolean consume(TxFpRawKeyValueEntryStream<E> txFpRawKeyValueEntryStream) throws Exception;
     }
 
-    public interface TxFpRawKeyValueEntryStream<R> {
+    public interface TxFpRawKeyValueEntryStream<E> {
 
         boolean stream(long txId, long fp, byte[] rawKey,
-            byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, R entry) throws Exception;
+            byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, E entry) throws Exception;
     }
 
-    public interface TxFpKeyValueEntryStream<R> {
+    public interface TxFpKeyValueEntryStream<E> {
 
         boolean stream(long txId, long fp, byte[] prefix, byte[] key,
-            byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, R entry) throws Exception;
+            byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion, E entry) throws Exception;
     }
 
-    public static <R> boolean decompose(TxFpRawKeyValueEntries<R> keyEntries, TxFpKeyValueEntryStream<R> stream) throws Exception {
+    public static <E> boolean decompose(TxFpRawKeyValueEntries<E> keyEntries, TxFpKeyValueEntryStream<E> stream) throws Exception {
         return keyEntries.consume((txId, fp, rawKey, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
-            short prefixLengthInBytes = UIO.bytesShort(rawKey);
-            byte[] prefix = prefixLengthInBytes > 0 ? new byte[prefixLengthInBytes] : null;
-            byte[] key = new byte[rawKey.length - 2 - prefixLengthInBytes];
-            if (prefix != null) {
-                System.arraycopy(rawKey, 2, prefix, 0, prefixLengthInBytes);
-            }
-            System.arraycopy(rawKey, 2 + prefixLengthInBytes, key, 0, key.length);
-            return stream.stream(txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry);
+            return stream.stream(txId, fp, rawKeyPrefix(rawKey), rawKeyKey(rawKey), value, valueTimestamp, valueTombstoned, valueVersion, entry);
         });
+    }
+
+    public static byte[] rawKeyPrefix(byte[] rawKey) {
+        short prefixLengthInBytes = UIO.bytesShort(rawKey);
+        byte[] prefix = prefixLengthInBytes > 0 ? new byte[prefixLengthInBytes] : null;
+        if (prefix != null) {
+            System.arraycopy(rawKey, 2, prefix, 0, prefixLengthInBytes);
+        }
+        return prefix;
+    }
+
+    public static byte[] rawKeyKey(byte[] rawKey) {
+        short prefixLengthInBytes = UIO.bytesShort(rawKey);
+        byte[] key = new byte[rawKey.length - 2 - prefixLengthInBytes];
+        System.arraycopy(rawKey, 2 + prefixLengthInBytes, key, 0, key.length);
+        return key;
     }
 
     public static byte[] prefixUpperExclusive(byte[] keyFragment) {

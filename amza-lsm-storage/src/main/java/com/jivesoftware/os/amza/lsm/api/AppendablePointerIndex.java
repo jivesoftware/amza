@@ -8,4 +8,5 @@ public interface AppendablePointerIndex {
 
     void append(Pointers pointers) throws Exception;
 
+    void flush() throws Exception;
 }

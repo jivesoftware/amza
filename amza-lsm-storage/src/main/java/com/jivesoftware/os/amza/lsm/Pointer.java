@@ -7,19 +7,22 @@ import com.google.common.primitives.UnsignedBytes;
  * @author jonathan.colt
  */
 class Pointer implements Comparable<Pointer> {
+
     final int sortIndex;
     final int fi;
     final byte[] key;
     final long timestamps;
+    final long version;
     final boolean tombstones;
     final long fps;
 
-    public Pointer(int sortIndex, int fi, byte[] key, long timestamps, boolean tombstones, long fps) {
+    public Pointer(int sortIndex, int fi, byte[] key, long timestamps, boolean tombstones, long version, long fps) {
         this.sortIndex = sortIndex;
         this.fi = fi;
         this.key = key;
         this.timestamps = timestamps;
         this.tombstones = tombstones;
+        this.version = version;
         this.fps = fps;
     }
 

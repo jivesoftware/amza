@@ -5,9 +5,9 @@ import com.jivesoftware.os.amza.lsm.api.AppendablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.api.Pointer;
-import com.jivesoftware.os.amza.lsm.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.api.PointerStream;
 import com.jivesoftware.os.amza.lsm.api.Pointers;
+import com.jivesoftware.os.amza.lsm.api.ReadPointerIndex;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
@@ -26,7 +26,7 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
     public boolean consume(PointerStream stream) throws Exception {
         for (Map.Entry<byte[], Pointer> e : index.entrySet()) {
             Pointer pointer = e.getValue();
-            if (!stream.stream(pointer.sortIndex, e.getKey(), pointer.timestamp, pointer.tombstone, pointer.walFp)) {
+            if (!stream.stream(pointer.sortIndex, e.getKey(), pointer.timestamp, pointer.tombstone, pointer.version, pointer.walFp)) {
                 return false;
             }
         }
@@ -35,12 +35,12 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
 
     @Override
     public void append(Pointers pointers) throws Exception {
-        pointers.consume((sortIndex, key, timestamp, tombstoned, fp) -> {
+        pointers.consume((sortIndex, key, timestamp, tombstoned, version, fp) -> {
             index.compute(key, (k, v) -> {
                 if (v == null) {
-                    return new Pointer(sortIndex, timestamp, tombstoned, fp);
+                    return new Pointer(sortIndex, timestamp, tombstoned, version, fp);
                 } else {
-                    return v.timestamp > timestamp ? v : new Pointer(sortIndex, timestamp, tombstoned, fp);
+                    return v.timestamp > timestamp ? v : new Pointer(sortIndex, timestamp, tombstoned, version, fp);
                 }
             });
             return true;
@@ -48,19 +48,25 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
     }
 
     @Override
-    public PointerIndex concurrent() throws Exception {
-        return new PointerIndex() {
+    public ReadPointerIndex concurrent() throws Exception {
+        return new ReadPointerIndex() {
 
             @Override
             public NextPointer getPointer(byte[] key) throws Exception {
+                Pointer[] pointer = new Pointer[]{index.get(key)};
                 return (stream) -> {
-                    Pointer pointer = index.get(key);
-                    if (pointer == null) {
-                        stream.stream(Integer.MIN_VALUE, key, -1, false, -1);
+                    if (pointer[0] == null) {
+                        return stream.stream(Integer.MIN_VALUE, key, -1, false, -1, -1);
                     } else {
-                        stream.stream(pointer.sortIndex, key, pointer.timestamp, pointer.tombstone, pointer.walFp);
+                        boolean done = stream.stream(pointer[0].sortIndex,
+                            key,
+                            pointer[0].timestamp,
+                            pointer[0].tombstone,
+                            pointer[0].version,
+                            pointer[0].walFp);
+                        pointer[0] = null;
+                        return done;
                     }
-                    return false;
                 };
             }
 
@@ -72,7 +78,7 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
                     if (iterator.hasNext()) {
                         Map.Entry<byte[], Pointer> next = iterator.next();
                         Pointer pointer = next.getValue();
-                        stream.stream(pointer.sortIndex, next.getKey(), pointer.timestamp, pointer.tombstone, pointer.walFp);
+                        stream.stream(pointer.sortIndex, next.getKey(), pointer.timestamp, pointer.tombstone, pointer.version, pointer.walFp);
                         return true;
                     }
                     return false;
@@ -86,11 +92,26 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
                     if (iterator.hasNext()) {
                         Map.Entry<byte[], Pointer> next = iterator.next();
                         Pointer pointer = next.getValue();
-                        stream.stream(pointer.sortIndex, next.getKey(), pointer.timestamp, pointer.tombstone, pointer.walFp);
+                        stream.stream(pointer.sortIndex, next.getKey(), pointer.timestamp, pointer.tombstone, pointer.version, pointer.walFp);
                         return true;
                     }
                     return false;
                 };
+            }
+
+            @Override
+            public void close() {
+                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+            }
+
+            @Override
+            public long count() {
+                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+            }
+
+            @Override
+            public boolean isEmpty() {
+                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
             }
         };
     }
@@ -100,4 +121,22 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
         index.clear();
     }
 
+    @Override
+    public void close() {
+        index.clear();
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return index.isEmpty();
+    }
+
+    @Override
+    public long count() {
+        return index.size();
+    }
+
+    @Override
+    public void flush() throws Exception {
+    }
 }

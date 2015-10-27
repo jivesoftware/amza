@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Type;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValues;
@@ -190,7 +191,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
             DatabaseEntry keyEntry = new DatabaseEntry(fromFpPk);
             DatabaseEntry valueEntry = new DatabaseEntry();
             valueEntry.setPartial(true);
-            return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
+            return WALKey.decompose((WALKey.TxFpRawKeyValueEntries) txFpRawKeyValueEntryStream -> {
                 if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
                     do {
                         if (KeyUtil.compare(keyEntry.getData(), toFpPk) >= 0) {

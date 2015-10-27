@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.shared.filer.IReadable;
+import com.jivesoftware.os.amza.api.filer.IReadable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -45,10 +45,10 @@ public class DiskBackedPointerIndexFilerChannelReader implements IReadable {
     @Override
     public int read() throws IOException {
         ByteBuffer bb = ByteBuffer.allocate(1);
-        fc.read(bb, fp);
+        int read = fc.read(bb, fp);
         fp++;
         bb.position(0);
-        return (int) bb.get();
+        return read != 1 ? -1 : bb.get();
     }
 
     @Override

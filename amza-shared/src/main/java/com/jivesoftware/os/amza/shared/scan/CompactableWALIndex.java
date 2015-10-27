@@ -12,15 +12,6 @@ public interface CompactableWALIndex {
 
     CompactionWALIndex startCompaction() throws Exception;
 
-    interface CompactionWALIndex {
-
-        boolean merge(TxKeyPointers pointers) throws Exception;
-
-        void abort() throws Exception;
-
-        void commit() throws Exception;
-    }
-
     boolean getPointer(byte[] prefix, byte[] key, WALKeyPointerStream stream) throws Exception;
 
     boolean isEmpty() throws Exception;

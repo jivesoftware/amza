@@ -8,17 +8,15 @@ import com.jivesoftware.os.amza.shared.wal.WALWriter;
  */
 public interface RowIO<K> extends WALReader, WALWriter {
 
-    long getInclusiveStartOfRow(long transactionId) throws Exception;
+    K getKey();
 
-    void move(K destination) throws Exception;
+    long getInclusiveStartOfRow(long transactionId) throws Exception;
 
     long sizeInBytes() throws Exception;
 
     void flush(boolean fsync) throws Exception;
 
     void close() throws Exception;
-
-    void delete() throws Exception;
 
     void initLeaps() throws Exception;
 

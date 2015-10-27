@@ -15,7 +15,7 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.shared.scan.RowType;
+import com.jivesoftware.os.amza.api.stream.RowType;
 
 public interface WALWriter {
 
@@ -34,22 +34,27 @@ public interface WALWriter {
     long getEndOfLastRow() throws Exception;
 
     interface RawRows {
+
         boolean consume(RawRowStream stream) throws Exception;
     }
 
     interface RawRowStream {
+
         boolean stream(byte[] row) throws Exception;
     }
 
     interface IndexableKeys {
+
         boolean consume(IndexableKeyStream stream) throws Exception;
     }
 
     interface IndexableKeyStream {
-        boolean stream(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned) throws Exception;
+
+        boolean stream(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion) throws Exception;
     }
 
     interface TxKeyPointerFpStream {
-        boolean stream(long txId, byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long fp) throws Exception;
+
+        boolean stream(long txId, byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion, long fp) throws Exception;
     }
 }

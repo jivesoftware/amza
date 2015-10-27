@@ -6,6 +6,12 @@ package com.jivesoftware.os.amza.shared.stream;
  */
 public interface TxKeyPointerStream {
 
-    boolean stream(long txId, byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long fp) throws Exception;
+    boolean stream(long txId,
+        byte[] prefix,
+        byte[] key,
+        long timestamp,
+        boolean tombstoned,
+        long version,
+        long fp) throws Exception;
 
 }

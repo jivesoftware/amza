@@ -16,10 +16,11 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.base.Splitter;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
@@ -58,11 +59,13 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/set")
     public Response set(@QueryParam("ring") @DefaultValue("default") String ring,
-        @QueryParam("partition") String partition,
+        @QueryParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
+        @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
+            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency), requireConsistency);
             String[] keys = key.split(",");
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
@@ -70,56 +73,60 @@ public class AmzaEndpoints {
                 //TODO prefix
                 updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
             }
-            partitionAPI.commit(null, updates, 1, 30000);
+            partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
-            LOG.warn("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partition + " key:" + key + " value:" + value, x);
+            LOG.warn("Failed to set partition:" + partitionName + " key:" + key + " value:" + value, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partitionName + " key:" + key + " value:" + value, x);
         }
     }
 
     @POST
     @Consumes("application/json")
     @Path("/multiSet/{partition}")
-    public Response multiSet(@PathParam("partition") String partition,
+    public Response multiSet(@PathParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
+        @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         Map<String, String> values) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent("default", partition);
+            Partition partition = createPartitionIfAbsent("default", partitionName, Consistency.valueOf(consistency), requireConsistency);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
                 //TODO prefix
                 updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
             }
-            partitionAPI.commit(null, updates, 1, 30000);
+            partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
-            LOG.warn("Failed to set partition:" + partition + " values:" + values, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partition + " values:" + values, x);
+            LOG.warn("Failed to set partition:" + partitionName + " values:" + values, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partitionName + " values:" + values, x);
         }
     }
 
     @POST
     @Consumes("application/json")
     @Path("/multiSet/{ring}/{partition}")
-    public Response multiSet(@PathParam("ring") @DefaultValue("default") String ring,
-        @PathParam("partition") String partition,
+    public Response multiSet(@PathParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
+        @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
+        @PathParam("ring") String ring,
         Map<String, String> values) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
+            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency), requireConsistency);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
                 //TODO prefix
                 updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
             }
-            partitionAPI.commit(null, updates, 1, 30000);
+            partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
 
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
-            LOG.warn("Failed to set partition:" + partition + " values:" + values, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partition + " values:" + values, x);
+            LOG.warn("Failed to set partition:" + partitionName + " values:" + values, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to set partition:" + partitionName + " values:" + values, x);
         }
     }
 
@@ -127,13 +134,15 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/get")
     public Response get(@QueryParam("ring") @DefaultValue("default") String ring,
-        @QueryParam("partition") String partition,
+        @QueryParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
+        @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         @QueryParam("key") String key) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
+            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency), requireConsistency);
             List<byte[]> got = new ArrayList<>();
             //TODO prefix
-            partitionAPI.get(null,
+            partition.get(Consistency.valueOf(consistency), null,
                 stream -> {
                     for (String s : Splitter.on(',').split(key)) {
                         if (!stream.stream(s.getBytes())) {
@@ -142,14 +151,16 @@ public class AmzaEndpoints {
                     }
                     return true;
                 },
-                (_prefix, _key, value, timestamp) -> {
-                    got.add(value);
+                (_prefix, _key, value, timestamp, tombstoned, version) -> {
+                    if (timestamp != -1 && !tombstoned) {
+                        got.add(value);
+                    }
                     return true;
                 });
             return ResponseHelper.INSTANCE.jsonResponse(got);
         } catch (Exception x) {
-            LOG.warn("Failed to get partition:" + partition + " key:" + key, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to get partition:" + partition + " key:" + key, x);
+            LOG.warn("Failed to get partition:" + partitionName + " key:" + key, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to get partition:" + partitionName + " key:" + key, x);
         }
     }
 
@@ -157,34 +168,37 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/remove")
     public Response remove(@QueryParam("ring") @DefaultValue("default") String ring,
-        @QueryParam("partition") String partition,
+        @QueryParam("partition") String partitionName,
+        @QueryParam("consistency") @DefaultValue("none") String consistency,
+        @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         @QueryParam("key") String key) {
         try {
-            AmzaPartitionAPI partitionAPI = createPartitionIfAbsent(ring, partition);
+            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency), requireConsistency);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             //TODO prefix
             updates.remove(key.getBytes(), -1);
-            partitionAPI.commit(null, updates, 1, 30000);
+            partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
-            LOG.warn("Failed to remove partition:" + partition + " key:" + key, x);
-            return ResponseHelper.INSTANCE.errorResponse("Failed to remove partition:" + partition + " key:" + key, x);
+            LOG.warn("Failed to remove partition:" + partitionName + " key:" + key, x);
+            return ResponseHelper.INSTANCE.errorResponse("Failed to remove partition:" + partitionName + " key:" + key, x);
         }
     }
 
-    AmzaPartitionAPI createPartitionIfAbsent(String ringName, String simplePartitionName) throws Exception {
+    Partition createPartitionIfAbsent(String ringName, String simplePartitionName, Consistency consistency, boolean requireConsistency) throws Exception {
 
-        int ringSize = amzaService.getRingReader().getRingSize("default".getBytes());
+        int ringSize = amzaService.getRingReader().getRingSize(ringName.getBytes());
         int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
         if (ringSize < systemRingSize) {
-            amzaService.getRingWriter().buildRandomSubRing("default".getBytes(), systemRingSize);
+            amzaService.getRingWriter().buildRandomSubRing(ringName.getBytes(), systemRingSize);
         }
 
-        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
+            new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
-        PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 1, false));
+        PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, requireConsistency, 1, false));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);
         return amzaService.getPartition(partitionName);

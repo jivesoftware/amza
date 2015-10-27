@@ -1,15 +1,29 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import java.io.File;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import java.io.IOException;
 import java.util.List;
 
 /**
- *
  * @author jonathan.colt
  */
-public interface RowIOProvider {
+public interface RowIOProvider<K> {
 
-    <K> RowIO<K> create(File dir, String name) throws Exception;
+    K baseKey(VersionedPartitionName versionedPartitionName);
 
-    List<File> listExisting(File dir);
+    RowIO<K> create(K key, String name) throws Exception;
+
+    List<String> listExisting(K key);
+
+    K versionedKey(K baseKey, String latestVersion) throws Exception;
+
+    K buildKey(K versionedKey, String name) throws Exception;
+
+    K createTempKey() throws Exception;
+
+    void moveTo(K key, K to) throws Exception;
+
+    void delete(K key) throws Exception;
+
+    boolean ensure(K key);
 }

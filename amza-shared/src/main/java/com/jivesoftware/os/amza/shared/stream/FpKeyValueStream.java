@@ -6,6 +6,6 @@ package com.jivesoftware.os.amza.shared.stream;
  */
 public interface FpKeyValueStream {
 
-    boolean stream(long fp, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) throws Exception;
+    boolean stream(long fp, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) throws Exception;
 
 }

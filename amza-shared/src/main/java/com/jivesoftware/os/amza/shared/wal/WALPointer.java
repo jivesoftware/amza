@@ -22,16 +22,19 @@ public class WALPointer {
 
     private final long timestamp;
     private final boolean tombstoned;
+    private final long version;
     private final long fp;
 
     @JsonCreator
     public WALPointer(
         @JsonProperty("fp") long fp,
         @JsonProperty("timestamp") long timestamp,
-        @JsonProperty("tombstoned") boolean tombstoned) {
+        @JsonProperty("tombstoned") boolean tombstoned,
+        @JsonProperty("version") long version) {
         this.fp = fp;
         this.timestamp = timestamp;
         this.tombstoned = tombstoned;
+        this.version = version;
     }
 
     public long getTimestampId() {
@@ -40,6 +43,10 @@ public class WALPointer {
 
     public boolean getTombstoned() {
         return tombstoned;
+    }
+
+    public long getVersion() {
+        return version;
     }
 
     public long getFp() {
@@ -51,6 +58,7 @@ public class WALPointer {
         return "WALPointer{"
             + "timestamp=" + timestamp
             + ", tombstoned=" + tombstoned
+            + ", version=" + version
             + ", fp=" + fp
             + '}';
     }
@@ -72,17 +80,17 @@ public class WALPointer {
         if (tombstoned != that.tombstoned) {
             return false;
         }
-        if (fp != that.fp) {
+        if (version != that.version) {
             return false;
         }
-
-        return true;
+        return fp == that.fp;
     }
 
     @Override
     public int hashCode() {
         int result = (int) (timestamp ^ (timestamp >>> 32));
         result = 31 * result + (tombstoned ? 1 : 0);
+        result = 31 * result + (int) (version ^ (version >>> 32));
         result = 31 * result + (int) (fp ^ (fp >>> 32));
         return result;
     }

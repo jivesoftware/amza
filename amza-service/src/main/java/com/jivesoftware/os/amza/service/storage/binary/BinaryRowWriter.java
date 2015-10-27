@@ -15,10 +15,10 @@
  */
 package com.jivesoftware.os.amza.service.storage.binary;
 
+import com.jivesoftware.os.amza.api.filer.IWriteable;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.IWriteable;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import gnu.trove.iterator.TLongIterator;
@@ -67,8 +67,8 @@ public class BinaryRowWriter implements WALWriter {
         }
 
         TLongIterator iter = offsets.iterator();
-        indexableKeys.consume((prefix, key, valueTimestamp, valueTombstones) ->
-            stream.stream(txId, prefix, key, valueTimestamp, valueTombstones, startFp + iter.next()));
+        indexableKeys.consume((prefix, key, valueTimestamp, valueTombstones, valueVersion) ->
+            stream.stream(txId, prefix, key, valueTimestamp, valueTombstones, valueVersion, startFp + iter.next()));
         return offsets.size();
     }
 
@@ -89,8 +89,8 @@ public class BinaryRowWriter implements WALWriter {
             1,
             row.length,
             stream -> stream.stream(row),
-            stream -> stream.stream(null, null, -1, false),
-            (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> {
+            stream -> stream.stream(null, null, -1, false, -1),
+            (txId, prefix, key, valueTimestamp, valueTombstoned, valueVerion, fp) -> {
                 fps[0] = fp;
                 return true;
             });

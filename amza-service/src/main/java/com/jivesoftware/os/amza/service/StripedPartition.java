@@ -17,60 +17,72 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.api.take.Highwaters;
+import com.jivesoftware.os.amza.api.take.TakeResult;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AckWaters;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.shared.Partition;
+import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.take.TakeResult;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.aquarium.Aquarium;
+import com.jivesoftware.os.aquarium.LivelyEndState;
+import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Set;
 
-public class StripedPartition implements AmzaPartitionAPI {
+public class StripedPartition implements Partition {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AmzaStats amzaStats;
     private final OrderIdProvider orderIdProvider;
+    private final VersionedPartitionProvider versionedPartitionProvider;
     private final WALUpdated walUpdated;
     private final RingMember ringMember;
     private final PartitionName partitionName;
     private final PartitionStripeProvider partitionStripeProvider;
     private final AckWaters ackWaters;
     private final AmzaRingStoreReader ringReader;
+    private final AmzaAquariumProvider aquariumProvider;
 
     public StripedPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
+        VersionedPartitionProvider versionedPartitionProvider,
         WALUpdated walUpdated,
         RingMember ringMember,
         PartitionName partitionName,
         PartitionStripeProvider partitionStripeProvider,
         AckWaters ackWaters,
-        AmzaRingStoreReader ringReader) {
+        AmzaRingStoreReader ringReader,
+        AmzaAquariumProvider aquariumProvider) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
+        this.versionedPartitionProvider = versionedPartitionProvider;
         this.walUpdated = walUpdated;
         this.ringMember = ringMember;
         this.partitionName = partitionName;
         this.partitionStripeProvider = partitionStripeProvider;
         this.ackWaters = ackWaters;
         this.ringReader = ringReader;
+        this.aquariumProvider = aquariumProvider;
     }
 
     public PartitionName getPartitionName() {
@@ -78,97 +90,136 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void commit(byte[] prefix,
+    public void commit(Consistency consistency,
+        byte[] prefix,
         Commitable updates,
-        int takeQuorum,
         long timeoutInMillis) throws Exception {
 
-        long timestampId = orderIdProvider.nextId();
+        PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
+        if (properties.requireConsistency && !properties.consistency.supportsWrites(consistency)) {
+            throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency
+                + " which does not support writes at consistency " + consistency);
+        }
+
+        Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(partitionName.getRingName());
+        int takeQuorum = consistency.quorum(neighbors.size());
+        if (neighbors.size() < takeQuorum) {
+            throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
+        }
+
+        long currentTime = System.currentTimeMillis();
+        long version = orderIdProvider.nextId();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix, (highwaters, scan) -> {
-                return updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
-                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
-                    return scan.row(rowTxId, key, value, timestamp, valueTombstone);
-                });
-            }, walUpdated);
-            amzaStats.direct(partitionName, commit.getApply().size(), commit.getOldestRowTxId());
-
-            Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(partitionName.getRingName());
-
-            if (takeQuorum > 0) {
-                if (ringMembers.size() < takeQuorum) {
-                    throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
-                } else {
-                    LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-                    int takenBy = ackWaters.await(commit.getVersionedPartitionName(),
-                        commit.getLargestCommittedTxId(),
-                        ringMembers,
-                        takeQuorum,
-                        timeoutInMillis);
-                    if (takenBy < takeQuorum) {
-                        throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
+            RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix,
+                (versionedPartitionName) -> {
+                    if (takeQuorum > 0) {
+                        Aquarium aquarium = aquariumProvider.getAquarium(versionedPartitionName);
+                        LivelyEndState livelyEndState = aquarium.livelyEndState();
+                        if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
+                            throw new FailedToAchieveQuorumException("Leader has changed.");
+                        }
                     }
-                }
-            }
+                    return -1;
+                },
+                (highwaters, stream) -> updates.commitable(highwaters,
+                    (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                        long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
+                        return stream.row(rowTxId, key, value, timestamp, valueTombstone, version);
+                    }),
+                (versionedPartitionName, leadershipToken, largestCommittedTxId) -> {
+                    if (takeQuorum > 0) {
+                        LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
+                        int takenBy = ackWaters.await(versionedPartitionName,
+                            largestCommittedTxId,
+                            neighbors,
+                            takeQuorum,
+                            timeoutInMillis,
+                            leadershipToken);
+                        if (takenBy < takeQuorum) {
+                            throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
+                        }
+                    }
+                    //TODO necessary? aquarium.tapTheGlass();
+                },
+                walUpdated);
+
+            amzaStats.direct(partitionName, commit.getApply().size(), commit.getSmallestCommittedTxId());
+
             return null;
         });
 
     }
 
-    @Override
-    public boolean get(byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
-        return partitionStripeProvider.txPartition(partitionName,
-            (stripe, highwaterStorage) -> stripe.get(partitionName, prefix, keys, valuesStream));
+    private void checkReadConsistencySupport(Consistency consistency) throws Exception {
+        PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
+        if (properties.requireConsistency && !properties.consistency.supportsReads(consistency)) {
+            throw new FailedToAchieveQuorumException("This partition has a minimum consistency of " + properties.consistency
+                + " which does not support reads at consistency " + consistency);
+        }
     }
 
     @Override
-    public void scan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, Scan<TimestampedValue> scan) throws Exception {
-        partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
+    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
+        checkReadConsistencySupport(consistency);
+        return partitionStripeProvider.txPartition(partitionName,
+            (stripe, highwaterStorage) -> stripe.get(partitionName, prefix, keys, stream));
+    }
+
+    @Override
+    public boolean scan(byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
+        KeyValueTimestampStream scan) throws Exception {
+        return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             if (fromKey == null && toKey == null) {
-                stripe.rowScan(partitionName, (prefix, key, value, valueTimestamp, valueTombstone) ->
-                    valueTombstone || scan.row(-1, prefix, key, new TimestampedValue(valueTimestamp, value)));
+                stripe.rowScan(partitionName, (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             } else {
                 stripe.rangeScan(partitionName,
                     fromPrefix,
                     fromKey,
                     toPrefix,
                     toKey,
-                    (prefix, key, value, valueTimestamp, valueTombstone) ->
-                        valueTombstone || scan.row(-1, prefix, key, new TimestampedValue(valueTimestamp, value)));
+                    (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             }
-            return null;
+            return true;
         });
     }
 
     @Override
-    public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
-        return takeFromTransactionIdInternal(null, transactionId, highwaters, scan);
+    public TakeResult takeFromTransactionId(long txId,
+        Highwaters highwaters,
+        TxKeyValueStream stream) throws Exception {
+        return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
     }
 
     @Override
-    public TakeResult takeFromTransactionId(byte[] prefix, long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
+    public TakeResult takePrefixFromTransactionId(byte[] prefix,
+        long txId,
+        Highwaters highwaters,
+        TxKeyValueStream stream) throws Exception {
+
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
-        return takeFromTransactionIdInternal(prefix, transactionId, highwaters, scan);
+        return takeFromTransactionIdInternal(true, prefix, txId, highwaters, stream);
     }
 
-    private TakeResult takeFromTransactionIdInternal(byte[] takePrefix,
-        long transactionId,
+    private TakeResult takeFromTransactionIdInternal(boolean usePrefix,
+        byte[] takePrefix,
+        long txId,
         Highwaters highwaters,
-        Scan<TimestampedValue> scan) throws Exception {
+        TxKeyValueStream stream) throws Exception {
 
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            long[] lastTxId = { -1 };
-            boolean[] done = { false };
-            TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
-                if (valueTombstone) {
-                    return true;
-                }
-
+            long[] lastTxId = {-1};
+            boolean[] done = {false};
+            TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (done[0] && rowTxId > lastTxId[0]) {
                     return false;
                 }
 
-                done[0] |= !scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value));
+                done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
                 if (rowTxId > lastTxId[0]) {
                     lastTxId[0] = rowTxId;
                 }
@@ -176,10 +227,10 @@ public class StripedPartition implements AmzaPartitionAPI {
             };
 
             WALHighwater highwater;
-            if (takePrefix != null) {
-                highwater = stripe.takeFromTransactionId(partitionName, takePrefix, transactionId, highwaterStorage, highwaters, txKeyValueStream);
+            if (usePrefix) {
+                highwater = stripe.takeFromTransactionId(partitionName, takePrefix, txId, highwaterStorage, highwaters, txKeyValueStream);
             } else {
-                highwater = stripe.takeFromTransactionId(partitionName, transactionId, highwaterStorage, highwaters, txKeyValueStream);
+                highwater = stripe.takeFromTransactionId(partitionName, txId, highwaterStorage, highwaters, txKeyValueStream);
             }
             return new TakeResult(ringMember, lastTxId[0], highwater);
         });
@@ -191,11 +242,8 @@ public class StripedPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
-        partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            stripe.highestPartitionTxId(partitionName, highestPartitionTx);
-            return null;
-        });
+    public <R> R highestTxId(HighestPartitionTx<R> highestPartitionTx) throws Exception {
+        return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> stripe.highestPartitionTxId(partitionName, highestPartitionTx));
     }
 
 }

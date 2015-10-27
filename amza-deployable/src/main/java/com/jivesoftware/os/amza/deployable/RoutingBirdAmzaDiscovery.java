@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.base.Strings;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaRingStoreWriter;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.deployable.Deployable;
@@ -62,9 +62,7 @@ public class RoutingBirdAmzaDiscovery implements Runnable {
 
                 HostPort hostPort = connectionDescriptor.getHostPort();
                 AmzaRingStoreWriter ringWriter = amzaService.getRingWriter();
-                ringWriter.register(routingRingMember, new RingHost(hostPort.getHost(), hostPort.getPort()));
-                ringWriter.addRingMember(AmzaRingReader.SYSTEM_RING, routingRingMember);
-
+                ringWriter.register(routingRingMember, new RingHost(hostPort.getHost(), hostPort.getPort()), -1);
             }
         } catch (Exception x) {
             LOG.warn("Failed while calling routing bird discovery.", x);

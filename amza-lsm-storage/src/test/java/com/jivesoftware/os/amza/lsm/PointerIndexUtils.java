@@ -1,7 +1,10 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.lsm.api.AppendablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.PointerStream;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -32,15 +35,15 @@ public class PointerIndexUtils {
                 byte[] key = UIO.longBytes(k);
                 long time = timeProvider.nextId();
                 if (desired != null) {
-                    desired.compute(key, (byte[] t, TimestampedValue u) -> {
+                    desired.compute(key, (t, u) -> {
                         if (u == null) {
-                            return new TimestampedValue(time, UIO.longBytes(walFp));
+                            return new TimestampedValue(time, Long.MAX_VALUE, UIO.longBytes(walFp));
                         } else {
-                            return u.getTimestampId() > time ? u : new TimestampedValue(time, UIO.longBytes(walFp));
+                            return u.getTimestampId() > time ? u : new TimestampedValue(time, Long.MAX_VALUE, UIO.longBytes(walFp));
                         }
                     });
                 }
-                if (!stream.stream(Integer.MIN_VALUE, key, time, false, walFp)) {
+                if (!stream.stream(Integer.MIN_VALUE, key, time, false, 0, walFp)) {
                     break;
                 }
                 k += 1 + rand.nextInt(step);
@@ -49,7 +52,7 @@ public class PointerIndexUtils {
         });
     }
 
-    static void assertions(PointerIndexs indexs,
+    static void assertions(MergeablePointerIndexs indexs,
         int count, int step,
         ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws
         Exception {
@@ -58,7 +61,7 @@ public class PointerIndexUtils {
 
         int[] index = new int[1];
         NextPointer rowScan = indexs.rowScan();
-        PointerStream stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+        PointerStream stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
             System.out.println("scanned:" + UIO.bytesLong(keys.get(index[0])) + " " + UIO.bytesLong(key));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
@@ -71,7 +74,7 @@ public class PointerIndexUtils {
         for (int i = 0; i < count * step; i++) {
             long k = i;
             NextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
                 TimestampedValue expectedFP = desired.get(key);
                 if (expectedFP == null) {
                     Assert.assertTrue(expectedFP == null && fp == -1);
@@ -90,7 +93,7 @@ public class PointerIndexUtils {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     System.out.println("Streamed:" + UIO.bytesLong(key));
                     streamed[0]++;
@@ -110,7 +113,7 @@ public class PointerIndexUtils {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, fp) -> {
+            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     streamed[0]++;
                 }

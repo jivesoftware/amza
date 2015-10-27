@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.service.storage.filer;
 
+import com.jivesoftware.os.amza.api.filer.IFiler;
+import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
-import com.jivesoftware.os.amza.shared.filer.IFiler;
-import com.jivesoftware.os.amza.shared.filer.IReadable;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
@@ -131,8 +131,8 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
 
     @Override
     public void write(int b) throws IOException {
-        size.incrementAndGet();
         super.write(b);
+        size.incrementAndGet();
     }
 
     @Override

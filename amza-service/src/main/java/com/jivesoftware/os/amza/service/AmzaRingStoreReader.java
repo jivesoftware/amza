@@ -1,30 +1,31 @@
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.UIO;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.ring.CacheId;
+import com.jivesoftware.os.amza.shared.ring.RingSet;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
-import java.util.AbstractMap.SimpleEntry;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.NavigableMap;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaRingStoreReader implements AmzaRingReader {
 
@@ -33,19 +34,22 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     private final RingMember rootRingMember;
     private final PartitionStore ringIndex;
     private final PartitionStore nodeIndex;
-    private final ConcurrentMap<IBA, Integer> ringSizesCache;
-    private final ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache;
+    private final ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache;
+    private final ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache;
+    private final AtomicLong nodeCacheId;
 
     public AmzaRingStoreReader(RingMember rootRingMember,
         PartitionStore ringIndex,
         PartitionStore nodeIndex,
-        ConcurrentMap<IBA, Integer> ringSizesCache,
-        ConcurrentMap<RingMember, Set<IBA>> ringMemberRingNamesCache) {
+        ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache,
+        ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache,
+        AtomicLong nodeCacheId) {
         this.rootRingMember = rootRingMember;
         this.ringIndex = ringIndex;
         this.nodeIndex = nodeIndex;
-        this.ringSizesCache = ringSizesCache;
+        this.ringsCache = ringsCache;
         this.ringMemberRingNamesCache = ringMemberRingNamesCache;
+        this.nodeCacheId = nodeCacheId;
     }
 
     byte[] keyToRingName(WALKey walKey) throws IOException {
@@ -75,7 +79,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
         return rootRingMember;
     }
 
-    @Override
+    /*@Override
     public List<Entry<RingMember, RingHost>> getNeighbors(byte[] ringName) throws Exception {
         NavigableMap<RingMember, RingHost> ring = getRing(ringName);
         if (!ring.containsKey(rootRingMember) || ring.size() < 2) {
@@ -91,49 +95,79 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             return neighbors;
         }
 
+    }*/
+
+    public TimestampedRingHost getRingHost() throws Exception {
+        TimestampedValue registeredHost = nodeIndex.getTimestampedValue(null, rootRingMember.toBytes());
+        if (registeredHost != null) {
+            return new TimestampedRingHost(RingHost.fromBytes(registeredHost.getValue()), registeredHost.getTimestampId());
+        } else {
+            return new TimestampedRingHost(RingHost.UNKNOWN_RING_HOST, -1);
+        }
     }
 
     public boolean isMemberOfRing(byte[] ringName) throws Exception {
-        boolean[] isMember = new boolean[1];
-        ringIndex.containsKeys(null, stream -> stream.stream(key(ringName, rootRingMember)),
-            (prefix, key, contained) -> {
-                isMember[0] = contained;
-                return true;
-            });
-        return isMember[0];
+        return getRing(ringName).rootMemberIndex >= 0;
     }
 
     @Override
-    public NavigableMap<RingMember, RingHost> getRing(byte[] ringName) throws Exception {
-
-        NavigableMap<RingMember, RingHost> orderedRing = new TreeMap<>();
-        byte[] from = key(ringName, null);
-        nodeIndex.streamValues(null,
-            stream -> ringIndex.rangeScan(null,
-                from,
-                null,
-                WALKey.prefixUpperExclusive(from),
-                (prefix, key, value, valueTimestamp, valueTombstone) -> {
-                    if (!valueTombstone) {
-                        RingMember ringMember = keyToRingMember(key);
-                        return stream.stream(ringMember.toBytes());
-                    } else {
+    public RingTopology getRing(byte[] ringName) throws Exception {
+        IBA ringIBA = new IBA(ringName);
+        CacheId<RingTopology> cacheIdRingTopology = ringsCache.computeIfAbsent(ringIBA, iba1 -> new CacheId<>(null));
+        RingTopology ring = cacheIdRingTopology.entry;
+        long currentRingCacheId = cacheIdRingTopology.currentCacheId;
+        long currentNodeCacheId = nodeCacheId.get();
+        if (ring == null || ring.ringCacheId != currentRingCacheId || ring.nodeCacheId != currentNodeCacheId) {
+            /*LOG.info("Recovering ring {} with ringCacheId:{} nodeCacheId:{}",
+                Arrays.toString(ringName),
+                ring == null ? -1 : ring.ringCacheId,
+                ring == null ? -1 : ring.nodeCacheId);*/
+            try {
+                List<RingMemberAndHost> orderedRing = Lists.newArrayList();
+                int[] rootMemberIndex = { -1 };
+                byte[] from = key(ringName, null);
+                nodeIndex.streamValues(null,
+                    stream -> ringIndex.rangeScan(null,
+                        from,
+                        null,
+                        WALKey.prefixUpperExclusive(from),
+                        (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                            if (!valueTombstone) {
+                                RingMember ringMember = keyToRingMember(key);
+                                return stream.stream(ringMember.toBytes());
+                            } else {
+                                return true;
+                            }
+                        }),
+                    (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                        RingMember ringMember = RingMember.fromBytes(key);
+                        if (ringMember.equals(rootRingMember)) {
+                            rootMemberIndex[0] = orderedRing.size();
+                        }
+                        if (value != null && !valueTombstone) {
+                            orderedRing.add(new RingMemberAndHost(ringMember, RingHost.fromBytes(value)));
+                        } else {
+                            orderedRing.add(new RingMemberAndHost(ringMember, RingHost.UNKNOWN_RING_HOST));
+                        }
                         return true;
-                    }
-                }),
-            (prefix, key, value, valueTimestamp, valueTombstone) -> {
-                if (value != null && !valueTombstone) {
-                    orderedRing.put(RingMember.fromBytes(key), RingHost.fromBytes(value));
-                } else {
-                    orderedRing.put(RingMember.fromBytes(key), RingHost.UNKNOWN_RING_HOST);
-                }
-                return true;
-            });
-        return orderedRing;
+                    });
+
+                ring = new RingTopology(currentRingCacheId, currentNodeCacheId, orderedRing, rootMemberIndex[0]);
+                cacheIdRingTopology.entry = ring;
+                /*LOG.info("Recovered ring {} using ringCacheId:{} nodeCacheId:{}",
+                    Arrays.toString(ringName),
+                    currentRingCacheId,
+                    currentNodeCacheId);*/
+
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return ring;
     }
 
     public RingHost getRingHost(RingMember ringMember) throws Exception {
-        TimestampedValue rawRingHost = nodeIndex.get(null, ringMember.toBytes());
+        TimestampedValue rawRingHost = nodeIndex.getTimestampedValue(null, ringMember.toBytes());
         return rawRingHost == null ? null : RingHost.fromBytes(rawRingHost.getValue());
     }
 
@@ -144,7 +178,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             from,
             null,
             WALKey.prefixUpperExclusive(from),
-            (prefix, key, value, valueTimestamp, valueTombstone) -> {
+            (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (!valueTombstone) {
                     RingMember ringMember = keyToRingMember(key);
                     if (!ringMember.equals(rootRingMember)) {
@@ -158,47 +192,49 @@ public class AmzaRingStoreReader implements AmzaRingReader {
 
     @Override
     public void getRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
-
-        Set<IBA> ringNames = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember, (_desiredRingMember) -> {
-            Set<IBA> set = new HashSet<>();
+        CacheId<RingSet> cacheIdRingSet = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember, ringMember -> new CacheId<>(null));
+        RingSet ringSet = cacheIdRingSet.entry;
+        long currentMemberCacheId = cacheIdRingSet.currentCacheId;
+        if (ringSet == null || ringSet.memberCacheId != currentMemberCacheId) {
             try {
-                ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
-                    if (!valueTombstone) {
-                        HeapFiler filer = new HeapFiler(key);
-                        byte[] ringName = UIO.readByteArray(filer, "ringName");
-                        UIO.readByte(filer, "separator");
-                        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
-                        if (ringMember != null && ringMember.equals(desiredRingMember)) {
-                            set.add(new IBA(ringName));
+                Set<IBA> ringNames = new HashSet<>();
+                try {
+                    ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                        if (!valueTombstone) {
+                            HeapFiler filer = new HeapFiler(key);
+                            byte[] ringName = UIO.readByteArray(filer, "ringName");
+                            UIO.readByte(filer, "separator");
+                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
+                            if (ringMember != null && ringMember.equals(desiredRingMember)) {
+                                ringNames.add(new IBA(ringName));
+                            }
                         }
-                    }
-                    return true;
-                });
-                return set;
-            } catch (Exception x) {
-                throw new RuntimeException(x);
+                        return true;
+                    });
+                } catch (Exception x) {
+                    throw new RuntimeException(x);
+                }
+
+                ringSet = new RingSet(currentMemberCacheId, ringNames);
+                cacheIdRingSet.entry = ringSet;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
-        });
-        for (IBA ringName : ringNames) {
+        }
+        for (IBA ringName : ringSet.ringNames) {
             ringNameStream.stream(ringName.getBytes());
         }
     }
 
     @Override
     public int getRingSize(byte[] ringName) throws Exception {
-        return ringSizesCache.computeIfAbsent(new IBA(ringName), key -> {
-            try {
-                return getRing(key.getBytes()).size();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
+        return getRing(ringName).entries.size();
     }
 
     @Override
     public void allRings(RingStream ringStream) throws Exception {
         Map<RingMember, RingHost> ringMemberToRingHost = new HashMap<>();
-        nodeIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
+        nodeIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
                 RingMember ringMember = RingMember.fromBytes(key);
                 RingHost ringHost = RingHost.fromBytes(value);
@@ -207,7 +243,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             return true;
         });
 
-        ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
+        ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
                 HeapFiler filer = new HeapFiler(key);
                 byte[] ringName = UIO.readByteArray(filer, "ringName");

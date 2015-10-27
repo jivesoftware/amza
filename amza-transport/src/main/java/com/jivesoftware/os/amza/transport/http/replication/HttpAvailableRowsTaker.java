@@ -16,8 +16,9 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
@@ -31,8 +32,10 @@ import com.jivesoftware.os.routing.bird.http.client.HttpClientFactoryProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelper;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
+import org.xerial.snappy.SnappyInputStream;
 
 public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
@@ -48,6 +51,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
     @Override
     public void availableRowsStream(RingMember localRingMember,
+        TimestampedRingHost localTimestampedRingHost,
         RingMember remoteRingMember,
         RingHost remoteRingHost,
         long takeSessionId,
@@ -55,10 +59,16 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         AvailableStream availableStream) throws Exception {
 
         HttpStreamResponse httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
-            "/amza/rows/available/" + localRingMember.getMember() + "/" + takeSessionId + "/" + timeoutMillis);
+            "/amza/rows/available" +
+                "/" + localRingMember.getMember() +
+                "/" + localTimestampedRingHost.ringHost.toCanonicalString() +
+                "/" + localTimestampedRingHost.timestampId +
+                "/" + takeSessionId +
+                "/" + timeoutMillis);
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
-            streamingTakesConsumer.consume(bis, availableStream);
+            DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
+            streamingTakesConsumer.consume(dis, availableStream);
         } finally {
             httpStreamResponse.close();
         }

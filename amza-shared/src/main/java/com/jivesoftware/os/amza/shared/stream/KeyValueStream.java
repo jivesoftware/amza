@@ -6,6 +6,11 @@ package com.jivesoftware.os.amza.shared.stream;
  */
 public interface KeyValueStream {
 
-    boolean stream(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned) throws Exception;
+    boolean stream(byte[] prefix,
+        byte[] key,
+        byte[] value,
+        long valueTimestamp,
+        boolean valueTombstoned,
+        long valueVersion) throws Exception;
 
 }

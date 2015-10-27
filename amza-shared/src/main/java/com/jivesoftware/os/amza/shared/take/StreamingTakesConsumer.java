@@ -1,45 +1,54 @@
 package com.jivesoftware.os.amza.shared.take;
 
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.shared.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import org.xerial.snappy.SnappyInputStream;
 
 /**
  *
  */
 public class StreamingTakesConsumer {
 
-    public void consume(InputStream bis, AvailableStream updatedPartitionsStream) throws Exception {
-        try (DataInputStream dis = new DataInputStream(bis)) {
-            while (dis.read() == 1) {
-                int partitionNameLength = dis.readInt();
-                if (partitionNameLength == 0) {
-                    // this is a ping
-                    continue;
-                }
-                byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
-                dis.readFully(versionedPartitionNameBytes);
-                byte statusByte = (byte) dis.read();
-                Status status = Status.fromSerializedForm(statusByte);
-                long txId = dis.readLong();
-                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), status, txId);
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
+    public void consume(DataInputStream dis, AvailableStream updatedPartitionsStream) throws Exception {
+        while (dis.read() == 1) {
+            int partitionNameLength = dis.readInt();
+            if (partitionNameLength == 0) {
+                // this is a ping
+                continue;
+            }
+            byte[] versionedPartitionNameBytes = new byte[partitionNameLength];
+            dis.readFully(versionedPartitionNameBytes);
+            long txId = dis.readLong();
+            try {
+                updatedPartitionsStream.available(VersionedPartitionName.fromBytes(versionedPartitionNameBytes), txId);
+            } catch (PropertiesNotPresentException e) {
+                LOG.warn(e.getMessage());
+            } catch (Throwable t) {
+                LOG.error("Encountered problem while streaming available rows", t);
             }
         }
     }
 
-    public StreamingTakeConsumed consume(InputStream bis, RowStream tookRowUpdates) throws Exception {
+    public StreamingTakeConsumed consume(DataInputStream is, RowStream tookRowUpdates) throws Exception {
         Map<RingMember, Long> neighborsHighwaterMarks = new HashMap<>();
+        long leadershipToken;
         long partitionVersion;
         boolean isOnline;
         long bytes = 0;
-        try (DataInputStream dis = new DataInputStream(bis)) {
+        try (DataInputStream dis = is) {
+            leadershipToken = dis.readLong();
             partitionVersion = dis.readLong();
             isOnline = dis.readByte() == 1;
             while (dis.readByte() == 1) {
@@ -62,17 +71,19 @@ public class StreamingTakesConsumer {
                 }
             }
         }
-        return new StreamingTakeConsumed(partitionVersion, isOnline, neighborsHighwaterMarks, bytes);
+        return new StreamingTakeConsumed(leadershipToken, partitionVersion, isOnline, neighborsHighwaterMarks, bytes);
     }
 
     public static class StreamingTakeConsumed {
 
+        public final long leadershipToken;
         public final long partitionVersion;
         public final boolean isOnline;
         public final Map<RingMember, Long> neighborsHighwaterMarks;
         public final long bytes;
 
-        public StreamingTakeConsumed(long partitionVersion, boolean isOnline, Map<RingMember, Long> neighborsHighwaterMarks, long bytes) {
+        public StreamingTakeConsumed(long leadershipToken, long partitionVersion, boolean isOnline, Map<RingMember, Long> neighborsHighwaterMarks, long bytes) {
+            this.leadershipToken = leadershipToken;
             this.partitionVersion = partitionVersion;
             this.isOnline = isOnline;
             this.neighborsHighwaterMarks = neighborsHighwaterMarks;

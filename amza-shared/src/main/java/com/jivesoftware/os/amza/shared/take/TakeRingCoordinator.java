@@ -1,22 +1,19 @@
 package com.jivesoftware.os.amza.shared.take;
 
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -42,7 +39,8 @@ public class TakeRingCoordinator {
         VersionedPartitionProvider versionedPartitionProvider,
         long systemReofferDeltaMillis,
         long slowTakeInMillis,
-        long reofferDeltaMillis, List<Entry<RingMember, RingHost>> neighbors) {
+        long reofferDeltaMillis,
+        RingTopology ring) {
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.idPacker = idPacker;
@@ -51,12 +49,12 @@ public class TakeRingCoordinator {
         this.systemReofferDeltaMillis = systemReofferDeltaMillis;
         this.reofferDeltaMillis = reofferDeltaMillis;
         //LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
-        this.versionedRing.compareAndSet(null, new VersionedRing(neighbors));
+        this.versionedRing.compareAndSet(null, new VersionedRing(ring));
     }
 
-    boolean cya(List<Entry<RingMember, RingHost>> neighbors) {
+    boolean cya(RingTopology ring) {
         VersionedRing existingRing = this.versionedRing.get();
-        VersionedRing updatedRing = ensureVersionedRing(neighbors);
+        VersionedRing updatedRing = ensureVersionedRing(ring);
         return existingRing != updatedRing; // reference equality is OK
     }
 
@@ -66,61 +64,95 @@ public class TakeRingCoordinator {
         }
     }
 
-    void update(List<Entry<RingMember, RingHost>> neighbors, VersionedPartitionName versionedPartitionName, Status status, long txId) throws Exception {
-        VersionedRing ring = ensureVersionedRing(neighbors);
-        TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.computeIfAbsent(versionedPartitionName,
+    void update(RingTopology ring,
+        VersionedPartitionName versionedPartitionName,
+        long txId) throws Exception {
+
+        VersionedRing versionedRing = ensureVersionedRing(ring);
+        TakeVersionedPartitionCoordinator coordinator = ensureCoordinator(versionedPartitionName);
+        PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
+        coordinator.updateTxId(versionedRing, properties.takeFromFactor, txId);
+    }
+
+    private TakeVersionedPartitionCoordinator ensureCoordinator(VersionedPartitionName versionedPartitionName) {
+        return partitionCoordinators.computeIfAbsent(versionedPartitionName,
             key -> new TakeVersionedPartitionCoordinator(versionedPartitionName,
                 timestampedOrderIdProvider,
-                status,
-                new AtomicLong(txId),
                 slowTakeInMillis,
                 idPacker.pack(slowTakeInMillis, 0, 0), //TODO need orderIdProvider.deltaMillisToIds()
                 systemReofferDeltaMillis,
                 reofferDeltaMillis));
-        PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-        coordinator.updateTxId(ring, status, txId, properties.takeFromFactor);
     }
 
-    long availableRowsStream(RingMember ringMember, long takeSessionId, AvailableStream availableStream) throws Exception {
+    long availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
+        RingMember ringMember,
+        CheckState checkState,
+        long takeSessionId,
+        AvailableStream availableStream) throws Exception {
+
         long suggestedWaitInMillis = Long.MAX_VALUE;
         VersionedRing ring = versionedRing.get();
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
-            PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-            suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
-                coordinator.availableRowsStream(takeSessionId, ring, ringMember, properties.takeFromFactor, availableStream));
+            if (!coordinator.isSteadyState(ringMember, takeSessionId)) {
+                PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
+                suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
+                    coordinator.availableRowsStream(txHighestPartitionTx,
+                        takeSessionId,
+                        ring,
+                        ringMember,
+                        checkState.isOnline(ringMember, coordinator.versionedPartitionName),
+                        properties.takeFromFactor,
+                        availableStream));
+            }
         }
         return suggestedWaitInMillis;
     }
 
-    void rowsTaken(RingMember remoteRingMember, VersionedPartitionName localVersionedPartitionName, long localTxId) throws Exception {
+    void rowsTaken(TxHighestPartitionTx<Long> txHighestPartitionTx,
+        RingMember remoteRingMember,
+        long takeSessionId,
+        VersionedPartitionName localVersionedPartitionName,
+        long localTxId) throws Exception {
         TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(localVersionedPartitionName);
         if (coordinator != null) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-            coordinator.rowsTaken(versionedRing.get(), remoteRingMember, localTxId, properties.takeFromFactor);
+            coordinator.rowsTaken(txHighestPartitionTx, takeSessionId, versionedRing.get(), remoteRingMember, localTxId, properties.takeFromFactor);
         }
     }
 
-    private VersionedRing ensureVersionedRing(List<Entry<RingMember, RingHost>> neighbors) {
+    private VersionedRing ensureVersionedRing(RingTopology ring) {
         return versionedRing.updateAndGet((existing) -> {
-            if (existing.isStillValid(neighbors)) {
+            if (existing.isStillValid(ring)) {
                 return existing;
             } else {
                 //LOG.info("RESIZED RING:" + ringName + " size:" + neighbors.size() + " " + this + " " + existing);
-                return new VersionedRing(neighbors);
+                return new VersionedRing(ring);
             }
         });
     }
 
     static public class VersionedRing {
 
+        final RingTopology ring;
         final int takeFromFactor;
         final LinkedHashMap<RingMember, Integer> members;
 
-        public VersionedRing(List<Entry<RingMember, RingHost>> neighbors) {
+        public VersionedRing(RingTopology ring) {
 
-            Entry<RingMember, RingHost>[] ringMembers = neighbors.toArray(new Entry[neighbors.size()]);
-            members = new LinkedHashMap<>();
-            takeFromFactor = 1 + (int) Math.sqrt(ringMembers.length);
+            int ringSize = ring.entries.size();
+            int neighborsSize = ringSize - (ring.rootMemberIndex == -1 ? 0 : 1);
+            RingMember[] ringMembers = new RingMember[neighborsSize];
+            for (int i = 0, j = 0; i < ringSize; i++) {
+                if (i != ring.rootMemberIndex) {
+                    ringMembers[j] = ring.entries.get(i).ringMember;
+                    j++;
+                }
+            }
+
+            this.ring = ring;
+            this.members = new LinkedHashMap<>();
+            this.takeFromFactor = 1 + (int) Math.sqrt(ringMembers.length);
+
             int taken = takeFromFactor;
             int category = 1;
             for (int start = 0; start < ringMembers.length; start++) {
@@ -132,7 +164,7 @@ public class TakeRingCoordinator {
                     if (ringMembers[memberIndex] == null) {
                         continue;
                     }
-                    members.put(ringMembers[memberIndex].getKey(), category);
+                    members.put(ringMembers[memberIndex], category);
                     ringMembers[memberIndex] = null;
 
                     taken--;
@@ -148,16 +180,8 @@ public class TakeRingCoordinator {
             return members.get(ringMember);
         }
 
-        boolean isStillValid(List<Entry<RingMember, RingHost>> neighbors) {
-            if (neighbors.size() != members.size()) {
-                return false;
-            }
-            for (Entry<RingMember, RingHost> neighbor : neighbors) {
-                if (!members.containsKey(neighbor.getKey())) {
-                    return false;
-                }
-            }
-            return true;
+        boolean isStillValid(RingTopology ring) {
+            return this.ring == ring;
         }
     }
 

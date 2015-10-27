@@ -16,13 +16,17 @@
 package com.jivesoftware.os.amza.service.discovery;
 
 import com.google.common.base.Splitter;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AmzaRingStoreWriter;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
@@ -33,7 +37,6 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
-import java.util.NavigableMap;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -99,18 +102,19 @@ public class AmzaDiscovery {
                                 String member = clusterMemberHostPort.get(1).trim();
                                 String host = clusterMemberHostPort.get(2).trim();
                                 int port = Integer.parseInt(clusterMemberHostPort.get(3).trim());
+                                long timestampId = Long.parseLong(clusterMemberHostPort.get(4).trim());
                                 RingMember ringMember = new RingMember(member);
                                 RingHost anotherRingHost = new RingHost(host, port);
-                                NavigableMap<RingMember, RingHost> ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
-                                RingHost ringHost = ring.get(ringMember);
-                                if (ringHost == null) {
+                                RingTopology ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
+                                //TODO this is a little heavy handed
+                                RingMemberAndHost entry = Iterables.find(ring.entries, input -> input.ringMember.equals(ringMember));
+                                if (entry == null) {
                                     LOG.info("Adding ringMember:" + ringMember + " on host:" + anotherRingHost + " to cluster: " + clusterName);
-                                    ringStoreWriter.register(ringMember, anotherRingHost);
-                                    ringStoreWriter.addRingMember(AmzaRingReader.SYSTEM_RING, ringMember);
+                                    ringStoreWriter.register(ringMember, anotherRingHost, timestampId);
                                     allMemberSeen.add(ringMember);
-                                } else if (!ringHost.equals(anotherRingHost)) {
+                                } else if (!entry.ringHost.equals(anotherRingHost)) {
                                     LOG.info("Updating ringMember:" + ringMember + " on host:" + anotherRingHost + " for cluster:" + clusterName);
-                                    ringStoreWriter.register(ringMember, anotherRingHost);
+                                    ringStoreWriter.register(ringMember, anotherRingHost, timestampId);
                                     allMemberSeen.add(ringMember);
                                 }
                             }
@@ -142,9 +146,13 @@ public class AmzaDiscovery {
             String message = "";
             try (MulticastSocket socket = new MulticastSocket()) {
                 RingMember ringMember = ringStoreReader.getRingMember();
-                RingHost ringHost = ringStoreWriter.getRingHost();
-                if (ringHost != RingHost.UNKNOWN_RING_HOST) {
-                    message = (clusterName + "|" + ringMember.getMember() + "|" + ringHost.getHost() + "|" + ringHost.getPort());
+                TimestampedRingHost timestampedRingHost = ringStoreReader.getRingHost();
+                if (timestampedRingHost.ringHost != RingHost.UNKNOWN_RING_HOST) {
+                    message = (clusterName +
+                        "|" + ringMember.getMember() +
+                        "|" + timestampedRingHost.ringHost.getHost() +
+                        "|" + timestampedRingHost.ringHost.getPort() +
+                        "|" + timestampedRingHost.timestampId);
                     byte[] buf = new byte[512];
                     byte[] rawMessage = message.getBytes(StandardCharsets.UTF_8);
                     System.arraycopy(rawMessage, 0, buf, 0, rawMessage.length);

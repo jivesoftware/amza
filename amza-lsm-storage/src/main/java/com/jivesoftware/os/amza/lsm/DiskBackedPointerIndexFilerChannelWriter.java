@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.shared.filer.IWriteable;
+import com.jivesoftware.os.amza.api.filer.IWriteable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;

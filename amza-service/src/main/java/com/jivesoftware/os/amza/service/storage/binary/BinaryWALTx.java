@@ -3,14 +3,13 @@ package com.jivesoftware.os.amza.service.storage.binary;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
-import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.CompareTimestampVersions;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex;
-import com.jivesoftware.os.amza.shared.scan.CompactableWALIndex.CompactionWALIndex;
-import com.jivesoftware.os.amza.shared.scan.RowType;
-import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
+import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALTx;
@@ -18,7 +17,6 @@ import com.jivesoftware.os.amza.shared.wal.WALWriter.IndexableKeys;
 import com.jivesoftware.os.amza.shared.wal.WALWriter.RawRows;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +29,7 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
+public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -39,38 +37,37 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
     private static final int NUM_PERMITS = 1024;
 
     private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
-    private final File dir;
+    private final K key;
     private final String name;
     private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
     private final WALIndexProvider<I> walIndexProvider;
 
-    private final RowIOProvider ioProvider;
-    private RowIO<File> io;
+    private final RowIOProvider<K> ioProvider;
+    private RowIO<K> io;
 
-    public BinaryWALTx(File baseDir,
+    public BinaryWALTx(K baseKey,
         String prefix,
-        RowIOProvider ioProvider,
+        RowIOProvider<K> ioProvider,
         PrimaryRowMarshaller<byte[]> rowMarshaller,
         WALIndexProvider<I> walIndexProvider) throws Exception {
-        this.dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
+        this.key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
         this.name = prefix + SUFFIX;
         this.ioProvider = ioProvider;
         this.primaryRowMarshaller = rowMarshaller;
         this.walIndexProvider = walIndexProvider;
-        this.io = ioProvider.create(dir, name);
+        this.io = ioProvider.create(key, name);
     }
 
-    public static Set<String> listExisting(File baseDir, RowIOProvider ioProvider) {
-        File dir = new File(baseDir, AmzaVersionConstants.LATEST_VERSION);
-        List<File> files = ioProvider.listExisting(dir);
-        Set<String> names = Sets.newHashSet();
-        for (File file : files) {
-            String name = file.getName();
+    public static <K> Set<String> listExisting(K baseKey, RowIOProvider<K> ioProvider) throws Exception {
+        K key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
+        List<String> names = ioProvider.listExisting(key);
+        Set<String> matched = Sets.newHashSet();
+        for (String name : names) {
             if (name.endsWith(SUFFIX)) {
-                names.add(name.substring(0, name.indexOf(SUFFIX)));
+                matched.add(name.substring(0, name.indexOf(SUFFIX)));
             }
         }
-        return names;
+        return matched;
     }
 
     @Override
@@ -157,11 +154,11 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                                 }
                                 return true;
                             });
-                    }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
+                    }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                         rebuilt.increment();
-                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, fp);
+                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
                     }),
-                    (mode, txId, prefix, key, timestamp, tombstoned, fp) -> true);
+                    (mode, txId, prefix, key, timestamp, tombstoned, version, fp) -> true);
 
                 LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
                 walIndex.commit();
@@ -189,11 +186,11 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                                 return rowTxId >= commitedUpToTxId[0];
                             }
                         });
-                    }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
+                    }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                         repair.increment();
-                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, fp);
+                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
                     }),
-                    (mode, txId, prefix, key, timestamp, tombstoned, fp) -> true);
+                    (mode, txId, prefix, key, timestamp, tombstoned, version, fp) -> true);
 
                 LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
                 walIndex.commit();
@@ -213,9 +210,9 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                 try {
                     io.close();
                 } catch (Exception x) {
-                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[] { dir.getAbsolutePath() }, x);
+                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[] { io.getKey() }, x);
                 }
-                io.delete();
+                ioProvider.delete(io.getKey());
                 return true;
             }
             return false;
@@ -235,8 +232,8 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
 
         CompactionWALIndex compactionRowIndex = compactableWALIndex != null ? compactableWALIndex.startCompaction() : null;
 
-        File tempDir = Files.createTempDir();
-        RowIO<File> compactionIO = ioProvider.create(tempDir, name);
+        K tempKey = ioProvider.createTempKey();
+        RowIO<K> compactionIO = ioProvider.create(tempKey, name);
 
         AtomicLong keyCount = new AtomicLong();
         AtomicLong clobberCount = new AtomicLong();
@@ -270,21 +267,25 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                 compactionIO.flush(true);
                 long sizeAfterCompaction = compactionIO.sizeInBytes();
                 compactionIO.close();
-                File backup = new File(dir, "bkp");
-                backup.delete();
+                K backup = ioProvider.buildKey(key, "bkp");
+                ioProvider.delete(backup);
+                if (!ioProvider.ensure(backup)) {
+                    throw new IOException("Failed trying to clean " + backup);
+                }
+                /*backup.delete();
                 if (!backup.exists() && !backup.mkdirs()) {
                     throw new IOException("Failed trying to mkdirs for " + backup);
-                }
+                }*/
                 long sizeBeforeCompaction = io.sizeInBytes();
                 io.close();
-                io.move(backup);
-                if (!dir.exists() && !dir.mkdirs()) {
-                    throw new IOException("Failed trying to mkdirs for " + dir);
+                ioProvider.moveTo(io.getKey(), backup);
+                if (!ioProvider.ensure(key)) {
+                    throw new IOException("Failed trying to ensure " + key);
                 }
-                compactionIO.move(dir);
+                ioProvider.moveTo(compactionIO.getKey(), key);
                 // Reopen the world
-                io = ioProvider.create(dir, name);
-                LOG.info("Compacted partition " + dir.getAbsolutePath() + "/" + name
+                io = ioProvider.create(key, name);
+                LOG.info("Compacted partition " + key + "/" + name
                     + " was:" + sizeBeforeCompaction + "bytes "
                     + " isNow:" + sizeAfterCompaction + "bytes.");
                 if (compactionRowIndex != null) {
@@ -361,15 +362,15 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
                     }
                     return true;
                 }),
-            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
-                compactableWALIndex.getPointer(prefix, key, (_prefix, _key, pointerTimestamp, pointerTombstoned, pointerFp) -> {
-                    if (pointerFp == -1 || valueTimestamp >= pointerTimestamp) {
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                compactableWALIndex.getPointer(prefix, key, (_prefix, _key, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
+                    if (pointerFp == -1 || CompareTimestampVersions.compare(valueTimestamp, valueVersion, pointerTimestamp, pointerVersion) >= 0) {
                         if (valueTombstoned && valueTimestamp < removeTombstonedOlderThanTimestampId) {
                             tombstoneCount.incrementAndGet();
                         } else {
                             if (valueTimestamp > ttlTimestampId) {
                                 estimatedSizeInBytes.add(row.length);
-                                flushables.add(new CompactionFlushable(prefix, key, valueTimestamp, valueTombstoned, row));
+                                flushables.add(new CompactionFlushable(prefix, key, valueTimestamp, valueTombstoned, valueVersion, row));
                                 keyCount.incrementAndGet();
                             } else {
                                 ttlCount.incrementAndGet();
@@ -418,7 +419,8 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
             },
             indexableKeyStream -> {
                 for (CompactionFlushable flushable : flushables) {
-                    if (!indexableKeyStream.stream(flushable.prefix, flushable.key, flushable.valueTimestamp, flushable.valueTombstoned)) {
+                    if (!indexableKeyStream.stream(flushable.prefix, flushable.key,
+                        flushable.valueTimestamp, flushable.valueTombstoned, flushable.valueVersion)) {
                         return false;
                     }
                 }
@@ -436,14 +438,15 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
         IndexableKeys indexableKeys) throws Exception {
 
         if (compactionWALIndex != null) {
-            compactionWALIndex.merge((TxKeyPointerStream stream) -> {
+            compactionWALIndex.merge((stream) -> {
                 compactionIO.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys,
-                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp) -> stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, fp));
+                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> stream.stream(txId, prefix, key,
+                        valueTimestamp, valueTombstoned, valueVersion, fp));
                 return true;
             });
         } else {
             compactionIO.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys,
-                (rowTxId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true);
+                (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
         }
     }
 
@@ -453,13 +456,15 @@ public class BinaryWALTx<I extends CompactableWALIndex> implements WALTx<I> {
         public byte[] key;
         public long valueTimestamp;
         public boolean valueTombstoned;
+        public long valueVersion;
         public byte[] row;
 
-        public CompactionFlushable(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, byte[] row) {
+        public CompactionFlushable(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion, byte[] row) {
             this.prefix = prefix;
             this.key = key;
             this.valueTimestamp = valueTimestamp;
             this.valueTombstoned = valueTombstoned;
+            this.valueVersion = valueVersion;
             this.row = row;
         }
     }

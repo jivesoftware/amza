@@ -1,19 +1,15 @@
 package com.jivesoftware.os.amza.service;
 
-import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
-import java.io.File;
-import java.io.IOException;
-import java.util.Set;
 
 /**
  * @author jonathan.colt
@@ -21,38 +17,33 @@ import java.util.Set;
 public class IndexedWALStorageProvider {
 
     private final WALIndexProviderRegistry indexProviderRegistry;
-    private final RowIOProvider rowIOProvider;
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
     private final BinaryHighwaterRowMarshaller highwaterRowMarshaller;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final int tombstoneCompactionFactor;
 
     public IndexedWALStorageProvider(WALIndexProviderRegistry indexProviderRegistry,
-        RowIOProvider rowIOProvider,
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         TimestampedOrderIdProvider orderIdProvider,
         int tombstoneCompactionFactor) {
 
         this.indexProviderRegistry = indexProviderRegistry;
-        this.rowIOProvider = rowIOProvider;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.orderIdProvider = orderIdProvider;
         this.tombstoneCompactionFactor = tombstoneCompactionFactor;
     }
 
-    public <I extends WALIndex> WALStorage<I> create(File workingDirectory,
-        String domain,
+    public <I extends WALIndex, K> WALStorage<I> create(K baseKey,
         VersionedPartitionName versionedPartitionName,
         WALStorageDescriptor storageDescriptor) throws Exception {
+
         @SuppressWarnings("unchecked")
         WALIndexProvider<I> walIndexProvider = (WALIndexProvider<I>) indexProviderRegistry.getWALIndexProvider(storageDescriptor);
-        File directory = new File(workingDirectory, domain);
-        if (!directory.exists() && !directory.mkdirs()) {
-            throw new IOException("Failed trying to mkdirs for " + directory);
-        }
-        BinaryWALTx<I> binaryWALTx = new BinaryWALTx<>(directory, versionedPartitionName.toBase64(), rowIOProvider, primaryRowMarshaller, walIndexProvider);
+        @SuppressWarnings("unchecked")
+        RowIOProvider<K> rowIOProvider = (RowIOProvider<K>) indexProviderRegistry.getRowIOProvider(storageDescriptor);
+        BinaryWALTx<I, K> binaryWALTx = buildBinaryWALTx(baseKey, versionedPartitionName, rowIOProvider, walIndexProvider);
         return new WALStorage<>(versionedPartitionName,
             orderIdProvider,
             primaryRowMarshaller,
@@ -63,7 +54,28 @@ public class IndexedWALStorageProvider {
             tombstoneCompactionFactor);
     }
 
-    public Set<VersionedPartitionName> listExisting(String[] workingDirectories, String domain) throws IOException {
+    public WALStorage<?> create(VersionedPartitionName versionedPartitionName, WALStorageDescriptor walStorageDescriptor) throws Exception {
+        return create(baseKey(versionedPartitionName, walStorageDescriptor), versionedPartitionName, walStorageDescriptor);
+    }
+
+    private <K> K baseKey(VersionedPartitionName versionedPartitionName, WALStorageDescriptor storageDescriptor) throws Exception {
+        @SuppressWarnings("unchecked")
+        RowIOProvider<K> rowIOProvider = (RowIOProvider<K>) indexProviderRegistry.getRowIOProvider(storageDescriptor);
+        return rowIOProvider.baseKey(versionedPartitionName);
+    }
+
+    private <I extends WALIndex, K> BinaryWALTx<I, K> buildBinaryWALTx(K baseKey,
+        VersionedPartitionName versionedPartitionName,
+        RowIOProvider<K> rowIOProvider,
+        WALIndexProvider<I> walIndexProvider) throws Exception {
+        return new BinaryWALTx<>(baseKey,
+            versionedPartitionName.toBase64(),
+            rowIOProvider,
+            primaryRowMarshaller,
+            walIndexProvider);
+    }
+
+    /*public Set<VersionedPartitionName> listExisting(String[] workingDirectories, String domain) throws IOException {
         Set<VersionedPartitionName> versionedPartitionNames = Sets.newHashSet();
         for (String workingDirectory : workingDirectories) {
             File directory = new File(workingDirectory, domain);
@@ -75,6 +87,6 @@ public class IndexedWALStorageProvider {
             }
         }
         return versionedPartitionNames;
-    }
+    }*/
 
 }

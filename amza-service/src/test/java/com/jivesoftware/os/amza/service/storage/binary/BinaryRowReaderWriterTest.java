@@ -16,17 +16,17 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.filer.UIO;
+import com.jivesoftware.os.amza.shared.filer.AutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import java.io.File;
-import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -39,7 +39,7 @@ import org.testng.annotations.Test;
 public class BinaryRowReaderWriterTest {
 
     private final WALWriter.IndexableKeys indexableKeys = stream -> true;
-    private final WALWriter.TxKeyPointerFpStream txKeyPointerFpStream = (txId, prefix, key, valueTimestamp, valueTombstoned, fp) -> true;
+    private final WALWriter.TxKeyPointerFpStream txKeyPointerFpStream = (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true;
 
     @Test
     public void testValidateDiskBacked() throws Exception {
@@ -55,12 +55,13 @@ public class BinaryRowReaderWriterTest {
     public void testValidateHeapBacked() throws Exception {
 
         IoStats ioStats = new IoStats();
-        WALFiler filer = new MemoryBackedWALFiler(new HeapFiler());
+        WALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
+            capacity -> ByteBuffer.allocate(capacity.intValue())));
         validate(filer, ioStats);
 
     }
 
-    private void validate(WALFiler filer, IoStats ioStats) throws IOException, Exception {
+    private void validate(WALFiler filer, IoStats ioStats) throws Exception {
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 3);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
@@ -88,7 +89,8 @@ public class BinaryRowReaderWriterTest {
     @Test
     public void testMemoryBackedRead() throws Exception {
         IoStats ioStats = new IoStats();
-        WALFiler filer = new MemoryBackedWALFiler(new HeapFiler());
+        WALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
+            capacity -> ByteBuffer.allocate(capacity.intValue())));
         read(filer, ioStats);
 
     }

@@ -16,33 +16,34 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Preconditions;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.api.take.Highwaters;
+import com.jivesoftware.os.amza.api.take.TakeResult;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.AckWaters;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
 import com.jivesoftware.os.amza.shared.FailedToAchieveQuorumException;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.Scan;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
-import com.jivesoftware.os.amza.shared.take.TakeResult;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Set;
 
-public class SystemPartition implements AmzaPartitionAPI {
+public class SystemPartition implements Partition {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -70,7 +71,7 @@ public class SystemPartition implements AmzaPartitionAPI {
         this.orderIdProvider = orderIdProvider;
         this.walUpdated = walUpdated;
         this.ringMember = ringMember;
-        this.versionedPartitionName = new VersionedPartitionName(partitionName, 0);
+        this.versionedPartitionName = new VersionedPartitionName(partitionName, VersionedPartitionName.STATIC_VERSION);
         this.systemWALStorage = systemWALStorage;
         this.systemHighwaterStorage = systemHighwaterStorage;
         this.ackWaters = ackWaters;
@@ -82,92 +83,104 @@ public class SystemPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void commit(byte[] prefix,
+    public void commit(Consistency consistency,
+        byte[] prefix,
         Commitable updates,
-        int takeQuorum,
         long timeoutInMillis) throws Exception {
 
-        long timestampId = orderIdProvider.nextId();
-        RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix,
-            (highwaters, scan) ->
-                updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone) -> {
-                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampId;
-                    return scan.row(rowTxId, key, value, timestamp, valueTombstone);
+        Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
+
+        int takeQuorum = consistency.quorum(neighbors.size());
+        if (takeQuorum > 0 && neighbors.size() < takeQuorum) {
+            throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
+        }
+
+        long timestampAndVersion = orderIdProvider.nextId();
+        RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix, (highwaters, scan) ->
+                updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampAndVersion;
+                    return scan.row(rowTxId, key, value, timestamp, valueTombstone, timestampAndVersion);
                 }),
             walUpdated);
-        amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getOldestRowTxId());
-
-        Set<RingMember> ringMembers = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
+        amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getSmallestCommittedTxId());
 
         if (takeQuorum > 0) {
-            if (ringMembers.size() < takeQuorum) {
-                throw new FailedToAchieveQuorumException("There are an insufficent number of nodes to achieve desired take quorum:" + takeQuorum);
-            } else {
-                LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
-                int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), ringMembers, takeQuorum, timeoutInMillis);
-                if (takenBy < takeQuorum) {
-                    throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
-                }
+            LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
+            int takenBy = ackWaters.await(versionedPartitionName, commit.getLargestCommittedTxId(), neighbors, takeQuorum, timeoutInMillis, -1);
+            if (takenBy < takeQuorum) {
+                throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
             }
         }
     }
 
     @Override
-    public boolean get(byte[] prefix, UnprefixedWALKeys keys, TimestampKeyValueStream valuesStream) throws Exception {
-        return systemWALStorage.get(versionedPartitionName, prefix, keys, valuesStream);
+    public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
+        return systemWALStorage.get(versionedPartitionName, prefix, keys, stream);
     }
 
     @Override
-    public void scan(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey, Scan<TimestampedValue> scan) throws Exception {
+    public boolean scan(byte[] fromPrefix,
+        byte[] fromKey,
+        byte[] toPrefix,
+        byte[] toKey,
+        KeyValueTimestampStream scan) throws Exception {
         if (fromKey == null && toKey == null) {
-            systemWALStorage.rowScan(versionedPartitionName, (prefix, key, value, valueTimestamp, valueTombstone) ->
-                valueTombstone || scan.row(-1, prefix, key, new TimestampedValue(valueTimestamp, value)));
+            return systemWALStorage.rowScan(versionedPartitionName, (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
         } else {
-            systemWALStorage.rangeScan(versionedPartitionName,
+            return systemWALStorage.rangeScan(versionedPartitionName,
                 fromPrefix,
                 fromKey,
                 toPrefix,
                 toKey,
-                (prefix, key, value, valueTimestamp, valueTombstone) ->
-                    valueTombstone || scan.row(-1, prefix, key, new TimestampedValue(valueTimestamp, value)));
+                (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
         }
     }
 
     @Override
-    public TakeResult takeFromTransactionId(long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
-        return takeFromTransactionIdInternal(null, transactionId, highwaters, scan);
+    public TakeResult takeFromTransactionId(long txId,
+        Highwaters highwaters,
+        TxKeyValueStream stream) throws Exception {
+        return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
     }
 
     @Override
-    public TakeResult takeFromTransactionId(byte[] prefix, long transactionId, Highwaters highwaters, Scan<TimestampedValue> scan) throws Exception {
+    public TakeResult takePrefixFromTransactionId(byte[] prefix,
+        long txId,
+        Highwaters highwaters,
+        TxKeyValueStream stream) throws Exception {
+
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
-        return takeFromTransactionIdInternal(prefix, transactionId, highwaters, scan);
+        return takeFromTransactionIdInternal(true, prefix, txId, highwaters, stream);
     }
 
-    private TakeResult takeFromTransactionIdInternal(byte[] takePrefix,
-        long transactionId,
+    private TakeResult takeFromTransactionIdInternal(boolean usePrefix, byte[] takePrefix,
+        long txId,
         Highwaters highwaters,
-        Scan<TimestampedValue> scan) throws Exception {
+        TxKeyValueStream stream) throws Exception {
 
         long[] lastTxId = { -1 };
         boolean[] done = { false };
         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-        boolean tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, takePrefix, transactionId, highwaters,
-            (rowTxId, prefix, key, value, valueTimestamp, valueTombstone) -> {
-                if (valueTombstone) {
-                    return true;
-                }
+        TxKeyValueStream delegateStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
 
-                if (done[0] && rowTxId > lastTxId[0]) {
-                    return false;
-                }
+            if (done[0] && rowTxId > lastTxId[0]) {
+                return false;
+            }
 
-                done[0] |= !scan.row(rowTxId, prefix, key, new TimestampedValue(valueTimestamp, value));
-                if (rowTxId > lastTxId[0]) {
-                    lastTxId[0] = rowTxId;
-                }
-                return true;
-            });
+            done[0] |= !stream.stream(rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
+            if (rowTxId > lastTxId[0]) {
+                lastTxId[0] = rowTxId;
+            }
+            return true;
+        };
+        boolean tookToEnd;
+        if (usePrefix) {
+            tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, takePrefix, txId, highwaters, delegateStream);
+        } else {
+            tookToEnd = systemWALStorage.takeFromTransactionId(versionedPartitionName, txId, highwaters, delegateStream);
+        }
         return new TakeResult(ringMember, lastTxId[0], tookToEnd ? partitionHighwater : null);
     }
 
@@ -177,8 +190,8 @@ public class SystemPartition implements AmzaPartitionAPI {
     }
 
     @Override
-    public void highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
-        systemWALStorage.highestPartitionTxIds(highestPartitionTx);
+    public <R> R highestTxId(HighestPartitionTx<R> highestPartitionTx) throws Exception {
+        return systemWALStorage.highestPartitionTxId(versionedPartitionName, highestPartitionTx);
     }
 
 }

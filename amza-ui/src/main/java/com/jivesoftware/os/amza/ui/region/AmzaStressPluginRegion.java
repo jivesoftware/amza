@@ -2,18 +2,19 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.PartitionClient;
+import com.jivesoftware.os.amza.api.PartitionClientProvider;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.client.http.exceptions.NotSolveableException;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.service.storage.delta.DeltaOverCapacityException;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.service.EmbeddedPartitionClient;
+import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -23,7 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,46 +48,55 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
     private final String template;
     private final SoyRenderer renderer;
     private final AmzaService amzaService;
+    private final PartitionClientProvider partitionClientProvider;
 
     public AmzaStressPluginRegion(String template,
         SoyRenderer renderer,
-        AmzaService amzaService) {
+        AmzaService amzaService,
+        PartitionClientProvider partitionClientProvider) {
         this.template = template;
         this.renderer = renderer;
         this.amzaService = amzaService;
+        this.partitionClientProvider = partitionClientProvider;
     }
 
     public static class AmzaStressPluginRegionInput {
 
         final String name;
+        final boolean client;
         final String regionPrefix;
         final int numBatches;
         final int batchSize;
         final int numPartitions;
         final int numThreadsPerPartition;
         final int numKeyPrefixes;
-        final int desiredQuorum;
+        final String consistency;
+        final boolean requireConsistency;
         final boolean orderedInsertion;
         final String action;
 
         public AmzaStressPluginRegionInput(String name,
+            boolean client,
             String regionPrefix,
             int numBatches,
             int batchSize,
             int numPartitions,
             int numThreadsPerRegion,
             int numKeyPrefixes,
-            int desiredQuorum,
+            String consistency,
+            boolean requireConsistency,
             boolean orderedInsertion,
             String action) {
             this.name = name;
+            this.client = client;
             this.regionPrefix = regionPrefix;
             this.numBatches = numBatches;
             this.batchSize = batchSize;
             this.numPartitions = numPartitions;
             this.numThreadsPerPartition = numThreadsPerRegion;
             this.numKeyPrefixes = numKeyPrefixes;
-            this.desiredQuorum = desiredQuorum;
+            this.consistency = consistency;
+            this.requireConsistency = requireConsistency;
             this.orderedInsertion = orderedInsertion;
             this.action = action;
         }
@@ -130,13 +140,14 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
 
                 Map<String, String> row = new HashMap<>();
                 row.put("name", entry.getKey());
+                row.put("client", String.valueOf(stress.input.client));
                 row.put("regionPrefix", stress.input.regionPrefix);
                 row.put("numBatches", String.valueOf(stress.input.numBatches));
                 row.put("batchSize", String.valueOf(stress.input.batchSize));
                 row.put("numPartitions", String.valueOf(stress.input.numPartitions));
                 row.put("numThreadsPerRegion", String.valueOf(stress.input.numThreadsPerPartition));
                 row.put("numKeyPrefixes", String.valueOf(stress.input.numKeyPrefixes));
-                row.put("desiredQuorum", String.valueOf(stress.input.desiredQuorum));
+                row.put("consistency", String.valueOf(stress.input.consistency));
                 row.put("orderedInsertion", String.valueOf(stress.input.orderedInsertion));
 
                 row.put("elapsed", MetricsPluginRegion.getDurationBreakdown(elapsed));
@@ -177,7 +188,12 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 String regionName = input.regionPrefix + i;
                 int numThread = input.orderedInsertion ? 1 : input.numThreadsPerPartition;
                 for (int j = 0; j < numThread; j++) {
-                    executor.submit(new Feeder(regionName, j, input.orderedInsertion));
+                    executor.submit(new Feeder(input.client,
+                        regionName,
+                        Consistency.valueOf(input.consistency),
+                        input.requireConsistency,
+                        j,
+                        input.orderedInsertion));
                 }
             }
         }
@@ -185,12 +201,18 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         private class Feeder implements Runnable {
 
             AtomicInteger batch = new AtomicInteger();
+            private final boolean client;
             private final String regionName;
+            private final Consistency consistency;
+            private final boolean requireConsistency;
             private final int threadIndex;
             private final boolean orderedInsertion;
 
-            public Feeder(String regionName, int threadIndex, boolean orderedInsertion) {
+            public Feeder(boolean client, String regionName, Consistency consistency, boolean requireConsistency, int threadIndex, boolean orderedInsertion) {
+                this.client = client;
                 this.regionName = regionName;
+                this.consistency = consistency;
+                this.requireConsistency = requireConsistency;
                 this.threadIndex = threadIndex;
                 this.orderedInsertion = orderedInsertion;
             }
@@ -200,7 +222,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 try {
                     int b = batch.incrementAndGet();
                     if (b <= input.numBatches && !forcedStop.get()) {
-                        feed(regionName, b, threadIndex);
+                        feed(client, regionName, consistency, requireConsistency, b, threadIndex);
                         executor.submit(this);
                     } else {
                         completed();
@@ -223,66 +245,83 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             return executor.awaitTermination(timeout, unit);
         }
 
-        private void feed(String regionName, int batch, int threadIndex) throws Exception {
-            AmzaPartitionAPI partition = createPartitionIfAbsent(regionName);
+        private void feed(boolean client, String regionName, Consistency consistency, boolean requireConsistency, int batch, int threadIndex) throws Exception {
+            PartitionClient partition = createPartitionIfAbsent(client, regionName, consistency, requireConsistency);
 
             while (true) {
                 try {
                     byte[] prefix = input.numKeyPrefixes > 0 ? UIO.intBytes(batch % input.numKeyPrefixes) : null;
-                    partition.commit(prefix, (Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) -> {
-                        if (input.orderedInsertion) {
-                            String max = String.valueOf(input.numBatches * input.batchSize);
-                            int bStart = batch * input.batchSize;
-                            for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
-                                String k = Strings.padEnd(String.valueOf(b), max.length(), '0');
-                                txKeyValueStream.row(-1, k.getBytes(), ("v" + batch).getBytes(), -1, false);
+                    partition.commit(consistency, prefix,
+                        (txKeyValueStream) -> {
+                            if (input.orderedInsertion) {
+                                String max = String.valueOf(input.numBatches * input.batchSize);
+                                int bStart = batch * input.batchSize;
+                                for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
+                                    String k = Strings.padEnd(String.valueOf(b), max.length(), '0');
+                                    txKeyValueStream.row(-1, k.getBytes(), ("v" + batch).getBytes(), -1, false, -1);
+                                }
+                            } else {
+                                int bStart = threadIndex * input.batchSize;
+                                int bEnd = bStart + input.batchSize;
+                                for (int b = bStart; b < bEnd; b++) {
+                                    String k = String.valueOf(batch);
+                                    txKeyValueStream.row(-1, (b + "k" + k).getBytes(), (b + "v" + batch).getBytes(), -1, false, -1);
+                                }
                             }
-                        } else {
-                            int bStart = threadIndex * input.batchSize;
-                            int bEnd = bStart + input.batchSize;
-                            for (int b = bStart; b < bEnd; b++) {
-                                String k = String.valueOf(batch);
-                                txKeyValueStream.row(-1, (b + "k" + k).getBytes(), (b + "v" + batch).getBytes(), -1, false);
-                            }
-                        }
-                        return true;
-                    }, input.desiredQuorum, 30_000);
+                            return true;
+                        },
+                        30_000,
+                        60_000,
+                        Optional.<List<String>>empty());
                     break;
 
                 } catch (DeltaOverCapacityException de) {
                     Thread.sleep(100);
-                    LOG.warn("Slowing stress for region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex});
+                    LOG.warn("Delta over capacity for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
+                } catch (NotSolveableException e) {
+                    Thread.sleep(100);
+                    LOG.warn("Not solveable for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });
                 } catch (Exception x) {
-                    LOG.warn("Failed to set region:{} batch:{} thread:{}", new Object[]{regionName, batch, threadIndex}, x);
+                    LOG.warn("Failed to set region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex }, x);
                 }
             }
             added.addAndGet(input.batchSize);
         }
     }
 
-    private AmzaPartitionAPI createPartitionIfAbsent(String simplePartitionName) throws Exception {
+    private PartitionClient createPartitionIfAbsent(boolean client,
+        String simplePartitionName,
+        Consistency consistency,
+        boolean requireConsistency) throws Exception {
 
-        NavigableMap<RingMember, RingHost> ring = amzaService.getRingReader().getRing("default".getBytes());
-        if (ring.isEmpty()) {
+        RingTopology ring = amzaService.getRingReader().getRing("default".getBytes());
+        if (ring.entries.isEmpty()) {
             amzaService.getRingWriter().buildRandomSubRing("default".getBytes(), amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING));
         }
 
-        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
+            new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, 2, false));
+        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, requireConsistency, 2, false));
 
         long timeoutMillis = 10_000;
         while (true) {
             try {
                 amzaService.awaitOnline(partitionName, timeoutMillis);
+                amzaService.awaitLeader(partitionName, timeoutMillis);
                 break;
             } catch (TimeoutException te) {
                 LOG.warn("{} failed to come online in {}", partitionName, timeoutMillis);
             }
         }
-        return amzaService.getPartition(partitionName);
+
+        if (client) {
+            return partitionClientProvider.getPartition(partitionName);
+        } else {
+            return new EmbeddedPartitionClient(amzaService.getPartition(partitionName), amzaService.getRingReader().getRingMember());
+        }
     }
 
     @Override

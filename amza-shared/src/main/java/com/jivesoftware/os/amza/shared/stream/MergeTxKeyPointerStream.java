@@ -10,6 +10,13 @@ public interface MergeTxKeyPointerStream {
     static byte clobbered = 2;
     static byte ignored = 3;
 
-    boolean stream(byte mode, long txId, byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long fp) throws Exception;
+    boolean stream(byte mode,
+        long txId,
+        byte[] prefix,
+        byte[] key,
+        long timestamp,
+        boolean tombstoned,
+        long version,
+        long fp) throws Exception;
 
 }

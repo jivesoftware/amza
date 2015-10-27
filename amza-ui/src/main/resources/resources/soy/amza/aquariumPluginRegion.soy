@@ -1,0 +1,130 @@
+{namespace soy.page}
+
+/**
+ * 
+ * @param? ringName
+ * @param? partitionName
+ * @param? partitionVersion
+ * @param? liveliness
+ * @param? aquarium
+ */
+{template .aquariumPluginRegion}
+   
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-piggy-bank"></span>{sp}Liveliness</div>
+            <div class="panel-body">
+
+                 <table class="table table-bordered table-condensed">
+                    <thead>
+                        <tr class="active">
+                            <th>Member</th>
+                            <th>Host</th>
+                            <th>Liveliness</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {if $liveliness}
+                            {foreach $l in $liveliness}
+                                <tr>    
+                                    <td>{$l.member}</td>
+                                    <td>{$l.host}</td>
+                                    <td>{$l.liveliness}</td>
+                                </tr>
+                            {/foreach}
+                        {/if}
+                    </tbody>
+                </table>
+                <table class="table table-condensed">
+                    <thead>
+                        <tr class="active">
+                            <th>Action</th>
+                            <th>Current</th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th>Desired</th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th>Name</th>
+                            <th>Ring</th>
+                            <th>Version</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
+                            method="post" name="addRingHost">
+                            <tr style="background-color:#ddd;">
+                                <td><button title="Add" type="submit" name="action" value="find" class="btn btn-default"><span class="glyphicon glyphicon-search"></span></button></td>
+                                <td>Member</td>
+                                <td>Current</td>
+                                <td>Alive</td>
+                                <td>Quorum</td>
+                                <td>Timestamp</td>
+                                <td>Version</td>
+
+                                <td>Member</td>
+                                <td>Desired</td>
+                                <td>Alive</td>
+                                <td>Quorum</td>
+                                <td>Timestamp</td>
+                                <td>Version</td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                    class="form-control" placeholder="Partition Name" value="{$partitionName}"
+                                    name="partitionName" title="">
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                    class="form-control" placeholder="Ring Name" value="{$ringName}"
+                                    name="ringName"  title="">
+                                </td>
+                                <td>
+                                    <input type="text" style="padding-left:10px;"
+                                    class="form-control" placeholder="Partition Version" value="{$partitionVersion}"
+                                    name="partitionVersion" title="">
+                                </td>
+                                <input type="hidden" name="action" value="search">
+                            </tr>
+                        </form>
+                        
+                        {if $aquarium}
+                            {foreach $a in $aquarium}
+                                <tr>
+                                    <td></td>
+                                    {if $a.current}
+                                        <td>{$a.current.member}</td>
+                                        <td>{$a.current.state}</td>
+                                        <td>{$a.current.alive}</td>
+                                        <td>{$a.current.quorum}</td>
+                                        <td>{$a.current.timestamp}</td>
+                                        <td>{$a.current.version}</td>
+                                    {else}
+                                        <td colspan="6"></td>
+                                    {/if}
+                                    {if $a.desired}
+                                        <td>{$a.desired.member}</td>
+                                        <td>{$a.desired.state}</td>
+                                        <td>{$a.desired.alive}</td>
+                                        <td>{$a.desired.quorum}</td>
+                                        <td>{$a.desired.timestamp}</td>
+                                        <td>{$a.desired.version}</td>
+                                    {else}
+                                        <td colspan="6"></td>
+                                    {/if}
+                                    <td>{$a.partitionName}</td>
+                                    <td>{$a.ringName}</td>
+                                    <td>{$a.partitionVersion}</td>
+                                </tr>
+                            {/foreach}
+                        {/if}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{/template}

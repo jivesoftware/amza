@@ -5,21 +5,27 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.126</version>
+        <version>0.127</version>
         <relativePath>../global-repo-management/pom.xml</relativePath>
     </parent>
     <artifactId>global-version-management</artifactId>
     <packaging>pom</packaging>
     <properties>
         <jive.utils.version>0.93</jive.utils.version>
-        <glassfish.version>2.13</glassfish.version>
+        <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.12</mlogger.version>
         <filer.version>0.74</filer.version>
-        <routing.bird.version>0.24</routing.bird.version>
+        <routing.bird.version>0.29-SNAPSHOT</routing.bird.version>
         <commons.io.version>2.4</commons.io.version>
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.jivesoftware.os.aquarium</groupId>
+                <artifactId>aquarium</artifactId>
+                <version>0.3-SNAPSHOT</version>
+            </dependency>
+            
             <dependency>
                 <groupId>com.jivesoftware.os.routing.bird</groupId>
                 <artifactId>routing-bird-server</artifactId>
@@ -92,7 +98,7 @@
             <dependency>
                 <groupId>org.xerial.snappy</groupId>
                 <artifactId>snappy-java</artifactId>
-                <version>1.0.4.1</version>
+                <version>1.1.1.7</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -208,17 +214,17 @@
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-core</artifactId>
-                <version>2.2.3</version>
+                <version>2.5.4</version>
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
-                <version>2.2.3</version>
+                <version>2.5.4</version>
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
-                <version>2.2.3</version>
+                <version>2.5.4</version>
             </dependency>
             <dependency>
                 <groupId>commons-exec</groupId>
@@ -241,7 +247,7 @@
         </dependencies>
     </dependencyManagement>
     
-   <build>
+    <build>
         <!-- This section defines the plugin versions and default configurations/executions. -->
         <pluginManagement>
             <plugins>

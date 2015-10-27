@@ -2,14 +2,14 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.google.common.collect.Iterators;
 import com.google.common.primitives.Longs;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValues;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -76,7 +76,7 @@ class PartitionDelta {
                 return keys.consume((key) -> {
                     WALPointer got = pointerIndex.get(new WALKey(prefix, key));
                     if (got == null) {
-                        return fpKeyValueStream.stream(-1, prefix, key, null, -1, false);
+                        return fpKeyValueStream.stream(-1, prefix, key, null, -1, false, -1);
                     } else {
                         return fpStream.stream(got.getFp());
                     }
@@ -102,12 +102,13 @@ class PartitionDelta {
     }
 
     boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstone) -> {
+        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             WALPointer pointer = getPointer(prefix, key);
             if (pointer != null) {
-                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, pointer.getTimestampId(), pointer.getTombstoned(), pointer.getFp());
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion,
+                    pointer.getTimestampId(), pointer.getTombstoned(), pointer.getVersion(), pointer.getFp());
             } else {
-                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, -1, false, -1);
+                return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion, -1, false, -1, -1);
             }
         });
     }
@@ -140,15 +141,16 @@ class PartitionDelta {
         byte[] prefix,
         byte[] key,
         long valueTimestamp,
-        boolean valueTombstone) {
+        boolean valueTombstone,
+        long valueVersion) {
 
-        WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone);
+        WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone, valueVersion);
         WALKey walKey = new WALKey(prefix, key);
         pointerIndex.put(walKey, pointer);
         orderedIndex.put(walKey.compose(), pointer);
     }
 
-    private AtomicBoolean firstAndOnlyOnce = new AtomicBoolean(true);
+    private final AtomicBoolean firstAndOnlyOnce = new AtomicBoolean(true);
 
     public boolean shouldWriteHighwater() {
         long got = updatesSinceLastHighwaterFlush.get();
@@ -171,14 +173,15 @@ class PartitionDelta {
                         null,
                         pointer.getTimestampId(),
                         pointer.getTombstoned(),
+                        pointer.getVersion(),
                         null)) {
                         return false;
                     }
                 }
                 return true;
             },
-            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, entry) ->
-                keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, fp));
+            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry)
+            -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
@@ -273,7 +276,7 @@ class PartitionDelta {
 
     void onLoadAppendTxFp(byte[] prefix, long rowTxId, long rowFP) {
         if (txIdWAL.isEmpty() || txIdWAL.last().txId != rowTxId) {
-            txIdWAL.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
+            txIdWAL.add(new TxFps(prefix, rowTxId, new long[]{rowFP}));
         } else {
             txIdWAL.onLoadAddFpToTail(rowFP);
         }
@@ -281,7 +284,7 @@ class PartitionDelta {
             AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.computeIfAbsent(new WALPrefix(prefix),
                 walPrefix -> new AppendOnlyConcurrentArrayList(8));
             if (prefixTxFps.isEmpty() || prefixTxFps.last().txId != rowTxId) {
-                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
+                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[]{rowFP}));
             } else {
                 prefixTxFps.onLoadAddFpToTail(rowFP);
             }
@@ -358,17 +361,17 @@ class PartitionDelta {
                                         }
                                         return true;
                                     },
-                                    (fp, prefix, key, value, valueTimestamp, valueTombstone, highwater) -> {
+                                    (fp, prefix, key, value, valueTimestamp, valueTombstone, valueVersion, highwater) -> {
                                         // prefix is the partitionName and is discarded
                                         WALPointer pointer = merge.orderedIndex.get(key);
                                         if (pointer == null) {
-                                            throw new RuntimeException("Delta WAL missing" +
-                                                " prefix: " + Arrays.toString(prefix) +
-                                                " key: " + Arrays.toString(key) +
-                                                " for: " + versionedPartitionName);
+                                            throw new RuntimeException("Delta WAL missing"
+                                                + " prefix: " + Arrays.toString(prefix)
+                                                + " key: " + Arrays.toString(key)
+                                                + " for: " + versionedPartitionName);
                                         }
                                         if (pointer.getFp() == fp) {
-                                            if (!txFpRawKeyValueStream.stream(txId, fp, key, value, valueTimestamp, valueTombstone, null)) {
+                                            if (!txFpRawKeyValueStream.stream(txId, fp, key, value, valueTimestamp, valueTombstone, valueVersion, null)) {
                                                 return false;
                                             }
                                             if (highwater != null) {
@@ -377,17 +380,14 @@ class PartitionDelta {
                                         }
                                         return true;
                                     }),
-                                (_txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, row) -> {
-                                    if (!scan.row(txId, key, value, valueTimestamp, valueTombstoned)) {
+                                (_txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                                    if (!scan.row(txId, key, value, valueTimestamp, valueTombstoned, valueVersion)) {
                                         eos.setValue(true);
                                         return false;
                                     }
                                     return true;
                                 }));
-                        if (eos.booleanValue()) {
-                            return false;
-                        }
-                        return true;
+                        return !eos.booleanValue();
                     });
                     partitionStore.getWalStorage().commitIndex();
                     LOG.info("Merged deltas for {}", merge.versionedPartitionName);

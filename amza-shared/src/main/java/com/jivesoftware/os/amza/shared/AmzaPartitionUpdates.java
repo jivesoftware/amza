@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.shared;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.shared.scan.Commitable;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
+import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
+import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -47,7 +47,7 @@ public class AmzaPartitionUpdates implements Commitable {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        changes.merge(key, new WALValue(value, timestampId, false), (existing, provided) -> {
+        changes.merge(key, new WALValue(value, timestampId, false, -1), (existing, provided) -> {
             if (provided.getTimestampId() >= existing.getTimestampId()) {
                 return provided;
             } else {
@@ -72,7 +72,7 @@ public class AmzaPartitionUpdates implements Commitable {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        changes.merge(key, new WALValue(null, timestamp, true), (existing, provided) -> {
+        changes.merge(key, new WALValue(null, timestamp, true, -1), (existing, provided) -> {
             if (provided.getTimestampId() >= existing.getTimestampId()) {
                 return provided;
             } else {
@@ -94,10 +94,17 @@ public class AmzaPartitionUpdates implements Commitable {
     public boolean commitable(Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) throws Exception {
         for (Entry<byte[], WALValue> e : changes.entrySet()) {
             WALValue value = e.getValue();
-            if (!txKeyValueStream.row(-1, e.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
+            if (!txKeyValueStream.row(-1, e.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
                 return false;
             }
         }
         return true;
+    }
+
+    @Override
+    public String toString() {
+        return "AmzaPartitionUpdates{" +
+            "changes=" + changes +
+            '}';
     }
 }

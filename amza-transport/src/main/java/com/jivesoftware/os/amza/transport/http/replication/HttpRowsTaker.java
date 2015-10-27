@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.transport.http.replication;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
@@ -29,13 +29,18 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientConfig;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientConfiguration;
+import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientFactory;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientFactoryProvider;
 import com.jivesoftware.os.routing.bird.http.client.HttpRequestHelper;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import java.io.BufferedInputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.xerial.snappy.SnappyInputStream;
 
 public class HttpRowsTaker implements RowsTaker {
 
@@ -65,22 +70,28 @@ public class HttpRowsTaker implements RowsTaker {
         RingHost remoteRingHost,
         VersionedPartitionName remoteVersionedPartitionName,
         long remoteTxId,
+        long localLeadershipToken,
         RowStream rowStream) {
 
         HttpStreamResponse httpStreamResponse;
         try {
             httpStreamResponse = getRequestHelper(remoteRingHost).executeStreamingPostRequest(null,
-                "/amza/rows/stream/" + localRingMember.getMember() + "/" + remoteVersionedPartitionName.toBase64() + "/" + remoteTxId);
-        } catch (Exception e) {
-            return new StreamingRowsResult(e, null, null);
+                "/amza/rows/stream/" + localRingMember.getMember()
+                    + "/" + remoteVersionedPartitionName.toBase64()
+                    + "/" + remoteTxId
+                    + "/" + localLeadershipToken);
+        } catch (IOException | HttpClientException e) {
+            return new StreamingRowsResult(e, null, -1, -1, null);
         }
         try {
             BufferedInputStream bis = new BufferedInputStream(httpStreamResponse.getInputStream(), 8096); // TODO config??
-            StreamingTakeConsumed consumed = streamingTakesConsumer.consume(bis, rowStream);
+            DataInputStream dis = new DataInputStream(new SnappyInputStream(bis));
+            StreamingTakeConsumed consumed = streamingTakesConsumer.consume(dis, rowStream);
             amzaStats.netStats.read.addAndGet(consumed.bytes);
-            return new StreamingRowsResult(null, null, consumed.isOnline ? consumed.neighborsHighwaterMarks : null);
+            Map<RingMember, Long> otherHighwaterMarks = consumed.isOnline ? consumed.neighborsHighwaterMarks : null;
+            return new StreamingRowsResult(null, null, consumed.leadershipToken, consumed.partitionVersion, otherHighwaterMarks);
         } catch (Exception e) {
-            return new StreamingRowsResult(null, e, null);
+            return new StreamingRowsResult(null, e, -1, -1, null);
         } finally {
             httpStreamResponse.close();
         }
@@ -90,14 +101,17 @@ public class HttpRowsTaker implements RowsTaker {
     public boolean rowsTaken(RingMember localRingMember,
         RingMember remoteRingMember,
         RingHost remoteRingHost,
+        long takeSessionId,
         VersionedPartitionName versionedPartitionName,
-        long txId) {
+        long txId,
+        long localLeadershipToken) {
         try {
             return getRequestHelper(remoteRingHost).executeRequest(null,
-                "/amza/rows/taken/"
-                    + localRingMember.getMember() + "/"
-                    + versionedPartitionName.toBase64() + "/"
-                    + txId,
+                "/amza/rows/taken/" + localRingMember.getMember()
+                    + "/" + takeSessionId
+                    + "/" + versionedPartitionName.toBase64()
+                    + "/" + txId
+                    + "/" + localLeadershipToken,
                 Boolean.class, false);
         } catch (Exception x) {
             LOG.warn("Failed to deliver acks for local:{} remote:{} partition:{} tx:{}",

@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 
 /**
  *

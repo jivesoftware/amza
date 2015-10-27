@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.shared.stream;
 
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 
 /**
  *
@@ -14,6 +14,7 @@ public interface FpKeyValueHighwaterStream {
         byte[] value,
         long valueTimestamp,
         boolean valueTombstone,
+        long valueVersion,
         WALHighwater highwater) throws Exception;
 
 }

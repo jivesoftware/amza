@@ -15,9 +15,9 @@
  */
 package com.jivesoftware.os.amza.shared.take;
 
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import java.util.Map;
 
@@ -28,19 +28,26 @@ public interface RowsTaker {
         RingHost remoteRingHost,
         VersionedPartitionName remoteVersionedPartitionName,
         long remoteTxId,
+        long localLeadershipToken,
         RowStream rowStream);
 
     class StreamingRowsResult {
 
         public final Throwable unreachable;
         public final Throwable error;
+        public final long leadershipToken;
+        public final long partitionVersion;
         public final Map<RingMember, Long> otherHighwaterMarks;
 
         public StreamingRowsResult(Exception unreachable,
             Exception error,
+            long leadershipToken,
+            long partitionVersion,
             Map<RingMember, Long> otherHighwaterMarks) {
             this.unreachable = unreachable;
             this.error = error;
+            this.leadershipToken = leadershipToken;
+            this.partitionVersion = partitionVersion;
             this.otherHighwaterMarks = otherHighwaterMarks;
         }
     }
@@ -48,7 +55,9 @@ public interface RowsTaker {
     boolean rowsTaken(RingMember localRingMember,
         RingMember remoteRingMember,
         RingHost remoteRingHost,
+        long takeSessionId,
         VersionedPartitionName versionedPartitionName,
-        long txId);
+        long txId,
+        long localLeadershipToken);
 
 }

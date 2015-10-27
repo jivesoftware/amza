@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 
 /**
@@ -32,7 +32,10 @@ public class StripedPartitionCommitChanges implements CommitChanges {
                 Optional.of(versionedPartitionName.getPartitionVersion()),
                 false,
                 prefix,
+                versionedPartitionName1 -> -1,
                 commitable,
+                (versionedPartitionName1, leadershipToken, largestCommittedTxId) -> {
+                },
                 walUpdated));
         });
         partitionStripeProvider.flush(partitionName, hardFlush);

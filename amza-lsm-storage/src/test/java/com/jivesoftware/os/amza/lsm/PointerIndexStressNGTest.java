@@ -19,7 +19,7 @@ public class PointerIndexStressNGTest {
     @Test(enabled = false)
     public void stress() throws Exception {
         long start = System.currentTimeMillis();
-        PointerIndexs indexs = new PointerIndexs();
+        MergeablePointerIndexs indexs = new MergeablePointerIndexs();
         int maxDepthBeforeMerging = 4;
         int count = 0;
         int batchSize = 10_000;
@@ -27,7 +27,8 @@ public class PointerIndexStressNGTest {
         MutableLong merge = new MutableLong();
         MutableBoolean running = new MutableBoolean(true);
         Future<Object> merger = Executors.newSingleThreadExecutor().submit(() -> {
-            while (running.isTrue() || indexs.mergeDebut() > maxDepthBeforeMerging) {
+            while ((running.isTrue() || indexs.mergeDebut() != 1)
+                || (indexs.mergeDebut() > maxDepthBeforeMerging)) {
                 try {
                     long startMerge = System.currentTimeMillis();
                     if (indexs.merge(maxDepthBeforeMerging, () -> {
@@ -36,15 +37,15 @@ public class PointerIndexStressNGTest {
                         File mergeIndexFiler = File.createTempFile("d-index-merged-" + merge.intValue(), ".tmp");
                         File mergeKeysFile = File.createTempFile("d-keys-merged-" + merge.intValue(), ".tmp");
 
-                        return new PointerIndex(
+                        return new DiskBackedPointerIndex(
                             new DiskBackedPointerIndexFiler(mergeIndexFiler.getAbsolutePath(), "rw", false),
                             new DiskBackedPointerIndexFiler(mergeKeysFile.getAbsolutePath(), "rw", false)
                         );
                     })) {
-                        System.out.println("Merge (" + merge.intValue() + ") elapse:" + format.format((System.currentTimeMillis() - startMerge)));
+                        System.out.println("Merge (" + merge.intValue() + ") elapse:" + format.format((System.currentTimeMillis() - startMerge)) + "millis");
                     } else {
-                        System.out.println("Nothing to merge. Sleeping.");
-                        Thread.sleep(1000);
+                        //System.out.println("Nothing to merge. Sleeping.");
+                        Thread.sleep(10);
                     }
                 } catch (Exception x) {
                     x.printStackTrace();
@@ -55,7 +56,7 @@ public class PointerIndexStressNGTest {
 
         });
 
-        for (int b = 0; b < 1000; b++) {
+        for (int b = 0; b < 100; b++) {
 
             File indexFiler = File.createTempFile("s-index-merged-" + b, ".tmp");
             File keysFile = File.createTempFile("s-keys-merged-" + b, ".tmp");
@@ -63,7 +64,7 @@ public class PointerIndexStressNGTest {
             //MemoryPointerIndex index = new MemoryPointerIndex();
             long startMerge = System.currentTimeMillis();
 
-            PointerIndex index = new PointerIndex(
+            DiskBackedPointerIndex index = new DiskBackedPointerIndex(
                 new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
                 new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
@@ -72,7 +73,7 @@ public class PointerIndexStressNGTest {
             count += batchSize;
 
             System.out.println("Insertions:" + format.format(count) + " ips:" + format.format(
-                (((double) count / (double) (System.currentTimeMillis() - start))) * 1000) + " elapse:" + format.format(
+                ((count / (double) (System.currentTimeMillis() - start))) * 1000) + " elapse:" + format.format(
                     (System.currentTimeMillis() - startMerge)) + " mergeDebut:" + indexs.mergeDebut());
         }
 

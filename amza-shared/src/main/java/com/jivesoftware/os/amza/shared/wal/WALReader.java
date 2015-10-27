@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.shared.filer.IReadable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stream.Fps;
 

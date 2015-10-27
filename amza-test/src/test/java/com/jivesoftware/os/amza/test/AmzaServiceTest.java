@@ -16,9 +16,9 @@
 package com.jivesoftware.os.amza.test;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import junit.framework.Assert;
 import org.testng.annotations.Test;
 
 public class AmzaServiceTest {
@@ -58,8 +59,8 @@ public class AmzaServiceTest {
             @Override
             public void run() {
                 for (int i = 0; i < maxUpdates; i++) {
+                    AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     try {
-                        AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                         if (node != null) {
                             node.create(partitionName);
                             boolean tombstone = random.nextBoolean();
@@ -72,55 +73,66 @@ public class AmzaServiceTest {
                             node.get(partitionName, indexPrefix, indexKey);
                         }
                     } catch (Exception x) {
+                        System.out.println("Failed to update node: " + node);
                         x.printStackTrace();
                     }
 
-                    try {
-                        if (removeService > 0) {
-                            RingMember key = new RingMember("localhost-" + random.nextInt(maxNumberOfServices));
-                            AmzaNode node = cluster.get(key);
+                    if (removeService > 0) {
+                        RingMember key = new RingMember("localhost-" + random.nextInt(maxNumberOfServices));
+                        node = cluster.get(key);
+                        try {
                             if (node != null) {
                                 System.out.println("Removing node:" + key);
                                 cluster.remove(key);
                                 node.stop();
                                 removeService--;
                             }
+                        } catch (Exception x) {
+                            System.out.println("Failed to remove node: " + node);
+                            x.printStackTrace();
                         }
-                    } catch (Exception x) {
-                        x.printStackTrace();
                     }
 
-                    try {
-                        if (addService > 0) {
-                            int port = maxNumberOfServices + random.nextInt(maxAddService);
-                            RingMember key = new RingMember("localhost-" + port);
-                            AmzaNode node = cluster.get(key);
+                    if (addService > 0) {
+                        int port = maxNumberOfServices + random.nextInt(maxAddService);
+                        RingMember key = new RingMember("localhost-" + port);
+                        node = cluster.get(key);
+                        try {
                             if (node == null) {
                                 cluster.newNode(new RingMember("localhost-" + port), new RingHost("localhost", port), partitionName);
                                 addService--;
                             }
+                        } catch (Exception x) {
+                            System.out.println("Failed to add node: " + key);
+                            x.printStackTrace();
                         }
-                    } catch (Exception x) {
-                        x.printStackTrace();
                     }
 
-                    try {
-                        if (offService > 0) {
-                            RingMember key = new RingMember("localhost-" + random.nextInt(maxNumberOfServices));
-                            AmzaNode node = cluster.get(key);
+                    if (offService > 0) {
+                        RingMember key = new RingMember("localhost-" + random.nextInt(maxNumberOfServices));
+                        node = cluster.get(key);
+                        try {
                             if (node != null) {
                                 node.setOff(!node.isOff());
                                 offService--;
                             }
+                        } catch (Exception x) {
+                            System.out.println(x.getMessage());
                         }
-                    } catch (Exception x) {
-                        System.out.println(x.getMessage());
                     }
-
                 }
                 latch.countDown();
             }
         });
+
+        /*System.out.println("---------------------------------------------------------------------\n\n\n\n");
+        while (latch.getCount() > 0) {
+            for (AmzaNode node : cluster.getAllNodes()) {
+                node.printRings();
+            }
+            Thread.sleep(1000);
+            System.out.println("---------------------------------------------------------------------\n\n\n\n");
+        }*/
 
         latch.await();
 
@@ -150,10 +162,16 @@ public class AmzaServiceTest {
                 System.out.println("---------------------------------------------------------------------\n\n\n\n");
             }
         }
+
+        for (AmzaNode a : cluster.getAllNodes()) {
+            Assert.assertFalse(a.isEmpty());
+        }
+
         System.out.println("\n------stopping---------");
         for (AmzaNode a : cluster.getAllNodes()) {
             a.stop();
         }
+
         System.out.println("\n------PASSED :) ---------");
 
     }

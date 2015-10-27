@@ -15,13 +15,13 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedTxKeyValueStream;
 
 public interface PrimaryRowMarshaller<R> {
 
-    R toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned) throws Exception;
+    R toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned, long version) throws Exception;
 
     int sizeInBytes(int pkSizeInBytes, int valueSizeInBytes);
 
@@ -58,4 +58,6 @@ public interface PrimaryRowMarshaller<R> {
     long timestampFromRow(R row) throws Exception;
 
     boolean tombstonedFromRow(R row) throws Exception;
+
+    long versionFromRow(R row) throws Exception;
 }

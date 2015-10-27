@@ -15,14 +15,14 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.scan.Commitable;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 
 public class PartitionStore implements RangeScannable {
@@ -67,8 +67,8 @@ public class PartitionStore implements RangeScannable {
         walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
     }
 
-    public TimestampedValue get(byte[] prefix, byte[] key) throws Exception {
-        return walStorage.get(prefix, key);
+    public TimestampedValue getTimestampedValue(byte[] prefix, byte[] key) throws Exception {
+        return walStorage.getTimestampedValue(prefix, key);
     }
 
     public boolean streamValues(byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {

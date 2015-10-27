@@ -15,9 +15,11 @@
  */
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -27,6 +29,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.concurrent.TimeoutException;
 import javax.inject.Singleton;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
@@ -38,6 +41,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
 import org.glassfish.jersey.server.ChunkedOutput;
+import org.xerial.snappy.SnappyOutputStream;
 
 @Singleton
 @Path("/amza")
@@ -56,10 +60,11 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/rows/stream/{ringMemberString}/{versionedPartitionName}/{txId}")
+    @Path("/rows/stream/{ringMemberString}/{versionedPartitionName}/{txId}/{leadershipToken}")
     public Response rowsStream(@PathParam("ringMemberString") String ringMemberString,
         @PathParam("versionedPartitionName") String versionedPartitionName,
-        @PathParam("txId") long txId) {
+        @PathParam("txId") long txId,
+        @PathParam("leadershipToken") long leadershipToken) {
 
         try {
             amzaStats.rowsStream.incrementAndGet();
@@ -67,12 +72,20 @@ public class AmzaReplicationRestEndpoints {
             StreamingOutput stream = (OutputStream os) -> {
                 os.flush();
                 BufferedOutputStream bos = new BufferedOutputStream(os, 8192); // TODO expose to config
-                final DataOutputStream dos = new DataOutputStream(bos);
+                final DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(bos));
                 try {
                     amzaInstance.rowsStream(dos,
                         new RingMember(ringMemberString),
                         VersionedPartitionName.fromBase64(versionedPartitionName),
-                        txId);
+                        txId,
+                        leadershipToken);
+                } catch (IOException x) {
+                    if (x.getCause() instanceof TimeoutException) {
+                        LOG.error("Timed out while streaming takes");
+                    } else {
+                        LOG.error("Failed to stream takes.", x);
+                    }
+                    throw x;
                 } catch (Exception x) {
                     LOG.error("Failed to stream takes.", x);
                     throw new IOException("Failed to stream takes.", x);
@@ -92,8 +105,10 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/rows/available/{ringMember}/{takeSessionId}/{timeoutMillis}")
+    @Path("/rows/available/{ringMember}/{ringHost}/{ringTimestampId}/{takeSessionId}/{timeoutMillis}")
     public ChunkedOutput<byte[]> availableRowsStream(@PathParam("ringMember") String ringMemberString,
+        @PathParam("ringHost") String ringHost,
+        @PathParam("ringTimestampId") long ringTimestampId,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
         try {
@@ -105,13 +120,16 @@ public class AmzaReplicationRestEndpoints {
                     amzaInstance.availableRowsStream(
                         chunkedOutput::write,
                         new RingMember(ringMemberString),
+                        new TimestampedRingHost(RingHost.fromCanonicalString(ringHost), ringTimestampId),
                         takeSessionId,
                         timeoutMillis);
                 } catch (Exception x) {
                     LOG.warn("Failed to stream available rows", x);
                 } finally {
                     try {
-                        chunkedOutput.close();
+                        if (!chunkedOutput.isClosed()) {
+                            chunkedOutput.close();
+                        }
                     } catch (IOException x) {
                         LOG.warn("Failed to close stream for available rows", x);
                     }
@@ -127,15 +145,19 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @Path("/rows/taken/{memberName}/{versionedPartitionName}/{txId}")
+    @Path("/rows/taken/{memberName}/{takeSessionId}/{versionedPartitionName}/{txId}/{leadershipToken}")
     public Response rowsTaken(@PathParam("memberName") String ringMemberName,
+        @PathParam("takeSessionId") long takeSessionId,
         @PathParam("versionedPartitionName") String versionedPartitionName,
-        @PathParam("txId") long txId) {
+        @PathParam("txId") long txId,
+        @PathParam("leadershipToken") long leadershipToken) {
         try {
             amzaStats.rowsTaken.incrementAndGet();
             amzaInstance.rowsTaken(new RingMember(ringMemberName),
+                takeSessionId,
                 VersionedPartitionName.fromBase64(versionedPartitionName),
-                txId);
+                txId,
+                leadershipToken);
             return ResponseHelper.INSTANCE.jsonResponse(Boolean.TRUE);
         } catch (Exception x) {
             LOG.warn("Failed to ack for member:{} partition:{} txId:{}",

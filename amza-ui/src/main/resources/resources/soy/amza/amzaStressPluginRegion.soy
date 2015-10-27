@@ -19,6 +19,11 @@
                                 class="form-control" placeholder="Name" value=""
                                 name="name" id="namePicker" data-original-title="" title="">
                         </td></tr>
+                        <tr><td>Client</td><td>
+                            <input type="checkbox" autocomplete="off" style="padding-left:10px;"
+                                class="form-control" placeholder="Client" value="true"
+                                name="client" id="clientPicker" data-original-title="" title="">
+                        </td></tr>
                         <tr><td>Region Prefix</td><td>
                             <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
                                 class="form-control" placeholder="Region Prefix" value=""
@@ -49,9 +54,21 @@
                                 class="form-control" placeholder="Key Prefixes" value="1"
                                 data-original-title="" title="">
                         </td></tr>
-                        <tr><td>Desired Quorum</td><td>
-                            <input type="number" name="desiredQuorum" min="0" style="padding-left:10px;"
-                                class="form-control" placeholder="Desired Quorum" value="1" title="">
+                        <tr><td>Consistency</td><td>
+                            <select style="width:120px; padding-left:10px;" class="form-control"
+                                placeholder="Consistency" name="consistency" id="consistencyPicker">
+                                <option value="none" selected="selected">None</option>
+                                <option value="leader">Leader</option>
+                                <option value="leader_plus_one">Leader Plus One</option>
+                                <option value="leader_quorum">Leader Quorum</option>
+                                <option value="quorum">Quorum</option>
+                                <option value="write_all_read_one">Write All Read One</option>
+                                <option value="write_one_read_all">Write One Read All</option>
+                            </select>
+                        </td></tr>
+                        <tr><td>Require Consistency</td><td>
+                            <input type="text" name="requireConsistency" style="padding-left:10px;"
+                                class="form-control" placeholder="Require Consistency" value="true" title="">
                         </td></tr>
                         <tr><td>Ordered Insertion</td><td>
                             <input type="text" name="orderedInsertion" style="padding-left:10px;"
@@ -109,6 +126,13 @@
                         {/foreach}
                     {/if}
                 </tr>
+                <tr><td>Client</td>
+                    {if $stress}
+                        {foreach $s in $stress}
+                            <td>{$s.client}</td>
+                        {/foreach}
+                    {/if}
+                </tr>
                 <tr><td>Region Prefix</td>
                     {if $stress}
                         {foreach $s in $stress}
@@ -151,10 +175,10 @@
                         {/foreach}
                     {/if}
                 </tr>
-                <tr><td>Desired Quorum</td>
+                <tr><td>Consistency</td>
                     {if $stress}
                         {foreach $s in $stress}
-                            <td>{$s.desiredQuorum}</td>
+                            <td>{$s.consistency}</td>
                         {/foreach}
                     {/if}
                 </tr>

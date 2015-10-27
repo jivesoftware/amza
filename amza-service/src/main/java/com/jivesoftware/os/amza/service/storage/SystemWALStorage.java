@@ -3,26 +3,24 @@ package com.jivesoftware.os.amza.service.storage;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.api.take.Highwaters;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.partition.HighestPartitionTx;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus.Status;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.scan.Commitable;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.TimestampKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.TxKeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.UnprefixedWALKeys;
-import com.jivesoftware.os.amza.shared.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 
 /**
  * @author jonathan.colt
@@ -62,29 +60,30 @@ public class SystemWALStorage {
         }
         if (!changed.getApply().isEmpty()) {
             //LOG.info("UPDATED:{} txId:{}", versionedPartitionName, changed.getLargestCommittedTxId());
-            updated.updated(versionedPartitionName, Status.ONLINE, changed.getLargestCommittedTxId());
+            updated.updated(versionedPartitionName, changed.getLargestCommittedTxId());
         }
         partitionStore.flush(hardFlush);
         return changed;
     }
 
-    public TimestampedValue get(VersionedPartitionName versionedPartitionName, byte[] prefix, byte[] key) throws Exception {
+    public TimestampedValue getTimestampedValue(VersionedPartitionName versionedPartitionName, byte[] prefix, byte[] key) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).get(prefix, key);
+        return partitionIndex.get(versionedPartitionName).getTimestampedValue(prefix, key);
     }
 
     public boolean get(VersionedPartitionName versionedPartitionName,
         byte[] prefix,
         UnprefixedWALKeys keys,
-        TimestampKeyValueStream stream) throws Exception {
+        KeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
-        return partitionIndex.get(versionedPartitionName).streamValues(prefix, keys, (_prefix, key, value, valueTimestamp, valueTombstone) -> {
-            if (value == null || valueTombstone) {
-                return stream.stream(prefix, key, null, -1);
-            } else {
-                return stream.stream(prefix, key, value, valueTimestamp);
-            }
-        });
+        return partitionIndex.get(versionedPartitionName).streamValues(prefix, keys,
+            (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                if (valueTimestamp == -1) {
+                    return stream.stream(prefix, key, null, -1, false, -1);
+                } else {
+                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
+                }
+            });
     }
 
     public boolean containsKeys(VersionedPartitionName versionedPartitionName,
@@ -103,7 +102,7 @@ public class SystemWALStorage {
 
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         PartitionStripe.RowStreamer streamer = rowStream -> partitionStore.takeRowUpdatesSince(transactionId, rowStream);
-        return takeRowUpdates.give(versionedPartitionName, TxPartitionStatus.Status.ONLINE, streamer);
+        return takeRowUpdates.give(versionedPartitionName, LivelyEndState.ALWAYS_ONLINE, streamer);
     }
 
     public boolean takeFromTransactionId(VersionedPartitionName versionedPartitionName,
@@ -177,14 +176,25 @@ public class SystemWALStorage {
         }
     }
 
-    public void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
+    public void highestPartitionTxIds(HighestPartitionTx<Void> tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getAllPartitions(), IS_SYSTEM_PREDICATE)) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();
-                tx.tx(versionedPartitionName, Status.ONLINE, highestTxId);
+                tx.tx(versionedPartitionName, LivelyEndState.ALWAYS_ONLINE, highestTxId);
             }
         }
+    }
+
+    public <R> R highestPartitionTxId(VersionedPartitionName versionedPartitionName, HighestPartitionTx<R> tx) throws Exception {
+        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+        if (partitionStore != null) {
+            long highestTxId = partitionStore.getWalStorage().highestTxId();
+            return tx.tx(versionedPartitionName, LivelyEndState.ALWAYS_ONLINE, highestTxId);
+        } else {
+            return tx.tx(null, null, -1);
+        }
+
     }
 
     public long count(VersionedPartitionName versionedPartitionName) throws Exception {

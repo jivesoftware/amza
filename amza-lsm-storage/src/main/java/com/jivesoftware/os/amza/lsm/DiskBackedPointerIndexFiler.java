@@ -1,9 +1,8 @@
 package com.jivesoftware.os.amza.lsm;
 
+import com.jivesoftware.os.amza.api.filer.IReadable;
+import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
-import com.jivesoftware.os.amza.shared.filer.IFiler;
-import com.jivesoftware.os.amza.shared.filer.IReadable;
-import com.jivesoftware.os.amza.shared.filer.IWriteable;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
@@ -14,7 +13,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @author jonathan.colt
  */
-public class DiskBackedPointerIndexFiler extends RandomAccessFile implements IFiler {
+public class DiskBackedPointerIndexFiler extends RandomAccessFile {
 
     private final String fileName;
     private final boolean useMemMap;
@@ -89,16 +88,6 @@ public class DiskBackedPointerIndexFiler extends RandomAccessFile implements IFi
     }
 
     @Override
-    public Object lock() {
-        return this;
-    }
-
-    @Override
-    public long skip(long position) throws IOException {
-        throw new UnsupportedOperationException("No skipping! Call fileChannelFiler() to read!");
-    }
-
-    @Override
     public void seek(long _fp) throws IOException {
         super.seek(_fp);
     }
@@ -143,15 +132,8 @@ public class DiskBackedPointerIndexFiler extends RandomAccessFile implements IFi
         size.addAndGet(_len);
     }
 
-    @Override
     public void eof() throws IOException {
         setLength(getFilePointer());
     }
 
-    @Override
-    public void flush(boolean fsync) throws IOException {
-        if (fsync) {
-            getFD().sync();
-        }
-    }
 }

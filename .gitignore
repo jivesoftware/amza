@@ -9,6 +9,7 @@
 .repository/
 .vagrant
 *.log
+nb*.xml
 .idea/
 .classpath
 .settings/

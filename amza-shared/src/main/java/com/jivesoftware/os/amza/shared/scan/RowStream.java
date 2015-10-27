@@ -1,5 +1,7 @@
 package com.jivesoftware.os.amza.shared.scan;
 
+import com.jivesoftware.os.amza.api.stream.RowType;
+
 /**
  *
  * @author jonathan.colt

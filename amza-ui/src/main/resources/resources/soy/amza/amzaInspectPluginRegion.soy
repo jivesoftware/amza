@@ -3,6 +3,7 @@
 /**
  * Amza Inspect plugin page
  *
+ * @param? client
  * @param? systemRegion
  * @param? ringName
  * @param? regionName
@@ -13,6 +14,7 @@
  * @param? value
  * @param? offset
  * @param? batchSize
+ * @param? consistency
  *
  * @param? msg
  * @param? rows
@@ -31,7 +33,8 @@
                 
                 <table class="table table-condensed">
                     <thead>
-                        <tr>
+                        <tr class="active">
+                            <th>Client</th>
                             <th>System</th>
                             <th>Ring Name</th>
                             <th>Region Name</th>
@@ -42,6 +45,7 @@
                             <th>Value</th>
                             <th>Offset</th>
                             <th>Batch</th>
+                            <th>Consistency</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -49,6 +53,9 @@
                         <form id="inspect" class="j-form" data-active-class="btn-default"
                             method="post" name="inspect">
                             <tr style="background-color:#ddd;">
+                                <td>
+                                    <input class="form-control" type="checkbox" name="client" value="true" {if $client}checked="checked"{/if}>
+                                </td>
                                 <td>
                                     <input class="form-control" type="checkbox" name="systemRegion" value="true" {if $systemRegion}checked="checked"{/if}>
                                 </td>
@@ -98,6 +105,19 @@
                                         data-original-title="" title="{$batchSize?:'100'}">
                                 </td>
                                 <td>
+                                    <select style="padding-left:10px;" class="form-control"
+                                        placeholder="Consistency" name="consistency">
+                                        <option value="none" {if $consistency == 'none'}selected="selected"{/if}>None</option>
+                                        <option value="leader" {if $consistency == 'leader'}selected="selected"{/if}>Leader</option>
+                                        <option value="leader_plus_one" {if $consistency == 'leader_plus_one'}selected="selected"{/if}>Leader Plus One</option>
+                                        <option value="leader_quorum" {if $consistency == 'leader_quorum'}selected="selected"{/if}>Leader Quorum</option>
+                                        <option value="quorum" {if $consistency == 'quorum'}selected="quorum"{/if}>Quorum</option>
+                                        <option value="write_all_read_one" {if $consistency == 'write_all_read_one'}selected="selected"{/if}>Write All Read One</option>
+                                        <option value="write_one_read_all" {if $consistency == 'write_one_read_all'}selected="selected"{/if}>Write One Read All</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <button title="Count" type="submit" name="action" value="count" class="btn btn-default">Count</button>
                                     <button title="Scan" type="submit" name="action" value="scan" class="btn btn-default">Scan</button>
                                     <button title="Get" type="submit" name="action" value="get" class="btn btn-default">Get</button>
                                     <button title="Set" type="submit" name="action" value="set" class="btn btn-default">Set</button>
@@ -109,11 +129,12 @@
                 </table>
                 <table class="table table-condensed">
                     <thead>
-                        <tr>
+                        <tr class="active">
                             <th>Prefix</th>
                             <th>Key</th>
                             <th>Value</th>
                             <th>Timestamp</th>
+                            <th>Version</th>
                             <th>Tombstone</th>
                         </tr>
                     </thead>
@@ -136,6 +157,10 @@
                                     <td>
                                         <p>{$r.timestampAsHex?:''}</p>
                                         <p>{$r.timestamp?:''}</p>
+                                    </td>
+                                    <td>
+                                        <p>{$r.versionAsHex?:''}</p>
+                                        <p>{$r.version?:''}</p>
                                     </td>
                                     <td>{$r.tombstone?:''}</td>
                                 </tr>

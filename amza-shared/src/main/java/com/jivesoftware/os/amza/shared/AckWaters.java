@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.shared;
 
 import com.google.common.base.Optional;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Collection;
@@ -16,33 +16,58 @@ public class AckWaters {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final AwaitNotify<VersionedPartitionName> awaitNotify;
-    private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedPartitionName, Long>> ackWaters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId>> ackWaters = new ConcurrentHashMap<>();
 
     public AckWaters(int stripingLevel) {
         this.awaitNotify = new AwaitNotify<>(stripingLevel);
     }
 
-    public void set(RingMember ringMember, VersionedPartitionName partitionName, Long txId) throws Exception {
-        ConcurrentHashMap<VersionedPartitionName, Long> partitionTxIds = ackWaters.computeIfAbsent(ringMember, (t) -> new ConcurrentHashMap<>());
+    public void set(RingMember ringMember, VersionedPartitionName partitionName, Long txId, long leadershipToken) throws Exception {
+        ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = ackWaters.computeIfAbsent(ringMember,
+            (t) -> new ConcurrentHashMap<>());
+
         awaitNotify.notifyChange(partitionName, () -> {
-            long merge = partitionTxIds.merge(partitionName, txId, Math::max);
-            return (merge == txId);
+            LeadershipTokenAndTxId result = partitionTxIds.compute(partitionName, (key, current) -> {
+                if (current == null) {
+                    return new LeadershipTokenAndTxId(leadershipToken, txId);
+                } else {
+                    if (txId <= current.txId && leadershipToken <= current.leadershipToken) {
+                        return current;
+                    }
+                    return new LeadershipTokenAndTxId(Math.max(leadershipToken, current.leadershipToken), Math.max(txId, current.txId));
+                }
+            });
+
+            return txId == result.txId || leadershipToken == result.leadershipToken;
+
         });
     }
 
-    public Long get(RingMember ringMember, VersionedPartitionName partitionName) {
-        ConcurrentHashMap<VersionedPartitionName, Long> partitionTxIds = ackWaters.get(ringMember);
+    LeadershipTokenAndTxId get(RingMember ringMember, VersionedPartitionName partitionName) {
+        ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = ackWaters.get(ringMember);
         if (partitionTxIds == null) {
             return null;
         }
         return partitionTxIds.get(partitionName);
     }
 
+    static class LeadershipTokenAndTxId {
+
+        final long leadershipToken;
+        final long txId;
+
+        LeadershipTokenAndTxId(long leadershipToken, long txId) {
+            this.leadershipToken = leadershipToken;
+            this.txId = txId;
+        }
+    }
+
     public int await(VersionedPartitionName partitionName,
         long desiredTxId,
         Collection<RingMember> takeRingMembers,
         int desiredTakeQuorum,
-        long toMillis) throws Exception {
+        long toMillis,
+        long leadershipToken) throws Exception {
 
         RingMember[] ringMembers = takeRingMembers.toArray(new RingMember[takeRingMembers.size()]);
         int[] passed = new int[1];
@@ -52,8 +77,11 @@ public class AckWaters {
                 if (ringMember == null) {
                     continue;
                 }
-                Long txId = get(ringMember, partitionName);
-                if (txId != null && txId >= desiredTxId) {
+                LeadershipTokenAndTxId leadershipTokenAndTxId = get(ringMember, partitionName);
+                if (leadershipToken > -1 && (leadershipTokenAndTxId != null && leadershipTokenAndTxId.leadershipToken > leadershipToken)) {
+                    throw new FailedToAchieveQuorumException("Leader transitioning from " + leadershipToken + " to " + leadershipTokenAndTxId.leadershipToken);
+                }
+                if (leadershipTokenAndTxId != null && leadershipTokenAndTxId.txId >= desiredTxId) {
                     passed[0]++;
                     ringMembers[i] = null;
                 }

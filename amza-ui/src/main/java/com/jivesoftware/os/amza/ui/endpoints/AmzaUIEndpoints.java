@@ -16,10 +16,11 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jivesoftware.os.amza.api.ring.RingHost;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
@@ -34,8 +35,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.NavigableMap;
 import javax.inject.Singleton;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -48,7 +47,6 @@ import javax.ws.rs.core.StreamingOutput;
 import javax.ws.rs.core.UriInfo;
 
 /**
- *
  * @author jonathan.colt
  */
 @Singleton
@@ -95,40 +93,40 @@ public class AmzaUIEndpoints {
     @Path("/chord")
     public Response chord() {
         try {
-            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
+            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
             List<List<Integer>> matrix = new ArrayList<>();
-            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
-                List<Integer> weights = new ArrayList();
-                for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
-                    if (host.equals(r)) {
-                        if (!host.equals(r2)) {
-                            weights.add((int) (amzaStats.getTotalTakes(r2.getKey())));
+            for (RingMemberAndHost e1 : ring.entries) {
+                List<Integer> weights = new ArrayList<>();
+                for (RingMemberAndHost e2 : ring.entries) {
+                    if (host.equals(e1.ringHost)) {
+                        if (!host.equals(e2.ringHost)) {
+                            weights.add((int) (amzaStats.getTotalTakes(e2.ringMember)));
                         } else {
                             weights.add(0);
                         }
-                    } else if (host.equals(r2)) {
-                        weights.add((int) (amzaStats.getTotalTakes(r.getKey())));
+                    } else if (host.equals(e2.ringHost)) {
+                        weights.add((int) (amzaStats.getTotalTakes(e1.ringMember)));
                     } else {
                         weights.add(0);
                     }
                 }
-                for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
+                for (RingMemberAndHost e2 : ring.entries) {
                     weights.add(0);
                 }
                 matrix.add(weights);
 
-                weights = new ArrayList();
-                for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
+                weights = new ArrayList<>();
+                for (RingMemberAndHost e2 : ring.entries) {
                     weights.add(0);
                 }
-                for (Entry<RingMember, RingHost> r2 : ring.entrySet()) {
-                    if (host.equals(r)) {
-                        if (!host.equals(r2)) {
+                for (RingMemberAndHost e2 : ring.entries) {
+                    if (host.equals(e1.ringHost)) {
+                        if (!host.equals(e2.ringHost)) {
                             weights.add(0); //TODO FIX (int) (amzaStats.getTotalOffered(r2.getKey())));
                         } else {
                             weights.add(0);
                         }
-                    } else if (host.equals(r2)) {
+                    } else if (host.equals(e2.ringHost)) {
                         weights.add(0); //TODO FIX (int) (amzaStats.getTotalOffered(r.getKey())));
                     } else {
                         weights.add(0);
@@ -148,20 +146,20 @@ public class AmzaUIEndpoints {
     @Path("/arc")
     public Response arc() {
         try {
-            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
+            RingTopology ring = ringReader.getRing(AmzaRingReader.SYSTEM_RING);
 
             Map<String, Integer> index = new HashMap<>();
             Map<String, Object> arcData = new HashMap<>();
             int i = 0;
             int g = 1;
-            List<Map<String, Object>> nodes = new ArrayList();
-            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
-                String name = r.getValue().getHost() + ":" + r.getValue().getPort();
+            List<Map<String, Object>> nodes = new ArrayList<>();
+            for (RingMemberAndHost entry : ring.entries) {
+                String name = entry.ringHost.getHost() + ":" + entry.ringHost.getPort();
                 addNode(nodes, index, name + "-received", i, g);
                 i++;
                 addNode(nodes, index, name + "-take", i, g);
                 i++;
-                if (r.equals(host)) {
+                if (entry.ringHost.equals(host)) {
                     addNode(nodes, index, name, i, g);
                     i++;
                 }
@@ -180,18 +178,18 @@ public class AmzaUIEndpoints {
             MinMaxLong range = new MinMaxLong();
             range.value(0);
             String sourceName = hostAsString(host);
-            long[] offered = new long[ring.size()];
-            long[] takes = new long[ring.size()];
+            long[] offered = new long[ring.entries.size()];
+            long[] takes = new long[ring.entries.size()];
 
             i = 0;
-            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
+            for (RingMemberAndHost entry : ring.entries) {
                 long totalOffered = 0; //TODO FIX amzaStats.getTotalOffered(r.getKey());
                 offered[i] = totalOffered;
                 if (totalOffered > 0) {
                     range.value(totalOffered);
                 }
 
-                long totalTakes = amzaStats.getTotalTakes(r.getKey());
+                long totalTakes = amzaStats.getTotalTakes(entry.ringMember);
                 takes[i] = totalTakes;
                 if (totalTakes > 0) {
                     range.value(totalOffered);
@@ -203,16 +201,16 @@ public class AmzaUIEndpoints {
                 i++;
             }
 
-            List<Map<String, Integer>> links = new ArrayList();
+            List<Map<String, Integer>> links = new ArrayList<>();
             Integer root = index.get(sourceName);
             i = 0;
-            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
+            for (RingMemberAndHost entry : ring.entries) {
                 long totalOffered = offered[i];
                 long totalTakes = takes[i];
                 long total = totalOffered + totalTakes; // TODO use applied from replicated vs took
                 if (totalOffered > 0) {
                     Integer source = index.get(sourceName + "-replicate");
-                    Integer target = index.get(hostAsString(r.getValue()) + "-received");
+                    Integer target = index.get(hostAsString(entry.ringHost) + "-received");
                     addLink(source, target, range, totalOffered, links);
                     addLink(root, target, range, total, links);
 
@@ -220,7 +218,7 @@ public class AmzaUIEndpoints {
 
                 if (totalTakes > 0) {
                     Integer source = index.get(sourceName + "-take");
-                    Integer target = index.get(hostAsString(r.getValue()) + "-took");
+                    Integer target = index.get(hostAsString(entry.ringHost) + "-took");
                     addLink(source, target, range, totalTakes, links);
                     addLink(root, target, range, total, links);
                 }

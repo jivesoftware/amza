@@ -2,13 +2,14 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.TxPartitionState;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
-import com.jivesoftware.os.amza.shared.TimestampedValue;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
@@ -18,8 +19,6 @@ import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.io.File;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -27,8 +26,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.jivesoftware.os.amza.service.storage.PartitionProvider.HIGHWATER_MARK_INDEX;
-import static com.jivesoftware.os.amza.service.storage.PartitionProvider.REGION_PROPERTIES;
+import static com.jivesoftware.os.amza.service.storage.PartitionCreator.AQUARIUM_LIVELINESS_INDEX;
+import static com.jivesoftware.os.amza.service.storage.PartitionCreator.AQUARIUM_STATE_INDEX;
+import static com.jivesoftware.os.amza.service.storage.PartitionCreator.HIGHWATER_MARK_INDEX;
+import static com.jivesoftware.os.amza.service.storage.PartitionCreator.REGION_PROPERTIES;
 
 /**
  * @author jonathan.colt
@@ -41,45 +42,41 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     private final ConcurrentHashMap<PartitionName, PartitionProperties> partitionProperties = new ConcurrentHashMap<>();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
 
-    private final String[] workingDirectories;
-    private final String domain;
     private final IndexedWALStorageProvider walStorageProvider;
     private final PartitionPropertyMarshaller partitionPropertyMarshaller;
     private final boolean hardFlush;
 
-    public PartitionIndex(String[] workingDirectories,
-        String domain,
-        IndexedWALStorageProvider walStorageProvider,
+    public PartitionIndex(IndexedWALStorageProvider walStorageProvider,
         PartitionPropertyMarshaller partitionPropertyMarshaller,
         boolean hardFlush) {
 
-        this.workingDirectories = Arrays.copyOf(workingDirectories, workingDirectories.length);
-        this.domain = domain;
         this.walStorageProvider = walStorageProvider;
         this.partitionPropertyMarshaller = partitionPropertyMarshaller;
         this.hardFlush = hardFlush;
     }
 
-    public void open(TxPartitionStatus txPartitionState) throws Exception {
+    public void open(TxPartitionState txPartitionState) throws Exception {
 
-        PartitionStore partitionIndexStore = get(PartitionProvider.REGION_INDEX);
-        get(PartitionProvider.RING_INDEX);
-        get(PartitionProvider.NODE_INDEX);
-        get(PartitionProvider.HIGHWATER_MARK_INDEX);
-        get(PartitionProvider.REGION_ONLINE_INDEX);
-        get(PartitionProvider.REGION_PROPERTIES);
+        PartitionStore partitionIndexStore = get(PartitionCreator.REGION_INDEX);
+        get(PartitionCreator.RING_INDEX);
+        get(PartitionCreator.NODE_INDEX);
+        get(PartitionCreator.HIGHWATER_MARK_INDEX);
+        get(PartitionCreator.PARTITION_VERSION_INDEX);
+        get(PartitionCreator.REGION_PROPERTIES);
+        get(PartitionCreator.AQUARIUM_STATE_INDEX);
+        get(PartitionCreator.AQUARIUM_LIVELINESS_INDEX);
 
         final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);
-        partitionIndexStore.rowScan((prefix, key, value, valueTimestamp, valueTombstone) -> {
+        partitionIndexStore.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             final PartitionName partitionName = PartitionName.fromBytes(key);
             try {
                 total.incrementAndGet();
                 openExecutor.submit(() -> {
                     try {
-                        txPartitionState.tx(partitionName, (versionedPartitionName, partitionStatus) -> {
+                        txPartitionState.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
                             if (versionedPartitionName != null) {
                                 get(versionedPartitionName);
                             }
@@ -110,7 +107,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 if (partitionName.isSystemPartition()) {
                     return coldstartSystemPartitionProperties(partitionName);
                 } else {
-                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionProvider.REGION_PROPERTIES).get(null, partitionName.toBytes());
+                    TimestampedValue rawPartitionProperties = getSystemPartition(PartitionCreator.REGION_PROPERTIES)
+                        .getTimestampedValue(null, partitionName.toBytes());
                     if (rawPartitionProperties == null) {
                         return null;
                     }
@@ -133,7 +131,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
 
         if (!versionedPartitionName.getPartitionName().isSystemPartition()
-            && !getSystemPartition(PartitionProvider.REGION_INDEX).containsKey(null, partitionName.toBytes())) {
+            && !getSystemPartition(PartitionCreator.REGION_INDEX).containsKey(null, partitionName.toBytes())) {
             return null;
         }
 
@@ -145,7 +143,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     private PartitionStore getSystemPartition(VersionedPartitionName versionedPartitionName) {
-        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Should ony be called by system partitions.");
+        Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Should only be called by system partitions.");
         ConcurrentHashMap<Long, PartitionStore> versionedPartitionStores = partitionStores.get(versionedPartitionName.getPartitionName());
         PartitionStore store = versionedPartitionStores == null ? null : versionedPartitionStores.get(0L);
         if (store == null) {
@@ -172,8 +170,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 return partitionStore;
             }
 
-            File workingDirectory = new File(workingDirectories[Math.abs(versionedPartitionName.hashCode() % workingDirectories.length)]);
-            WALStorage<?> walStorage = walStorageProvider.create(workingDirectory, domain, versionedPartitionName, properties.walStorageDescriptor);
+            WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, properties.walStorageDescriptor);
             partitionStore = new PartitionStore(walStorage, hardFlush);
             partitionStore.load();
 
@@ -209,12 +206,28 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         PartitionProperties properties;
         if (partitionName.equals(HIGHWATER_MARK_INDEX.getPartitionName())) {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new PartitionProperties(storageDescriptor, 0, false);
+                false,
+                new PrimaryIndexDescriptor("memory_persistent", 0, false, null),
+                null,
+                1000,
+                1000);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 0, false);
+        } else if (partitionName.equals(AQUARIUM_LIVELINESS_INDEX.getPartitionName()) || partitionName.equals(AQUARIUM_STATE_INDEX.getPartitionName())) {
+            WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
+                true,
+                new PrimaryIndexDescriptor("memory_ephemeral", 0, false, null),
+                null,
+                Integer.MAX_VALUE,
+                Integer.MAX_VALUE);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false);
         } else {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
-                new PrimaryIndexDescriptor("memory", 0, false, null), null, 1000, 1000);
-            properties = new PartitionProperties(storageDescriptor, 2, false);
+                false,
+                new PrimaryIndexDescriptor("memory_persistent", 0, false, null),
+                null,
+                1000,
+                1000);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false);
         }
         return properties;
     }

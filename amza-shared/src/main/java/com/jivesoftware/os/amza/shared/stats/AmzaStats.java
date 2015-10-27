@@ -2,8 +2,8 @@ package com.jivesoftware.os.amza.shared.stats;
 
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.Multiset;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
@@ -202,7 +202,7 @@ public class AmzaStats {
         totals.takeApplies.addAndGet(count);
         long lag = lag(smallestTxId);
         totals.takeAppliesLag.set(lag);
-        grandTotals.takesLag.set((grandTotals.takesLag.get() + lag) / 2);
+        grandTotals.takeAppliesLag.set((grandTotals.takeAppliesLag.get() + lag) / 2);
     }
 
     public void direct(PartitionName partitionName, int count, long smallestTxId) {
@@ -228,7 +228,7 @@ public class AmzaStats {
     }
 
     long lag(RowsChanged changed) {
-        return lag(changed.getOldestRowTxId());
+        return lag(changed.getSmallestCommittedTxId());
     }
 
     long lag(long oldest) {

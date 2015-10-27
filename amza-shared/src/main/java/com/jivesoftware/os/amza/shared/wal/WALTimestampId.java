@@ -57,11 +57,7 @@ public class WALTimestampId {
         if (timestamp != that.timestamp) {
             return false;
         }
-        if (tombstoned != that.tombstoned) {
-            return false;
-        }
-
-        return true;
+        return tombstoned == that.tombstoned;
     }
 
     @Override

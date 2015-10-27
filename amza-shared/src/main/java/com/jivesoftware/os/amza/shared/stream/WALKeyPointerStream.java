@@ -6,6 +6,11 @@ package com.jivesoftware.os.amza.shared.stream;
  */
 public interface WALKeyPointerStream {
 
-    boolean stream(byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long fp) throws Exception;
+    boolean stream(byte[] prefix,
+        byte[] key,
+        long timestamp,
+        boolean tombstoned,
+        long version,
+        long fp) throws Exception;
 
 }

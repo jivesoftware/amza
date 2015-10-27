@@ -2,27 +2,30 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedState;
+import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
-import com.jivesoftware.os.amza.service.replication.PartitionStatusStorage;
+import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.shared.AmzaPartitionAPI;
-import com.jivesoftware.os.amza.shared.filer.UIO;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.partition.TxPartitionStatus;
-import com.jivesoftware.os.amza.shared.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.partition.VersionedStatus;
+import com.jivesoftware.os.amza.shared.Partition;
+import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingHost;
-import com.jivesoftware.os.amza.shared.ring.RingMember;
+import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowType;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.wal.WALHighwater;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
+import com.jivesoftware.os.aquarium.LivelyEndState;
+import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -37,7 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NavigableMap;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.management.Attribute;
@@ -274,39 +277,44 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             map.put("type", name.isSystemPartition() ? "SYSTEM" : "USER");
             map.put("name", new String(name.getName()));
             map.put("ringName", new String(name.getRingName()));
-            NavigableMap<RingMember, RingHost> ring = ringReader.getRing(name.getRingName());
+            RingTopology ring = ringReader.getRing(name.getRingName());
             List<Map<String, String>> ringMaps = new ArrayList<>();
-            for (Entry<RingMember, RingHost> r : ring.entrySet()) {
-                ringMaps.add(ImmutableMap.of("member", r.getKey().getMember(),
-                    "host", r.getValue().getHost(),
-                    "port", String.valueOf(r.getValue().getPort())));
+            for (RingMemberAndHost entry : ring.entries) {
+                ringMaps.add(ImmutableMap.of("member", entry.ringMember.getMember(),
+                    "host", entry.ringHost.getHost(),
+                    "port", String.valueOf(entry.ringHost.getPort())));
             }
             map.put("ring", ringMaps);
 
-            AmzaPartitionAPI partition = amzaService.getPartition(name);
+            Partition partition = amzaService.getPartition(name);
             if (includeCount) {
                 map.put("count", numberFormat.format(partition.count()));
             } else {
                 map.put("count", "disabled");
             }
 
-            partition.highestTxId((VersionedPartitionName versionedPartitionName, TxPartitionStatus.Status partitionStatus, long highestTxId) -> {
+            partition.highestTxId((versionedPartitionName, livelyEndState, highestTxId) -> {
+                State currentState = livelyEndState.getCurrentState();
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                map.put("status", partitionStatus.name());
+                map.put("state", currentState != null ? currentState.name() : "unknown");
+                map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
+                return null;
             });
 
-            PartitionStatusStorage partitionStatusStorage = amzaService.getPartitionStatusStorage();
-            VersionedStatus localStatus = partitionStatusStorage.getLocalStatus(name);
+            PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
+            VersionedState localState = partitionStateStorage.getLocalVersionedState(name);
 
             if (name.isSystemPartition()) {
                 HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localStatus.version));
+                WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(
+                    new VersionedPartitionName(name, localState.getPartitionVersion()));
                 map.put("highwaters", renderHighwaters(partitionHighwater));
             } else {
                 PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
                 partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(new VersionedPartitionName(name, localStatus.version));
+                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(
+                        new VersionedPartitionName(name, localState.getPartitionVersion()));
                     map.put("highwaters", renderHighwaters(partitionHighwater));
                     return null;
                 });
@@ -327,6 +335,28 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         map.put("takeApplies", numberFormat.format(totals.takeApplies.get()));
         map.put("takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()));
 
+        if (name != null) {
+            VersionedState localVersionedWaterline = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
+            LivelyEndState livelyEndState = localVersionedWaterline.getLivelyEndState();
+            State currentState = livelyEndState.getCurrentState();
+            map.put("localState", ImmutableMap.of("online", livelyEndState.isOnline(),
+                "state", currentState != null ? currentState.name() : "unknown",
+                "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
+                "partitionVersion", String.valueOf(localVersionedWaterline.getPartitionVersion()),
+                "stripeVersion", String.valueOf(localVersionedWaterline.getStorageVersion().stripeVersion)));
+
+            List<Map<String, Object>> neighborStates = new ArrayList<>();
+            Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
+            for (RingMember ringMember : neighboringRingMembers) {
+
+                RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
+                neighborStates.add(ImmutableMap.of("version", String.valueOf(neighborState.version),
+                    "state", neighborState.waterline.getState().name(),
+                    "name", new String(ringMember.getMember().getBytes())));
+            }
+            map.put("neighborStates", neighborStates);
+        }
+
         return map;
     }
 
@@ -342,7 +372,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
     public Map<String, Object> renderPartition(PartitionName partitionName, long startFp, long endFp) {
         Map<String, Object> partitionViz = new HashMap<>();
-        //amzaService.getPartitionProvider().
+        //amzaService.getPartitionCreator().
 
         return partitionViz;
     }
@@ -350,11 +380,11 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     public String renderOverview() throws Exception {
 
         StringBuilder sb = new StringBuilder();
-        sb.append("<p>uptime<span class=\"badge\">" + getDurationBreakdown(runtimeBean.getUptime()) + "</span>");
-        sb.append("&nbsp&nbsp&nbsp&nbspdiskR<span class=\"badge\">" + humanReadableByteCount(amzaStats.ioStats.read.get(), false) + "</span>");
-        sb.append("&nbsp&nbsp&nbsp&nbspdiskW<span class=\"badge\">" + humanReadableByteCount(amzaStats.ioStats.wrote.get(), false) + "</span>");
-        sb.append("&nbsp&nbsp&nbsp&nbspnetR<span class=\"badge\">" + humanReadableByteCount(amzaStats.netStats.read.get(), false) + "</span>");
-        sb.append("&nbsp&nbsp&nbsp&nbspnetW<span class=\"badge\">" + humanReadableByteCount(amzaStats.netStats.wrote.get(), false) + "</span>");
+        sb.append("<p>uptime<span class=\"badge\">").append(getDurationBreakdown(runtimeBean.getUptime())).append("</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspdiskR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.read.get(), false)).append("</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspdiskW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.ioStats.wrote.get(), false)).append("</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspnetR<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.read.get(), false)).append("</span>");
+        sb.append("&nbsp&nbsp&nbsp&nbspnetW<span class=\"badge\">").append(humanReadableByteCount(amzaStats.netStats.wrote.get(), false)).append("</span>");
 
         double processCpuLoad = getProcessCpuLoad();
         sb.append(progress("CPU",
@@ -365,7 +395,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -457,7 +487,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

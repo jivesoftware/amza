@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.shared.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import java.util.Arrays;
@@ -17,11 +17,6 @@ public class PartitionStripeProvider {
     private final HighwaterStorage[] highwaterStorages;
     private final ExecutorService[] rowTakerThreadPools;
     private final RowsTaker[] rowsTakers;
-
-    public interface PartitionStripeFunction {
-
-        int stripe(PartitionName partitionName);
-    }
 
     public PartitionStripeProvider(PartitionStripeFunction partitionStripeFunction,
         PartitionStripe[] deltaStripes,
@@ -40,7 +35,7 @@ public class PartitionStripeProvider {
         int stripeIndex = partitionStripeFunction.stripe(partitionName);
         return tx.tx(deltaStripes[stripeIndex], highwaterStorages[stripeIndex]);
     }
-
+    
     public void flush(PartitionName partitionName, boolean hardFlush) throws Exception {
         int stripeIndex = partitionStripeFunction.stripe(partitionName);
         highwaterStorages[stripeIndex].flush(() -> {

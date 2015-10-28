@@ -15,7 +15,12 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
     private final Object indexesLock = new Object();
     private ConcurrentReadablePointerIndex[] indexes = new ConcurrentReadablePointerIndex[0];
 
-    public boolean merge(int count, PointerIndexFactory indexFactory) throws Exception {
+    public static interface CommitIndex {
+
+        DiskBackedPointerIndex commit(DiskBackedPointerIndex index) throws Exception;
+    }
+
+    public boolean merge(int count, PointerIndexFactory indexFactory, CommitIndex commitIndex) throws Exception {
         ConcurrentReadablePointerIndex[] copy;
         synchronized (indexesLock) {
             copy = indexes;
@@ -40,7 +45,7 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
             newSinceMerge = indexes.length - copy.length;
             DiskBackedPointerIndex[] merged = new DiskBackedPointerIndex[newSinceMerge + 1];
             System.arraycopy(indexes, 0, merged, 1, newSinceMerge);
-            merged[0] = mergedIndex;
+            merged[0] = commitIndex.commit(mergedIndex);
             indexes = merged;
         }
 
@@ -77,7 +82,6 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
     public NextPointer getPointer(byte[] key) throws Exception {
         return PointerIndexUtil.get(indexes, key);
     }
-
 
     @Override
     public NextPointer rangeScan(byte[] from, byte[] to) throws Exception {

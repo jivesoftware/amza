@@ -41,7 +41,7 @@ public class PointerIndexStressNGTest {
                             new DiskBackedPointerIndexFiler(mergeIndexFiler.getAbsolutePath(), "rw", false),
                             new DiskBackedPointerIndexFiler(mergeKeysFile.getAbsolutePath(), "rw", false)
                         );
-                    })) {
+                    }, (index) -> index)) {
                         System.out.println("Merge (" + merge.intValue() + ") elapse:" + format.format((System.currentTimeMillis() - startMerge)) + "millis");
                     } else {
                         //System.out.println("Nothing to merge. Sleeping.");

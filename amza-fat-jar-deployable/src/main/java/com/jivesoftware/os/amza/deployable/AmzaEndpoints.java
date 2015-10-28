@@ -29,6 +29,7 @@ import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +74,7 @@ public class AmzaEndpoints {
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
                 //TODO prefix
-                updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
+                updates.set(keys[i].getBytes(StandardCharsets.UTF_8), values[i].getBytes(StandardCharsets.UTF_8), -1);
             }
             partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
@@ -98,7 +99,7 @@ public class AmzaEndpoints {
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
                 //TODO prefix
-                updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
+                updates.set(entry.getKey().getBytes(StandardCharsets.UTF_8), entry.getValue().getBytes(StandardCharsets.UTF_8), -1);
             }
             partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
 
@@ -125,7 +126,7 @@ public class AmzaEndpoints {
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
                 //TODO prefix
-                updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
+                updates.set(entry.getKey().getBytes(StandardCharsets.UTF_8), entry.getValue().getBytes(StandardCharsets.UTF_8), -1);
             }
             partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
 
@@ -147,12 +148,12 @@ public class AmzaEndpoints {
         @QueryParam("key") String key) {
         try {
             Partition partition = createPartitionIfAbsent(ring, indexClassName, partitionName, Consistency.valueOf(consistency), requireConsistency);
-            List<byte[]> got = new ArrayList<>();
+            List<String> got = new ArrayList<>();
             //TODO prefix
             partition.get(Consistency.valueOf(consistency), null,
                 stream -> {
                     for (String s : Splitter.on(',').split(key)) {
-                        if (!stream.stream(s.getBytes())) {
+                        if (!stream.stream(s.getBytes(StandardCharsets.UTF_8))) {
                             return false;
                         }
                     }
@@ -160,7 +161,7 @@ public class AmzaEndpoints {
                 },
                 (_prefix, _key, value, timestamp, tombstoned, version) -> {
                     if (timestamp != -1 && !tombstoned) {
-                        got.add(value);
+                        got.add(new String(value, StandardCharsets.UTF_8));
                     }
                     return true;
                 });
@@ -184,7 +185,7 @@ public class AmzaEndpoints {
             Partition partition = createPartitionIfAbsent(ring, indexClassName, partitionName, Consistency.valueOf(consistency), requireConsistency);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             //TODO prefix
-            updates.remove(key.getBytes(), -1);
+            updates.remove(key.getBytes(StandardCharsets.UTF_8), -1);
             partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -196,17 +197,17 @@ public class AmzaEndpoints {
     Partition createPartitionIfAbsent(String ringName, String indexClassName,
         String simplePartitionName, Consistency consistency, boolean requireConsistency) throws Exception {
 
-        int ringSize = amzaService.getRingReader().getRingSize(ringName.getBytes());
+        int ringSize = amzaService.getRingReader().getRingSize(ringName.getBytes(StandardCharsets.UTF_8));
         int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
         if (ringSize < systemRingSize) {
-            amzaService.getRingWriter().buildRandomSubRing(ringName.getBytes(), systemRingSize);
+            amzaService.getRingWriter().buildRandomSubRing(ringName.getBytes(StandardCharsets.UTF_8), systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
             new PrimaryIndexDescriptor(indexClassName, 0, false, null),
             null, 1000, 1000);
 
-        PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
+        PartitionName partitionName = new PartitionName(false, ringName.getBytes(StandardCharsets.UTF_8), simplePartitionName.getBytes(StandardCharsets.UTF_8));
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, requireConsistency, 1, false));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);

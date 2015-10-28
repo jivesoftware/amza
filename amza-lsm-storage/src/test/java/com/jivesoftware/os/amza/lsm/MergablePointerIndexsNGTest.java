@@ -50,6 +50,8 @@ public class MergablePointerIndexsNGTest {
 
             return new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
                 new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
+        }, (index) -> {
+            return index;
         });
     }
 

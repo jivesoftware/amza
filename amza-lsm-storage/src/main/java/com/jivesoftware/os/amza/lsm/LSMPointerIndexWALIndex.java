@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.lsm.LSMPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.api.PointerStream;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
@@ -298,6 +299,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
         lock.acquire();
         try {
             environment.flushLog(false);
+            flush(); // TODO is this the right thing to do?
             synchronized (commits) {
                 count.set(-1);
                 commits.incrementAndGet();
@@ -308,7 +310,8 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     }
 
     @Override
-    public void compact() {
+    public void compact() throws Exception {
+        flush(); // TODO is this the right thing to do?
     }
 
     public void flush() throws Exception {

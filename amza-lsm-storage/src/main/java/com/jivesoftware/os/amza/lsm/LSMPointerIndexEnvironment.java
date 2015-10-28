@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.lsm;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.api.Pointers;
 import java.io.File;
 import java.io.IOException;
@@ -146,19 +147,64 @@ public class LSMPointerIndexEnvironment {
 
         @Override
         public void append(Pointers pointers) throws Exception {
-            memoryPointerIndex.append(pointers);
+            memoryPointerIndex.append((stream) -> {
+                return pointers.consume((int sortIndex, byte[] key, long timestamp, boolean tombstoned, long version, long pointer) -> {
+                    if (memoryPointerIndex.count() > 10_000) { // TODO expose to config, TODO flush on memory pressure.
+
+                    }
+                    return stream.stream(sortIndex, key, timestamp, tombstoned, version, pointer);
+                });
+            });
+            merge();
+        }
+
+        private volatile boolean merging = false;
+
+        public void merge() throws Exception {
+            int maxMergeDebt = 2; // TODO expose config
+            if (mergeablePointerIndexs.mergeDebut() < maxMergeDebt || merging) {
+                return;
+            }
+            long nextIndexId;
+            synchronized (this) { // TODO use semaphores instead of a hard lock
+                if (merging) {
+                    return;
+                }
+                merging = true;
+                nextIndexId = largestIndexId.incrementAndGet();
+            }
+            File[] tmpRoot = new File[1];
+            mergeablePointerIndexs.merge(maxMergeDebt, () -> {
+                tmpRoot[0] = Files.createTempDir();
+                DiskBackedPointerIndex pointerIndex = new DiskBackedPointerIndex(
+                    new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false),
+                    new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "keys").getAbsolutePath(), "rw", false));
+                return pointerIndex;
+            }, (index) -> {
+                index.flush();
+                index.close();
+                File mergedIndexRoot = new File(indexRoot, Long.toString(nextIndexId));
+                FileUtils.moveDirectory(tmpRoot[0], mergedIndexRoot);
+
+                return new DiskBackedPointerIndex(
+                    new DiskBackedPointerIndexFiler(new File(mergedIndexRoot, "index").getAbsolutePath(), "rw", false),
+                    new DiskBackedPointerIndexFiler(new File(mergedIndexRoot, "keys").getAbsolutePath(), "rw", false));
+            });
+
+            merging = false;
         }
 
         @Override
         public void flush() throws Exception {
+            long nextIndexId;
             synchronized (this) { // TODO use semaphores instead of a hard lock
                 if (flushingMemoryPointerIndex != null) {
                     throw new RuntimeException("Concurrently trying to flush while a flush is underway.");
                 }
+                nextIndexId = largestIndexId.incrementAndGet();
                 flushingMemoryPointerIndex = memoryPointerIndex;
                 memoryPointerIndex = new MemoryPointerIndex();
             }
-            long nextIndexId = largestIndexId.incrementAndGet();
             File tmpRoot = Files.createTempDir();
             DiskBackedPointerIndex pointerIndex = new DiskBackedPointerIndex(
                 new DiskBackedPointerIndexFiler(new File(tmpRoot, "index").getAbsolutePath(), "rw", false),

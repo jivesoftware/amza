@@ -17,7 +17,7 @@ public interface WALTx<I> {
 
     void validateAndRepair() throws Exception;
 
-    I load(VersionedPartitionName partitionName) throws Exception;
+    I load(VersionedPartitionName partitionName, int maxUpdatesBetweenIndexCommitMarker) throws Exception;
 
     long length() throws Exception;
 

@@ -337,27 +337,27 @@ public class BerkeleyDBWALIndex implements WALIndex {
             lock.release();
         }
     }
-
-    @Override
-    public long size() throws Exception {
-        lock.acquire();
-        try {
-            long size = count.get();
-            if (size >= 0) {
-                return size;
-            }
-            int numCommits = commits.get();
-            size = primaryDb.count();
-            synchronized (commits) {
-                if (numCommits == commits.get()) {
-                    count.set(size);
-                }
-            }
-            return size;
-        } finally {
-            lock.release();
-        }
-    }
+//
+//    @Override
+//    public long size() throws Exception {
+//        lock.acquire();
+//        try {
+//            long size = count.get();
+//            if (size >= 0) {
+//                return size;
+//            }
+//            int numCommits = commits.get();
+//            size = primaryDb.count();
+//            synchronized (commits) {
+//                if (numCommits == commits.get()) {
+//                    count.set(size);
+//                }
+//            }
+//            return size;
+//        } finally {
+//            lock.release();
+//        }
+//    }
 
     @Override
     public void commit() throws Exception {
@@ -371,10 +371,6 @@ public class BerkeleyDBWALIndex implements WALIndex {
         } finally {
             lock.release();
         }
-    }
-
-    @Override
-    public void compact() {
     }
 
     @Override

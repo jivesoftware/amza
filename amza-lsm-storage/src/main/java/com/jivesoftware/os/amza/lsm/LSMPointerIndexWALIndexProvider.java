@@ -30,9 +30,9 @@ public class LSMPointerIndexWALIndexProvider implements WALIndexProvider<LSMPoin
     }
 
     @Override
-    public LSMPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public LSMPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         LSMPointerIndexWALIndexName name = new LSMPointerIndexWALIndexName(LSMPointerIndexWALIndexName.Type.active, versionedPartitionName.toBase64());
-        return new LSMPointerIndexWALIndex(environments[Math.abs(versionedPartitionName.hashCode() % environments.length)], name);
+        return new LSMPointerIndexWALIndex(environments[Math.abs(versionedPartitionName.hashCode() % environments.length)], name, maxUpdatesBetweenCompactionHintMarker);
     }
 
     @Override

@@ -26,20 +26,6 @@ public interface IWriteable extends ICloseable, ISeekable {
     /**
      *
      * @param b
-     * @throws IOException
-     */
-    public void write(int b) throws IOException;
-
-    /**
-     *
-     * @param b
-     * @throws IOException
-     */
-    public void write(byte b[]) throws IOException;
-
-    /**
-     *
-     * @param b
      * @param _offset
      * @param _len
      * @throws IOException

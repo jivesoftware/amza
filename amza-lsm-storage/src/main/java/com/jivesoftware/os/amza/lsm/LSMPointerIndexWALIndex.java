@@ -44,6 +44,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     private static final int numPermits = 1024;
 
     private final LSMPointerIndexWALIndexName name;
+    private final int maxUpdatesBetweenCompactionHintMarker;
     private final LSMPointerIndexEnvironment environment;
     private PointerIndex primaryDb;
     private PointerIndex prefixDb;
@@ -53,12 +54,14 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     private final AtomicInteger commits = new AtomicInteger(0);
     private final AtomicReference<WALIndex> compactingTo = new AtomicReference<>();
 
-    public LSMPointerIndexWALIndex(LSMPointerIndexEnvironment environment, LSMPointerIndexWALIndexName name) throws Exception {
+    public LSMPointerIndexWALIndex(LSMPointerIndexEnvironment environment,
+        LSMPointerIndexWALIndexName name,
+        int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         this.name = name;
-
+        this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
         this.environment = environment;
-        this.primaryDb = environment.open(name.getPrimaryName());
-        this.prefixDb = environment.open(name.getPrefixName());
+        this.primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBetweenCompactionHintMarker);
+        this.prefixDb = environment.open(name.getPrefixName(), maxUpdatesBetweenCompactionHintMarker);
     }
 
     private boolean entryToWALPointer(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion, long pointer,
@@ -273,54 +276,41 @@ public class LSMPointerIndexWALIndex implements WALIndex {
         }
     }
 
-    @Override
-    public long size() throws Exception {
-        lock.acquire();
-        try {
-            long size = count.get();
-            if (size >= 0) {
-                return size;
-            }
-            int numCommits = commits.get();
-            size = primaryDb.count();
-            synchronized (commits) {
-                if (numCommits == commits.get()) {
-                    count.set(size);
-                }
-            }
-            return size;
-        } finally {
-            lock.release();
-        }
-    }
+//    @Override
+//    public long size() throws Exception {
+//        lock.acquire();
+//        try {
+//            long size = count.get();
+//            if (size >= 0) {
+//                return size;
+//            }
+//            int numCommits = commits.get();
+//            size = primaryDb.count();
+//            synchronized (commits) {
+//                if (numCommits == commits.get()) {
+//                    count.set(size);
+//                }
+//            }
+//            return size;
+//        } finally {
+//            lock.release();
+//        }
+//    }
 
     @Override
     public void commit() throws Exception {
         lock.acquire();
         try {
-            environment.flushLog(false);
-            flush(); // TODO is this the right thing to do?
+            // TODO is this the right thing to do?
+            primaryDb.commit();
+            prefixDb.commit();
+
             synchronized (commits) {
                 count.set(-1);
                 commits.incrementAndGet();
             }
         } finally {
             lock.release();
-        }
-    }
-
-    @Override
-    public void compact() throws Exception {
-        flush(); // TODO is this the right thing to do?
-    }
-
-    public void flush() throws Exception {
-        lock.acquire(1);
-        try {
-            primaryDb.flush();
-            prefixDb.flush();
-        } finally {
-            lock.release(1);
         }
     }
 
@@ -385,7 +375,9 @@ public class LSMPointerIndexWALIndex implements WALIndex {
             removeDatabase(Type.compacted);
             removeDatabase(Type.backup);
 
-            final LSMPointerIndexWALIndex compactingWALIndex = new LSMPointerIndexWALIndex(environment, name.typeName(Type.compacting));
+            final LSMPointerIndexWALIndex compactingWALIndex = new LSMPointerIndexWALIndex(environment,
+                name.typeName(Type.compacting),
+                maxUpdatesBetweenCompactionHintMarker);
             compactingTo.set(compactingWALIndex);
 
             return new CompactionWALIndex() {
@@ -415,7 +407,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                         } else {
                             LOG.info("Committing before swap: {}", name.getPrimaryName());
 
-                            compactingWALIndex.flush();
+                            compactingWALIndex.commit();
                             compactingWALIndex.close();
                             rename(Type.compacting, Type.compacted);
 
@@ -428,8 +420,8 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                             rename(Type.compacted, Type.active);
                             removeDatabase(Type.backup);
 
-                            primaryDb = environment.open(name.getPrimaryName());
-                            prefixDb = environment.open(name.getPrefixName());
+                            primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBetweenCompactionHintMarker);
+                            prefixDb = environment.open(name.getPrefixName(), maxUpdatesBetweenCompactionHintMarker);
 
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }

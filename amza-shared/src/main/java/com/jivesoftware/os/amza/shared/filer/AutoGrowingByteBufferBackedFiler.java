@@ -237,19 +237,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
         }
         return offset;
     }
-
-    @Override
-    public void write(int b) throws IOException {
-        long count = ensure(1);
-        filers[fpFilerIndex].write(b);
-        length += count;
-    }
-
-    @Override
-    public void write(byte[] b) throws IOException {
-        write(b, 0, b.length);
-    }
-
+    
     @Override
     public void write(byte[] b, int offset, int len) throws IOException {
         long count = ensure(len);

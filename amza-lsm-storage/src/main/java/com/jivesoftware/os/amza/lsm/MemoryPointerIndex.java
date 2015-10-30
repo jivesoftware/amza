@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
@@ -21,6 +22,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentReadablePointerIndex, Pointers {
 
     private final ConcurrentSkipListMap<byte[], Pointer> index = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
+    private final AtomicLong approximateCount = new AtomicLong();
 
     @Override
     public boolean consume(PointerStream stream) throws Exception {
@@ -38,6 +40,7 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
         pointers.consume((sortIndex, key, timestamp, tombstoned, version, fp) -> {
             index.compute(key, (k, v) -> {
                 if (v == null) {
+                    approximateCount.incrementAndGet();
                     return new Pointer(sortIndex, timestamp, tombstoned, version, fp);
                 } else {
                     return v.timestamp > timestamp ? v : new Pointer(sortIndex, timestamp, tombstoned, version, fp);
@@ -118,11 +121,13 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
 
     @Override
     public void destroy() throws IOException {
+        approximateCount.set(0);
         index.clear();
     }
 
     @Override
     public void close() {
+        approximateCount.set(0);
         index.clear();
     }
 
@@ -133,10 +138,10 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
 
     @Override
     public long count() {
-        return index.size();
+        return approximateCount.get();
     }
 
     @Override
-    public void flush() throws Exception {
+    public void commit() throws Exception {
     }
 }

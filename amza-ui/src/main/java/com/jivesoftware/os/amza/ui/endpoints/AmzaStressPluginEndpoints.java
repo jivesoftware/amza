@@ -35,7 +35,7 @@ public class AmzaStressPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new AmzaStressPluginRegionInput("", false, "", "", 0, 0, 0, 0, 0, "none", true, false, ""));
+            new AmzaStressPluginRegionInput("", false, "", 1000, 1000, "", 0, 0, 0, 0, 0, "none", true, false, ""));
         return Response.ok(rendered).build();
     }
 
@@ -46,6 +46,8 @@ public class AmzaStressPluginEndpoints {
     public Response action(@FormParam("client") @DefaultValue("false") boolean client,
         @FormParam("name") @DefaultValue("") String name,
         @FormParam("indexClassName") @DefaultValue("berkeleydb") String indexClassName,
+        @FormParam("maxUpdatesBetweenCompactionHintMarker") @DefaultValue("1000") int maxUpdatesBetweenCompactionHintMarker,
+        @FormParam("maxUpdatesBetweenIndexCommitMarker") @DefaultValue("1000") int maxUpdatesBetweenIndexCommitMarker,
         @FormParam("regionPrefix") @DefaultValue("") String regionPrefix,
         @FormParam("numBatches") @DefaultValue("1") int numBatches,
         @FormParam("batchSize") @DefaultValue("1") int batchSize,
@@ -60,6 +62,8 @@ public class AmzaStressPluginEndpoints {
             new AmzaStressPluginRegionInput(name.trim(),
                 client,
                 indexClassName.trim(),
+                maxUpdatesBetweenCompactionHintMarker,
+                maxUpdatesBetweenIndexCommitMarker,
                 regionPrefix.trim(),
                 numBatches,
                 batchSize,

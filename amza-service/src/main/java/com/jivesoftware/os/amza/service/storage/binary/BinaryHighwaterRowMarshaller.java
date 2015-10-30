@@ -28,13 +28,14 @@ public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte
 
     @Override
     public byte[] toBytes(WALHighwater highwater) throws Exception {
+        byte[] lengthBuffer = new byte[4];
         HeapFiler filer = new HeapFiler(new byte[sizeInBytes(highwater)]);
         for (RingMemberHighwater rmh : highwater.ringMemberHighwater) {
-            UIO.writeBoolean(filer, true, "hasMore");
-            UIO.writeByteArray(filer, rmh.ringMember.toBytes(), "ringMember");
+            UIO.writeByte(filer, (byte) 1, "hasMore");
+            UIO.writeByteArray(filer, rmh.ringMember.toBytes(), "ringMember", lengthBuffer);
             UIO.writeLong(filer, rmh.transactionId, "txId");
         }
-        UIO.writeBoolean(filer, false, "hasMore");
+        UIO.writeByte(filer, (byte) 0, "hasMore");
         return filer.getBytes();
     }
 
@@ -52,8 +53,10 @@ public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte
     public WALHighwater fromBytes(byte[] row) throws Exception {
         HeapFiler filer = new HeapFiler(row);
         List<RingMemberHighwater> rmh = new ArrayList<>();
+        byte[] intLongBuffer = new byte[8];
         while (UIO.readBoolean(filer, "hasMore")) {
-            rmh.add(new RingMemberHighwater(RingMember.fromBytes(UIO.readByteArray(filer, "ringMember")), UIO.readLong(filer, "txId")));
+            rmh.add(new RingMemberHighwater(RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", intLongBuffer)),
+                UIO.readLong(filer, "txId", intLongBuffer)));
         }
         return new WALHighwater(rmh);
     }

@@ -222,7 +222,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireAll();
         try {
 
-            walIndex.compareAndSet(null, walTx.load(versionedPartitionName));
+            walIndex.compareAndSet(null, walTx.load(versionedPartitionName, maxUpdatesBetweenCompactionHintMarker.get()));
 
             MutableLong lastTxId = new MutableLong(-1);
             MutableLong rowsVisited = new MutableLong(maxUpdatesBetweenCompactionHintMarker.get());

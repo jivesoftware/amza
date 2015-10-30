@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.api.AppendablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.Pointers;
+import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import java.io.File;
 import java.io.IOException;
 
@@ -27,6 +28,8 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
 
     private final DiskBackedPointerIndexFiler index;
     private final DiskBackedPointerIndexFiler keys;
+    private byte[] minKey;
+    private byte[] maxKey;
 
     public DiskBackedPointerIndex(DiskBackedPointerIndexFiler index, DiskBackedPointerIndexFiler keys) {
         this.index = index;
@@ -59,31 +62,45 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
 
         long[] keyFp = new long[]{keys.getFilePointer()};
 
+        byte[] lengthBuffer = new byte[4];
+        HeapFiler indexEntryFiler = new HeapFiler(INDEX_ENTRY_SIZE);
         pointers.consume((sortIndex, key, timestamp, tombstoned, version, walPointer) -> {
-            UIO.writeInt(writeIndex, sortIndex, "sortIndex");
-            UIO.writeLong(writeIndex, keyFp[0], "keyFp");
-            UIO.writeInt(writeIndex, key.length, "keyLength");
-            UIO.writeLong(writeIndex, timestamp, "timestamp");
-            UIO.writeBoolean(writeIndex, tombstoned, "tombstone");
-            UIO.writeLong(writeIndex, version, "version");
-            UIO.writeLong(writeIndex, walPointer, "walPointerFp");
 
-            UIO.writeInt(writeKeys, key.length, "keyLength");
-            UIO.write(writeKeys, key);
+            indexEntryFiler.seek(0);
+            UIO.writeInt(indexEntryFiler, sortIndex, "sortIndex",lengthBuffer);
+            UIO.writeLong(indexEntryFiler, keyFp[0], "keyFp");
+            UIO.writeInt(indexEntryFiler, key.length, "keyLength",lengthBuffer);
+            UIO.writeLong(indexEntryFiler, timestamp, "timestamp");
+            UIO.writeByte(indexEntryFiler, tombstoned ? (byte)1 : (byte)0, "tombstone");
+            UIO.writeLong(indexEntryFiler, version, "version");
+            UIO.writeLong(indexEntryFiler, walPointer, "walPointerFp");
+            writeIndex.write(indexEntryFiler.leakBytes(), 0, (int)indexEntryFiler.length());
+
+            UIO.writeInt(writeKeys, key.length, "keyLength",lengthBuffer);
+            UIO.write(writeKeys, key, "key");
             keyFp[0] += (4 + key.length);
             return true;
         });
 
-        writeKeys.flush(false);
-        writeIndex.flush(false);
-
+        //writeKeys.flush(false);
+        //writeIndex.flush(false);
     }
 
     @Override
     public ReadablePointerIndex concurrent() throws Exception {
         IReadable readableIndex = index.fileChannelFiler();
         IReadable readableKeys = keys.fileChannelFiler();
-        return new ReadablePointerIndex((int) (readableIndex.length() / INDEX_ENTRY_SIZE), readableIndex, readableKeys);
+        int count = (int) (readableIndex.length() / INDEX_ENTRY_SIZE);
+        if (minKey == null) {
+            minKey = ReadablePointerIndex.readKeyAtIndex(0, readableIndex, readableKeys);
+            maxKey = ReadablePointerIndex.readKeyAtIndex(count - 1, readableIndex, readableKeys);
+        }
+
+        return new ReadablePointerIndex(count,
+            minKey,
+            maxKey,
+            readableIndex,
+            readableKeys);
     }
 
     @Override
@@ -97,6 +114,6 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
     }
 
     @Override
-    public void flush() throws Exception {
+    public void commit() throws Exception {
     }
 }

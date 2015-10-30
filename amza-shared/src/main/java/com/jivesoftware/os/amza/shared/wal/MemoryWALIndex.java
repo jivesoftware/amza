@@ -52,11 +52,6 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void compact() {
-
-    }
-
-    @Override
     public boolean takePrefixUpdatesSince(byte[] prefix, long sinceTransactionId, TxFpStream txFpStream) throws Exception {
         ConcurrentSkipListMap<Long, ConcurrentLinkedQueue<Long>> prefixMap = prefixFpIndex.get(prefix);
         if (prefixMap != null) {
@@ -159,10 +154,10 @@ public class MemoryWALIndex implements WALIndex {
         return delta[0];
     }
 
-    @Override
-    public long size() throws Exception {
-        return index.size();
-    }
+//    @Override
+//    public long size() throws Exception {
+//        return index.size();
+//    }
 
     @Override
     public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {

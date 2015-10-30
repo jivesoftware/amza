@@ -49,16 +49,6 @@ public class DiskBackedPointerIndexFilerChannelWriter implements IWriteable {
     }
 
     @Override
-    public void write(int b) throws IOException {
-        write(ByteBuffer.wrap(new byte[]{(byte) b}));
-    }
-
-    @Override
-    public void write(byte[] b) throws IOException {
-        write(ByteBuffer.wrap(b));
-    }
-
-    @Override
     public void write(byte[] b, int _offset, int _len) throws IOException {
         write(ByteBuffer.wrap(b, _offset, _len));
     }

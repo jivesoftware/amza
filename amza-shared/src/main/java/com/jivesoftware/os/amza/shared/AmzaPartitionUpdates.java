@@ -22,10 +22,12 @@ import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class AmzaPartitionUpdates implements Commitable {
 
     private final ConcurrentSkipListMap<byte[], WALValue> changes = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
+    private final AtomicInteger approximateSize = new AtomicInteger(); // Because changes.size() walks the entire collection to compute size :(
 
     public AmzaPartitionUpdates setAll(Iterable<Entry<byte[], byte[]>> updates) throws Exception {
         setAll(updates, -1);
@@ -47,20 +49,7 @@ public class AmzaPartitionUpdates implements Commitable {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        changes.merge(key, new WALValue(value, timestampId, false, -1), (existing, provided) -> {
-            if (provided.getTimestampId() >= existing.getTimestampId()) {
-                return provided;
-            } else {
-                return existing;
-            }
-        });
-        return this;
-    }
-
-    public AmzaPartitionUpdates removeAll(Iterable<byte[]> keys, long timestampId) throws Exception {
-        for (byte[] key : keys) {
-            remove(key, timestampId);
-        }
+        update(key, value, timestampId, false);
         return this;
     }
 
@@ -68,26 +57,34 @@ public class AmzaPartitionUpdates implements Commitable {
         return remove(key, -1);
     }
 
-    public AmzaPartitionUpdates remove(byte[] key, long timestamp) throws Exception {
+    public AmzaPartitionUpdates remove(byte[] key, long timestampId) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
-        changes.merge(key, new WALValue(null, timestamp, true, -1), (existing, provided) -> {
-            if (provided.getTimestampId() >= existing.getTimestampId()) {
-                return provided;
+        update(key, null, timestampId, true);
+        return this;
+    }
+
+    private void update(byte[] key, byte[] value, long timestampId, boolean tombstone) {
+        changes.compute(key, (byte[] k, WALValue existing) -> {
+            if (existing == null) {
+                approximateSize.incrementAndGet();
+                return new WALValue(value, timestampId, tombstone, -1);
+            } else if (timestampId >= existing.getTimestampId()) {
+                return new WALValue(value, timestampId, tombstone, -1);
             } else {
                 return existing;
             }
         });
-        return this;
     }
 
     public void reset() {
+        approximateSize.set(0);
         changes.clear();
     }
 
     public int size() {
-        return changes.size();
+        return approximateSize.get();
     }
 
     @Override
@@ -103,8 +100,8 @@ public class AmzaPartitionUpdates implements Commitable {
 
     @Override
     public String toString() {
-        return "AmzaPartitionUpdates{" +
-            "changes=" + changes +
-            '}';
+        return "AmzaPartitionUpdates{"
+            + "changes=" + changes
+            + '}';
     }
 }

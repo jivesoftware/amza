@@ -61,17 +61,18 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
 
     // TODO IOC shift to using callback
     private byte[] appendHighwaterHints(byte[] value, WALHighwater hints) throws Exception {
+        byte[] lengthBuffer = new byte[4];
         if (hints != null) {
             byte[] hintsBytes = highwaterRowMarshaller.toBytes(hints);
             HeapFiler filer = new HeapFiler(new byte[4 + (value != null ? value.length : 0) + 1 + 4 + hintsBytes.length]);
-            UIO.writeByteArray(filer, value, "value");
-            UIO.writeBoolean(filer, true, "hasHighwaterHints");
-            UIO.writeByteArray(filer, hintsBytes, "highwaterHints");
+            UIO.writeByteArray(filer, value, "value", lengthBuffer);
+            UIO.write(filer, new byte[]{1}, "hasHighwaterHints");
+            UIO.writeByteArray(filer, hintsBytes, "highwaterHints", lengthBuffer);
             return filer.getBytes();
         } else {
             HeapFiler filer = new HeapFiler(new byte[4 + (value != null ? value.length : 0) + 1]);
-            UIO.writeByteArray(filer, value, "value");
-            UIO.writeBoolean(filer, false, "hasHighwaterHints");
+            UIO.writeByteArray(filer, value, "value", lengthBuffer);
+            UIO.write(filer, new byte[]{0}, "hasHighwaterHints");
             return filer.getBytes();
         }
     }
@@ -156,25 +157,26 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
     }
 
     boolean takeRows(ConsumeTxFps consumeTxFps, RowStream rowStream) throws Exception {
+        byte[] intBuffer = new byte[4];
         return wal.read(reader -> primaryRowMarshaller.fromRows(
             txFpRowStream -> consumeTxFps.consume(txFps -> reader.read(
-                    fpStream -> {
-                        for (long fp : txFps.fps) {
-                            if (!fpStream.stream(fp)) {
-                                return false;
-                            }
+                fpStream -> {
+                    for (long fp : txFps.fps) {
+                        if (!fpStream.stream(fp)) {
+                            return false;
                         }
-                        return true;
-                    },
-                    (rowFP, rowTxId, rowType, row) -> txFpRowStream.stream(rowTxId, rowFP, row))),
+                    }
+                    return true;
+                },
+                (rowFP, rowTxId, rowType, row) -> txFpRowStream.stream(rowTxId, rowFP, row))),
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 HeapFiler filer = new HeapFiler(value);
-                byte[] deltaRow = primaryRowMarshaller.toRow(key, UIO.readByteArray(filer, "value"), valueTimestamp, valueTombstoned, valueVersion);
+                byte[] deltaRow = primaryRowMarshaller.toRow(key, UIO.readByteArray(filer, "value", intBuffer), valueTimestamp, valueTombstoned, valueVersion);
                 if (!rowStream.row(fp, txId, RowType.primary, deltaRow)) {
                     return false;
                 }
                 if (UIO.readBoolean(filer, "hasHighwaterHints")) {
-                    if (!rowStream.row(-1, -1, RowType.highwater, UIO.readByteArray(filer, "highwaterHints"))) {
+                    if (!rowStream.row(-1, -1, RowType.highwater, UIO.readByteArray(filer, "highwaterHints", intBuffer))) {
                         return false;
                     }
                 }
@@ -209,7 +211,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                             reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, row))),
                         (fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                             byte[] deltaValue = UIO.readByteArray(value, 0, "value");
-                            return decomposeStream.stream(-1, fp, key, deltaValue, valueTimestamp, valueTombstoned,valueVersion, null);
+                            return decomposeStream.stream(-1, fp, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion, null);
                         });
                 },
                 (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
@@ -221,6 +223,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
     }
 
     public boolean hydrateKeyValueHighwaters(Fps fps, FpKeyValueHighwaterStream stream) throws Exception {
+        byte[] intBuffer = new byte[4];
         return primaryRowMarshaller.fromRows(
             fpRowStream -> wal.read(
                 reader -> reader.read(fps,
@@ -228,10 +231,10 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
             (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 try {
                     HeapFiler filer = new HeapFiler(value);
-                    byte[] hydrateValue = UIO.readByteArray(filer, "value");
+                    byte[] hydrateValue = UIO.readByteArray(filer, "value", intBuffer);
                     WALHighwater highwater = null;
                     if (UIO.readBoolean(filer, "hasHighwaterHint")) {
-                        highwater = highwaterRowMarshaller.fromBytes(UIO.readByteArray(filer, "highwaters"));
+                        highwater = highwaterRowMarshaller.fromBytes(UIO.readByteArray(filer, "highwaters", intBuffer));
                     }
                     return stream.stream(fp, prefix, key, hydrateValue, valueTimestamp, valueTombstoned, valueVersion, highwater);
                 } catch (Exception x) {

@@ -37,7 +37,7 @@ public class LSMPointerIndexWALIndexTest {
         });
 
         Assert.assertFalse(index.isEmpty());
-        index.flush();
+        index.commit();
         index.close();
 
         
@@ -53,7 +53,7 @@ public class LSMPointerIndexWALIndexTest {
             return true;
         });
 
-        index.flush();
+        index.commit();
         index.close();
 
         // reopen
@@ -71,11 +71,10 @@ public class LSMPointerIndexWALIndexTest {
 
         testPutAsserts(index);
 
-        index.flush();
+        index.commit();
 
         testPutAsserts(index);
 
-        index.compact();
     }
 
     private void testPutAsserts(LSMPointerIndexWALIndex index) throws Exception {
@@ -189,7 +188,7 @@ public class LSMPointerIndexWALIndexTest {
 
         testRangeAsserts(index);
 
-        index.flush();
+        index.commit();
 
         testRangeAsserts(index);
     }
@@ -269,7 +268,7 @@ public class LSMPointerIndexWALIndexTest {
 
         testRangesPrefixedAsserts(index);
 
-        index.flush();
+        index.commit();
 
         testRangesPrefixedAsserts(index);
 
@@ -309,7 +308,7 @@ public class LSMPointerIndexWALIndexTest {
         }, null);
 
         testTakePrefixedAsserts(index);
-        index.flush();
+        index.commit();
         testTakePrefixedAsserts(index);
 
     }
@@ -373,7 +372,7 @@ public class LSMPointerIndexWALIndexTest {
     }
 
     private LSMPointerIndexWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
-        return new LSMPointerIndexWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
+        return new LSMPointerIndexWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName, 10_000);
     }
 
 }

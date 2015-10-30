@@ -9,10 +9,8 @@ import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.DataInputStream;
-import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
-import org.xerial.snappy.SnappyInputStream;
 
 /**
  *

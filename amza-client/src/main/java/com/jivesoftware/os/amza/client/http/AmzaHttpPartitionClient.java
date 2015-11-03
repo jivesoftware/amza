@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.client.http;
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.FilerOutputStream;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.ws.rs.core.Response.Status;
 import org.apache.http.HttpStatus;
 
 /**
@@ -140,6 +142,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     }, null);
 
                 CloseableHttpResponse closeableHttpResponse = new CloseableHttpResponse(got);
+                if (got.getStatusCode() == Status.ACCEPTED.getStatusCode()) {
+                    throw new FailedToAchieveQuorumException(
+                        "The server could NOT achieve " + consistency.name() + " within " + abandonSolutionAfterNMillis + "millis");
+                }
                 handleLeaderStatusCodes(consistency, got.getStatusCode(), closeableHttpResponse);
                 return new PartitionResponse<>(closeableHttpResponse, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
             },

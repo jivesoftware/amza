@@ -82,8 +82,8 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
             return true;
         });
 
-        //writeKeys.flush(false);
-        //writeIndex.flush(false);
+        writeKeys.flush(false);
+        writeIndex.flush(false);
     }
 
     @Override

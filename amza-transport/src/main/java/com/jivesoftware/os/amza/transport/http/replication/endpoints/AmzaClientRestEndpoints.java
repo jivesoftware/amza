@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
@@ -178,6 +179,9 @@ public class AmzaClientRestEndpoints {
         } catch (DeltaOverCapacityException x) {
             LOG.info("Delta over capacity for {}", base64PartitionName);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "Delta over capacity");
+        } catch(FailedToAchieveQuorumException x) {
+            LOG.info("FailedToAchieveQuorumException for {}", base64PartitionName);
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.ACCEPTED, "Failed to achieve quorum exception");
         } catch (Exception x) {
             Object[] vals = new Object[]{base64PartitionName, consistencyName};
             LOG.warn("Failed to commit to {} at {}.", vals, x);

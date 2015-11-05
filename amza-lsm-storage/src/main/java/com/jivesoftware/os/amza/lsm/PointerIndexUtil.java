@@ -19,7 +19,7 @@ public class PointerIndexUtil {
                 return false;
             };
             for (ConcurrentReadablePointerIndex index : indexes) {
-                NextPointer pointer = index.concurrent().getPointer(key);
+                NextPointer pointer = index.concurrent(0).getPointer(key);
                 if (pointer.next(found)) {
                     return false;
                 }
@@ -32,7 +32,7 @@ public class PointerIndexUtil {
     public static NextPointer rangeScan(ConcurrentReadablePointerIndex[] copy, byte[] from, byte[] to) throws Exception {
         NextPointer[] feeders = new NextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].concurrent().rangeScan(from, to);
+            feeders[i] = copy[i].concurrent(0).rangeScan(from, to);
         }
         return new InterleavePointerStream(feeders);
     }
@@ -40,7 +40,7 @@ public class PointerIndexUtil {
     public static NextPointer rowScan(ConcurrentReadablePointerIndex[] copy) throws Exception {
         NextPointer[] feeders = new NextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].concurrent().rowScan();
+            feeders[i] = copy[i].concurrent(1024 * 1024 * 10).rowScan();
         }
         return new InterleavePointerStream(feeders);
     }

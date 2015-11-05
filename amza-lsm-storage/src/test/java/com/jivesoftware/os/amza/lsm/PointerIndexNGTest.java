@@ -18,7 +18,7 @@ import org.testng.annotations.Test;
  */
 public class PointerIndexNGTest {
 
-    @Test(enabled = true)
+    @Test(enabled = false)
     public void testDisk() throws Exception {
         File indexFiler = File.createTempFile("b-index", ".tmp");
         File keysFile = File.createTempFile("b-keys", ".tmp");
@@ -36,6 +36,22 @@ public class PointerIndexNGTest {
     }
 
     @Test(enabled = true)
+    public void testLeapDisk() throws Exception {
+        File indexFiler = File.createTempFile("l-index", ".tmp");
+
+        ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
+
+        int count = 100;
+        int step = 10;
+
+        DiskBackedLeapPointerIndex pointerIndex = new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+            64, 10);
+
+        PointerIndexUtils.append(pointerIndex, 0, step, count, desired);
+        assertions(pointerIndex, count, step, desired);
+    }
+
+    @Test(enabled = false)
     public void testMemory() throws Exception {
 
         ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
@@ -49,7 +65,7 @@ public class PointerIndexNGTest {
         assertions(walIndex, count, step, desired);
     }
 
-    @Test(enabled = true)
+    @Test(enabled = false)
     public void testMemoryToDisk() throws Exception {
 
         ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
@@ -78,19 +94,24 @@ public class PointerIndexNGTest {
         ArrayList<byte[]> keys = new ArrayList<>(desired.navigableKeySet());
 
         int[] index = new int[1];
-        NextPointer rowScan = walIndex.concurrent().rowScan();
+        NextPointer rowScan = walIndex.concurrent(1024).rowScan();
         PointerStream stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            System.out.println("rowScan:" + UIO.bytesLong(key));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
             return true;
         };
-
         while (rowScan.next(stream));
 
+
+        System.out.println("Point Get");
         for (int i = 0; i < count * step; i++) {
             long k = i;
-            NextPointer getPointer = walIndex.concurrent().getPointer(UIO.longBytes(k));
+            NextPointer getPointer = walIndex.concurrent(0).getPointer(UIO.longBytes(k));
             stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+
+                System.out.println(
+                    "Got: Key=" + k + " Value= " + sortIndex + " " + UIO.bytesLong(key) + " " + timestamp + " " + tombstoned + " " + version + " " + fp);
                 if (fp != -1) {
                     TimestampedValue d = desired.get(key);
                     if (d == null) {
@@ -102,11 +123,10 @@ public class PointerIndexNGTest {
                 return fp != -1;
             };
 
-            while (getPointer.next(stream)) {
-                System.out.println("k:" + k + " " + System.currentTimeMillis());
-            }
+            while (getPointer.next(stream));
         }
 
+        System.out.println("Ranges");
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
 
@@ -120,7 +140,7 @@ public class PointerIndexNGTest {
             };
 
             System.out.println("Asked:" + UIO.bytesLong(keys.get(_i)) + " to " + UIO.bytesLong(keys.get(_i + 3)));
-            NextPointer rangeScan = walIndex.concurrent().rangeScan(keys.get(_i), keys.get(_i + 3));
+            NextPointer rangeScan = walIndex.concurrent(1024).rangeScan(keys.get(_i), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(3, streamed[0]);
 
@@ -135,7 +155,7 @@ public class PointerIndexNGTest {
                 }
                 return fp != -1;
             };
-            NextPointer rangeScan = walIndex.concurrent().rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
+            NextPointer rangeScan = walIndex.concurrent(1024).rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(2, streamed[0]);
 

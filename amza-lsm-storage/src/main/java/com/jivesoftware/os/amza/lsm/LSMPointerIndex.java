@@ -121,7 +121,7 @@ public class LSMPointerIndex implements PointerIndex {
 
     public void merge() throws Exception {
         int maxMergeDebt = 2; // TODO expose config
-        if (mergeablePointerIndexs.mergeDebut() < maxMergeDebt || merging) {
+        if (mergeablePointerIndexs.mergeDebt() < maxMergeDebt || merging) {
             return;
         }
         long nextIndexId;
@@ -137,18 +137,22 @@ public class LSMPointerIndex implements PointerIndex {
         mergeablePointerIndexs.merge(maxMergeDebt,
             () -> {
                 tmpRoot[0] = Files.createTempDir();
-                DiskBackedPointerIndex pointerIndex = new DiskBackedPointerIndex(
-                    new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "index").getAbsolutePath(),
-                        "rw", false), new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "keys").getAbsolutePath(), "rw", false));
+                DiskBackedLeapPointerIndex pointerIndex = new DiskBackedLeapPointerIndex(
+                    new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false), 64, 4096); //, new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "keys").getAbsolutePath(), "rw", false));
                 return pointerIndex;
             },
-            (com.jivesoftware.os.amza.lsm.DiskBackedPointerIndex index) -> {
+            (index) -> {
                 index.commit();
                 index.close();
                 File mergedIndexRoot = new File(indexRoot, Long.toString(nextIndexId));
                 FileUtils.moveDirectory(tmpRoot[0], mergedIndexRoot);
-                return new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(new File(mergedIndexRoot, "index").getAbsolutePath(), "rw", false),
-                    new DiskBackedPointerIndexFiler(new File(mergedIndexRoot, "keys").getAbsolutePath(), "rw", false));
+                File indexFile = new File(mergedIndexRoot, "index");
+                File keyFile = new File(mergedIndexRoot, "keys");
+                DiskBackedLeapPointerIndex reopenedIndex = new DiskBackedLeapPointerIndex(
+                    new DiskBackedPointerIndexFiler(indexFile.getAbsolutePath(), "rw", false), 64, 4096);//,
+                //new DiskBackedPointerIndexFiler(keyFile.getAbsolutePath(), "rw", false));
+                System.out.println("Commited " + reopenedIndex.count() + " index:" + indexFile.length() + "bytes keys:" + keyFile.length() + "bytes");
+                return reopenedIndex;
             });
         merging = false;
     }

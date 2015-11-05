@@ -67,16 +67,16 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
         pointers.consume((sortIndex, key, timestamp, tombstoned, version, walPointer) -> {
 
             indexEntryFiler.seek(0);
-            UIO.writeInt(indexEntryFiler, sortIndex, "sortIndex",lengthBuffer);
+            UIO.writeInt(indexEntryFiler, sortIndex, "sortIndex", lengthBuffer);
             UIO.writeLong(indexEntryFiler, keyFp[0], "keyFp");
-            UIO.writeInt(indexEntryFiler, key.length, "keyLength",lengthBuffer);
+            UIO.writeInt(indexEntryFiler, key.length, "keyLength", lengthBuffer);
             UIO.writeLong(indexEntryFiler, timestamp, "timestamp");
-            UIO.writeByte(indexEntryFiler, tombstoned ? (byte)1 : (byte)0, "tombstone");
+            UIO.writeByte(indexEntryFiler, tombstoned ? (byte) 1 : (byte) 0, "tombstone");
             UIO.writeLong(indexEntryFiler, version, "version");
             UIO.writeLong(indexEntryFiler, walPointer, "walPointerFp");
-            writeIndex.write(indexEntryFiler.leakBytes(), 0, (int)indexEntryFiler.length());
+            writeIndex.write(indexEntryFiler.leakBytes(), 0, (int) indexEntryFiler.length());
 
-            UIO.writeInt(writeKeys, key.length, "keyLength",lengthBuffer);
+            UIO.writeInt(writeKeys, key.length, "keyLength", lengthBuffer);
             UIO.write(writeKeys, key, "key");
             keyFp[0] += (4 + key.length);
             return true;
@@ -87,9 +87,9 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
     }
 
     @Override
-    public ReadablePointerIndex concurrent() throws Exception {
-        IReadable readableIndex = index.fileChannelFiler();
-        IReadable readableKeys = keys.fileChannelFiler();
+    public ReadablePointerIndex concurrent(int bufferSize) throws Exception {
+        IReadable readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
+        IReadable readableKeys = (bufferSize > 0) ? new HeapBufferedReadable(keys.fileChannelFiler(), bufferSize) : keys.fileChannelFiler();
         int count = (int) (readableIndex.length() / INDEX_ENTRY_SIZE);
         if (minKey == null) {
             minKey = ReadablePointerIndex.readKeyAtIndex(0, readableIndex, readableKeys);
@@ -116,4 +116,10 @@ public class DiskBackedPointerIndex implements ConcurrentReadablePointerIndex, A
     @Override
     public void commit() throws Exception {
     }
+
+    @Override
+    public String toString() {
+        return "DiskBackedPointerIndex{" + "index=" + index + ", keys=" + keys + ", minKey=" + minKey + ", maxKey=" + maxKey + '}';
+    }
+
 }

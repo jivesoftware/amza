@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.lsm.api;
 
-import com.jivesoftware.os.amza.lsm.DiskBackedPointerIndex;
+import com.jivesoftware.os.amza.lsm.DiskBackedLeapPointerIndex;
 
 /**
  *
@@ -8,5 +8,5 @@ import com.jivesoftware.os.amza.lsm.DiskBackedPointerIndex;
  */
 public interface PointerIndexFactory {
 
-    DiskBackedPointerIndex createPointerIndex() throws Exception;
+    DiskBackedLeapPointerIndex createPointerIndex() throws Exception;
 }

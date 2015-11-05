@@ -17,7 +17,7 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
 
     public static interface CommitIndex {
 
-        DiskBackedPointerIndex commit(DiskBackedPointerIndex index) throws Exception;
+        DiskBackedLeapPointerIndex commit(DiskBackedLeapPointerIndex index) throws Exception;
     }
 
     public boolean merge(int count, PointerIndexFactory indexFactory, CommitIndex commitIndex) throws Exception {
@@ -29,10 +29,10 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
             return false;
         }
 
-        DiskBackedPointerIndex mergedIndex = indexFactory.createPointerIndex();
+        DiskBackedLeapPointerIndex mergedIndex = indexFactory.createPointerIndex();
         NextPointer[] feeders = new NextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].concurrent().rowScan();
+            feeders[i] = copy[i].concurrent(1024 * 1204 * 10).rowScan();
         }
         InterleavePointerStream feedInterleaver = new InterleavePointerStream(feeders);
         mergedIndex.append((stream) -> {
@@ -43,7 +43,7 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
         int newSinceMerge;
         synchronized (indexesLock) {
             newSinceMerge = indexes.length - copy.length;
-            DiskBackedPointerIndex[] merged = new DiskBackedPointerIndex[newSinceMerge + 1];
+            DiskBackedLeapPointerIndex[] merged = new DiskBackedLeapPointerIndex[newSinceMerge + 1];
             System.arraycopy(indexes, 0, merged, 1, newSinceMerge);
             merged[0] = commitIndex.commit(mergedIndex);
             indexes = merged;
@@ -57,7 +57,7 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
         return true;
     }
 
-    public int mergeDebut() {
+    public int mergeDebt() {
         return grab().length;
     }
 

@@ -225,14 +225,6 @@ public class BinaryRowIO<K> implements RowIO<K> {
         return Math.sqrt(v);
     }
 
-    static public double dotProduct(double[] a, double[] b) {
-        double dp = 0;
-        for (int i = 0; i < a.length; i++) {
-            dp += a[i] * b[i];
-        }
-        return dp;
-    }
-
     private static class LeapFrog {
 
         private final long fp;

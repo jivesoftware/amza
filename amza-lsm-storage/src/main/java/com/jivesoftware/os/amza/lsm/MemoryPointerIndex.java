@@ -51,7 +51,7 @@ public class MemoryPointerIndex implements AppendablePointerIndex, ConcurrentRea
     }
 
     @Override
-    public ReadPointerIndex concurrent() throws Exception {
+    public ReadPointerIndex concurrent(int bufferSize) throws Exception {
         return new ReadPointerIndex() {
 
             @Override

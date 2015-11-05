@@ -30,10 +30,11 @@ public class MergablePointerIndexsNGTest {
         for (int wi = 0; wi < indexes; wi++) {
 
             File indexFiler = File.createTempFile("a-index-" + wi, ".tmp");
-            File keysFile = File.createTempFile("a-keys-" + wi, ".tmp");
+            //File keysFile = File.createTempFile("a-keys-" + wi, ".tmp");
 
-            DiskBackedPointerIndex walIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
-                new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
+            DiskBackedLeapPointerIndex walIndex = new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+                64, 2);//,
+            //new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
             PointerIndexUtils.append(walIndex, 0, step, count, desired);
             indexs.append(walIndex);
@@ -46,10 +47,11 @@ public class MergablePointerIndexsNGTest {
 
         indexs.merge(2, () -> {
             File indexFiler = File.createTempFile("a-index-merged", ".tmp");
-            File keysFile = File.createTempFile("a-keys-merged", ".tmp");
+            //File keysFile = File.createTempFile("a-keys-merged", ".tmp");
 
-            return new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
-                new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
+            return new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+                64, 2);//,
+            //new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
         }, (index) -> {
             return index;
         });

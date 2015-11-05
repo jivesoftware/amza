@@ -8,7 +8,7 @@ import java.io.IOException;
  */
 public interface ConcurrentReadablePointerIndex {
 
-    ReadPointerIndex concurrent() throws Exception;
+    ReadPointerIndex concurrent(int bufferSize) throws Exception;
 
     void destroy() throws IOException;
 

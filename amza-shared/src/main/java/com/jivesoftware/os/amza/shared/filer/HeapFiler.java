@@ -43,6 +43,11 @@ public class HeapFiler implements IFiler {
         maxLength = _bytes.length;
     }
 
+    public HeapFiler(byte[] _bytes, int _maxLength) {
+        bytes = _bytes;
+        maxLength = _maxLength;
+    }
+
     public HeapFiler createReadOnlyClone() {
         HeapFiler heapFiler = new HeapFiler();
         heapFiler.bytes = bytes;
@@ -69,6 +74,11 @@ public class HeapFiler implements IFiler {
     public void reset() {
         fp = 0;
         maxLength = 0;
+    }
+
+    public void reset(int _maxLength) {
+        fp = 0;
+        maxLength = _maxLength;
     }
 
     @Override

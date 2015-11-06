@@ -26,11 +26,17 @@ public class PointerIndexStressNGTest {
         int maxDepthBeforeMerging = 2;
         int count = 0;
 
-        int maxLeaps = 64;
-        int updatesBetweenLeaps = 4096;
+        int numBatches = 10;
+        int batchSize = 1_000_000;
+        int maxKeyIncrement = 10;
+
+        int maxLeaps = (int) (Math.log(numBatches * batchSize) / Math.log(2));
+        int updatesBetweenLeaps = 100;
 
         MutableLong merge = new MutableLong();
+        MutableLong maxKey = new MutableLong();
         MutableBoolean running = new MutableBoolean(true);
+        MutableBoolean merging = new MutableBoolean(true);
         MutableLong stopGets = new MutableLong(Long.MAX_VALUE);
         Future<Object> merger = Executors.newSingleThreadExecutor().submit(() -> {
             while ((running.isTrue() || indexs.mergeDebt() > 1)
@@ -63,44 +69,38 @@ public class PointerIndexStressNGTest {
                 }
             }
 
-            stopGets.setValue(System.currentTimeMillis() + 20_000);
+            //stopGets.setValue(System.currentTimeMillis() + 60_000);
             return null;
 
         });
 
-        int numBatches = 10;
-        int batchSize = 1_000_000;
-        int maxKeyIncrement = 2;
         Random rand = new Random();
         
         Future<Object> pointGets = Executors.newSingleThreadExecutor().submit(() -> {
 
-            long maxValueForPointGet = batchSize * (maxKeyIncrement + 1);
             int[] hits = {0};
             int[] misses = {0};
             long getStart = System.currentTimeMillis();
             while (stopGets.longValue() > System.currentTimeMillis()) {
 
                 try {
-                    if (running.isTrue()) {
+                    if (running.isTrue() || merging.isTrue()) {
                         Thread.sleep(100);
                         continue;
                     }
 
-                    int longKey = rand.nextInt((int) maxValueForPointGet);
+                    int longKey = rand.nextInt(maxKey.intValue());
                     byte[] keyBytes = UIO.longBytes(longKey);
                     NextPointer pointer = indexs.getPointer(keyBytes);
-                    if (!pointer.next((sortIndex, key, timestamp, tombstoned, version, pointer1) -> {
-                        if (key != null) {
+                    pointer.next((sortIndex, key, timestamp, tombstoned, version, pointer1) -> {
+                        if (pointer1 != -1) {
                             hits[0]++;
                         } else {
                             misses[0]++;
                         }
                         return true;
-                    })) {
-                        misses[0]++;
-                    }
-                    if ((hits[0] + misses[0]) % 10 == 0) {
+                    });
+                    if ((hits[0] + misses[0]) % 1_000 == 0) {
                         long getEnd = System.currentTimeMillis();
                         System.out.println("Hits:" + hits[0] + " Misses:" + misses[0] + " Elapse:" + (getEnd - getStart));
                         hits[0] = 0;
@@ -129,7 +129,8 @@ public class PointerIndexStressNGTest {
                 new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false), maxLeaps, updatesBetweenLeaps);//,
             //new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
-            PointerIndexUtils.append(index, 0, maxKeyIncrement, batchSize, null);
+            long lastKey = PointerIndexUtils.append(index, 0, maxKeyIncrement, batchSize, null);
+            maxKey.setValue(Math.max(maxKey.longValue(), lastKey));
             indexs.append(index);
             count += batchSize;
 
@@ -140,6 +141,9 @@ public class PointerIndexStressNGTest {
 
         running.setValue(false);
         merger.get();
+        /*System.out.println("Sleeping 10 sec before gets...");
+        Thread.sleep(10_000L);*/
+        merging.setValue(false);
         pointGets.get();
 
         System.out.println("Done. " + (System.currentTimeMillis() - start));

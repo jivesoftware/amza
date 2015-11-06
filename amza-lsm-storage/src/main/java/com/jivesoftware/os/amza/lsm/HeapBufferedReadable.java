@@ -35,10 +35,17 @@ class HeapBufferedReadable implements IReadable {
         } else {
             backingReadable.seek(position);
             long remaining = length() - position;
-            byte[] bytes = new byte[Math.min((int) remaining, Math.max(bufferSize, needed))];
-            backingReadable.read(bytes);
+            int nextBufferSize = Math.max(bufferSize, needed);
+            int used = Math.min((int) remaining, nextBufferSize);
+            if (buffer == null || needed > buffer.leakBytes().length) {
+                byte[] bytes = new byte[nextBufferSize];
+                backingReadable.read(bytes, 0, used);
+                buffer = new HeapFiler(bytes, used);
+            } else {
+                buffer.reset(used);
+                backingReadable.read(buffer.leakBytes(), 0, used);
+            }
             startOfBufferFp = position;
-            buffer = new HeapFiler(bytes);
             return buffer;
         }
     }

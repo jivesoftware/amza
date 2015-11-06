@@ -22,12 +22,13 @@ public class PointerIndexUtils {
     static final Random rand = new Random();
     static OrderIdProvider timeProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
 
-    static void append(AppendablePointerIndex appendablePointerIndex,
+    static long append(AppendablePointerIndex appendablePointerIndex,
         long start,
         int step,
         int count,
         ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws Exception {
 
+        long[] lastKey = new long[1];
         appendablePointerIndex.append((stream) -> {
             long k = start + rand.nextInt(step);
             for (int i = 0; i < count; i++) {
@@ -48,8 +49,10 @@ public class PointerIndexUtils {
                 }
                 k += 1 + rand.nextInt(step);
             }
+            lastKey[0] = k;
             return true;
         });
+        return lastKey[0];
     }
 
     static void assertions(MergeablePointerIndexs indexs,

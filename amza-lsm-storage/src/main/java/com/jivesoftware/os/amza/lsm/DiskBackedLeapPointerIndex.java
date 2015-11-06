@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.lsm;
 
+import com.google.common.collect.Maps;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
@@ -12,6 +13,7 @@ import com.jivesoftware.os.amza.lsm.api.ReadPointerIndex;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 
 /**
  *
@@ -102,47 +104,58 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         return new LeapFrog(startOfLeapFp, leaps);
     }
 
+    Leaps leaps = null;
+    Map<Long, Leaps> leapsCache = Maps.newHashMap();
+
     @Override
     public ReadPointerIndex concurrent(int bufferSize) throws Exception {
         IReadable readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
 
-        byte[] lengthBuffer = new byte[8];
-        long indexLength = readableIndex.length();
-        if (indexLength < 4) {
-            System.out.println("WTF:" + indexLength);
+        if (leaps == null) {
+            byte[] lengthBuffer = new byte[8];
+            long indexLength = readableIndex.length();
+            if (indexLength < 4) {
+                System.out.println("WTF:" + indexLength);
+            }
+            readableIndex.seek(indexLength - 4);
+            int length = UIO.readInt(readableIndex, "length", lengthBuffer);
+            readableIndex.seek(indexLength - length);
+            leaps = Leaps.read(readableIndex, lengthBuffer);
         }
-        readableIndex.seek(indexLength - 4);
-        int length = UIO.readInt(readableIndex, "length", lengthBuffer);
-        readableIndex.seek(indexLength - length);
-        Leaps leaps = Leaps.read(readableIndex, lengthBuffer);
-        return new DiskBackedLeapReadablePointerIndex(leaps, readableIndex);
+        return new DiskBackedLeapReadablePointerIndex(leaps, readableIndex, leapsCache);
     }
 
     public static class DiskBackedLeapReadablePointerIndex implements ReadPointerIndex {
 
         private final Leaps leaps;
         private final IReadable readable;
+        private final Map<Long, Leaps> leapsCache;
 
-        public DiskBackedLeapReadablePointerIndex(Leaps leaps, IReadable readable) {
+        public DiskBackedLeapReadablePointerIndex(Leaps leaps, IReadable readable, Map<Long, Leaps> leapsCache) {
             this.leaps = leaps;
             this.readable = readable;
+            this.leapsCache = leapsCache;
         }
 
         @Override
         public NextPointer getPointer(byte[] desired) throws Exception {
 
             long fp = getInclusiveStartOfRow(desired);
+            if (fp < 0) {
+                return stream -> false;
+            }
             NextPointer scanFromFp = scanFromFp(fp);
             boolean[] once = new boolean[]{false};
             return (stream) -> {
                 if (once[0]) {
                     return false;
                 }
+                boolean[] result = new boolean[1];
                 while (scanFromFp.next((sortIndex, key, timestamp, tombstoned, version, pointer) -> {
                     int c = UnsignedBytes.lexicographicalComparator().compare(key, desired);
 
                     if (c == 0) {
-                        stream.stream(sortIndex, key, timestamp, tombstoned, version, pointer);
+                        result[0] = stream.stream(sortIndex, key, timestamp, tombstoned, version, pointer);
                         once[0] = true;
                         return false;
                     }
@@ -153,12 +166,15 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                         return true;
                     }
                 }));
-                return false;
+                return once[0] && result[0];
             };
         }
 
         public long getInclusiveStartOfRow(byte[] key) throws Exception {
             Leaps at = leaps;
+            if (UnsignedBytes.lexicographicalComparator().compare(leaps.lastKey, key) < 0) {
+                return -1;
+            }
 
             byte[] lengthBuffer = new byte[8];
             long closestFP = 0;
@@ -168,8 +184,13 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                     if (UnsignedBytes.lexicographicalComparator().compare(at.keys[i], key) < 0) {
                         closestFP = Math.max(closestFP, at.fpIndex[i]) - 1;
                     } else {
-                        readable.seek(at.fpIndex[i]);
-                        next = Leaps.read(readable, lengthBuffer);
+                        next = leapsCache.get(at.fpIndex[i]);
+                        if (next == null) {
+                            readable.seek(at.fpIndex[i]);
+                            next = Leaps.read(readable, lengthBuffer);
+                            leapsCache.put(at.fpIndex[i], next);
+                        }
+
                         break;
                     }
                 }
@@ -181,6 +202,9 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         @Override
         public NextPointer rangeScan(byte[] from, byte[] to) throws Exception {
             long fp = getInclusiveStartOfRow(from);
+            if (fp < 0) {
+                return stream -> false;
+            }
             NextPointer scanFromFp = scanFromFp(fp);
             return (stream) -> {
                 return scanFromFp.next((sortIndex, key, timestamp, tombstoned, version, pointer) -> {
@@ -211,14 +235,19 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                         int length = UIO.readInt(readable, "entryLength", lengthBuffer);
                         byte[] bytes = new byte[length - 4];
                         readable.read(bytes);
-                        HeapFiler filer = new HeapFiler(bytes);
-                        stream.stream(-1,
-                            UIO.readByteArray(filer, "key", lengthBuffer),
-                            UIO.readLong(filer, "timestamp", lengthBuffer),
-                            UIO.readByte(filer, "tombstone") != 0,
-                            UIO.readLong(filer, "version", lengthBuffer),
-                            UIO.readLong(filer, "walPointerFp", lengthBuffer));
-                        break;
+                        int keyLength = UIO.bytesInt(bytes, 0);
+                        byte[] key = new byte[keyLength];
+                        System.arraycopy(bytes, 4, key, 0, keyLength);
+                        long timestamp = UIO.bytesLong(bytes, 4 + keyLength);
+                        boolean tombstone = bytes[4 + keyLength + 8] != 0;
+                        long version = UIO.bytesLong(bytes, 4 + keyLength + 8 + 1);
+                        long walPointerFp = UIO.bytesLong(bytes, 4 + keyLength + 8 + 1 + 8);
+                        return stream.stream(-1,
+                            key,
+                            timestamp,
+                            tombstone,
+                            version,
+                            walPointerFp);
                     } else {
                         int length = UIO.readInt(readable, "entryLength", lengthBuffer);
                         readable.seek(readable.getFilePointer() + (length - 4));
@@ -260,7 +289,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
 
     @Override
     public String toString() {
-        return "DiskBackedPointerIndex{" + "index=" + index + ", minKey=" + minKey + ", maxKey=" + maxKey + '}';
+        return "DiskBackedLeapPointerIndex{" + "index=" + index + ", minKey=" + minKey + ", maxKey=" + maxKey + '}';
     }
 
     private static class LeapFrog {

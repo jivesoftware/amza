@@ -109,7 +109,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                 byte[] pk = WALKey.compose(prefix, key);
                 NextPointer got = primaryDb.getPointer(key);
                 byte[] mode = new byte[1];
-                got.next((int sortIndex, byte[] key1, long timestamp1, boolean tombstoned1, long version1, long pointer) -> {
+                got.next((key1, timestamp1, tombstoned1, version1, pointer) -> {
                     if (pointer != -1) {
                         int c = CompareTimestampVersions.compare(timestamp1, version1, timestamp, version);
                         mode[0] = (c < 0) ? WALMergeKeyPointerStream.clobbered : WALMergeKeyPointerStream.ignored;
@@ -119,7 +119,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
 
                     if (mode[0] != WALMergeKeyPointerStream.ignored) {
                         primaryDb.append((pointerStream) -> {
-                            return pointerStream.stream(sortIndex, pk, timestamp, tombstoned, version, fp);
+                            return pointerStream.stream(pk, timestamp, tombstoned, version, fp);
                         });
 
                         if (prefix != null) {
@@ -127,7 +127,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                             UIO.longBytes(fp, txFpBytes, 8);
                             byte[] prefixTxFp = WALKey.compose(prefix, txFpBytes);
                             prefixDb.append((pointerStream) -> {
-                                return pointerStream.stream(sortIndex, prefixTxFp, timestamp, tombstoned, version, fp);
+                                return pointerStream.stream(prefixTxFp, timestamp, tombstoned, version, fp);
                             });
                         }
                     }
@@ -151,17 +151,14 @@ public class LSMPointerIndexWALIndex implements WALIndex {
             byte[] fromFpPk = WALKey.compose(prefix, new byte[0]);
             byte[] toFpPk = WALKey.prefixUpperExclusive(fromFpPk);
             NextPointer rangeScan = prefixDb.rangeScan(fromFpPk, toFpPk);
-            PointerStream stream = new PointerStream() {
-                @Override
-                public boolean stream(int sortIndex, byte[] rawKey, long timestamp, boolean tombstoned, long version, long pointer) throws Exception {
-                    if (KeyUtil.compare(rawKey, toFpPk) >= 0) {
-                        return false;
-                    }
-                    byte[] key = WALKey.rawKeyKey(rawKey);
-                    long takeTxId = UIO.bytesLong(key, 0);
-                    long takeFp = UIO.bytesLong(key, 8);
-                    return txFpStream.stream(takeTxId, takeFp);
+            PointerStream stream = (rawKey, timestamp, tombstoned, version, pointer) -> {
+                if (KeyUtil.compare(rawKey, toFpPk) >= 0) {
+                    return false;
                 }
+                byte[] key = WALKey.rawKeyKey(rawKey);
+                long takeTxId = UIO.bytesLong(key, 0);
+                long takeFp = UIO.bytesLong(key, 8);
+                return txFpStream.stream(takeTxId, takeFp);
             };
             while (rangeScan.next(stream));
             return false;
@@ -181,7 +178,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
         try {
             byte[] pk = WALKey.compose(prefix, key);
             NextPointer pointer = primaryDb.getPointer(pk);
-            return pointer.next((sortIndex, rawKey, timestamp, tombstoned, version, pointer1) -> {
+            return pointer.next((rawKey, timestamp, tombstoned, version, pointer1) -> {
                 return stream.stream(prefix, key, timestamp, tombstoned, version, pointer1);
             });
         } finally {
@@ -196,7 +193,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
             return keys.consume((key) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 NextPointer pointer = primaryDb.getPointer(pk);
-                return pointer.next((sortIndex, rawKey, timestamp, tombstoned, version, pointer1) -> {
+                return pointer.next((rawKey, timestamp, tombstoned, version, pointer1) -> {
                     return stream.stream(prefix, key, timestamp, tombstoned, version, pointer1);
                 });
             });
@@ -212,7 +209,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
             return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 NextPointer pointer = primaryDb.getPointer(pk);
-                return pointer.next((sortIndex, rawKey, timestamp, tombstoned, version, pointer1) -> {
+                return pointer.next((rawKey, timestamp, tombstoned, version, pointer1) -> {
                     return entryToWALPointer(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
                         timestamp, tombstoned, version, pointer1, stream);
                 });
@@ -296,7 +293,6 @@ public class LSMPointerIndexWALIndex implements WALIndex {
 //            lock.release();
 //        }
 //    }
-
     @Override
     public void commit() throws Exception {
         lock.acquire();
@@ -352,7 +348,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     }
 
     private boolean stream(final WALKeyPointerStream stream, NextPointer nextPointer) throws Exception {
-        PointerStream pointerStream = (sortIndex, rawKey, timestamp, tombstoned, version, pointer)
+        PointerStream pointerStream = ( rawKey, timestamp, tombstoned, version, pointer)
             -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned, version, pointer);
         while (nextPointer.next(pointerStream));
         return false;

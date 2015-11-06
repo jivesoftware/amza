@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.lsm.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.api.PointerStream;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.concurrent.ConcurrentSkipListMap;
 import junit.framework.Assert;
 import org.testng.annotations.Test;
@@ -17,23 +18,6 @@ import org.testng.annotations.Test;
  * @author jonathan.colt
  */
 public class PointerIndexNGTest {
-
-    @Test(enabled = false)
-    public void testDisk() throws Exception {
-        File indexFiler = File.createTempFile("b-index", ".tmp");
-        File keysFile = File.createTempFile("b-keys", ".tmp");
-
-        ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
-
-        int count = 10;
-        int step = 10;
-
-        DiskBackedPointerIndex pointerIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
-            new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
-
-        PointerIndexUtils.append(pointerIndex, 0, step, count, desired);
-        assertions(pointerIndex, count, step, desired);
-    }
 
     @Test(enabled = true)
     public void testLeapDisk() throws Exception {
@@ -47,7 +31,7 @@ public class PointerIndexNGTest {
         DiskBackedLeapPointerIndex pointerIndex = new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
             64, 10);
 
-        PointerIndexUtils.append(pointerIndex, 0, step, count, desired);
+        PointerIndexUtils.append(new Random(), pointerIndex, 0, step, count, desired);
         assertions(pointerIndex, count, step, desired);
     }
 
@@ -61,7 +45,7 @@ public class PointerIndexNGTest {
 
         MemoryPointerIndex walIndex = new MemoryPointerIndex();
 
-        PointerIndexUtils.append(walIndex, 0, step, count, desired);
+        PointerIndexUtils.append(new Random(), walIndex, 0, step, count, desired);
         assertions(walIndex, count, step, desired);
     }
 
@@ -75,13 +59,12 @@ public class PointerIndexNGTest {
 
         MemoryPointerIndex memoryIndex = new MemoryPointerIndex();
 
-        PointerIndexUtils.append(memoryIndex, 0, step, count, desired);
+        PointerIndexUtils.append(new Random(), memoryIndex, 0, step, count, desired);
         assertions(memoryIndex, count, step, desired);
 
         File indexFiler = File.createTempFile("c-index", ".tmp");
-        File keysFile = File.createTempFile("c-keys", ".tmp");
-        DiskBackedPointerIndex disIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
-            new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
+        DiskBackedLeapPointerIndex disIndex = new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
+            64, 10);
 
         disIndex.append(memoryIndex);
 
@@ -95,7 +78,7 @@ public class PointerIndexNGTest {
 
         int[] index = new int[1];
         NextPointer rowScan = walIndex.concurrent(1024).rowScan();
-        PointerStream stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+        PointerStream stream = (key, timestamp, tombstoned, version, fp) -> {
             System.out.println("rowScan:" + UIO.bytesLong(key));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
@@ -103,15 +86,14 @@ public class PointerIndexNGTest {
         };
         while (rowScan.next(stream));
 
-
         System.out.println("Point Get");
         for (int i = 0; i < count * step; i++) {
             long k = i;
             NextPointer getPointer = walIndex.concurrent(0).getPointer(UIO.longBytes(k));
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
 
                 System.out.println(
-                    "Got: Key=" + k + " Value= " + sortIndex + " " + UIO.bytesLong(key) + " " + timestamp + " " + tombstoned + " " + version + " " + fp);
+                    "Got: Key=" + k + " Value= " + UIO.bytesLong(key) + " " + timestamp + " " + tombstoned + " " + version + " " + fp);
                 if (fp != -1) {
                     TimestampedValue d = desired.get(key);
                     if (d == null) {
@@ -131,7 +113,7 @@ public class PointerIndexNGTest {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     System.out.println("Streamed:" + UIO.bytesLong(key));
                     streamed[0]++;
@@ -149,7 +131,7 @@ public class PointerIndexNGTest {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     streamed[0]++;
                 }

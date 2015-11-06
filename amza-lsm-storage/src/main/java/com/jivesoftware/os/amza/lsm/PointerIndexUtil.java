@@ -12,9 +12,9 @@ public class PointerIndexUtil {
 
     public static NextPointer get(ConcurrentReadablePointerIndex[] indexes, byte[] key) {
         return (stream) -> {
-            PointerStream found = (sortIndex, key1, timestamp, tombstoned, version, fp) -> {
+            PointerStream found = (key1, timestamp, tombstoned, version, fp) -> {
                 if (fp != -1) {
-                    return stream.stream(sortIndex, key1, timestamp, tombstoned, version, fp);
+                    return stream.stream(key1, timestamp, tombstoned, version, fp);
                 }
                 return false;
             };
@@ -24,7 +24,7 @@ public class PointerIndexUtil {
                     return false;
                 }
             }
-            stream.stream(Integer.MIN_VALUE, key, -1, false, -1, -1);
+            stream.stream(key, -1, false, -1, -1);
             return false;
         };
     }

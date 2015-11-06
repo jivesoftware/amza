@@ -19,14 +19,15 @@ import junit.framework.Assert;
  */
 public class PointerIndexUtils {
 
-    static final Random rand = new Random();
     static OrderIdProvider timeProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
 
-    static long append(AppendablePointerIndex appendablePointerIndex,
+    static long append(Random rand,
+        AppendablePointerIndex appendablePointerIndex,
         long start,
         int step,
         int count,
         ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws Exception {
+
 
         long[] lastKey = new long[1];
         appendablePointerIndex.append((stream) -> {
@@ -44,7 +45,7 @@ public class PointerIndexUtils {
                         }
                     });
                 }
-                if (!stream.stream(Integer.MIN_VALUE, key, time, false, 0, walFp)) {
+                if (!stream.stream(key, time, false, 0, walFp)) {
                     break;
                 }
                 k += 1 + rand.nextInt(step);
@@ -64,7 +65,7 @@ public class PointerIndexUtils {
 
         int[] index = new int[1];
         NextPointer rowScan = indexs.rowScan();
-        PointerStream stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+        PointerStream stream = (key, timestamp, tombstoned, version, fp) -> {
             System.out.println("scanned:" + UIO.bytesLong(keys.get(index[0])) + " " + UIO.bytesLong(key));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
@@ -77,7 +78,7 @@ public class PointerIndexUtils {
         for (int i = 0; i < count * step; i++) {
             long k = i;
             NextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
                 TimestampedValue expectedFP = desired.get(key);
                 if (expectedFP == null) {
                     Assert.assertTrue(expectedFP == null && fp == -1);
@@ -96,7 +97,7 @@ public class PointerIndexUtils {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     System.out.println("Streamed:" + UIO.bytesLong(key));
                     streamed[0]++;
@@ -116,7 +117,7 @@ public class PointerIndexUtils {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     streamed[0]++;
                 }

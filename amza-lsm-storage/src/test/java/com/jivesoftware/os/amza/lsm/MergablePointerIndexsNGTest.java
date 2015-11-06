@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.lsm.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.api.PointerStream;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.concurrent.ConcurrentSkipListMap;
 import junit.framework.Assert;
 import org.testng.annotations.Test;
@@ -27,34 +28,29 @@ public class MergablePointerIndexsNGTest {
         int indexes = 4;
 
         MergeablePointerIndexs indexs = new MergeablePointerIndexs();
+        Random rand = new Random();
         for (int wi = 0; wi < indexes; wi++) {
 
             File indexFiler = File.createTempFile("a-index-" + wi, ".tmp");
-            //File keysFile = File.createTempFile("a-keys-" + wi, ".tmp");
 
             DiskBackedLeapPointerIndex walIndex = new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
-                64, 2);//,
-            //new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
+                64, 2);
 
-            PointerIndexUtils.append(walIndex, 0, step, count, desired);
+            PointerIndexUtils.append(rand, walIndex, 0, step, count, desired);
             indexs.append(walIndex);
         }
 
-        //LsmMemoryWalIndex memoryWalIndex = new LsmMemoryWalIndex();
-        //append(memoryWalIndex, step, count, timeProvider, desired);
-        //indexs.append(memoryWalIndex);
         assertions(indexs, count, step, desired);
 
         indexs.merge(2, () -> {
             File indexFiler = File.createTempFile("a-index-merged", ".tmp");
-            //File keysFile = File.createTempFile("a-keys-merged", ".tmp");
 
-            return new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false),
-                64, 2);//,
-            //new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
+            return new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false), 64, 2);
         }, (index) -> {
             return index;
         });
+
+        assertions(indexs, count, step, desired);
     }
 
     private void assertions(MergeablePointerIndexs indexs,
@@ -66,8 +62,8 @@ public class MergablePointerIndexsNGTest {
 
         int[] index = new int[1];
         NextPointer rowScan = indexs.rowScan();
-        PointerStream stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
-            //System.out.println(UIO.bytesLong(keys.get(index[0]))+" "+UIO.bytesLong(key));
+        PointerStream stream = (key, timestamp, tombstoned, version, fp) -> {
+            System.out.println(UIO.bytesLong(keys.get(index[0])) + " " + UIO.bytesLong(key));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
             index[0]++;
             return true;
@@ -79,7 +75,7 @@ public class MergablePointerIndexsNGTest {
         for (int i = 0; i < count * step; i++) {
             long k = i;
             NextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
                 TimestampedValue expectedFP = desired.get(key);
                 if (expectedFP == null) {
                     Assert.assertTrue(expectedFP == null && fp == -1);
@@ -98,7 +94,7 @@ public class MergablePointerIndexsNGTest {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     System.out.println("Streamed:" + UIO.bytesLong(key));
                     streamed[0]++;
@@ -118,7 +114,7 @@ public class MergablePointerIndexsNGTest {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (sortIndex, key, timestamp, tombstoned, version, fp) -> {
+            stream = (key, timestamp, tombstoned, version, fp) -> {
                 if (fp > -1) {
                     streamed[0]++;
                 }

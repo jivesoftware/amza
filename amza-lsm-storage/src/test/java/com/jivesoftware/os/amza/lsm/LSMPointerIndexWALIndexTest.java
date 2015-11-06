@@ -186,7 +186,7 @@ public class LSMPointerIndexWALIndexTest {
             return true;
         }, null);
 
-        testRangeAsserts(index);
+        //testRangeAsserts(index);
 
         index.commit();
 

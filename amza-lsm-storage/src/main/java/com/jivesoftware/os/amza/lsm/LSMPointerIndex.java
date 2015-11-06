@@ -44,8 +44,8 @@ public class LSMPointerIndex implements PointerIndex {
         }
         for (Long indexId : indexIds) {
             File index = new File(indexRoot, String.valueOf(indexId));
-            DiskBackedPointerIndex pointerIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(new File(index, "index").getAbsolutePath(), "rw",
-                false), new DiskBackedPointerIndexFiler(new File(index, "keys").getAbsolutePath(), "rw", false));
+            DiskBackedLeapPointerIndex pointerIndex = new DiskBackedLeapPointerIndex(
+                new DiskBackedPointerIndexFiler(new File(index, "index").getAbsolutePath(), "rw", false), 64, 1024);
             mergeablePointerIndexs.append(pointerIndex);
         }
     } // descending
@@ -103,7 +103,7 @@ public class LSMPointerIndex implements PointerIndex {
     public void append(Pointers pointers) throws Exception {
         long[] count = {memoryPointerIndex.count()};
         memoryPointerIndex.append((stream) -> {
-            return pointers.consume((int sortIndex, byte[] key, long timestamp, boolean tombstoned, long version, long pointer) -> {
+            return pointers.consume((key, timestamp, tombstoned, version, pointer) -> {
                 count[0]++;
                 if (count[0] > maxUpdatesBetweenCompactionHintMarker) { //  TODO flush on memory pressure.
                     count[0] = memoryPointerIndex.count();
@@ -111,7 +111,7 @@ public class LSMPointerIndex implements PointerIndex {
                         commit();
                     }
                 }
-                return stream.stream(sortIndex, key, timestamp, tombstoned, version, pointer);
+                return stream.stream(key, timestamp, tombstoned, version, pointer);
             });
         });
         merge();
@@ -138,7 +138,7 @@ public class LSMPointerIndex implements PointerIndex {
             () -> {
                 tmpRoot[0] = Files.createTempDir();
                 DiskBackedLeapPointerIndex pointerIndex = new DiskBackedLeapPointerIndex(
-                    new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false), 64, 4096); //, new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "keys").getAbsolutePath(), "rw", false));
+                    new DiskBackedPointerIndexFiler(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false), 64, 4096);
                 return pointerIndex;
             },
             (index) -> {
@@ -179,14 +179,13 @@ public class LSMPointerIndex implements PointerIndex {
         }
         LOG.info("Commiting memory index (" + flushingMemoryPointerIndex.count() + ") to on disk index." + indexRoot);
         File tmpRoot = Files.createTempDir();
-        DiskBackedPointerIndex pointerIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(new File(tmpRoot, "index").getAbsolutePath(), "rw",
-            false), new DiskBackedPointerIndexFiler(new File(tmpRoot, "keys").getAbsolutePath(), "rw", false));
+        DiskBackedLeapPointerIndex pointerIndex = new DiskBackedLeapPointerIndex(
+            new DiskBackedPointerIndexFiler(new File(tmpRoot, "index").getAbsolutePath(), "rw", false), 64, 100); // TODO Config
         pointerIndex.append(flushingMemoryPointerIndex);
         pointerIndex.close();
         File index = new File(indexRoot, Long.toString(nextIndexId));
         FileUtils.moveDirectory(tmpRoot, index);
-        pointerIndex = new DiskBackedPointerIndex(new DiskBackedPointerIndexFiler(new File(index, "index").getAbsolutePath(), "rw", false),
-            new DiskBackedPointerIndexFiler(new File(index, "keys").getAbsolutePath(), "rw", false));
+        pointerIndex = new DiskBackedLeapPointerIndex(new DiskBackedPointerIndexFiler(new File(index, "index").getAbsolutePath(), "rw", false), 64, 100); // TODO Config
         synchronized (this) {
             mergeablePointerIndexs.append(pointerIndex);
             flushingMemoryPointerIndex = null;

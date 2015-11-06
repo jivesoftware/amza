@@ -60,7 +60,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         HeapFiler indexEntryFiler = new HeapFiler(1024); // TODO somthing better
 
         byte[][] lastKey = new byte[1][];
-        pointers.consume((sortIndex, key, timestamp, tombstoned, version, walPointer) -> {
+        pointers.consume((key, timestamp, tombstoned, version, walPointer) -> {
 
             indexEntryFiler.reset();
             UIO.writeByte(indexEntryFiler, (byte) 0, "type");
@@ -147,17 +147,17 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                 return stream -> false;
             }
             NextPointer scanFromFp = scanFromFp(fp);
-            boolean[] once = new boolean[] { false };
+            boolean[] once = new boolean[]{false};
             return (stream) -> {
                 if (once[0]) {
                     return false;
                 }
                 boolean[] result = new boolean[1];
-                while (scanFromFp.next((sortIndex, key, timestamp, tombstoned, version, pointer) -> {
+                while (scanFromFp.next((key, timestamp, tombstoned, version, pointer) -> {
                     int c = UnsignedBytes.lexicographicalComparator().compare(key, desired);
 
                     if (c == 0) {
-                        result[0] = stream.stream(sortIndex, key, timestamp, tombstoned, version, pointer);
+                        result[0] = stream.stream(key, timestamp, tombstoned, version, pointer);
                         once[0] = true;
                         return false;
                     }
@@ -209,15 +209,23 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
             }
             NextPointer scanFromFp = scanFromFp(fp);
             return (stream) -> {
-                return scanFromFp.next((sortIndex, key, timestamp, tombstoned, version, pointer) -> {
-                    int c = UnsignedBytes.lexicographicalComparator().compare(key, from);
-                    if (c >= 0) {
-                        c = UnsignedBytes.lexicographicalComparator().compare(key, to);
-                        return c < 0 && stream.stream(sortIndex, key, timestamp, tombstoned, version, pointer);
-                    } else {
-                        return true;
-                    }
-                });
+                boolean[] once = new boolean[]{false};
+                boolean more = true;
+                while (!once[0] && more) {
+                    more = scanFromFp.next((key, timestamp, tombstoned, version, pointer) -> {
+                        int c = UnsignedBytes.lexicographicalComparator().compare(key, from);
+                        if (c >= 0) {
+                            c = UnsignedBytes.lexicographicalComparator().compare(key, to);
+                            if (c < 0) {
+                                once[0] = true;
+                            }
+                            return c < 0 && stream.stream(key, timestamp, tombstoned, version, pointer);
+                        } else {
+                            return true;
+                        }
+                    });
+                }
+                return more;
             };
         }
 
@@ -244,7 +252,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                         boolean tombstone = bytes[4 + keyLength + 8] != 0;
                         long version = UIO.bytesLong(bytes, 4 + keyLength + 8 + 1);
                         long walPointerFp = UIO.bytesLong(bytes, 4 + keyLength + 8 + 1 + 8);
-                        return stream.stream(-1,
+                        return stream.stream(
                             key,
                             timestamp,
                             tombstone,
@@ -292,6 +300,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
     @Override
     public String toString() {
         return "DiskBackedLeapPointerIndex{" + "index=" + index + ", minKey=" + minKey + ", maxKey=" + maxKey + '}';
+
     }
 
     private static class LeapFrog {

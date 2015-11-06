@@ -8,17 +8,13 @@ import com.google.common.primitives.UnsignedBytes;
  */
 class Pointer implements Comparable<Pointer> {
 
-    final int sortIndex;
-    final int fi;
     final byte[] key;
     final long timestamps;
     final long version;
     final boolean tombstones;
     final long fps;
 
-    public Pointer(int sortIndex, int fi, byte[] key, long timestamps, boolean tombstones, long version, long fps) {
-        this.sortIndex = sortIndex;
-        this.fi = fi;
+    public Pointer(byte[] key, long timestamps, boolean tombstones, long version, long fps) {
         this.key = key;
         this.timestamps = timestamps;
         this.tombstones = tombstones;
@@ -29,10 +25,11 @@ class Pointer implements Comparable<Pointer> {
     @Override
     public int compareTo(Pointer o) {
         int i = UnsignedBytes.lexicographicalComparator().compare(key, o.key);
-        if (i != 0) {
-            return i;
-        }
-        return -Long.compare(fps, o.fps);
+//        if (i != 0) {
+//            return i;
+//        }
+//        return -Long.compare(fps, o.fps);
+        return i;
     }
 
 }

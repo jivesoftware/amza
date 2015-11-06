@@ -19,8 +19,10 @@ public class PointerIndexStressNGTest {
 
     NumberFormat format = NumberFormat.getInstance();
 
-    @Test(enabled = true)
+    @Test(enabled = false)
     public void stress() throws Exception {
+        Random rand = new Random();
+
         long start = System.currentTimeMillis();
         MergeablePointerIndexs indexs = new MergeablePointerIndexs();
         int maxDepthBeforeMerging = 1;
@@ -74,8 +76,6 @@ public class PointerIndexStressNGTest {
 
         });
 
-        Random rand = new Random();
-        
         Future<Object> pointGets = Executors.newSingleThreadExecutor().submit(() -> {
 
             int[] hits = {0};
@@ -92,7 +92,7 @@ public class PointerIndexStressNGTest {
                     int longKey = rand.nextInt(maxKey.intValue());
                     byte[] keyBytes = UIO.longBytes(longKey);
                     NextPointer pointer = indexs.getPointer(keyBytes);
-                    pointer.next((sortIndex, key, timestamp, tombstoned, version, pointer1) -> {
+                    pointer.next((key, timestamp, tombstoned, version, pointer1) -> {
                         if (pointer1 != -1) {
                             hits[0]++;
                         } else {
@@ -129,7 +129,7 @@ public class PointerIndexStressNGTest {
                 new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", true), maxLeaps, updatesBetweenLeaps);//,
             //new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
-            long lastKey = PointerIndexUtils.append(index, 0, maxKeyIncrement, batchSize, null);
+            long lastKey = PointerIndexUtils.append(rand, index, 0, maxKeyIncrement, batchSize, null);
             maxKey.setValue(Math.max(maxKey.longValue(), lastKey));
             indexs.append(index);
             count += batchSize;

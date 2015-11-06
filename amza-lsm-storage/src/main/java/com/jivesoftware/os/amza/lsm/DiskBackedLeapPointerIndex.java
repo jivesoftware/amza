@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.util.Map;
 
 /**
- *
  * @author jonathan.colt
  */
 public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerIndex, AppendablePointerIndex {
@@ -97,7 +96,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         byte[] key,
         byte[] lengthBuffer) throws IOException {
 
-        Leaps leaps = computeNextLeaps(key, latest, maxLeaps, updatesBetweenLeaps);
+        Leaps leaps = computeNextLeaps(key, latest, maxLeaps);
         UIO.writeByte(writeIndex, (byte) 1, "type");
         long startOfLeapFp = writeIndex.getFilePointer();
         leaps.write(writeIndex, lengthBuffer);
@@ -109,7 +108,10 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
 
     @Override
     public ReadPointerIndex concurrent(int bufferSize) throws Exception {
-        IReadable readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
+        IReadable readableIndex = index.fileChannelMemMapFiler(0);
+        if (readableIndex == null) {
+            readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
+        }
 
         if (leaps == null) {
             byte[] lengthBuffer = new byte[8];
@@ -145,7 +147,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                 return stream -> false;
             }
             NextPointer scanFromFp = scanFromFp(fp);
-            boolean[] once = new boolean[]{false};
+            boolean[] once = new boolean[] { false };
             return (stream) -> {
                 if (once[0]) {
                     return false;
@@ -182,7 +184,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                 Leaps next = null;
                 for (int i = 0; i < at.keys.length; i++) {
                     if (UnsignedBytes.lexicographicalComparator().compare(at.keys[i], key) < 0) {
-                        closestFP = Math.max(closestFP, at.fpIndex[i]) - 1;
+                        closestFP = Math.max(closestFP, at.fpIndex[i] - 1);
                     } else {
                         next = leapsCache.get(at.fpIndex[i]);
                         if (next == null) {
@@ -353,7 +355,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         }
     }
 
-    static private Leaps computeNextLeaps(byte[] lastKey, LeapFrog latest, int maxLeaps, int updatesBetweenLeaps) {
+    static private Leaps computeNextLeaps(byte[] lastKey, LeapFrog latest, int maxLeaps) {
         long[] fpIndex;
         byte[][] keys;
         if (latest == null) {

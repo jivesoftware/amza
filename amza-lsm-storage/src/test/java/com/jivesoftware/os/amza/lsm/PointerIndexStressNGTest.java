@@ -23,7 +23,7 @@ public class PointerIndexStressNGTest {
     public void stress() throws Exception {
         long start = System.currentTimeMillis();
         MergeablePointerIndexs indexs = new MergeablePointerIndexs();
-        int maxDepthBeforeMerging = 2;
+        int maxDepthBeforeMerging = 1;
         int count = 0;
 
         int numBatches = 10;
@@ -51,7 +51,7 @@ public class PointerIndexStressNGTest {
                         //File mergeKeysFile = File.createTempFile("d-keys-merged-" + merge.intValue(), ".tmp");
 
                         return new DiskBackedLeapPointerIndex(
-                            new DiskBackedPointerIndexFiler(mergeIndexFiler.getAbsolutePath(), "rw", false), maxLeaps, updatesBetweenLeaps); //,
+                            new DiskBackedPointerIndexFiler(mergeIndexFiler.getAbsolutePath(), "rw", true), maxLeaps, updatesBetweenLeaps); //,
                         //new DiskBackedPointerIndexFiler(mergeKeysFile.getAbsolutePath(), "rw", false)
                         //);
                     }, (index) -> {
@@ -126,7 +126,7 @@ public class PointerIndexStressNGTest {
             long startMerge = System.currentTimeMillis();
 
             DiskBackedLeapPointerIndex index = new DiskBackedLeapPointerIndex(
-                new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", false), maxLeaps, updatesBetweenLeaps);//,
+                new DiskBackedPointerIndexFiler(indexFiler.getAbsolutePath(), "rw", true), maxLeaps, updatesBetweenLeaps);//,
             //new DiskBackedPointerIndexFiler(keysFile.getAbsolutePath(), "rw", false));
 
             long lastKey = PointerIndexUtils.append(index, 0, maxKeyIncrement, batchSize, null);

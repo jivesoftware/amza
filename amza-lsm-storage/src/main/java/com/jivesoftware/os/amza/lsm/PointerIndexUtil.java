@@ -19,7 +19,7 @@ public class PointerIndexUtil {
                 return false;
             };
             for (ConcurrentReadablePointerIndex index : indexes) {
-                NextPointer pointer = index.concurrent(8_192).getPointer(key);
+                NextPointer pointer = index.concurrent(2_048).getPointer(key);
                 if (pointer.next(found)) {
                     return false;
                 }

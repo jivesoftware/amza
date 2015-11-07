@@ -23,12 +23,14 @@ public class MergablePointerIndexsNGTest {
 
         ConcurrentSkipListMap<byte[], byte[]> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
 
-        int count = 10;
+        int count = 3;
         int step = 100;
         int indexes = 4;
 
         MergeablePointerIndexs indexs = new MergeablePointerIndexs();
-        Random rand = new Random();
+        long time = System.currentTimeMillis();
+        System.out.println("Seed:" + time);
+        Random rand = new Random(1446914103456L);
         for (int wi = 0; wi < indexes; wi++) {
 
             File indexFiler = File.createTempFile("a-index-" + wi, ".tmp");
@@ -63,7 +65,7 @@ public class MergablePointerIndexsNGTest {
         int[] index = new int[1];
         RawNextPointer rowScan = indexs.rowScan();
         RawPointerStream stream = (rawEntry, offset, length) -> {
-            System.out.println(UIO.bytesLong(keys.get(index[0])) + " " + SimpleRawEntry.toString(rawEntry));
+            System.out.println("Expected:key:" + UIO.bytesLong(keys.get(index[0])) + " Found:" + SimpleRawEntry.toString(rawEntry));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), SimpleRawEntry.key(rawEntry));
             index[0]++;
             return true;

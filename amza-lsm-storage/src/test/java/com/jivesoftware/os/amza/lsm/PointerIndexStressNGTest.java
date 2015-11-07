@@ -30,7 +30,7 @@ public class PointerIndexStressNGTest {
         int count = 0;
 
         int numBatches = 10;
-        int batchSize = 1_000_000;
+        int batchSize = 10_000_000;
         int maxKeyIncrement = 10;
 
         int maxLeaps = (int) (Math.log(numBatches * batchSize) / Math.log(2));
@@ -72,7 +72,7 @@ public class PointerIndexStressNGTest {
                 }
             }
 
-            //stopGets.setValue(System.currentTimeMillis() + 60_000);
+            stopGets.setValue(System.currentTimeMillis() + 60_000);
             return null;
 
         });

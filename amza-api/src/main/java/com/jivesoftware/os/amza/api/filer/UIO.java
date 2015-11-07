@@ -54,7 +54,7 @@ public class UIO {
      * @param fieldName
      * @throws IOException
      */
-    public static void write(IWriteable _filer, byte[] bytes, String fieldName) throws IOException {
+    public static void write(IAppendOnly _filer, byte[] bytes, String fieldName) throws IOException {
         _filer.write(bytes, 0, bytes.length);
     }
 
@@ -65,7 +65,7 @@ public class UIO {
      * @param fieldName
      * @throws IOException
      */
-    public static void writeByte(IWriteable _filer, byte v,
+    public static void writeByte(IAppendOnly _filer, byte v,
         String fieldName) throws IOException {
         _filer.write(new byte[]{v}, 0, 1);
     }
@@ -77,7 +77,7 @@ public class UIO {
      * @param fieldName
      * @throws IOException
      */
-    public static void writeInt(IWriteable _filer, int v, String fieldName, byte[] intBuffer) throws IOException {
+    public static void writeInt(IAppendOnly _filer, int v, String fieldName, byte[] intBuffer) throws IOException {
         intBuffer[0] = (byte) (v >>> 24);
         intBuffer[1] = (byte) (v >>> 16);
         intBuffer[2] = (byte) (v >>> 8);
@@ -93,7 +93,7 @@ public class UIO {
      * @param fieldName
      * @throws IOException
      */
-    public static void writeLong(IWriteable _filer, long v,
+    public static void writeLong(IAppendOnly _filer, long v,
         String fieldName) throws IOException {
         _filer.write(new byte[]{
             (byte) (v >>> 56),
@@ -113,11 +113,11 @@ public class UIO {
      * @param l
      * @throws IOException
      */
-    private static void writeLength(IWriteable _filer, int l, byte[] lengthBuffer) throws IOException {
+    private static void writeLength(IAppendOnly _filer, int l, byte[] lengthBuffer) throws IOException {
         writeInt(_filer, l, "length", lengthBuffer);
     }
 
-    public static void writeByteArray(IWriteable _filer, byte[] array, String fieldName, byte[] lengthBuffer) throws IOException {
+    public static void writeByteArray(IAppendOnly _filer, byte[] array, String fieldName, byte[] lengthBuffer) throws IOException {
         writeByteArray(_filer, array, 0, array == null ? -1 : array.length, fieldName, lengthBuffer);
     }
 
@@ -130,7 +130,7 @@ public class UIO {
      * @param fieldName
      * @throws IOException
      */
-    public static void writeByteArray(IWriteable _filer, byte[] array,
+    public static void writeByteArray(IAppendOnly _filer, byte[] array,
         int _start, int _len, String fieldName, byte[] lengthBuffer) throws IOException {
         int len;
         if (array == null) {

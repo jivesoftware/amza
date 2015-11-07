@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.lsm;
 
+import com.jivesoftware.os.amza.api.filer.IAppendOnly;
 import com.jivesoftware.os.amza.api.filer.IReadable;
-import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import java.io.IOException;
@@ -63,18 +63,26 @@ public class DiskBackedPointerIndexFiler extends RandomAccessFile {
         }
     }
 
-    public IWriteable fileChannelWriter() {
+    public IAppendOnly fileChannelWriter(int bufferSize) throws IOException {
 
-        final HeapFiler filer = new HeapFiler();
-        return new IWriteable() {
+        HeapFiler filer = new HeapFiler(bufferSize);
+        seek(0);
+        return new IAppendOnly() {
+            private long flushedFp = 0;
+
             @Override
             public void write(byte[] b, int _offset, int _len) throws IOException {
                 filer.write(b, _offset, _len);
+                if (filer.length() > bufferSize) {
+                    flush(false);
+                }
             }
 
             @Override
             public void flush(boolean fsync) throws IOException {
+                flushedFp += filer.length();
                 DiskBackedPointerIndexFiler.this.write(filer.leakBytes(), 0, (int) filer.length());
+                filer.reset();
             }
 
             @Override
@@ -88,23 +96,16 @@ public class DiskBackedPointerIndexFiler extends RandomAccessFile {
             }
 
             @Override
-            public void seek(long position) throws IOException {
-                filer.seek(position);
-            }
-
-            @Override
             public long length() throws IOException {
-                return filer.length();
+                return flushedFp + filer.getFilePointer();
             }
 
             @Override
             public long getFilePointer() throws IOException {
-                return filer.getFilePointer();
+                return flushedFp + filer.getFilePointer();
             }
         };
 
-        //FileChannel channel = getChannel();
-        //return new DiskBackedPointerIndexFilerChannelWriter(this, channel);
     }
 
     void addToSize(long amount) {

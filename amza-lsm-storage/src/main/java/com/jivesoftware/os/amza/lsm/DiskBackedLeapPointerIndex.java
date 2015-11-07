@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.primitives.UnsignedBytes;
+import com.jivesoftware.os.amza.api.filer.IAppendOnly;
 import com.jivesoftware.os.amza.api.filer.IReadable;
-import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.api.RawAppendablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
@@ -57,9 +57,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
     @Override
     public boolean append(RawPointers pointers) throws Exception {
-        IWriteable writeIndex = index.fileChannelWriter();
-
-        writeIndex.seek(0);
+        IAppendOnly writeIndex = index.fileChannelWriter(1 * 1024 * 1024 * 1024);
 
         LeapFrog[] latestLeapFrog = new LeapFrog[1];
         int[] updatesSinceLeap = new int[1];
@@ -114,7 +112,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
         return true;
     }
 
-    private LeapFrog writeLeaps(IWriteable writeIndex,
+    private LeapFrog writeLeaps(IAppendOnly writeIndex,
         LeapFrog latest,
         int index,
         byte[] key,
@@ -357,7 +355,6 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                 }
                 return type >= 0;
             }
-
         }
 
         @Override
@@ -436,7 +433,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             this.keys = keys;
         }
 
-        private void write(IWriteable writeable, byte[] lengthBuffer) throws IOException {
+        private void write(IAppendOnly writeable, byte[] lengthBuffer) throws IOException {
             int entryLength = 4 + 4 + 4 + lastKey.length + 4;
             for (int i = 0; i < fps.length; i++) {
                 entryLength += 8 + 4 + keys[i].length;
@@ -487,7 +484,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             this.count = count;
         }
 
-        private void write(IWriteable writeable, byte[] lengthBuffer) throws IOException {
+        private void write(IAppendOnly writeable, byte[] lengthBuffer) throws IOException {
             int entryLength = 4 + 4 + 8 + 4;
             UIO.writeInt(writeable, entryLength, "entryLength", lengthBuffer);
             UIO.writeInt(writeable, leapCount, "leapCount", lengthBuffer);

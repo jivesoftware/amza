@@ -19,22 +19,6 @@
  */
 package com.jivesoftware.os.amza.api.filer;
 
-import java.io.IOException;
+public interface IWriteable extends ICloseable, ISeekable, IAppendOnly {
 
-public interface IWriteable extends ICloseable, ISeekable {
-
-    /**
-     *
-     * @param b
-     * @param _offset
-     * @param _len
-     * @throws IOException
-     */
-    public void write(byte b[], int _offset, int _len) throws IOException;
-
-    /**
-     *
-     * @throws IOException
-     */
-    public void flush(boolean fsync) throws IOException;
 }

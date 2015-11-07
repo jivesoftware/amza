@@ -163,7 +163,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                 throw new RuntimeException("Corruption! " + type + " expected " + FOOTER);
             }
             footer = Footer.read(readableIndex, lengthBuffer);
-            leapsCache = new TLongObjectHashMap(footer.leapCount);
+            leapsCache = new TLongObjectHashMap<>(footer.leapCount);
 
         }
         return new DiskBackedLeapReadablePointerIndex(leaps, readableIndex, leapsCache);

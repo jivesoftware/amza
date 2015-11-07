@@ -104,11 +104,11 @@ public class LSMPointerIndexWALIndex implements WALIndex {
             throw new RuntimeException(ie);
         }
         try {
+            byte[] mode = new byte[1];
             byte[] txFpBytes = new byte[16];
             return pointers.consume((txId, prefix, key, timestamp, tombstoned, version, fp) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 NextPointer got = primaryDb.getPointer(key);
-                byte[] mode = new byte[1];
                 got.next((key1, timestamp1, tombstoned1, version1, pointer) -> {
                     if (pointer != -1) {
                         int c = CompareTimestampVersions.compare(timestamp1, version1, timestamp, version);
@@ -348,7 +348,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     }
 
     private boolean stream(final WALKeyPointerStream stream, NextPointer nextPointer) throws Exception {
-        PointerStream pointerStream = ( rawKey, timestamp, tombstoned, version, pointer)
+        PointerStream pointerStream = (rawKey, timestamp, tombstoned, version, pointer)
             -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned, version, pointer);
         while (nextPointer.next(pointerStream));
         return false;

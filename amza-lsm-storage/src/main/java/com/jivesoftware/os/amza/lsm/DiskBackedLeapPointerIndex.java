@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.google.common.collect.Maps;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
@@ -14,15 +13,20 @@ import com.jivesoftware.os.amza.lsm.api.RawPointers;
 import com.jivesoftware.os.amza.lsm.api.RawReadPointerIndex;
 import com.jivesoftware.os.amza.lsm.api.ScanFromFp;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import gnu.trove.map.hash.TLongObjectHashMap;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Map;
 
 /**
  * @author jonathan.colt
  */
 public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerIndex, RawAppendablePointerIndex {
+
+    public static final byte ENTRY = 0;
+    public static final byte LEAP = 1;
+    public static final byte BOUND = 2;
+    public static final byte FOOTER = 3;
 
     private final int maxLeaps;
     private final int updatesBetweenLeaps;
@@ -58,57 +62,75 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
         writeIndex.seek(0);
 
         LeapFrog[] latestLeapFrog = new LeapFrog[1];
-        long[] updatesSinceLeap = new long[1];
+        int[] updatesSinceLeap = new int[1];
 
         byte[] lengthBuffer = new byte[4];
-        HeapFiler indexEntryFiler = new HeapFiler(1024); // TODO somthing better
+        long[] boundsFps = new long[updatesBetweenLeaps];
+        HeapFiler entryBuffer = new HeapFiler(1024); // TODO somthing better
 
         byte[][] lastKey = new byte[1][];
+        int[] leapCount = {0};
+        long[] count = {0};
+
         pointers.consume((rawEntry, offset, length) -> {
 
-            indexEntryFiler.reset();
-            UIO.writeByte(indexEntryFiler, (byte) 0, "type");
+            entryBuffer.reset();
+            UIO.writeByte(entryBuffer, ENTRY, "type");
 
             int entryLength = 4 + length + 4;
-            UIO.writeInt(indexEntryFiler, entryLength, "entryLength", lengthBuffer);
-            indexEntryFiler.write(rawEntry, offset, length);
-            UIO.writeInt(indexEntryFiler, entryLength, "entryLength", lengthBuffer);
+            UIO.writeInt(entryBuffer, entryLength, "entryLength", lengthBuffer);
+            entryBuffer.write(rawEntry, offset, length);
+            UIO.writeInt(entryBuffer, entryLength, "entryLength", lengthBuffer);
 
-            writeIndex.write(indexEntryFiler.leakBytes(), 0, (int) indexEntryFiler.length());
+            writeIndex.write(entryBuffer.leakBytes(), 0, (int) entryBuffer.length());
 
             int keyLength = UIO.bytesInt(rawEntry, offset);
             byte[] key = new byte[keyLength];
             System.arraycopy(rawEntry, 4, key, 0, keyLength);
+
             lastKey[0] = key;
             updatesSinceLeap[0]++;
+            count[0]++;
+
             if (updatesSinceLeap[0] >= updatesBetweenLeaps) { // TODO consider bytes between leaps
-                latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], key, lengthBuffer);
+                entryBuffer.reset();
+                latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], leapCount[0], key, lengthBuffer);
                 updatesSinceLeap[0] = 0;
+                leapCount[0]++;
             }
             return true;
         });
 
         if (updatesSinceLeap[0] > 0) {
-            latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], lastKey[0], lengthBuffer);
+            writeIndex.write(entryBuffer.leakBytes(), 0, (int) entryBuffer.length());
+            entryBuffer.reset();
+            latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], leapCount[0], lastKey[0], lengthBuffer);
+            leapCount[0]++;
         }
+
+        UIO.writeByte(writeIndex, FOOTER, "type");
+        new Footer(leapCount[0], count[0]).write(writeIndex, lengthBuffer);
         writeIndex.flush(false);
         return true;
     }
 
     private LeapFrog writeLeaps(IWriteable writeIndex,
         LeapFrog latest,
+        int index,
         byte[] key,
         byte[] lengthBuffer) throws IOException {
 
-        Leaps leaps = computeNextLeaps(key, latest, maxLeaps);
-        UIO.writeByte(writeIndex, (byte) 1, "type");
+        Leaps leaps = computeNextLeaps(index, key, latest, maxLeaps);
+        UIO.writeByte(writeIndex, LEAP, "type");
         long startOfLeapFp = writeIndex.getFilePointer();
         leaps.write(writeIndex, lengthBuffer);
         return new LeapFrog(startOfLeapFp, leaps);
     }
 
     Leaps leaps = null;
-    Map<Long, Leaps> leapsCache = Maps.newHashMap();
+    //Map<Long, Leaps> leapsCache = Maps.newHashMap();
+    TLongObjectHashMap<Leaps> leapsCache;
+    Footer footer = null;
 
     @Override
     public RawReadPointerIndex rawConcurrent(int bufferSize) throws Exception {
@@ -117,16 +139,32 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
         }
 
-        if (leaps == null) {
+        if (footer == null) {
             byte[] lengthBuffer = new byte[8];
             long indexLength = readableIndex.length();
             if (indexLength < 4) {
                 System.out.println("WTF:" + indexLength);
             }
             readableIndex.seek(indexLength - 4);
-            int length = UIO.readInt(readableIndex, "length", lengthBuffer);
-            readableIndex.seek(indexLength - length);
+            int footerLength = UIO.readInt(readableIndex, "length", lengthBuffer);
+            readableIndex.seek(indexLength - (footerLength + 1 + 4));
+            int leapLength = UIO.readInt(readableIndex, "length", lengthBuffer);
+
+            readableIndex.seek(indexLength - (1 + leapLength + 1 + footerLength));
+
+            int type = readableIndex.read();
+            if (type != LEAP) {
+                throw new RuntimeException("Corruption! " + type + " expected " + LEAP);
+            }
             leaps = Leaps.read(readableIndex, lengthBuffer);
+
+            type = readableIndex.read();
+            if (type != FOOTER) {
+                throw new RuntimeException("Corruption! " + type + " expected " + FOOTER);
+            }
+            footer = Footer.read(readableIndex, lengthBuffer);
+            leapsCache = new TLongObjectHashMap(footer.leapCount);
+
         }
         return new DiskBackedLeapReadablePointerIndex(leaps, readableIndex, leapsCache);
     }
@@ -135,10 +173,10 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
         private final Leaps leaps;
         private final IReadable readable;
-        private final Map<Long, Leaps> leapsCache;
+        private final TLongObjectHashMap<Leaps> leapsCache;
         private final byte[] lengthBuffer = new byte[8];
 
-        public DiskBackedLeapReadablePointerIndex(Leaps leaps, IReadable readable, Map<Long, Leaps> leapsCache) {
+        public DiskBackedLeapReadablePointerIndex(Leaps leaps, IReadable readable, TLongObjectHashMap<Leaps> leapsCache) {
             this.leaps = leaps;
             this.readable = readable;
             this.leapsCache = leapsCache;
@@ -233,40 +271,22 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             long closestFP = 0;
             while (at != null) {
                 Leaps next = null;
-
-                // Binary Search
-                if (at.fpIndex.length != 0) {
+                if (at.fps.length != 0) {
                     int index = Arrays.binarySearch(at.keys, key, UnsignedBytes.lexicographicalComparator());
-                    if (index == -(at.fpIndex.length + 1)) {
-                        closestFP = at.fpIndex[at.fpIndex.length - 1] - 1;
+                    if (index == -(at.fps.length + 1)) {
+                        closestFP = at.fps[at.fps.length - 1] - 1;
                     } else {
                         if (index < 0) {
                             index = -(index + 1);
                         }
-                        next = leapsCache.get(at.fpIndex[index]);
+                        next = leapsCache.get(at.fps[index]);
                         if (next == null) {
-                            readable.seek(at.fpIndex[index]);
+                            readable.seek(at.fps[index]);
                             next = Leaps.read(readable, lengthBuffer);
-                            leapsCache.put(at.fpIndex[index], next);
+                            leapsCache.put(at.fps[index], next);
                         }
                     }
                 }
-
-                // Brute forcce
-//                for (int i = 0; i < at.keys.length; i++) {
-//                    if (UnsignedBytes.lexicographicalComparator().compare(at.keys[i], key) < 0) {
-//                        closestFP = Math.max(closestFP, at.fpIndex[i] - 1);
-//                    } else {
-//                        next = leapsCache.get(at.fpIndex[i]);
-//                        if (next == null) {
-//                            readable.seek(at.fpIndex[i]);
-//                            next = Leaps.read(readable, lengthBuffer);
-//                            leapsCache.put(at.fpIndex[i], next);
-//                        }
-//
-//                        break;
-//                    }
-//                }
                 at = next;
             }
             return closestFP;
@@ -310,8 +330,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
         private byte[] entryBuffer;
         private int entryLength;
 
-     
-        class ActiveScan implements ScanFromFp {
+        private class ActiveScan implements ScanFromFp {
 
             private long activeFp = Long.MAX_VALUE;
 
@@ -323,7 +342,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                 }
                 int type;
                 while ((type = readable.read()) >= 0) {
-                    if (type == 0) {
+                    if (type == ENTRY) {
                         int length = UIO.readInt(readable, "entryLength", lengthBuffer);
                         entryLength = length - 4;
                         if (entryBuffer == null || entryBuffer.length < entryLength) {
@@ -336,8 +355,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                         readable.seek(readable.getFilePointer() + (length - 4));
                     }
                 }
-                boolean more = type >= 0;
-                return more;
+                return type >= 0;
             }
 
         }
@@ -378,6 +396,21 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
     }
 
+    private static class Bounds {
+
+        private final byte[] fps;
+
+        public Bounds(byte[] fps) {
+            this.fps = fps;
+        }
+
+        private static Bounds read(IReadable readable, byte[] lengthBuffer) throws IOException {
+            byte[] fps = UIO.readByteArray(readable, "fps", lengthBuffer);
+            return new Bounds(fps);
+        }
+
+    }
+
     private static class LeapFrog {
 
         private final long fp;
@@ -391,30 +424,34 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
     private static class Leaps {
 
+        private final int index;
         private final byte[] lastKey;
-        private final long[] fpIndex;
+        private final long[] fps;
         private final byte[][] keys;
 
-        public Leaps(byte[] lastKey, long[] fpIndex, byte[][] keys) {
+        public Leaps(int index, byte[] lastKey, long[] fpIndex, byte[][] keys) {
+            this.index = index;
             this.lastKey = lastKey;
-            this.fpIndex = fpIndex;
+            this.fps = fpIndex;
             this.keys = keys;
         }
 
         private void write(IWriteable writeable, byte[] lengthBuffer) throws IOException {
-            int entryLength = 4 + 4 + lastKey.length + 4;
-            for (int i = 0; i < fpIndex.length; i++) {
+            int entryLength = 4 + 4 + 4 + lastKey.length + 4;
+            for (int i = 0; i < fps.length; i++) {
                 entryLength += 8 + 4 + keys[i].length;
             }
             entryLength += 4;
 
             UIO.writeInt(writeable, entryLength, "entryLength", lengthBuffer);
+            UIO.writeInt(writeable, index, "index", lengthBuffer);
+
             UIO.writeInt(writeable, lastKey.length, "lastKeyLength", lengthBuffer);
             UIO.write(writeable, lastKey, "lastKey");
-            UIO.writeInt(writeable, fpIndex.length, "fpIndexLength", lengthBuffer);
+            UIO.writeInt(writeable, fps.length, "fpIndexLength", lengthBuffer);
 
-            for (int i = 0; i < fpIndex.length; i++) {
-                UIO.writeLong(writeable, fpIndex[i], "fpIndex");
+            for (int i = 0; i < fps.length; i++) {
+                UIO.writeLong(writeable, fps[i], "fpIndex");
                 UIO.writeByteArray(writeable, keys[i], "key", lengthBuffer);
             }
             UIO.writeInt(writeable, entryLength, "entryLength", lengthBuffer);
@@ -422,6 +459,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
         private static Leaps read(IReadable readable, byte[] lengthBuffer) throws IOException {
             int entryLength = UIO.readInt(readable, "entryLength", lengthBuffer);
+            int index = UIO.readInt(readable, "index", lengthBuffer);
             int lastKeyLength = UIO.readInt(readable, "lastKeyLength", lengthBuffer);
             byte[] lastKey = new byte[lastKeyLength];
             UIO.read(readable, lastKey);
@@ -435,21 +473,51 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             if (UIO.readInt(readable, "entryLength", lengthBuffer) != entryLength) {
                 throw new RuntimeException("Encountered length corruption. ");
             }
-            return new Leaps(lastKey, fpIndex, keys);
+            return new Leaps(index, lastKey, fpIndex, keys);
         }
     }
 
-    static private Leaps computeNextLeaps(byte[] lastKey, LeapFrog latest, int maxLeaps) {
+    private static class Footer {
+
+        private final int leapCount;
+        private final long count;
+
+        public Footer(int leapCount, long count) {
+            this.leapCount = leapCount;
+            this.count = count;
+        }
+
+        private void write(IWriteable writeable, byte[] lengthBuffer) throws IOException {
+            int entryLength = 4 + 4 + 8 + 4;
+            UIO.writeInt(writeable, entryLength, "entryLength", lengthBuffer);
+            UIO.writeInt(writeable, leapCount, "leapCount", lengthBuffer);
+            UIO.writeLong(writeable, count, "count");
+            UIO.writeInt(writeable, entryLength, "entryLength", lengthBuffer);
+
+        }
+
+        private static Footer read(IReadable readable, byte[] lengthBuffer) throws IOException {
+            int entryLength = UIO.readInt(readable, "entryLength", lengthBuffer);
+            int leapCount = UIO.readInt(readable, "leapCount", lengthBuffer);
+            long count = UIO.readLong(readable, "count", lengthBuffer);
+            if (UIO.readInt(readable, "entryLength", lengthBuffer) != entryLength) {
+                throw new RuntimeException("Encountered length corruption. ");
+            }
+            return new Footer(leapCount, count);
+        }
+    }
+
+    static private Leaps computeNextLeaps(int index, byte[] lastKey, LeapFrog latest, int maxLeaps) {
         long[] fpIndex;
         byte[][] keys;
         if (latest == null) {
             fpIndex = new long[0];
             keys = new byte[0][];
-        } else if (latest.leaps.fpIndex.length < maxLeaps) {
-            int numLeaps = latest.leaps.fpIndex.length + 1;
+        } else if (latest.leaps.fps.length < maxLeaps) {
+            int numLeaps = latest.leaps.fps.length + 1;
             fpIndex = new long[numLeaps];
             keys = new byte[numLeaps][];
-            System.arraycopy(latest.leaps.fpIndex, 0, fpIndex, 0, latest.leaps.fpIndex.length);
+            System.arraycopy(latest.leaps.fps, 0, fpIndex, 0, latest.leaps.fps.length);
             System.arraycopy(latest.leaps.keys, 0, keys, 0, latest.leaps.keys.length);
             fpIndex[numLeaps - 1] = latest.fp;
             keys[numLeaps - 1] = latest.leaps.lastKey;
@@ -470,12 +538,11 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             }
 
             double smallestDistance = Double.MAX_VALUE;
-
-            for (int i = 0; i < latest.leaps.fpIndex.length; i++) {
+            for (int i = 0; i < latest.leaps.fps.length; i++) {
                 long[] testFpIndex = new long[maxLeaps];
 
-                System.arraycopy(latest.leaps.fpIndex, 0, testFpIndex, 0, i);
-                System.arraycopy(latest.leaps.fpIndex, i + 1, testFpIndex, i, maxLeaps - 1 - i);
+                System.arraycopy(latest.leaps.fps, 0, testFpIndex, 0, i);
+                System.arraycopy(latest.leaps.fps, i + 1, testFpIndex, i, maxLeaps - 1 - i);
                 testFpIndex[maxLeaps - 1] = latest.fp;
 
                 double distance = euclidean(testFpIndex, idealFpIndex);
@@ -487,13 +554,8 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                     smallestDistance = distance;
                 }
             }
-
-            //System.out.println("@" + latest.fp + " base:  " + base);
-            //System.out.println("@" + latest.fp + " ideal: " + Arrays.toString(idealFpIndex));
-            //System.out.println("@" + latest.fp + " next:  " + Arrays.toString(fpIndex));
         }
-
-        return new Leaps(lastKey, fpIndex, keys);
+        return new Leaps(index, lastKey, fpIndex, keys);
     }
 
     static private double euclidean(long[] a, long[] b) {

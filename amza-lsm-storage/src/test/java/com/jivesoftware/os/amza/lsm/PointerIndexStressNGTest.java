@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
 import java.io.File;
 import java.text.NumberFormat;
 import java.util.Random;
@@ -19,7 +19,7 @@ public class PointerIndexStressNGTest {
 
     NumberFormat format = NumberFormat.getInstance();
 
-    @Test(enabled = false)
+    @Test(enabled = true)
     public void stress() throws Exception {
         Random rand = new Random();
 
@@ -91,9 +91,9 @@ public class PointerIndexStressNGTest {
 
                     int longKey = rand.nextInt(maxKey.intValue());
                     byte[] keyBytes = UIO.longBytes(longKey);
-                    NextPointer pointer = indexs.getPointer(keyBytes);
-                    pointer.next((key, timestamp, tombstoned, version, pointer1) -> {
-                        if (pointer1 != -1) {
+                    RawNextPointer pointer = indexs.getPointer(keyBytes);
+                    pointer.next((rawEntry, offset, length) -> {
+                        if (SimpleRawEntry.value(rawEntry) != 0) {
                             hits[0]++;
                         } else {
                             misses[0]++;

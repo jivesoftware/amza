@@ -1,10 +1,10 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.api.Pointers;
+import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
@@ -24,15 +24,17 @@ public class LSMPointerIndex implements PointerIndex {
 
     private final File indexRoot;
     private final int maxUpdatesBetweenCompactionHintMarker;
-    private MemoryPointerIndex memoryPointerIndex;
-    private MemoryPointerIndex flushingMemoryPointerIndex;
+    private RawMemoryPointerIndex memoryPointerIndex;
+    private RawMemoryPointerIndex flushingMemoryPointerIndex;
     private final AtomicLong largestIndexId = new AtomicLong();
     private final MergeablePointerIndexs mergeablePointerIndexs;
+
+    private final LSMValueMarshaller marshaller = new LSMValueMarshaller();
 
     public LSMPointerIndex(File indexRoot, int maxUpdatesBetweenCompactionHintMarker) throws IOException {
         this.indexRoot = indexRoot;
         this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
-        this.memoryPointerIndex = new MemoryPointerIndex();
+        this.memoryPointerIndex = new RawMemoryPointerIndex(marshaller);
         this.mergeablePointerIndexs = new MergeablePointerIndexs();
         TreeSet<Long> indexIds = new TreeSet<>((java.lang.Long o1, java.lang.Long o2) -> Long.compare(o2, o1)); // descending
         for (File indexFile : indexRoot.listFiles()) {
@@ -50,11 +52,11 @@ public class LSMPointerIndex implements PointerIndex {
         }
     } // descending
 
-    private ConcurrentReadablePointerIndex[] grab() {
-        MemoryPointerIndex stackCopy = flushingMemoryPointerIndex;
+    private RawConcurrentReadablePointerIndex[] grab() {
+        RawMemoryPointerIndex stackCopy = flushingMemoryPointerIndex;
         int flushing = stackCopy == null ? 0 : 1;
-        ConcurrentReadablePointerIndex[] grabbed = mergeablePointerIndexs.grab();
-        ConcurrentReadablePointerIndex[] indexes = new ConcurrentReadablePointerIndex[grabbed.length + 1 + flushing];
+        RawConcurrentReadablePointerIndex[] grabbed = mergeablePointerIndexs.grab();
+        RawConcurrentReadablePointerIndex[] indexes = new RawConcurrentReadablePointerIndex[grabbed.length + 1 + flushing];
         synchronized (this) {
             indexes[0] = memoryPointerIndex;
             if (stackCopy != null) {
@@ -67,17 +69,17 @@ public class LSMPointerIndex implements PointerIndex {
 
     @Override
     public NextPointer getPointer(byte[] key) throws Exception {
-        return PointerIndexUtil.get(grab(), key);
+        return LSMPointerUtils.rawToReal(PointerIndexUtil.get(grab(), key));
     }
 
     @Override
     public NextPointer rangeScan(byte[] from, byte[] to) throws Exception {
-        return PointerIndexUtil.rangeScan(grab(), from, to);
+        return LSMPointerUtils.rawToReal(PointerIndexUtil.rangeScan(grab(), from, to));
     }
 
     @Override
     public NextPointer rowScan() throws Exception {
-        return PointerIndexUtil.rowScan(grab());
+        return LSMPointerUtils.rawToReal(PointerIndexUtil.rowScan(grab()));
     }
 
     @Override
@@ -100,9 +102,10 @@ public class LSMPointerIndex implements PointerIndex {
     }
 
     @Override
-    public void append(Pointers pointers) throws Exception {
+    public boolean append(Pointers pointers) throws Exception {
         long[] count = {memoryPointerIndex.count()};
-        memoryPointerIndex.append((stream) -> {
+
+        boolean appended = memoryPointerIndex.append((stream) -> {
             return pointers.consume((key, timestamp, tombstoned, version, pointer) -> {
                 count[0]++;
                 if (count[0] > maxUpdatesBetweenCompactionHintMarker) { //  TODO flush on memory pressure.
@@ -111,10 +114,12 @@ public class LSMPointerIndex implements PointerIndex {
                         commit();
                     }
                 }
-                return stream.stream(key, timestamp, tombstoned, version, pointer);
+                byte[] rawEntry = marshaller.toRawEntry(key, timestamp, tombstoned, version, pointer);
+                return stream.stream(rawEntry, 0, rawEntry.length);
             });
         });
         merge();
+        return appended;
     }
 
     private volatile boolean merging = true; // TODO set back to false!
@@ -175,7 +180,7 @@ public class LSMPointerIndex implements PointerIndex {
             }
             nextIndexId = largestIndexId.incrementAndGet();
             flushingMemoryPointerIndex = memoryPointerIndex;
-            memoryPointerIndex = new MemoryPointerIndex();
+            memoryPointerIndex = new RawMemoryPointerIndex(marshaller);
         }
         LOG.info("Commiting memory index (" + flushingMemoryPointerIndex.count() + ") to on disk index." + indexRoot);
         File tmpRoot = Files.createTempDir();

@@ -1,9 +1,8 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -21,7 +20,7 @@ public class InterleavePointerStreamNGTest {
     @Test
     public void testNext() throws Exception {
 
-        InterleavePointerStream ips = new InterleavePointerStream(new NextPointer[]{
+        InterleavePointerStream ips = new InterleavePointerStream(new RawNextPointer[]{
             nextPointerSequence(new long[]{1, 2, 3, 4, 5}, new long[]{3, 3, 3, 3, 3})
         });
 
@@ -32,11 +31,15 @@ public class InterleavePointerStreamNGTest {
         expected.add(new Expected(4, 3));
         expected.add(new Expected(5, 3));
 
-        while (ips.next((key, timestamp, tombstoned, version, pointer) -> {
+        assertExpected(ips, expected);
+    }
+
+    private void assertExpected(InterleavePointerStream ips, List<Expected> expected) throws Exception {
+        while (ips.next((rawEntry, offset, length) -> {
             Expected expect = expected.remove(0);
-            System.out.println("key:" + UIO.bytesLong(key) + " vs" + expect.key + " value:" + timestamp + " vs " + expect.value);
-            Assert.assertEquals(UIO.bytesLong(key), expect.key);
-            Assert.assertEquals(timestamp, expect.value);
+            System.out.println("key:" + SimpleRawEntry.key(rawEntry) + " vs" + expect.key + " value:" + SimpleRawEntry.value(rawEntry) + " vs " + expect.value);
+            Assert.assertEquals(SimpleRawEntry.key(rawEntry), expect.key);
+            Assert.assertEquals(SimpleRawEntry.value(rawEntry), expect.value);
             return true;
         }));
     }
@@ -44,7 +47,7 @@ public class InterleavePointerStreamNGTest {
     @Test
     public void testNext1() throws Exception {
 
-        InterleavePointerStream ips = new InterleavePointerStream(new NextPointer[]{
+        InterleavePointerStream ips = new InterleavePointerStream(new RawNextPointer[]{
             nextPointerSequence(new long[]{1, 2, 3, 4, 5}, new long[]{3, 3, 3, 3, 3}),
             nextPointerSequence(new long[]{1, 2, 3, 4, 5}, new long[]{2, 2, 2, 2, 2}),
             nextPointerSequence(new long[]{1, 2, 3, 4, 5}, new long[]{1, 1, 1, 1, 1})
@@ -57,19 +60,14 @@ public class InterleavePointerStreamNGTest {
         expected.add(new Expected(4, 3));
         expected.add(new Expected(5, 3));
 
-        while (ips.next((key, timestamp, tombstoned, version, pointer) -> {
-            Expected expect = expected.remove(0);
-            System.out.println("key:" + UIO.bytesLong(key) + " vs" + expect.key + " value:" + timestamp + " vs " + expect.value);
-            Assert.assertEquals(UIO.bytesLong(key), expect.key);
-            Assert.assertEquals(timestamp, expect.value);
-            return true;
-        }));
+        assertExpected(ips, expected);
+
     }
 
     @Test
     public void testNext2() throws Exception {
 
-        InterleavePointerStream ips = new InterleavePointerStream(new NextPointer[]{
+        InterleavePointerStream ips = new InterleavePointerStream(new RawNextPointer[]{
             nextPointerSequence(new long[]{10, 21, 29, 41, 50}, new long[]{1, 0, 0, 0, 1}),
             nextPointerSequence(new long[]{10, 21, 29, 40, 50}, new long[]{0, 0, 0, 1, 0}),
             nextPointerSequence(new long[]{10, 20, 30, 39, 50}, new long[]{0, 1, 1, 0, 0})
@@ -86,13 +84,8 @@ public class InterleavePointerStreamNGTest {
         expected.add(new Expected(41, 0));
         expected.add(new Expected(50, 1));
 
-        while (ips.next((key, timestamp, tombstoned, version, pointer) -> {
-            Expected expect = expected.remove(0);
-            System.out.println("key:" + UIO.bytesLong(key) + " vs" + expect.key + " value:" + timestamp + " vs " + expect.value);
-            Assert.assertEquals(UIO.bytesLong(key), expect.key);
-            Assert.assertEquals(timestamp, expect.value);
-            return true;
-        }));
+        assertExpected(ips, expected);
+
     }
 
     @Test
@@ -104,44 +97,38 @@ public class InterleavePointerStreamNGTest {
 
         Random rand = new Random();
 
-        ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
+        ConcurrentSkipListMap<byte[], byte[]> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
 
-        MemoryPointerIndex[] pointerIndexes = new MemoryPointerIndex[indexes];
-        NextPointer[] nextPointers = new NextPointer[indexes];
+        RawMemoryPointerIndex[] pointerIndexes = new RawMemoryPointerIndex[indexes];
+        RawNextPointer[] nextPointers = new RawNextPointer[indexes];
         for (int wi = 0; wi < indexes; wi++) {
 
             int i = (indexes - 1) - wi;
 
-            pointerIndexes[i] = new MemoryPointerIndex();
+            pointerIndexes[i] = new RawMemoryPointerIndex(new SimpleRawEntry());
             PointerIndexUtils.append(rand, pointerIndexes[i], 0, step, count, desired);
             System.out.println("Index " + i);
-            NextPointer nextPointer = pointerIndexes[i].concurrent(0).rowScan();
-            while (nextPointer.next((key, timestamp, tombstoned, version, pointer) -> {
-                System.out.println(UIO.bytesLong(key) + " timestamp:" + timestamp);
+            RawNextPointer nextPointer = pointerIndexes[i].rawConcurrent(0).rowScan();
+            while (nextPointer.next((rawEntry, offset, length) -> {
+                System.out.println(SimpleRawEntry.toString(rawEntry));
                 return true;
             }));
             System.out.println("\n");
 
-            nextPointers[i] = pointerIndexes[i].concurrent(0).rowScan();
+            nextPointers[i] = pointerIndexes[i].rawConcurrent(0).rowScan();
         }
 
         InterleavePointerStream ips = new InterleavePointerStream(nextPointers);
 
         List<Expected> expected = new ArrayList<>();
         System.out.println("Expected:");
-        for (Map.Entry<byte[], TimestampedValue> entry : desired.entrySet()) {
-            expected.add(new Expected(UIO.bytesLong(entry.getKey()), entry.getValue().getTimestampId()));
-            System.out.println(UIO.bytesLong(entry.getKey()) + " timestamp:" + entry.getValue().getTimestampId());
+        for (Map.Entry<byte[], byte[]> entry : desired.entrySet()) {
+            expected.add(new Expected(UIO.bytesLong(entry.getKey()), SimpleRawEntry.value(entry.getValue())));
+            System.out.println(UIO.bytesLong(entry.getKey()) + " timestamp:" + SimpleRawEntry.value(entry.getValue()));
         }
         System.out.println("\n");
 
-        while (ips.next((key, timestamp, tombstoned, version, pointer) -> {
-            Expected expect = expected.remove(0);
-            System.out.println("key:" + UIO.bytesLong(key) + " vs" + expect.key + " value:" + timestamp + " vs " + expect.value);
-            Assert.assertEquals(UIO.bytesLong(key), expect.key);
-            Assert.assertEquals(timestamp, expect.value);
-            return true;
-        }));
+        assertExpected(ips, expected);
 
     }
 
@@ -160,11 +147,12 @@ public class InterleavePointerStreamNGTest {
 
     }
 
-    public NextPointer nextPointerSequence(long[] keys, long[] values) {
+    public RawNextPointer nextPointerSequence(long[] keys, long[] values) {
         int[] index = {0};
         return (stream) -> {
             if (index[0] < keys.length) {
-                if (!stream.stream(UIO.longBytes(keys[index[0]]), values[index[0]], true, 0, 0)) {
+                byte[] rawEntry = SimpleRawEntry.rawEntry(keys[index[0]], values[index[0]]);
+                if (!stream.stream(rawEntry, 0, rawEntry.length)) {
                     return false;
                 }
             }

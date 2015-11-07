@@ -125,12 +125,11 @@ public class HeapFiler implements IFiler {
         if (_b == null) {
             return;
         }
-        int len = _len;
-        if (fp + len > bytes.length) {
-            bytes = grow(bytes, Math.max((int) ((fp + len) - bytes.length), bytes.length));
+        if (fp + _len > bytes.length) {
+            bytes = grow(bytes, Math.max((int) ((fp + _len) - bytes.length), bytes.length));
         }
-        System.arraycopy(_b, _offset, bytes, (int) fp, len);
-        fp += len;
+        System.arraycopy(_b, _offset, bytes, (int) fp, _len);
+        fp += _len;
         maxLength = Math.max(maxLength, fp);
     }
 

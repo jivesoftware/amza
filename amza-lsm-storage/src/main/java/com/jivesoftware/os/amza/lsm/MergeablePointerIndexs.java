@@ -1,19 +1,19 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.api.PointerIndexFactory;
-import com.jivesoftware.os.amza.lsm.api.ReadPointerIndex;
+import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawReadPointerIndex;
 
 /**
  *
  * @author jonathan.colt
  */
-public class MergeablePointerIndexs implements ReadPointerIndex {
+public class MergeablePointerIndexs implements RawReadPointerIndex {
 
     // newest to oldest
     private final Object indexesLock = new Object();
-    private ConcurrentReadablePointerIndex[] indexes = new ConcurrentReadablePointerIndex[0];
+    private RawConcurrentReadablePointerIndex[] indexes = new RawConcurrentReadablePointerIndex[0];
 
     public static interface CommitIndex {
 
@@ -21,7 +21,7 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
     }
 
     public boolean merge(int count, PointerIndexFactory indexFactory, CommitIndex commitIndex) throws Exception {
-        ConcurrentReadablePointerIndex[] copy;
+        RawConcurrentReadablePointerIndex[] copy;
         synchronized (indexesLock) {
             copy = indexes;
         }
@@ -30,9 +30,9 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
         }
 
         DiskBackedLeapPointerIndex mergedIndex = indexFactory.createPointerIndex();
-        NextPointer[] feeders = new NextPointer[copy.length];
+        RawNextPointer[] feeders = new RawNextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].concurrent(1024 * 1204 * 10).rowScan();
+            feeders[i] = copy[i].rawConcurrent(1024 * 1204 * 10).rowScan();
         }
         InterleavePointerStream feedInterleaver = new InterleavePointerStream(feeders);
         mergedIndex.append((stream) -> {
@@ -51,7 +51,7 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
 
         System.out.println("Merged (" + copy.length + "), NewSinceMerge (" + newSinceMerge + ")");
 
-        for (ConcurrentReadablePointerIndex c : copy) {
+        for (RawConcurrentReadablePointerIndex c : copy) {
             c.destroy();
         }
         return true;
@@ -61,17 +61,17 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
         return grab().length;
     }
 
-    public ConcurrentReadablePointerIndex[] grab() {
-        ConcurrentReadablePointerIndex[] copy;
+    public RawConcurrentReadablePointerIndex[] grab() {
+        RawConcurrentReadablePointerIndex[] copy;
         synchronized (indexesLock) {
             copy = indexes;
         }
         return copy;
     }
 
-    public void append(ConcurrentReadablePointerIndex pointerIndex) {
+    public void append(RawConcurrentReadablePointerIndex pointerIndex) {
         synchronized (indexesLock) {
-            ConcurrentReadablePointerIndex[] append = new ConcurrentReadablePointerIndex[indexes.length + 1];
+            RawConcurrentReadablePointerIndex[] append = new RawConcurrentReadablePointerIndex[indexes.length + 1];
             append[0] = pointerIndex;
             System.arraycopy(indexes, 0, append, 1, indexes.length);
             indexes = append;
@@ -79,24 +79,24 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
     }
 
     @Override
-    public NextPointer getPointer(byte[] key) throws Exception {
+    public RawNextPointer getPointer(byte[] key) throws Exception {
         return PointerIndexUtil.get(indexes, key);
     }
 
     @Override
-    public NextPointer rangeScan(byte[] from, byte[] to) throws Exception {
+    public RawNextPointer rangeScan(byte[] from, byte[] to) throws Exception {
         return PointerIndexUtil.rangeScan(indexes, from, to);
     }
 
     @Override
-    public NextPointer rowScan() throws Exception {
+    public RawNextPointer rowScan() throws Exception {
         return PointerIndexUtil.rowScan(indexes);
     }
 
     @Override
     public void close() throws Exception {
         synchronized (indexesLock) {
-            for (ConcurrentReadablePointerIndex indexe : indexes) {
+            for (RawConcurrentReadablePointerIndex indexe : indexes) {
                 indexe.close();
             }
         }
@@ -105,7 +105,7 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
     @Override
     public long count() throws Exception {
         long count = 0;
-        for (ConcurrentReadablePointerIndex g : grab()) {
+        for (RawConcurrentReadablePointerIndex g : grab()) {
             count += g.count();
         }
         return count;
@@ -113,7 +113,7 @@ public class MergeablePointerIndexs implements ReadPointerIndex {
 
     @Override
     public boolean isEmpty() throws Exception {
-        for (ConcurrentReadablePointerIndex g : grab()) {
+        for (RawConcurrentReadablePointerIndex g : grab()) {
             if (!g.isEmpty()) {
                 return false;
             }

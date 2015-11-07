@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
-import com.jivesoftware.os.amza.lsm.api.PointerStream;
+import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 
 /**
  *
@@ -10,38 +10,49 @@ import com.jivesoftware.os.amza.lsm.api.PointerStream;
  */
 public class PointerIndexUtil {
 
-    public static NextPointer get(ConcurrentReadablePointerIndex[] indexes, byte[] key) {
+    public static RawNextPointer get(RawConcurrentReadablePointerIndex[] indexes, byte[] key) {
         return (stream) -> {
-            PointerStream found = (key1, timestamp, tombstoned, version, fp) -> {
-                if (fp != -1) {
-                    return stream.stream(key1, timestamp, tombstoned, version, fp);
+            RawPointerStream found = (rawEntry, offset, length) -> {
+                if (rawEntry != null) {
+                    return stream.stream(rawEntry, offset, length);
                 }
                 return false;
             };
-            for (ConcurrentReadablePointerIndex index : indexes) {
-                NextPointer pointer = index.concurrent(2_048).getPointer(key);
+            for (RawConcurrentReadablePointerIndex index : indexes) {
+                RawNextPointer pointer = index.rawConcurrent(2_048).getPointer(key);
                 if (pointer.next(found)) {
                     return false;
                 }
             }
-            stream.stream(key, -1, false, -1, -1);
+            stream.stream(null, 0, 0);
             return false;
         };
     }
 
-    public static NextPointer rangeScan(ConcurrentReadablePointerIndex[] copy, byte[] from, byte[] to) throws Exception {
-        NextPointer[] feeders = new NextPointer[copy.length];
+    public static RawNextPointer rangeScan(RawConcurrentReadablePointerIndex[] copy, byte[] from, byte[] to) throws Exception {
+        RawNextPointer[] feeders = new RawNextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].concurrent(4096).rangeScan(from, to);
+            feeders[i] = copy[i].rawConcurrent(4096).rangeScan(from, to);
         }
         return new InterleavePointerStream(feeders);
     }
 
-    public static NextPointer rowScan(ConcurrentReadablePointerIndex[] copy) throws Exception {
-        NextPointer[] feeders = new NextPointer[copy.length];
+    public static RawNextPointer rowScan(RawConcurrentReadablePointerIndex[] copy) throws Exception {
+        RawNextPointer[] feeders = new RawNextPointer[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].concurrent(1024 * 1024 * 10).rowScan();
+            feeders[i] = copy[i].rawConcurrent(1024 * 1024 * 10).rowScan();
         }
         return new InterleavePointerStream(feeders);
+    }
+
+    public static int compare(byte[] left, int leftOffset, int leftLength, byte[] right, int rightOffset, int rightLength) {
+        int minLength = Math.min(leftLength, rightLength);
+        for (int i = 0; i < minLength; i++) {
+            int result = (left[leftOffset + i] & 0xFF) - (right[rightOffset + i] & 0xFF);
+            if (result != 0) {
+                return result;
+            }
+        }
+        return leftLength - rightLength;
     }
 }

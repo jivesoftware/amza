@@ -1,10 +1,9 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
-import com.jivesoftware.os.amza.lsm.api.PointerStream;
+import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
@@ -21,7 +20,7 @@ public class MergablePointerIndexsNGTest {
     @Test(enabled = true)
     public void testTx() throws Exception {
 
-        ConcurrentSkipListMap<byte[], TimestampedValue> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
+        ConcurrentSkipListMap<byte[], byte[]> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
 
         int count = 10;
         int step = 100;
@@ -55,16 +54,16 @@ public class MergablePointerIndexsNGTest {
 
     private void assertions(MergeablePointerIndexs indexs,
         int count, int step,
-        ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws
+        ConcurrentSkipListMap<byte[], byte[]> desired) throws
         Exception {
 
         ArrayList<byte[]> keys = new ArrayList<>(desired.navigableKeySet());
 
         int[] index = new int[1];
-        NextPointer rowScan = indexs.rowScan();
-        PointerStream stream = (key, timestamp, tombstoned, version, fp) -> {
-            System.out.println(UIO.bytesLong(keys.get(index[0])) + " " + UIO.bytesLong(key));
-            Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
+        RawNextPointer rowScan = indexs.rowScan();
+        RawPointerStream stream = (rawEntry, offset, length) -> {
+            System.out.println(UIO.bytesLong(keys.get(index[0])) + " " + SimpleRawEntry.toString(rawEntry));
+            Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), SimpleRawEntry.key(rawEntry));
             index[0]++;
             return true;
         };
@@ -74,13 +73,14 @@ public class MergablePointerIndexsNGTest {
 
         for (int i = 0; i < count * step; i++) {
             long k = i;
-            NextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
-            stream = (key, timestamp, tombstoned, version, fp) -> {
-                TimestampedValue expectedFP = desired.get(key);
-                if (expectedFP == null) {
-                    Assert.assertTrue(expectedFP == null && fp == -1);
+            RawNextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
+            stream = (rawEntry, offset, length) -> {
+                byte[] expected = desired.get(UIO.longBytes(SimpleRawEntry.key(rawEntry)));
+                if (expected == null) {
+                    System.out.println("expected:" + expected + " " + SimpleRawEntry.value(rawEntry));
+                    Assert.assertTrue(expected == null && SimpleRawEntry.value(rawEntry) == 0);
                 } else {
-                    Assert.assertEquals(UIO.bytesLong(expectedFP.getValue()), fp);
+                    Assert.assertEquals(SimpleRawEntry.value(expected), SimpleRawEntry.value(rawEntry));
                 }
                 return true;
             };
@@ -94,16 +94,16 @@ public class MergablePointerIndexsNGTest {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (key, timestamp, tombstoned, version, fp) -> {
-                if (fp > -1) {
-                    System.out.println("Streamed:" + UIO.bytesLong(key));
+            stream = (rawEntry, offset, length) -> {
+                if (SimpleRawEntry.value(rawEntry) > -1) {
+                    System.out.println("Streamed:" + SimpleRawEntry.toString(rawEntry));
                     streamed[0]++;
                 }
                 return true;
             };
 
             System.out.println("Asked:" + UIO.bytesLong(keys.get(_i)) + " to " + UIO.bytesLong(keys.get(_i + 3)));
-            NextPointer rangeScan = indexs.rangeScan(keys.get(_i), keys.get(_i + 3));
+            RawNextPointer rangeScan = indexs.rangeScan(keys.get(_i), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(3, streamed[0]);
 
@@ -114,13 +114,13 @@ public class MergablePointerIndexsNGTest {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (key, timestamp, tombstoned, version, fp) -> {
-                if (fp > -1) {
+            stream = (rawEntry, offset, length) -> {
+                if (SimpleRawEntry.value(rawEntry) > -1) {
                     streamed[0]++;
                 }
                 return true;
             };
-            NextPointer rangeScan = indexs.rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
+            RawNextPointer rangeScan = indexs.rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(2, streamed[0]);
 

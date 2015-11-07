@@ -1,10 +1,9 @@
 package com.jivesoftware.os.amza.lsm;
 
-import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.api.AppendablePointerIndex;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
-import com.jivesoftware.os.amza.lsm.api.PointerStream;
+import com.jivesoftware.os.amza.lsm.api.RawAppendablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -12,6 +11,10 @@ import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ConcurrentSkipListMap;
 import junit.framework.Assert;
+
+import static com.jivesoftware.os.amza.lsm.SimpleRawEntry.key;
+import static com.jivesoftware.os.amza.lsm.SimpleRawEntry.rawEntry;
+import static com.jivesoftware.os.amza.lsm.SimpleRawEntry.value;
 
 /**
  *
@@ -22,30 +25,31 @@ public class PointerIndexUtils {
     static OrderIdProvider timeProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
 
     static long append(Random rand,
-        AppendablePointerIndex appendablePointerIndex,
+        RawAppendablePointerIndex appendablePointerIndex,
         long start,
         int step,
         int count,
-        ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws Exception {
-
+        ConcurrentSkipListMap<byte[], byte[]> desired) throws Exception {
 
         long[] lastKey = new long[1];
         appendablePointerIndex.append((stream) -> {
             long k = start + rand.nextInt(step);
             for (int i = 0; i < count; i++) {
-                long walFp = Math.abs(rand.nextLong());
                 byte[] key = UIO.longBytes(k);
                 long time = timeProvider.nextId();
+
+                long specialK = k;
                 if (desired != null) {
                     desired.compute(key, (t, u) -> {
                         if (u == null) {
-                            return new TimestampedValue(time, Long.MAX_VALUE, UIO.longBytes(walFp));
+                            return rawEntry(specialK, time);
                         } else {
-                            return u.getTimestampId() > time ? u : new TimestampedValue(time, Long.MAX_VALUE, UIO.longBytes(walFp));
+                            return value(u) > time ? u : rawEntry(specialK, time);
                         }
                     });
                 }
-                if (!stream.stream(key, time, false, 0, walFp)) {
+                byte[] rawEntry = rawEntry(k, time);
+                if (!stream.stream(rawEntry, 0, rawEntry.length)) {
                     break;
                 }
                 k += 1 + rand.nextInt(step);
@@ -58,16 +62,16 @@ public class PointerIndexUtils {
 
     static void assertions(MergeablePointerIndexs indexs,
         int count, int step,
-        ConcurrentSkipListMap<byte[], TimestampedValue> desired) throws
+        ConcurrentSkipListMap<byte[], byte[]> desired) throws
         Exception {
 
         ArrayList<byte[]> keys = new ArrayList<>(desired.navigableKeySet());
 
         int[] index = new int[1];
-        NextPointer rowScan = indexs.rowScan();
-        PointerStream stream = (key, timestamp, tombstoned, version, fp) -> {
-            System.out.println("scanned:" + UIO.bytesLong(keys.get(index[0])) + " " + UIO.bytesLong(key));
-            Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), UIO.bytesLong(key));
+        RawNextPointer rowScan = indexs.rowScan();
+        RawPointerStream stream = (rawEntry, offset, length) -> {
+            System.out.println("scanned:" + UIO.bytesLong(keys.get(index[0])) + " " + key(rawEntry));
+            Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), key(rawEntry));
             index[0]++;
             return true;
         };
@@ -77,13 +81,13 @@ public class PointerIndexUtils {
 
         for (int i = 0; i < count * step; i++) {
             long k = i;
-            NextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
-            stream = (key, timestamp, tombstoned, version, fp) -> {
-                TimestampedValue expectedFP = desired.get(key);
+            RawNextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
+            stream = (rawEntry, offset, length) -> {
+                byte[] expectedFP = desired.get(UIO.longBytes(key(rawEntry)));
                 if (expectedFP == null) {
-                    Assert.assertTrue(expectedFP == null && fp == -1);
+                    Assert.assertTrue(expectedFP == null && value(rawEntry) == -1);
                 } else {
-                    Assert.assertEquals(UIO.bytesLong(expectedFP.getValue()), fp);
+                    Assert.assertEquals(value(expectedFP), value(rawEntry));
                 }
                 return true;
             };
@@ -97,16 +101,16 @@ public class PointerIndexUtils {
             int _i = i;
 
             int[] streamed = new int[1];
-            stream = (key, timestamp, tombstoned, version, fp) -> {
-                if (fp > -1) {
-                    System.out.println("Streamed:" + UIO.bytesLong(key));
+            stream = (rawEntry, offset, length) -> {
+                if (value(rawEntry) > -1) {
+                    System.out.println("Streamed:" + key(rawEntry));
                     streamed[0]++;
                 }
                 return true;
             };
 
             System.out.println("Asked:" + UIO.bytesLong(keys.get(_i)) + " to " + UIO.bytesLong(keys.get(_i + 3)));
-            NextPointer rangeScan = indexs.rangeScan(keys.get(_i), keys.get(_i + 3));
+            RawNextPointer rangeScan = indexs.rangeScan(keys.get(_i), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(3, streamed[0]);
 
@@ -117,13 +121,13 @@ public class PointerIndexUtils {
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
-            stream = (key, timestamp, tombstoned, version, fp) -> {
-                if (fp > -1) {
+            stream = (rawEntry, offset, length) -> {
+                if (value(rawEntry) > -1) {
                     streamed[0]++;
                 }
                 return true;
             };
-            NextPointer rangeScan = indexs.rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
+            RawNextPointer rangeScan = indexs.rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(2, streamed[0]);
 
@@ -131,4 +135,5 @@ public class PointerIndexUtils {
 
         System.out.println("rangeScan2 PASSED");
     }
+
 }

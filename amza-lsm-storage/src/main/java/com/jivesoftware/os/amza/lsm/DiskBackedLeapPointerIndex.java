@@ -5,12 +5,12 @@ import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.api.AppendablePointerIndex;
-import com.jivesoftware.os.amza.lsm.api.ConcurrentReadablePointerIndex;
-import com.jivesoftware.os.amza.lsm.api.NextPointer;
-import com.jivesoftware.os.amza.lsm.api.PointerStream;
-import com.jivesoftware.os.amza.lsm.api.Pointers;
-import com.jivesoftware.os.amza.lsm.api.ReadPointerIndex;
+import com.jivesoftware.os.amza.lsm.api.RawAppendablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
+import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
+import com.jivesoftware.os.amza.lsm.api.RawPointers;
+import com.jivesoftware.os.amza.lsm.api.RawReadPointerIndex;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import java.io.File;
 import java.io.IOException;
@@ -20,7 +20,7 @@ import java.util.Map;
 /**
  * @author jonathan.colt
  */
-public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerIndex, AppendablePointerIndex {
+public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerIndex, RawAppendablePointerIndex {
 
     private final int maxLeaps;
     private final int updatesBetweenLeaps;
@@ -50,7 +50,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
     }
 
     @Override
-    public void append(Pointers pointers) throws Exception {
+    public boolean append(RawPointers pointers) throws Exception {
         IWriteable writeIndex = index.fileChannelWriter();
 
         writeIndex.seek(0);
@@ -62,22 +62,21 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         HeapFiler indexEntryFiler = new HeapFiler(1024); // TODO somthing better
 
         byte[][] lastKey = new byte[1][];
-        pointers.consume((key, timestamp, tombstoned, version, walPointer) -> {
+        pointers.consume((rawEntry, offset, length) -> {
 
             indexEntryFiler.reset();
             UIO.writeByte(indexEntryFiler, (byte) 0, "type");
 
-            int entryLength = 4 + 4 + key.length + 8 + 1 + 8 + 8 + 4;
+            int entryLength = 4 + length + 4;
             UIO.writeInt(indexEntryFiler, entryLength, "entryLength", lengthBuffer);
-            UIO.writeByteArray(indexEntryFiler, key, 0, key.length, "key", lengthBuffer);
-            UIO.writeLong(indexEntryFiler, timestamp, "timestamp");
-            UIO.writeByte(indexEntryFiler, tombstoned ? (byte) 1 : (byte) 0, "tombstone");
-            UIO.writeLong(indexEntryFiler, version, "version");
-            UIO.writeLong(indexEntryFiler, walPointer, "walPointerFp");
+            indexEntryFiler.write(rawEntry, offset, length);
             UIO.writeInt(indexEntryFiler, entryLength, "entryLength", lengthBuffer);
 
             writeIndex.write(indexEntryFiler.leakBytes(), 0, (int) indexEntryFiler.length());
 
+            int keyLength = UIO.bytesInt(rawEntry, offset);
+            byte[] key = new byte[keyLength];
+            System.arraycopy(rawEntry, 4, key, 0, keyLength);
             lastKey[0] = key;
             updatesSinceLeap[0]++;
             if (updatesSinceLeap[0] >= updatesBetweenLeaps) { // TODO consider bytes between leaps
@@ -91,6 +90,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
             latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], lastKey[0], lengthBuffer);
         }
         writeIndex.flush(false);
+        return true;
     }
 
     private LeapFrog writeLeaps(IWriteable writeIndex,
@@ -109,7 +109,7 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
     Map<Long, Leaps> leapsCache = Maps.newHashMap();
 
     @Override
-    public ReadPointerIndex concurrent(int bufferSize) throws Exception {
+    public RawReadPointerIndex rawConcurrent(int bufferSize) throws Exception {
         IReadable readableIndex = index.fileChannelMemMapFiler(0);
         if (readableIndex == null) {
             readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
@@ -129,11 +129,12 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         return new DiskBackedLeapReadablePointerIndex(leaps, readableIndex, leapsCache);
     }
 
-    public static class DiskBackedLeapReadablePointerIndex implements ReadPointerIndex {
+    public static class DiskBackedLeapReadablePointerIndex implements RawReadPointerIndex {
 
         private final Leaps leaps;
         private final IReadable readable;
         private final Map<Long, Leaps> leapsCache;
+        private final byte[] lengthBuffer = new byte[8];
 
         public DiskBackedLeapReadablePointerIndex(Leaps leaps, IReadable readable, Map<Long, Leaps> leapsCache) {
             this.leaps = leaps;
@@ -141,10 +142,10 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
             this.leapsCache = leapsCache;
         }
 
-        private static class LeapPointerStream implements PointerStream {
+        private static class LeapPointerStream implements RawPointerStream {
 
             private final byte[] desired;
-            private PointerStream stream;
+            private RawPointerStream stream;
             private boolean once = false;
             private boolean result = false;
 
@@ -152,17 +153,18 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                 this.desired = desired;
             }
 
-            private void prepare(PointerStream stream) {
+            private void prepare(RawPointerStream stream) {
                 this.stream = stream;
                 this.result = false;
             }
 
             @Override
-            public boolean stream(byte[] key, long timestamp, boolean tombstoned, long version, long pointer) throws Exception {
-                int c = UnsignedBytes.lexicographicalComparator().compare(key, desired);
+            public boolean stream(byte[] rawEntry, int offset, int length) throws Exception {
+                int keylength = UIO.bytesInt(rawEntry, 0);
+                int c = PointerIndexUtil.compare(rawEntry, 4, keylength, desired, 0, desired.length);
 
                 if (c == 0) {
-                    result = stream.stream(key, timestamp, tombstoned, version, pointer);
+                    result = stream.stream(rawEntry, offset, length);
                     once = true;
                     return false;
                 }
@@ -176,13 +178,13 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         }
 
         @Override
-        public NextPointer getPointer(byte[] desired) throws Exception {
+        public RawNextPointer getPointer(byte[] desired) throws Exception {
 
             long fp = getInclusiveStartOfRow(desired);
             if (fp < 0) {
                 return stream -> false;
             }
-            NextPointer scanFromFp = scanFromFp(fp);
+            RawNextPointer scanFromFp = scanFromFp(fp);
             LeapPointerStream leapPointerStream = new LeapPointerStream(desired);
             return (stream) -> {
                 if (leapPointerStream.once) {
@@ -201,7 +203,6 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
                 return -1;
             }
 
-            byte[] lengthBuffer = new byte[8];
             long closestFP = 0;
             while (at != null) {
                 Leaps next = null;
@@ -227,24 +228,25 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         }
 
         @Override
-        public NextPointer rangeScan(byte[] from, byte[] to) throws Exception {
+        public RawNextPointer rangeScan(byte[] from, byte[] to) throws Exception {
             long fp = getInclusiveStartOfRow(from);
             if (fp < 0) {
                 return stream -> false;
             }
-            NextPointer scanFromFp = scanFromFp(fp);
+            RawNextPointer scanFromFp = scanFromFp(fp);
             return (stream) -> {
-                boolean[] once = new boolean[] { false };
+                boolean[] once = new boolean[]{false};
                 boolean more = true;
                 while (!once[0] && more) {
-                    more = scanFromFp.next((key, timestamp, tombstoned, version, pointer) -> {
-                        int c = UnsignedBytes.lexicographicalComparator().compare(key, from);
+                    more = scanFromFp.next((rawEntry, offset, length) -> {
+                        int keylength = UIO.bytesInt(rawEntry, offset);
+                        int c = PointerIndexUtil.compare(rawEntry, 4, keylength, from, 0, from.length);
                         if (c >= 0) {
-                            c = UnsignedBytes.lexicographicalComparator().compare(key, to);
+                            c = PointerIndexUtil.compare(rawEntry, 4, keylength, to, 0, to.length);
                             if (c < 0) {
                                 once[0] = true;
                             }
-                            return c < 0 && stream.stream(key, timestamp, tombstoned, version, pointer);
+                            return c < 0 && stream.stream(rawEntry, offset, length);
                         } else {
                             return true;
                         }
@@ -255,34 +257,27 @@ public class DiskBackedLeapPointerIndex implements ConcurrentReadablePointerInde
         }
 
         @Override
-        public NextPointer rowScan() throws Exception {
+        public RawNextPointer rowScan() throws Exception {
             return scanFromFp(0);
         }
 
-        private NextPointer scanFromFp(long fp) throws IOException {
+        private byte[] entryBuffer;
+        private int entryLength;
+
+        private RawNextPointer scanFromFp(long fp) throws IOException {
             readable.seek(fp);
-            byte[] lengthBuffer = new byte[8];
             return (stream) -> {
 
                 int type;
                 while ((type = readable.read()) >= 0) {
                     if (type == 0) {
                         int length = UIO.readInt(readable, "entryLength", lengthBuffer);
-                        byte[] bytes = new byte[length - 4];
-                        readable.read(bytes);
-                        int keyLength = UIO.bytesInt(bytes, 0);
-                        byte[] key = new byte[keyLength];
-                        System.arraycopy(bytes, 4, key, 0, keyLength);
-                        long timestamp = UIO.bytesLong(bytes, 4 + keyLength);
-                        boolean tombstone = bytes[4 + keyLength + 8] != 0;
-                        long version = UIO.bytesLong(bytes, 4 + keyLength + 8 + 1);
-                        long walPointerFp = UIO.bytesLong(bytes, 4 + keyLength + 8 + 1 + 8);
-                        return stream.stream(
-                            key,
-                            timestamp,
-                            tombstone,
-                            version,
-                            walPointerFp);
+                        entryLength = length - 4;
+                        if (entryBuffer == null || entryBuffer.length < entryLength) {
+                            entryBuffer = new byte[entryLength];
+                        }
+                        readable.read(entryBuffer, 0, entryLength);
+                        return stream.stream(entryBuffer, 0, entryLength);
                     } else {
                         int length = UIO.readInt(readable, "entryLength", lengthBuffer);
                         readable.seek(readable.getFilePointer() + (length - 4));

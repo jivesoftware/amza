@@ -4,6 +4,7 @@ import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointGet;
 import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 import java.io.File;
 import java.util.ArrayList;
@@ -88,7 +89,7 @@ public class PointerIndexNGTest {
         System.out.println("Point Get");
         for (int i = 0; i < count * step; i++) {
             long k = i;
-            RawNextPointer getPointer = walIndex.rawConcurrent(0).getPointer(UIO.longBytes(k));
+            RawPointGet getPointer = walIndex.rawConcurrent(0).getPointer();
             stream = (rawEntry, offset, length) -> {
 
                 System.out.println("Got: "+SimpleRawEntry.toString(rawEntry));
@@ -103,7 +104,7 @@ public class PointerIndexNGTest {
                 return SimpleRawEntry.value(rawEntry) != -1;
             };
 
-            while (getPointer.next(stream));
+            while (getPointer.next(UIO.longBytes(k), stream));
         }
 
         System.out.println("Ranges");

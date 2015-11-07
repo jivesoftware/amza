@@ -6,7 +6,7 @@ package com.jivesoftware.os.amza.lsm.api;
  */
 public interface RawReadPointerIndex {
 
-    RawNextPointer getPointer(byte[] key) throws Exception;
+    RawPointGet getPointer() throws Exception;
 
     RawNextPointer rangeScan(byte[] from, byte[] to) throws Exception;
 

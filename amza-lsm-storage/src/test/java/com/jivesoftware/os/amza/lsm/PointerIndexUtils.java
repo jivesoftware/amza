@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.lsm;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.api.RawAppendablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointGet;
 import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -81,7 +82,7 @@ public class PointerIndexUtils {
 
         for (int i = 0; i < count * step; i++) {
             long k = i;
-            RawNextPointer getPointer = indexs.getPointer(UIO.longBytes(k));
+            RawPointGet getPointer = indexs.getPointer();
             stream = (rawEntry, offset, length) -> {
                 byte[] expectedFP = desired.get(UIO.longBytes(key(rawEntry)));
                 if (expectedFP == null) {
@@ -92,7 +93,7 @@ public class PointerIndexUtils {
                 return true;
             };
 
-            while (getPointer.next(stream));
+            while (getPointer.next(UIO.longBytes(k), stream));
         }
 
         System.out.println("getPointer PASSED");

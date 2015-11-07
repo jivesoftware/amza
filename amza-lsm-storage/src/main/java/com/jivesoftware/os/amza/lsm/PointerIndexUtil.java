@@ -2,7 +2,9 @@ package com.jivesoftware.os.amza.lsm;
 
 import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointGet;
 import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
+import com.jivesoftware.os.amza.lsm.api.RawReadPointerIndex;
 
 /**
  *
@@ -10,17 +12,23 @@ import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
  */
 public class PointerIndexUtil {
 
-    public static RawNextPointer get(RawConcurrentReadablePointerIndex[] indexes, byte[] key) {
-        return (stream) -> {
+    public static RawPointGet get(RawConcurrentReadablePointerIndex[] indexes) throws Exception {
+
+        RawPointGet[] pointGets = new RawPointGet[indexes.length];
+        for (int i = 0; i < pointGets.length; i++) {
+            RawReadPointerIndex rawConcurrent = indexes[i].rawConcurrent(2_048);
+            pointGets[i] = rawConcurrent.getPointer();
+        }
+
+        return (key, stream) -> {
             RawPointerStream found = (rawEntry, offset, length) -> {
                 if (rawEntry != null) {
                     return stream.stream(rawEntry, offset, length);
                 }
                 return false;
             };
-            for (RawConcurrentReadablePointerIndex index : indexes) {
-                RawNextPointer pointer = index.rawConcurrent(2_048).getPointer(key);
-                if (pointer.next(found)) {
+            for (RawPointGet pointGet : pointGets) {
+                if (pointGet.next(key, found)) {
                     return false;
                 }
             }

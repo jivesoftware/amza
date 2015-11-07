@@ -8,9 +8,11 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.api.RawAppendablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointGet;
 import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 import com.jivesoftware.os.amza.lsm.api.RawPointers;
 import com.jivesoftware.os.amza.lsm.api.RawReadPointerIndex;
+import com.jivesoftware.os.amza.lsm.api.ScanFromFp;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import java.io.File;
 import java.io.IOException;
@@ -144,17 +146,15 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
         private static class LeapPointerStream implements RawPointerStream {
 
-            private final byte[] desired;
+            private byte[] desired;
             private RawPointerStream stream;
             private boolean once = false;
             private boolean result = false;
 
-            public LeapPointerStream(byte[] desired) {
+            private void prepare(byte[] desired, RawPointerStream stream) {
                 this.desired = desired;
-            }
-
-            private void prepare(RawPointerStream stream) {
                 this.stream = stream;
+                this.once = false;
                 this.result = false;
             }
 
@@ -178,23 +178,46 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
         }
 
         @Override
-        public RawNextPointer getPointer(byte[] desired) throws Exception {
+        public RawPointGet getPointer() throws Exception {
+            return new Gets(scanFromFp());
+        }
 
-            long fp = getInclusiveStartOfRow(desired);
-            if (fp < 0) {
-                return stream -> false;
+        private class Gets implements RawPointGet {
+
+            private byte[] activeKey;
+            private long activeFp;
+            private ScanFromFp scanFromFp;
+            private final LeapPointerStream leapPointerStream = new LeapPointerStream();
+
+            public Gets(ScanFromFp scanFromFp) {
+                this.scanFromFp = scanFromFp;
             }
-            RawNextPointer scanFromFp = scanFromFp(fp);
-            LeapPointerStream leapPointerStream = new LeapPointerStream(desired);
-            return (stream) -> {
+
+            @Override
+            public boolean next(byte[] key, RawPointerStream stream) throws Exception {
+                if (activeKey == null || activeKey != key) {
+                    activeKey = key;
+                    activeFp = getInclusiveStartOfRow(key);
+                    if (activeFp < 0) {
+                        reset();
+                        return false;
+                    }
+                    leapPointerStream.prepare(activeKey, stream);
+                }
                 if (leapPointerStream.once) {
                     return false;
                 }
+                while (scanFromFp.next(activeFp, leapPointerStream)) ;
+                boolean more = leapPointerStream.once && leapPointerStream.result;
+                if (!more) {
+                    reset();
+                }
+                return more;
+            }
 
-                leapPointerStream.prepare(stream);
-                while (scanFromFp.next(leapPointerStream)) ;
-                return leapPointerStream.once && leapPointerStream.result;
-            };
+            private void reset() {
+                activeKey = null;
+            }
         }
 
         public long getInclusiveStartOfRow(byte[] key) throws Exception {
@@ -206,6 +229,8 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             long closestFP = 0;
             while (at != null) {
                 Leaps next = null;
+
+                // Binary Search
                 if (at.fpIndex.length != 0) {
                     int index = Arrays.binarySearch(at.keys, key, UnsignedBytes.lexicographicalComparator());
                     if (index == -(at.fpIndex.length + 1)) {
@@ -222,6 +247,22 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                         }
                     }
                 }
+
+                // Brute forcce
+//                for (int i = 0; i < at.keys.length; i++) {
+//                    if (UnsignedBytes.lexicographicalComparator().compare(at.keys[i], key) < 0) {
+//                        closestFP = Math.max(closestFP, at.fpIndex[i] - 1);
+//                    } else {
+//                        next = leapsCache.get(at.fpIndex[i]);
+//                        if (next == null) {
+//                            readable.seek(at.fpIndex[i]);
+//                            next = Leaps.read(readable, lengthBuffer);
+//                            leapsCache.put(at.fpIndex[i], next);
+//                        }
+//
+//                        break;
+//                    }
+//                }
                 at = next;
             }
             return closestFP;
@@ -233,12 +274,12 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             if (fp < 0) {
                 return stream -> false;
             }
-            RawNextPointer scanFromFp = scanFromFp(fp);
+            ScanFromFp scanFromFp = scanFromFp();
             return (stream) -> {
                 boolean[] once = new boolean[]{false};
                 boolean more = true;
                 while (!once[0] && more) {
-                    more = scanFromFp.next((rawEntry, offset, length) -> {
+                    more = scanFromFp.next(fp, (rawEntry, offset, length) -> {
                         int keylength = UIO.bytesInt(rawEntry, offset);
                         int c = PointerIndexUtil.compare(rawEntry, 4, keylength, from, 0, from.length);
                         if (c >= 0) {
@@ -258,16 +299,22 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
         @Override
         public RawNextPointer rowScan() throws Exception {
-            return scanFromFp(0);
+            ScanFromFp scanFromFp = scanFromFp();
+            return (stream) -> scanFromFp.next(0, stream);
         }
 
         private byte[] entryBuffer;
         private int entryLength;
 
-        private RawNextPointer scanFromFp(long fp) throws IOException {
-            readable.seek(fp);
-            return (stream) -> {
+        private ScanFromFp scanFromFp() throws IOException {
 
+            Long[] activeFp = new Long[1];
+            return (fp, stream) -> {
+
+                if (activeFp[0] == null || activeFp[0] != fp) {
+                    activeFp[0] = fp;
+                    readable.seek(fp);
+                }
                 int type;
                 while ((type = readable.read()) >= 0) {
                     if (type == 0) {
@@ -283,7 +330,8 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                         readable.seek(readable.getFilePointer() + (length - 4));
                     }
                 }
-                return type >= 0;
+                boolean more = type >= 0;
+                return more;
             };
         }
 

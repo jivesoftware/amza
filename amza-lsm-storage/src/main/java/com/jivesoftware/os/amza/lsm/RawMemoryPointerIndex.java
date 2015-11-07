@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.lsm.api.MergeRawEntry;
 import com.jivesoftware.os.amza.lsm.api.RawAppendablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointGet;
 import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 import com.jivesoftware.os.amza.lsm.api.RawPointers;
 import com.jivesoftware.os.amza.lsm.api.RawReadPointerIndex;
@@ -65,17 +66,23 @@ public class RawMemoryPointerIndex implements RawAppendablePointerIndex, RawConc
         return new RawReadPointerIndex() {
 
             @Override
-            public RawNextPointer getPointer(byte[] key) throws Exception {
+            public RawPointGet getPointer() throws Exception {
 
+                byte[][] lastKey = new byte[1][];
                 byte[][] pointer = new byte[1][];
-                pointer[0] = index.get(key);
-                return (stream) -> {
+                return (key, stream) -> {
+                    if (lastKey[0] == null || lastKey[0] != key) {
+                        pointer[0] = index.get(key);
+                    }
                     if (pointer[0] == null) {
                         return stream.stream(null, 0, 0);
                     } else {
-                        boolean done = stream.stream(pointer[0], 0, pointer[0].length);
+                        boolean more = stream.stream(pointer[0], 0, pointer[0].length);
                         pointer[0] = null;
-                        return done;
+                        if (!more) {
+                            lastKey[0] = null;
+                        }
+                        return more;
                     }
                 };
             }

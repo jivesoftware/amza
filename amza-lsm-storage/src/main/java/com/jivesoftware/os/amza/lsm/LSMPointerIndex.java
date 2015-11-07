@@ -69,7 +69,7 @@ public class LSMPointerIndex implements PointerIndex {
 
     @Override
     public NextPointer getPointer(byte[] key) throws Exception {
-        return LSMPointerUtils.rawToReal(PointerIndexUtil.get(grab(), key));
+        return LSMPointerUtils.rawToReal(key, PointerIndexUtil.get(grab()));
     }
 
     @Override

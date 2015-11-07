@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.lsm;
 import com.jivesoftware.os.amza.lsm.api.PointerIndexFactory;
 import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointGet;
 import com.jivesoftware.os.amza.lsm.api.RawReadPointerIndex;
 
 /**
@@ -14,6 +15,7 @@ public class MergeablePointerIndexs implements RawReadPointerIndex {
     // newest to oldest
     private final Object indexesLock = new Object();
     private RawConcurrentReadablePointerIndex[] indexes = new RawConcurrentReadablePointerIndex[0];
+    private long version;
 
     public static interface CommitIndex {
 
@@ -47,6 +49,7 @@ public class MergeablePointerIndexs implements RawReadPointerIndex {
             System.arraycopy(indexes, 0, merged, 1, newSinceMerge);
             merged[0] = commitIndex.commit(mergedIndex);
             indexes = merged;
+            version++;
         }
 
         System.out.println("Merged (" + copy.length + "), NewSinceMerge (" + newSinceMerge + ")");
@@ -75,12 +78,22 @@ public class MergeablePointerIndexs implements RawReadPointerIndex {
             append[0] = pointerIndex;
             System.arraycopy(indexes, 0, append, 1, indexes.length);
             indexes = append;
+            version++;
         }
     }
 
+    long pointGetCacheVersion;  // HACK
+    RawPointGet pointGetCache; // HACK
+
     @Override
-    public RawNextPointer getPointer(byte[] key) throws Exception {
-        return PointerIndexUtil.get(indexes, key);
+    public RawPointGet getPointer() throws Exception {
+        long stackVersion = version;
+        if (pointGetCache == null || pointGetCacheVersion < stackVersion) {
+            System.out.println("RawPointGet for version " + stackVersion);
+            pointGetCache = PointerIndexUtil.get(indexes);
+            pointGetCacheVersion = stackVersion;
+        }
+        return pointGetCache;
     }
 
     @Override

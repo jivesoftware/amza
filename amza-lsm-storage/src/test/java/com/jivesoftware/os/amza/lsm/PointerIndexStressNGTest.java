@@ -1,7 +1,8 @@
 package com.jivesoftware.os.amza.lsm;
 
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
+import com.jivesoftware.os.amza.lsm.api.RawPointGet;
+import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 import java.io.File;
 import java.text.NumberFormat;
 import java.util.Random;
@@ -80,7 +81,19 @@ public class PointerIndexStressNGTest {
 
             int[] hits = {0};
             int[] misses = {0};
+            RawPointerStream hitsAndMisses = (rawEntry, offset, length) -> {
+                if (SimpleRawEntry.value(rawEntry) != 0) {
+                    hits[0]++;
+                } else {
+                    misses[0]++;
+                }
+                return true;
+            };
             long getStart = System.currentTimeMillis();
+            long best = Long.MAX_VALUE;
+            long total = 0;
+            long samples = 0;
+            byte[] longBuffer = new byte[8];
             while (stopGets.longValue() > System.currentTimeMillis()) {
 
                 try {
@@ -89,20 +102,20 @@ public class PointerIndexStressNGTest {
                         continue;
                     }
 
+                    RawPointGet pointer = indexs.getPointer();
                     int longKey = rand.nextInt(maxKey.intValue());
-                    byte[] keyBytes = UIO.longBytes(longKey);
-                    RawNextPointer pointer = indexs.getPointer(keyBytes);
-                    pointer.next((rawEntry, offset, length) -> {
-                        if (SimpleRawEntry.value(rawEntry) != 0) {
-                            hits[0]++;
-                        } else {
-                            misses[0]++;
-                        }
-                        return true;
-                    });
+                    pointer.next(UIO.longBytes(longKey), hitsAndMisses);
                     if ((hits[0] + misses[0]) % 1_000 == 0) {
                         long getEnd = System.currentTimeMillis();
-                        System.out.println("Hits:" + hits[0] + " Misses:" + misses[0] + " Elapse:" + (getEnd - getStart));
+                        long elapse = (getEnd - getStart);
+                        total += elapse;
+                        samples++;
+                        if (elapse < best) {
+                            best = elapse;
+                        }
+
+                        System.out.println(
+                            "Hits:" + hits[0] + " Misses:" + misses[0] + " Elapse:" + elapse + " Best:" + best + " Avg:" + ((double) total / (double) samples));
                         hits[0] = 0;
                         misses[0] = 0;
                         getStart = getEnd;

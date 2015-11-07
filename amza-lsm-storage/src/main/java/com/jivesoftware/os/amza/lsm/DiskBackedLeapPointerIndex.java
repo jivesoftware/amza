@@ -164,9 +164,13 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                 int c = PointerIndexUtil.compare(rawEntry, 4, keylength, desired, 0, desired.length);
 
                 if (c == 0) {
-                    result = stream.stream(rawEntry, offset, length);
+                    if (rawEntry != null) {
+                        result = stream.stream(rawEntry, offset, length);
+                    } else {
+                        result = false;
+                    }
                     once = true;
-                    return false;
+                    return result;
                 }
                 if (c > 0) {
                     once = true;
@@ -179,7 +183,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
         @Override
         public RawPointGet getPointer() throws Exception {
-            return new Gets(scanFromFp());
+            return new Gets(new ActiveScan());
         }
 
         private class Gets implements RawPointGet {
@@ -274,7 +278,7 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
             if (fp < 0) {
                 return stream -> false;
             }
-            ScanFromFp scanFromFp = scanFromFp();
+            ScanFromFp scanFromFp = new ActiveScan();
             return (stream) -> {
                 boolean[] once = new boolean[]{false};
                 boolean more = true;
@@ -299,20 +303,22 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
 
         @Override
         public RawNextPointer rowScan() throws Exception {
-            ScanFromFp scanFromFp = scanFromFp();
+            ScanFromFp scanFromFp = new ActiveScan();
             return (stream) -> scanFromFp.next(0, stream);
         }
 
         private byte[] entryBuffer;
         private int entryLength;
 
-        private ScanFromFp scanFromFp() throws IOException {
+     
+        class ActiveScan implements ScanFromFp {
 
-            Long[] activeFp = new Long[1];
-            return (fp, stream) -> {
+            private long activeFp = Long.MAX_VALUE;
 
-                if (activeFp[0] == null || activeFp[0] != fp) {
-                    activeFp[0] = fp;
+            @Override
+            public boolean next(long fp, RawPointerStream stream) throws Exception {
+                if (activeFp == Long.MAX_VALUE || activeFp != fp) {
+                    activeFp = fp;
                     readable.seek(fp);
                 }
                 int type;
@@ -332,7 +338,8 @@ public class DiskBackedLeapPointerIndex implements RawConcurrentReadablePointerI
                 }
                 boolean more = type >= 0;
                 return more;
-            };
+            }
+
         }
 
         @Override

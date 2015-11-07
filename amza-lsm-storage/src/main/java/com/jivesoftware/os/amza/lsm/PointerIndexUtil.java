@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.lsm;
 import com.jivesoftware.os.amza.lsm.api.RawConcurrentReadablePointerIndex;
 import com.jivesoftware.os.amza.lsm.api.RawNextPointer;
 import com.jivesoftware.os.amza.lsm.api.RawPointGet;
-import com.jivesoftware.os.amza.lsm.api.RawPointerStream;
 import com.jivesoftware.os.amza.lsm.api.RawReadPointerIndex;
 
 /**
@@ -21,14 +20,8 @@ public class PointerIndexUtil {
         }
 
         return (key, stream) -> {
-            RawPointerStream found = (rawEntry, offset, length) -> {
-                if (rawEntry != null) {
-                    return stream.stream(rawEntry, offset, length);
-                }
-                return false;
-            };
             for (RawPointGet pointGet : pointGets) {
-                if (pointGet.next(key, found)) {
+                if (pointGet.next(key, stream)) {
                     return false;
                 }
             }

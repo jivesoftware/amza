@@ -34,7 +34,7 @@ public class PointerIndexStressNGTest {
         int maxKeyIncrement = 10;
 
         int maxLeaps = (int) (Math.log(numBatches * batchSize) / Math.log(2));
-        int updatesBetweenLeaps = 100;
+        int updatesBetweenLeaps = 64;
 
         MutableLong merge = new MutableLong();
         MutableLong maxKey = new MutableLong();
@@ -93,7 +93,6 @@ public class PointerIndexStressNGTest {
             long best = Long.MAX_VALUE;
             long total = 0;
             long samples = 0;
-            byte[] longBuffer = new byte[8];
             while (stopGets.longValue() > System.currentTimeMillis()) {
 
                 try {
@@ -105,7 +104,8 @@ public class PointerIndexStressNGTest {
                     RawPointGet pointer = indexs.getPointer();
                     int longKey = rand.nextInt(maxKey.intValue());
                     pointer.next(UIO.longBytes(longKey), hitsAndMisses);
-                    if ((hits[0] + misses[0]) % 1_000 == 0) {
+                    int logInterval = 100_000;
+                    if ((hits[0] + misses[0]) % logInterval == 0) {
                         long getEnd = System.currentTimeMillis();
                         long elapse = (getEnd - getStart);
                         total += elapse;
@@ -115,7 +115,8 @@ public class PointerIndexStressNGTest {
                         }
 
                         System.out.println(
-                            "Hits:" + hits[0] + " Misses:" + misses[0] + " Elapse:" + elapse + " Best:" + best + " Avg:" + ((double) total / (double) samples));
+                            "Hits:" + hits[0] + " Misses:" + misses[0] + " Elapse:" + elapse + " Best:" + rps(logInterval, best) + " Avg:" + rps(logInterval,
+                            (long) ((double) total / (double) samples)));
                         hits[0] = 0;
                         misses[0] = 0;
                         getStart = getEnd;
@@ -161,6 +162,10 @@ public class PointerIndexStressNGTest {
 
         System.out.println("Done. " + (System.currentTimeMillis() - start));
 
+    }
+
+    private final long rps(long logInterval, long elapse) {
+        return (long) (((double) logInterval / (double) elapse) * 1000);
     }
 
 }

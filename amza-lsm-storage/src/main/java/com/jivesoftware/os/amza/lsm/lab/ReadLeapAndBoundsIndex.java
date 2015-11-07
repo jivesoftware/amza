@@ -3,13 +3,13 @@ package com.jivesoftware.os.amza.lsm.lab;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.lab.api.ScanFromFp;
-import gnu.trove.map.hash.TLongObjectHashMap;
-import java.util.Arrays;
-import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
+import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
+import com.jivesoftware.os.amza.lsm.lab.api.ScanFromFp;
+import gnu.trove.map.hash.TLongObjectHashMap;
+import java.util.Arrays;
 
 /**
  *
@@ -66,7 +66,7 @@ public class ReadLeapAndBoundsIndex implements ReadIndex {
 
     @Override
     public GetRaw get() throws Exception {
-        return new Gets(new ActiveScan());
+        return new Gets(new ActiveScan(readable, lengthBuffer));
     }
 
     public class Gets implements GetRaw {
@@ -144,25 +144,25 @@ public class ReadLeapAndBoundsIndex implements ReadIndex {
         if (fp < 0) {
             return (stream) -> false;
         }
-        ScanFromFp scanFromFp = new ActiveScan();
+        ScanFromFp scanFromFp = new ActiveScan(readable, lengthBuffer);
         return (com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream stream) -> {
             boolean[] once = new boolean[]{false};
             boolean more = true;
             while (!once[0] && more) {
                 more = scanFromFp.next(fp,
                     (byte[] rawEntry, int offset, int length) -> {
-                    int keylength = UIO.bytesInt(rawEntry, offset);
-                    int c = IndexUtil.compare(rawEntry, 4, keylength, from, 0, from.length);
-                    if (c >= 0) {
-                        c = IndexUtil.compare(rawEntry, 4, keylength, to, 0, to.length);
-                        if (c < 0) {
-                            once[0] = true;
+                        int keylength = UIO.bytesInt(rawEntry, offset);
+                        int c = IndexUtil.compare(rawEntry, 4, keylength, from, 0, from.length);
+                        if (c >= 0) {
+                            c = IndexUtil.compare(rawEntry, 4, keylength, to, 0, to.length);
+                            if (c < 0) {
+                                once[0] = true;
+                            }
+                            return c < 0 && stream.stream(rawEntry, offset, length);
+                        } else {
+                            return true;
                         }
-                        return c < 0 && stream.stream(rawEntry, offset, length);
-                    } else {
-                        return true;
-                    }
-                });
+                    });
             }
             return more;
         };
@@ -170,39 +170,8 @@ public class ReadLeapAndBoundsIndex implements ReadIndex {
 
     @Override
     public NextRawEntry rowScan() throws Exception {
-        ScanFromFp scanFromFp = new ActiveScan();
+        ScanFromFp scanFromFp = new ActiveScan(readable, lengthBuffer);
         return (stream) -> scanFromFp.next(0, stream);
-    }
-    private byte[] entryBuffer;
-    private int entryLength;
-
-    private class ActiveScan implements ScanFromFp {
-
-        private long activeFp = Long.MAX_VALUE;
-
-        @Override
-        public boolean next(long fp, RawEntryStream stream) throws Exception {
-            if (activeFp == Long.MAX_VALUE || activeFp != fp) {
-                activeFp = fp;
-                readable.seek(fp);
-            }
-            int type;
-            while ((type = readable.read()) >= 0) {
-                if (type == LeapsAndBoundsIndex.ENTRY) {
-                    int length = UIO.readInt(readable, "entryLength", lengthBuffer);
-                    entryLength = length - 4;
-                    if (entryBuffer == null || entryBuffer.length < entryLength) {
-                        entryBuffer = new byte[entryLength];
-                    }
-                    readable.read(entryBuffer, 0, entryLength);
-                    return stream.stream(entryBuffer, 0, entryLength);
-                } else {
-                    int length = UIO.readInt(readable, "entryLength", lengthBuffer);
-                    readable.seek(readable.getFilePointer() + (length - 4));
-                }
-            }
-            return type >= 0;
-        }
     }
 
     @Override

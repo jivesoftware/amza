@@ -13,7 +13,6 @@ import org.apache.commons.lang.mutable.MutableLong;
 import org.testng.annotations.Test;
 
 /**
- *
  * @author jonathan.colt
  */
 public class IndexStressNGTest {
@@ -79,10 +78,10 @@ public class IndexStressNGTest {
 
         Future<Object> pointGets = Executors.newSingleThreadExecutor().submit(() -> {
 
-            int[] hits = {0};
-            int[] misses = {0};
+            int[] hits = { 0 };
+            int[] misses = { 0 };
             RawEntryStream hitsAndMisses = (rawEntry, offset, length) -> {
-                if (SimpleRawEntry.value(rawEntry) != 0) {
+                if (rawEntry != null) {
                     hits[0]++;
                 } else {
                     misses[0]++;

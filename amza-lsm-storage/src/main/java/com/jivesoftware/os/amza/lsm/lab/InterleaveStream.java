@@ -11,7 +11,6 @@ import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
 class InterleaveStream implements NextRawEntry {
 
     private final NextRawEntry[] feeds;
-    //private final byte[][] next;
     private final int[] nextRawKeyLength;
     private final byte[][] nextRawEntry;
     private final int[] nextOffset;

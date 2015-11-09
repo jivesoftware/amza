@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.ScanFromFp;
 import gnu.trove.map.hash.TLongObjectHashMap;
 import java.util.Arrays;
+import java.util.Comparator;
 
 /**
  *
@@ -119,6 +120,7 @@ public class ReadLeapAndBoundsIndex implements ReadIndex {
             Leaps next = null;
             if (at.fps.length != 0) {
                 int index = Arrays.binarySearch(at.keys, key, UnsignedBytes.lexicographicalComparator());
+                //int index = interpolationSearch(at.keys, key);
                 if (index == -(at.fps.length + 1)) {
                     closestFP = at.fps[at.fps.length - 1] - 1;
                 } else {
@@ -136,6 +138,59 @@ public class ReadLeapAndBoundsIndex implements ReadIndex {
             at = next;
         }
         return closestFP;
+    }
+
+    public static int interpolationSearch(byte[][] list, byte[] x) {
+
+        Comparator<byte[]> cmp = UnsignedBytes.lexicographicalComparator();
+
+        int l = 0;
+        int r = list.length - 1;
+
+        while (l <= r) {
+            if (list[l] == list[r]) {
+                if (cmp.compare(list[l], x) == 0) {
+                    return l;
+                } else {
+                    return -1;// not found
+                }
+            }
+
+            int k = hammingDistance(x, list[l]) / hammingDistance(list[r], list[l]);
+
+            // not found
+            if (k < 0 || k > 1) {
+                return -1;
+            }
+
+            int mid = (l + k * (r - l));
+
+            int midc = cmp.compare(x, list[mid]);
+            if (midc < 0) {
+                r = mid - 1;
+            } else if (midc > 0) {
+                l = mid + 1;
+            } else {
+                return mid;// success!
+            }
+        }
+        return -1;// not found
+
+    }
+
+    private static int hammingDistance(byte[] x, byte[] y) {
+        if (x.length != y.length) {
+            throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
+        }
+
+        int dist = 0;
+        for (int i = 0; i < x.length; i++) {
+            if (x[i] != y[i]) {
+                dist++;
+            }
+        }
+
+        return dist;
     }
 
     @Override

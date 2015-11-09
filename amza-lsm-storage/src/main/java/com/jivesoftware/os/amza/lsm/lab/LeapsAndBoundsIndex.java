@@ -3,14 +3,14 @@ package com.jivesoftware.os.amza.lsm.lab;
 import com.jivesoftware.os.amza.api.filer.IAppendOnly;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.lsm.lab.api.RawAppendableIndex;
+import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.RawEntries;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import gnu.trove.map.hash.TLongObjectHashMap;
 import java.io.File;
 import java.io.IOException;
-import com.jivesoftware.os.amza.lsm.lab.api.RawAppendableIndex;
-import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 
 /**
  * @author jonathan.colt
@@ -51,7 +51,7 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
 
     @Override
     public boolean append(RawEntries pointers) throws Exception {
-        IAppendOnly writeIndex = index.fileChannelWriter(1 * 1024 * 1024 * 1024);
+        IAppendOnly writeIndex = index.fileChannelWriter(1 * 1024 * 1024);
 
         LeapFrog[] latestLeapFrog = new LeapFrog[1];
         int[] updatesSinceLeap = new int[1];
@@ -112,17 +112,16 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
         byte[] key,
         byte[] lengthBuffer) throws IOException {
 
-        Leaps leaps = LeapFrog.computeNextLeaps(index, key, latest, maxLeaps);
+        Leaps nextLeaps = LeapFrog.computeNextLeaps(index, key, latest, maxLeaps);
         UIO.writeByte(writeIndex, LEAP, "type");
         long startOfLeapFp = writeIndex.getFilePointer();
-        leaps.write(writeIndex, lengthBuffer);
-        return new LeapFrog(startOfLeapFp, leaps);
+        nextLeaps.write(writeIndex, lengthBuffer);
+        return new LeapFrog(startOfLeapFp, nextLeaps);
     }
 
-    Leaps leaps = null;
-    //Map<Long, Leaps> leapsCache = Maps.newHashMap();
-    TLongObjectHashMap<Leaps> leapsCache;
-    Footer footer = null;
+    private Leaps leaps = null;
+    private TLongObjectHashMap<Leaps> leapsCache;
+    private Footer footer = null;
 
     @Override
     public ReadIndex rawConcurrent(int bufferSize) throws Exception {
@@ -168,7 +167,10 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
 
     @Override
     public long count() throws IOException {
-        return 0; // TODO I hate counts
+        if (footer != null) {
+            return footer.count;
+        }
+        return 0;
     }
 
     @Override
@@ -177,7 +179,7 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
 
     @Override
     public String toString() {
-        return "DiskBackedLeapPointerIndex{" + "index=" + index + ", minKey=" + minKey + ", maxKey=" + maxKey + '}';
+        return "LeapsAndBoundsIndex{" + "index=" + index + ", minKey=" + minKey + ", maxKey=" + maxKey + '}';
 
     }
 

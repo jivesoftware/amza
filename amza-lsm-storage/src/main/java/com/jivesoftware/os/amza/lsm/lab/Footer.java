@@ -12,7 +12,7 @@ import java.io.IOException;
 public class Footer {
 
     final int leapCount;
-    private final long count;
+    final long count;
 
     public Footer(int leapCount, long count) {
         this.leapCount = leapCount;

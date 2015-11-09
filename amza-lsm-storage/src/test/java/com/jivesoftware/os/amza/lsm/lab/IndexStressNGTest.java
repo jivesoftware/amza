@@ -71,7 +71,7 @@ public class IndexStressNGTest {
                 }
             }
 
-            stopGets.setValue(System.currentTimeMillis() + 60_000);
+            //stopGets.setValue(System.currentTimeMillis() + 60_000);
             return null;
 
         });

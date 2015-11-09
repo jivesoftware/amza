@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.ScanFromFp;
 import gnu.trove.map.hash.TLongObjectHashMap;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 
@@ -16,14 +17,14 @@ import java.util.Comparator;
  *
  * @author jonathan.colt
  */
-public class ReadLeapAndBoundsIndex implements ReadIndex {
+public class ReadLeapsAndBoundsIndex implements ReadIndex {
 
     private final Leaps leaps;
     private final IReadable readable;
     private final TLongObjectHashMap<Leaps> leapsCache;
     private final byte[] lengthBuffer = new byte[8];
 
-    public ReadLeapAndBoundsIndex(Leaps leaps, IReadable readable, TLongObjectHashMap<Leaps> leapsCache) {
+    public ReadLeapsAndBoundsIndex(Leaps leaps, IReadable readable, TLongObjectHashMap<Leaps> leapsCache) {
         this.leaps = leaps;
         this.readable = readable;
         this.leapsCache = leapsCache;
@@ -96,7 +97,6 @@ public class ReadLeapAndBoundsIndex implements ReadIndex {
                 return false;
             }
             while (scanFromFp.next(activeFp, leapPointerStream)) {
-                ;
             }
             boolean more = leapPointerStream.once && leapPointerStream.result;
             if (!more) {
@@ -118,26 +118,53 @@ public class ReadLeapAndBoundsIndex implements ReadIndex {
         long closestFP = 0;
         while (at != null) {
             Leaps next = null;
-            if (at.fps.length != 0) {
-                int index = Arrays.binarySearch(at.keys, key, UnsignedBytes.lexicographicalComparator());
-                //int index = interpolationSearch(at.keys, key);
-                if (index == -(at.fps.length + 1)) {
-                    closestFP = at.fps[at.fps.length - 1] - 1;
-                } else {
-                    if (index < 0) {
-                        index = -(index + 1);
-                    }
-                    next = leapsCache.get(at.fps[index]);
-                    if (next == null) {
-                        readable.seek(at.fps[index]);
-                        next = Leaps.read(readable, lengthBuffer);
-                        leapsCache.put(at.fps[index], next);
-                    }
+            int index = Arrays.binarySearch(at.keys, key, UnsignedBytes.lexicographicalComparator());
+            if (index == -(at.fps.length + 1)) {
+                if (at.fps.length == 0) {
+                    return 0;
+                }
+                closestFP = at.fps[at.fps.length - 1] - 1;
+                //closestFP = binarySearchClosestFP(at, key);
+            } else {
+                if (index < 0) {
+                    index = -(index + 1);
+                }
+                next = leapsCache.get(at.fps[index]);
+                if (next == null) {
+                    readable.seek(at.fps[index]);
+                    next = Leaps.read(readable, lengthBuffer);
+                    leapsCache.put(at.fps[index], next);
                 }
             }
             at = next;
         }
         return closestFP;
+    }
+
+    private long binarySearchClosestFP(Leaps at, byte[] key) throws IOException {
+        int low = 0;
+        int high = key.length - 1;
+
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            long fp = at.startOfEntryIndex[mid];
+
+            readable.seek(fp);
+            byte[] midKey = UIO.readByteArray(readable, "key", lengthBuffer);
+            if (midKey == null) {
+                throw new IllegalStateException("Missing key");
+            }
+
+            int cmp = IndexUtil.compare(key, 0, key.length, midKey, 0, midKey.length);
+            if (cmp < 0) {
+                low = mid + 1;
+            } else if (cmp > 0) {
+                high = mid - 1;
+            } else {
+                return fp - (1 + 4); // key found. (1 for type 4 for entry length)
+            }
+        }
+        return -1; // key not found.
     }
 
     public static int interpolationSearch(byte[][] list, byte[] x) {

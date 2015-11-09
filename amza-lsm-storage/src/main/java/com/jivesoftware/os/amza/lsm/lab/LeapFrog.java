@@ -1,11 +1,5 @@
 package com.jivesoftware.os.amza.lsm.lab;
 
-import com.jivesoftware.os.amza.api.filer.IAppendOnly;
-import com.jivesoftware.os.amza.api.filer.UIO;
-import java.io.IOException;
-
-import static com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex.LEAP;
-
 /**
  *
  * @author jonathan.colt
@@ -20,20 +14,7 @@ class LeapFrog {
         this.leaps = leaps;
     }
 
-    private static LeapFrog writeLeaps(int maxLeaps, IAppendOnly writeIndex,
-        LeapFrog latest,
-        int index,
-        byte[] key,
-        byte[] lengthBuffer) throws IOException {
-
-        Leaps leaps = computeNextLeaps(index, key, latest, maxLeaps);
-        UIO.writeByte(writeIndex, LEAP, "type");
-        long startOfLeapFp = writeIndex.getFilePointer();
-        leaps.write(writeIndex, lengthBuffer);
-        return new LeapFrog(startOfLeapFp, leaps);
-    }
-
-    static public Leaps computeNextLeaps(int index, byte[] lastKey, LeapFrog latest, int maxLeaps) {
+    static public Leaps computeNextLeaps(int index, byte[] lastKey, LeapFrog latest, int maxLeaps, long[] startOfEntryIndex) {
         long[] fpIndex;
         byte[][] keys;
         if (latest == null) {
@@ -81,7 +62,7 @@ class LeapFrog {
                 }
             }
         }
-        return new Leaps(index, lastKey, fpIndex, keys);
+        return new Leaps(index, lastKey, fpIndex, keys, startOfEntryIndex);
     }
 
     static private double euclidean(long[] a, long[] b) {

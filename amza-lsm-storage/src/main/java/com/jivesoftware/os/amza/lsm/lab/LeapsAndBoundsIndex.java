@@ -57,18 +57,20 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
         int[] updatesSinceLeap = new int[1];
 
         byte[] lengthBuffer = new byte[4];
-        long[] boundsFps = new long[updatesBetweenLeaps];
+        long[] startOfEntryIndex = new long[updatesBetweenLeaps];
         HeapFiler entryBuffer = new HeapFiler(1024); // TODO somthing better
 
-        byte[][] lastKey = new byte[1][];
+        byte[][] firstAndLastKey = new byte[2][];
         int[] leapCount = {0};
         long[] count = {0};
 
         pointers.consume((rawEntry, offset, length) -> {
 
             entryBuffer.reset();
-            UIO.writeByte(entryBuffer, ENTRY, "type");
 
+            long fp = writeIndex.getFilePointer();
+            startOfEntryIndex[updatesSinceLeap[0]] = fp + 1 + 4;
+            UIO.writeByte(entryBuffer, ENTRY, "type");
             int entryLength = 4 + length + 4;
             UIO.writeInt(entryBuffer, entryLength, "entryLength", lengthBuffer);
             entryBuffer.write(rawEntry, offset, length);
@@ -80,13 +82,18 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
             byte[] key = new byte[keyLength];
             System.arraycopy(rawEntry, 4, key, 0, keyLength);
 
-            lastKey[0] = key;
+            if (firstAndLastKey[0] == null) {
+                firstAndLastKey[0] = key;
+            }
+            firstAndLastKey[1] = key;
             updatesSinceLeap[0]++;
             count[0]++;
 
             if (updatesSinceLeap[0] >= updatesBetweenLeaps) { // TODO consider bytes between leaps
                 entryBuffer.reset();
-                latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], leapCount[0], key, lengthBuffer);
+                long[] copyOfStartOfEntryIndex = new long[updatesSinceLeap[0]];
+                System.arraycopy(startOfEntryIndex, 0, copyOfStartOfEntryIndex, 0, updatesSinceLeap[0]);
+                latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], leapCount[0], key, copyOfStartOfEntryIndex, lengthBuffer);
                 updatesSinceLeap[0] = 0;
                 leapCount[0]++;
             }
@@ -96,12 +103,14 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
         if (updatesSinceLeap[0] > 0) {
             writeIndex.write(entryBuffer.leakBytes(), 0, (int) entryBuffer.length());
             entryBuffer.reset();
-            latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], leapCount[0], lastKey[0], lengthBuffer);
+            long[] copyOfStartOfEntryIndex = new long[updatesSinceLeap[0]];
+            System.arraycopy(startOfEntryIndex, 0, copyOfStartOfEntryIndex, 0, updatesSinceLeap[0]);
+            latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], leapCount[0], firstAndLastKey[1], copyOfStartOfEntryIndex, lengthBuffer);
             leapCount[0]++;
         }
 
         UIO.writeByte(writeIndex, FOOTER, "type");
-        new Footer(leapCount[0], count[0]).write(writeIndex, lengthBuffer);
+        new Footer(leapCount[0], count[0], firstAndLastKey[0], firstAndLastKey[1]).write(writeIndex, lengthBuffer);
         writeIndex.flush(false);
         return true;
     }
@@ -110,9 +119,10 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
         LeapFrog latest,
         int index,
         byte[] key,
+        long[] startOfEntryIndex,
         byte[] lengthBuffer) throws IOException {
 
-        Leaps nextLeaps = LeapFrog.computeNextLeaps(index, key, latest, maxLeaps);
+        Leaps nextLeaps = LeapFrog.computeNextLeaps(index, key, latest, maxLeaps, startOfEntryIndex);
         UIO.writeByte(writeIndex, LEAP, "type");
         long startOfLeapFp = writeIndex.getFilePointer();
         nextLeaps.write(writeIndex, lengthBuffer);
@@ -157,7 +167,7 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
             leapsCache = new TLongObjectHashMap<>(footer.leapCount);
 
         }
-        return new ReadLeapAndBoundsIndex(leaps, readableIndex, leapsCache);
+        return new ReadLeapsAndBoundsIndex(leaps, readableIndex, leapsCache);
     }
 
     @Override

@@ -145,6 +145,62 @@ public class UIO {
         _filer.write(array, _start, len);
     }
 
+    public static void writeLongArray(IAppendOnly _filer, long[] array,
+        String fieldName, byte[] lengthBuffer) throws IOException {
+        int len;
+        if (array == null) {
+            len = -1;
+        } else {
+            len = array.length;
+        }
+        writeLength(_filer, len, lengthBuffer);
+        if (len < 0) {
+            return;
+        }
+        byte[] bytes = new byte[8 * len];
+        for (int i = 0; i < len; i++) {
+            long v = array[i];
+            UIO.longBytes(v, bytes, i * 8);
+        }
+        _filer.write(bytes, 0, bytes.length);
+
+    }
+
+    public static long[] readLongArray(IReadable _filer, String fieldName, byte[] lengthBuffer) throws IOException {
+        int len = readLength(_filer, lengthBuffer);
+        if (len < 0) {
+            return null;
+        }
+        if (len == 0) {
+            return new long[0];
+        }
+        long[] array = new long[len];
+        byte[] bytes = new byte[8 * len];
+        _filer.read(bytes);
+        int j;
+        for (int i = 0; i < len; i++) {
+            j = i * 8;
+            long v = 0;
+            v |= (bytes[j + 0] & 0xFF);
+            v <<= 8;
+            v |= (bytes[j + 1] & 0xFF);
+            v <<= 8;
+            v |= (bytes[j + 2] & 0xFF);
+            v <<= 8;
+            v |= (bytes[j + 3] & 0xFF);
+            v <<= 8;
+            v |= (bytes[j + 4] & 0xFF);
+            v <<= 8;
+            v |= (bytes[j + 5] & 0xFF);
+            v <<= 8;
+            v |= (bytes[j + 6] & 0xFF);
+            v <<= 8;
+            v |= (bytes[j + 7] & 0xFF);
+            array[i] = v;
+        }
+        return array;
+    }
+
     /**
      *
      * @param _filer

@@ -4,6 +4,7 @@ import com.jivesoftware.os.amza.api.filer.IFiler;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Function;
 
 /**
@@ -16,7 +17,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
 
     private final long initialBufferSegmentSize;
     private final long maxBufferSegmentSize;
-    private final Function<Long, ByteBuffer> byteBufferFactory;
+    private final ByteBufferFactory byteBufferFactory;
 
     private ByteBufferBackedFiler[] filers;
     private int fpFilerIndex;
@@ -27,7 +28,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
 
     public AutoGrowingByteBufferBackedFiler(long initialBufferSegmentSize,
         long maxBufferSegmentSize,
-        Function<Long, ByteBuffer> byteBufferFactory) throws IOException {
+        ByteBufferFactory byteBufferFactory) throws IOException {
         this.initialBufferSegmentSize = UIO.chunkLength(UIO.chunkPower(initialBufferSegmentSize, 0));
 
         maxBufferSegmentSize = Math.min(UIO.chunkLength(UIO.chunkPower(maxBufferSegmentSize, 0)), MAX_BUFFER_SEGMENT_SIZE);
@@ -46,7 +47,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
     }
 
     private AutoGrowingByteBufferBackedFiler(long maxBufferSegmentSize,
-        Function<Long, ByteBuffer> byteBufferFactory,
+        ByteBufferFactory byteBufferFactory,
         ByteBufferBackedFiler[] filers,
         long length,
         int fShift,
@@ -109,7 +110,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
         if (f >= filers.length) {
             int lastFilerIndex = filers.length - 1;
             if (lastFilerIndex > -1 && filers[lastFilerIndex].length() < maxBufferSegmentSize) {
-                ByteBuffer reallocate = reallocate(filers[lastFilerIndex].buffer, maxBufferSegmentSize);
+                ByteBuffer reallocate = reallocate(lastFilerIndex, filers[lastFilerIndex].buffer, maxBufferSegmentSize);
                 filers[lastFilerIndex] = new ByteBufferBackedFiler(reallocate);
             }
 
@@ -118,9 +119,9 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
             System.arraycopy(filers, 0, newFilers, 0, filers.length);
             for (int n = filers.length; n < newLength; n++) {
                 if (n < newLength - 1) {
-                    newFilers[n] = new ByteBufferBackedFiler(allocate(maxBufferSegmentSize));
+                    newFilers[n] = new ByteBufferBackedFiler(allocate(lastFilerIndex, maxBufferSegmentSize));
                 } else {
-                    newFilers[n] = new ByteBufferBackedFiler(allocate(Math.max(fseek, initialBufferSegmentSize)));
+                    newFilers[n] = new ByteBufferBackedFiler(allocate(lastFilerIndex, Math.max(fseek, initialBufferSegmentSize)));
                 }
             }
             filers = newFilers;
@@ -130,19 +131,23 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
             while (newSize < fseek) {
                 newSize *= 2;
             }
-            ByteBuffer reallocate = reallocate(filers[f].buffer, Math.min(maxBufferSegmentSize, newSize));
+            ByteBuffer reallocate = reallocate(f, filers[f].buffer, Math.min(maxBufferSegmentSize, newSize));
             filers[f] = new ByteBufferBackedFiler(reallocate);
         }
         filers[f].seek(fseek);
         fpFilerIndex = f;
     }
 
-    private ByteBuffer allocate(long maxBufferSegmentSize) {
-        return byteBufferFactory.apply(maxBufferSegmentSize);
+    private byte[] key(int index) {
+        return String.valueOf(index).getBytes(StandardCharsets.UTF_8);
     }
 
-    private ByteBuffer reallocate(ByteBuffer oldBuffer, long newSize) {
-        ByteBuffer newBuffer = allocate(newSize);
+    private ByteBuffer allocate(int index, long maxBufferSegmentSize) {
+        return byteBufferFactory.allocate(key(index), maxBufferSegmentSize);
+    }
+
+    private ByteBuffer reallocate(int index, ByteBuffer oldBuffer, long newSize) {
+        ByteBuffer newBuffer = allocate(index, newSize);
         if (oldBuffer != null) {
             oldBuffer.position(0);
             newBuffer.put(oldBuffer); // assume we only grow

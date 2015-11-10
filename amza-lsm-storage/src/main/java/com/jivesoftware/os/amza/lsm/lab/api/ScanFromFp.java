@@ -7,4 +7,8 @@ package com.jivesoftware.os.amza.lsm.lab.api;
 public interface ScanFromFp {
 
     boolean next(long fp, RawEntryStream stream) throws Exception;
+
+    boolean result();
+
+    void reset();
 }

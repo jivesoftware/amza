@@ -17,6 +17,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
+import com.jivesoftware.os.amza.shared.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
 import com.jivesoftware.os.aquarium.LivelyEndState;
@@ -26,7 +27,6 @@ import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
-import java.nio.ByteBuffer;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -52,7 +52,7 @@ public class AmzaStateStorageNGTest {
             100,
             1_024,
             1_024 * 1_024,
-            capacity -> ByteBuffer.allocate(capacity.intValue()));
+            new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(workingDirectories,
             ioStats,
             100,

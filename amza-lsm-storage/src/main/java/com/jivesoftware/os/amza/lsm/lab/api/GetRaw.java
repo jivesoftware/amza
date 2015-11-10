@@ -6,5 +6,7 @@ package com.jivesoftware.os.amza.lsm.lab.api;
  */
 public interface GetRaw {
 
-    boolean next(byte[] key, RawEntryStream stream) throws Exception;
+    boolean get(byte[] key, RawEntryStream stream) throws Exception;
+
+    boolean result();
 }

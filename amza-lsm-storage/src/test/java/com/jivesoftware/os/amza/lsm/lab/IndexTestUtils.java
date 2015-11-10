@@ -18,7 +18,6 @@ import static com.jivesoftware.os.amza.lsm.lab.SimpleRawEntry.rawEntry;
 import static com.jivesoftware.os.amza.lsm.lab.SimpleRawEntry.value;
 
 /**
- *
  * @author jonathan.colt
  */
 public class IndexTestUtils {
@@ -34,8 +33,10 @@ public class IndexTestUtils {
 
         long[] lastKey = new long[1];
         appendablePointerIndex.append((stream) -> {
-            long k = start + rand.nextInt(step);
+            long k = start;
             for (int i = 0; i < count; i++) {
+                k += 1 + rand.nextInt(step);
+
                 byte[] key = UIO.longBytes(k);
                 long time = timeProvider.nextId();
 
@@ -53,7 +54,6 @@ public class IndexTestUtils {
                 if (!stream.stream(rawEntry, 0, rawEntry.length)) {
                     break;
                 }
-                k += 1 + rand.nextInt(step);
             }
             lastKey[0] = k;
             return true;
@@ -76,7 +76,7 @@ public class IndexTestUtils {
             index[0]++;
             return true;
         };
-        while (rowScan.next(stream));
+        while (rowScan.next(stream)) ;
 
         System.out.println("rowScan PASSED");
 
@@ -93,7 +93,7 @@ public class IndexTestUtils {
                 return true;
             };
 
-            while (getPointer.next(UIO.longBytes(k), stream));
+            while (getPointer.get(UIO.longBytes(k), stream)) ;
         }
 
         System.out.println("getPointer PASSED");
@@ -112,7 +112,7 @@ public class IndexTestUtils {
 
             System.out.println("Asked:" + UIO.bytesLong(keys.get(_i)) + " to " + UIO.bytesLong(keys.get(_i + 3)));
             NextRawEntry rangeScan = indexs.rangeScan(keys.get(_i), keys.get(_i + 3));
-            while (rangeScan.next(stream));
+            while (rangeScan.next(stream)) ;
             Assert.assertEquals(3, streamed[0]);
 
         }
@@ -129,7 +129,7 @@ public class IndexTestUtils {
                 return true;
             };
             NextRawEntry rangeScan = indexs.rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
-            while (rangeScan.next(stream));
+            while (rangeScan.next(stream)) ;
             Assert.assertEquals(2, streamed[0]);
 
         }

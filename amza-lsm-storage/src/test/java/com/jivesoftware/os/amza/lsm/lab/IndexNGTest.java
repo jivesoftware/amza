@@ -10,7 +10,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ConcurrentSkipListMap;
-import junit.framework.Assert;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
@@ -90,21 +90,26 @@ public class IndexNGTest {
         for (int i = 0; i < count * step; i++) {
             long k = i;
             GetRaw getPointer = walIndex.rawConcurrent(0).get();
+            byte[] key = UIO.longBytes(k);
             stream = (rawEntry, offset, length) -> {
 
                 System.out.println("Got: "+SimpleRawEntry.toString(rawEntry));
-                if (SimpleRawEntry.value(rawEntry) != -1) {
-                    byte[] d = desired.get(UIO.longBytes(SimpleRawEntry.key(rawEntry)));
+                if (rawEntry != null) {
+                    byte[] rawKey = UIO.longBytes(SimpleRawEntry.key(rawEntry));
+                    Assert.assertEquals(rawKey, key);
+                    byte[] d = desired.get(key);
                     if (d == null) {
-                        Assert.assertTrue(d == null && SimpleRawEntry.value(rawEntry) == -1);
+                        Assert.fail();
                     } else {
-                        Assert.assertEquals(SimpleRawEntry.value(d), SimpleRawEntry.value(rawEntry));
+                        Assert.assertEquals(SimpleRawEntry.value(rawEntry), SimpleRawEntry.value(d));
                     }
+                } else {
+                    Assert.assertFalse(desired.containsKey(key));
                 }
-                return SimpleRawEntry.value(rawEntry) != -1;
+                return rawEntry != null;
             };
 
-            while (getPointer.next(UIO.longBytes(k), stream));
+            Assert.assertEquals(getPointer.get(key, stream), desired.containsKey(key));
         }
 
         System.out.println("Ranges");
@@ -113,7 +118,7 @@ public class IndexNGTest {
 
             int[] streamed = new int[1];
             stream = (entry, offset, length) -> {
-                if (SimpleRawEntry.value(entry) > -1) {
+                if (entry != null) {
                     System.out.println("Streamed:" + SimpleRawEntry.toString(entry));
                     streamed[0]++;
                 }
@@ -131,7 +136,7 @@ public class IndexNGTest {
             int _i = i;
             int[] streamed = new int[1];
             stream = (entry, offset, length) -> {
-                if (SimpleRawEntry.value(entry) > -1) {
+                if (entry != null) {
                     streamed[0]++;
                 }
                 return SimpleRawEntry.value(entry) != -1;

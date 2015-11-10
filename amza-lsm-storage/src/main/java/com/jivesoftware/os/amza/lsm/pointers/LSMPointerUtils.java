@@ -13,10 +13,10 @@ public class LSMPointerUtils {
 
     public static NextPointer rawToReal(byte[] key, GetRaw rawNextPointer) throws Exception {
 
-        return (stream) -> rawNextPointer.next(key, (rawEntry, offset, length) -> {
+        return (stream) -> rawNextPointer.get(key, (rawEntry, offset, length) -> {
 
             if (rawEntry == null) {
-                return stream.stream(null, -1, false, -1, -1);
+                return stream.stream(key, -1, false, -1, -1);
             }
             int keyLength = UIO.bytesInt(rawEntry, offset);
             byte[] k = new byte[keyLength];

@@ -2,23 +2,22 @@ package com.jivesoftware.os.amza.lsm.lab;
 
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.MergeRawEntry;
+import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
+import com.jivesoftware.os.amza.lsm.lab.api.RawAppendableIndex;
+import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
+import com.jivesoftware.os.amza.lsm.lab.api.RawEntries;
+import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
+import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
-import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
-import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
-import com.jivesoftware.os.amza.lsm.lab.api.RawEntries;
-import com.jivesoftware.os.amza.lsm.lab.api.RawAppendableIndex;
-import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
-import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
-import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
 
 /**
- *
  * @author jonathan.colt
  */
 public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadableIndex, RawEntries {
@@ -44,8 +43,8 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
     }
 
     @Override
-    public boolean append(RawEntries pointers) throws Exception {
-        return pointers.consume((rawEntry, offset, length) -> {
+    public boolean append(RawEntries entries) throws Exception {
+        return entries.consume((rawEntry, offset, length) -> {
             int keyLength = UIO.bytesInt(rawEntry);
             byte[] key = new byte[keyLength];
             System.arraycopy(rawEntry, 4, key, 0, keyLength);
@@ -68,21 +67,24 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
             @Override
             public GetRaw get() throws Exception {
 
-                byte[][] lastKey = new byte[1][];
-                byte[][] pointer = new byte[1][];
-                return (key, stream) -> {
-                    if (lastKey[0] == null || lastKey[0] != key) {
-                        pointer[0] = index.get(key);
-                    }
-                    if (pointer[0] == null) {
-                        return stream.stream(null, 0, 0);
-                    } else {
-                        boolean more = stream.stream(pointer[0], 0, pointer[0].length);
-                        pointer[0] = null;
-                        if (!more) {
-                            lastKey[0] = null;
+                return new GetRaw() {
+
+                    private boolean result;
+
+                    @Override
+                    public boolean get(byte[] key, RawEntryStream stream) throws Exception {
+                        byte[] rawEntry = index.get(key);
+                        if (rawEntry == null) {
+                            return false;
+                        } else {
+                            result = stream.stream(rawEntry, 0, rawEntry.length);
+                            return true;
                         }
-                        return more;
+                    }
+
+                    @Override
+                    public boolean result() {
+                        return result;
                     }
                 };
             }
@@ -94,8 +96,7 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
                 return (stream) -> {
                     if (iterator.hasNext()) {
                         Map.Entry<byte[], byte[]> next = iterator.next();
-                        stream.stream(next.getValue(), 0, next.getValue().length);
-                        return true;
+                        return stream.stream(next.getValue(), 0, next.getValue().length);
                     }
                     return false;
                 };
@@ -107,8 +108,7 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
                 return (stream) -> {
                     if (iterator.hasNext()) {
                         Map.Entry<byte[], byte[]> next = iterator.next();
-                        stream.stream(next.getValue(), 0, next.getValue().length);
-                        return true;
+                        return stream.stream(next.getValue(), 0, next.getValue().length);
                     }
                     return false;
                 };

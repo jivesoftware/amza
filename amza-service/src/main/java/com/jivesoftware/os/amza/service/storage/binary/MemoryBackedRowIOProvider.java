@@ -4,6 +4,7 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.shared.filer.AutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.amza.shared.filer.ByteBufferFactory;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import java.io.File;
 import java.io.IOException;
@@ -23,7 +24,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
     private final int corruptionParanoiaFactor;
     private final long initialBufferSegmentSize;
     private final long maxBufferSegmentSize;
-    private final Function<Long, ByteBuffer> byteBufferFactory;
+    private final ByteBufferFactory byteBufferFactory;
 
     private final ConcurrentHashMap<File, MemoryBackedWALFiler> filers = new ConcurrentHashMap<>();
 
@@ -32,7 +33,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
         int corruptionParanoiaFactor,
         long initialBufferSegmentSize,
         long maxBufferSegmentSize,
-        Function<Long, ByteBuffer> byteBufferFactory) {
+        ByteBufferFactory byteBufferFactory) {
         this.workingDirectories = workingDirectories;
         this.ioStats = ioStats;
         this.corruptionParanoiaFactor = corruptionParanoiaFactor;

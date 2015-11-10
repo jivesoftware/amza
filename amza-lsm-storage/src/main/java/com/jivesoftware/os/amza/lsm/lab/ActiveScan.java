@@ -13,9 +13,9 @@ public class ActiveScan implements ScanFromFp {
 
     private final IReadable readable;
     private final byte[] lengthBuffer;
-    private long activeFp = Long.MAX_VALUE;
     private byte[] entryBuffer;
-    private int entryLength;
+    private long activeFp = Long.MAX_VALUE;
+    private boolean activeResult;
 
     public ActiveScan(IReadable readable, byte[] lengthBuffer) {
         this.readable = readable;
@@ -28,22 +28,39 @@ public class ActiveScan implements ScanFromFp {
             activeFp = fp;
             readable.seek(fp);
         }
+        activeResult = false;
         int type;
         while ((type = readable.read()) >= 0) {
             if (type == LeapsAndBoundsIndex.ENTRY) {
                 int length = UIO.readInt(readable, "entryLength", lengthBuffer);
-                entryLength = length - 4;
+                int entryLength = length - 4;
                 if (entryBuffer == null || entryBuffer.length < entryLength) {
                     entryBuffer = new byte[entryLength];
                 }
                 readable.read(entryBuffer, 0, entryLength);
-                return stream.stream(entryBuffer, 0, entryLength);
-            } else {
+                activeResult = stream.stream(entryBuffer, 0, entryLength);
+                return false;
+            } else if (type == LeapsAndBoundsIndex.FOOTER) {
+                activeResult = false;
+                return false;
+            } else if (type == LeapsAndBoundsIndex.LEAP) {
                 int length = UIO.readInt(readable, "entryLength", lengthBuffer);
                 readable.seek(readable.getFilePointer() + (length - 4));
+            } else {
+                throw new IllegalStateException("Bad row");
             }
         }
-        return type >= 0;
+        throw new IllegalStateException("Missing footer");
     }
 
+    @Override
+    public boolean result() {
+        return activeResult;
+    }
+
+    @Override
+    public void reset() {
+        activeFp = Long.MAX_VALUE;
+        activeResult = false;
+    }
 }

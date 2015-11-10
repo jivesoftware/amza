@@ -51,6 +51,7 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
 import com.jivesoftware.os.amza.shared.AckWaters;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
+import com.jivesoftware.os.amza.shared.filer.DirectByteBufferFactory;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.CacheId;
 import com.jivesoftware.os.amza.shared.ring.RingSet;
@@ -80,7 +81,6 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -155,7 +155,7 @@ public class AmzaServiceInitializer {
             config.corruptionParanoiaFactor,
             1_024 * 1_024,
             1_024 * 1_024 * 1_024,
-            capacity -> ByteBuffer.allocateDirect(capacity.intValue()));
+            new DirectByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(config.workingDirectories,
             amzaStats.ioStats,
             config.corruptionParanoiaFactor,

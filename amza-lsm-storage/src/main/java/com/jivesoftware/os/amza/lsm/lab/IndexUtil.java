@@ -5,6 +5,7 @@ import com.google.common.primitives.UnsignedLongs;
 import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
+import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import java.lang.reflect.Field;
 import java.nio.ByteOrder;
@@ -18,6 +19,33 @@ import sun.misc.Unsafe;
  */
 public class IndexUtil {
 
+    private static class PointGetRaw implements GetRaw {
+
+        private final GetRaw[] pointGets;
+        private boolean result;
+
+        public PointGetRaw(GetRaw[] pointGets) {
+            this.pointGets = pointGets;
+        }
+
+        @Override
+        public boolean get(byte[] key, RawEntryStream stream) throws Exception {
+            for (GetRaw pointGet : pointGets) {
+                if (pointGet.get(key, stream)) {
+                    result = pointGet.result();
+                    return result;
+                }
+            }
+            result = stream.stream(null, -1, -1);
+            return result;
+        }
+
+        @Override
+        public boolean result() {
+            return result;
+        }
+    }
+
     public static GetRaw get(RawConcurrentReadableIndex[] indexes) throws Exception {
 
         GetRaw[] pointGets = new GetRaw[indexes.length];
@@ -26,15 +54,7 @@ public class IndexUtil {
             pointGets[i] = rawConcurrent.get();
         }
 
-        return (key, stream) -> {
-            for (GetRaw pointGet : pointGets) {
-                if (pointGet.next(key, stream)) {
-                    return false;
-                }
-            }
-            stream.stream(null, 0, 0);
-            return false;
-        };
+        return new PointGetRaw(pointGets);
     }
 
     public static NextRawEntry rangeScan(RawConcurrentReadableIndex[] copy, byte[] from, byte[] to) throws Exception {
@@ -129,7 +149,7 @@ public class IndexUtil {
         }
 
         for (i = minWords * 8; i < minLength; ++i) {
-            int var11 = UnsignedBytes.compare(left[i], right[i]);
+            int var11 = UnsignedBytes.compare(left[leftOffset + i], right[rightOffset + i]);
             if (var11 != 0) {
                 return var11;
             }

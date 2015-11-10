@@ -31,6 +31,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshalle
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
+import com.jivesoftware.os.amza.shared.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -47,7 +48,6 @@ import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
-import java.nio.ByteBuffer;
 import org.testng.Assert;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
@@ -85,7 +85,7 @@ public class DeltaStripeWALStorageNGTest {
             100,
             1_024,
             1_024 * 1_024,
-            capacity -> ByteBuffer.allocate(capacity.intValue()));
+            new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(workingDirectories,
             ioStats,
             100,

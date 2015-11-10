@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
+import com.jivesoftware.os.amza.shared.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
@@ -17,7 +18,6 @@ import com.jivesoftware.os.amza.shared.wal.WALRow;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -144,7 +144,7 @@ public class RowPartitionNGTest {
         IoStats ioStats = new IoStats();
 
         RowIOProvider<File> binaryRowIOProvider = new MemoryBackedRowIOProvider(new String[] { walDir.getAbsolutePath() }, ioStats, 1, 4_096, 4_096,
-            size -> ByteBuffer.allocate(size.intValue()));
+            new HeapByteBufferFactory());
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),

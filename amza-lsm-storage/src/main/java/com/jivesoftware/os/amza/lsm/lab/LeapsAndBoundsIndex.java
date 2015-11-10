@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import gnu.trove.map.hash.TLongObjectHashMap;
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * @author jonathan.colt
@@ -61,8 +62,8 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
         HeapFiler entryBuffer = new HeapFiler(1024); // TODO somthing better
 
         byte[][] firstAndLastKey = new byte[2][];
-        int[] leapCount = {0};
-        long[] count = {0};
+        int[] leapCount = { 0 };
+        long[] count = { 0 };
 
         pointers.consume((rawEntry, offset, length) -> {
 
@@ -90,7 +91,6 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
             count[0]++;
 
             if (updatesSinceLeap[0] >= updatesBetweenLeaps) { // TODO consider bytes between leaps
-                entryBuffer.reset();
                 long[] copyOfStartOfEntryIndex = new long[updatesSinceLeap[0]];
                 System.arraycopy(startOfEntryIndex, 0, copyOfStartOfEntryIndex, 0, updatesSinceLeap[0]);
                 latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], leapCount[0], key, copyOfStartOfEntryIndex, lengthBuffer);
@@ -101,8 +101,6 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
         });
 
         if (updatesSinceLeap[0] > 0) {
-            writeIndex.write(entryBuffer.leakBytes(), 0, (int) entryBuffer.length());
-            entryBuffer.reset();
             long[] copyOfStartOfEntryIndex = new long[updatesSinceLeap[0]];
             System.arraycopy(startOfEntryIndex, 0, copyOfStartOfEntryIndex, 0, updatesSinceLeap[0]);
             latestLeapFrog[0] = writeLeaps(writeIndex, latestLeapFrog[0], leapCount[0], firstAndLastKey[1], copyOfStartOfEntryIndex, lengthBuffer);
@@ -189,7 +187,7 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
 
     @Override
     public String toString() {
-        return "LeapsAndBoundsIndex{" + "index=" + index + ", minKey=" + minKey + ", maxKey=" + maxKey + '}';
+        return "LeapsAndBoundsIndex{" + "index=" + index + ", minKey=" + Arrays.toString(minKey) + ", maxKey=" + Arrays.toString(maxKey) + '}';
 
     }
 

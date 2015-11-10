@@ -26,7 +26,7 @@ public class LSMPointerIndexWALIndexTest {
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
         LSMPointerIndexWALIndex index = getIndex(dir0, partitionName);
-         index.merge(stream -> stream.stream(0L, UIO.longBytes(0), UIO.longBytes(0), System.currentTimeMillis(), false, Long.MAX_VALUE, 0L),
+        index.merge(stream -> stream.stream(0L, UIO.longBytes(0), UIO.longBytes(0), System.currentTimeMillis(), false, Long.MAX_VALUE, 0L),
             null);
         index.merge(stream -> stream.stream(1L, UIO.longBytes(1), UIO.longBytes(1), System.currentTimeMillis(), false, Long.MAX_VALUE, 1L),
             null);
@@ -186,7 +186,7 @@ public class LSMPointerIndexWALIndexTest {
             return true;
         }, null);
 
-        //testRangeAsserts(index);
+        testRangeAsserts(index);
 
         index.commit();
 

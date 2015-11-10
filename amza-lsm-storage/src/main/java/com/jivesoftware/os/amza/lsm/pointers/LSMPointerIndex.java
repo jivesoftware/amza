@@ -41,7 +41,7 @@ public class LSMPointerIndex implements PointerIndex {
         this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
         this.memoryPointerIndex = new RawMemoryIndex(marshaller);
         this.mergeablePointerIndexs = new MergeableIndexes();
-        TreeSet<Long> indexIds = new TreeSet<>((java.lang.Long o1, java.lang.Long o2) -> Long.compare(o2, o1)); // descending
+        TreeSet<Long> indexIds = new TreeSet<>();
         for (File indexFile : indexRoot.listFiles()) {
             long indexId = Long.parseLong(FilenameUtils.removeExtension(indexFile.getName()));
             indexIds.add(indexId);

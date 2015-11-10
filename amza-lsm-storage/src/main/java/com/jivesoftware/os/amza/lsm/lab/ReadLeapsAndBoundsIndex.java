@@ -14,7 +14,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 
 /**
- *
  * @author jonathan.colt
  */
 public class ReadLeapsAndBoundsIndex implements ReadIndex {
@@ -30,101 +29,69 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
         this.leapsCache = leapsCache;
     }
 
-    private static class LeapPointerStream implements RawEntryStream {
-
-        private byte[] desired;
-        private RawEntryStream stream;
-        private boolean once = false;
-        private boolean result = false;
-
-        private void prepare(byte[] desired, RawEntryStream stream) {
-            this.desired = desired;
-            this.stream = stream;
-            this.once = false;
-            this.result = false;
-        }
-
-        @Override
-        public boolean stream(byte[] rawEntry, int offset, int length) throws Exception {
-            int keylength = UIO.bytesInt(rawEntry, 0);
-            int c = IndexUtil.compare(rawEntry, 4, keylength, desired, 0, desired.length);
-            if (c == 0) {
-                if (rawEntry != null) {
-                    result = stream.stream(rawEntry, offset, length);
-                } else {
-                    result = false;
-                }
-                once = true;
-                return result;
-            }
-            if (c > 0) {
-                once = true;
-                return false;
-            } else {
-                return true;
-            }
-        }
-    }
-
     @Override
     public GetRaw get() throws Exception {
         return new Gets(new ActiveScan(readable, lengthBuffer));
     }
 
-    public class Gets implements GetRaw {
+    public class Gets implements GetRaw, RawEntryStream {
 
-        private byte[] activeKey;
-        private long activeFp;
-        private ScanFromFp scanFromFp;
-        private final LeapPointerStream leapPointerStream = new LeapPointerStream();
+        private final ScanFromFp scanFromFp;
+
+        private RawEntryStream activeStream;
+        private boolean found = false;
 
         public Gets(ScanFromFp scanFromFp) {
             this.scanFromFp = scanFromFp;
         }
 
         @Override
-        public boolean next(byte[] key, RawEntryStream stream) throws Exception {
-            if (activeKey == null || activeKey != key) {
-                activeKey = key;
-                activeFp = getInclusiveStartOfRow(key);
-                if (activeFp < 0) {
-                    reset();
-                    return false;
-                }
-                leapPointerStream.prepare(activeKey, stream);
-            }
-            if (leapPointerStream.once) {
+        public boolean get(byte[] key, RawEntryStream stream) throws Exception {
+            //TODO pass an IBA since this needs to be treated as immutable
+
+            long activeFp = getInclusiveStartOfRow(key, true);
+            if (activeFp < 0) {
                 return false;
             }
-            while (scanFromFp.next(activeFp, leapPointerStream)) {
+
+            activeStream = stream;
+            found = false;
+            scanFromFp.reset();
+
+            boolean more = true;
+            while (more && !found) {
+                more = scanFromFp.next(activeFp, this);
             }
-            boolean more = leapPointerStream.once && leapPointerStream.result;
-            if (!more) {
-                reset();
-            }
-            return more;
+            return found;
         }
 
-        private void reset() {
-            activeKey = null;
+        @Override
+        public boolean stream(byte[] rawEntry, int offset, int length) throws Exception {
+            boolean result = activeStream.stream(rawEntry, offset, length);
+            found = true;
+            return result;
+        }
+
+        @Override
+        public boolean result() {
+            return scanFromFp.result();
         }
     }
 
-    public long getInclusiveStartOfRow(byte[] key) throws Exception {
+    public long getInclusiveStartOfRow(byte[] key, boolean exact) throws Exception {
         Leaps at = leaps;
         if (UnsignedBytes.lexicographicalComparator().compare(leaps.lastKey, key) < 0) {
             return -1;
         }
-        long closestFP = 0;
         while (at != null) {
             Leaps next = null;
             int index = Arrays.binarySearch(at.keys, key, UnsignedBytes.lexicographicalComparator());
             if (index == -(at.fps.length + 1)) {
-                if (at.fps.length == 0) {
+                /*if (at.fps.length == 0) {
                     return 0;
                 }
-                closestFP = at.fps[at.fps.length - 1] - 1;
-                //closestFP = binarySearchClosestFP(at, key);
+                return at.fps[at.fps.length - 1] - 1;*/
+                return binarySearchClosestFP(at, key, exact);
             } else {
                 if (index < 0) {
                     index = -(index + 1);
@@ -138,12 +105,12 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
             }
             at = next;
         }
-        return closestFP;
+        return -1;
     }
 
-    private long binarySearchClosestFP(Leaps at, byte[] key) throws IOException {
+    private long binarySearchClosestFP(Leaps at, byte[] key, boolean exact) throws IOException {
         int low = 0;
-        int high = key.length - 1;
+        int high = at.startOfEntryIndex.length - 1;
 
         while (low <= high) {
             int mid = (low + high) >>> 1;
@@ -155,7 +122,7 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
                 throw new IllegalStateException("Missing key");
             }
 
-            int cmp = IndexUtil.compare(key, 0, key.length, midKey, 0, midKey.length);
+            int cmp = IndexUtil.compare(midKey, 0, midKey.length, key, 0, key.length);
             if (cmp < 0) {
                 low = mid + 1;
             } else if (cmp > 0) {
@@ -164,7 +131,11 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
                 return fp - (1 + 4); // key found. (1 for type 4 for entry length)
             }
         }
-        return -1; // key not found.
+        if (exact) {
+            return -1;
+        } else {
+            return at.startOfEntryIndex[low] - (1 + 4); // best index. (1 for type 4 for entry length)
+        }
     }
 
     public static int interpolationSearch(byte[][] list, byte[] x) {
@@ -222,17 +193,17 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
 
     @Override
     public NextRawEntry rangeScan(byte[] from, byte[] to) throws Exception {
-        long fp = getInclusiveStartOfRow(from);
+        long fp = getInclusiveStartOfRow(from, false);
         if (fp < 0) {
             return (stream) -> false;
         }
         ScanFromFp scanFromFp = new ActiveScan(readable, lengthBuffer);
-        return (com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream stream) -> {
-            boolean[] once = new boolean[]{false};
+        return (stream) -> {
+            boolean[] once = new boolean[] { false };
             boolean more = true;
             while (!once[0] && more) {
                 more = scanFromFp.next(fp,
-                    (byte[] rawEntry, int offset, int length) -> {
+                    (rawEntry, offset, length) -> {
                         int keylength = UIO.bytesInt(rawEntry, offset);
                         int c = IndexUtil.compare(rawEntry, 4, keylength, from, 0, from.length);
                         if (c >= 0) {
@@ -246,14 +217,17 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
                         }
                     });
             }
-            return more;
+            return scanFromFp.result();
         };
     }
 
     @Override
     public NextRawEntry rowScan() throws Exception {
         ScanFromFp scanFromFp = new ActiveScan(readable, lengthBuffer);
-        return (stream) -> scanFromFp.next(0, stream);
+        return (stream) -> {
+            scanFromFp.next(0, stream);
+            return scanFromFp.result();
+        };
     }
 
     @Override

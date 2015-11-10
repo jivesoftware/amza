@@ -29,11 +29,11 @@ public class IndexStressNGTest {
         int count = 0;
 
         int numBatches = 10;
-        int batchSize = 1_000_000;
+        int batchSize = 10_000_000;
         int maxKeyIncrement = 10;
 
         int maxLeaps = (int) (Math.log(numBatches * batchSize) / Math.log(2));
-        int updatesBetweenLeaps = 64;
+        int updatesBetweenLeaps = 1024;
 
         MutableLong merge = new MutableLong();
         MutableLong maxKey = new MutableLong();
@@ -92,6 +92,7 @@ public class IndexStressNGTest {
             long best = Long.MAX_VALUE;
             long total = 0;
             long samples = 0;
+            byte[] key = new byte[8];
             while (stopGets.longValue() > System.currentTimeMillis()) {
 
                 try {
@@ -102,7 +103,8 @@ public class IndexStressNGTest {
 
                     GetRaw pointer = indexs.get();
                     int longKey = rand.nextInt(maxKey.intValue());
-                    pointer.next(UIO.longBytes(longKey), hitsAndMisses);
+                    UIO.longBytes(longKey, key, 0);
+                    pointer.get(key, hitsAndMisses);
                     int logInterval = 100_000;
                     if ((hits[0] + misses[0]) % logInterval == 0) {
                         long getEnd = System.currentTimeMillis();

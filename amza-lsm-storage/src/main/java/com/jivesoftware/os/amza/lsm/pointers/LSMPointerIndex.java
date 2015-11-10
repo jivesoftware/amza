@@ -1,11 +1,12 @@
 package com.jivesoftware.os.amza.lsm.pointers;
 
-import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.lsm.lab.IndexFile;
-import com.jivesoftware.os.amza.lsm.lab.MergeableIndexes;
 import com.jivesoftware.os.amza.lsm.lab.IndexUtil;
+import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
+import com.jivesoftware.os.amza.lsm.lab.MergeableIndexes;
 import com.jivesoftware.os.amza.lsm.lab.RawMemoryIndex;
+import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.Pointers;
@@ -17,7 +18,6 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
-import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 
 /**
  *
@@ -145,10 +145,15 @@ public class LSMPointerIndex implements PointerIndex {
         }
         File[] tmpRoot = new File[1];
         mergeablePointerIndexs.merge(maxMergeDebt,
-            () -> {
+            (count) -> {
                 tmpRoot[0] = Files.createTempDir();
+
+                int entriesBetweenLeaps = 4096; // TODO expose to a config;
+                
+                int maxLeaps = IndexUtil.calculateIdealMaxLeaps(count, entriesBetweenLeaps);
+
                 LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(
-                    new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false), 64, 4096);
+                    new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false), maxLeaps, 4096);
                 return pointerIndex;
             },
             (index) -> {

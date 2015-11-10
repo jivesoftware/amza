@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.lsm.lab;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
-import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 
 /**
@@ -21,7 +20,6 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
     public GetRaw get() throws Exception {
         return new Gets(activeScan);
     }
-
 
     
     @Override

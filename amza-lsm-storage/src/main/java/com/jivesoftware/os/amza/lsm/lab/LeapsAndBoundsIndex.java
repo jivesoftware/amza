@@ -114,7 +114,7 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
     private Footer footer = null;
 
     @Override
-    public ReadIndex rawConcurrent(int bufferSize) throws Exception {
+    public ReadIndex reader(int bufferSize) throws Exception {
         IReadable readableIndex = index.fileChannelMemMapFiler(0);
         if (readableIndex == null) {
             readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();

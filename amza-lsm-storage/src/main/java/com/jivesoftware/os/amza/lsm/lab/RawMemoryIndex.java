@@ -61,7 +61,7 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
     }
 
     @Override
-    public ReadIndex rawConcurrent(int bufferSize) throws Exception {
+    public ReadIndex reader(int bufferSize) throws Exception {
         return new ReadIndex() {
 
             @Override

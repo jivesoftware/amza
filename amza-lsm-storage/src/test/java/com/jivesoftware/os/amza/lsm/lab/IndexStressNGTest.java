@@ -32,8 +32,8 @@ public class IndexStressNGTest {
         int batchSize = 1_000_000;
         int maxKeyIncrement = 10;
 
-        int maxLeaps = (int) (Math.log(numBatches * batchSize) / Math.log(2));
-        int updatesBetweenLeaps = 1024;
+        int entriesBetweenLeaps = 1024;
+        int entryCount = numBatches * batchSize;
 
         MutableLong merge = new MutableLong();
         MutableLong maxKey = new MutableLong();
@@ -46,13 +46,14 @@ public class IndexStressNGTest {
 
                 try {
                     long startMerge = System.currentTimeMillis();
-                    if (indexs.merge(maxDepthBeforeMerging, () -> {
+                    if (indexs.merge(maxDepthBeforeMerging, (worstCaseCount) -> {
 
                         merge.increment();
                         File mergeIndexFiler = File.createTempFile("d-index-merged-" + merge.intValue(), ".tmp");
 
-                        return new LeapsAndBoundsIndex(
-                            new IndexFile(mergeIndexFiler.getAbsolutePath(), "rw", true), maxLeaps, updatesBetweenLeaps);
+                        int maxLeaps = IndexUtil.calculateIdealMaxLeaps(worstCaseCount, entriesBetweenLeaps);
+
+                        return new LeapsAndBoundsIndex(new IndexFile(mergeIndexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
                     }, (index) -> {
                         System.out.println("Commit Merged index:" + index);
                         return index;
@@ -129,14 +130,14 @@ public class IndexStressNGTest {
 
         });
 
+
+        int maxLeaps = IndexUtil.calculateIdealMaxLeaps(batchSize, entriesBetweenLeaps);
         for (int b = 0; b < numBatches; b++) {
 
             File indexFiler = File.createTempFile("s-index-merged-" + b, ".tmp");
 
-            //MemoryPointerIndex index = new MemoryPointerIndex();
             long startMerge = System.currentTimeMillis();
-
-            LeapsAndBoundsIndex index = new LeapsAndBoundsIndex(new IndexFile(indexFiler.getAbsolutePath(), "rw", true), maxLeaps, updatesBetweenLeaps);
+            LeapsAndBoundsIndex index = new LeapsAndBoundsIndex(new IndexFile(indexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
 
             long lastKey = IndexTestUtils.append(rand, index, 0, maxKeyIncrement, batchSize, null);
             maxKey.setValue(Math.max(maxKey.longValue(), lastKey));
@@ -159,7 +160,7 @@ public class IndexStressNGTest {
 
     }
 
-    private  long rps(long logInterval, long elapse) {
+    private long rps(long logInterval, long elapse) {
         return (long) ((logInterval / (double) elapse) * 1000);
     }
 

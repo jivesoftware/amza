@@ -8,5 +8,5 @@ import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
  */
 public interface IndexFactory {
 
-    LeapsAndBoundsIndex createIndex() throws Exception;
+    LeapsAndBoundsIndex createIndex(long worstCaseCount) throws Exception;
 }

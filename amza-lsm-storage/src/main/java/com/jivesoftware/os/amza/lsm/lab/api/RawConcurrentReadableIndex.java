@@ -8,7 +8,7 @@ import java.io.IOException;
  */
 public interface RawConcurrentReadableIndex {
 
-    ReadIndex rawConcurrent(int bufferSize) throws Exception;
+    ReadIndex reader(int bufferSize) throws Exception;
 
     void destroy() throws IOException;
 

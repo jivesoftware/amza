@@ -108,14 +108,14 @@ public class InterleaveStreamNGTest {
             pointerIndexes[i] = new RawMemoryIndex(new SimpleRawEntry());
             IndexTestUtils.append(rand, pointerIndexes[i], 0, step, count, desired);
             System.out.println("Index " + i);
-            NextRawEntry nextPointer = pointerIndexes[i].rawConcurrent(0).rowScan();
+            NextRawEntry nextPointer = pointerIndexes[i].reader(0).rowScan();
             while (nextPointer.next((rawEntry, offset, length) -> {
                 System.out.println(SimpleRawEntry.toString(rawEntry));
                 return true;
             }));
             System.out.println("\n");
 
-            nextPointers[i] = pointerIndexes[i].rawConcurrent(0).rowScan();
+            nextPointers[i] = pointerIndexes[i].reader(0).rowScan();
         }
 
         InterleaveStream ips = new InterleaveStream(nextPointers);

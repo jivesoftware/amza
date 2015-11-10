@@ -18,7 +18,6 @@ public class MergeableIndexes implements ReadIndex {
     private RawConcurrentReadableIndex[] indexes = new RawConcurrentReadableIndex[0];
     private long version;
 
-
     public boolean merge(int count, IndexFactory indexFactory, CommitIndex commitIndex) throws Exception {
         RawConcurrentReadableIndex[] copy;
         synchronized (indexesLock) {
@@ -28,11 +27,15 @@ public class MergeableIndexes implements ReadIndex {
             return false;
         }
 
-        LeapsAndBoundsIndex mergedIndex = indexFactory.createIndex();
+        long worstCaseCount = 0;
         NextRawEntry[] feeders = new NextRawEntry[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].rawConcurrent(1024 * 1204 * 10).rowScan();
+            ReadIndex readIndex = copy[i].reader(1024 * 1204 * 10);
+            worstCaseCount += readIndex.count();
+            feeders[i] = readIndex.rowScan();
         }
+
+        LeapsAndBoundsIndex mergedIndex = indexFactory.createIndex(worstCaseCount);
         InterleaveStream feedInterleaver = new InterleaveStream(feeders);
         mergedIndex.append((stream) -> {
             while (feedInterleaver.next(stream));

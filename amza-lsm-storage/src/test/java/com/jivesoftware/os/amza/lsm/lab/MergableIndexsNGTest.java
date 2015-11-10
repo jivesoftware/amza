@@ -44,10 +44,11 @@ public class MergableIndexsNGTest {
 
         assertions(indexs, count, step, desired);
 
-        indexs.merge(2, () -> {
+        indexs.merge(2, (worstCaseCount) -> {
             File indexFiler = File.createTempFile("a-index-merged", ".tmp");
-
-            return new LeapsAndBoundsIndex(new IndexFile(indexFiler.getAbsolutePath(), "rw", false), 64, 2);
+            int updatesBetweenLeaps = 2;
+            int maxLeaps = IndexUtil.calculateIdealMaxLeaps(worstCaseCount, updatesBetweenLeaps);
+            return new LeapsAndBoundsIndex(new IndexFile(indexFiler.getAbsolutePath(), "rw", false), maxLeaps, updatesBetweenLeaps);
         }, (index) -> {
             return index;
         });
@@ -80,7 +81,7 @@ public class MergableIndexsNGTest {
             byte[] key = UIO.longBytes(k);
             stream = (rawEntry, offset, length) -> {
                 if (rawEntry != null) {
-                    System.out.println("Got: "+SimpleRawEntry.toString(rawEntry));
+                    System.out.println("Got: " + SimpleRawEntry.toString(rawEntry));
                     byte[] rawKey = UIO.longBytes(SimpleRawEntry.key(rawEntry));
                     Assert.assertEquals(rawKey, key);
                     byte[] d = desired.get(key);

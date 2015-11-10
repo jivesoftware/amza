@@ -50,7 +50,7 @@ public class IndexUtil {
 
         GetRaw[] pointGets = new GetRaw[indexes.length];
         for (int i = 0; i < pointGets.length; i++) {
-            ReadIndex rawConcurrent = indexes[i].rawConcurrent(2_048);
+            ReadIndex rawConcurrent = indexes[i].reader(2_048);
             pointGets[i] = rawConcurrent.get();
         }
 
@@ -60,7 +60,7 @@ public class IndexUtil {
     public static NextRawEntry rangeScan(RawConcurrentReadableIndex[] copy, byte[] from, byte[] to) throws Exception {
         NextRawEntry[] feeders = new NextRawEntry[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].rawConcurrent(4096).rangeScan(from, to);
+            feeders[i] = copy[i].reader(4096).rangeScan(from, to);
         }
         return new InterleaveStream(feeders);
     }
@@ -68,15 +68,20 @@ public class IndexUtil {
     public static NextRawEntry rowScan(RawConcurrentReadableIndex[] copy) throws Exception {
         NextRawEntry[] feeders = new NextRawEntry[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].rawConcurrent(1024 * 1024 * 10).rowScan();
+            feeders[i] = copy[i].reader(1024 * 1024 * 10).rowScan();
         }
         return new InterleaveStream(feeders);
+    }
+
+    public static int calculateIdealMaxLeaps(long entryCount, int entriesBetweenLeaps) {
+        int approximateLeapCount = (int)Math.max(1, entryCount / entriesBetweenLeaps);
+        int maxLeaps = (int) (Math.log(approximateLeapCount) / Math.log(2));
+        return maxLeaps;
     }
 
     /**
      * Borrowed from guava.
      */
-
     static final boolean BIG_ENDIAN;
     static final Unsafe theUnsafe;
     static final int BYTE_ARRAY_BASE_OFFSET;

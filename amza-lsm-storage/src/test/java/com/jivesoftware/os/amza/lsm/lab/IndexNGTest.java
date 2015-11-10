@@ -77,7 +77,7 @@ public class IndexNGTest {
         ArrayList<byte[]> keys = new ArrayList<>(desired.navigableKeySet());
 
         int[] index = new int[1];
-        NextRawEntry rowScan = walIndex.rawConcurrent(1024).rowScan();
+        NextRawEntry rowScan = walIndex.reader(1024).rowScan();
         RawEntryStream stream = (rawEntry, offset, length) -> {
             System.out.println("rowScan:" + SimpleRawEntry.key(rawEntry));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), SimpleRawEntry.key(rawEntry));
@@ -89,7 +89,7 @@ public class IndexNGTest {
         System.out.println("Point Get");
         for (int i = 0; i < count * step; i++) {
             long k = i;
-            GetRaw getPointer = walIndex.rawConcurrent(0).get();
+            GetRaw getPointer = walIndex.reader(0).get();
             byte[] key = UIO.longBytes(k);
             stream = (rawEntry, offset, length) -> {
 
@@ -126,7 +126,7 @@ public class IndexNGTest {
             };
 
             System.out.println("Asked:" + UIO.bytesLong(keys.get(_i)) + " to " + UIO.bytesLong(keys.get(_i + 3)));
-            NextRawEntry rangeScan = walIndex.rawConcurrent(1024).rangeScan(keys.get(_i), keys.get(_i + 3));
+            NextRawEntry rangeScan = walIndex.reader(1024).rangeScan(keys.get(_i), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(3, streamed[0]);
 
@@ -141,7 +141,7 @@ public class IndexNGTest {
                 }
                 return SimpleRawEntry.value(entry) != -1;
             };
-            NextRawEntry rangeScan = walIndex.rawConcurrent(1024).rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
+            NextRawEntry rangeScan = walIndex.reader(1024).rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(2, streamed[0]);
 

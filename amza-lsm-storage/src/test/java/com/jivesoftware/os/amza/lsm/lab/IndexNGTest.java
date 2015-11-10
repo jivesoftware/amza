@@ -28,11 +28,15 @@ public class IndexNGTest {
         int count = 100;
         int step = 10;
 
-        LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(new IndexFile(indexFiler.getAbsolutePath(), "rw", false),
+        IndexRangeId indexRangeId = new IndexRangeId(1, 1);
+
+        WriteLeapsAndBoundsIndex write = new WriteLeapsAndBoundsIndex(indexRangeId, new IndexFile(indexFiler.getAbsolutePath(), "rw", false),
             64, 10);
 
-        IndexTestUtils.append(new Random(), pointerIndex, 0, step, count, desired);
-        assertions(pointerIndex, count, step, desired);
+        IndexTestUtils.append(new Random(), write, 0, step, count, desired);
+        write.close();
+
+        assertions(new LeapsAndBoundsIndex(indexRangeId, new IndexFile(indexFiler.getAbsolutePath(), "r", false)), count, step, desired);
     }
 
     @Test(enabled = false)
@@ -63,12 +67,14 @@ public class IndexNGTest {
         assertions(memoryIndex, count, step, desired);
 
         File indexFiler = File.createTempFile("c-index", ".tmp");
-        LeapsAndBoundsIndex disIndex = new LeapsAndBoundsIndex(new IndexFile(indexFiler.getAbsolutePath(), "rw", false),
+        IndexRangeId indexRangeId = new IndexRangeId(1, 1);
+        WriteLeapsAndBoundsIndex disIndex = new WriteLeapsAndBoundsIndex(indexRangeId, new IndexFile(indexFiler.getAbsolutePath(), "rw", false),
             64, 10);
 
         disIndex.append(memoryIndex);
+        disIndex.close();
 
-        assertions(disIndex, count, step, desired);
+        assertions(new LeapsAndBoundsIndex(indexRangeId, new IndexFile(indexFiler.getAbsolutePath(), "r", false)), count, step, desired);
 
     }
 
@@ -93,7 +99,7 @@ public class IndexNGTest {
             byte[] key = UIO.longBytes(k);
             stream = (rawEntry, offset, length) -> {
 
-                System.out.println("Got: "+SimpleRawEntry.toString(rawEntry));
+                System.out.println("Got: " + SimpleRawEntry.toString(rawEntry));
                 if (rawEntry != null) {
                     byte[] rawKey = UIO.longBytes(SimpleRawEntry.key(rawEntry));
                     Assert.assertEquals(rawKey, key);

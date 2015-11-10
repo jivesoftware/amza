@@ -32,6 +32,11 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
     }
 
     @Override
+    public IndexRangeId id() {
+        return null;
+    }
+
+    @Override
     public boolean consume(RawEntryStream stream) throws Exception {
         for (Map.Entry<byte[], byte[]> e : index.entrySet()) {
             byte[] entry = e.getValue();
@@ -151,10 +156,6 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
     @Override
     public long count() {
         return approximateCount.get();
-    }
-
-    @Override
-    public void commit() throws Exception {
     }
 
 }

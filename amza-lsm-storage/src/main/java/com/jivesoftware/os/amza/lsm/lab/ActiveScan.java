@@ -10,6 +10,10 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Comparator;
 
+import static com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex.ENTRY;
+import static com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex.FOOTER;
+import static com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex.LEAP;
+
 /**
  *
  * @author jonathan.colt
@@ -42,7 +46,7 @@ public class ActiveScan implements ScanFromFp {
         activeResult = false;
         int type;
         while ((type = readable.read()) >= 0) {
-            if (type == LeapsAndBoundsIndex.ENTRY) {
+            if (type == ENTRY) {
                 int length = UIO.readInt(readable, "entryLength", lengthBuffer);
                 int entryLength = length - 4;
                 if (entryBuffer == null || entryBuffer.length < entryLength) {
@@ -51,10 +55,10 @@ public class ActiveScan implements ScanFromFp {
                 readable.read(entryBuffer, 0, entryLength);
                 activeResult = stream.stream(entryBuffer, 0, entryLength);
                 return false;
-            } else if (type == LeapsAndBoundsIndex.FOOTER) {
+            } else if (type == FOOTER) {
                 activeResult = false;
                 return false;
-            } else if (type == LeapsAndBoundsIndex.LEAP) {
+            } else if (type == LEAP) {
                 int length = UIO.readInt(readable, "entryLength", lengthBuffer);
                 readable.seek(readable.getFilePointer() + (length - 4));
             } else {

@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.lsm.lab.api;
 
-import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
+import com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex;
+import com.jivesoftware.os.amza.lsm.lab.IndexRangeId;
 
 /**
  *
@@ -8,5 +9,5 @@ import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
  */
 public interface IndexFactory {
 
-    LeapsAndBoundsIndex createIndex(long worstCaseCount) throws Exception;
+    WriteLeapsAndBoundsIndex createIndex(IndexRangeId id, long worstCaseCount) throws Exception;
 }

@@ -29,31 +29,38 @@ public class MergeableIndexes implements ReadIndex {
 
         long worstCaseCount = 0;
         NextRawEntry[] feeders = new NextRawEntry[copy.length];
+        IndexRangeId superRange = null;
         for (int i = 0; i < feeders.length; i++) {
+            IndexRangeId id = copy[i].id();
+            if (superRange == null) {
+                superRange = id;
+            } else {
+                superRange = superRange.join(id);
+            }
             ReadIndex readIndex = copy[i].reader(1024 * 1204 * 10);
             worstCaseCount += readIndex.count();
             feeders[i] = readIndex.rowScan();
         }
 
-        LeapsAndBoundsIndex mergedIndex = indexFactory.createIndex(worstCaseCount);
+        WriteLeapsAndBoundsIndex mergedIndex = indexFactory.createIndex(superRange, worstCaseCount);
         InterleaveStream feedInterleaver = new InterleaveStream(feeders);
         mergedIndex.append((stream) -> {
             while (feedInterleaver.next(stream));
             return true;
         });
+        mergedIndex.close();
 
         int newSinceMerge;
         synchronized (indexesLock) {
             newSinceMerge = indexes.length - copy.length;
             LeapsAndBoundsIndex[] merged = new LeapsAndBoundsIndex[newSinceMerge + 1];
             System.arraycopy(indexes, 0, merged, 1, newSinceMerge);
-            merged[0] = commitIndex.commit(mergedIndex);
+            merged[0] = commitIndex.commit(superRange, mergedIndex);
             indexes = merged;
             version++;
         }
 
         System.out.println("Merged (" + copy.length + "), NewSinceMerge (" + newSinceMerge + ")");
-
         for (RawConcurrentReadableIndex c : copy) {
             c.destroy();
         }

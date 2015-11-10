@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.lsm.lab.api;
 
+import com.jivesoftware.os.amza.lsm.lab.IndexRangeId;
 import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
+import com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex;
 
 /**
  *
@@ -8,6 +10,6 @@ import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
  */
 public interface CommitIndex {
 
-    LeapsAndBoundsIndex commit(LeapsAndBoundsIndex index) throws Exception;
+    LeapsAndBoundsIndex commit(IndexRangeId id, WriteLeapsAndBoundsIndex index) throws Exception;
 
 }

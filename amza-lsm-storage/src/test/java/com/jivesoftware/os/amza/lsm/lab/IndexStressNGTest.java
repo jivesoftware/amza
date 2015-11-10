@@ -19,7 +19,7 @@ public class IndexStressNGTest {
 
     NumberFormat format = NumberFormat.getInstance();
 
-    @Test(enabled = true)
+    @Test(enabled = false)
     public void stress() throws Exception {
         Random rand = new Random();
 
@@ -46,17 +46,16 @@ public class IndexStressNGTest {
 
                 try {
                     long startMerge = System.currentTimeMillis();
-                    if (indexs.merge(maxDepthBeforeMerging, (worstCaseCount) -> {
+                    File mergeIndexFiler = File.createTempFile("d-index-merged-" + merge.intValue(), ".tmp");
+                    if (indexs.merge(maxDepthBeforeMerging, (id, worstCaseCount) -> {
 
                         merge.increment();
-                        File mergeIndexFiler = File.createTempFile("d-index-merged-" + merge.intValue(), ".tmp");
-
                         int maxLeaps = IndexUtil.calculateIdealMaxLeaps(worstCaseCount, entriesBetweenLeaps);
 
-                        return new LeapsAndBoundsIndex(new IndexFile(mergeIndexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
-                    }, (index) -> {
+                        return new WriteLeapsAndBoundsIndex(id, new IndexFile(mergeIndexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
+                    }, (id, index) -> {
                         System.out.println("Commit Merged index:" + index);
-                        return index;
+                        return new LeapsAndBoundsIndex(id, new IndexFile(mergeIndexFiler.getAbsolutePath(), "r", true));
                     })) {
                         System.out.println("Merge (" + merge.intValue() + ") elapse:" + format.format((System.currentTimeMillis() - startMerge)) + "millis");
                     } else {
@@ -130,18 +129,21 @@ public class IndexStressNGTest {
 
         });
 
-
         int maxLeaps = IndexUtil.calculateIdealMaxLeaps(batchSize, entriesBetweenLeaps);
         for (int b = 0; b < numBatches; b++) {
 
+            IndexRangeId id = new IndexRangeId(b, b);
             File indexFiler = File.createTempFile("s-index-merged-" + b, ".tmp");
 
             long startMerge = System.currentTimeMillis();
-            LeapsAndBoundsIndex index = new LeapsAndBoundsIndex(new IndexFile(indexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
+            WriteLeapsAndBoundsIndex write = new WriteLeapsAndBoundsIndex(id,
+                new IndexFile(indexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
+            long lastKey = IndexTestUtils.append(rand, write, 0, maxKeyIncrement, batchSize, null);
+            write.close();
 
-            long lastKey = IndexTestUtils.append(rand, index, 0, maxKeyIncrement, batchSize, null);
             maxKey.setValue(Math.max(maxKey.longValue(), lastKey));
-            indexs.append(index);
+            indexs.append(new LeapsAndBoundsIndex(id, new IndexFile(indexFiler.getAbsolutePath(), "r", true)));
+
             count += batchSize;
 
             System.out.println("Insertions:" + format.format(count) + " ips:" + format.format(

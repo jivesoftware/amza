@@ -2,10 +2,12 @@ package com.jivesoftware.os.amza.lsm.pointers;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.lsm.lab.IndexFile;
+import com.jivesoftware.os.amza.lsm.lab.IndexRangeId;
 import com.jivesoftware.os.amza.lsm.lab.IndexUtil;
 import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
 import com.jivesoftware.os.amza.lsm.lab.MergeableIndexes;
 import com.jivesoftware.os.amza.lsm.lab.RawMemoryIndex;
+import com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerIndex;
@@ -17,7 +19,6 @@ import java.io.IOException;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.FilenameUtils;
 
 /**
  *
@@ -41,18 +42,39 @@ public class LSMPointerIndex implements PointerIndex {
         this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
         this.memoryPointerIndex = new RawMemoryIndex(marshaller);
         this.mergeablePointerIndexs = new MergeableIndexes();
-        TreeSet<Long> indexIds = new TreeSet<>();
-        for (File indexFile : indexRoot.listFiles()) {
-            long indexId = Long.parseLong(FilenameUtils.removeExtension(indexFile.getName()));
-            indexIds.add(indexId);
-            if (largestIndexId.get() < indexId) {
-                largestIndexId.set(indexId);
+        TreeSet<IndexRangeId> ranges = new TreeSet<>();
+        for (File indexDir : indexRoot.listFiles()) {
+            String rawRange = indexDir.getName();
+            String[] range = rawRange.split("-");
+            long start = Long.parseLong(range[0]);
+            long end = Long.parseLong(range[1]);
+            ranges.add(new IndexRangeId(start, end));
+            if (largestIndexId.get() < end) {
+                largestIndexId.set(end);
             }
         }
-        for (Long indexId : indexIds) {
-            File index = new File(indexRoot, String.valueOf(indexId));
-            LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(
-                new IndexFile(new File(index, "index").getAbsolutePath(), "rw", false), 64, 1024);
+
+        IndexRangeId active = null;
+        TreeSet<IndexRangeId> remove = new TreeSet<>();
+        for (IndexRangeId range : ranges) {
+            if (active == null || !active.intersects(range)) {
+                active = range;
+            } else {
+                LOG.info("Destroying index for overlaping range:" + range);
+                remove.add(range);
+            }
+        }
+
+        for (IndexRangeId range : remove) {
+            File indexDir = range.toFile(indexRoot);
+            FileUtils.deleteDirectory(indexDir);
+        }
+
+        ranges.removeAll(remove);
+
+        for (IndexRangeId range : ranges) {
+            File indexDir = range.toFile(indexRoot);
+            LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(range, new IndexFile(new File(indexDir, "index").getAbsolutePath(), "rw", false));
             mergeablePointerIndexs.append(pointerIndex);
         }
     } // descending
@@ -134,39 +156,31 @@ public class LSMPointerIndex implements PointerIndex {
         if (mergeablePointerIndexs.mergeDebt() < maxMergeDebt || merging) {
             return;
         }
-        long nextIndexId;
         synchronized (this) {
             // TODO use semaphores instead of a hard lock
             if (merging) {
                 return;
             }
             merging = true;
-            nextIndexId = largestIndexId.incrementAndGet();
         }
         File[] tmpRoot = new File[1];
         mergeablePointerIndexs.merge(maxMergeDebt,
-            (count) -> {
+            (id, count) -> {
                 tmpRoot[0] = Files.createTempDir();
 
                 int entriesBetweenLeaps = 4096; // TODO expose to a config;
-                
                 int maxLeaps = IndexUtil.calculateIdealMaxLeaps(count, entriesBetweenLeaps);
 
-                LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(
+                WriteLeapsAndBoundsIndex writeLeapsAndBoundsIndex = new WriteLeapsAndBoundsIndex(id,
                     new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false), maxLeaps, 4096);
-                return pointerIndex;
+                return writeLeapsAndBoundsIndex;
             },
-            (index) -> {
-                index.commit();
-                index.close();
-                File mergedIndexRoot = new File(indexRoot, Long.toString(nextIndexId));
+            (id, index) -> {
+                File mergedIndexRoot = id.toFile(indexRoot);
                 FileUtils.moveDirectory(tmpRoot[0], mergedIndexRoot);
                 File indexFile = new File(mergedIndexRoot, "index");
-                File keyFile = new File(mergedIndexRoot, "keys");
-                LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(
-                    new IndexFile(indexFile.getAbsolutePath(), "rw", false), 64, 4096);//,
-                //new DiskBackedPointerIndexFiler(keyFile.getAbsolutePath(), "rw", false));
-                System.out.println("Commited " + reopenedIndex.count() + " index:" + indexFile.length() + "bytes keys:" + keyFile.length() + "bytes");
+                LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(id, new IndexFile(indexFile.getAbsolutePath(), "r", false));
+                System.out.println("Commited " + reopenedIndex.count() + " index:" + indexFile.length() + "bytes");
                 return reopenedIndex;
             });
         merging = false;
@@ -194,15 +208,21 @@ public class LSMPointerIndex implements PointerIndex {
         }
         LOG.info("Commiting memory index (" + flushingMemoryPointerIndex.count() + ") to on disk index." + indexRoot);
         File tmpRoot = Files.createTempDir();
-        LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(
-            new IndexFile(new File(tmpRoot, "index").getAbsolutePath(), "rw", false), 64, 100); // TODO Config
-        pointerIndex.append(flushingMemoryPointerIndex);
-        pointerIndex.close();
-        File index = new File(indexRoot, Long.toString(nextIndexId));
+
+        int entriesBetweenLeaps = 4096; // TODO expose to a config;
+        int maxLeaps = IndexUtil.calculateIdealMaxLeaps(flushingMemoryPointerIndex.count(), entriesBetweenLeaps);
+
+        IndexRangeId indexRangeId = new IndexRangeId(nextIndexId, nextIndexId);
+        WriteLeapsAndBoundsIndex write = new WriteLeapsAndBoundsIndex(indexRangeId,
+            new IndexFile(new File(tmpRoot, "index").getAbsolutePath(), "rw", false), maxLeaps, entriesBetweenLeaps);
+        write.append(flushingMemoryPointerIndex);
+        write.close();
+
+        File index = indexRangeId.toFile(indexRoot);
         FileUtils.moveDirectory(tmpRoot, index);
-        pointerIndex = new LeapsAndBoundsIndex(new IndexFile(new File(index, "index").getAbsolutePath(), "rw", false), 64, 100); // TODO Config
+        LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(indexRangeId, new IndexFile(new File(index, "index").getAbsolutePath(), "r", false));
         synchronized (this) {
-            mergeablePointerIndexs.append(pointerIndex);
+            mergeablePointerIndexs.append(reopenedIndex);
             flushingMemoryPointerIndex = null;
             commiting = false;
         }

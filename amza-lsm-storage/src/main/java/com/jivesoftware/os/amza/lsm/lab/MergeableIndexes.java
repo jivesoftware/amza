@@ -79,8 +79,8 @@ public class MergeableIndexes implements ReadIndex {
         }
     }
 
-    long pointGetCacheVersion;  // HACK
-    GetRaw pointGetCache; // HACK
+    private long pointGetCacheVersion;  // HACK
+    private GetRaw pointGetCache; // HACK
 
     @Override
     public GetRaw get() throws Exception {

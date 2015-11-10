@@ -11,7 +11,6 @@ import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import gnu.trove.map.hash.TLongObjectHashMap;
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 
 /**
  * @author jonathan.colt
@@ -20,34 +19,17 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
 
     public static final byte ENTRY = 0;
     public static final byte LEAP = 1;
-    public static final byte BOUND = 2;
-    public static final byte FOOTER = 3;
+    public static final byte FOOTER = 2;
 
     private final int maxLeaps;
     private final int updatesBetweenLeaps;
 
     private final IndexFile index;
-    private byte[] minKey;
-    private byte[] maxKey;
-
+    
     public LeapsAndBoundsIndex(IndexFile index, int maxLeaps, int updatesBetweenLeaps) {
         this.index = index;
         this.maxLeaps = maxLeaps;
         this.updatesBetweenLeaps = updatesBetweenLeaps;
-    }
-
-    @Override
-    public void destroy() throws IOException {
-        // TODO aquireAll?
-        close();
-
-        new File(index.getFileName()).delete();
-    }
-
-    @Override
-    public void close() throws IOException {
-        // TODO aquireAll?
-        index.close();
     }
 
     @Override
@@ -62,8 +44,8 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
         HeapFiler entryBuffer = new HeapFiler(1024); // TODO somthing better
 
         byte[][] firstAndLastKey = new byte[2][];
-        int[] leapCount = { 0 };
-        long[] count = { 0 };
+        int[] leapCount = {0};
+        long[] count = {0};
 
         pointers.consume((rawEntry, offset, length) -> {
 
@@ -137,9 +119,8 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
         if (readableIndex == null) {
             readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
         }
-
+        byte[] lengthBuffer = new byte[8];
         if (footer == null) {
-            byte[] lengthBuffer = new byte[8];
             long indexLength = readableIndex.length();
             if (indexLength < 4) {
                 System.out.println("WTF:" + indexLength);
@@ -165,7 +146,18 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
             leapsCache = new TLongObjectHashMap<>(footer.leapCount);
 
         }
-        return new ReadLeapsAndBoundsIndex(leaps, readableIndex, leapsCache);
+        return new ReadLeapsAndBoundsIndex(new ActiveScan(leaps, leapsCache, footer, readableIndex, lengthBuffer));
+    }
+
+    @Override
+    public void destroy() throws IOException {
+        close();
+        new File(index.getFileName()).delete();
+    }
+
+    @Override
+    public void close() throws IOException {
+        index.close();
     }
 
     @Override
@@ -187,8 +179,7 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex, RawAppen
 
     @Override
     public String toString() {
-        return "LeapsAndBoundsIndex{" + "index=" + index + ", minKey=" + Arrays.toString(minKey) + ", maxKey=" + Arrays.toString(maxKey) + '}';
-
+        return "LeapsAndBoundsIndex{" + "index=" + index + '}';
     }
 
 }

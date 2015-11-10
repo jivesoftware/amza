@@ -62,7 +62,7 @@ public class MergeableIndexes implements ReadIndex {
 
         System.out.println("Merged (" + copy.length + "), NewSinceMerge (" + newSinceMerge + ")");
         for (RawConcurrentReadableIndex c : copy) {
-            c.destroy();
+            c.destroy(); // TODO hand off to another executor to destroy
         }
         return true;
     }

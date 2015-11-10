@@ -7,6 +7,9 @@ import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import gnu.trove.map.hash.TLongObjectHashMap;
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex.FOOTER;
 import static com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex.LEAP;
@@ -18,10 +21,17 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
 
     private final IndexRangeId id;
     private final IndexFile index;
+    private final ExecutorService destroy;
+    private final AtomicBoolean disposed = new AtomicBoolean(false);
 
-    public LeapsAndBoundsIndex(IndexRangeId id, IndexFile index) {
+    private final int numBonesHidden = 1024;  // TODO config
+    private final Semaphore hideABone;
+
+    public LeapsAndBoundsIndex(ExecutorService destroy, IndexRangeId id, IndexFile index) {
+        this.destroy = destroy;
         this.id = id;
         this.index = index;
+        this.hideABone = new Semaphore(numBonesHidden, true);
     }
 
     @Override
@@ -71,13 +81,29 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
 
     @Override
     public void destroy() throws IOException {
-        close();
-        new File(index.getFileName()).delete();
+        destroy.submit(() -> {
+
+            hideABone.acquire(numBonesHidden);
+            disposed.set(true);
+            try {
+                index.close();
+                new File(index.getFileName()).delete();
+            } finally {
+                hideABone.release(numBonesHidden);
+            }
+            return null;
+        });
+
     }
 
     @Override
-    public void close() throws IOException {
-        index.close();
+    public void close() throws Exception {
+        hideABone.acquire(numBonesHidden);
+        try {
+            index.close();
+        } finally {
+            hideABone.release(numBonesHidden);
+        }
     }
 
     @Override

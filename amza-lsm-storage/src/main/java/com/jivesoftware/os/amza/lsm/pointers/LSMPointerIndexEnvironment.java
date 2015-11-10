@@ -3,6 +3,8 @@ package com.jivesoftware.os.amza.lsm.pointers;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerIndex;
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.apache.commons.io.FileUtils;
 
 /**
@@ -12,15 +14,16 @@ import org.apache.commons.io.FileUtils;
 public class LSMPointerIndexEnvironment {
 
     private final File rootFile;
+    private final ExecutorService destroy = Executors.newSingleThreadExecutor(); // TODO config 'maybe'
 
     public LSMPointerIndexEnvironment(File rootFile) {
         this.rootFile = rootFile;
     }
 
-    PointerIndex open(String primaryName, int maxUpdatesBetweenCompactionHintMarker) throws IOException {
+    PointerIndex open(String primaryName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         File indexRoot = new File(rootFile, primaryName + File.separator);
         ensure(indexRoot);
-        return new LSMPointerIndex(indexRoot, maxUpdatesBetweenCompactionHintMarker);
+        return new LSMPointerIndex(destroy, indexRoot, maxUpdatesBetweenCompactionHintMarker);
     }
 
     boolean ensure(File key) {

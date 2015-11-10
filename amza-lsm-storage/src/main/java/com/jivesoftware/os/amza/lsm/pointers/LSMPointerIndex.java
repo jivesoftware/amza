@@ -9,14 +9,13 @@ import com.jivesoftware.os.amza.lsm.lab.MergeableIndexes;
 import com.jivesoftware.os.amza.lsm.lab.RawMemoryIndex;
 import com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
-import com.jivesoftware.os.amza.lsm.pointers.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.Pointers;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
-import java.io.IOException;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FileUtils;
 
@@ -28,6 +27,7 @@ public class LSMPointerIndex implements PointerIndex {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final ExecutorService destroy;
     private final File indexRoot;
     private final int maxUpdatesBetweenCompactionHintMarker;
     private RawMemoryIndex memoryPointerIndex;
@@ -37,7 +37,8 @@ public class LSMPointerIndex implements PointerIndex {
 
     private final LSMValueMarshaller marshaller = new LSMValueMarshaller();
 
-    public LSMPointerIndex(File indexRoot, int maxUpdatesBetweenCompactionHintMarker) throws IOException {
+    public LSMPointerIndex(ExecutorService destroy, File indexRoot, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+        this.destroy = destroy;
         this.indexRoot = indexRoot;
         this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
         this.memoryPointerIndex = new RawMemoryIndex(marshaller);
@@ -74,7 +75,8 @@ public class LSMPointerIndex implements PointerIndex {
 
         for (IndexRangeId range : ranges) {
             File indexDir = range.toFile(indexRoot);
-            LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(range, new IndexFile(new File(indexDir, "index").getAbsolutePath(), "rw", false));
+            LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(destroy,
+                range, new IndexFile(new File(indexDir, "index").getAbsolutePath(), "rw", false));
             mergeablePointerIndexs.append(pointerIndex);
         }
     } // descending
@@ -95,18 +97,18 @@ public class LSMPointerIndex implements PointerIndex {
     }
 
     @Override
-    public NextPointer getPointer(byte[] key) throws Exception {
-        return LSMPointerUtils.rawToReal(key, IndexUtil.get(grab()));
+    public <R> R getPointer(byte[] key, Tx<R> tx) throws Exception {
+        return LSMPointerUtils.rawToReal(key, IndexUtil.get(grab()), tx);
     }
 
     @Override
-    public NextPointer rangeScan(byte[] from, byte[] to) throws Exception {
-        return LSMPointerUtils.rawToReal(IndexUtil.rangeScan(grab(), from, to));
+    public <R> R rangeScan(byte[] from, byte[] to, Tx<R> tx) throws Exception {
+        return LSMPointerUtils.rawToReal(IndexUtil.rangeScan(grab(), from, to), tx);
     }
 
     @Override
-    public NextPointer rowScan() throws Exception {
-        return LSMPointerUtils.rawToReal(IndexUtil.rowScan(grab()));
+    public <R> R rowScan(Tx<R> tx) throws Exception {
+        return LSMPointerUtils.rawToReal(IndexUtil.rowScan(grab()), tx);
     }
 
     @Override
@@ -179,7 +181,8 @@ public class LSMPointerIndex implements PointerIndex {
                 File mergedIndexRoot = id.toFile(indexRoot);
                 FileUtils.moveDirectory(tmpRoot[0], mergedIndexRoot);
                 File indexFile = new File(mergedIndexRoot, "index");
-                LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(id, new IndexFile(indexFile.getAbsolutePath(), "r", false));
+                LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(destroy,
+                    id, new IndexFile(indexFile.getAbsolutePath(), "r", false));
                 System.out.println("Commited " + reopenedIndex.count() + " index:" + indexFile.length() + "bytes");
                 return reopenedIndex;
             });
@@ -220,7 +223,8 @@ public class LSMPointerIndex implements PointerIndex {
 
         File index = indexRangeId.toFile(indexRoot);
         FileUtils.moveDirectory(tmpRoot, index);
-        LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(indexRangeId, new IndexFile(new File(index, "index").getAbsolutePath(), "r", false));
+        LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(destroy,
+            indexRangeId, new IndexFile(new File(index, "index").getAbsolutePath(), "r", false));
         synchronized (this) {
             mergeablePointerIndexs.append(reopenedIndex);
             flushingMemoryPointerIndex = null;

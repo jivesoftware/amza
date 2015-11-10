@@ -9,6 +9,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -21,6 +23,7 @@ public class MergableIndexsNGTest {
     @Test(enabled = true)
     public void testTx() throws Exception {
 
+        ExecutorService destroy = Executors.newSingleThreadExecutor();
         ConcurrentSkipListMap<byte[], byte[]> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
 
         int count = 3;
@@ -42,7 +45,7 @@ public class MergableIndexsNGTest {
             write.close();
 
             indexFile = new IndexFile(indexFiler.getAbsolutePath(), "r", false);
-            indexs.append(new LeapsAndBoundsIndex(indexRangeId, indexFile));
+            indexs.append(new LeapsAndBoundsIndex(destroy, indexRangeId, indexFile));
         }
 
         assertions(indexs, count, step, desired);
@@ -53,7 +56,7 @@ public class MergableIndexsNGTest {
             int maxLeaps = IndexUtil.calculateIdealMaxLeaps(worstCaseCount, updatesBetweenLeaps);
             return new WriteLeapsAndBoundsIndex(id, new IndexFile(indexFiler.getAbsolutePath(), "rw", false), maxLeaps, updatesBetweenLeaps);
         }, (id, index) -> {
-            return new LeapsAndBoundsIndex(id, new IndexFile(indexFiler.getAbsolutePath(), "r", false));
+            return new LeapsAndBoundsIndex(destroy, id, new IndexFile(indexFiler.getAbsolutePath(), "r", false));
         });
 
         assertions(indexs, count, step, desired);

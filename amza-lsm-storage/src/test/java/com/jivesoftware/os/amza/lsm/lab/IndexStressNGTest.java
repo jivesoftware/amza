@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
 import java.io.File;
 import java.text.NumberFormat;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.apache.commons.lang.mutable.MutableBoolean;
@@ -21,6 +22,8 @@ public class IndexStressNGTest {
 
     @Test(enabled = false)
     public void stress() throws Exception {
+        ExecutorService destroy = Executors.newSingleThreadExecutor();
+
         Random rand = new Random();
 
         long start = System.currentTimeMillis();
@@ -55,7 +58,7 @@ public class IndexStressNGTest {
                         return new WriteLeapsAndBoundsIndex(id, new IndexFile(mergeIndexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
                     }, (id, index) -> {
                         System.out.println("Commit Merged index:" + index);
-                        return new LeapsAndBoundsIndex(id, new IndexFile(mergeIndexFiler.getAbsolutePath(), "r", true));
+                        return new LeapsAndBoundsIndex(destroy, id, new IndexFile(mergeIndexFiler.getAbsolutePath(), "r", true));
                     })) {
                         System.out.println("Merge (" + merge.intValue() + ") elapse:" + format.format((System.currentTimeMillis() - startMerge)) + "millis");
                     } else {
@@ -142,7 +145,7 @@ public class IndexStressNGTest {
             write.close();
 
             maxKey.setValue(Math.max(maxKey.longValue(), lastKey));
-            indexs.append(new LeapsAndBoundsIndex(id, new IndexFile(indexFiler.getAbsolutePath(), "r", true)));
+            indexs.append(new LeapsAndBoundsIndex(destroy, id, new IndexFile(indexFiler.getAbsolutePath(), "r", true)));
 
             count += batchSize;
 

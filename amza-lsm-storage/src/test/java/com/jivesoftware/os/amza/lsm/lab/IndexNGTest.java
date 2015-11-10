@@ -10,6 +10,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -21,6 +23,8 @@ public class IndexNGTest {
 
     @Test(enabled = true)
     public void testLeapDisk() throws Exception {
+
+        ExecutorService destroy = Executors.newSingleThreadExecutor();
         File indexFiler = File.createTempFile("l-index", ".tmp");
 
         ConcurrentSkipListMap<byte[], byte[]> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
@@ -36,7 +40,7 @@ public class IndexNGTest {
         IndexTestUtils.append(new Random(), write, 0, step, count, desired);
         write.close();
 
-        assertions(new LeapsAndBoundsIndex(indexRangeId, new IndexFile(indexFiler.getAbsolutePath(), "r", false)), count, step, desired);
+        assertions(new LeapsAndBoundsIndex(destroy, indexRangeId, new IndexFile(indexFiler.getAbsolutePath(), "r", false)), count, step, desired);
     }
 
     @Test(enabled = false)
@@ -56,6 +60,7 @@ public class IndexNGTest {
     @Test(enabled = false)
     public void testMemoryToDisk() throws Exception {
 
+        ExecutorService destroy = Executors.newSingleThreadExecutor();
         ConcurrentSkipListMap<byte[], byte[]> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
 
         int count = 10;
@@ -74,7 +79,7 @@ public class IndexNGTest {
         disIndex.append(memoryIndex);
         disIndex.close();
 
-        assertions(new LeapsAndBoundsIndex(indexRangeId, new IndexFile(indexFiler.getAbsolutePath(), "r", false)), count, step, desired);
+        assertions(new LeapsAndBoundsIndex(destroy, indexRangeId, new IndexFile(indexFiler.getAbsolutePath(), "r", false)), count, step, desired);
 
     }
 

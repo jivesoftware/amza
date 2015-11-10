@@ -6,11 +6,16 @@ package com.jivesoftware.os.amza.lsm.pointers.api;
  */
 public interface ReadPointerIndex {
 
-    NextPointer getPointer(byte[] key) throws Exception;
+    interface Tx<R> {
 
-    NextPointer rangeScan(byte[] from, byte[] to) throws Exception;
+        R tx(NextPointer nextPointer) throws Exception;
+    }
 
-    NextPointer rowScan() throws Exception;
+    <R> R getPointer(byte[] key, Tx<R> tx) throws Exception;
+
+    <R> R rangeScan(byte[] from, byte[] to, Tx<R> tx) throws Exception;
+
+    <R> R rowScan( Tx<R> tx) throws Exception;
 
     void close() throws Exception;
 

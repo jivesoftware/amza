@@ -4,7 +4,6 @@ import com.google.common.primitives.UnsignedBytes;
 import com.google.common.primitives.UnsignedLongs;
 import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
-import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import java.lang.reflect.Field;
@@ -46,35 +45,33 @@ public class IndexUtil {
         }
     }
 
-    public static GetRaw get(RawConcurrentReadableIndex[] indexes) throws Exception {
+    public static GetRaw get(ReadIndex[] indexes) throws Exception {
 
         GetRaw[] pointGets = new GetRaw[indexes.length];
         for (int i = 0; i < pointGets.length; i++) {
-            ReadIndex rawConcurrent = indexes[i].reader(2_048);
-            pointGets[i] = rawConcurrent.get();
+            pointGets[i] = indexes[i].get();
         }
-
         return new PointGetRaw(pointGets);
     }
 
-    public static NextRawEntry rangeScan(RawConcurrentReadableIndex[] copy, byte[] from, byte[] to) throws Exception {
+    public static NextRawEntry rangeScan(ReadIndex[] copy, byte[] from, byte[] to) throws Exception {
         NextRawEntry[] feeders = new NextRawEntry[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].reader(4096).rangeScan(from, to);
+            feeders[i] = copy[i].rangeScan(from, to);
         }
         return new InterleaveStream(feeders);
     }
 
-    public static NextRawEntry rowScan(RawConcurrentReadableIndex[] copy) throws Exception {
+    public static NextRawEntry rowScan(ReadIndex[] copy) throws Exception {
         NextRawEntry[] feeders = new NextRawEntry[copy.length];
         for (int i = 0; i < feeders.length; i++) {
-            feeders[i] = copy[i].reader(1024 * 1024 * 10).rowScan();
+            feeders[i] = copy[i].rowScan();
         }
         return new InterleaveStream(feeders);
     }
 
     public static int calculateIdealMaxLeaps(long entryCount, int entriesBetweenLeaps) {
-        int approximateLeapCount = (int)Math.max(1, entryCount / entriesBetweenLeaps);
+        int approximateLeapCount = (int) Math.max(1, entryCount / entriesBetweenLeaps);
         int maxLeaps = (int) (Math.log(approximateLeapCount) / Math.log(2));
         return maxLeaps;
     }

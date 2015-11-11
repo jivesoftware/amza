@@ -45,38 +45,50 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
 
     @Override
     public ReadIndex reader(int bufferSize) throws Exception {
-        IReadable readableIndex = index.fileChannelMemMapFiler(0);
-        if (readableIndex == null) {
-            readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
+        hideABone.acquire();
+        if (disposed.get()) {
+            hideABone.release();
+            return null;
         }
-        byte[] lengthBuffer = new byte[8];
-        if (footer == null) {
-            long indexLength = readableIndex.length();
-            if (indexLength < 4) {
-                System.out.println("WTF:" + indexLength);
+
+        try {
+            IReadable readableIndex = index.fileChannelMemMapFiler(0);
+            if (readableIndex == null) {
+                readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
             }
-            readableIndex.seek(indexLength - 4);
-            int footerLength = UIO.readInt(readableIndex, "length", lengthBuffer);
-            readableIndex.seek(indexLength - (footerLength + 1 + 4));
-            int leapLength = UIO.readInt(readableIndex, "length", lengthBuffer);
+            byte[] lengthBuffer = new byte[8];
+            if (footer == null) {
+                long indexLength = readableIndex.length();
+                if (indexLength < 4) {
+                    System.out.println("WTF:" + indexLength);
+                }
+                readableIndex.seek(indexLength - 4);
+                int footerLength = UIO.readInt(readableIndex, "length", lengthBuffer);
+                readableIndex.seek(indexLength - (footerLength + 1 + 4));
+                int leapLength = UIO.readInt(readableIndex, "length", lengthBuffer);
 
-            readableIndex.seek(indexLength - (1 + leapLength + 1 + footerLength));
+                readableIndex.seek(indexLength - (1 + leapLength + 1 + footerLength));
 
-            int type = readableIndex.read();
-            if (type != LEAP) {
-                throw new RuntimeException("Corruption! " + type + " expected " + LEAP);
+                int type = readableIndex.read();
+                if (type != LEAP) {
+                    throw new RuntimeException("Corruption! " + type + " expected " + LEAP);
+                }
+                leaps = Leaps.read(readableIndex, lengthBuffer);
+
+                type = readableIndex.read();
+                if (type != FOOTER) {
+                    throw new RuntimeException("Corruption! " + type + " expected " + FOOTER);
+                }
+                footer = Footer.read(readableIndex, lengthBuffer);
+                leapsCache = new TLongObjectHashMap<>(footer.leapCount);
+
             }
-            leaps = Leaps.read(readableIndex, lengthBuffer);
-
-            type = readableIndex.read();
-            if (type != FOOTER) {
-                throw new RuntimeException("Corruption! " + type + " expected " + FOOTER);
-            }
-            footer = Footer.read(readableIndex, lengthBuffer);
-            leapsCache = new TLongObjectHashMap<>(footer.leapCount);
-
+            return new ReadLeapsAndBoundsIndex(disposed, hideABone, new ActiveScan(leaps, leapsCache, footer, readableIndex, lengthBuffer));
+        } catch (Throwable x) {
+            throw x;
+        } finally {
+            hideABone.release();
         }
-        return new ReadLeapsAndBoundsIndex(new ActiveScan(leaps, leapsCache, footer, readableIndex, lengthBuffer));
     }
 
     @Override

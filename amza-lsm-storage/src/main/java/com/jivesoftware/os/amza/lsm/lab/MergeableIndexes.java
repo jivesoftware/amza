@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.lsm.lab;
 
 import com.jivesoftware.os.amza.lsm.lab.api.CommitIndex;
-import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.IndexFactory;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
@@ -11,12 +10,12 @@ import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
  *
  * @author jonathan.colt
  */
-public class MergeableIndexes implements ReadIndex {
+public class MergeableIndexes {
 
     // newest to oldest
     private final Object indexesLock = new Object();
-    private RawConcurrentReadableIndex[] indexes = new RawConcurrentReadableIndex[0];
-    private long version;
+    private volatile RawConcurrentReadableIndex[] indexes = new RawConcurrentReadableIndex[0];
+    private volatile long version;
 
     public boolean merge(int count, IndexFactory indexFactory, CommitIndex commitIndex) throws Exception {
         RawConcurrentReadableIndex[] copy;
@@ -37,7 +36,7 @@ public class MergeableIndexes implements ReadIndex {
             } else {
                 superRange = superRange.join(id);
             }
-            ReadIndex readIndex = copy[i].reader(1024 * 1204 * 10);
+            ReadIndex readIndex = copy[i].reader(1024 * 1024); // TODO config
             worstCaseCount += readIndex.count();
             feeders[i] = readIndex.rowScan();
         }
@@ -62,21 +61,17 @@ public class MergeableIndexes implements ReadIndex {
 
         System.out.println("Merged (" + copy.length + "), NewSinceMerge (" + newSinceMerge + ")");
         for (RawConcurrentReadableIndex c : copy) {
-            c.destroy(); // TODO hand off to another executor to destroy
+            c.destroy();
         }
         return true;
     }
 
     public int mergeDebt() {
-        return grab().length;
-    }
-
-    public RawConcurrentReadableIndex[] grab() {
         RawConcurrentReadableIndex[] copy;
         synchronized (indexesLock) {
             copy = indexes;
         }
-        return copy;
+        return copy.length;
     }
 
     public void append(RawConcurrentReadableIndex pointerIndex) {
@@ -89,40 +84,65 @@ public class MergeableIndexes implements ReadIndex {
         }
     }
 
-    private long pointGetCacheVersion;  // HACK
-    private GetRaw pointGetCache; // HACK
+    public final Reader reader() throws Exception {
+        return new Reader();
+    }
 
-    @Override
-    public GetRaw get() throws Exception {
-        long stackVersion = version;
-        if (pointGetCache == null || pointGetCacheVersion < stackVersion) {
-            System.out.println("RawPointGet for version " + stackVersion);
-            pointGetCache = IndexUtil.get(indexes);
-            pointGetCacheVersion = stackVersion;
+    public class Reader {
+
+        private long cacheVersion = -1;
+        private RawConcurrentReadableIndex[] stackIndexes;
+        private ReadIndex[] readIndexs;
+
+        public ReadIndex[] acquire(int bufferSize) throws Exception {
+            long stackVersion = version;
+            TRY_AGAIN:
+            while (true) {
+                if (cacheVersion < stackVersion) {
+                    readIndexs = acquireReadIndexes(bufferSize);
+                }
+                for (int i = 0; i < readIndexs.length; i++) {
+                    ReadIndex readIndex = readIndexs[i];
+                    try {
+                        readIndex.acquire();
+                    } catch (Throwable t) {
+                        for (int j = 0; j < i; j++) {
+                            readIndexs[j].release();
+                        }
+                        if (t instanceof InterruptedException) {
+                            throw t;
+                        }
+                        continue TRY_AGAIN;
+                    }
+                }
+                return readIndexs;
+            }
         }
-        return pointGetCache;
-    }
 
-    @Override
-    public NextRawEntry rangeScan(byte[] from, byte[] to) throws Exception {
-        return IndexUtil.rangeScan(indexes, from, to);
-    }
+        private ReadIndex[] acquireReadIndexes(int bufferSize) throws Exception {
+            TRY_AGAIN:
+            while (true) {
+                long stackVersion = version;
+                stackIndexes = indexes;
+                cacheVersion = stackVersion;
+                ReadIndex[] readIndexs = new ReadIndex[stackIndexes.length];
+                for (int i = 0; i < readIndexs.length; i++) {
+                    readIndexs[i] = stackIndexes[i].reader(bufferSize);
+                    if (readIndexs[i] == null) {
+                        continue TRY_AGAIN;
+                    }
+                }
+                return readIndexs;
+            }
+        }
 
-    @Override
-    public NextRawEntry rowScan() throws Exception {
-        return IndexUtil.rowScan(indexes);
-    }
-
-    @Override
-    public void close() throws Exception {
-        synchronized (indexesLock) {
-            for (RawConcurrentReadableIndex indexe : indexes) {
-                indexe.close();
+        public void release() {
+            for (ReadIndex readIndex : readIndexs) {
+                readIndex.release();
             }
         }
     }
 
-    @Override
     public long count() throws Exception {
         long count = 0;
         for (RawConcurrentReadableIndex g : grab()) {
@@ -131,7 +151,14 @@ public class MergeableIndexes implements ReadIndex {
         return count;
     }
 
-    @Override
+    public void close() throws Exception {
+        synchronized (indexesLock) {
+            for (RawConcurrentReadableIndex indexe : indexes) {
+                indexe.close();
+            }
+        }
+    }
+
     public boolean isEmpty() throws Exception {
         for (RawConcurrentReadableIndex g : grab()) {
             if (!g.isEmpty()) {
@@ -139,6 +166,14 @@ public class MergeableIndexes implements ReadIndex {
             }
         }
         return true;
+    }
+
+    private RawConcurrentReadableIndex[] grab() {
+        RawConcurrentReadableIndex[] copy;
+        synchronized (indexesLock) {
+            copy = indexes;
+        }
+        return copy;
     }
 
 }

@@ -13,7 +13,7 @@ public interface RawConcurrentReadableIndex {
 
     ReadIndex reader(int bufferSize) throws Exception;
 
-    void destroy() throws IOException;
+    void destroy() throws Exception;
 
     boolean isEmpty() throws IOException;
 

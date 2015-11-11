@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.lsm.pointers;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
-import com.jivesoftware.os.amza.lsm.pointers.api.ReadPointerIndex;
+import com.jivesoftware.os.amza.lsm.pointers.api.ReadPointerIndex.PointerTx;
 
 /**
  *
@@ -11,7 +11,7 @@ import com.jivesoftware.os.amza.lsm.pointers.api.ReadPointerIndex;
  */
 public class LSMPointerUtils {
 
-    public static <R> R rawToReal(byte[] key, GetRaw rawNextPointer, ReadPointerIndex.Tx<R> tx) throws Exception {
+    public static <R> R rawToReal(byte[] key, GetRaw rawNextPointer, PointerTx<R> tx) throws Exception {
 
         return tx.tx((stream) -> rawNextPointer.get(key, (rawEntry, offset, length) -> {
 
@@ -30,7 +30,7 @@ public class LSMPointerUtils {
         }));
     }
 
-    public static <R> R rawToReal(NextRawEntry rawNextPointer, ReadPointerIndex.Tx<R> tx) throws Exception {
+    public static <R> R rawToReal(NextRawEntry rawNextPointer, PointerTx<R> tx) throws Exception {
 
         return tx.tx((stream) -> rawNextPointer.next((rawEntry, offset, length) -> {
 

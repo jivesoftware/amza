@@ -62,7 +62,7 @@ public class ActiveScan implements ScanFromFp {
                 int length = UIO.readInt(readable, "entryLength", lengthBuffer);
                 readable.seek(readable.getFilePointer() + (length - 4));
             } else {
-                throw new IllegalStateException("Bad row");
+                throw new IllegalStateException("Bad row type:" + type);
             }
         }
         throw new IllegalStateException("Missing footer");

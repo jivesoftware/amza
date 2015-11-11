@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.lsm.lab;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
+import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import java.io.File;
 import java.text.NumberFormat;
 import java.util.Random;
@@ -93,15 +94,19 @@ public class IndexStressNGTest {
             long total = 0;
             long samples = 0;
             byte[] key = new byte[8];
+
+            MergeableIndexes.Reader reader = indexs.reader();
+
+            while (merging.isTrue() || running.isTrue()) {
+                Thread.sleep(100);
+            }
+
+            ReadIndex[] acquire = reader.acquire(2048);
+            GetRaw pointer = IndexUtil.get(acquire);
             while (stopGets.longValue() > System.currentTimeMillis()) {
 
                 try {
-                    if (running.isTrue() || merging.isTrue()) {
-                        Thread.sleep(100);
-                        continue;
-                    }
 
-                    GetRaw pointer = indexs.get();
                     int longKey = rand.nextInt(maxKey.intValue());
                     UIO.longBytes(longKey, key, 0);
                     pointer.get(key, hitsAndMisses);
@@ -122,12 +127,14 @@ public class IndexStressNGTest {
                         misses[0] = 0;
                         getStart = getEnd;
                     }
+
                     //Thread.sleep(1);
                 } catch (Exception x) {
                     x.printStackTrace();
                     Thread.sleep(10);
                 }
             }
+            reader.release();
             return null;
 
         });

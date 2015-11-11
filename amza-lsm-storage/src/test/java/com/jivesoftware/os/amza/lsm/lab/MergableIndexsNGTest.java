@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
+import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
@@ -48,7 +49,8 @@ public class MergableIndexsNGTest {
             indexs.append(new LeapsAndBoundsIndex(destroy, indexRangeId, indexFile));
         }
 
-        assertions(indexs, count, step, desired);
+        MergeableIndexes.Reader reader = indexs.reader();
+        assertions(reader, count, step, desired);
 
         File indexFiler = File.createTempFile("a-index-merged", ".tmp");
         indexs.merge(2, (id, worstCaseCount) -> {
@@ -59,10 +61,10 @@ public class MergableIndexsNGTest {
             return new LeapsAndBoundsIndex(destroy, id, new IndexFile(indexFiler.getAbsolutePath(), "r", false));
         });
 
-        assertions(indexs, count, step, desired);
+        assertions(reader, count, step, desired);
     }
 
-    private void assertions(MergeableIndexes indexs,
+    private void assertions(MergeableIndexes.Reader reader,
         int count, int step,
         ConcurrentSkipListMap<byte[], byte[]> desired) throws
         Exception {
@@ -70,7 +72,8 @@ public class MergableIndexsNGTest {
         ArrayList<byte[]> keys = new ArrayList<>(desired.navigableKeySet());
 
         int[] index = new int[1];
-        NextRawEntry rowScan = indexs.rowScan();
+        ReadIndex[] acquired = reader.acquire(1024);
+        NextRawEntry rowScan = IndexUtil.rowScan(acquired);
         RawEntryStream stream = (rawEntry, offset, length) -> {
             System.out.println("Expected:key:" + UIO.bytesLong(keys.get(index[0])) + " Found:" + SimpleRawEntry.toString(rawEntry));
             Assert.assertEquals(UIO.bytesLong(keys.get(index[0])), SimpleRawEntry.key(rawEntry));
@@ -78,12 +81,13 @@ public class MergableIndexsNGTest {
             return true;
         };
         while (rowScan.next(stream));
-
+        reader.release();
         System.out.println("rowScan PASSED");
 
+        acquired = reader.acquire(1024);
         for (int i = 0; i < count * step; i++) {
             long k = i;
-            GetRaw getPointer = indexs.get();
+            GetRaw getPointer = IndexUtil.get(acquired);
             byte[] key = UIO.longBytes(k);
             stream = (rawEntry, offset, length) -> {
                 if (rawEntry != null) {
@@ -104,9 +108,10 @@ public class MergableIndexsNGTest {
 
             getPointer.get(key, stream);
         }
+        reader.release();
 
         System.out.println("getPointer PASSED");
-
+        acquired = reader.acquire(1024);
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
 
@@ -120,14 +125,15 @@ public class MergableIndexsNGTest {
             };
 
             System.out.println("Asked:" + UIO.bytesLong(keys.get(_i)) + " to " + UIO.bytesLong(keys.get(_i + 3)));
-            NextRawEntry rangeScan = indexs.rangeScan(keys.get(_i), keys.get(_i + 3));
+            NextRawEntry rangeScan = IndexUtil.rangeScan(acquired, keys.get(_i), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(3, streamed[0]);
 
         }
+        reader.release();
 
         System.out.println("rangeScan PASSED");
-
+        acquired = reader.acquire(1024);
         for (int i = 0; i < keys.size() - 3; i++) {
             int _i = i;
             int[] streamed = new int[1];
@@ -137,12 +143,12 @@ public class MergableIndexsNGTest {
                 }
                 return true;
             };
-            NextRawEntry rangeScan = indexs.rangeScan(UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
+            NextRawEntry rangeScan = IndexUtil.rangeScan(acquired, UIO.longBytes(UIO.bytesLong(keys.get(_i)) + 1), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(2, streamed[0]);
 
         }
-
+        reader.release();
         System.out.println("rangeScan2 PASSED");
     }
 

@@ -4,16 +4,36 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author jonathan.colt
  */
 public class ReadLeapsAndBoundsIndex implements ReadIndex {
 
+    private final AtomicBoolean disposed;
+    private final Semaphore hideABone;
     private final ActiveScan activeScan;
-   
-    public ReadLeapsAndBoundsIndex(ActiveScan activeScan) {
+
+    public ReadLeapsAndBoundsIndex(AtomicBoolean disposed, Semaphore hideABone, ActiveScan activeScan) {
+        this.disposed = disposed;
+        this.hideABone = hideABone;
         this.activeScan = activeScan;
+    }
+
+    @Override
+    public void acquire() throws Exception {
+        hideABone.acquire();
+        if (disposed.get()) {
+            hideABone.release();
+            throw new IllegalStateException("Cannot acquire a bone on a disposed index.");
+        }
+    }
+
+    @Override
+    public void release() {
+        hideABone.release();
     }
 
     @Override
@@ -21,7 +41,6 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
         return new Gets(activeScan);
     }
 
-    
     @Override
     public NextRawEntry rangeScan(byte[] from, byte[] to) throws Exception {
         long fp = activeScan.getInclusiveStartOfRow(from, false);

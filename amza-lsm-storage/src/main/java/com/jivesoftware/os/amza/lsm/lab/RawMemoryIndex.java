@@ -10,11 +10,11 @@ import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.RawEntries;
 import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
-import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -26,6 +26,9 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
     private final AtomicLong approximateCount = new AtomicLong();
 
     private final MergeRawEntry merger;
+
+    private final int numBones = 1024;
+    private final Semaphore rawBones = new Semaphore(numBones, true);
 
     public RawMemoryIndex(MergeRawEntry merger) {
         this.merger = merger;
@@ -133,19 +136,38 @@ public class RawMemoryIndex implements RawAppendableIndex, RawConcurrentReadable
             public boolean isEmpty() {
                 throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
             }
+
+            @Override
+            public void release() {
+                rawBones.release();
+            }
+
+            @Override
+            public void acquire() throws Exception {
+                rawBones.acquire();
+            }
         };
     }
 
     @Override
-    public void destroy() throws IOException {
+    public void destroy() throws Exception {
         approximateCount.set(0);
-        index.clear();
+        internalClear();
+    }
+
+    private void internalClear() throws Exception {
+        rawBones.acquire(numBones);
+        try {
+            index.clear();
+        } finally {
+            rawBones.release(numBones);
+        }
     }
 
     @Override
-    public void close() {
+    public void close() throws Exception {
+        internalClear();
         approximateCount.set(0);
-        index.clear();
     }
 
     @Override

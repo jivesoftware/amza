@@ -6,6 +6,10 @@ package com.jivesoftware.os.amza.lsm.lab.api;
  */
 public interface ReadIndex {
 
+    void acquire() throws Exception;
+
+    void release();
+
     GetRaw get() throws Exception;
 
     NextRawEntry rangeScan(byte[] from, byte[] to) throws Exception;

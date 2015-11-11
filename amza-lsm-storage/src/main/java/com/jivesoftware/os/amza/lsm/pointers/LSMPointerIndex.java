@@ -8,7 +8,8 @@ import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
 import com.jivesoftware.os.amza.lsm.lab.MergeableIndexes;
 import com.jivesoftware.os.amza.lsm.lab.RawMemoryIndex;
 import com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex;
-import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
+import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
+import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.Pointers;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -81,34 +82,58 @@ public class LSMPointerIndex implements PointerIndex {
         }
     } // descending
 
-    private RawConcurrentReadableIndex[] grab() {
+    interface GrabTx<R> {
+
+        R grabbed(ReadIndex[] readIndexes) throws Exception;
+    }
+
+    private <R> R grab(int bufferSize, GrabTx<R> grabTx) throws Exception {
         RawMemoryIndex stackCopy = flushingMemoryPointerIndex;
         int flushing = stackCopy == null ? 0 : 1;
-        RawConcurrentReadableIndex[] grabbed = mergeablePointerIndexs.grab();
-        RawConcurrentReadableIndex[] indexes = new RawConcurrentReadableIndex[grabbed.length + 1 + flushing];
-        synchronized (this) {
-            indexes[0] = memoryPointerIndex;
-            if (stackCopy != null) {
-                indexes[1] = stackCopy;
+
+        ReadIndex memoryReadIndex = memoryPointerIndex.reader(bufferSize);
+        MergeableIndexes.Reader reader = mergeablePointerIndexs.reader();
+        memoryReadIndex.acquire();
+        try {
+            ReadIndex[] acquired = reader.acquire(bufferSize);
+            try {
+                ReadIndex[] indexes = new ReadIndex[acquired.length + 1 + flushing];
+                synchronized (this) {
+                    indexes[0] = memoryPointerIndex.reader(bufferSize);
+                    if (stackCopy != null) {
+                        indexes[1] = stackCopy.reader(bufferSize);
+                    }
+                }
+                System.arraycopy(acquired, 0, indexes, 1 + flushing, acquired.length);
+                return grabTx.grabbed(indexes);
+            } finally {
+                reader.release();
             }
+        } finally {
+            memoryReadIndex.release();
         }
-        System.arraycopy(grabbed, 0, indexes, 1 + flushing, grabbed.length);
-        return indexes;
     }
 
     @Override
-    public <R> R getPointer(byte[] key, Tx<R> tx) throws Exception {
-        return LSMPointerUtils.rawToReal(key, IndexUtil.get(grab()), tx);
+    public <R> R getPointer(byte[] key, PointerTx<R> tx) throws Exception {
+        return grab(2048, (readIndexes) -> {
+            GetRaw getRaw = IndexUtil.get(readIndexes);
+            return LSMPointerUtils.rawToReal(key, getRaw, tx);
+        });
     }
 
     @Override
-    public <R> R rangeScan(byte[] from, byte[] to, Tx<R> tx) throws Exception {
-        return LSMPointerUtils.rawToReal(IndexUtil.rangeScan(grab(), from, to), tx);
+    public <R> R rangeScan(byte[] from, byte[] to, PointerTx<R> tx) throws Exception {
+        return grab(2048, (readIndexes) -> {
+            return LSMPointerUtils.rawToReal(IndexUtil.rangeScan(readIndexes, from, to), tx);
+        });
     }
 
     @Override
-    public <R> R rowScan(Tx<R> tx) throws Exception {
-        return LSMPointerUtils.rawToReal(IndexUtil.rowScan(grab()), tx);
+    public <R> R rowScan(PointerTx<R> tx) throws Exception {
+        return grab(2048, (readIndexes) -> {
+            return LSMPointerUtils.rawToReal(IndexUtil.rowScan(readIndexes), tx);
+        });
     }
 
     @Override

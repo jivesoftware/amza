@@ -14,6 +14,7 @@ import org.apache.commons.io.FileUtils;
 public class LSMPointerIndexEnvironment {
 
     private final File rootFile;
+    private final ExecutorService merge = Executors.newCachedThreadPool(); // TODO config 'maybe'
     private final ExecutorService destroy = Executors.newSingleThreadExecutor(); // TODO config 'maybe'
 
     public LSMPointerIndexEnvironment(File rootFile) {
@@ -23,7 +24,7 @@ public class LSMPointerIndexEnvironment {
     PointerIndex open(String primaryName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         File indexRoot = new File(rootFile, primaryName + File.separator);
         ensure(indexRoot);
-        return new LSMPointerIndex(destroy, indexRoot, maxUpdatesBetweenCompactionHintMarker);
+        return new LSMPointerIndex(merge, destroy, indexRoot, maxUpdatesBetweenCompactionHintMarker);
     }
 
     boolean ensure(File key) {

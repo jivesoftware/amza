@@ -69,7 +69,7 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
         }
 
         try {
-            IReadable readableIndex = index.fileChannelMemMapFiler(0);
+            IReadable readableIndex = null;//index.fileChannelMemMapFiler(0);
             if (readableIndex == null) {
                 readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
             }

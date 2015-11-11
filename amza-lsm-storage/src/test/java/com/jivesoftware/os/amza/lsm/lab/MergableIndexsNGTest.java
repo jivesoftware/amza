@@ -22,6 +22,56 @@ import org.testng.annotations.Test;
 public class MergableIndexsNGTest {
 
     @Test(enabled = true)
+    public void testConcurrentMerges() throws Exception {
+
+        ExecutorService destroy = Executors.newSingleThreadExecutor();
+        ConcurrentSkipListMap<byte[], byte[]> desired = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
+
+        int count = 3;
+        int step = 100;
+        int indexes = 40;
+
+        MergeableIndexes indexs = new MergeableIndexes();
+        long time = System.currentTimeMillis();
+        System.out.println("Seed:" + time);
+        Random rand = new Random(1446914103456L);
+
+        Executors.newSingleThreadExecutor().submit(() -> {
+            for (int wi = 0; wi < indexes; wi++) {
+
+                File indexFiler = File.createTempFile("a-index-" + wi, ".tmp");
+                IndexFile indexFile = new IndexFile(indexFiler.getAbsolutePath(), "rw", false);
+                IndexRangeId indexRangeId = new IndexRangeId(wi, wi);
+
+                WriteLeapsAndBoundsIndex write = new WriteLeapsAndBoundsIndex(indexRangeId, indexFile, 64, 2);
+                IndexTestUtils.append(rand, write, 0, step, count, desired);
+                write.close();
+
+                indexFile = new IndexFile(indexFiler.getAbsolutePath(), "r", false);
+                indexs.append(new LeapsAndBoundsIndex(destroy, indexRangeId, indexFile));
+
+            }
+            Thread.sleep(10);
+            return null;
+        });
+
+        MergeableIndexes.Reader reader = indexs.reader();
+        assertions(reader, count, step, desired);
+
+        File indexFiler = File.createTempFile("a-index-merged", ".tmp");
+        MergeableIndexes.Merger merger = indexs.merge((id, worstCaseCount) -> {
+            int updatesBetweenLeaps = 2;
+            int maxLeaps = IndexUtil.calculateIdealMaxLeaps(worstCaseCount, updatesBetweenLeaps);
+            return new WriteLeapsAndBoundsIndex(id, new IndexFile(indexFiler.getAbsolutePath(), "rw", false), maxLeaps, updatesBetweenLeaps);
+        }, (id, index) -> {
+            return new LeapsAndBoundsIndex(destroy, id, new IndexFile(indexFiler.getAbsolutePath(), "r", false));
+        });
+        merger.call();
+
+        assertions(reader, count, step, desired);
+    }
+
+    @Test(enabled = true)
     public void testTx() throws Exception {
 
         ExecutorService destroy = Executors.newSingleThreadExecutor();

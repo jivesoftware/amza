@@ -34,9 +34,9 @@ public class IndexStressNGTest {
         int count = 0;
 
         boolean concurrentReads = false;
-        int numBatches = 100;
-        int batchSize = 100_000;
-        int maxKeyIncrement = 100;
+        int numBatches = 10;
+        int batchSize = 1_000_000;
+        int maxKeyIncrement = 20;
         int entriesBetweenLeaps = 1024;
 
         AtomicLong merge = new AtomicLong();
@@ -64,8 +64,8 @@ public class IndexStressNGTest {
                     });
 
                     if (merger != null) {
-                        //concurrentMerging.submit(merger);
-                        merger.call();
+                        concurrentMerging.submit(merger);
+                        //merger.call();
                     } else {
                         //System.out.println("Nothing to merge. Sleeping. "+indexs.mergeDebut());
                         Thread.sleep(10);
@@ -181,7 +181,8 @@ public class IndexStressNGTest {
         /*System.out.println("Sleeping 10 sec before gets...");
         Thread.sleep(10_000L);*/
         merging.setValue(false);
-        System.out.println(" **************   Total to add including all merging: " + (System.currentTimeMillis() - start) + " millis *****************");
+        System.out.println(
+            " **************   Total time to add " + (numBatches * batchSize) + " including all merging: " + (System.currentTimeMillis() - start) + " millis *****************");
 
         pointGets.get();
 

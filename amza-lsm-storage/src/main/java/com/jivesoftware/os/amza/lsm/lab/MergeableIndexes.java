@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Arrays;
 import java.util.concurrent.Callable;
 
 /**
@@ -25,11 +26,12 @@ public class MergeableIndexes {
 
     public void append(RawConcurrentReadableIndex pointerIndex) {
         synchronized (indexesLock) {
-            boolean[] prependToMerging = new boolean[indexes.length + 1];
+            int length = indexes.length + 1;
+            boolean[] prependToMerging = new boolean[length];
             prependToMerging[0] = false;
             System.arraycopy(merging, 0, prependToMerging, 1, merging.length);
 
-            RawConcurrentReadableIndex[] prependToIndexes = new RawConcurrentReadableIndex[indexes.length + 1];
+            RawConcurrentReadableIndex[] prependToIndexes = new RawConcurrentReadableIndex[length];
             prependToIndexes[0] = pointerIndex;
             System.arraycopy(indexes, 0, prependToIndexes, 1, indexes.length);
 
@@ -77,8 +79,8 @@ public class MergeableIndexes {
         int startOfSmallestMerge = -1;
         int length = 0;
 
-        boolean smallestPairs = false;
-        boolean biggestGain = true;
+        boolean smallestPairs = true;
+        boolean biggestGain = false;
 
         if (smallestPairs) {
             long smallestCount = Long.MAX_VALUE;
@@ -94,7 +96,7 @@ public class MergeableIndexes {
                 }
             }
         } else if (biggestGain) {
-            if (indexesCopy.length == 2) {
+            if (indexesCopy.length == 2 && !merginCopy[0] && !merginCopy[1]) {
                 startOfSmallestMerge = 0;
                 length = 2;
             } else {
@@ -128,18 +130,25 @@ public class MergeableIndexes {
         RawConcurrentReadableIndex[] mergeSet = new RawConcurrentReadableIndex[length];
         for (int i = 0; i < length; i++) {
             mergeSet[i] = indexesCopy[startOfSmallestMerge + i];
-
         }
 
         // prevent others from trying to merge the same things
         synchronized (indexesLock) {
+            boolean[] updateMerging = new boolean[merging.length];
             int mi = 0;
-            for (int i = 0; i < indexes.length && mi < mergeSet.length; i++) {
-                if (indexes[i] == mergeSet[mi]) {
-                    merging[i] = true;
+            for (int i = 0; i < indexes.length; i++) {
+                if (mi < mergeSet.length && indexes[i] == mergeSet[mi]) {
+                    updateMerging[i] = true;
                     mi++;
+                } else {
+                    updateMerging[i] = merging[i];
                 }
             }
+
+            System.out.println("????? WTF " + startOfSmallestMerge + " " + length + " " + Arrays.toString(merginCopy) + " ~~~~~~~~~~~ " + Arrays.toString(
+                updateMerging));
+
+            merging = updateMerging;
         }
 
         IndexRangeId join = null;
@@ -174,6 +183,18 @@ public class MergeableIndexes {
         @Override
         public Void call() {
             try {
+                StringBuilder bla = new StringBuilder();
+                bla.append(Thread.currentThread() + " ------ Merging:");
+                for (RawConcurrentReadableIndex m : mergeSet) {
+                    bla.append(m.id()).append("=").append(m.count()).append(",");
+                    m.destroy();
+                }
+                bla.append(" remaing debt:" + mergeDebt() + " -> ");
+                for (RawConcurrentReadableIndex i : indexes) {
+                    bla.append(i.id()).append("=").append(i.count()).append(",");
+                }
+                System.out.println("\n" + bla.toString() + "\n");
+
                 long startMerge = System.currentTimeMillis();
 
                 long worstCaseCount = 0;
@@ -204,7 +225,7 @@ public class MergeableIndexes {
                 synchronized (indexesLock) {
                     int newLength = indexes.length - (mergeSet.length - 1);
                     boolean[] updateMerging = new boolean[newLength];
-                    RawConcurrentReadableIndex[] updateIndexs = new RawConcurrentReadableIndex[newLength];
+                    RawConcurrentReadableIndex[] updateIndexes = new RawConcurrentReadableIndex[newLength];
 
                     int ui = 0;
                     int mi = 0;
@@ -212,20 +233,19 @@ public class MergeableIndexes {
                         if (mi < mergeSet.length && indexes[i] == mergeSet[mi]) {
                             if (mi == 0) {
                                 updateMerging[ui] = false;
-                                updateIndexs[ui] = index;
+                                updateIndexes[ui] = index;
                                 ui++;
                             }
                             mi++;
                         } else {
                             updateMerging[ui] = merging[i];
-                            updateIndexs[ui] = indexes[i];
+                            updateIndexes[ui] = indexes[i];
                             ui++;
                         }
-
                     }
 
                     merging = updateMerging;
-                    indexes = updateIndexs;
+                    indexes = updateIndexes;
                     version++;
                 }
 
@@ -244,13 +264,17 @@ public class MergeableIndexes {
                 LOG.warn("Failed to merge range:" + mergeRangeId, x);
 
                 synchronized (indexesLock) {
+                    boolean[] updateMerging = new boolean[merging.length];
                     int mi = 0;
-                    for (int i = 0; i < indexes.length && mi < mergeSet.length; i++) {
-                        if (indexes[i] == mergeSet[mi]) {
-                            merging[i] = false;
+                    for (int i = 0; i < indexes.length; i++) {
+                        if (mi < mergeSet.length && indexes[i] == mergeSet[mi]) {
+                            updateMerging[i] = false;
                             mi++;
+                        } else {
+                            updateMerging[i] = merging[i];
                         }
                     }
+                    merging = updateMerging;
                 }
 
             }

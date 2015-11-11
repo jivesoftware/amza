@@ -17,6 +17,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FileUtils;
 
@@ -29,6 +30,7 @@ public class LSMPointerIndex implements PointerIndex {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final ExecutorService destroy;
+    private final ExecutorService merge;
     private final File indexRoot;
     private final int maxUpdatesBetweenCompactionHintMarker;
     private RawMemoryIndex memoryPointerIndex;
@@ -38,7 +40,8 @@ public class LSMPointerIndex implements PointerIndex {
 
     private final LSMValueMarshaller marshaller = new LSMValueMarshaller();
 
-    public LSMPointerIndex(ExecutorService destroy, File indexRoot, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+    public LSMPointerIndex(ExecutorService merge, ExecutorService destroy, File indexRoot, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+        this.merge = merge;
         this.destroy = destroy;
         this.indexRoot = indexRoot;
         this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
@@ -176,7 +179,7 @@ public class LSMPointerIndex implements PointerIndex {
         return appended;
     }
 
-    private volatile boolean merging = true; // TODO set back to false!
+    private volatile boolean merging = false;
 
     public void merge() throws Exception {
         int maxMergeDebt = 2; // TODO expose config
@@ -192,15 +195,15 @@ public class LSMPointerIndex implements PointerIndex {
         }
         File[] tmpRoot = new File[1];
         MergeableIndexes.Merger merger = mergeablePointerIndexs.merge((id, count) -> {
-                tmpRoot[0] = Files.createTempDir();
+            tmpRoot[0] = Files.createTempDir();
 
-                int entriesBetweenLeaps = 4096; // TODO expose to a config;
-                int maxLeaps = IndexUtil.calculateIdealMaxLeaps(count, entriesBetweenLeaps);
+            int entriesBetweenLeaps = 4096; // TODO expose to a config;
+            int maxLeaps = IndexUtil.calculateIdealMaxLeaps(count, entriesBetweenLeaps);
 
-                WriteLeapsAndBoundsIndex writeLeapsAndBoundsIndex = new WriteLeapsAndBoundsIndex(id,
-                    new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false), maxLeaps, 4096);
-                return writeLeapsAndBoundsIndex;
-            },
+            WriteLeapsAndBoundsIndex writeLeapsAndBoundsIndex = new WriteLeapsAndBoundsIndex(id,
+                new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false), maxLeaps, 4096);
+            return writeLeapsAndBoundsIndex;
+        },
             (id, index) -> {
                 File mergedIndexRoot = id.toFile(indexRoot);
                 FileUtils.moveDirectory(tmpRoot[0], mergedIndexRoot);
@@ -211,7 +214,8 @@ public class LSMPointerIndex implements PointerIndex {
                 return reopenedIndex;
             });
         if (merger != null) {
-            merger.call();
+            Future<Void> merging = merge.submit(merger);
+            merging.get(); // TODO figure out it we really need to wait here.
         }
         merging = false;
     }

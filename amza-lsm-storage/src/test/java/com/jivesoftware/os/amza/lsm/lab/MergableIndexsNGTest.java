@@ -53,13 +53,14 @@ public class MergableIndexsNGTest {
         assertions(reader, count, step, desired);
 
         File indexFiler = File.createTempFile("a-index-merged", ".tmp");
-        indexs.merge(2, (id, worstCaseCount) -> {
+        MergeableIndexes.Merger merger = indexs.merge((id, worstCaseCount) -> {
             int updatesBetweenLeaps = 2;
             int maxLeaps = IndexUtil.calculateIdealMaxLeaps(worstCaseCount, updatesBetweenLeaps);
             return new WriteLeapsAndBoundsIndex(id, new IndexFile(indexFiler.getAbsolutePath(), "rw", false), maxLeaps, updatesBetweenLeaps);
         }, (id, index) -> {
             return new LeapsAndBoundsIndex(destroy, id, new IndexFile(indexFiler.getAbsolutePath(), "r", false));
         });
+        merger.call();
 
         assertions(reader, count, step, desired);
     }

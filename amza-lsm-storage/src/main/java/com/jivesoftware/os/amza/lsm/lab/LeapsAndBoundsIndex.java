@@ -19,6 +19,7 @@ import static com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex.LEAP;
  */
 public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
 
+    private final byte[] lengthBuffer = new byte[8];
     private final IndexRangeId id;
     private final IndexFile index;
     private final ExecutorService destroy;
@@ -27,11 +28,27 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
     private final int numBonesHidden = 1024;  // TODO config
     private final Semaphore hideABone;
 
-    public LeapsAndBoundsIndex(ExecutorService destroy, IndexRangeId id, IndexFile index) {
+    public LeapsAndBoundsIndex(ExecutorService destroy, IndexRangeId id, IndexFile index) throws Exception {
         this.destroy = destroy;
         this.id = id;
         this.index = index;
         this.hideABone = new Semaphore(numBonesHidden, true);
+
+        long indexLength = index.length();
+        if (indexLength < 4) {
+            System.out.println("WTF:" + indexLength);
+        }
+        index.seek(indexLength - 4);
+        int footerLength = UIO.readInt(index, "length", lengthBuffer);
+        index.seek(indexLength - (1 + footerLength));
+
+        int type = index.read();
+        if (type != FOOTER) {
+            throw new RuntimeException("Corruption! " + type + " expected " + FOOTER);
+        }
+        this.footer = Footer.read(index, lengthBuffer);
+        index.seek(0);
+    
     }
 
     @Override
@@ -56,8 +73,8 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
             if (readableIndex == null) {
                 readableIndex = (bufferSize > 0) ? new HeapBufferedReadable(index.fileChannelFiler(), bufferSize) : index.fileChannelFiler();
             }
-            byte[] lengthBuffer = new byte[8];
-            if (footer == null) {
+
+            if (leaps == null) {
                 long indexLength = readableIndex.length();
                 if (indexLength < 4) {
                     System.out.println("WTF:" + indexLength);
@@ -74,12 +91,6 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
                     throw new RuntimeException("Corruption! " + type + " expected " + LEAP);
                 }
                 leaps = Leaps.read(readableIndex, lengthBuffer);
-
-                type = readableIndex.read();
-                if (type != FOOTER) {
-                    throw new RuntimeException("Corruption! " + type + " expected " + FOOTER);
-                }
-                footer = Footer.read(readableIndex, lengthBuffer);
                 leapsCache = new TLongObjectHashMap<>(footer.leapCount);
 
             }
@@ -120,15 +131,12 @@ public class LeapsAndBoundsIndex implements RawConcurrentReadableIndex {
 
     @Override
     public boolean isEmpty() throws IOException {
-        return index.length() == 0;
+        return footer.count == 0;
     }
 
     @Override
     public long count() throws IOException {
-        if (footer != null) {
-            return footer.count;
-        }
-        return 0;
+        return footer.count;
     }
 
     @Override

@@ -10,6 +10,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableLong;
 import org.testng.annotations.Test;
@@ -21,7 +22,7 @@ public class IndexStressNGTest {
 
     NumberFormat format = NumberFormat.getInstance();
 
-    @Test(enabled = false)
+    @Test(enabled = true)
     public void stress() throws Exception {
         ExecutorService destroy = Executors.newSingleThreadExecutor();
 
@@ -32,36 +33,39 @@ public class IndexStressNGTest {
         int maxDepthBeforeMerging = 1;
         int count = 0;
 
-        int numBatches = 10;
-        int batchSize = 1_000_000;
-        int maxKeyIncrement = 10;
-
+        boolean concurrentReads = false;
+        int numBatches = 100;
+        int batchSize = 100_000;
+        int maxKeyIncrement = 100;
         int entriesBetweenLeaps = 1024;
-        int entryCount = numBatches * batchSize;
 
-        MutableLong merge = new MutableLong();
+        AtomicLong merge = new AtomicLong();
         MutableLong maxKey = new MutableLong();
         MutableBoolean running = new MutableBoolean(true);
         MutableBoolean merging = new MutableBoolean(true);
         MutableLong stopGets = new MutableLong(Long.MAX_VALUE);
-        Future<Object> merger = Executors.newSingleThreadExecutor().submit(() -> {
+
+        ExecutorService concurrentMerging = Executors.newCachedThreadPool();
+
+        Future<Object> mergering = Executors.newSingleThreadExecutor().submit(() -> {
             while ((running.isTrue() || indexs.mergeDebt() > 1)
                 || (indexs.mergeDebt() > maxDepthBeforeMerging)) {
 
                 try {
-                    long startMerge = System.currentTimeMillis();
-                    File mergeIndexFiler = File.createTempFile("d-index-merged-" + merge.intValue(), ".tmp");
-                    if (indexs.merge(maxDepthBeforeMerging, (id, worstCaseCount) -> {
+                    MergeableIndexes.Merger merger = indexs.merge((id, worstCaseCount) -> {
 
-                        merge.increment();
+                        long m = merge.incrementAndGet();
                         int maxLeaps = IndexUtil.calculateIdealMaxLeaps(worstCaseCount, entriesBetweenLeaps);
-
+                        File mergeIndexFiler = File.createTempFile("d-index-merged-" + m, ".tmp");
                         return new WriteLeapsAndBoundsIndex(id, new IndexFile(mergeIndexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
                     }, (id, index) -> {
-                        System.out.println("Commit Merged index:" + index);
-                        return new LeapsAndBoundsIndex(destroy, id, new IndexFile(mergeIndexFiler.getAbsolutePath(), "r", true));
-                    })) {
-                        System.out.println("Merge (" + merge.intValue() + ") elapse:" + format.format((System.currentTimeMillis() - startMerge)) + "millis");
+                        //System.out.println("Commit Merged id:" + id + "index:" + index);
+                        return new LeapsAndBoundsIndex(destroy, id, new IndexFile(index.getIndex().getFileName(), "r", true));
+                    });
+
+                    if (merger != null) {
+                        //concurrentMerging.submit(merger);
+                        merger.call();
                     } else {
                         //System.out.println("Nothing to merge. Sleeping. "+indexs.mergeDebut());
                         Thread.sleep(10);
@@ -97,8 +101,10 @@ public class IndexStressNGTest {
 
             MergeableIndexes.Reader reader = indexs.reader();
 
-            while (merging.isTrue() || running.isTrue()) {
-                Thread.sleep(100);
+            if (!concurrentReads) {
+                while (merging.isTrue() || running.isTrue()) {
+                    Thread.sleep(100);
+                }
             }
 
             ReadIndex[] acquire = reader.acquire(2048);
@@ -106,12 +112,20 @@ public class IndexStressNGTest {
             while (stopGets.longValue() > System.currentTimeMillis()) {
 
                 try {
-
-                    int longKey = rand.nextInt(maxKey.intValue());
+                    int i = maxKey.intValue();
+                    if (i == 0) {
+                        Thread.sleep(10);
+                        continue;
+                    }
+                    int longKey = rand.nextInt(i);
                     UIO.longBytes(longKey, key, 0);
                     pointer.get(key, hitsAndMisses);
                     int logInterval = 100_000;
                     if ((hits[0] + misses[0]) % logInterval == 0) {
+                        reader.release();
+                        acquire = reader.acquire(2048);
+                        pointer = IndexUtil.get(acquire);
+
                         long getEnd = System.currentTimeMillis();
                         long elapse = (getEnd - getStart);
                         total += elapse;
@@ -126,6 +140,7 @@ public class IndexStressNGTest {
                         hits[0] = 0;
                         misses[0] = 0;
                         getStart = getEnd;
+
                     }
 
                     //Thread.sleep(1);
@@ -162,10 +177,12 @@ public class IndexStressNGTest {
         }
 
         running.setValue(false);
-        merger.get();
+        mergering.get();
         /*System.out.println("Sleeping 10 sec before gets...");
         Thread.sleep(10_000L);*/
         merging.setValue(false);
+        System.out.println(" **************   Total to add including all merging: " + (System.currentTimeMillis() - start) + " millis *****************");
+
         pointGets.get();
 
         System.out.println("Done. " + (System.currentTimeMillis() - start));

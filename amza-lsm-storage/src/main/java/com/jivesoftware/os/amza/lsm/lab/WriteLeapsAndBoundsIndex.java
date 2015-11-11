@@ -49,6 +49,9 @@ public class WriteLeapsAndBoundsIndex implements RawAppendableIndex {
         return indexRangeId;
     }
 
+    public IndexFile getIndex() {
+        return index;
+    }
 
     @Override
     public boolean append(RawEntries pointers) throws Exception {
@@ -119,4 +122,10 @@ public class WriteLeapsAndBoundsIndex implements RawAppendableIndex {
         writeIndex.flush(false); // TODO expose config Fsync
         index.close();
     }
+
+    @Override
+    public String toString() {
+        return "WriteLeapsAndBoundsIndex{" + "indexRangeId=" + indexRangeId + ", index=" + index + ", maxLeaps=" + maxLeaps + ", updatesBetweenLeaps=" + updatesBetweenLeaps + ", count=" + count + '}';
+    }
+
 }

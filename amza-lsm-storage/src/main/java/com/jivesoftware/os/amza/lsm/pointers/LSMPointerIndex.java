@@ -191,8 +191,7 @@ public class LSMPointerIndex implements PointerIndex {
             merging = true;
         }
         File[] tmpRoot = new File[1];
-        mergeablePointerIndexs.merge(maxMergeDebt,
-            (id, count) -> {
+        MergeableIndexes.Merger merger = mergeablePointerIndexs.merge((id, count) -> {
                 tmpRoot[0] = Files.createTempDir();
 
                 int entriesBetweenLeaps = 4096; // TODO expose to a config;
@@ -211,6 +210,9 @@ public class LSMPointerIndex implements PointerIndex {
                 System.out.println("Commited " + reopenedIndex.count() + " index:" + indexFile.length() + "bytes");
                 return reopenedIndex;
             });
+        if (merger != null) {
+            merger.call();
+        }
         merging = false;
     }
 

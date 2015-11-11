@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @author jonathan.colt
  */
-public class IndexFile extends RandomAccessFile {
+public class IndexFile extends RandomAccessFile implements IReadable {
 
     private final String fileName;
     private final boolean useMemMap;
@@ -28,6 +28,11 @@ public class IndexFile extends RandomAccessFile {
         this.fileName = name;
         this.useMemMap = useMemMap;
         this.size = new AtomicLong(super.length());
+    }
+
+    @Override
+    public Object lock() {
+        return this;
     }
 
     public String getFileName() {
@@ -136,17 +141,17 @@ public class IndexFile extends RandomAccessFile {
 
     @Override
     public int read() throws IOException {
-        throw new UnsupportedOperationException("No reading! Call fileChannelFiler() to read!");
+        return super.read();
     }
 
     @Override
     public int read(byte b[]) throws IOException {
-        throw new UnsupportedOperationException("No reading! Call fileChannelFiler() to read!");
+        return super.read(b);
     }
 
     @Override
     public int read(byte b[], int _offset, int _len) throws IOException {
-        throw new UnsupportedOperationException("No reading! Call fileChannelFiler() to read!");
+        return super.read(b, _offset, _len);
     }
 
     @Override

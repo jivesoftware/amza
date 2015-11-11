@@ -5,6 +5,9 @@ import com.jivesoftware.os.amza.lsm.lab.api.IndexFactory;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.concurrent.Callable;
 
 /**
  *
@@ -12,76 +15,248 @@ import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
  */
 public class MergeableIndexes {
 
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+
     // newest to oldest
     private final Object indexesLock = new Object();
+    private volatile boolean[] merging = new boolean[0];
     private volatile RawConcurrentReadableIndex[] indexes = new RawConcurrentReadableIndex[0];
     private volatile long version;
 
-    public boolean merge(int count, IndexFactory indexFactory, CommitIndex commitIndex) throws Exception {
-        RawConcurrentReadableIndex[] copy;
+    public void append(RawConcurrentReadableIndex pointerIndex) {
         synchronized (indexesLock) {
-            copy = indexes;
-        }
-        if (copy.length <= count) {
-            return false;
-        }
+            boolean[] prependToMerging = new boolean[indexes.length + 1];
+            prependToMerging[0] = false;
+            System.arraycopy(merging, 0, prependToMerging, 1, merging.length);
 
-        long worstCaseCount = 0;
-        NextRawEntry[] feeders = new NextRawEntry[copy.length];
-        IndexRangeId superRange = null;
-        for (int i = 0; i < feeders.length; i++) {
-            IndexRangeId id = copy[i].id();
-            if (superRange == null) {
-                superRange = id;
-            } else {
-                superRange = superRange.join(id);
-            }
-            ReadIndex readIndex = copy[i].reader(1024 * 1024); // TODO config
-            worstCaseCount += readIndex.count();
-            feeders[i] = readIndex.rowScan();
-        }
+            RawConcurrentReadableIndex[] prependToIndexes = new RawConcurrentReadableIndex[indexes.length + 1];
+            prependToIndexes[0] = pointerIndex;
+            System.arraycopy(indexes, 0, prependToIndexes, 1, indexes.length);
 
-        WriteLeapsAndBoundsIndex mergedIndex = indexFactory.createIndex(superRange, worstCaseCount);
-        InterleaveStream feedInterleaver = new InterleaveStream(feeders);
-        mergedIndex.append((stream) -> {
-            while (feedInterleaver.next(stream));
-            return true;
-        });
-        mergedIndex.close();
-
-        int newSinceMerge;
-        synchronized (indexesLock) {
-            newSinceMerge = indexes.length - copy.length;
-            LeapsAndBoundsIndex[] merged = new LeapsAndBoundsIndex[newSinceMerge + 1];
-            System.arraycopy(indexes, 0, merged, 1, newSinceMerge);
-            merged[0] = commitIndex.commit(superRange, mergedIndex);
-            indexes = merged;
+            merging = prependToMerging;
+            indexes = prependToIndexes;
             version++;
         }
-
-        System.out.println("Merged (" + copy.length + "), NewSinceMerge (" + newSinceMerge + ")");
-        for (RawConcurrentReadableIndex c : copy) {
-            c.destroy();
-        }
-        return true;
     }
 
     public int mergeDebt() {
-        RawConcurrentReadableIndex[] copy;
+        Object[] copy;
         synchronized (indexesLock) {
             copy = indexes;
         }
         return copy.length;
     }
 
-    public void append(RawConcurrentReadableIndex pointerIndex) {
-        synchronized (indexesLock) {
-            RawConcurrentReadableIndex[] append = new RawConcurrentReadableIndex[indexes.length + 1];
-            append[0] = pointerIndex;
-            System.arraycopy(indexes, 0, append, 1, indexes.length);
-            indexes = append;
-            version++;
+    public static void main(String[] args) {
+        int[] sizes = new int[]{1000000, 1000000, 1000000, 1000000, 2000001};
+
+        for (int i = 0; i < sizes.length; i++) {
+            long c = 0;
+            int s = 0;
+            for (int j = i; j < sizes.length; j++) {
+                c += sizes[j];
+                s++;
+                if (s > 1) {
+                    System.out.println(i + "-" + j + "=" + (((c / (double) s)) - s));
+                }
+            }
         }
+    }
+
+    public Merger merge(IndexFactory indexFactory, CommitIndex commitIndex) throws Exception {
+        boolean[] merginCopy;
+        RawConcurrentReadableIndex[] indexesCopy;
+        synchronized (indexesLock) {
+            merginCopy = merging;
+            indexesCopy = indexes;
+        }
+        if (indexesCopy.length <= 1) {
+            return null;
+        }
+
+        int startOfSmallestMerge = -1;
+        int length = 0;
+
+        boolean smallestPairs = false;
+        boolean biggestGain = true;
+
+        if (smallestPairs) {
+            long smallestCount = Long.MAX_VALUE;
+            for (int i = 0; i < indexesCopy.length - 1; i++) {
+                if (merginCopy[i]) {
+                    continue;
+                }
+                long worstCaseMergeCount = indexesCopy[i].count() + indexesCopy[i + 1].count();
+                if (worstCaseMergeCount < smallestCount) {
+                    smallestCount = worstCaseMergeCount;
+                    startOfSmallestMerge = i;
+                    length = 2;
+                }
+            }
+        } else if (biggestGain) {
+            if (indexesCopy.length == 2) {
+                startOfSmallestMerge = 0;
+                length = 2;
+            } else {
+                double smallestScore = Double.MAX_VALUE;
+                NEXT:
+                for (int i = 0; i < indexesCopy.length; i++) {
+                    long worstCaseMergeCount = 0;
+                    int fileCount = 0;
+                    for (int j = i; j < indexesCopy.length; j++) {
+                        if (merginCopy[j]) {
+                            continue NEXT;
+                        }
+                        worstCaseMergeCount += indexesCopy[j].count();
+                        fileCount++;
+
+                        double score = (((worstCaseMergeCount / (double) fileCount)) - fileCount);
+                        if (score < smallestScore && fileCount > 1) {
+                            smallestScore = score;
+                            startOfSmallestMerge = i;
+                            length = fileCount;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (startOfSmallestMerge == -1 || length < 2) {
+            return null;
+        }
+
+        RawConcurrentReadableIndex[] mergeSet = new RawConcurrentReadableIndex[length];
+        for (int i = 0; i < length; i++) {
+            mergeSet[i] = indexesCopy[startOfSmallestMerge + i];
+
+        }
+
+        // prevent others from trying to merge the same things
+        synchronized (indexesLock) {
+            int mi = 0;
+            for (int i = 0; i < indexes.length && mi < mergeSet.length; i++) {
+                if (indexes[i] == mergeSet[mi]) {
+                    merging[i] = true;
+                    mi++;
+                }
+            }
+        }
+
+        IndexRangeId join = null;
+        for (RawConcurrentReadableIndex m : mergeSet) {
+            if (join == null) {
+                join = m.id();
+            } else {
+                join = join.join(m.id());
+            }
+        }
+
+        return new Merger(mergeSet, join, indexFactory, commitIndex);
+    }
+
+    public class Merger implements Callable<Void> {
+
+        private final RawConcurrentReadableIndex[] mergeSet;
+        private final IndexRangeId mergeRangeId;
+        private final IndexFactory indexFactory;
+        private final CommitIndex commitIndex;
+
+        private Merger(RawConcurrentReadableIndex[] merging,
+            IndexRangeId mergeRangeId,
+            IndexFactory indexFactory,
+            CommitIndex commitIndex) {
+            this.mergeSet = merging;
+            this.mergeRangeId = mergeRangeId;
+            this.indexFactory = indexFactory;
+            this.commitIndex = commitIndex;
+        }
+
+        @Override
+        public Void call() {
+            try {
+                long startMerge = System.currentTimeMillis();
+
+                long worstCaseCount = 0;
+                NextRawEntry[] feeders = new NextRawEntry[mergeSet.length];
+                IndexRangeId superRange = null;
+                for (int i = 0; i < feeders.length; i++) {
+                    IndexRangeId id = mergeSet[i].id();
+                    if (superRange == null) {
+                        superRange = id;
+                    } else {
+                        superRange = superRange.join(id);
+                    }
+                    ReadIndex readIndex = mergeSet[i].reader(1024 * 1024); // TODO config
+                    worstCaseCount += readIndex.count();
+                    feeders[i] = readIndex.rowScan();
+                }
+
+                WriteLeapsAndBoundsIndex mergedIndex = indexFactory.createIndex(superRange, worstCaseCount);
+                InterleaveStream feedInterleaver = new InterleaveStream(feeders);
+                mergedIndex.append((stream) -> {
+                    while (feedInterleaver.next(stream));
+                    return true;
+                });
+                mergedIndex.close();
+
+                LeapsAndBoundsIndex index = commitIndex.commit(superRange, mergedIndex);
+
+                synchronized (indexesLock) {
+                    int newLength = indexes.length - (mergeSet.length - 1);
+                    boolean[] updateMerging = new boolean[newLength];
+                    RawConcurrentReadableIndex[] updateIndexs = new RawConcurrentReadableIndex[newLength];
+
+                    int ui = 0;
+                    int mi = 0;
+                    for (int i = 0; i < indexes.length; i++) {
+                        if (mi < mergeSet.length && indexes[i] == mergeSet[mi]) {
+                            if (mi == 0) {
+                                updateMerging[ui] = false;
+                                updateIndexs[ui] = index;
+                                ui++;
+                            }
+                            mi++;
+                        } else {
+                            updateMerging[ui] = merging[i];
+                            updateIndexs[ui] = indexes[i];
+                            ui++;
+                        }
+
+                    }
+
+                    merging = updateMerging;
+                    indexes = updateIndexs;
+                    version++;
+                }
+
+                StringBuilder sb = new StringBuilder();
+                sb.append((System.currentTimeMillis() - startMerge) + " millis Merged:");
+                for (RawConcurrentReadableIndex m : mergeSet) {
+                    sb.append(m.id()).append("=").append(m.count()).append(",");
+                    m.destroy();
+                }
+                sb.append(" remaing debt:" + mergeDebt() + " -> ");
+                for (RawConcurrentReadableIndex i : indexes) {
+                    sb.append(i.id()).append("=").append(i.count()).append(",");
+                }
+                System.out.println("\n" + sb.toString() + "\n");
+            } catch (Exception x) {
+                LOG.warn("Failed to merge range:" + mergeRangeId, x);
+
+                synchronized (indexesLock) {
+                    int mi = 0;
+                    for (int i = 0; i < indexes.length && mi < mergeSet.length; i++) {
+                        if (indexes[i] == mergeSet[mi]) {
+                            merging[i] = false;
+                            mi++;
+                        }
+                    }
+                }
+
+            }
+            return null;
+        }
+
     }
 
     public final Reader reader() throws Exception {

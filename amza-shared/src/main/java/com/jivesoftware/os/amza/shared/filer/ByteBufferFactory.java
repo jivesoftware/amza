@@ -7,26 +7,13 @@ import java.nio.ByteBuffer;
  */
 public interface ByteBufferFactory {
 
-    /**
-     *
-     * @param key
-     * @return
-     */
-    boolean exists(byte[] key);
+    boolean exists();
 
-    /**
-     * @param key
-     * @param size
-     * @return
-     */
-    ByteBuffer allocate(byte[] key, long size);
+    ByteBuffer allocate(int index, long size);
 
-    /**
-     * @param key
-     * @param oldBuffer can be null and if it is you could have just called allocate which is what implementation should do.
-     * @param newSize
-     * @return
-     */
-    ByteBuffer reallocate(byte[] key, ByteBuffer oldBuffer, long newSize);
+    ByteBuffer reallocate(int index, ByteBuffer oldBuffer, long newSize);
 
+    long length();
+
+    long nextLength(int index, long oldLength, long position);
 }

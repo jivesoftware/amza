@@ -4,8 +4,6 @@ import com.jivesoftware.os.amza.api.filer.IFiler;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.function.Function;
 
 /**
  *
@@ -29,13 +27,14 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
     public AutoGrowingByteBufferBackedFiler(long initialBufferSegmentSize,
         long maxBufferSegmentSize,
         ByteBufferFactory byteBufferFactory) throws IOException {
-        this.initialBufferSegmentSize = UIO.chunkLength(UIO.chunkPower(initialBufferSegmentSize, 0));
+        this.initialBufferSegmentSize = initialBufferSegmentSize > 0 ? UIO.chunkLength(UIO.chunkPower(initialBufferSegmentSize, 0)) : -1;
 
         maxBufferSegmentSize = Math.min(UIO.chunkLength(UIO.chunkPower(maxBufferSegmentSize, 0)), MAX_BUFFER_SEGMENT_SIZE);
         this.maxBufferSegmentSize = maxBufferSegmentSize;
 
         this.byteBufferFactory = byteBufferFactory;
         this.filers = new ByteBufferBackedFiler[0];
+        this.length = byteBufferFactory.length();
 
         // test power of 2
         if ((maxBufferSegmentSize & (maxBufferSegmentSize - 1)) == 0) {
@@ -119,18 +118,15 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
             System.arraycopy(filers, 0, newFilers, 0, filers.length);
             for (int n = filers.length; n < newLength; n++) {
                 if (n < newLength - 1) {
-                    newFilers[n] = new ByteBufferBackedFiler(allocate(lastFilerIndex, maxBufferSegmentSize));
+                    newFilers[n] = new ByteBufferBackedFiler(allocate(n, maxBufferSegmentSize));
                 } else {
-                    newFilers[n] = new ByteBufferBackedFiler(allocate(lastFilerIndex, Math.max(fseek, initialBufferSegmentSize)));
+                    newFilers[n] = new ByteBufferBackedFiler(allocate(n, Math.max(fseek, initialBufferSegmentSize)));
                 }
             }
             filers = newFilers;
 
         } else if (f == filers.length - 1 && fseek > filers[f].length()) {
-            long newSize = filers[f].length() * 2;
-            while (newSize < fseek) {
-                newSize *= 2;
-            }
+            long newSize = byteBufferFactory.nextLength(f, filers[f].length(), fseek);
             ByteBuffer reallocate = reallocate(f, filers[f].buffer, Math.min(maxBufferSegmentSize, newSize));
             filers[f] = new ByteBufferBackedFiler(reallocate);
         }
@@ -138,22 +134,12 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
         fpFilerIndex = f;
     }
 
-    private byte[] key(int index) {
-        return String.valueOf(index).getBytes(StandardCharsets.UTF_8);
-    }
-
     private ByteBuffer allocate(int index, long maxBufferSegmentSize) {
-        return byteBufferFactory.allocate(key(index), maxBufferSegmentSize);
+        return byteBufferFactory.allocate(index, maxBufferSegmentSize);
     }
 
     private ByteBuffer reallocate(int index, ByteBuffer oldBuffer, long newSize) {
-        ByteBuffer newBuffer = allocate(index, newSize);
-        if (oldBuffer != null) {
-            oldBuffer.position(0);
-            newBuffer.put(oldBuffer); // assume we only grow
-            newBuffer.position(0);
-        }
-        return newBuffer;
+        return byteBufferFactory.reallocate(index, oldBuffer, newSize);
     }
 
     @Override

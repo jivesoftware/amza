@@ -2,25 +2,27 @@ package com.jivesoftware.os.amza.lsm.lab;
 
 import com.jivesoftware.os.amza.api.filer.IAppendOnly;
 import com.jivesoftware.os.amza.api.filer.IReadable;
-import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
+import com.jivesoftware.os.amza.shared.filer.AutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.amza.shared.filer.FileBackedMemMappedByteBufferFactory;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
- *
  * @author jonathan.colt
  */
 public class IndexFile extends RandomAccessFile implements IReadable {
+
+    private static final long BUFFER_SEGMENT_SIZE = 1024L * 1024 * 1024;
 
     private final String fileName;
     private final boolean useMemMap;
     private final AtomicLong size;
 
-    private final AtomicReference<ByteBufferBackedFiler> memMapFiler = new AtomicReference<>();
+    private final AutoGrowingByteBufferBackedFiler memMapFiler;
     private final AtomicLong memMapFilerLength = new AtomicLong(-1);
 
     public IndexFile(String name, String mode, boolean useMemMap) throws IOException {
@@ -28,6 +30,12 @@ public class IndexFile extends RandomAccessFile implements IReadable {
         this.fileName = name;
         this.useMemMap = useMemMap;
         this.size = new AtomicLong(super.length());
+        if (useMemMap) {
+            FileBackedMemMappedByteBufferFactory byteBufferFactory = new FileBackedMemMappedByteBufferFactory(new File(name), BUFFER_SEGMENT_SIZE);
+            this.memMapFiler = new AutoGrowingByteBufferBackedFiler(-1L, BUFFER_SEGMENT_SIZE, byteBufferFactory);
+        } else {
+            this.memMapFiler = null;
+        }
     }
 
     @Override
@@ -49,23 +57,15 @@ public class IndexFile extends RandomAccessFile implements IReadable {
             return null;
         }
         if (size <= memMapFilerLength.get()) {
-            return memMapFiler.get().duplicate();
+            return memMapFiler.duplicateAll();
         }
         synchronized (this) {
-            if (size <= memMapFilerLength.get()) {
-                return memMapFiler.get().duplicate();
+            if (size > memMapFilerLength.get()) {
+                memMapFiler.seek(size);
+                memMapFilerLength.set(size);
             }
-            FileChannel channel = getChannel();
-            long newLength = length();
-            // TODO handle larger files
-            if (newLength >= Integer.MAX_VALUE) {
-                return null;
-            }
-            ByteBufferBackedFiler newFiler = new ByteBufferBackedFiler(channel.map(FileChannel.MapMode.READ_ONLY, 0, (int) newLength));
-            memMapFiler.set(newFiler);
-            memMapFilerLength.set(newLength);
-            return newFiler.duplicate();
         }
+        return memMapFiler.duplicateAll();
     }
 
     public IAppendOnly fileChannelWriter(int bufferSize) throws IOException {

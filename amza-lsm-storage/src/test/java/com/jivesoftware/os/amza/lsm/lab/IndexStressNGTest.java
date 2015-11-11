@@ -93,7 +93,6 @@ public class IndexStressNGTest {
                 }
                 return true;
             };
-            long getStart = System.currentTimeMillis();
             long best = Long.MAX_VALUE;
             long total = 0;
             long samples = 0;
@@ -107,6 +106,7 @@ public class IndexStressNGTest {
                 }
             }
 
+            long getStart = System.currentTimeMillis();
             ReadIndex[] acquire = reader.acquire(2048);
             GetRaw pointer = IndexUtil.get(acquire);
             while (stopGets.longValue() > System.currentTimeMillis()) {

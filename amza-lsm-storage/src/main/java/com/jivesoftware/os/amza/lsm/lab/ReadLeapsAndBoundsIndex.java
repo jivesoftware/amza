@@ -43,6 +43,7 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
 
     @Override
     public NextRawEntry rangeScan(byte[] from, byte[] to) throws Exception {
+        activeScan.reset();
         long fp = activeScan.getInclusiveStartOfRow(from, false);
         if (fp < 0) {
             return (stream) -> false;
@@ -72,6 +73,7 @@ public class ReadLeapsAndBoundsIndex implements ReadIndex {
 
     @Override
     public NextRawEntry rowScan() throws Exception {
+        activeScan.reset();
         return (stream) -> {
             activeScan.next(0, stream);
             return activeScan.result();

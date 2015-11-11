@@ -124,7 +124,7 @@ public class MergableIndexsNGTest {
                 return true;
             };
 
-            System.out.println("Asked:" + UIO.bytesLong(keys.get(_i)) + " to " + UIO.bytesLong(keys.get(_i + 3)));
+            System.out.println("Asked index:" + _i + " key:" + UIO.bytesLong(keys.get(_i)) + " to:" + UIO.bytesLong(keys.get(_i + 3)));
             NextRawEntry rangeScan = IndexUtil.rangeScan(acquired, keys.get(_i), keys.get(_i + 3));
             while (rangeScan.next(stream));
             Assert.assertEquals(3, streamed[0]);

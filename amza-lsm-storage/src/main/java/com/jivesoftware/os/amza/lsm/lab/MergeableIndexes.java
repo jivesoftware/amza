@@ -7,11 +7,10 @@ import com.jivesoftware.os.amza.lsm.lab.api.RawConcurrentReadableIndex;
 import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.Arrays;
+import java.io.IOException;
 import java.util.concurrent.Callable;
 
 /**
- *
  * @author jonathan.colt
  */
 public class MergeableIndexes {
@@ -41,8 +40,29 @@ public class MergeableIndexes {
         }
     }
 
+    public boolean hasMergeDebt() throws IOException {
+        boolean[] mergingCopy;
+        RawConcurrentReadableIndex[] indexesCopy;
+        synchronized (indexesLock) {
+            mergingCopy = merging;
+            indexesCopy = indexes;
+        }
+
+        MergeRange mergeRange = getMergeRange(MergeStrategy.crazySauce, mergingCopy, indexesCopy);
+        if (mergeRange.startOfSmallestMerge < 0) {
+            for (boolean m : mergingCopy) {
+                if (m) {
+                    return true;
+                }
+            }
+            return false;
+        } else {
+            return true;
+        }
+    }
+
     public int mergeDebt() {
-        Object[] copy;
+        RawConcurrentReadableIndex[] copy;
         synchronized (indexesLock) {
             copy = indexes;
         }
@@ -50,7 +70,7 @@ public class MergeableIndexes {
     }
 
     public static void main(String[] args) {
-        int[] sizes = new int[]{1000000, 1000000, 1000000, 1000000, 2000001};
+        int[] sizes = new int[] { 1000000, 1000000, 1000000, 1000000, 2000001 };
 
         for (int i = 0; i < sizes.length; i++) {
             long c = 0;
@@ -65,63 +85,27 @@ public class MergeableIndexes {
         }
     }
 
+    enum MergeStrategy {
+        smallestPairs,
+        biggestGain,
+        longestRun,
+        crazySauce;
+    }
+
     public Merger merge(IndexFactory indexFactory, CommitIndex commitIndex) throws Exception {
-        boolean[] merginCopy;
+        boolean[] mergingCopy;
         RawConcurrentReadableIndex[] indexesCopy;
         synchronized (indexesLock) {
-            merginCopy = merging;
+            mergingCopy = merging;
             indexesCopy = indexes;
         }
         if (indexesCopy.length <= 1) {
             return null;
         }
 
-        int startOfSmallestMerge = -1;
-        int length = 0;
-
-        boolean smallestPairs = true;
-        boolean biggestGain = false;
-
-        if (smallestPairs) {
-            long smallestCount = Long.MAX_VALUE;
-            for (int i = 0; i < indexesCopy.length - 1; i++) {
-                if (merginCopy[i]) {
-                    continue;
-                }
-                long worstCaseMergeCount = indexesCopy[i].count() + indexesCopy[i + 1].count();
-                if (worstCaseMergeCount < smallestCount) {
-                    smallestCount = worstCaseMergeCount;
-                    startOfSmallestMerge = i;
-                    length = 2;
-                }
-            }
-        } else if (biggestGain) {
-            if (indexesCopy.length == 2 && !merginCopy[0] && !merginCopy[1]) {
-                startOfSmallestMerge = 0;
-                length = 2;
-            } else {
-                double smallestScore = Double.MAX_VALUE;
-                NEXT:
-                for (int i = 0; i < indexesCopy.length; i++) {
-                    long worstCaseMergeCount = 0;
-                    int fileCount = 0;
-                    for (int j = i; j < indexesCopy.length; j++) {
-                        if (merginCopy[j]) {
-                            continue NEXT;
-                        }
-                        worstCaseMergeCount += indexesCopy[j].count();
-                        fileCount++;
-
-                        double score = (((worstCaseMergeCount / (double) fileCount)) - fileCount);
-                        if (score < smallestScore && fileCount > 1) {
-                            smallestScore = score;
-                            startOfSmallestMerge = i;
-                            length = fileCount;
-                        }
-                    }
-                }
-            }
-        }
+        MergeRange mergeRange = getMergeRange(MergeStrategy.crazySauce, mergingCopy, indexesCopy);
+        int startOfSmallestMerge = mergeRange.startOfSmallestMerge;
+        int length = mergeRange.length;
 
         if (startOfSmallestMerge == -1 || length < 2) {
             return null;
@@ -145,8 +129,8 @@ public class MergeableIndexes {
                 }
             }
 
-            System.out.println("????? WTF " + startOfSmallestMerge + " " + length + " " + Arrays.toString(merginCopy) + " ~~~~~~~~~~~ " + Arrays.toString(
-                updateMerging));
+            /*System.out.println("????? WTF " + startOfSmallestMerge + " " + length + " " + Arrays.toString(mergingCopy) + " ~~~~~~~~~~~ " + Arrays.toString(
+                updateMerging));*/
 
             merging = updateMerging;
         }
@@ -183,17 +167,16 @@ public class MergeableIndexes {
         @Override
         public Void call() {
             try {
-                StringBuilder bla = new StringBuilder();
+                /*StringBuilder bla = new StringBuilder();
                 bla.append(Thread.currentThread() + " ------ Merging:");
                 for (RawConcurrentReadableIndex m : mergeSet) {
                     bla.append(m.id()).append("=").append(m.count()).append(",");
-                    m.destroy();
                 }
-                bla.append(" remaing debt:" + mergeDebt() + " -> ");
+                bla.append(" remaining debt:" + mergeDebt() + " -> ");
                 for (RawConcurrentReadableIndex i : indexes) {
                     bla.append(i.id()).append("=").append(i.count()).append(",");
                 }
-                System.out.println("\n" + bla.toString() + "\n");
+                System.out.println("\n" + bla.toString() + "\n");*/
 
                 long startMerge = System.currentTimeMillis();
 
@@ -215,7 +198,7 @@ public class MergeableIndexes {
                 WriteLeapsAndBoundsIndex mergedIndex = indexFactory.createIndex(superRange, worstCaseCount);
                 InterleaveStream feedInterleaver = new InterleaveStream(feeders);
                 mergedIndex.append((stream) -> {
-                    while (feedInterleaver.next(stream));
+                    while (feedInterleaver.next(stream)) ;
                     return true;
                 });
                 mergedIndex.close();
@@ -255,9 +238,10 @@ public class MergeableIndexes {
                     sb.append(m.id()).append("=").append(m.count()).append(",");
                     m.destroy();
                 }
-                sb.append(" remaing debt:" + mergeDebt() + " -> ");
-                for (RawConcurrentReadableIndex i : indexes) {
-                    sb.append(i.id()).append("=").append(i.count()).append(",");
+                sb.append(" remaining debt:" + mergeDebt() + " -> ");
+                for (int i = 0; i < indexes.length; i++) {
+                    RawConcurrentReadableIndex rawIndex = indexes[i];
+                    sb.append(rawIndex.id()).append("=").append(rawIndex.count()).append(merging[i] ? "*" : "").append(",");
                 }
                 System.out.println("\n" + sb.toString() + "\n");
             } catch (Exception x) {
@@ -375,4 +359,119 @@ public class MergeableIndexes {
         return copy;
     }
 
+    private static class MergeRange {
+        private final int startOfSmallestMerge;
+        private final int length;
+
+        public MergeRange(int startOfSmallestMerge, int length) {
+            this.startOfSmallestMerge = startOfSmallestMerge;
+            this.length = length;
+        }
+    }
+
+    public MergeRange getMergeRange(MergeStrategy mergeStrategy, boolean[] mergingCopy,
+        RawConcurrentReadableIndex[] indexesCopy) throws IOException {
+
+        int startOfSmallestMerge = -1;
+        int length = 0;
+
+        if (mergeStrategy == MergeStrategy.smallestPairs) {
+            long smallestCount = Long.MAX_VALUE;
+            for (int i = 0; i < indexesCopy.length - 1; i++) {
+                if (mergingCopy[i] || mergingCopy[i + 1]) {
+                    continue;
+                }
+                long worstCaseMergeCount = indexesCopy[i].count() + indexesCopy[i + 1].count();
+                if (worstCaseMergeCount < smallestCount) {
+                    smallestCount = worstCaseMergeCount;
+                    startOfSmallestMerge = i;
+                    length = 2;
+                }
+            }
+        } else if (mergeStrategy == MergeStrategy.biggestGain) {
+            if (indexesCopy.length == 2 && !mergingCopy[0] && !mergingCopy[1]) {
+                startOfSmallestMerge = 0;
+                length = 2;
+            } else {
+                double smallestScore = Double.MAX_VALUE;
+                NEXT:
+                for (int i = 0; i < indexesCopy.length; i++) {
+                    long worstCaseMergeCount = 0;
+                    int fileCount = 0;
+                    for (int j = i; j < indexesCopy.length; j++) {
+                        if (mergingCopy[j]) {
+                            continue NEXT;
+                        }
+                        worstCaseMergeCount += indexesCopy[j].count();
+                        fileCount++;
+
+                        if (fileCount > 1) {
+                            double score = (((worstCaseMergeCount / (double) fileCount)) - fileCount);
+                            if (score < smallestScore) {
+                                smallestScore = score;
+                                startOfSmallestMerge = i;
+                                length = fileCount;
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (mergeStrategy == MergeStrategy.longestRun) {
+            int longestRun = 0;
+            if (!mergingCopy[0]) {
+                for (int i = 1; i < indexesCopy.length; i++) {
+                    if (mergingCopy[i]) {
+                        break;
+                    }
+                    int run = i + 1;
+                    if (run > longestRun) {
+                        longestRun = run;
+                        startOfSmallestMerge = 0;
+                        length = run;
+                    }
+                }
+            }
+            if (!mergingCopy[mergingCopy.length - 1]) {
+                for (int i = indexesCopy.length - 2; i >= 0; i--) {
+                    if (mergingCopy[i]) {
+                        break;
+                    }
+                    int run = indexesCopy.length - i;
+                    if (run > longestRun) {
+                        longestRun = run;
+                        startOfSmallestMerge = i;
+                        length = run;
+                    }
+                }
+            }
+        } else if (mergeStrategy == MergeStrategy.crazySauce) {
+            boolean encounteredMerge = false;
+            for (int i = 1; i < indexesCopy.length; i++) {
+                if (mergingCopy[i]) {
+                    encounteredMerge = true;
+                }
+
+                long headSum = 0;
+                for (int j = 0; j < i; j++) {
+                    headSum += indexesCopy[j].count();
+                }
+
+                if (headSum >= indexesCopy[i].count()) {
+                    if (encounteredMerge) {
+                        startOfSmallestMerge = -1;
+                        length = 0;
+                        break;
+                    } else {
+                        startOfSmallestMerge = 0;
+                        length = 1 + i;
+                    }
+                }
+            }
+            if (startOfSmallestMerge < 0 && indexesCopy.length > 1 && !encounteredMerge) {
+                startOfSmallestMerge = 0;
+                length = indexesCopy.length;
+            }
+        }
+        return new MergeRange(startOfSmallestMerge, length);
+    }
 }

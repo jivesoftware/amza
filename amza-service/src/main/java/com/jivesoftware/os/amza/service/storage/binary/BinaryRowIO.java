@@ -219,7 +219,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
     static private double euclidean(long[] a, long[] b) {
         double v = 0;
         for (int i = 0; i < a.length; i++) {
-            long d = a[i] - b[i];
+            double d = a[i] - b[i];
             v += d * d;
         }
         return Math.sqrt(v);

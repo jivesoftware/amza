@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentSkipListMap;
-import org.junit.Assert;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
@@ -42,6 +42,7 @@ public class InterleaveStreamNGTest {
             Assert.assertEquals(SimpleRawEntry.value(rawEntry), expect.value);
             return true;
         }));
+        Assert.assertTrue(expected.isEmpty());
     }
 
     @Test

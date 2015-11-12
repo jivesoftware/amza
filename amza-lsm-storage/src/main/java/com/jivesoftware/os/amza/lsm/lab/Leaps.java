@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.lsm.lab;
 
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.filer.IAppendOnly;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -20,6 +21,7 @@ public class Leaps {
     public Leaps(int index, byte[] lastKey, long[] fpIndex, byte[][] keys, long[] startOfEntryIndex) {
         this.index = index;
         this.lastKey = lastKey;
+        Preconditions.checkArgument(fpIndex.length == keys.length, "fpIndex and keys misalignment, %s != %s", fpIndex.length, keys.length);
         this.fps = fpIndex;
         this.keys = keys;
         this.startOfEntryIndex = startOfEntryIndex;

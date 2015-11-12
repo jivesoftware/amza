@@ -34,9 +34,9 @@ public class IndexStressNGTest {
         int count = 0;
 
         boolean concurrentReads = false;
-        int numBatches = 10;
-        int batchSize = 1_000_000;
-        int maxKeyIncrement = 20;
+        int numBatches = 1000;
+        int batchSize = 100_000;
+        int maxKeyIncrement = 2000;
         int entriesBetweenLeaps = 1024;
 
         AtomicLong merge = new AtomicLong();
@@ -45,13 +45,19 @@ public class IndexStressNGTest {
         MutableBoolean merging = new MutableBoolean(true);
         MutableLong stopGets = new MutableLong(Long.MAX_VALUE);
 
+        int maxParallelMerges = 2;
+        AtomicLong ongoingMerges = new AtomicLong(0);
         ExecutorService concurrentMerging = Executors.newCachedThreadPool();
 
         Future<Object> mergering = Executors.newSingleThreadExecutor().submit(() -> {
-            while ((running.isTrue() || indexs.mergeDebt() > 1)
-                || (indexs.mergeDebt() > maxDepthBeforeMerging)) {
+            while (running.isTrue() || indexs.hasMergeDebt()) {
 
                 try {
+                    if (ongoingMerges.get() >= maxParallelMerges) {
+                        Thread.sleep(10);
+                        continue;
+                    }
+
                     MergeableIndexes.Merger merger = indexs.merge((id, worstCaseCount) -> {
 
                         long m = merge.incrementAndGet();
@@ -60,10 +66,12 @@ public class IndexStressNGTest {
                         return new WriteLeapsAndBoundsIndex(id, new IndexFile(mergeIndexFiler.getAbsolutePath(), "rw", true), maxLeaps, entriesBetweenLeaps);
                     }, (id, index) -> {
                         //System.out.println("Commit Merged id:" + id + "index:" + index);
+                        ongoingMerges.decrementAndGet();
                         return new LeapsAndBoundsIndex(destroy, id, new IndexFile(index.getIndex().getFileName(), "r", true));
                     });
 
                     if (merger != null) {
+                        ongoingMerges.incrementAndGet();
                         concurrentMerging.submit(merger);
                         //merger.call();
                     } else {

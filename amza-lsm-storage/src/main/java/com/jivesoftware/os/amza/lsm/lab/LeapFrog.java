@@ -1,7 +1,9 @@
 package com.jivesoftware.os.amza.lsm.lab;
 
+import com.google.common.math.LongMath;
+import java.util.Arrays;
+
 /**
- *
  * @author jonathan.colt
  */
 class LeapFrog {
@@ -68,7 +70,7 @@ class LeapFrog {
     static private double euclidean(long[] a, long[] b) {
         double v = 0;
         for (int i = 0; i < a.length; i++) {
-            long d = a[i] - b[i];
+            double d = a[i] - b[i];
             v += d * d;
         }
         return Math.sqrt(v);

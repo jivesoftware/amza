@@ -144,7 +144,7 @@ public class IndexStressNGTest {
 
                         System.out.println(
                             "Hits:" + hits[0] + " Misses:" + misses[0] + " Elapse:" + elapse + " Best:" + rps(logInterval, best) + " Avg:" + rps(logInterval,
-                            (long) ((double) total / (double) samples)));
+                            (long) (total / (double) samples)));
                         hits[0] = 0;
                         misses[0] = 0;
                         getStart = getEnd;

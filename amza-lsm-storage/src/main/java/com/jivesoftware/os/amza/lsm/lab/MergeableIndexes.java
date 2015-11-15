@@ -233,12 +233,12 @@ public class MergeableIndexes {
                 }
 
                 StringBuilder sb = new StringBuilder();
-                sb.append((System.currentTimeMillis() - startMerge) + " millis Merged:");
+                sb.append(System.currentTimeMillis() - startMerge).append(" millis Merged:");
                 for (RawConcurrentReadableIndex m : mergeSet) {
                     sb.append(m.id()).append("=").append(m.count()).append(",");
                     m.destroy();
                 }
-                sb.append(" remaining debt:" + mergeDebt() + " -> ");
+                sb.append(" remaining debt:").append(mergeDebt()).append(" -> ");
                 for (int i = 0; i < indexes.length; i++) {
                     RawConcurrentReadableIndex rawIndex = indexes[i];
                     sb.append(rawIndex.id()).append("=").append(rawIndex.count()).append(merging[i] ? "*" : "").append(",");

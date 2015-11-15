@@ -3,16 +3,14 @@ package com.jivesoftware.os.amza.lsm.lab;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 import com.jivesoftware.os.amza.lsm.lab.api.RawEntryStream;
-import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * @author jonathan.colt
  */
 class InterleaveStream implements NextRawEntry {
 
-    private PriorityQueue<Feed> feeds = new PriorityQueue<>();
+    private final PriorityQueue<Feed> feeds = new PriorityQueue<>();
     private Feed active;
     private Feed until;
 

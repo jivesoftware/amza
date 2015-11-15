@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.lsm.lab.api;
 
-import com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex;
 import com.jivesoftware.os.amza.lsm.lab.IndexRangeId;
+import com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex;
 
 /**
  *

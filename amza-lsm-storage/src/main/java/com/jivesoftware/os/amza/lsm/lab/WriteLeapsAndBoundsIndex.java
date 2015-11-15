@@ -27,8 +27,8 @@ public class WriteLeapsAndBoundsIndex implements RawAppendableIndex {
     private LeapFrog latestLeapFrog;
     private int updatesSinceLeap;
 
-    private long[] startOfEntryIndex;
-    private HeapFiler entryBuffer = new HeapFiler(1024); // TODO somthing better
+    private final long[] startOfEntryIndex;
+    private final HeapFiler entryBuffer = new HeapFiler(1024); // TODO somthing better
     private byte[] firstKey;
     private byte[] lastKey;
     private int leapCount;

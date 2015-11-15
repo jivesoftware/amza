@@ -1,8 +1,5 @@
 package com.jivesoftware.os.amza.lsm.lab;
 
-import com.google.common.math.LongMath;
-import java.util.Arrays;
-
 /**
  * @author jonathan.colt
  */

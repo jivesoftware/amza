@@ -109,7 +109,7 @@ public class IndexUtil {
                     for (int i$ = 0; i$ < len$; ++i$) {
                         Field f = arr$[i$];
                         f.setAccessible(true);
-                        Object x = f.get((Object) null);
+                        Object x = f.get(null);
                         if (k.isInstance(x)) {
                             return (Unsafe) k.cast(x);
                         }
@@ -138,8 +138,8 @@ public class IndexUtil {
 
         int i;
         for (i = 0; i < minWords * 8; i += 8) {
-            long result = theUnsafe.getLong(left, (long) BYTE_ARRAY_BASE_OFFSET + leftOffset + (long) i);
-            long rw = theUnsafe.getLong(right, (long) BYTE_ARRAY_BASE_OFFSET + rightOffset + (long) i);
+            long result = theUnsafe.getLong(left, (long) BYTE_ARRAY_BASE_OFFSET + leftOffset + i);
+            long rw = theUnsafe.getLong(right, (long) BYTE_ARRAY_BASE_OFFSET + rightOffset + i);
             if (result != rw) {
                 if (BIG_ENDIAN) {
                     return UnsignedLongs.compare(result, rw);

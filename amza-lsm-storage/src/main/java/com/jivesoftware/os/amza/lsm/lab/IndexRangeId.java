@@ -65,9 +65,6 @@ public class IndexRangeId implements Comparable<IndexRangeId> {
         if (this.start != other.start) {
             return false;
         }
-        if (this.end != other.end) {
-            return false;
-        }
-        return true;
+        return this.end == other.end;
     }
 }

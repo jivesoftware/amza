@@ -210,7 +210,7 @@ public class LSMPointerIndexWALIndexTest {
         index.rowScan((byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long version, long fp) -> {
             System.out.println(
                 "rowScan "
-                + " " + prefix
+                + " " + Arrays.toString(prefix)
                 + " " + Arrays.toString(key)
                 + " " + timestamp
                 + " " + tombstoned
@@ -229,7 +229,7 @@ public class LSMPointerIndexWALIndexTest {
             (byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long version, long fp) -> {
                 System.out.println(
                     "rangeScan "
-                    + " " + prefix
+                    + " " + Arrays.toString(prefix)
                     + " " + Arrays.toString(key)
                     + " " + timestamp
                     + " " + tombstoned

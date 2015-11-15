@@ -1,17 +1,17 @@
 package com.jivesoftware.os.amza.lsm.pointers;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.lsm.lab.IndexFile;
-import com.jivesoftware.os.amza.lsm.lab.IndexRangeId;
-import com.jivesoftware.os.amza.lsm.lab.IndexUtil;
-import com.jivesoftware.os.amza.lsm.lab.LeapsAndBoundsIndex;
-import com.jivesoftware.os.amza.lsm.lab.MergeableIndexes;
-import com.jivesoftware.os.amza.lsm.lab.RawMemoryIndex;
-import com.jivesoftware.os.amza.lsm.lab.WriteLeapsAndBoundsIndex;
-import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
-import com.jivesoftware.os.amza.lsm.lab.api.ReadIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.Pointers;
+import com.jivesoftware.os.lab.IndexFile;
+import com.jivesoftware.os.lab.IndexRangeId;
+import com.jivesoftware.os.lab.IndexUtil;
+import com.jivesoftware.os.lab.LeapsAndBoundsIndex;
+import com.jivesoftware.os.lab.MergeableIndexes;
+import com.jivesoftware.os.lab.RawMemoryIndex;
+import com.jivesoftware.os.lab.WriteLeapsAndBoundsIndex;
+import com.jivesoftware.os.lab.api.GetRaw;
+import com.jivesoftware.os.lab.api.ReadIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;

@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.lsm.pointers;
 
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.lab.api.GetRaw;
-import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 import com.jivesoftware.os.amza.lsm.pointers.api.ReadPointerIndex.PointerTx;
+import com.jivesoftware.os.lab.api.GetRaw;
+import com.jivesoftware.os.lab.api.NextRawEntry;
 
 /**
  *

@@ -15,6 +15,10 @@
     </properties>
     <dependencies>
         <dependency>
+            <groupId>com.jivesoftware.os.leaps-n-bounds</groupId>
+            <artifactId>leaps-n-bounds</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.jivesoftware.os.mlogger</groupId>
             <artifactId>core</artifactId>
         </dependency>

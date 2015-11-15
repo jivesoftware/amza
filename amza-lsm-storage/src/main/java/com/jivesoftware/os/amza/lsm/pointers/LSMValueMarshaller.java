@@ -1,11 +1,11 @@
 package com.jivesoftware.os.amza.lsm.pointers;
 
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.lsm.lab.api.MergeRawEntry;
 import com.jivesoftware.os.amza.lsm.pointers.api.NextPointer;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import com.jivesoftware.os.lab.api.MergeRawEntry;
+import com.jivesoftware.os.lab.api.NextRawEntry;
 import java.io.IOException;
-import com.jivesoftware.os.amza.lsm.lab.api.NextRawEntry;
 
 /**
  *

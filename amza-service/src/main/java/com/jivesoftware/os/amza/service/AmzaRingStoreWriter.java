@@ -157,10 +157,13 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         return ringStoreReader.isMemberOfRing(ringName);
     }
 
-    public void ensureMaximalSubRing(byte[] ringName) throws Exception {
+    @Override
+    public void ensureMaximalRing(byte[] ringName) throws Exception {
         ensureSubRing(ringName, ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING));
     }
 
+
+    @Override
     public void ensureSubRing(byte[] ringName, int desiredRingSize) throws Exception {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
@@ -172,7 +175,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         }
     }
 
-    public void buildRandomSubRing(byte[] ringName, int desiredRingSize) throws Exception {
+    private void buildRandomSubRing(byte[] ringName, int desiredRingSize) throws Exception {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }

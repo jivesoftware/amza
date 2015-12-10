@@ -13,13 +13,13 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
-import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.aquarium.Liveliness;
@@ -98,12 +98,8 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             byte[] partitionNameBytes = input.partitionName.getBytes();
             if (input.action.equals("add")) {
                 if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
-                    int ringSize = amzaService.getRingReader().getRingSize(ringNameBytes);
-                    int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
-                    if (ringSize < systemRingSize) {
-                        amzaService.getRingWriter().buildRandomSubRing(ringNameBytes, systemRingSize);
-                    }
-
+                    amzaService.getRingWriter().ensureMaximalRing(ringNameBytes);
+                    
                     WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
                         new PrimaryIndexDescriptor(input.indexClassName, 0, false, null),
                         null, 1000, 1000);

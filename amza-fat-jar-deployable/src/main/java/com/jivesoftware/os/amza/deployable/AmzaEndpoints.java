@@ -22,10 +22,9 @@ import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.Partition;
-import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
-import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
@@ -197,12 +196,8 @@ public class AmzaEndpoints {
     Partition createPartitionIfAbsent(String ringName, String indexClassName,
         String simplePartitionName, Consistency consistency, boolean requireConsistency) throws Exception {
 
-        int ringSize = amzaService.getRingReader().getRingSize(ringName.getBytes(StandardCharsets.UTF_8));
-        int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
-        if (ringSize < systemRingSize) {
-            amzaService.getRingWriter().buildRandomSubRing(ringName.getBytes(StandardCharsets.UTF_8), systemRingSize);
-        }
-
+        amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes(StandardCharsets.UTF_8));
+        
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
             new PrimaryIndexDescriptor(indexClassName, 0, false, null),
             null, 1000, 1000);

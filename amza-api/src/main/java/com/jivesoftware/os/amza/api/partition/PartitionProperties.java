@@ -1,9 +1,8 @@
-package com.jivesoftware.os.amza.shared.partition;
+package com.jivesoftware.os.amza.api.partition;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.jivesoftware.os.amza.api.Consistency;
-import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 
 /**
  * @author jonathan.colt

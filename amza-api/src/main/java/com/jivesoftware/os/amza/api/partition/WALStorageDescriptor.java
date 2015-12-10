@@ -1,7 +1,4 @@
-package com.jivesoftware.os.amza.shared.wal;
-
-import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.partition.SecondaryIndexDescriptor;
+package com.jivesoftware.os.amza.api.partition;
 
 /**
  * @author jonathan.colt

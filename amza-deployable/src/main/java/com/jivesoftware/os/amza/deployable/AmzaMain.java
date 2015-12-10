@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
@@ -35,8 +36,8 @@ import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.PartitionProvider;
-import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
@@ -184,7 +185,7 @@ public class AmzaMain {
                 10_000); // TODO expose to conf
 
             AmzaHttpClientProvider clientProvider = new AmzaHttpClientProvider(
-                new PartitionHostsProvider(httpClient),
+                new PartitionHostsProvider(httpClient, mapper),
                 new RingHostHttpClientProvider(httpClient),
                 Executors.newCachedThreadPool(),
                 10_000); //TODO expose to conf
@@ -199,6 +200,7 @@ public class AmzaMain {
             deployable.addInjectables(AmzaInstance.class, amzaService);
             deployable.addEndpoints(AmzaClientRestEndpoints.class);
             deployable.addInjectables(AmzaRingReader.class, amzaService.getRingReader());
+            deployable.addInjectables(AmzaRingWriter.class, amzaService.getRingWriter());
             deployable.addInjectables(PartitionProvider.class, amzaService);
 
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,

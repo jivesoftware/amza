@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.shared.partition;
 
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 

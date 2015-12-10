@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.shared;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 
 /**
@@ -8,6 +9,8 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
  * @author jonathan.colt
  */
 public interface PartitionProvider {
+
+    void setPropertiesIfAbsent(PartitionName partitionName, PartitionProperties partitionProperties) throws Exception;
 
     Partition getPartition(PartitionName partitionName) throws Exception;
 

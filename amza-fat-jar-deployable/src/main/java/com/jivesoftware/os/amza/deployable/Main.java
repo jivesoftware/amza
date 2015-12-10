@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
@@ -37,8 +38,8 @@ import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
 import com.jivesoftware.os.amza.shared.PartitionProvider;
-import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -175,7 +176,7 @@ public class Main {
             10_000); //TODO expose to conf
 
         AmzaHttpClientProvider clientProvider = new AmzaHttpClientProvider(
-            new PartitionHostsProvider(httpClient),
+            new PartitionHostsProvider(httpClient, mapper),
             new RingHostHttpClientProvider(httpClient),
             Executors.newCachedThreadPool(),
             10_000); //TODO expose to conf
@@ -188,6 +189,7 @@ public class Main {
             .addInjectable(AmzaStats.class, amzaStats)
             .addEndpoint(AmzaClientRestEndpoints.class)
             .addInjectable(AmzaRingReader.class, amzaService.getRingReader())
+            .addInjectable(AmzaRingWriter.class, amzaService.getRingWriter())
             .addInjectable(PartitionProvider.class, amzaService);
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, new AmzaUIInitializer.InjectionCallback() {

@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import java.io.IOException;
 
 /**

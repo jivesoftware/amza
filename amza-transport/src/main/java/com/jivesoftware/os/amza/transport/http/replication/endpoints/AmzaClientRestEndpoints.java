@@ -17,9 +17,11 @@ package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
+import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -27,11 +29,11 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.Partition;
 import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -60,12 +62,15 @@ public class AmzaClientRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRingReader ringReader;
+    private final AmzaRingWriter ringWriter;
     private final PartitionProvider partitionProvider;
     private final ExecutorService chunkExecutors = Executors.newCachedThreadPool(); // TODO config!!!
 
     public AmzaClientRestEndpoints(@Context AmzaRingReader ringReader,
+        @Context AmzaRingWriter ringWriter,
         @Context PartitionProvider partitionProvider) {
         this.ringReader = ringReader;
+        this.ringWriter = ringWriter;
         this.partitionProvider = partitionProvider;
     }
 
@@ -91,6 +96,36 @@ public class AmzaClientRestEndpoints {
             }
         }
         return null;
+    }
+
+    @POST
+    //@Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/ensurePartition/{base64PartitionName}/{ringSize}/{waitForLeaderElection}")
+    public Object ensurePartition(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("ringSize") int ringSize,
+        @PathParam("waitForLeaderElection") long waitForLeaderElection,
+        PartitionProperties partitionProperties) {
+
+        try {
+            PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+            byte[] ringNameBytes = partitionName.getRingName();
+            RingTopology ringTopology = ringReader.getRing(ringNameBytes);
+            if (ringTopology.entries.isEmpty()) {
+                ringWriter.ensureSubRing("default".getBytes(), ringSize);
+            }
+            partitionProvider.setPropertiesIfAbsent(partitionName, partitionProperties);
+
+            long start = System.currentTimeMillis();
+            partitionProvider.awaitOnline(partitionName, waitForLeaderElection);
+            waitForLeaderElection = Math.max(0, waitForLeaderElection - (System.currentTimeMillis() - start));
+            partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
+            return Response.ok().build();
+        } catch (TimeoutException e) {
+            return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
+        } catch (Exception e) {
+            return Response.serverError().build();
+        }
     }
 
     @POST
@@ -179,7 +214,7 @@ public class AmzaClientRestEndpoints {
         } catch (DeltaOverCapacityException x) {
             LOG.info("Delta over capacity for {}", base64PartitionName);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "Delta over capacity");
-        } catch(FailedToAchieveQuorumException x) {
+        } catch (FailedToAchieveQuorumException x) {
             LOG.info("FailedToAchieveQuorumException for {}", base64PartitionName);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.ACCEPTED, "Failed to achieve quorum exception");
         } catch (Exception x) {

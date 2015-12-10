@@ -305,19 +305,18 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                     LOG.info("Merged {}", answers.size());
                     return true;
 
-                } else {
-                    for (FilerInputStream fis : streams) {
-                        while (!UIO.readBoolean(fis, "eos")) {
-                            if (!stream.stream(UIO.readByteArray(fis, "prefix", intLongBuffer),
-                                UIO.readByteArray(fis, "key", intLongBuffer),
-                                UIO.readByteArray(fis, "value", intLongBuffer),
-                                UIO.readLong(fis, "timestampId", intLongBuffer),
-                                UIO.readLong(fis, "version", intLongBuffer))) {
-                                return false;
-                            }
+                } else if (size == 1) {
+                    FilerInputStream fis = streams.get(0);
+                    while (!UIO.readBoolean(fis, "eos")) {
+                        if (!stream.stream(UIO.readByteArray(fis, "prefix", intLongBuffer),
+                            UIO.readByteArray(fis, "key", intLongBuffer),
+                            UIO.readByteArray(fis, "value", intLongBuffer),
+                            UIO.readLong(fis, "timestampId", intLongBuffer),
+                            UIO.readLong(fis, "version", intLongBuffer))) {
+                            return false;
                         }
-                        return true;
                     }
+                    return true;
                 }
                 throw new RuntimeException("Failed to scan.");
             },
@@ -351,10 +350,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
             },
             (answers) -> {
                 List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
-                for (FilerInputStream fis : streams) {
-                    return take(fis, highwaters, stream, intLongBuffer);
+                if (streams.isEmpty()) {
+                    throw new RuntimeException("Failed to takeFromTransactionId.");
                 }
-                throw new RuntimeException("Failed to takePrefixFromTransactionId.");
+                return take(streams.get(0), highwaters, stream, intLongBuffer);
             },
             awaitLeaderElectionForNMillis,
             additionalSolverAfterNMillis,
@@ -386,10 +385,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
             },
             (answers) -> {
                 List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
-                for (FilerInputStream fis : streams) {
-                    return take(fis, highwaters, stream, intLongBuffer);
+                if (streams.isEmpty()) {
+                    throw new RuntimeException("Failed to takePrefixFromTransactionId.");
                 }
-                throw new RuntimeException("Failed to takePrefixFromTransactionId.");
+                return take(streams.get(0), highwaters, stream, intLongBuffer);
             },
             awaitLeaderElectionForNMillis,
             additionalSolverAfterNMillis,

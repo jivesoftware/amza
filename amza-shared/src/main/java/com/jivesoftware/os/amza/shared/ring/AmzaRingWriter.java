@@ -8,6 +8,10 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
  */
 public interface AmzaRingWriter {
 
+    void ensureMaximalRing(byte[] ringName) throws Exception;
+
+    void ensureSubRing(byte[] ringName, int desiredRingSize) throws Exception;
+
     void deregister(RingMember ringMember) throws Exception;
 
     void register(RingMember ringMember, RingHost ringHost, long timestampId) throws Exception;

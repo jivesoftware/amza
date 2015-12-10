@@ -8,14 +8,12 @@ import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.client.http.exceptions.NotSolveableException;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.EmbeddedPartitionClient;
-import com.jivesoftware.os.amza.shared.partition.PartitionProperties;
-import com.jivesoftware.os.amza.shared.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.RingTopology;
-import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -68,6 +66,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         final int maxUpdatesBetweenCompactionHintMarker;
         final int maxUpdatesBetweenIndexCommitMarker;
         final String regionPrefix;
+        final int ringSize;
         final int numBatches;
         final int batchSize;
         final int numPartitions;
@@ -84,6 +83,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             int maxUpdatesBetweenCompactionHintMarker,
             int maxUpdatesBetweenIndexCommitMarker,
             String regionPrefix,
+            int ringSize,
             int numBatches,
             int batchSize,
             int numPartitions,
@@ -99,6 +99,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
             this.maxUpdatesBetweenIndexCommitMarker = maxUpdatesBetweenIndexCommitMarker;
             this.regionPrefix = regionPrefix;
+            this.ringSize = ringSize;
             this.numBatches = numBatches;
             this.batchSize = batchSize;
             this.numPartitions = numPartitions;
@@ -205,6 +206,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                         input.maxUpdatesBetweenCompactionHintMarker,
                         input.maxUpdatesBetweenIndexCommitMarker,
                         regionName,
+                        input.ringSize,
                         Consistency.valueOf(input.consistency),
                         input.requireConsistency,
                         j,
@@ -221,6 +223,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             private final int maxUpdatesBetweenCompactionHintMarker;
             private final int maxUpdatesBetweenIndexCommitMarker;
             private final String regionName;
+            private final int ringSize;
             private final Consistency consistency;
             private final boolean requireConsistency;
             private final int threadIndex;
@@ -231,6 +234,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 int maxUpdatesBetweenCompactionHintMarker,
                 int maxUpdatesBetweenIndexCommitMarker,
                 String regionName,
+                int ringSize,
                 Consistency consistency,
                 boolean requireConsistency,
                 int threadIndex,
@@ -240,6 +244,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
                 this.maxUpdatesBetweenIndexCommitMarker = maxUpdatesBetweenIndexCommitMarker;
                 this.regionName = regionName;
+                this.ringSize = ringSize;
                 this.consistency = consistency;
                 this.requireConsistency = requireConsistency;
                 this.threadIndex = threadIndex;
@@ -252,7 +257,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                     int b = batch.incrementAndGet();
                     if (b <= input.numBatches && !forcedStop.get()) {
                         feed(client, indexClassName, maxUpdatesBetweenCompactionHintMarker, maxUpdatesBetweenIndexCommitMarker,
-                            regionName, consistency, requireConsistency, b, threadIndex);
+                            regionName, ringSize, consistency, requireConsistency, b, threadIndex);
                         executor.submit(this);
                     } else {
                         completed();
@@ -280,16 +285,19 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             int maxUpdatesBetweenCompactionHintMarker,
             int maxUpdatesBetweenIndexCommitMarker,
             String regionName,
+            int ringSize,
             Consistency consistency,
             boolean requireConsistency,
-            int batch, int threadIndex) throws Exception {
+            int batch,
+            int threadIndex) throws Exception {
             PartitionClient partition = createPartitionIfAbsent(client,
                 indexClassName,
                 maxUpdatesBetweenCompactionHintMarker,
                 maxUpdatesBetweenIndexCommitMarker,
                 regionName,
                 consistency,
-                requireConsistency);
+                requireConsistency,
+                ringSize);
 
             while (true) {
                 try {
@@ -338,35 +346,43 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         int maxUpdatesBetweenIndexCommitMarker,
         String simplePartitionName,
         Consistency consistency,
-        boolean requireConsistency) throws Exception {
+        boolean requireConsistency,
+        int ringSize) throws Exception {
 
-        RingTopology ring = amzaService.getRingReader().getRing("default".getBytes());
-        if (ring.entries.isEmpty()) {
-            amzaService.getRingWriter().buildRandomSubRing("default".getBytes(), amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING));
+        if (ringSize < 1) {
+            amzaService.getRingWriter().ensureMaximalRing("default".getBytes());
+        } else {
+            amzaService.getRingWriter().ensureSubRing("default".getBytes(), ringSize);
+
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
             new PrimaryIndexDescriptor(indexClassName, 0, false, null),
             null, maxUpdatesBetweenCompactionHintMarker, maxUpdatesBetweenIndexCommitMarker);
-
-        PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, requireConsistency, 2, false));
-
+        PartitionProperties partitionProperties = new PartitionProperties(storageDescriptor, consistency, requireConsistency, 2, false);
         long timeoutMillis = 10_000;
-        while (true) {
-            try {
-                amzaService.awaitOnline(partitionName, timeoutMillis);
-                amzaService.awaitLeader(partitionName, timeoutMillis);
-                break;
-            } catch (TimeoutException te) {
-                LOG.warn("{} failed to come online in {}", partitionName, timeoutMillis);
-            }
-        }
+        PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
 
         if (client) {
-            return partitionClientProvider.getPartition(partitionName);
+            while (true) {
+                try {
+                    return partitionClientProvider.getPartition(partitionName, ringSize, partitionProperties, timeoutMillis);
+                } catch (Exception x) {
+                    LOG.warn("{} failed to come online in {}", partitionName, timeoutMillis);
+                }
+            }
         } else {
-            return new EmbeddedPartitionClient(amzaService.getPartition(partitionName), amzaService.getRingReader().getRingMember());
+            amzaService.setPropertiesIfAbsent(partitionName, partitionProperties);
+
+            while (true) {
+                try {
+                    amzaService.awaitOnline(partitionName, timeoutMillis);
+                    amzaService.awaitLeader(partitionName, timeoutMillis);
+                    return new EmbeddedPartitionClient(amzaService.getPartition(partitionName), amzaService.getRingReader().getRingMember());
+                } catch (TimeoutException te) {
+                    LOG.warn("{} failed to come online in {}", partitionName, timeoutMillis);
+                }
+            }
         }
     }
 

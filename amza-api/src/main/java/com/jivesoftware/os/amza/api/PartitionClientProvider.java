@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.api;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 
 /**
  *
@@ -9,4 +10,9 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 public interface PartitionClientProvider {
 
     PartitionClient getPartition(PartitionName partitionName) throws Exception;
+
+    PartitionClient getPartition(PartitionName partitionName,
+        int ringSize,
+        PartitionProperties partitionProperties,
+        long waitInMillis) throws Exception;
 }

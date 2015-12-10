@@ -1,14 +1,17 @@
 package com.jivesoftware.os.amza.client.http;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.routing.bird.http.client.ConnectionDescriptorSelectiveStrategy;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
+import com.jivesoftware.os.routing.bird.http.client.HttpResponse;
 import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import com.jivesoftware.os.routing.bird.http.client.RoundRobinStrategy;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
@@ -27,19 +30,37 @@ import java.util.Random;
 public class PartitionHostsProvider {
 
     private final TenantAwareHttpClient<String> tenantAwareHttpClient;
+    private final ObjectMapper mapper;
 
     private final RoundRobinStrategy roundRobinStrategy = new RoundRobinStrategy();
 
-    public PartitionHostsProvider(TenantAwareHttpClient<String> tenantAwareHttpClient) {
+    public PartitionHostsProvider(TenantAwareHttpClient<String> tenantAwareHttpClient, ObjectMapper mapper) {
         this.tenantAwareHttpClient = tenantAwareHttpClient;
+        this.mapper = mapper;
+    }
+
+    void ensurePartition(PartitionName partitionName, int ringSize, PartitionProperties partitionProperties, long waitInMillis) throws Exception {
+        String base64PartitionName = partitionName.toBase64();
+        String partitionPropertiesString = mapper.writeValueAsString(partitionProperties);
+
+        tenantAwareHttpClient.call("", roundRobinStrategy, "ensurePartition", (client) -> {
+
+            HttpResponse got = client.postJson("/amza/v1/ensurePartition/" + base64PartitionName + "/" + ringSize + "/" + waitInMillis,
+                partitionPropertiesString, null);
+
+            if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
+                return new ClientCall.ClientResponse<>(null, true);
+            }
+            throw new RuntimeException("Failed to ensure partition:" + partitionName);
+        });
     }
 
     Ring getPartitionHosts(PartitionName partitionName, Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws HttpClientException {
 
         NextClientStrategy strategy = useHost.map(
-            (RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
-                new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
-            })).orElse(roundRobinStrategy);
+            (RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[]{
+            new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
+        })).orElse(roundRobinStrategy);
         byte[] intBuffer = new byte[4];
         return tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 

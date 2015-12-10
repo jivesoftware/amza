@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.shared.partition;
+package com.jivesoftware.os.amza.api.partition;
 
 import java.util.Map;
 

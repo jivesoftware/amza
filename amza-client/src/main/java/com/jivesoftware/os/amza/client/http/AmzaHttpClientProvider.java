@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.client.http;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -31,9 +32,23 @@ public class AmzaHttpClientProvider implements PartitionClientProvider {
 
     @Override
     public PartitionClient getPartition(PartitionName partitionName) throws Exception {
+        AmzaHttpPartitionClient got = cache.get(partitionName);
+        if (got != null) {
+            return got;
+        }
+        AmzaHttpClientCallRouter partitionCallRouter = new AmzaHttpClientCallRouter(callerThreads, partitionHostsProvider, clientProvider);
+        return new AmzaHttpPartitionClient(partitionName, partitionCallRouter, awaitLeaderElectionForNMillis);
+    }
+
+    @Override
+    public PartitionClient getPartition(PartitionName partitionName,
+        int ringSize,
+        PartitionProperties partitionProperties,
+        long waitInMillis) throws Exception {
 
         return cache.computeIfAbsent(partitionName, (key) -> {
             try {
+                partitionHostsProvider.ensurePartition(partitionName, ringSize, partitionProperties, waitInMillis);
                 AmzaHttpClientCallRouter partitionCallRouter = new AmzaHttpClientCallRouter(callerThreads, partitionHostsProvider, clientProvider);
                 return new AmzaHttpPartitionClient(key, partitionCallRouter, awaitLeaderElectionForNMillis);
             } catch (Exception x) {
@@ -41,5 +56,4 @@ public class AmzaHttpClientProvider implements PartitionClientProvider {
             }
         });
     }
-
 }

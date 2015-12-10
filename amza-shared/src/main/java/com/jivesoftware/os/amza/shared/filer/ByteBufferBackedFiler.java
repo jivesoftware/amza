@@ -102,16 +102,6 @@ public class ByteBufferBackedFiler implements IFiler {
     }
 
     @Override
-    public void write(int b) throws IOException {
-        buffer.put((byte) b);
-    }
-
-    @Override
-    public void write(byte[] b) throws IOException {
-        buffer.put(b);
-    }
-
-    @Override
     public void write(byte[] b, int _offset, int _len) throws IOException {
         buffer.put(b, _offset, _len);
     }

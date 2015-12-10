@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service.storage.filer;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.shared.filer.AutoGrowingByteBufferBackedFiler;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -71,19 +70,6 @@ public class MemoryBackedWALFiler implements WALFiler, IReadable, IWriteable {
     @Override
     public long getFilePointer() throws IOException {
         return filer.getFilePointer();
-    }
-
-    @Override
-    public void write(int b) throws IOException {
-        filer.write(b);
-        size.incrementAndGet();
-
-    }
-
-    @Override
-    public void write(byte[] b) throws IOException {
-        filer.write(b);
-        size.addAndGet(b.length);
     }
 
     @Override

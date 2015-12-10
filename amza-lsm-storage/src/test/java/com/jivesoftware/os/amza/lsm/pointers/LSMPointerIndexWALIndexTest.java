@@ -1,10 +1,11 @@
-package com.jivesoftware.os.amza.lsm;
+package com.jivesoftware.os.amza.lsm.pointers;
 
 import com.google.common.io.Files;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeyStream;
 import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
 import java.io.File;
@@ -25,42 +26,147 @@ public class LSMPointerIndexWALIndexTest {
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "r1".getBytes(), "t1".getBytes()),
             VersionedPartitionName.STATIC_VERSION);
         LSMPointerIndexWALIndex index = getIndex(dir0, partitionName);
-        index.merge(stream -> stream.stream(1L, UIO.longBytes(-1), UIO.longBytes(1), System.currentTimeMillis(), false, Long.MAX_VALUE, 1L),
+        index.merge(stream -> stream.stream(0L, UIO.longBytes(0), UIO.longBytes(0), System.currentTimeMillis(), false, Long.MAX_VALUE, 0L),
+            null);
+        index.merge(stream -> stream.stream(1L, UIO.longBytes(1), UIO.longBytes(1), System.currentTimeMillis(), false, Long.MAX_VALUE, 1L),
             null);
 
-        index.getPointer(UIO.longBytes(-1), UIO.longBytes(1), (prefix, key, timestamp, tombstoned, version, fp) -> {
+        index.getPointer(UIO.longBytes(1), UIO.longBytes(1), (prefix, key, timestamp, tombstoned, version, fp) -> {
             assertEquals(fp, 1);
             return true;
         });
 
+        Assert.assertFalse(index.isEmpty());
+        index.commit();
         index.close();
 
+        
         // reopen
         index = getIndex(dir0, partitionName);
-        index.merge(stream -> stream.stream(2L, UIO.longBytes(-2), UIO.longBytes(2), System.currentTimeMillis(), false, Long.MAX_VALUE, 2L),
+        Assert.assertFalse(index.isEmpty());
+
+
+        index.merge(stream -> stream.stream(2L, UIO.longBytes(2), UIO.longBytes(2), System.currentTimeMillis(), false, Long.MAX_VALUE, 2L),
             null);
-        index.getPointer(UIO.longBytes(-2), UIO.longBytes(2), (prefix, key, timestamp, tombstoned, version, fp) -> {
+        index.getPointer(UIO.longBytes(2), UIO.longBytes(2), (prefix, key, timestamp, tombstoned, version, fp) -> {
             assertEquals(fp, 2);
             return true;
         });
 
+        index.commit();
+        index.close();
+
+        // reopen
+        index = getIndex(dir0, partitionName);
+        Assert.assertFalse(index.isEmpty());
+
         index.merge((TxKeyPointerStream stream) -> {
-            for (long i = 0; i < 100; i++) {
-                if (!stream.stream(i, UIO.longBytes(-i), UIO.longBytes(i), System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
+            for (long i = 3; i < 100; i++) {
+                if (!stream.stream(i, UIO.longBytes(i), UIO.longBytes(i), System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
                     return false;
                 }
             }
             return true;
         }, null);
 
+        testPutAsserts(index);
+
+        index.commit();
+
+        testPutAsserts(index);
+
+    }
+
+    private void testPutAsserts(LSMPointerIndexWALIndex index) throws Exception {
+        // one at a time get
         for (long i = 0; i < 100; i++) {
             long expected = i;
-            index.getPointer(UIO.longBytes(-i), UIO.longBytes(i), (prefix, key, timestamp, tombstoned, version, fp) -> {
+            index.getPointer(UIO.longBytes(i), UIO.longBytes(i), (prefix, key, timestamp, tombstoned, version, fp) -> {
                 assertEquals(fp, expected);
                 return true;
             });
-
         }
+
+        index.getPointers(UIO.longBytes(10), (UnprefixedWALKeyStream keyStream) -> {
+            keyStream.stream(UIO.longBytes(10));
+            return true;
+        }, (prefix, key, timestamp, tombstoned, version, fp) -> {
+            Assert.assertTrue(fp != -1);
+            return true;
+        });
+
+        index.getPointers((stream) -> {
+            for (long i = 0; i < 100; i++) {
+                stream.stream(UIO.longBytes(i), UIO.longBytes(i), null, 0, false, 0);
+            }
+            return true;
+        }, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
+
+            System.out.println(
+                "getPointers "
+                + " " + Long.toString(UIO.bytesLong(prefix), 2)
+                + " " + Long.toString(UIO.bytesLong(key), 2)
+                + " " + pointerTimestamp
+                + " " + pointerTombstoned
+                + " " + pointerVersion
+                + " " + pointerFp);
+
+            Assert.assertTrue(pointerFp != -1);
+            return true;
+        });
+
+        // contains
+        index.containsKeys(UIO.longBytes(1000), (UnprefixedWALKeyStream keyStream) -> {
+            keyStream.stream(UIO.longBytes(10000));
+            keyStream.stream(UIO.longBytes(10001));
+            keyStream.stream(UIO.longBytes(10002));
+            return true;
+        }, (byte[] prefix, byte[] key, boolean contained) -> {
+            Assert.assertFalse(contained);
+            return true;
+        });
+
+        index.containsKeys(UIO.longBytes(10), (UnprefixedWALKeyStream keyStream) -> {
+            keyStream.stream(UIO.longBytes(10));
+            return true;
+        }, (byte[] prefix, byte[] key, boolean contained) -> {
+            Assert.assertTrue(contained);
+            return true;
+        });
+
+        int[] rowScanExpectedI = new int[]{0};
+        index.rowScan((byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long version, long fp) -> {
+            System.out.println(
+                "rowScan "
+                + " " + Long.toString(UIO.bytesLong(prefix), 2)
+                + " " + Long.toString(UIO.bytesLong(key), 2)
+                + " " + timestamp
+                + " " + tombstoned
+                + " " + version
+                + " " + fp);
+
+            assertEquals(rowScanExpectedI[0], UIO.bytesLong(key));
+            rowScanExpectedI[0]++;
+            return true;
+        });
+
+        int[] rangeScaneExpectedI = new int[]{10};
+        index.rangeScan(UIO.longBytes(10), UIO.longBytes(10), UIO.longBytes(20), UIO.longBytes(20),
+            (byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long version, long fp) -> {
+                System.out.println(
+                    "rangeScan "
+                    + " " + Long.toString(UIO.bytesLong(prefix), 2)
+                    + " " + Long.toString(UIO.bytesLong(key), 2)
+                    + " " + timestamp
+                    + " " + tombstoned
+                    + " " + version
+                    + " " + fp);
+
+                Assert.assertTrue(rangeScaneExpectedI[0] < 20);
+                assertEquals(rangeScaneExpectedI[0], UIO.bytesLong(key));
+                rangeScaneExpectedI[0]++;
+                return true;
+            });
     }
 
     @Test
@@ -73,14 +179,21 @@ public class LSMPointerIndexWALIndexTest {
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 0; i < 64; i++) {
-                byte[] key = {0, (byte) (i % 4), (byte) (i % 2), (byte) i};
-                if (!stream.stream(i, null, key, System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
+                if (!stream.stream(i, null, iToKey(i), System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
                     return false;
                 }
             }
             return true;
         }, null);
 
+        testRangeAsserts(index);
+
+        index.commit();
+
+        testRangeAsserts(index);
+    }
+
+    private void testRangeAsserts(LSMPointerIndexWALIndex index) throws Exception {
         int[] count = new int[1];
         byte[] fromKey = {0, 1, 0, 0};
         byte[] toKey = {0, 2, 0, 0};
@@ -92,6 +205,46 @@ public class LSMPointerIndexWALIndexTest {
             return true;
         });
         Assert.assertEquals(count[0], 16);
+
+        int[] rowScanExpectedI = new int[]{0};
+        index.rowScan((byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long version, long fp) -> {
+            System.out.println(
+                "rowScan "
+                + " " + Arrays.toString(prefix)
+                + " " + Arrays.toString(key)
+                + " " + timestamp
+                + " " + tombstoned
+                + " " + version
+                + " " + fp);
+
+            //assertEquals(iToKey(rowScanExpectedI[0]), key);
+            rowScanExpectedI[0]++;
+            return true;
+        });
+
+        Assert.assertTrue(rowScanExpectedI[0] == 64);
+
+        int[] rangeScaneExpectedI = new int[]{8};
+        index.rangeScan(null, iToKey(8), null, iToKey(32),
+            (byte[] prefix, byte[] key, long timestamp, boolean tombstoned, long version, long fp) -> {
+                System.out.println(
+                    "rangeScan "
+                    + " " + Arrays.toString(prefix)
+                    + " " + Arrays.toString(key)
+                    + " " + timestamp
+                    + " " + tombstoned
+                    + " " + version
+                    + " " + fp);
+
+                Assert.assertTrue(rangeScaneExpectedI[0] < 32);
+                assertEquals(iToKey(rangeScaneExpectedI[0]), key);
+                rangeScaneExpectedI[0] += 4;
+                return true;
+            });
+    }
+
+    byte[] iToKey(long i) {
+        return new byte[]{0, (byte) (i % 4), (byte) (i % 2), (byte) i};
     }
 
     @Test
@@ -113,6 +266,15 @@ public class LSMPointerIndexWALIndexTest {
             return true;
         }, null);
 
+        testRangesPrefixedAsserts(index);
+
+        index.commit();
+
+        testRangesPrefixedAsserts(index);
+
+    }
+
+    private void testRangesPrefixedAsserts(LSMPointerIndexWALIndex index) throws Exception {
         int[] count = new int[1];
         byte[] fromPrefix = {0, 1};
         byte[] toPrefix = {0, 2};
@@ -145,6 +307,13 @@ public class LSMPointerIndexWALIndexTest {
             return true;
         }, null);
 
+        testTakePrefixedAsserts(index);
+        index.commit();
+        testTakePrefixedAsserts(index);
+
+    }
+
+    private void testTakePrefixedAsserts(LSMPointerIndexWALIndex index) throws Exception {
         int[] count = new int[1];
         byte[] prefix = {0, 1};
         index.takePrefixUpdatesSince(prefix, 0, (txId, fp) -> {
@@ -203,7 +372,7 @@ public class LSMPointerIndexWALIndexTest {
     }
 
     private LSMPointerIndexWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
-        return new LSMPointerIndexWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
+        return new LSMPointerIndexWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName, 10_000);
     }
 
 }

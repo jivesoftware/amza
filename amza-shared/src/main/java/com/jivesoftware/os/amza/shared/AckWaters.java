@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.shared;
 
+import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;

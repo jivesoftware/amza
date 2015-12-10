@@ -7,79 +7,6 @@
  */
 {template .amzaStressPluginRegion}
     <div class="panel panel-default">
-        <div class="panel-heading"><span class="glyphicon glyphicon-scale"></span>{sp}Stress</div>
-        <div class="panel-body">
-
-            <form id="add-stress" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
-                        method="post" name="addStress">
-
-                <table class="table table-condensed">
-                        <tr><td>Name</td><td>
-                            <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                class="form-control" placeholder="Name" value=""
-                                name="name" id="namePicker" data-original-title="" title="">
-                        </td></tr>
-                        <tr><td>Client</td><td>
-                            <input type="checkbox" autocomplete="off" style="padding-left:10px;"
-                                class="form-control" placeholder="Client" value="true"
-                                name="client" id="clientPicker" data-original-title="" title="">
-                        </td></tr>
-                        <tr><td>Region Prefix</td><td>
-                            <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
-                                class="form-control" placeholder="Region Prefix" value=""
-                                name="regionPrefix" id="regionPrefixPicker" title="">
-                        </td></tr>
-                        <tr><td>Number of Batches</td><td>
-                            <input type="number" name="numBatches" min="1" style="padding-left:10px;"
-                                class="form-control" placeholder="Number of Batches" value="" 
-                                data-original-title="" title="">
-                        </td></tr>
-                        <tr><td>Batch Size</td><td>
-                            <input type="number" name="batchSize" min="1" style="padding-left:10px;"
-                                class="form-control" placeholder="Batch Size" value="100" 
-                                data-original-title="" title="">
-                        </td></tr>
-                        <tr><td>Number of Partitions</td><td>
-                            <input type="number" name="numPartitions" min="1" style="padding-left:10px;"
-                                class="form-control" placeholder="Number of Partitions" value="1" 
-                                data-original-title="" title="">
-                        </td></tr>
-                        <tr><td>Threads Per Region</td><td>
-                            <input type="number" name="numThreadsPerRegion" min="1" style="padding-left:10px;"
-                                class="form-control" placeholder="Threads Per Region" value="1"
-                                data-original-title="" title="">
-                        </td></tr>
-                        <tr><td>Key Prefixes</td><td>
-                            <input type="number" name="numKeyPrefixes" min="0" style="padding-left:10px;"
-                                class="form-control" placeholder="Key Prefixes" value="1"
-                                data-original-title="" title="">
-                        </td></tr>
-                        <tr><td>Consistency</td><td>
-                            <select style="width:120px; padding-left:10px;" class="form-control"
-                                placeholder="Consistency" name="consistency" id="consistencyPicker">
-                                <option value="none" selected="selected">None</option>
-                                <option value="leader">Leader</option>
-                                <option value="leader_plus_one">Leader Plus One</option>
-                                <option value="leader_quorum">Leader Quorum</option>
-                                <option value="quorum">Quorum</option>
-                                <option value="write_all_read_one">Write All Read One</option>
-                                <option value="write_one_read_all">Write One Read All</option>
-                            </select>
-                        </td></tr>
-                        <tr><td>Require Consistency</td><td>
-                            <input type="text" name="requireConsistency" style="padding-left:10px;"
-                                class="form-control" placeholder="Require Consistency" value="true" title="">
-                        </td></tr>
-                        <tr><td>Ordered Insertion</td><td>
-                            <input type="text" name="orderedInsertion" style="padding-left:10px;"
-                                class="form-control" placeholder="Ordered Insertion" value="false" title="">
-                        </td></tr>
-                        <tr><td></td><td><button title="Start" type="submit" name="action" value="start" class="btn btn-default"><span class="glyphicon glyphicon-play"></span>Start Stress Test</button></td></tr>
-                </table>
-            </form>
-        </div>
-    </div>
-    <div class="panel panel-default">
         <div class="panel-heading"><span class="glyphicon glyphicon-scale"></span>{sp}Runs</div>
         <div class="panel-body">
             <table class="table table-condensed">
@@ -133,6 +60,32 @@
                         {/foreach}
                     {/if}
                 </tr>
+
+                <tr><td>Index Type</td>
+                    {if $stress}
+                        {foreach $s in $stress}
+                            <td>{$s.indexClassName}</td>
+                        {/foreach}
+                    {/if}
+                </tr>
+
+                <tr><td>Compaction Hint Frequency</td>
+                    {if $stress}
+                        {foreach $s in $stress}
+                            <td>{$s.maxUpdatesBetweenCompactionHintMarker}</td>
+                        {/foreach}
+                    {/if}
+                </tr>
+
+                <tr><td>Index Commit Frequency</td>
+                    {if $stress}
+                        {foreach $s in $stress}
+                            <td>{$s.maxUpdatesBetweenIndexCommitMarker}</td>
+                        {/foreach}
+                    {/if}
+                </tr>
+
+
                 <tr><td>Region Prefix</td>
                     {if $stress}
                         {foreach $s in $stress}
@@ -192,4 +145,99 @@
             </table>
         </div>
     </div>
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-scale"></span>{sp}Stress</div>
+        <div class="panel-body">
+
+            <form id="add-stress" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
+                        method="post" name="addStress">
+
+                <table class="table table-condensed">
+                        <tr><td>Name</td><td>
+                            <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                class="form-control" placeholder="Name" value=""
+                                name="name" id="namePicker" data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Client</td><td>
+                            <input type="checkbox" autocomplete="off" style="padding-left:10px;"
+                                class="form-control" placeholder="Client" value="true"
+                                name="client" id="clientPicker" data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Index Type</td><td>
+                            <select style="width:120px; padding-left:10px;" class="form-control"
+                                placeholder="Index Type" name="indexClassName" id="indexClassNamePicker">
+                                <option value="berkeleydb" selected="selected">berkeleydb</option>
+                                <option value="lsmpointerindex">lsmpointerindex</option>
+                                <option value="memory_ephemeral">memory_ephemeral</option>
+                                <option value="memory_persistent">memory_persistent</option>
+                                <option value="noop_persistent">memory_ephemeral</option>
+                            </select>
+                        </td></tr>
+                        <tr><td>Compaction Hint Frequency</td><td>
+                            <input type="number" name="maxUpdatesBetweenCompactionHintMarker" min="1" style="padding-left:10px;"
+                                class="form-control" placeholder="maxUpdatesBetweenCompactionHintMarker" value="1000"
+                                data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Index Commit Frequency</td><td>
+                            <input type="number" name="maxUpdatesBetweenIndexCommitMarker" min="1" style="padding-left:10px;"
+                                class="form-control" placeholder="maxUpdatesBetweenIndexCommitMarker" value="1000"
+                                data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Region Prefix</td><td>
+                            <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                class="form-control" placeholder="Region Prefix" value=""
+                                name="regionPrefix" id="regionPrefixPicker" title="">
+                        </td></tr>
+                        <tr><td>Number of Batches</td><td>
+                            <input type="number" name="numBatches" min="1" style="padding-left:10px;"
+                                class="form-control" placeholder="Number of Batches" value="" 
+                                data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Batch Size</td><td>
+                            <input type="number" name="batchSize" min="1" style="padding-left:10px;"
+                                class="form-control" placeholder="Batch Size" value="100" 
+                                data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Number of Partitions</td><td>
+                            <input type="number" name="numPartitions" min="1" style="padding-left:10px;"
+                                class="form-control" placeholder="Number of Partitions" value="1" 
+                                data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Threads Per Region</td><td>
+                            <input type="number" name="numThreadsPerRegion" min="1" style="padding-left:10px;"
+                                class="form-control" placeholder="Threads Per Region" value="1"
+                                data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Key Prefixes</td><td>
+                            <input type="number" name="numKeyPrefixes" min="0" style="padding-left:10px;"
+                                class="form-control" placeholder="Key Prefixes" value="1"
+                                data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Consistency</td><td>
+                            <select style="width:120px; padding-left:10px;" class="form-control"
+                                placeholder="Consistency" name="consistency" id="consistencyPicker">
+                                <option value="none" selected="selected">None</option>
+                                <option value="leader">Leader</option>
+                                <option value="leader_plus_one">Leader Plus One</option>
+                                <option value="leader_quorum">Leader Quorum</option>
+                                <option value="quorum">Quorum</option>
+                                <option value="write_all_read_one">Write All Read One</option>
+                                <option value="write_one_read_all">Write One Read All</option>
+                            </select>
+                        </td></tr>
+                        <tr><td>Require Consistency</td><td>
+                            <input type="text" name="requireConsistency" style="padding-left:10px;"
+                                class="form-control" placeholder="Require Consistency" value="true" title="">
+                        </td></tr>
+                        <tr><td>Ordered Insertion</td><td>
+                            <input type="text" name="orderedInsertion" style="padding-left:10px;"
+                                class="form-control" placeholder="Ordered Insertion" value="false" title="">
+                        </td></tr>
+                        <tr><td></td><td><button title="Start" type="submit" name="action" value="start" class="btn btn-default"><span class="glyphicon glyphicon-play"></span>Start Stress Test</button></td></tr>
+                </table>
+            </form>
+        </div>
+    </div>
+    
 {/template}

@@ -3,7 +3,6 @@ package com.jivesoftware.os.amza.service;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
-import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;

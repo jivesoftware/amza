@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.shared.ring;
 
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *

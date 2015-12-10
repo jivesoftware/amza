@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import java.io.IOException;
 import java.util.List;
 
 /**

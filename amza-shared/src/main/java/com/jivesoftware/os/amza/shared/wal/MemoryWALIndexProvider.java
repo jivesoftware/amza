@@ -9,7 +9,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 public class MemoryWALIndexProvider implements WALIndexProvider<MemoryWALIndex> {
 
     @Override
-    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         return new MemoryWALIndex();
     }
 

@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.128</version>
+        <version>0.129</version>
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -39,7 +39,6 @@
         <dependency>
             <groupId>javax.inject</groupId>
             <artifactId>javax.inject</artifactId>
-            <version>1</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -49,17 +48,17 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-service</artifactId>
-            <version>0.128</version>
+            <version>0.129</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-ui</artifactId>
-            <version>0.128</version>
+            <version>0.129</version>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
-            <version>0.128</version>
+            <version>0.129</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -84,13 +83,13 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-transport</artifactId>
-            <version>0.128</version>
+            <version>0.129</version>
             <type>jar</type>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-berkeleydb-storage</artifactId>
-            <version>0.128</version>
+            <version>0.129</version>
             <type>jar</type>
         </dependency>
         <dependency>
@@ -104,6 +103,11 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-lsm-storage</artifactId>
+            <version>0.129</version>
         </dependency>
     </dependencies>
     <name>amza-fat-jar-deployable</name>

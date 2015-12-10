@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.128</version>
+        <version>0.129</version>
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -15,13 +15,17 @@
     </properties>
     <dependencies>
         <dependency>
+            <groupId>com.jivesoftware.os.leaps-n-bounds</groupId>
+            <artifactId>leaps-n-bounds</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.jivesoftware.os.mlogger</groupId>
             <artifactId>core</artifactId>
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-shared</artifactId>
-            <version>0.128</version>
+            <version>0.129</version>
         </dependency>
         <dependency>
             <groupId>org.testng</groupId>
@@ -40,7 +44,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-service</artifactId>
-            <version>0.128</version>
+            <version>0.129</version>
             <type>jar</type>
         </dependency>
     </dependencies>

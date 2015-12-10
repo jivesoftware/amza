@@ -12,6 +12,8 @@ import java.io.File;
  */
 public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWALIndex> {
 
+    public static final String INDEX_CLASS_NAME = "berkeleydb";
+
     private final Environment[] environments;
 
     public BerkeleyDBWALIndexProvider(String[] baseDirs, int stripes) {
@@ -19,8 +21,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
         for (int i = 0; i < environments.length; i++) {
             File active = new File(
                 new File(
-                    new File(baseDirs[i % baseDirs.length], AmzaVersionConstants.LATEST_VERSION),
-                    "berkeleydb"),
+                    new File(baseDirs[i % baseDirs.length], AmzaVersionConstants.LATEST_VERSION), INDEX_CLASS_NAME),
                 String.valueOf(i));
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
@@ -37,7 +38,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     }
 
     @Override
-    public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
         return new BerkeleyDBWALIndex(environments[Math.abs(versionedPartitionName.hashCode() % environments.length)], name);
     }

@@ -54,48 +54,32 @@ public class AmzaRingStoreReader implements AmzaRingReader {
 
     byte[] keyToRingName(WALKey walKey) throws IOException {
         HeapFiler filer = new HeapFiler(walKey.key);
-        return UIO.readByteArray(filer, "ringName");
+        return UIO.readByteArray(filer, "ringName", new byte[4]);
     }
 
     byte[] key(byte[] ringName, RingMember ringMember) throws Exception {
         HeapFiler filer = new HeapFiler();
-        UIO.writeByteArray(filer, ringName, "ringName");
-        UIO.writeByte(filer, 0, "separator");
+        byte[] lengthBuffer = new byte[4];
+        UIO.writeByteArray(filer, ringName, "ringName", lengthBuffer);
+        UIO.write(filer, new byte[]{(byte) 0}, "separator");
         if (ringMember != null) {
-            UIO.writeByteArray(filer, ringMember.toBytes(), "ringMember");
+            byte[] ringMemberBytes = ringMember.toBytes();
+            UIO.writeByteArray(filer, ringMemberBytes, "ringMember", lengthBuffer);
         }
         return filer.getBytes();
     }
 
     RingMember keyToRingMember(byte[] key) throws Exception {
         HeapFiler filer = new HeapFiler(key);
-        UIO.readByteArray(filer, "ringName");
+        UIO.readByteArray(filer, "ringName", new byte[4]);
         UIO.readByte(filer, "separator");
-        return RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
+        return RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", new byte[4]));
     }
 
     @Override
     public RingMember getRingMember() {
         return rootRingMember;
     }
-
-    /*@Override
-    public List<Entry<RingMember, RingHost>> getNeighbors(byte[] ringName) throws Exception {
-        NavigableMap<RingMember, RingHost> ring = getRing(ringName);
-        if (!ring.containsKey(rootRingMember) || ring.size() < 2) {
-            return Collections.emptyList();
-        } else {
-            List<Entry<RingMember, RingHost>> neighbors = new ArrayList<>(ring.size() - 1);
-            ring.tailMap(rootRingMember, false).forEach((RingMember k, RingHost v) -> {
-                neighbors.add(new SimpleEntry<>(k, v));
-            });
-            ring.headMap(rootRingMember, false).forEach((RingMember k, RingHost v) -> {
-                neighbors.add(new SimpleEntry<>(k, v));
-            });
-            return neighbors;
-        }
-
-    }*/
 
     public TimestampedRingHost getRingHost() throws Exception {
         TimestampedValue registeredHost = nodeIndex.getTimestampedValue(null, rootRingMember.toBytes());
@@ -124,7 +108,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
                 ring == null ? -1 : ring.nodeCacheId);*/
             try {
                 List<RingMemberAndHost> orderedRing = Lists.newArrayList();
-                int[] rootMemberIndex = { -1 };
+                int[] rootMemberIndex = {-1};
                 byte[] from = key(ringName, null);
                 nodeIndex.streamValues(null,
                     stream -> ringIndex.rangeScan(null,
@@ -199,12 +183,13 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             try {
                 Set<IBA> ringNames = new HashSet<>();
                 try {
+                    byte[] intBuffer = new byte[4];
                     ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         if (!valueTombstone) {
                             HeapFiler filer = new HeapFiler(key);
-                            byte[] ringName = UIO.readByteArray(filer, "ringName");
+                            byte[] ringName = UIO.readByteArray(filer, "ringName", intBuffer);
                             UIO.readByte(filer, "separator");
-                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
+                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", intBuffer));
                             if (ringMember != null && ringMember.equals(desiredRingMember)) {
                                 ringNames.add(new IBA(ringName));
                             }
@@ -243,12 +228,13 @@ public class AmzaRingStoreReader implements AmzaRingReader {
             return true;
         });
 
+        byte[] intBuffer = new byte[4];
         ringIndex.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
                 HeapFiler filer = new HeapFiler(key);
-                byte[] ringName = UIO.readByteArray(filer, "ringName");
+                byte[] ringName = UIO.readByteArray(filer, "ringName", intBuffer);
                 UIO.readByte(filer, "separator");
-                RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember"));
+                RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", intBuffer));
                 RingHost ringHost = ringMemberToRingHost.get(ringMember);
                 if (ringHost == null) {
                     ringHost = RingHost.UNKNOWN_RING_HOST;

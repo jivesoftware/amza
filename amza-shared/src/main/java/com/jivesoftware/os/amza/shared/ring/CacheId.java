@@ -1,8 +1,5 @@
 package com.jivesoftware.os.amza.shared.ring;
 
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-
 /**
  *
  */

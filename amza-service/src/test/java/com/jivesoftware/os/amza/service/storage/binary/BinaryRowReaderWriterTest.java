@@ -22,11 +22,11 @@ import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import com.jivesoftware.os.amza.shared.filer.AutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.amza.shared.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import com.jivesoftware.os.amza.shared.wal.WALWriter;
 import java.io.File;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -56,7 +56,7 @@ public class BinaryRowReaderWriterTest {
 
         IoStats ioStats = new IoStats();
         WALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
-            capacity -> ByteBuffer.allocate(capacity.intValue())));
+            new HeapByteBufferFactory()));
         validate(filer, ioStats);
 
     }
@@ -90,7 +90,7 @@ public class BinaryRowReaderWriterTest {
     public void testMemoryBackedRead() throws Exception {
         IoStats ioStats = new IoStats();
         WALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
-            capacity -> ByteBuffer.allocate(capacity.intValue())));
+            new HeapByteBufferFactory()));
         read(filer, ioStats);
 
     }

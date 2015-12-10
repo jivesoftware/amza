@@ -72,10 +72,10 @@ public class NoOpWALIndex implements WALIndex {
         return delta[0];
     }
 
-    @Override
-    public long size() throws Exception {
-        return 0;
-    }
+//    @Override
+//    public long size() throws Exception {
+//        return 0;
+//    }
 
     @Override
     public void commit() throws Exception {
@@ -84,10 +84,6 @@ public class NoOpWALIndex implements WALIndex {
     @Override
     public void close() throws Exception {
 
-    }
-
-    @Override
-    public void compact() throws Exception {
     }
 
     @Override

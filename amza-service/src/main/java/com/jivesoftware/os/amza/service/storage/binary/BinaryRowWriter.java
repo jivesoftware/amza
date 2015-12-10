@@ -43,32 +43,33 @@ public class BinaryRowWriter implements WALWriter {
         RawRows rows,
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream) throws Exception {
+        byte[] lengthBuffer = new byte[4];
         HeapFiler memoryFiler = new HeapFiler(new byte[(estimatedNumberOfRows * (4 + 1 + 8 + 4)) + estimatedSizeInBytes]);
         TLongArrayList offsets = new TLongArrayList();
         rows.consume(row -> {
             offsets.add(memoryFiler.getFilePointer());
             int length = (1 + 8) + row.length;
-            UIO.writeInt(memoryFiler, length, "length");
+            UIO.writeInt(memoryFiler, length, "length", lengthBuffer);
             UIO.writeByte(memoryFiler, rowType.toByte(), "rowType");
             UIO.writeLong(memoryFiler, txId, "txId");
-            memoryFiler.write(row);
-            UIO.writeInt(memoryFiler, length, "length");
+            memoryFiler.write(row, 0, row.length);
+            UIO.writeInt(memoryFiler, length, "length", lengthBuffer);
             return true;
         });
 
-        byte[] bytes = memoryFiler.getBytes();
+        long l = memoryFiler.length();
         long startFp;
-        ioStats.wrote.addAndGet(bytes.length);
+        ioStats.wrote.addAndGet(l);
         synchronized (filer.lock()) {
             startFp = filer.length();
             filer.seek(startFp); // seek to end of file.
-            filer.write(bytes);
+            filer.write(memoryFiler.leakBytes(), 0, (int) l);
             filer.flush(false); // TODO expose to config
         }
 
         TLongIterator iter = offsets.iterator();
-        indexableKeys.consume((prefix, key, valueTimestamp, valueTombstones, valueVersion) ->
-            stream.stream(txId, prefix, key, valueTimestamp, valueTombstones, valueVersion, startFp + iter.next()));
+        indexableKeys.consume((prefix, key, valueTimestamp, valueTombstones, valueVersion)
+            -> stream.stream(txId, prefix, key, valueTimestamp, valueTombstones, valueVersion, startFp + iter.next()));
         return offsets.size();
     }
 

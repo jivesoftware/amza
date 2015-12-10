@@ -34,18 +34,6 @@ class ChunkedOutputFiler implements IWriteable {
     }
 
     @Override
-    public void write(int b) throws IOException {
-        filer.write(b);
-        flushChunk(false);
-    }
-
-    @Override
-    public void write(byte[] b) throws IOException {
-        filer.write(b);
-        flushChunk(false);
-    }
-
-    @Override
     public void write(byte[] b, int _offset, int _len) throws IOException {
         filer.write(b, _offset, _len);
         flushChunk(false);

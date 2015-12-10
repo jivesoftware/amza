@@ -130,7 +130,7 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
     }
 
     @Override
-    public I load(VersionedPartitionName versionedPartitionName) throws Exception {
+    public I load(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
 
@@ -140,7 +140,7 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
                 LOG.warn("Removed wal index for {}.", versionedPartitionName);
             }
 
-            final I walIndex = walIndexProvider.createIndex(versionedPartitionName);
+            final I walIndex = walIndexProvider.createIndex(versionedPartitionName, maxUpdatesBetweenCompactionHintMarker);
             if (walIndex.isEmpty()) {
                 LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedPartitionName);
 

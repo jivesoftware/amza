@@ -5,12 +5,13 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-repo-management</artifactId>
-        <version>0.128</version>
+        <version>0.129</version>
         <relativePath>../global-repo-management/pom.xml</relativePath>
     </parent>
     <artifactId>global-version-management</artifactId>
     <packaging>pom</packaging>
     <properties>
+        <leaps-n-bounds.version>0.3</leaps-n-bounds.version>
         <jive.utils.version>0.93</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.12</mlogger.version>
@@ -21,6 +22,11 @@
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.jivesoftware.os.leaps-n-bounds</groupId>
+                <artifactId>leaps-n-bounds</artifactId>
+                <version>${leaps-n-bounds.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.aquarium</groupId>
                 <artifactId>aquarium</artifactId>

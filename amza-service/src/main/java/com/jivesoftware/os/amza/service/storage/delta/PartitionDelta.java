@@ -343,7 +343,7 @@ class PartitionDelta {
                 try {
                     PartitionStore partitionStore = partitionIndex.get(merge.versionedPartitionName);
                     long highestTxId = partitionStore.highestTxId();
-                    LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.orderedIndex.size(), merge.versionedPartitionName, highestTxId);
+                    LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);
                     LOG.debug("Merging keys: {}", merge.orderedIndex.keySet());
                     MutableBoolean eos = new MutableBoolean(false);
                     merge.txIdWAL.streamFromTxId(highestTxId, true, txFps -> {

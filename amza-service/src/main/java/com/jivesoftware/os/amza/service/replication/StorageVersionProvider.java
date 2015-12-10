@@ -119,12 +119,14 @@ public class StorageVersionProvider implements RowChanges {
     public void streamLocal(PartitionMemberStorageVersionStream stream) throws Exception {
         byte[] fromKey = walKey(rootRingMember, null);
         byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
+        byte[] intBuffer = new byte[4];
+
         systemWALStorage.rangeScan(PartitionCreator.PARTITION_VERSION_INDEX, null, fromKey, null, toKey,
             (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 HeapFiler filer = new HeapFiler(key);
                 UIO.readByte(filer, "serializationVersion");
-                RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member"));
-                PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition"));
+                RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));
+                PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition", intBuffer));
                 StorageVersion storageVersion = StorageVersion.fromBytes(value);
 
                 if (storageVersion.stripeVersion == stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
@@ -216,11 +218,13 @@ public class StorageVersionProvider implements RowChanges {
     }
 
     void clearCache(byte[] walKey, byte[] walValue) throws Exception {
+        byte[] intBuffer = new byte[4];
+
         HeapFiler filer = new HeapFiler(walKey);
         UIO.readByte(filer, "serializationVersion");
-        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member"));
+        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));
         if (ringMember != null) {
-            PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition"));
+            PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition", intBuffer));
             if (ringMember.equals(rootRingMember)) {
                 StorageVersion storageVersion = StorageVersion.fromBytes(walValue);
                 invalidateLocalVersionCache(new VersionedPartitionName(partitionName, storageVersion.partitionVersion));
@@ -231,6 +235,7 @@ public class StorageVersionProvider implements RowChanges {
     }
 
     private static class RingMemberAndPartitionName {
+
         private final RingMember ringMember;
         private final PartitionName partitionName;
 

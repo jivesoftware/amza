@@ -40,7 +40,7 @@ public class PartitionHostsProvider {
             (RingMemberAndHost value) -> (NextClientStrategy) new ConnectionDescriptorSelectiveStrategy(new HostPort[] {
                 new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
             })).orElse(roundRobinStrategy);
-
+        byte[] intBuffer = new byte[4];
         return tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 
             HttpStreamResponse got = client.streamingPost("/amza/v1/ring/"
@@ -49,12 +49,12 @@ public class PartitionHostsProvider {
                 if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
                     try {
                         FilerInputStream fis = new FilerInputStream(got.getInputStream());
-                        int ringSize = UIO.readInt(fis, "ringSize");
+                        int ringSize = UIO.readInt(fis, "ringSize", intBuffer);
                         int leaderIndex = -1;
                         RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
                         for (int i = 0; i < ringSize; i++) {
-                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember"));
-                            RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost"));
+                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember", intBuffer));
+                            RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost", intBuffer));
                             ring[i] = new RingMemberAndHost(ringMember, ringHost);
                             if (UIO.readBoolean(fis, "leader")) {
                                 if (leaderIndex == -1) {

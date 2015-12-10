@@ -9,7 +9,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
 
     @Override
-    public NoOpWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    public NoOpWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         return new NoOpWALIndex();
     }
 

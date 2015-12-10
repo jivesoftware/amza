@@ -38,11 +38,7 @@ public interface WALIndex extends RangeScannablePointers {
 
     long deltaCount(WALKeyPointers keyPointers) throws Exception;
 
-    long size() throws Exception;
-
     void close() throws Exception;
-
-    void compact() throws Exception;
 
     boolean delete() throws Exception;
 

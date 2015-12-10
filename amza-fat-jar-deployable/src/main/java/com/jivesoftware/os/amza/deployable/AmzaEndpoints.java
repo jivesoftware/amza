@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.deployable;
 import com.google.common.base.Splitter;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.Partition;
@@ -28,6 +29,7 @@ import com.jivesoftware.os.amza.shared.wal.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -59,19 +61,20 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/set")
     public Response set(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
         @QueryParam("partition") String partitionName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         @QueryParam("key") String key,
         @QueryParam("value") String value) {
         try {
-            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency), requireConsistency);
+            Partition partition = createPartitionIfAbsent(ring, indexClassName, partitionName, Consistency.valueOf(consistency), requireConsistency);
             String[] keys = key.split(",");
             String[] values = value.split(",");
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             for (int i = 0; i < keys.length; i++) {
                 //TODO prefix
-                updates.set(keys[i].getBytes(), values[i].getBytes(), -1);
+                updates.set(keys[i].getBytes(StandardCharsets.UTF_8), values[i].getBytes(StandardCharsets.UTF_8), -1);
             }
             partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
             return Response.ok("ok", MediaType.TEXT_PLAIN).build();
@@ -84,17 +87,19 @@ public class AmzaEndpoints {
     @POST
     @Consumes("application/json")
     @Path("/multiSet/{partition}")
-    public Response multiSet(@PathParam("partition") String partitionName,
+    public Response multiSet(
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
+        @PathParam("partition") String partitionName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         Map<String, String> values) {
         try {
-            Partition partition = createPartitionIfAbsent("default", partitionName, Consistency.valueOf(consistency), requireConsistency);
+            Partition partition = createPartitionIfAbsent("default", indexClassName, partitionName, Consistency.valueOf(consistency), requireConsistency);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
                 //TODO prefix
-                updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
+                updates.set(entry.getKey().getBytes(StandardCharsets.UTF_8), entry.getValue().getBytes(StandardCharsets.UTF_8), -1);
             }
             partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
 
@@ -108,18 +113,20 @@ public class AmzaEndpoints {
     @POST
     @Consumes("application/json")
     @Path("/multiSet/{ring}/{partition}")
-    public Response multiSet(@PathParam("partition") String partitionName,
+    public Response multiSet(
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
+        @PathParam("partition") String partitionName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         @PathParam("ring") String ring,
         Map<String, String> values) {
         try {
-            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency), requireConsistency);
+            Partition partition = createPartitionIfAbsent(ring, indexClassName, partitionName, Consistency.valueOf(consistency), requireConsistency);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
 
             for (Map.Entry<String, String> entry : values.entrySet()) {
                 //TODO prefix
-                updates.set(entry.getKey().getBytes(), entry.getValue().getBytes(), -1);
+                updates.set(entry.getKey().getBytes(StandardCharsets.UTF_8), entry.getValue().getBytes(StandardCharsets.UTF_8), -1);
             }
             partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
 
@@ -134,18 +141,19 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/get")
     public Response get(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
         @QueryParam("partition") String partitionName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         @QueryParam("key") String key) {
         try {
-            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency), requireConsistency);
-            List<byte[]> got = new ArrayList<>();
+            Partition partition = createPartitionIfAbsent(ring, indexClassName, partitionName, Consistency.valueOf(consistency), requireConsistency);
+            List<String> got = new ArrayList<>();
             //TODO prefix
             partition.get(Consistency.valueOf(consistency), null,
                 stream -> {
                     for (String s : Splitter.on(',').split(key)) {
-                        if (!stream.stream(s.getBytes())) {
+                        if (!stream.stream(s.getBytes(StandardCharsets.UTF_8))) {
                             return false;
                         }
                     }
@@ -153,7 +161,7 @@ public class AmzaEndpoints {
                 },
                 (_prefix, _key, value, timestamp, tombstoned, version) -> {
                     if (timestamp != -1 && !tombstoned) {
-                        got.add(value);
+                        got.add(new String(value, StandardCharsets.UTF_8));
                     }
                     return true;
                 });
@@ -168,15 +176,16 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/remove")
     public Response remove(@QueryParam("ring") @DefaultValue("default") String ring,
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
         @QueryParam("partition") String partitionName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         @QueryParam("key") String key) {
         try {
-            Partition partition = createPartitionIfAbsent(ring, partitionName, Consistency.valueOf(consistency), requireConsistency);
+            Partition partition = createPartitionIfAbsent(ring, indexClassName, partitionName, Consistency.valueOf(consistency), requireConsistency);
             AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
             //TODO prefix
-            updates.remove(key.getBytes(), -1);
+            updates.remove(key.getBytes(StandardCharsets.UTF_8), -1);
             partition.commit(Consistency.valueOf(consistency), null, updates, 30000);
             return Response.ok("removed " + key, MediaType.TEXT_PLAIN).build();
         } catch (Exception x) {
@@ -185,19 +194,20 @@ public class AmzaEndpoints {
         }
     }
 
-    Partition createPartitionIfAbsent(String ringName, String simplePartitionName, Consistency consistency, boolean requireConsistency) throws Exception {
+    Partition createPartitionIfAbsent(String ringName, String indexClassName,
+        String simplePartitionName, Consistency consistency, boolean requireConsistency) throws Exception {
 
-        int ringSize = amzaService.getRingReader().getRingSize(ringName.getBytes());
+        int ringSize = amzaService.getRingReader().getRingSize(ringName.getBytes(StandardCharsets.UTF_8));
         int systemRingSize = amzaService.getRingReader().getRingSize(AmzaRingReader.SYSTEM_RING);
         if (ringSize < systemRingSize) {
-            amzaService.getRingWriter().buildRandomSubRing(ringName.getBytes(), systemRingSize);
+            amzaService.getRingWriter().buildRandomSubRing(ringName.getBytes(StandardCharsets.UTF_8), systemRingSize);
         }
 
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-            new PrimaryIndexDescriptor("berkeleydb", 0, false, null),
+            new PrimaryIndexDescriptor(indexClassName, 0, false, null),
             null, 1000, 1000);
 
-        PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
+        PartitionName partitionName = new PartitionName(false, ringName.getBytes(StandardCharsets.UTF_8), simplePartitionName.getBytes(StandardCharsets.UTF_8));
         amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, requireConsistency, 1, false));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);

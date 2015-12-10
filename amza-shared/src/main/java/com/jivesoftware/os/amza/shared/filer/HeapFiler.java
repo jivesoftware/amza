@@ -43,6 +43,11 @@ public class HeapFiler implements IFiler {
         maxLength = _bytes.length;
     }
 
+    public HeapFiler(byte[] _bytes, int _maxLength) {
+        bytes = _bytes;
+        maxLength = _maxLength;
+    }
+
     public HeapFiler createReadOnlyClone() {
         HeapFiler heapFiler = new HeapFiler();
         heapFiler.bytes = bytes;
@@ -69,6 +74,11 @@ public class HeapFiler implements IFiler {
     public void reset() {
         fp = 0;
         maxLength = 0;
+    }
+
+    public void reset(int _maxLength) {
+        fp = 0;
+        maxLength = _maxLength;
     }
 
     @Override
@@ -100,24 +110,14 @@ public class HeapFiler implements IFiler {
         if (fp + len > maxLength) {
             len = (int) (maxLength - fp);
         }
-        System.arraycopy(bytes, (int) fp, b, _offset, len);
+        try {
+            System.arraycopy(bytes, (int) fp, b, _offset, len);
+        } catch (Exception x) {
+            System.out.println("Error:" + bytes.length + " srcPos:" + fp + " " + b.length + " dstPos:" + _offset + " legnth:" + len);
+            throw x;
+        }
         fp += len;
         return len;
-    }
-
-    @Override
-    public void write(int b) throws IOException {
-        if (fp + 1 > bytes.length) {
-            bytes = grow(bytes, Math.max((int) ((fp + 1) - bytes.length), bytes.length));
-        }
-        bytes[(int) fp] = (byte) b;
-        fp++;
-        maxLength = Math.max(maxLength, fp);
-    }
-
-    @Override
-    public void write(byte _b[]) throws IOException {
-        write(_b, 0, _b.length);
     }
 
     @Override
@@ -125,12 +125,11 @@ public class HeapFiler implements IFiler {
         if (_b == null) {
             return;
         }
-        int len = _len;
-        if (fp + len > bytes.length) {
-            bytes = grow(bytes, Math.max((int) ((fp + len) - bytes.length), bytes.length));
+        if (fp + _len > bytes.length) {
+            bytes = grow(bytes, Math.max((int) ((fp + _len) - bytes.length), bytes.length));
         }
-        System.arraycopy(_b, _offset, bytes, (int) fp, len);
-        fp += len;
+        System.arraycopy(_b, _offset, bytes, (int) fp, _len);
+        fp += _len;
         maxLength = Math.max(maxLength, fp);
     }
 

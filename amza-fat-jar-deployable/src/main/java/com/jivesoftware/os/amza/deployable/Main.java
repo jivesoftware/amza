@@ -28,6 +28,7 @@ import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.client.http.AmzaHttpClientProvider;
 import com.jivesoftware.os.amza.client.http.PartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -82,7 +83,9 @@ public class Main {
         int port = Integer.parseInt(System.getProperty("amza.port", "1175"));
         String multicastGroup = System.getProperty("amza.discovery.group", "225.4.5.6");
         int multicastPort = Integer.parseInt(System.getProperty("amza.discovery.port", "1223"));
-        String clusterName = (args.length > 1 ? args[1] : null);
+        String clusterName = (args.length > 1 ? args[1] : "unnamed");
+        String hostPortPeers = (args.length > 2 ? args[2] : null);
+
         String logicalName = System.getProperty("amza.logicalName", hostname + ":" + port);
 
         RingMember ringMember = new RingMember(logicalName);
@@ -137,7 +140,11 @@ public class Main {
             idPacker,
             partitionPropertyMarshaller,
             (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider) -> {
-                indexProviderRegistry.register("berkeleydb", new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+                indexProviderRegistry.register(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME,
+                    new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+
+                indexProviderRegistry.register(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                    new LSMPointerIndexWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
             },
             availableRowsTaker,
             () -> new HttpRowsTaker(amzaStats),
@@ -215,15 +222,38 @@ public class Main {
         System.out.println("-----------------------------------------------------------------------");
 
         if (clusterName != null) {
-            AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getRingReader(),
-                amzaService.getRingWriter(),
-                clusterName,
-                multicastGroup,
-                multicastPort);
-            amzaDiscovery.start();
-            System.out.println("-----------------------------------------------------------------------");
-            System.out.println("|      Amza Service Discovery Online");
-            System.out.println("-----------------------------------------------------------------------");
+            if (hostPortPeers != null) {
+                System.out.println("-----------------------------------------------------------------------");
+                System.out.println("|     Amza Service is in manual Discovery mode. Cluster Name:" + clusterName);
+                String[] peers = hostPortPeers.split(",");
+                for (String peer : peers) {
+                    String[] hostPort = peer.trim().split(":");
+                    if (hostPort.length > 2) {
+                        System.out.println("|     Malformed peer:" + peer + " expected form: <host>:<port> or <logicalName>:<host>:<port>");
+                    } else {
+                        String peerLogicalName = (hostPort.length == 2) ? hostPort[0] + ":" + hostPort[1] : hostPort[0];
+                        String peerHostname = (hostPort.length == 2) ? hostPort[0] : hostPort[1];
+                        String peerPort = (hostPort.length == 2) ? hostPort[1] : hostPort[2];
+
+                        RingMember peerRingMember = new RingMember(peerLogicalName);
+                        RingHost peerRingHost = new RingHost(peerHostname, Integer.parseInt(peerPort));
+
+                        System.out.println("|     Adding ringMember:" + peerRingMember + " on host:" + peerRingHost + " to cluster: " + clusterName);
+                        amzaService.getRingWriter().register(peerRingMember, peerRingHost, writerId);
+                    }
+                }
+                System.out.println("-----------------------------------------------------------------------");
+            } else {
+                AmzaDiscovery amzaDiscovery = new AmzaDiscovery(amzaService.getRingReader(),
+                    amzaService.getRingWriter(),
+                    clusterName,
+                    multicastGroup,
+                    multicastPort);
+                amzaDiscovery.start();
+                System.out.println("-----------------------------------------------------------------------");
+                System.out.println("|      Amza Service Discovery Online: Cluster Name:" + clusterName);
+                System.out.println("-----------------------------------------------------------------------");
+            }
         } else {
             System.out.println("-----------------------------------------------------------------------");
             System.out.println("|     Amza Service is in manual Discovery mode.  No cluster name was specified");

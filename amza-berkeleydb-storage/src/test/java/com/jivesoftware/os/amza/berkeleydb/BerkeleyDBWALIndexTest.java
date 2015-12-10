@@ -7,7 +7,6 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import java.io.File;
 import java.util.Arrays;
 import org.testng.Assert;
@@ -204,7 +203,7 @@ public class BerkeleyDBWALIndexTest {
     }
 
     private BerkeleyDBWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName);
+        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName, 1000);
     }
 
 }

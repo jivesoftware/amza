@@ -6,11 +6,10 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.shared.filer.AutoGrowingByteBufferBackedFiler;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import com.jivesoftware.os.amza.shared.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import java.io.File;
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
@@ -40,7 +39,7 @@ public class BinaryRowIONGTest {
     @Test
     public void testMemoryWrite() throws Exception {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
-            capacity -> ByteBuffer.allocate(capacity.intValue())));
+            new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer,
             new BinaryRowReader(filer, ioStats, 10),
@@ -111,7 +110,7 @@ public class BinaryRowIONGTest {
     @Test
     public void testMemoryLeap() throws Exception {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
-            capacity -> ByteBuffer.allocate(capacity.intValue())));
+            new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
         leap(() -> binaryRowIO);

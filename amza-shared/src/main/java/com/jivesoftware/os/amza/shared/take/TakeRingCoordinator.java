@@ -142,11 +142,9 @@ public class TakeRingCoordinator {
             int ringSize = ring.entries.size();
             int neighborsSize = ringSize - (ring.rootMemberIndex == -1 ? 0 : 1);
             RingMember[] ringMembers = new RingMember[neighborsSize];
-            for (int i = 0, j = 0; i < ringSize; i++) {
-                if (i != ring.rootMemberIndex) {
-                    ringMembers[j] = ring.entries.get(i).ringMember;
-                    j++;
-                }
+            for (int i = ring.rootMemberIndex + 1, j = 0; j < ringSize - 1; i++) {
+                ringMembers[j] = ring.entries.get(i % ringSize).ringMember;
+                j++;
             }
 
             this.ring = ring;

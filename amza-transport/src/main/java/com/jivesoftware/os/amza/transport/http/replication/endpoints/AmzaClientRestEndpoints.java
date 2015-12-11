@@ -99,27 +99,23 @@ public class AmzaClientRestEndpoints {
     }
 
     @POST
-    //@Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/ensurePartition/{base64PartitionName}/{ringSize}/{waitForLeaderElection}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    //@Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/ensurePartition/{base64PartitionName}/{ringSize}")
     public Object ensurePartition(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("ringSize") int ringSize,
-        @PathParam("waitForLeaderElection") long waitForLeaderElection,
         PartitionProperties partitionProperties) {
 
         try {
             PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
             byte[] ringNameBytes = partitionName.getRingName();
-            RingTopology ringTopology = ringReader.getRing(ringNameBytes);
-            if (ringTopology.entries.isEmpty()) {
-                ringWriter.ensureSubRing("default".getBytes(), ringSize);
-            }
+            ringWriter.ensureSubRing(ringNameBytes, ringSize);
             partitionProvider.setPropertiesIfAbsent(partitionName, partitionProperties);
 
-            long start = System.currentTimeMillis();
+            /*long start = System.currentTimeMillis();
             partitionProvider.awaitOnline(partitionName, waitForLeaderElection);
             waitForLeaderElection = Math.max(0, waitForLeaderElection - (System.currentTimeMillis() - start));
-            partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
+            partitionProvider.awaitLeader(partitionName, waitForLeaderElection);*/
             return Response.ok().build();
         } catch (TimeoutException e) {
             return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();

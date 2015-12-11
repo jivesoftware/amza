@@ -366,7 +366,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         if (client) {
             while (true) {
                 try {
-                    return partitionClientProvider.getPartition(partitionName, ringSize, partitionProperties, timeoutMillis);
+                    return partitionClientProvider.getPartition(partitionName, ringSize, partitionProperties);
                 } catch (Exception x) {
                     LOG.warn("{} failed to come online in {}", partitionName, timeoutMillis);
                 }

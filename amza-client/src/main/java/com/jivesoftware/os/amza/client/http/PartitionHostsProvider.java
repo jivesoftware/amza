@@ -39,13 +39,13 @@ public class PartitionHostsProvider {
         this.mapper = mapper;
     }
 
-    void ensurePartition(PartitionName partitionName, int ringSize, PartitionProperties partitionProperties, long waitInMillis) throws Exception {
+    void ensurePartition(PartitionName partitionName, int ringSize, PartitionProperties partitionProperties) throws Exception {
         String base64PartitionName = partitionName.toBase64();
         String partitionPropertiesString = mapper.writeValueAsString(partitionProperties);
 
         tenantAwareHttpClient.call("", roundRobinStrategy, "ensurePartition", (client) -> {
 
-            HttpResponse got = client.postJson("/amza/v1/ensurePartition/" + base64PartitionName + "/" + ringSize + "/" + waitInMillis,
+            HttpResponse got = client.postJson("/amza/v1/ensurePartition/" + base64PartitionName + "/" + ringSize,
                 partitionPropertiesString, null);
 
             if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {

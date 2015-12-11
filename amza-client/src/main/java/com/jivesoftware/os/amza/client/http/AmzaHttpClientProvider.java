@@ -43,12 +43,11 @@ public class AmzaHttpClientProvider implements PartitionClientProvider {
     @Override
     public PartitionClient getPartition(PartitionName partitionName,
         int ringSize,
-        PartitionProperties partitionProperties,
-        long waitInMillis) throws Exception {
+        PartitionProperties partitionProperties) throws Exception {
 
         return cache.computeIfAbsent(partitionName, (key) -> {
             try {
-                partitionHostsProvider.ensurePartition(partitionName, ringSize, partitionProperties, waitInMillis);
+                partitionHostsProvider.ensurePartition(partitionName, ringSize, partitionProperties);
                 AmzaHttpClientCallRouter partitionCallRouter = new AmzaHttpClientCallRouter(callerThreads, partitionHostsProvider, clientProvider);
                 return new AmzaHttpPartitionClient(key, partitionCallRouter, awaitLeaderElectionForNMillis);
             } catch (Exception x) {

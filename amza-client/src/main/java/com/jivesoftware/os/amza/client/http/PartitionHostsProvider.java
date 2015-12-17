@@ -39,13 +39,53 @@ public class PartitionHostsProvider {
         this.mapper = mapper;
     }
 
-    void ensurePartition(PartitionName partitionName, int ringSize, PartitionProperties partitionProperties) throws Exception {
+    void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
         String base64PartitionName = partitionName.toBase64();
         String partitionPropertiesString = mapper.writeValueAsString(partitionProperties);
+        byte[] intBuffer = new byte[4];
+        Ring partitionsRing = tenantAwareHttpClient.call("", roundRobinStrategy, "configPartition", (client) -> {
 
-        tenantAwareHttpClient.call("", roundRobinStrategy, "ensurePartition", (client) -> {
+            HttpStreamResponse got = client.streamingPost("/amza/v1/configPartition/" + base64PartitionName + "/" + desiredRingSize,
+                partitionPropertiesString, null);
+            try {
+                if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
+                    try {
+                        FilerInputStream fis = new FilerInputStream(got.getInputStream());
+                        int ringSize = UIO.readInt(fis, "ringSize", intBuffer);
+                        int leaderIndex = -1;
+                        RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
+                        for (int i = 0; i < ringSize; i++) {
+                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember", intBuffer));
+                            RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost", intBuffer));
+                            ring[i] = new RingMemberAndHost(ringMember, ringHost);
+                            if (UIO.readBoolean(fis, "leader")) {
+                                if (leaderIndex == -1) {
+                                    leaderIndex = i;
+                                } else {
+                                    throw new RuntimeException("We suck! Gave back more than one leader!");
+                                }
+                            }
+                        }
+                        return new ClientCall.ClientResponse<>(new Ring(leaderIndex, ring), true);
+                    } catch (Exception x) {
+                        throw new RuntimeException("Failed loading routes for " + partitionName, x);
+                    }
+                }
+            } finally {
+                got.close();
+            }
+            throw new RuntimeException("Failed to config partition:" + partitionName);
+        });
 
-            HttpResponse got = client.postJson("/amza/v1/ensurePartition/" + base64PartitionName + "/" + ringSize,
+        HostPort[] orderHostPorts = new HostPort[partitionsRing.members.length];
+        for (int i = 0; i < orderHostPorts.length; i++) {
+            RingHost ringHost = partitionsRing.members[i].ringHost;
+            orderHostPorts[i] = new HostPort(ringHost.getHost(), ringHost.getPort());
+        }
+        NextClientStrategy strategy = new ConnectionDescriptorSelectiveStrategy(orderHostPorts);
+        tenantAwareHttpClient.call("", strategy, "ensurePartition", (client) -> {
+
+            HttpResponse got = client.postJson("/amza/v1/ensurePartition/" + base64PartitionName + "/" + 30_000, // TODO config
                 partitionPropertiesString, null);
 
             if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {

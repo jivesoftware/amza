@@ -100,9 +100,8 @@ public class AmzaClientRestEndpoints {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    //@Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/ensurePartition/{base64PartitionName}/{ringSize}")
-    public Object ensurePartition(@PathParam("base64PartitionName") String base64PartitionName,
+    @Path("/config/{base64PartitionName}/{ringSize}")
+    public Object configPartition(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("ringSize") int ringSize,
         PartitionProperties partitionProperties) {
 
@@ -111,11 +110,51 @@ public class AmzaClientRestEndpoints {
             byte[] ringNameBytes = partitionName.getRingName();
             ringWriter.ensureSubRing(ringNameBytes, ringSize);
             partitionProvider.setPropertiesIfAbsent(partitionName, partitionProperties);
+            RingTopology ring = ringReader.getRing(partitionName.getRingName());
 
-            /*long start = System.currentTimeMillis();
+            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
+            chunkExecutors.submit(() -> {
+                try {
+                    ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                    byte[] lengthBuffer = new byte[4];
+                    UIO.writeInt(cf, ring.entries.size(), "ringSize", lengthBuffer);
+                    for (RingMemberAndHost entry : ring.entries) {
+                        UIO.writeByteArray(cf, entry.ringMember.toBytes(), "ringMember", lengthBuffer);
+                        UIO.writeByteArray(cf, entry.ringHost.toBytes(), "ringHost", lengthBuffer);
+                        UIO.writeByte(cf, (byte) 0, "leader");
+                    }
+                    cf.flush(true);
+
+                } catch (Exception x) {
+                    LOG.warn("Failed to stream ring", x);
+                } finally {
+                    try {
+                        chunkedOutput.close();
+                    } catch (IOException x) {
+                        LOG.warn("Failed to close ring stream", x);
+                    }
+                }
+            });
+            return chunkedOutput;
+        } catch (TimeoutException e) {
+            return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
+        } catch (Exception e) {
+            return Response.serverError().build();
+        }
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Path("/ensure/{base64PartitionName}/{waitForLeaderElection}")
+    public Object ensurePartition(@PathParam("base64PartitionName") String base64PartitionName,
+        @PathParam("waitForLeaderElection") long waitForLeaderElection) {
+
+        try {
+            PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+            long start = System.currentTimeMillis();
             partitionProvider.awaitOnline(partitionName, waitForLeaderElection);
             waitForLeaderElection = Math.max(0, waitForLeaderElection - (System.currentTimeMillis() - start));
-            partitionProvider.awaitLeader(partitionName, waitForLeaderElection);*/
+            partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
             return Response.ok().build();
         } catch (TimeoutException e) {
             return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
@@ -125,7 +164,6 @@ public class AmzaClientRestEndpoints {
     }
 
     @POST
-    //@Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/ring/{base64PartitionName}/{waitForLeaderElection}")
     public Object ring(@PathParam("base64PartitionName") String base64PartitionName,

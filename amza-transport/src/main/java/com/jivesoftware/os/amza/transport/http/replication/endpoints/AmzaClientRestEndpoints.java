@@ -100,7 +100,7 @@ public class AmzaClientRestEndpoints {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    @Path("/config/{base64PartitionName}/{ringSize}")
+    @Path("/configPartition/{base64PartitionName}/{ringSize}")
     public Object configPartition(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("ringSize") int ringSize,
         PartitionProperties partitionProperties) {
@@ -145,7 +145,7 @@ public class AmzaClientRestEndpoints {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    @Path("/ensure/{base64PartitionName}/{waitForLeaderElection}")
+    @Path("/ensurePartition/{base64PartitionName}/{waitForLeaderElection}")
     public Object ensurePartition(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("waitForLeaderElection") long waitForLeaderElection) {
 

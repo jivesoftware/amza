@@ -227,7 +227,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
         partitionStateStorage.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
             if (!livelyEndState.isOnline()) {
-                VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
+                VersionedState versionedState = partitionStateStorage.markAsBootstrap(versionedPartitionName, livelyEndState);
                 versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.getPartitionVersion());
             }
             if (partitionCreator.createPartitionStoreIfAbsent(versionedPartitionName, properties)) {
@@ -262,7 +262,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             partitionStateStorage.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
                 if (!livelyEndState.isOnline()) {
-                    VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
+                    VersionedState versionedState = partitionStateStorage.markAsBootstrap(versionedPartitionName, livelyEndState);
                     versionedPartitionName = new VersionedPartitionName(partitionName, versionedState.getPartitionVersion());
                 }
                 partitionCreator.createPartitionStoreIfAbsent(versionedPartitionName, properties);
@@ -526,7 +526,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             PartitionName partitionName = localVersionedPartitionName.getPartitionName();
             try {
                 if (ringStoreWriter.isMemberOfRing(partitionName.getRingName()) && partitionCreator.hasPartition(partitionName)) {
-                    partitionStateStorage.markAsBootstrap(partitionName);
+                    partitionStateStorage.tx(partitionName, partitionStateStorage::markAsBootstrap);
                 }
             } catch (Exception x) {
                 LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);

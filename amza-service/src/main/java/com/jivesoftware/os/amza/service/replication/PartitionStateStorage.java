@@ -62,12 +62,12 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
         }
     }
 
-    public void tapTheGlass(VersionedPartitionName versionedPartitionName) throws Exception {
+    public void wipeTheGlass(VersionedPartitionName versionedPartitionName) throws Exception {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
             return;
         }
 
-        aquariumProvider.getAquarium(versionedPartitionName).tapTheGlass();
+        aquariumProvider.wipeTheGlass(versionedPartitionName, aquariumProvider.getLivelyEndState(versionedPartitionName));
     }
 
     public long getPartitionVersion(PartitionName partitionName) throws Exception {
@@ -99,18 +99,17 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
         return new RemoteVersionedState(remoteState, remoteStorageVersion.partitionVersion);
     }
 
-    public VersionedState markAsBootstrap(PartitionName partitionName) throws Exception {
+    public VersionedState markAsBootstrap(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception {
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
         if (partitionName.isSystemPartition()) {
             return new VersionedState(LivelyEndState.ALWAYS_ONLINE, new StorageVersion(0, 0));
         }
 
         StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-
-        // let aquarium do its thing
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-        aquariumProvider.getAquarium(versionedPartitionName).tapTheGlass();
-
-        LivelyEndState livelyEndState = aquariumProvider.getLivelyEndState(versionedPartitionName);
+        if (storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()) {
+            // let aquarium do its thing
+            aquariumProvider.wipeTheGlass(versionedPartitionName, livelyEndState);
+        }
         return new VersionedState(livelyEndState, storageVersion);
     }
 

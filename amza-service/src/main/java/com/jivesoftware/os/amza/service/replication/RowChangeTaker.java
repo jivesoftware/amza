@@ -352,8 +352,9 @@ public class RowChangeTaker implements RowChanges {
                             //      ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                             return null;
                         }
-                        VersionedState versionedState = partitionStateStorage.markAsBootstrap(partitionName);
+                        VersionedState versionedState = partitionStateStorage.getLocalVersionedState(partitionName);
                         localVersionedPartitionName = new VersionedPartitionName(partitionName, versionedState.getPartitionVersion());
+                        partitionStateStorage.wipeTheGlass(localVersionedPartitionName);
                         //LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} state:{}",
                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                     }
@@ -563,7 +564,7 @@ public class RowChangeTaker implements RowChanges {
                                 partitionStateStorage.tookFully(remoteRingMember,
                                     leadershipToken,
                                     localVersionedPartitionName);
-                                partitionStateStorage.tapTheGlass(localVersionedPartitionName);
+                                partitionStateStorage.wipeTheGlass(localVersionedPartitionName);
                             } else {
                                 int updates = 0;
 
@@ -623,9 +624,9 @@ public class RowChangeTaker implements RowChanges {
                                         takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                     }
                                     partitionStateStorage.tookFully(remoteRingMember, rowsResult.leadershipToken, localVersionedPartitionName);
-                                    partitionStateStorage.tapTheGlass(localVersionedPartitionName);
+                                    partitionStateStorage.wipeTheGlass(localVersionedPartitionName);
                                 } else if (rowsResult.error == null) {
-                                    partitionStateStorage.tapTheGlass(localVersionedPartitionName);
+                                    partitionStateStorage.wipeTheGlass(localVersionedPartitionName);
                                 } else if (rowsResult.leadershipToken > 0 && rowsResult.partitionVersion == -1) {
                                     // Took from node in bootstrap.
                                     partitionStateStorage.tookFully(remoteRingMember, rowsResult.leadershipToken, localVersionedPartitionName);

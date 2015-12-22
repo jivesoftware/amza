@@ -214,6 +214,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         }
     }
 
+    @Override
     public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
         if (!ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             throw new IllegalStateException("Not a member of the ring for partition: " + partitionName);

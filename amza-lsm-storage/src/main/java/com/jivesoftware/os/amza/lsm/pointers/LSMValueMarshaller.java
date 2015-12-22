@@ -50,7 +50,7 @@ public class LSMValueMarshaller implements MergeRawEntry {
         return (stream) -> nextPointer.next((byte[] key, long timestamp, boolean tombstoned, long version, long pointer) -> {
             indexEntryFiler.reset();
 
-            UIO.writeByteArray(indexEntryFiler, key, 0, key.length, "key", lengthBuffer);
+            UIO.writeByteArray(indexEntryFiler, key, "key", lengthBuffer);
             UIO.writeLong(indexEntryFiler, timestamp, "timestamp");
             UIO.writeByte(indexEntryFiler, tombstoned ? (byte) 1 : (byte) 0, "tombstone");
             UIO.writeLong(indexEntryFiler, version, "version");
@@ -66,7 +66,7 @@ public class LSMValueMarshaller implements MergeRawEntry {
 
         HeapFiler indexEntryFiler = new HeapFiler(4 + key.length + 8 + 1 + 8); // TODO somthing better
 
-        UIO.writeByteArray(indexEntryFiler, key, 0, key.length, "key", new byte[4]);
+        UIO.writeByteArray(indexEntryFiler, key, "key", new byte[4]);
         UIO.writeLong(indexEntryFiler, timestamp, "timestamp");
         UIO.writeByte(indexEntryFiler, tombstoned ? (byte) 1 : (byte) 0, "tombstone");
         UIO.writeLong(indexEntryFiler, version, "version");

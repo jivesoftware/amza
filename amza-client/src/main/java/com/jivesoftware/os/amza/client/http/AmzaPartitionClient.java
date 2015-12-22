@@ -3,10 +3,8 @@ package com.jivesoftware.os.amza.client.http;
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.Consistency;
-import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
-import com.jivesoftware.os.amza.api.filer.FilerOutputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -19,90 +17,35 @@ import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
-import com.jivesoftware.os.amza.client.http.exceptions.LeaderElectionInProgressException;
-import com.jivesoftware.os.amza.client.http.exceptions.NoLongerTheLeaderException;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.jivesoftware.os.routing.bird.http.client.HttpResponse;
-import com.jivesoftware.os.routing.bird.http.client.HttpStreamResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import javax.ws.rs.core.Response.Status;
-import org.apache.http.HttpStatus;
 
 /**
  * @author jonathan.colt
  */
-public class AmzaHttpPartitionClient implements PartitionClient {
+public class AmzaPartitionClient<C, E extends Throwable> implements PartitionClient {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final String base64PartitionName;
     private final PartitionName partitionName;
-    private final AmzaHttpClientCallRouter partitionCallRouter;
+    private final AmzaClientCallRouter<C, E> partitionCallRouter;
+    private final RemotePartitionCaller<C, E> remotePartitionCaller;
     private final long awaitLeaderElectionForNMillis;
 
-    public AmzaHttpPartitionClient(PartitionName partitionName,
-        AmzaHttpClientCallRouter partitionCallRouter,
+    public AmzaPartitionClient(PartitionName partitionName,
+        AmzaClientCallRouter<C, E> partitionCallRouter,
+        RemotePartitionCaller<C, E> remotePartitionCaller,
         long awaitLeaderElectionForNMillis) throws IOException {
 
-        this.base64PartitionName = partitionName.toBase64();
         this.partitionName = partitionName;
         this.partitionCallRouter = partitionCallRouter;
+        this.remotePartitionCaller = remotePartitionCaller;
         this.awaitLeaderElectionForNMillis = awaitLeaderElectionForNMillis;
-    }
-
-    private void handleLeaderStatusCodes(Consistency consistency, int statusCode, Closeable closeable) {
-        if (consistency.requiresLeader()) {
-            if (statusCode == HttpStatus.SC_SERVICE_UNAVAILABLE) {
-                try {
-                    closeable.close();
-                } catch (Exception e) {
-                    LOG.warn("Failed to close {}", closeable);
-                }
-                partitionCallRouter.invalidateRouting(partitionName);
-                throw new LeaderElectionInProgressException(partitionName + " " + consistency);
-            }
-            if (statusCode == HttpStatus.SC_CONFLICT) {
-                try {
-                    closeable.close();
-                } catch (Exception e) {
-                    LOG.warn("Failed to close {}", closeable);
-                }
-                partitionCallRouter.invalidateRouting(partitionName);
-                throw new NoLongerTheLeaderException(partitionName + " " + consistency);
-            }
-        }
-    }
-
-    private static class CloseableHttpResponse implements Closeable {
-
-        public final HttpResponse response;
-
-        public CloseableHttpResponse(HttpResponse response) {
-            this.response = response;
-        }
-
-        @Override
-        public void close() throws Exception {
-        }
-    }
-
-    private static class CloseableHttpStreamResponse implements Closeable {
-
-        public final HttpStreamResponse response;
-
-        public CloseableHttpStreamResponse(HttpStreamResponse response) {
-            this.response = response;
-        }
-
-        @Override
-        public void close() throws Exception {
-            response.close();
-        }
     }
 
     @Override
@@ -116,40 +59,7 @@ public class AmzaHttpPartitionClient implements PartitionClient {
 
         partitionCallRouter.write(solutionLog.orElse(null), partitionName, consistency, "commit",
             (leader, ringMember, client) -> {
-                boolean checkLeader = ringMember.equals(leader);
-                HttpResponse got = client.postStreamableRequest("/amza/v1/commit/" + base64PartitionName + "/" + consistency.name() + "/" + checkLeader,
-                    (out) -> {
-                        try {
-
-                            FilerOutputStream fos = new FilerOutputStream(out);
-                            UIO.writeByteArray(fos, prefix, 0, prefix.length, "prefix", lengthBuffer);
-                            UIO.writeLong(fos, abandonSolutionAfterNMillis, "timeoutInMillis");
-
-                            updates.updates((rowTxId, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                                UIO.write(fos, new byte[] { 0 }, "eos");
-                                UIO.writeLong(fos, rowTxId, "rowTxId");
-                                UIO.writeByteArray(fos, key, 0, key.length, "key", lengthBuffer);
-                                UIO.writeByteArray(fos, value, 0, value.length, "value", lengthBuffer);
-                                UIO.writeLong(fos, valueTimestamp, "valueTimestamp");
-                                UIO.write(fos, new byte[] { valueTombstoned ? (byte) 1 : (byte) 0 }, "valueTombstoned");
-                                // valueVersion is only ever generated on the servers.
-                                return true;
-                            });
-                            UIO.write(fos, new byte[] { 1 }, "eos");
-                        } catch (Exception x) {
-                            throw new RuntimeException("Failed while streaming commitable.", x);
-                        } finally {
-                            out.close();
-                        }
-                    }, null);
-
-                CloseableHttpResponse closeableHttpResponse = new CloseableHttpResponse(got);
-                if (got.getStatusCode() == Status.ACCEPTED.getStatusCode()) {
-                    throw new FailedToAchieveQuorumException(
-                        "The server could NOT achieve " + consistency.name() + " within " + abandonSolutionAfterNMillis + "millis");
-                }
-                handleLeaderStatusCodes(consistency, got.getStatusCode(), closeableHttpResponse);
-                return new PartitionResponse<>(closeableHttpResponse, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return remotePartitionCaller.commit(leader, ringMember, client, consistency, prefix, updates, abandonSolutionAfterNMillis);
             },
             answer -> true,
             awaitLeaderElectionForNMillis,
@@ -169,30 +79,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] intLongBuffer = new byte[8];
         partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "get",
             (leader, ringMember, client) -> {
-                HttpStreamResponse got = client.streamingPostStreamableRequest(
-                    "/amza/v1/get/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
-                    (out) -> {
-                        try {
-                            FilerOutputStream fos = new FilerOutputStream(out);
-                            UIO.writeByteArray(fos, prefix, 0, prefix.length, "prefix", intLongBuffer);
-                            keys.consume((key) -> {
-                                UIO.write(fos, new byte[] { 0 }, "eos");
-                                UIO.writeByteArray(fos, key, 0, key.length, "key", intLongBuffer);
-                                return true;
-                            });
-                            UIO.write(fos, new byte[] { 1 }, "eos");
-                        } catch (Exception x) {
-                            throw new RuntimeException("Failed while streaming keys.", x);
-                        } finally {
-                            out.close();
-                        }
-                    }, null);
-                CloseableHttpStreamResponse closeableHttpStreamResponse = new CloseableHttpStreamResponse(got);
-                handleLeaderStatusCodes(consistency, got.getStatusCode(), closeableHttpStreamResponse);
-                return new PartitionResponse<>(closeableHttpStreamResponse, got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return remotePartitionCaller.get(leader, ringMember, client, consistency, prefix, keys);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
                 int eosed = 0;
                 while (streams.size() > 0 && eosed == 0) {
                     byte[] latestPrefix = null;
@@ -260,24 +150,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] intLongBuffer = new byte[8];
         return partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "scan",
             (leader, ringMember, client) -> {
-                HttpStreamResponse got = client.streamingPostStreamableRequest(
-                    "/amza/v1/scan/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
-                    (out) -> {
-                        try {
-                            FilerOutputStream fos = new FilerOutputStream(out);
-                            UIO.writeByteArray(fos, fromPrefix, 0, fromPrefix.length, "fromPrefix", intLongBuffer);
-                            UIO.writeByteArray(fos, fromKey, 0, fromKey.length, "fromKey", intLongBuffer);
-                            UIO.writeByteArray(fos, toPrefix, 0, toPrefix.length, "toPrefix", intLongBuffer);
-                            UIO.writeByteArray(fos, toKey, 0, toKey.length, "toKey", intLongBuffer);
-                        } finally {
-                            out.close();
-                        }
-                    }, null);
-
-                return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return remotePartitionCaller.scan(leader, ringMember, client, consistency, fromPrefix, fromKey, toPrefix, toKey);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
                 int size = streams.size();
                 if (merge && size > 1) {
                     boolean[] eos = new boolean[size];
@@ -346,22 +222,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] intLongBuffer = new byte[8];
         return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takeFromTransactionId",
             (leader, ringMember, client) -> {
-                long transactionId = membersTxId.getOrDefault(ringMember, -1L);
-                HttpStreamResponse got = client.streamingPostStreamableRequest(
-                    "/amza/v1/takeFromTransactionId/" + base64PartitionName,
-                    (out) -> {
-                        try {
-                            FilerOutputStream fos = new FilerOutputStream(out);
-                            UIO.writeLong(fos, transactionId, "transactionId");
-                        } finally {
-                            out.close();
-                        }
-                    }, null);
-
-                return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return remotePartitionCaller.takeFromTransactionId(leader, ringMember, client, membersTxId, stream);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
                 if (streams.isEmpty()) {
                     throw new RuntimeException("Failed to takeFromTransactionId.");
                 }
@@ -384,23 +248,10 @@ public class AmzaHttpPartitionClient implements PartitionClient {
         byte[] intLongBuffer = new byte[8];
         return partitionCallRouter.take(solutionLog.orElse(null), partitionName, membersInOrder, "takePrefixFromTransactionId",
             (leader, ringMember, client) -> {
-                long transactionId = membersTxId.getOrDefault(ringMember, -1L);
-                HttpStreamResponse got = client.streamingPostStreamableRequest(
-                    "/amza/v1/takePrefixFromTransactionId/" + base64PartitionName,
-                    (out) -> {
-                        try {
-                            FilerOutputStream fos = new FilerOutputStream(out);
-                            UIO.writeByteArray(fos, prefix, 0, prefix.length, "prefix", intLongBuffer);
-                            UIO.writeLong(fos, transactionId, "transactionId");
-                        } finally {
-                            out.close();
-                        }
-                    }, null);
-
-                return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
+                return remotePartitionCaller.takePrefixFromTransactionId(leader, ringMember, client, prefix, membersTxId, stream);
             },
             (answers) -> {
-                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().response.getInputStream()));
+                List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));
                 if (streams.isEmpty()) {
                     throw new RuntimeException("Failed to takePrefixFromTransactionId.");
                 }

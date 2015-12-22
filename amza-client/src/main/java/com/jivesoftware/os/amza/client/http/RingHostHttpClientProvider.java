@@ -14,7 +14,7 @@ import com.jivesoftware.os.routing.bird.shared.HostPort;
  *
  * @author jonathan.colt
  */
-public class RingHostHttpClientProvider {
+public class RingHostHttpClientProvider implements RingHostClientProvider<HttpClient, HttpClientException> {
 
     private final TenantAwareHttpClient<String> tenantAwareHttpClient;
 
@@ -22,7 +22,8 @@ public class RingHostHttpClientProvider {
         this.tenantAwareHttpClient = tenantAwareHttpClient;
     }
 
-    <R> R call(PartitionName partitionName,
+    @Override
+    public <R> R call(PartitionName partitionName,
         RingMember leader,
         RingMemberAndHost ringMemberAndHost,
         String family,

@@ -5,6 +5,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.aquarium.State;
@@ -76,9 +77,9 @@ public class PartitionComposter {
                         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName,
                             versionedState.getPartitionVersion());
                         if (stripe.expungePartition(versionedPartitionName)) {
-                            partitionIndex.remove(versionedPartitionName);
+                            PartitionStore partitionStore = partitionIndex.remove(versionedPartitionName);
+                            partitionStore.getWalStorage().expunge();
                             highwaterStorage.expunge(versionedPartitionName);
-                            partitionProvider.destroyPartition(partitionName);
                             composted.add(versionedPartitionName);
                         }
                         return null;

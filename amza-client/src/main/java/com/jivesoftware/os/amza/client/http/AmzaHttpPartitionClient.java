@@ -126,18 +126,20 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                             UIO.writeLong(fos, abandonSolutionAfterNMillis, "timeoutInMillis");
 
                             updates.updates((rowTxId, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                                UIO.write(fos, new byte[]{0}, "eos");
+                                UIO.write(fos, new byte[] { 0 }, "eos");
                                 UIO.writeLong(fos, rowTxId, "rowTxId");
                                 UIO.writeByteArray(fos, key, 0, key.length, "key", lengthBuffer);
                                 UIO.writeByteArray(fos, value, 0, value.length, "value", lengthBuffer);
                                 UIO.writeLong(fos, valueTimestamp, "valueTimestamp");
-                                UIO.write(fos, new byte[]{valueTombstoned ? (byte) 1 : (byte) 0}, "valueTombstoned");
+                                UIO.write(fos, new byte[] { valueTombstoned ? (byte) 1 : (byte) 0 }, "valueTombstoned");
                                 // valueVersion is only ever generated on the servers.
                                 return true;
                             });
-                            UIO.write(fos, new byte[]{1}, "eos");
+                            UIO.write(fos, new byte[] { 1 }, "eos");
                         } catch (Exception x) {
                             throw new RuntimeException("Failed while streaming commitable.", x);
+                        } finally {
+                            out.close();
                         }
                     }, null);
 
@@ -174,13 +176,15 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                             FilerOutputStream fos = new FilerOutputStream(out);
                             UIO.writeByteArray(fos, prefix, 0, prefix.length, "prefix", intLongBuffer);
                             keys.consume((key) -> {
-                                UIO.write(fos, new byte[]{0}, "eos");
+                                UIO.write(fos, new byte[] { 0 }, "eos");
                                 UIO.writeByteArray(fos, key, 0, key.length, "key", intLongBuffer);
                                 return true;
                             });
-                            UIO.write(fos, new byte[]{1}, "eos");
+                            UIO.write(fos, new byte[] { 1 }, "eos");
                         } catch (Exception x) {
                             throw new RuntimeException("Failed while streaming keys.", x);
+                        } finally {
+                            out.close();
                         }
                     }, null);
                 CloseableHttpStreamResponse closeableHttpStreamResponse = new CloseableHttpStreamResponse(got);
@@ -259,11 +263,15 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                 HttpStreamResponse got = client.streamingPostStreamableRequest(
                     "/amza/v1/scan/" + base64PartitionName + "/" + consistency.name() + "/" + ringMember.equals(leader),
                     (out) -> {
-                        FilerOutputStream fos = new FilerOutputStream(out);
-                        UIO.writeByteArray(fos, fromPrefix, 0, fromPrefix.length, "fromPrefix", intLongBuffer);
-                        UIO.writeByteArray(fos, fromKey, 0, fromKey.length, "fromKey", intLongBuffer);
-                        UIO.writeByteArray(fos, toPrefix, 0, toPrefix.length, "toPrefix", intLongBuffer);
-                        UIO.writeByteArray(fos, toKey, 0, toKey.length, "toKey", intLongBuffer);
+                        try {
+                            FilerOutputStream fos = new FilerOutputStream(out);
+                            UIO.writeByteArray(fos, fromPrefix, 0, fromPrefix.length, "fromPrefix", intLongBuffer);
+                            UIO.writeByteArray(fos, fromKey, 0, fromKey.length, "fromKey", intLongBuffer);
+                            UIO.writeByteArray(fos, toPrefix, 0, toPrefix.length, "toPrefix", intLongBuffer);
+                            UIO.writeByteArray(fos, toKey, 0, toKey.length, "toKey", intLongBuffer);
+                        } finally {
+                            out.close();
+                        }
                     }, null);
 
                 return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
@@ -342,8 +350,12 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                 HttpStreamResponse got = client.streamingPostStreamableRequest(
                     "/amza/v1/takeFromTransactionId/" + base64PartitionName,
                     (out) -> {
-                        FilerOutputStream fos = new FilerOutputStream(out);
-                        UIO.writeLong(fos, transactionId, "transactionId");
+                        try {
+                            FilerOutputStream fos = new FilerOutputStream(out);
+                            UIO.writeLong(fos, transactionId, "transactionId");
+                        } finally {
+                            out.close();
+                        }
                     }, null);
 
                 return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);
@@ -376,9 +388,13 @@ public class AmzaHttpPartitionClient implements PartitionClient {
                 HttpStreamResponse got = client.streamingPostStreamableRequest(
                     "/amza/v1/takePrefixFromTransactionId/" + base64PartitionName,
                     (out) -> {
-                        FilerOutputStream fos = new FilerOutputStream(out);
-                        UIO.writeByteArray(fos, prefix, 0, prefix.length, "prefix", intLongBuffer);
-                        UIO.writeLong(fos, transactionId, "transactionId");
+                        try {
+                            FilerOutputStream fos = new FilerOutputStream(out);
+                            UIO.writeByteArray(fos, prefix, 0, prefix.length, "prefix", intLongBuffer);
+                            UIO.writeLong(fos, transactionId, "transactionId");
+                        } finally {
+                            out.close();
+                        }
                     }, null);
 
                 return new PartitionResponse<>(new CloseableHttpStreamResponse(got), got.getStatusCode() >= 200 && got.getStatusCode() < 300);

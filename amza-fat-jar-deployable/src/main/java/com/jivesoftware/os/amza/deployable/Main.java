@@ -26,8 +26,9 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
-import com.jivesoftware.os.amza.client.http.AmzaHttpClientProvider;
-import com.jivesoftware.os.amza.client.http.PartitionHostsProvider;
+import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
+import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
+import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
 import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -54,6 +55,8 @@ import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
+import com.jivesoftware.os.routing.bird.http.client.HttpClient;
+import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
 import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.http.client.TenantRoutingHttpClientInitializer;
@@ -175,8 +178,9 @@ public class Main {
             10,
             10_000); //TODO expose to conf
 
-        AmzaHttpClientProvider clientProvider = new AmzaHttpClientProvider(
-            new PartitionHostsProvider(httpClient, mapper),
+         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
+            new HttpPartitionClientFactory(),
+            new HttpPartitionHostsProvider(httpClient, mapper),
             new RingHostHttpClientProvider(httpClient),
             Executors.newCachedThreadPool(),
             10_000); //TODO expose to conf

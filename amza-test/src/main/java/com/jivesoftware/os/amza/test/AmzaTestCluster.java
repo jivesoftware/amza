@@ -22,7 +22,10 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
@@ -35,8 +38,6 @@ import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.EmbeddedClientProvider;
 import com.jivesoftware.os.amza.shared.Partition;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
@@ -46,7 +47,6 @@ import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.shared.take.RowsTaker;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer;
 import com.jivesoftware.os.amza.shared.take.StreamingTakesConsumer.StreamingTakeConsumed;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -97,6 +97,73 @@ public class AmzaTestCluster {
         this.oddsOfAConnectionFailureWhenTaking = oddsOfAConnectionFailureWhenTaking;
     }
 
+    /*
+    class AmzaServiceRemotePartitionCaller implements RemotePartitionCaller<AmzaService, Exception> {
+
+        @Override
+        public PartitionResponse<NoOpCloseable> commit(RingMember leader, RingMember ringMember, AmzaService client, Consistency consistency, byte[] prefix,
+            ClientUpdates updates, long abandonSolutionAfterNMillis) throws Exception {
+
+        }
+
+        @Override
+        public PartitionResponse<CloseableStreamResponse> get(RingMember leader, RingMember ringMember, AmzaService client, Consistency consistency,
+            byte[] prefix, UnprefixedWALKeys keys) throws Exception {
+
+        }
+
+        @Override
+        public PartitionResponse<CloseableStreamResponse> scan(RingMember leader, RingMember ringMember, AmzaService client, Consistency consistency,
+            byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) throws Exception {
+
+        }
+
+        @Override
+        public PartitionResponse<CloseableStreamResponse> takeFromTransactionId(RingMember leader, RingMember ringMember, AmzaService client,
+            Map<RingMember, Long> membersTxId, TxKeyValueStream stream) throws Exception {
+
+        }
+
+        @Override
+        public PartitionResponse<CloseableStreamResponse> takePrefixFromTransactionId(RingMember leader, RingMember ringMember, AmzaService client,
+            byte[] prefix, Map<RingMember, Long> membersTxId, TxKeyValueStream stream) throws Exception {
+
+        }
+
+    }
+
+    public AmzaClientProvider getClientProvider(RingMember ringMember) {
+
+        PartitionHostsProvider partitionHostsProvider = new PartitionHostsProvider() {
+            @Override
+            public void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
+
+            }
+
+            @Override
+            public Ring getPartitionHosts(PartitionName partitionName, java.util.Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws
+                Exception {
+
+            }
+        };
+        RingHostClientProvider<AmzaService, Exception> clientProvider = new RingHostClientProvider<AmzaService, Exception>() {
+            @Override
+            public <R> R call(PartitionName partitionName, RingMember leader, RingMemberAndHost ringMemberAndHost, String family,
+                PartitionCall<AmzaService, R, Exception> clientCall) throws Exception {
+
+                return
+            }
+        };
+        ExecutorService callerThreads = Executors.newCachedThreadPool();
+
+        PartitionClientFactory<AmzaService, Exception> partitionClientFactory =
+            (partitionName, partitionCallRouter, awaitLeaderElectionForNMillis) -> {
+                return new AmzaPartitionClient(partitionName, partitionCallRouter, new AmzaServiceRemotePartitionCaller(), awaitLeaderElectionForNMillis);
+            };
+        long awaitLeaderElectionForNMillis = 30_000;
+        return new AmzaClientProvider(partitionClientFactory, partitionHostsProvider, clientProvider, callerThreads, awaitLeaderElectionForNMillis);
+    }*/
+
     public Collection<AmzaNode> getAllNodes() {
         return cluster.values();
     }
@@ -117,7 +184,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         config.aquariumLivelinessFeedEveryMillis = 500;
         //config.useMemMap = true;
@@ -411,9 +478,9 @@ public class AmzaTestCluster {
         public void printRings() {
             try {
                 RingTopology systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
-                System.out.println("RING:" +
-                    " me:" + amzaService.getRingReader().getRingMember() +
-                    " ring:" + Lists.transform(systemRing.entries, input -> input.ringMember));
+                System.out.println("RING:"
+                    + " me:" + amzaService.getRingReader().getRingMember()
+                    + " ring:" + Lists.transform(systemRing.entries, input -> input.ringMember));
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -428,7 +495,7 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = { 0 };
+                    int[] count = {0};
                     partition.scan(null, null, null, null, (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
@@ -542,7 +609,7 @@ public class AmzaTestCluster {
                             byte[] bValue = bvalue[0];
                             long bVersion = bversion[0];
                             String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                                + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                             if (bValue == null) {
                                 System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)

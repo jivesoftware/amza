@@ -9,14 +9,11 @@ import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
-import com.jivesoftware.os.amza.client.http.PartitionHostsProvider.Ring;
 import com.jivesoftware.os.amza.client.http.exceptions.LeaderElectionInProgressException;
 import com.jivesoftware.os.amza.client.http.exceptions.NoLongerTheLeaderException;
 import com.jivesoftware.os.amza.client.http.exceptions.NotSolveableException;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.jivesoftware.os.routing.bird.http.client.HttpClient;
-import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,18 +33,18 @@ import java.util.concurrent.TimeoutException;
 /**
  * @author jonathan.colt
  */
-public class AmzaHttpClientCallRouter {
+public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvalidator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final ExecutorService callerThreads;
     private final PartitionHostsProvider partitionHostsProvider;
-    private final RingHostHttpClientProvider clientProvider;
+    private final RingHostClientProvider<C, E> clientProvider;
     private final Cache<PartitionName, Ring> partitionRoutingCache;
 
-    public AmzaHttpClientCallRouter(ExecutorService callerThreads,
+    public AmzaClientCallRouter(ExecutorService callerThreads,
         PartitionHostsProvider partitionHostsProvider,
-        RingHostHttpClientProvider clientProvider) {
+        RingHostClientProvider<C, E> clientProvider) {
         this.callerThreads = callerThreads;
         this.partitionHostsProvider = partitionHostsProvider;
         this.clientProvider = clientProvider;
@@ -61,7 +58,7 @@ public class AmzaHttpClientCallRouter {
         PartitionName partitionName,
         Consistency consistency,
         String family,
-        PartitionCall<HttpClient, A, HttpClientException> partitionCall,
+        PartitionCall<C, A, E> partitionCall,
         Merger<R, A> merger,
         long awaitLeaderElectionForNMillis,
         long additionalSolverAfterNMillis,
@@ -99,6 +96,7 @@ public class AmzaHttpClientCallRouter {
 
     }
 
+    @Override
     public void invalidateRouting(PartitionName partitionName) {
         partitionRoutingCache.invalidate(partitionName);
     }
@@ -107,7 +105,7 @@ public class AmzaHttpClientCallRouter {
         PartitionName partitionName,
         Consistency consistency,
         String family,
-        PartitionCall<HttpClient, A, HttpClientException> call,
+        PartitionCall<C, A, E> call,
         Merger<R, A> merger,
         long awaitLeaderElectionForNMillis,
         long additionalSolverAfterNMillis,
@@ -242,7 +240,7 @@ public class AmzaHttpClientCallRouter {
         PartitionName partitionName,
         List<RingMember> membersInOrder,
         String family,
-        PartitionCall<HttpClient, A, HttpClientException> call,
+        PartitionCall<C, A, E> call,
         Merger<R, A> merger,
         long awaitLeaderElectionForNMillis,
         long additionalSolverAfterNMillis,
@@ -257,7 +255,7 @@ public class AmzaHttpClientCallRouter {
     private Ring ring(PartitionName partitionName,
         Consistency consistency,
         Optional<RingMemberAndHost> useHost,
-        long waitForLeaderElection) throws HttpClientException, ExecutionException,
+        long waitForLeaderElection) throws Exception, ExecutionException,
         LeaderElectionInProgressException {
 
         Ring ring = partitionRoutingCache.getIfPresent(partitionName);
@@ -276,7 +274,7 @@ public class AmzaHttpClientCallRouter {
     private <R, A extends Closeable> R solve(List<String> solutionLog,
         PartitionName partitionName,
         String family,
-        PartitionCall<HttpClient, A, HttpClientException> partitionCall,
+        PartitionCall<C, A, E> partitionCall,
         int mandatory,
         boolean addNewSolverOnTimeout,
         Merger<R, A> merger,

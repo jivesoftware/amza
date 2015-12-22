@@ -219,10 +219,11 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
                         && !leadershipTokenAndTookFully.tookFully.isEmpty()
                         && properties.consistency.requiresLeader()) {
                         Waterline demoted = State.highest(rootAquariumMember, State.demoted, readCurrent, existing);
-                        if (demoted != null
-                            && demoted.isAtQuorum()
+                        // if there is no demoted member, assume this is the first election and declare the node repaired
+                        if (demoted == null ||
+                            (demoted.isAtQuorum()
                             && liveliness.isAlive(demoted.getMember())
-                            && leadershipTokenAndTookFully.tookFully.contains(RingMember.fromAquariumMember(demoted.getMember()))) {
+                            && leadershipTokenAndTookFully.tookFully.contains(RingMember.fromAquariumMember(demoted.getMember())))) {
                             repairedFromDemoted = true;
                         }
                     }

@@ -66,6 +66,10 @@ public class TakeVersionedPartitionCoordinator {
             synchronized (steadyState) {
                 return txHighestPartitionTx.tx(versionedPartitionName.getPartitionName(),
                     (versionedPartitionName1, livelyEndState, highestTxId) -> {
+                        if (livelyEndState == null) {
+                            // no storage, likely not a member of the ring
+                            return Long.MAX_VALUE;
+                        }
                         /*if (versionedPartitionName1 == null || versionedPartitionName1.getPartitionVersion() != versionedPartitionName.getPartitionVersion
                         ()) {
                             return Long.MAX_VALUE;

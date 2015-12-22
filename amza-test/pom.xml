@@ -82,7 +82,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-transport</artifactId>
-            <version>0.137-SNAPSHOT</version>
+            <version>0.141-SNAPSHOT</version>
             <type>jar</type>
         </dependency>
     </dependencies>

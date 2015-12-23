@@ -65,6 +65,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         final String indexClassName;
         final int maxUpdatesBetweenCompactionHintMarker;
         final int maxUpdatesBetweenIndexCommitMarker;
+        final String ringName;
         final String regionPrefix;
         final int ringSize;
         final int numBatches;
@@ -82,6 +83,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             String indexClassName,
             int maxUpdatesBetweenCompactionHintMarker,
             int maxUpdatesBetweenIndexCommitMarker,
+            String ringName,
             String regionPrefix,
             int ringSize,
             int numBatches,
@@ -98,6 +100,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             this.indexClassName = indexClassName;
             this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
             this.maxUpdatesBetweenIndexCommitMarker = maxUpdatesBetweenIndexCommitMarker;
+            this.ringName = ringName;
             this.regionPrefix = regionPrefix;
             this.ringSize = ringSize;
             this.numBatches = numBatches;
@@ -154,6 +157,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 row.put("indexClassName", stress.input.indexClassName);
                 row.put("maxUpdatesBetweenCompactionHintMarker", String.valueOf(stress.input.maxUpdatesBetweenCompactionHintMarker));
                 row.put("maxUpdatesBetweenIndexCommitMarker", String.valueOf(stress.input.maxUpdatesBetweenIndexCommitMarker));
+                row.put("ringName", stress.input.ringName);
                 row.put("regionPrefix", stress.input.regionPrefix);
                 row.put("numBatches", String.valueOf(stress.input.numBatches));
                 row.put("batchSize", String.valueOf(stress.input.batchSize));
@@ -205,6 +209,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                         input.indexClassName,
                         input.maxUpdatesBetweenCompactionHintMarker,
                         input.maxUpdatesBetweenIndexCommitMarker,
+                        input.ringName,
                         regionName,
                         input.ringSize,
                         Consistency.valueOf(input.consistency),
@@ -222,6 +227,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             private final String indexClassName;
             private final int maxUpdatesBetweenCompactionHintMarker;
             private final int maxUpdatesBetweenIndexCommitMarker;
+            private final String ringName;
             private final String regionName;
             private final int ringSize;
             private final Consistency consistency;
@@ -233,6 +239,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 String indexClassName,
                 int maxUpdatesBetweenCompactionHintMarker,
                 int maxUpdatesBetweenIndexCommitMarker,
+                String ringName,
                 String regionName,
                 int ringSize,
                 Consistency consistency,
@@ -243,6 +250,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 this.indexClassName = indexClassName;
                 this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
                 this.maxUpdatesBetweenIndexCommitMarker = maxUpdatesBetweenIndexCommitMarker;
+                this.ringName = ringName;
                 this.regionName = regionName;
                 this.ringSize = ringSize;
                 this.consistency = consistency;
@@ -257,7 +265,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                     int b = batch.incrementAndGet();
                     if (b <= input.numBatches && !forcedStop.get()) {
                         feed(client, indexClassName, maxUpdatesBetweenCompactionHintMarker, maxUpdatesBetweenIndexCommitMarker,
-                            regionName, ringSize, consistency, requireConsistency, b, threadIndex);
+                            ringName, regionName, ringSize, consistency, requireConsistency, b, threadIndex);
                         executor.submit(this);
                     } else {
                         completed();
@@ -284,6 +292,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             String indexClassName,
             int maxUpdatesBetweenCompactionHintMarker,
             int maxUpdatesBetweenIndexCommitMarker,
+            String ringName,
             String regionName,
             int ringSize,
             Consistency consistency,
@@ -294,6 +303,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 indexClassName,
                 maxUpdatesBetweenCompactionHintMarker,
                 maxUpdatesBetweenIndexCommitMarker,
+                ringName,
                 regionName,
                 consistency,
                 requireConsistency,
@@ -344,15 +354,16 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         String indexClassName,
         int maxUpdatesBetweenCompactionHintMarker,
         int maxUpdatesBetweenIndexCommitMarker,
+        String ringName,
         String simplePartitionName,
         Consistency consistency,
         boolean requireConsistency,
         int ringSize) throws Exception {
 
         if (ringSize < 1) {
-            amzaService.getRingWriter().ensureMaximalRing("default".getBytes());
+            amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes());
         } else {
-            amzaService.getRingWriter().ensureSubRing("default".getBytes(), ringSize);
+            amzaService.getRingWriter().ensureSubRing(ringName.getBytes(), ringSize);
 
         }
 
@@ -361,7 +372,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             null, maxUpdatesBetweenCompactionHintMarker, maxUpdatesBetweenIndexCommitMarker);
         PartitionProperties partitionProperties = new PartitionProperties(storageDescriptor, consistency, requireConsistency, 2, false);
         long timeoutMillis = 10_000;
-        PartitionName partitionName = new PartitionName(false, "default".getBytes(), simplePartitionName.getBytes());
+        PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
 
         if (client) {
             while (true) {

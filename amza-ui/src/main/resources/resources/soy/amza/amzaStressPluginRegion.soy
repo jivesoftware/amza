@@ -86,6 +86,13 @@
                 </tr>
 
 
+                <tr><td>Ring Name</td>
+                    {if $stress}
+                        {foreach $s in $stress}
+                            <td>{$s.ringName}</td>
+                        {/foreach}
+                    {/if}
+                </tr>
                 <tr><td>Region Prefix</td>
                     {if $stress}
                         {foreach $s in $stress}
@@ -183,6 +190,11 @@
                             <input type="number" name="maxUpdatesBetweenIndexCommitMarker" min="1" style="padding-left:10px;"
                                 class="form-control" placeholder="maxUpdatesBetweenIndexCommitMarker" value="1000"
                                 data-original-title="" title="">
+                        </td></tr>
+                        <tr><td>Ring Name</td><td>
+                            <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"
+                                class="form-control" placeholder="Ring Name" value=""
+                                name="ringName" id="ringNamePicker" title="">
                         </td></tr>
                         <tr><td>Region Prefix</td><td>
                             <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"

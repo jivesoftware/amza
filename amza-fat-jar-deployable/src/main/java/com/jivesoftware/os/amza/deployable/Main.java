@@ -38,9 +38,7 @@ import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -48,6 +46,7 @@ import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaClientRestEndpoints;
+import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaClientService;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -178,7 +177,7 @@ public class Main {
             10,
             10_000); //TODO expose to conf
 
-         AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
+        AmzaClientProvider<HttpClient, HttpClientException> clientProvider = new AmzaClientProvider<>(
             new HttpPartitionClientFactory(),
             new HttpPartitionHostsProvider(httpClient, mapper),
             new RingHostHttpClientProvider(httpClient),
@@ -192,9 +191,7 @@ public class Main {
             .addInjectable(AmzaInstance.class, amzaService)
             .addInjectable(AmzaStats.class, amzaStats)
             .addEndpoint(AmzaClientRestEndpoints.class)
-            .addInjectable(AmzaRingReader.class, amzaService.getRingReader())
-            .addInjectable(AmzaRingWriter.class, amzaService.getRingWriter())
-            .addInjectable(PartitionProvider.class, amzaService);
+            .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
         new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, new AmzaUIInitializer.InjectionCallback() {
 

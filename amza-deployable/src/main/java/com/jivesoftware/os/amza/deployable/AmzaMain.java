@@ -36,15 +36,13 @@ import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.PartitionProvider;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
 import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.HttpRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaClientRestEndpoints;
+import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaClientService;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
@@ -203,10 +201,8 @@ public class AmzaMain {
             deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
             deployable.addInjectables(AmzaInstance.class, amzaService);
             deployable.addEndpoints(AmzaClientRestEndpoints.class);
-            deployable.addInjectables(AmzaRingReader.class, amzaService.getRingReader());
-            deployable.addInjectables(AmzaRingWriter.class, amzaService.getRingWriter());
-            deployable.addInjectables(PartitionProvider.class, amzaService);
-
+            deployable.addInjectables(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
+            
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
                 new AmzaUIInitializer.InjectionCallback() {
 

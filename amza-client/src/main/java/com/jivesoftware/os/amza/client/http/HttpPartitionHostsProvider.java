@@ -8,6 +8,8 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.http.client.ConnectionDescriptorSelectiveStrategy;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpResponse;
@@ -17,12 +19,15 @@ import com.jivesoftware.os.routing.bird.http.client.TenantAwareHttpClient;
 import com.jivesoftware.os.routing.bird.shared.ClientCall;
 import com.jivesoftware.os.routing.bird.shared.HostPort;
 import com.jivesoftware.os.routing.bird.shared.NextClientStrategy;
+import java.io.IOException;
 import java.util.Optional;
 
 /**
  * @author jonathan.colt
  */
 public class HttpPartitionHostsProvider implements PartitionHostsProvider {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final TenantAwareHttpClient<String> tenantAwareHttpClient;
     private final ObjectMapper mapper;
@@ -105,8 +110,9 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
                 + partitionName.toBase64() + "/" + waitForLeaderElection, "", null);
             try {
                 if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
+                    FilerInputStream fis = null;
                     try {
-                        FilerInputStream fis = new FilerInputStream(got.getInputStream());
+                        fis = new FilerInputStream(got.getInputStream());
                         int ringSize = UIO.readInt(fis, "ringSize", intBuffer);
                         int leaderIndex = -1;
                         RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
@@ -126,6 +132,14 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
 
                     } catch (Exception x) {
                         throw new RuntimeException("Failed loading routes for " + partitionName, x);
+                    } finally {
+                        if (fis != null) {
+                            try {
+                                fis.close();
+                            } catch (IOException e) {
+                                LOG.warn("Failed to close input stream", e);
+                            }
+                        }
                     }
                 }
             } finally {

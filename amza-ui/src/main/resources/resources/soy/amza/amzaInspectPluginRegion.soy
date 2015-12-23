@@ -147,12 +147,16 @@
                                         <p>{$r.prefixAsString?:''}</p>
                                     </td>
                                     <td>
-                                        <p>{$r.keyAsHex?:''}</p>
-                                        <p>{$r.keyAsString?:''}</p>
+                                        <div style="max-height: 100px; overflow: auto; word-break: break-all;">
+                                            <p>{$r.keyAsHex?:''}</p>
+                                            <p>{$r.keyAsString?:''}</p>
+                                        </div>
                                     </td>
                                     <td>
-                                        <p>{$r.valueAsHex?:''}</p>
-                                        <p>{$r.valueAsString?:''}</p>
+                                        <div style="max-height: 100px; overflow: auto; word-break: break-all;">
+                                            <p>{$r.valueAsHex?:''}</p>
+                                            <p>{$r.valueAsString?:''}</p>
+                                        </div>
                                     </td>
                                     <td>
                                         <p>{$r.timestampAsHex?:''}</p>

@@ -349,7 +349,8 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
     }
 
     public void wipeTheGlass(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception {
-        if (!livelyEndState.isOnline() && ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName())) {
+        if ((!livelyEndState.isOnline() || !isOnline(livelyEndState.getLeaderWaterline()))
+            && ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName())) {
             Aquarium aquarium = getAquarium(versionedPartitionName);
             if (livelyEndState.getCurrentState() == State.expunged) {
                 // reenter the aquarium
@@ -357,6 +358,10 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
             }
             aquarium.tapTheGlass();
         }
+    }
+
+    public boolean isOnline(Waterline waterline) throws Exception {
+        return waterline != null && waterline.isAtQuorum() && liveliness.isAlive(waterline.getMember());
     }
 
     public LivelyEndState awaitOnline(VersionedPartitionName versionedPartitionName, long timeoutMillis) throws Exception {

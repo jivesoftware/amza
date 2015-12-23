@@ -133,7 +133,13 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
         }
 
         StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-        return aquariumProvider.awaitOnline(new VersionedPartitionName(partitionName, storageVersion.partitionVersion), timeoutMillis).getLeaderWaterline();
+        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+        Waterline leaderWaterline = aquariumProvider.awaitOnline(versionedPartitionName,
+            timeoutMillis).getLeaderWaterline();
+        if (!aquariumProvider.isOnline(leaderWaterline)) {
+            wipeTheGlass(versionedPartitionName);
+        }
+        return leaderWaterline;
     }
 
     @Override

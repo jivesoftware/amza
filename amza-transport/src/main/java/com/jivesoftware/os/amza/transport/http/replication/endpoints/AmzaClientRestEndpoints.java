@@ -90,7 +90,7 @@ public class AmzaClientRestEndpoints {
                     return Response.status(HttpStatus.SC_CONFLICT).build();
                 }
             } catch (Exception x) {
-                Object[] vals = new Object[]{partitionName, consistency};
+                Object[] vals = new Object[] { partitionName, consistency };
                 LOG.warn("Failed while determining leader {} at {}. ", vals, x);
                 return ResponseHelper.INSTANCE.errorResponse("Failed while determining leader: " + Arrays.toString(vals), x);
             }
@@ -252,7 +252,7 @@ public class AmzaClientRestEndpoints {
             LOG.info("FailedToAchieveQuorumException for {}", base64PartitionName);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.ACCEPTED, "Failed to achieve quorum exception");
         } catch (Exception x) {
-            Object[] vals = new Object[]{base64PartitionName, consistencyName};
+            Object[] vals = new Object[] { base64PartitionName, consistencyName };
             LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         } finally {
@@ -278,6 +278,11 @@ public class AmzaClientRestEndpoints {
         FilerInputStream fis = new FilerInputStream(inputStream);
         Response response = checkForReadyState(partitionName, consistency, checkLeader);
         if (response != null) {
+            try {
+                inputStream.close();
+            } catch (IOException x) {
+                LOG.warn("Failed to close input stream", x);
+            }
             return response;
         }
 
@@ -354,8 +359,14 @@ public class AmzaClientRestEndpoints {
 
         Response response = checkForReadyState(partitionName, consistency, checkLeader);
         if (response != null) {
+            try {
+                inputStream.close();
+            } catch (IOException x) {
+                LOG.warn("Failed to close input stream", x);
+            }
             return response;
         }
+
         byte[] intLongBuffer = new byte[8];
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {

@@ -120,31 +120,36 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             Future<A> future = null;
             try {
                 RingMemberAndHost leader = ring.leader();
-                A answer;
+                A answer = null;
                 try {
-                    RingMemberAndHost initialLeader = leader;
-                    if (solutionLog != null) {
-                        solutionLog.add("Reading from " + initialLeader);
+                    try {
+                        RingMemberAndHost initialLeader = leader;
+                        if (solutionLog != null) {
+                            solutionLog.add("Reading from " + initialLeader);
+                        }
+                        future = callerThreads.submit(() -> clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call));
+                        answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
+                    } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
+                        LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name() +
+                            ">" + new String(partitionName.getName(), StandardCharsets.UTF_8));
+                        ring = ring(partitionName, consistency, Optional.of(ring.leader()), awaitLeaderElectionForNMillis);
+                        leader = ring.leader();
+                        RingMemberAndHost nextLeader = leader;
+                        if (solutionLog != null) {
+                            solutionLog.add("Leader changed. Reattempting READ against " + leader);
+                        }
+                        if (future != null) {
+                            future.cancel(true);
+                        }
+                        future = callerThreads.submit(() -> clientProvider.call(partitionName, nextLeader.ringMember, nextLeader, family, call));
+                        answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
                     }
-                    future = callerThreads.submit(() -> clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call));
-                    answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
-                } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
-                    LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name() +
-                        ">" + new String(partitionName.getName(), StandardCharsets.UTF_8));
-                    ring = ring(partitionName, consistency, Optional.of(ring.leader()), awaitLeaderElectionForNMillis);
-                    leader = ring.leader();
-                    RingMemberAndHost nextLeader = leader;
-                    if (solutionLog != null) {
-                        solutionLog.add("Leader changed. Reattempting READ against " + leader);
+                    return merger.merge(Collections.singletonList(new RingMemberAndHostAnswer<>(leader, answer)));
+                } finally {
+                    if (answer != null) {
+                        answer.close();
                     }
-                    if (future != null) {
-                        future.cancel(true);
-                    }
-                    future = callerThreads.submit(() -> clientProvider.call(partitionName, nextLeader.ringMember, nextLeader, family, call));
-                    answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
                 }
-                return merger.merge(Collections.singletonList(new RingMemberAndHostAnswer<>(leader, answer)));
-
             } catch (TimeoutException x) {
                 if (future != null) {
                     future.cancel(true);

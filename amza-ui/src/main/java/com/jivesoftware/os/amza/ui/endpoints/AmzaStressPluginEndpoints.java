@@ -35,7 +35,7 @@ public class AmzaStressPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new AmzaStressPluginRegionInput("", false, "", 1000, 1000, "", 0, 0, 0, 0, 0, 0, "none", true, false, ""));
+            new AmzaStressPluginRegionInput("", false, "", 1000, 1000, ringName, "", 0, 0, 0, 0, 0, 0, "none", true, false, ""));
         return Response.ok(rendered).build();
     }
 
@@ -65,7 +65,7 @@ public class AmzaStressPluginEndpoints {
                 indexClassName.trim(),
                 maxUpdatesBetweenCompactionHintMarker,
                 maxUpdatesBetweenIndexCommitMarker,
-                regionPrefix.trim(),
+                ringName, regionPrefix.trim(),
                 ringSize,
                 numBatches,
                 batchSize,

@@ -145,10 +145,12 @@ public class AmzaClientRestEndpoints {
         @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         FilerInputStream in = null;
         try {
             in = new FilerInputStream(inputStream);
-            AmzaClientService.StateMessageCause stateMessageCause = amzaClientService.commit(PartitionName.fromBase64(base64PartitionName), Consistency.none,
+            AmzaClientService.StateMessageCause stateMessageCause = amzaClientService.commit(partitionName,
+                Consistency.valueOf(consistencyName),
                 checkLeader, 10_000, in);
             if (stateMessageCause != null) {
                 return stateMessageCauseToResponse(stateMessageCause);
@@ -156,13 +158,13 @@ public class AmzaClientRestEndpoints {
             return Response.ok("success").build();
 
         } catch (DeltaOverCapacityException x) {
-            LOG.info("Delta over capacity for {}", base64PartitionName);
+            LOG.warn("Delta over capacity for {} {}", base64PartitionName, x);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "Delta over capacity.");
         } catch (FailedToAchieveQuorumException x) {
-            LOG.info("FailedToAchieveQuorumException for {}", base64PartitionName);
+            LOG.warn("FailedToAchieveQuorumException for {} {}", base64PartitionName, x);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.ACCEPTED, "Failed to achieve quorum exception.");
         } catch (Exception x) {
-            Object[] vals = new Object[] { base64PartitionName, consistencyName };
+            Object[] vals = new Object[]{partitionName, consistencyName};
             LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         } finally {
@@ -299,14 +301,14 @@ public class AmzaClientRestEndpoints {
             try {
                 in.close();
             } catch (Exception x) {
-                LOG.warn("Failed to close input stream for " + context, x);
+                LOG.warn("Failed to close input stream for {} {}", context, x);
             }
         }
         if (out != null) {
             try {
                 out.close();
             } catch (Exception x) {
-                LOG.warn("Failed to close output stream for " + context, x);
+                LOG.warn("Failed to close output stream for {} {}", context, x);
             }
         }
     }

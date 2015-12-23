@@ -19,26 +19,14 @@ import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
-import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.filer.ICloseable;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
-import com.jivesoftware.os.amza.api.take.Highwaters;
-import com.jivesoftware.os.amza.api.take.TakeResult;
-import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.shared.Partition;
-import com.jivesoftware.os.amza.shared.PartitionProvider;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
@@ -53,7 +41,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import org.apache.http.HttpStatus;
 import org.glassfish.jersey.server.ChunkedOutput;
 
 @Singleton
@@ -61,41 +48,11 @@ import org.glassfish.jersey.server.ChunkedOutput;
 public class AmzaClientRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private final AmzaRingReader ringReader;
-    private final AmzaRingWriter ringWriter;
-    private final PartitionProvider partitionProvider;
+    private final AmzaClientService amzaClientService;
     private final ExecutorService chunkExecutors = Executors.newCachedThreadPool(); // TODO config!!!
 
-    public AmzaClientRestEndpoints(@Context AmzaRingReader ringReader,
-        @Context AmzaRingWriter ringWriter,
-        @Context PartitionProvider partitionProvider) {
-        this.ringReader = ringReader;
-        this.ringWriter = ringWriter;
-        this.partitionProvider = partitionProvider;
-    }
-
-    private Response checkForReadyState(PartitionName partitionName, Consistency consistency, boolean checkLeader) {
-        try {
-            partitionProvider.awaitOnline(partitionName, 10_000L); //TODO config
-        } catch (Exception e) {
-            return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
-        }
-        if (checkLeader && consistency.requiresLeader()) {
-            try {
-                RingMember leader = partitionProvider.awaitLeader(partitionName, 0);
-                if (leader == null) {
-                    return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
-                }
-                if (!leader.equals(ringReader.getRingMember())) {
-                    return Response.status(HttpStatus.SC_CONFLICT).build();
-                }
-            } catch (Exception x) {
-                Object[] vals = new Object[] { partitionName, consistency };
-                LOG.warn("Failed while determining leader {} at {}. ", vals, x);
-                return ResponseHelper.INSTANCE.errorResponse("Failed while determining leader: " + Arrays.toString(vals), x);
-            }
-        }
-        return null;
+    public AmzaClientRestEndpoints(@Context AmzaClientService amzaClientService) {
+        this.amzaClientService = amzaClientService;
     }
 
     @POST
@@ -105,41 +62,26 @@ public class AmzaClientRestEndpoints {
         @PathParam("ringSize") int ringSize,
         PartitionProperties partitionProperties) {
 
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-            byte[] ringNameBytes = partitionName.getRingName();
-            ringWriter.ensureSubRing(ringNameBytes, ringSize);
-            partitionProvider.setPropertiesIfAbsent(partitionName, partitionProperties);
-            RingTopology ring = ringReader.getRing(partitionName.getRingName());
-
+            RingTopology ringTopology = amzaClientService.configPartition(partitionName, partitionProperties, ringSize);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
+                ChunkedOutputFiler out = null;
                 try {
-                    ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                    byte[] lengthBuffer = new byte[4];
-                    UIO.writeInt(cf, ring.entries.size(), "ringSize", lengthBuffer);
-                    for (RingMemberAndHost entry : ring.entries) {
-                        UIO.writeByteArray(cf, entry.ringMember.toBytes(), "ringMember", lengthBuffer);
-                        UIO.writeByteArray(cf, entry.ringHost.toBytes(), "ringHost", lengthBuffer);
-                        UIO.writeByte(cf, (byte) 0, "leader");
-                    }
-                    cf.flush(true);
-
+                    out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                    amzaClientService.configPartition(ringTopology, out);
+                    out.flush(true);
                 } catch (Exception x) {
                     LOG.warn("Failed to stream ring", x);
                 } finally {
-                    try {
-                        chunkedOutput.close();
-                    } catch (IOException x) {
-                        LOG.warn("Failed to close ring stream", x);
-                    }
+                    closeStreams("configPartition", null, out);
                 }
             });
             return chunkedOutput;
-        } catch (TimeoutException e) {
-            return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
         } catch (Exception e) {
-            return Response.serverError().build();
+            LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[]{partitionName, partitionProperties, ringSize}, e);
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to configPartition.", e);
         }
     }
 
@@ -149,17 +91,16 @@ public class AmzaClientRestEndpoints {
     public Object ensurePartition(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("waitForLeaderElection") long waitForLeaderElection) {
 
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-            long start = System.currentTimeMillis();
-            partitionProvider.awaitOnline(partitionName, waitForLeaderElection);
-            waitForLeaderElection = Math.max(0, waitForLeaderElection - (System.currentTimeMillis() - start));
-            partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
+            amzaClientService.ensurePartition(partitionName, waitForLeaderElection);
             return Response.ok().build();
         } catch (TimeoutException e) {
-            return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
+            LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
-            return Response.serverError().build();
+            LOG.error("Failed while attempting to ensurePartition:{}", new Object[]{partitionName}, e);
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
 
@@ -169,40 +110,29 @@ public class AmzaClientRestEndpoints {
     public Object ring(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("waitForLeaderElection") long waitForLeaderElection) {
 
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-            RingMember leader = partitionName.isSystemPartition() ? null : partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
-            RingTopology ring = ringReader.getRing(partitionName.getRingName());
-
+            AmzaClientService.RingLeader ringLeader = amzaClientService.ring(partitionName, waitForLeaderElection);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
+                ChunkedOutputFiler out = null;
                 try {
-                    ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                    byte[] lengthBuffer = new byte[4];
-                    UIO.writeInt(cf, ring.entries.size(), "ringSize", lengthBuffer);
-                    for (RingMemberAndHost entry : ring.entries) {
-                        UIO.writeByteArray(cf, entry.ringMember.toBytes(), "ringMember", lengthBuffer);
-                        UIO.writeByteArray(cf, entry.ringHost.toBytes(), "ringHost", lengthBuffer);
-                        boolean isLeader = leader != null && Arrays.equals(entry.ringMember.toBytes(), leader.toBytes());
-                        UIO.writeByte(cf, isLeader ? (byte) 1 : (byte) 0, "leader");
-                    }
-                    cf.flush(true);
-
+                    out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                    amzaClientService.ring(ringLeader, out);
+                    out.flush(true);
                 } catch (Exception x) {
                     LOG.warn("Failed to stream ring", x);
                 } finally {
-                    try {
-                        chunkedOutput.close();
-                    } catch (IOException x) {
-                        LOG.warn("Failed to close ring stream", x);
-                    }
+                    closeStreams("commit", null, out);
                 }
             });
             return chunkedOutput;
         } catch (TimeoutException e) {
-            return Response.status(HttpStatus.SC_SERVICE_UNAVAILABLE).build();
+            LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
-            return Response.serverError().build();
+            LOG.error("Failed while attempting to get ring:{}", new Object[]{partitionName}, e);
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
 
@@ -215,52 +145,28 @@ public class AmzaClientRestEndpoints {
         @PathParam("checkLeader") boolean checkLeader,
         InputStream inputStream) {
 
+        FilerInputStream in = null;
         try {
-
-            PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-            Consistency consistency = Consistency.valueOf(consistencyName);
-            FilerInputStream fis = new FilerInputStream(inputStream);
-            Response response = checkForReadyState(partitionName, consistency, checkLeader);
-            if (response != null) {
-                return response;
+            in = new FilerInputStream(inputStream);
+            AmzaClientService.StateMessageCause stateMessageCause = amzaClientService.commit(PartitionName.fromBase64(base64PartitionName), Consistency.none,
+                checkLeader, 10_000, in);
+            if (stateMessageCause != null) {
+                return stateMessageCauseToResponse(stateMessageCause);
             }
-
-            Partition partition = partitionProvider.getPartition(partitionName);
-            byte[] intLongBuffer = new byte[8];
-            byte[] prefix = UIO.readByteArray(fis, "prefix", intLongBuffer);
-            long timeoutInMillis = UIO.readLong(fis, "timeoutInMillis", intLongBuffer);
-
-            partition.commit(consistency, prefix, (highwaters, txKeyValueStream) -> {
-                while (!UIO.readBoolean(fis, "eos")) {
-                    if (!txKeyValueStream.row(UIO.readLong(fis, "rowTxId", intLongBuffer),
-                        UIO.readByteArray(fis, "key", intLongBuffer),
-                        UIO.readByteArray(fis, "value", intLongBuffer),
-                        UIO.readLong(fis, "valueTimestamp", intLongBuffer),
-                        UIO.readBoolean(fis, "valueTombstoned"),
-                        -1)) {
-                        return false;
-                    }
-                }
-                return true;
-            }, timeoutInMillis);
-
             return Response.ok("success").build();
+
         } catch (DeltaOverCapacityException x) {
             LOG.info("Delta over capacity for {}", base64PartitionName);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "Delta over capacity");
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "Delta over capacity.");
         } catch (FailedToAchieveQuorumException x) {
             LOG.info("FailedToAchieveQuorumException for {}", base64PartitionName);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.ACCEPTED, "Failed to achieve quorum exception");
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.ACCEPTED, "Failed to achieve quorum exception.");
         } catch (Exception x) {
             Object[] vals = new Object[] { base64PartitionName, consistencyName };
             LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         } finally {
-            try {
-                inputStream.close();
-            } catch (IOException x) {
-                LOG.warn("Failed to close input stream", x);
-            }
+            closeStreams("commit", in, null);
         }
     }
 
@@ -274,71 +180,27 @@ public class AmzaClientRestEndpoints {
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        Consistency consistency = Consistency.valueOf(consistencyName);
-        FilerInputStream fis = new FilerInputStream(inputStream);
-        Response response = checkForReadyState(partitionName, consistency, checkLeader);
-        if (response != null) {
-            try {
-                inputStream.close();
-            } catch (IOException x) {
-                LOG.warn("Failed to close input stream", x);
-            }
-            return response;
+        AmzaClientService.StateMessageCause stateMessageCause = amzaClientService.status(partitionName,
+            Consistency.valueOf(consistencyName),
+            checkLeader,
+            10_000);
+        if (stateMessageCause != null) {
+            return stateMessageCauseToResponse(stateMessageCause);
         }
 
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
-        byte[] intLongBuffer = new byte[8];
         chunkExecutors.submit(() -> {
+            FilerInputStream in = null;
+            ChunkedOutputFiler out = null;
             try {
-
-                Partition partition = partitionProvider.getPartition(partitionName);
-                byte[] prefix = UIO.readByteArray(fis, "prefix", intLongBuffer);
-
-                ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                partition.get(consistency, prefix,
-                    (keyStream) -> {
-                        while (!UIO.readBoolean(fis, "eos")) {
-                            if (!keyStream.stream(UIO.readByteArray(fis, "key", intLongBuffer))) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    },
-                    (prefix1, key, value, timestamp, tombstoned, version) -> {
-                        UIO.writeByte(cf, (byte) 0, "eos");
-                        UIO.writeByteArray(cf, prefix1, "prefix", intLongBuffer);
-                        UIO.writeByteArray(cf, key, "key", intLongBuffer);
-                        if (tombstoned) {
-                            UIO.writeByteArray(cf, null, "value", intLongBuffer);
-                            UIO.writeLong(cf, -1L, "timestamp");
-                            UIO.writeByte(cf, (byte) 1, "tombstoned");
-                            UIO.writeLong(cf, -1L, "version");
-                        } else {
-                            UIO.writeByteArray(cf, value, "value", intLongBuffer);
-                            UIO.writeLong(cf, timestamp, "timestamp");
-                            UIO.writeByte(cf, (byte) 0, "tombstoned");
-                            UIO.writeLong(cf, version, "version");
-                        }
-                        return true;
-                    });
-
-                UIO.writeByte(cf, (byte) 1, "eos");
-                cf.flush(true);
-
+                in = new FilerInputStream(inputStream);
+                out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                amzaClientService.get(partitionName, Consistency.none, in, out);
+                out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream gets", x);
-
             } finally {
-                try {
-                    chunkedOutput.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close get stream", x);
-                }
-                try {
-                    inputStream.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close input stream", x);
-                }
+                closeStreams("get", in, out);
             }
         });
         return chunkedOutput;
@@ -354,58 +216,28 @@ public class AmzaClientRestEndpoints {
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        Consistency consistency = Consistency.valueOf(consistencyName);
-        FilerInputStream fis = new FilerInputStream(inputStream);
-
-        Response response = checkForReadyState(partitionName, consistency, checkLeader);
-        if (response != null) {
-            try {
-                inputStream.close();
-            } catch (IOException x) {
-                LOG.warn("Failed to close input stream", x);
-            }
-            return response;
+        AmzaClientService.StateMessageCause stateMessageCause = amzaClientService.status(partitionName,
+            Consistency.valueOf(consistencyName),
+            checkLeader,
+            10_000);
+        if (stateMessageCause != null) {
+            return stateMessageCauseToResponse(stateMessageCause);
         }
 
-        byte[] intLongBuffer = new byte[8];
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
+            FilerInputStream in = null;
+            ChunkedOutputFiler out = null;
             try {
-                Partition partition = partitionProvider.getPartition(partitionName);
-                byte[] fromPrefix = UIO.readByteArray(fis, "fromPrefix", intLongBuffer);
-                byte[] fromKey = UIO.readByteArray(fis, "fromKey", intLongBuffer);
-                byte[] toPrefix = UIO.readByteArray(fis, "toPrefix", intLongBuffer);
-                byte[] toKey = UIO.readByteArray(fis, "toKey", intLongBuffer);
-
-                ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                partition.scan(fromPrefix, fromKey, toPrefix, toKey,
-                    (prefix, key, value, timestamp, version) -> {
-                        UIO.writeByte(cf, (byte) 0, "eos");
-                        UIO.writeByteArray(cf, prefix, "prefix", intLongBuffer);
-                        UIO.writeByteArray(cf, key, "key", intLongBuffer);
-                        UIO.writeByteArray(cf, value, "value", intLongBuffer);
-                        UIO.writeLong(cf, timestamp, "timestampId");
-                        UIO.writeLong(cf, version, "version");
-                        return true;
-                    });
-
-                UIO.writeByte(cf, (byte) 1, "eos");
-                cf.flush(true);
+                in = new FilerInputStream(inputStream);
+                out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                amzaClientService.scan(partitionName, in, out);
+                out.flush(true);
 
             } catch (Exception x) {
                 LOG.warn("Failed to stream scan", x);
-
             } finally {
-                try {
-                    chunkedOutput.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close scan stream", x);
-                }
-                try {
-                    inputStream.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close input stream", x);
-                }
+                closeStreams("scan", in, out);
             }
         });
         return chunkedOutput;
@@ -418,30 +250,19 @@ public class AmzaClientRestEndpoints {
     public Object takeFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
         InputStream inputStream) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        FilerInputStream fis = new FilerInputStream(inputStream);
-        byte[] intLongBuffer = new byte[8];
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
+            FilerInputStream in = null;
+            ChunkedOutputFiler out = null;
             try {
-                long transactionId = UIO.readLong(fis, "transactionId", intLongBuffer);
-
-                Partition partition = partitionProvider.getPartition(partitionName);
-                take(chunkedOutput, partition, false, null, transactionId, intLongBuffer);
+                in = new FilerInputStream(inputStream);
+                out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                amzaClientService.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
+                out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takeFromTransactionId", x);
-
             } finally {
-                try {
-                    chunkedOutput.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close takeFromTransactionId stream", x);
-                }
-                try {
-                    inputStream.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close input stream", x);
-                }
+                closeStreams("takeFromTransactionId", in, out);
             }
         });
         return chunkedOutput;
@@ -454,83 +275,59 @@ public class AmzaClientRestEndpoints {
     public Object takePrefixFromTransactionId(@PathParam("base64PartitionName") String base64PartitionName,
         InputStream inputStream) {
 
-        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        FilerInputStream fis = new FilerInputStream(inputStream);
-        byte[] intLongBuffer = new byte[8];
         ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
         chunkExecutors.submit(() -> {
+
+            FilerInputStream in = null;
+            ChunkedOutputFiler out = null;
             try {
-                Partition partition = partitionProvider.getPartition(partitionName);
-                byte[] prefix = UIO.readByteArray(fis, "prefix", intLongBuffer);
-                long txId = UIO.readLong(fis, "txId", intLongBuffer);
-                take(chunkedOutput, partition, true, prefix, txId, intLongBuffer);
+                in = new FilerInputStream(inputStream);
+                out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                amzaClientService.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
+                out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takePrefixFromTransactionId", x);
-
             } finally {
-                try {
-                    chunkedOutput.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close takePrefixFromTransactionId stream", x);
-                }
-                try {
-                    inputStream.close();
-                } catch (IOException x) {
-                    LOG.warn("Failed to close input stream", x);
-                }
+                closeStreams("takePrefixFromTransactionId", in, out);
             }
         });
         return chunkedOutput;
     }
 
-    private void take(ChunkedOutput<byte[]> chunkedOutput,
-        Partition partition,
-        boolean usePrefix,
-        byte[] prefix,
-        long txId,
-        byte[] lengthBuffer) throws Exception {
-
-        ChunkedOutputFiler cf = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-        RingMember ringMember = ringReader.getRingMember();
-        UIO.writeByteArray(cf, ringMember.toBytes(), "ringMember", lengthBuffer);
-        Highwaters streamHighwater = (highwater) -> {
-            UIO.writeByte(cf, (byte) 0, "eos");
-            UIO.writeByte(cf, RowType.highwater.toByte(), "type");
-            writeHighwaters(cf, highwater, lengthBuffer);
-        };
-        TxKeyValueStream stream = (rowTxId, prefix1, key, value, timestamp, tombstoned, version) -> {
-            UIO.writeByte(cf, (byte) 0, "eos");
-            UIO.writeByte(cf, RowType.primary.toByte(), "type");
-            UIO.writeLong(cf, rowTxId, "rowTxId");
-            UIO.writeByteArray(cf, prefix1, "prefix", lengthBuffer);
-            UIO.writeByteArray(cf, key, "key", lengthBuffer);
-            UIO.writeByteArray(cf, value, "value", lengthBuffer);
-            UIO.writeLong(cf, timestamp, "timestamp");
-            UIO.writeByte(cf, tombstoned ? (byte) 1 : (byte) 0, "tombstoned");
-            UIO.writeLong(cf, version, "version");
-            return true;
-        };
-        TakeResult takeResult;
-        if (usePrefix) {
-            takeResult = partition.takePrefixFromTransactionId(prefix, txId, streamHighwater, stream);
-        } else {
-            takeResult = partition.takeFromTransactionId(txId, streamHighwater, stream);
+    private void closeStreams(String context, ICloseable in, ICloseable out) {
+        if (in != null) {
+            try {
+                in.close();
+            } catch (Exception x) {
+                LOG.warn("Failed to close input stream for " + context, x);
+            }
         }
-        UIO.writeByte(cf, (byte) 1, "eos");
-
-        UIO.writeByteArray(cf, takeResult.tookFrom.toBytes(), "ringMember", lengthBuffer);
-        UIO.writeLong(cf, takeResult.lastTxId, "lastTxId");
-        writeHighwaters(cf, takeResult.tookToEnd, lengthBuffer);
-        UIO.writeByte(cf, (byte) 1, "eos");
-        cf.flush(true);
+        if (out != null) {
+            try {
+                out.close();
+            } catch (Exception x) {
+                LOG.warn("Failed to close output stream for " + context, x);
+            }
+        }
     }
 
-    private void writeHighwaters(ChunkedOutputFiler cf, WALHighwater highwater, byte[] lengthBuffer) throws IOException {
-        UIO.writeInt(cf, highwater.ringMemberHighwater.size(), "length", lengthBuffer);
-        for (WALHighwater.RingMemberHighwater ringMemberHighwater : highwater.ringMemberHighwater) {
-            UIO.writeByteArray(cf, ringMemberHighwater.ringMember.toBytes(), "ringMember", lengthBuffer);
-            UIO.writeLong(cf, ringMemberHighwater.transactionId, "txId");
+    private Response stateMessageCauseToResponse(AmzaClientService.StateMessageCause stateMessageCause) {
+        if (stateMessageCause != null && stateMessageCause.state != null) {
+            LOG.warn("{}", stateMessageCause);
+            switch (stateMessageCause.state) {
+                case failed_to_come_online:
+                    return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, stateMessageCause.message, stateMessageCause.cause);
+                case lacks_leader:
+                    return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, stateMessageCause.message, stateMessageCause.cause);
+                case not_the_leader:
+                    return ResponseHelper.INSTANCE.errorResponse(Response.Status.CONFLICT, stateMessageCause.message, stateMessageCause.cause);
+                case error:
+                    return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, stateMessageCause.message, stateMessageCause.cause);
+                default:
+                    break;
+            }
         }
+        return null;
     }
 
 }

@@ -255,6 +255,12 @@ public class AmzaClientRestEndpoints {
             Object[] vals = new Object[]{base64PartitionName, consistencyName};
             LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
+        } finally {
+            try {
+                inputStream.close();
+            } catch (IOException x) {
+                LOG.warn("Failed to close input stream", x);
+            }
         }
     }
 
@@ -323,6 +329,11 @@ public class AmzaClientRestEndpoints {
                 } catch (IOException x) {
                     LOG.warn("Failed to close get stream", x);
                 }
+                try {
+                    inputStream.close();
+                } catch (IOException x) {
+                    LOG.warn("Failed to close input stream", x);
+                }
             }
         });
         return chunkedOutput;
@@ -379,6 +390,11 @@ public class AmzaClientRestEndpoints {
                 } catch (IOException x) {
                     LOG.warn("Failed to close scan stream", x);
                 }
+                try {
+                    inputStream.close();
+                } catch (IOException x) {
+                    LOG.warn("Failed to close input stream", x);
+                }
             }
         });
         return chunkedOutput;
@@ -410,6 +426,11 @@ public class AmzaClientRestEndpoints {
                 } catch (IOException x) {
                     LOG.warn("Failed to close takeFromTransactionId stream", x);
                 }
+                try {
+                    inputStream.close();
+                } catch (IOException x) {
+                    LOG.warn("Failed to close input stream", x);
+                }
             }
         });
         return chunkedOutput;
@@ -440,6 +461,11 @@ public class AmzaClientRestEndpoints {
                     chunkedOutput.close();
                 } catch (IOException x) {
                     LOG.warn("Failed to close takePrefixFromTransactionId stream", x);
+                }
+                try {
+                    inputStream.close();
+                } catch (IOException x) {
+                    LOG.warn("Failed to close input stream", x);
                 }
             }
         });

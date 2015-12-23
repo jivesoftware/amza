@@ -75,13 +75,17 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                 }
                 return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis,
                     leader.ringMember, leader);
-            } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
+            } catch (LeaderElectionInProgressException | NoLongerTheLeaderException | ExecutionException e) {
                 LOG.inc("reattempts>write>" + e.getClass().getSimpleName() + ">" + consistency.name() +
                     ">" + new String(partitionName.getName(), StandardCharsets.UTF_8));
-                ring = ring(partitionName, consistency, Optional.of(ring.leader()), awaitLeaderElectionForNMillis);
+                partitionRoutingCache.invalidate(partitionName);
+                ring = ring(partitionName,
+                    consistency,
+                    (e instanceof ExecutionException) ? Optional.empty() : Optional.of(ring.leader()),
+                    awaitLeaderElectionForNMillis);
                 RingMemberAndHost leader = ring.leader();
                 if (solutionLog != null) {
-                    solutionLog.add("Leader changed. Reattempting WRITE against " + leader);
+                    solutionLog.add("Leader may have changed. Reattempting WRITE against " + leader);
                 }
                 return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis,
                     leader.ringMember, leader);
@@ -129,14 +133,18 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                         }
                         future = callerThreads.submit(() -> clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call));
                         answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
-                    } catch (LeaderElectionInProgressException | NoLongerTheLeaderException e) {
+                    } catch (LeaderElectionInProgressException | NoLongerTheLeaderException | ExecutionException e) {
                         LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name() +
                             ">" + new String(partitionName.getName(), StandardCharsets.UTF_8));
-                        ring = ring(partitionName, consistency, Optional.of(ring.leader()), awaitLeaderElectionForNMillis);
+                        partitionRoutingCache.invalidate(partitionName);
+                        ring = ring(partitionName,
+                            consistency,
+                            (e instanceof ExecutionException) ? Optional.empty() : Optional.of(ring.leader()),
+                            awaitLeaderElectionForNMillis);
                         leader = ring.leader();
                         RingMemberAndHost nextLeader = leader;
                         if (solutionLog != null) {
-                            solutionLog.add("Leader changed. Reattempting READ against " + leader);
+                            solutionLog.add("Leader may have changed. Reattempting READ against " + leader);
                         }
                         if (future != null) {
                             future.cancel(true);
@@ -190,7 +198,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     leaderlessRing);
             } else if (consistency == Consistency.leader_quorum) {
                 RingMemberAndHost[] leaderlessRing = ring.leaderlessRing();
-                int neighborQuorum = consistency.quorum(leaderlessRing.length);
+                int neighborQuorum = 1 + consistency.repairQuorum(leaderlessRing.length);
                 if (solutionLog != null) {
                     solutionLog.add("Failing over READ to " + neighborQuorum + " out of" + leaderlessRing.length + " members.");
                 }

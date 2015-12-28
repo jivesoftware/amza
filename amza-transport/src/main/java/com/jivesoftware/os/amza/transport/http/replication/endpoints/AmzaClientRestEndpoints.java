@@ -48,11 +48,11 @@ import org.glassfish.jersey.server.ChunkedOutput;
 public class AmzaClientRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private final AmzaClientService amzaClientService;
+    private final AmzaRestClient client;
     private final ExecutorService chunkExecutors = Executors.newCachedThreadPool(); // TODO config!!!
 
-    public AmzaClientRestEndpoints(@Context AmzaClientService amzaClientService) {
-        this.amzaClientService = amzaClientService;
+    public AmzaClientRestEndpoints(@Context AmzaRestClient client) {
+        this.client = client;
     }
 
     @POST
@@ -64,13 +64,13 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            RingTopology ringTopology = amzaClientService.configPartition(partitionName, partitionProperties, ringSize);
+            RingTopology ringTopology = client.configPartition(partitionName, partitionProperties, ringSize);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
                 try {
                     out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                    amzaClientService.configPartition(ringTopology, out);
+                    client.configPartition(ringTopology, out);
                     out.flush(true);
                 } catch (Exception x) {
                     LOG.warn("Failed to stream ring", x);
@@ -93,7 +93,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            amzaClientService.ensurePartition(partitionName, waitForLeaderElection);
+            client.ensurePartition(partitionName, waitForLeaderElection);
             return Response.ok().build();
         } catch (TimeoutException e) {
             LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
@@ -112,13 +112,13 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            AmzaClientService.RingLeader ringLeader = amzaClientService.ring(partitionName, waitForLeaderElection);
+            AmzaClientService.RingLeader ringLeader = client.ring(partitionName, waitForLeaderElection);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
                 try {
                     out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                    amzaClientService.ring(ringLeader, out);
+                    client.ring(ringLeader, out);
                     out.flush(true);
                 } catch (Exception x) {
                     LOG.warn("Failed to stream ring", x);
@@ -149,7 +149,7 @@ public class AmzaClientRestEndpoints {
         FilerInputStream in = null;
         try {
             in = new FilerInputStream(inputStream);
-            AmzaClientService.StateMessageCause stateMessageCause = amzaClientService.commit(partitionName,
+            AmzaClientService.StateMessageCause stateMessageCause = client.commit(partitionName,
                 Consistency.valueOf(consistencyName),
                 checkLeader, 10_000, in);
             if (stateMessageCause != null) {
@@ -182,7 +182,7 @@ public class AmzaClientRestEndpoints {
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        AmzaClientService.StateMessageCause stateMessageCause = amzaClientService.status(partitionName,
+        AmzaClientService.StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
             checkLeader,
             10_000);
@@ -197,7 +197,7 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                amzaClientService.get(partitionName, Consistency.none, in, out);
+                client.get(partitionName, Consistency.none, in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream gets", x);
@@ -218,7 +218,7 @@ public class AmzaClientRestEndpoints {
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        AmzaClientService.StateMessageCause stateMessageCause = amzaClientService.status(partitionName,
+        AmzaClientService.StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
             checkLeader,
             10_000);
@@ -233,7 +233,7 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                amzaClientService.scan(partitionName, in, out);
+                client.scan(partitionName, in, out);
                 out.flush(true);
 
             } catch (Exception x) {
@@ -259,7 +259,7 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                amzaClientService.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
+                client.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takeFromTransactionId", x);
@@ -285,7 +285,7 @@ public class AmzaClientRestEndpoints {
             try {
                 in = new FilerInputStream(inputStream);
                 out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
-                amzaClientService.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
+                client.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
                 out.flush(true);
             } catch (Exception x) {
                 LOG.warn("Failed to stream takePrefixFromTransactionId", x);

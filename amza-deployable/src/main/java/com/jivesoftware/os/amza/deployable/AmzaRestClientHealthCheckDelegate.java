@@ -181,12 +181,39 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
     private static final HealthTimer ringRequestLatency = HealthFactory.getHealthTimer(RingRequestLatency.class, TimerHealthChecker.FACTORY);
 
     @Override
-    public RingLeader ring(PartitionName partitionName, long waitForLeaderElection) throws Exception {
+    public RingLeader ring(PartitionName partitionName) throws Exception {
         try {
             ringRequestLatency.startTimer();
-            return client.ring(partitionName, waitForLeaderElection);
+            return client.ring(partitionName);
         } finally {
             ringRequestLatency.stopTimer("Ensure", "Check cluster health.");
+        }
+    }
+
+     public static interface RingLeaderRequestLatency extends TimerHealthCheckConfig {
+
+        @StringDefault("client>ringLeader>request>latency")
+        @Override
+        String getName();
+
+        @StringDefault("How long its taking to request a ringLeader.")
+        @Override
+        String getDescription();
+
+        @DoubleDefault(3600000d)
+        @Override
+        Double get95ThPecentileMax();
+    }
+
+    private static final HealthTimer ringLeaderRequestLatency = HealthFactory.getHealthTimer(RingLeaderRequestLatency.class, TimerHealthChecker.FACTORY);
+
+    @Override
+    public RingLeader ringLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception {
+        try {
+            ringLeaderRequestLatency.startTimer();
+            return client.ringLeader(partitionName, waitForLeaderElection);
+        } finally {
+            ringLeaderRequestLatency.stopTimer("Ensure", "Check cluster health.");
         }
     }
 

@@ -27,7 +27,7 @@ import java.util.Arrays;
  *
  * @author jonathan.colt
  */
-public class AmzaClientService {
+public class AmzaClientService implements AmzaRestClient {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRingReader ringReader;
@@ -40,6 +40,7 @@ public class AmzaClientService {
         this.partitionProvider = partitionProvider;
     }
 
+    @Override
     public RingTopology configPartition(PartitionName partitionName, PartitionProperties partitionProperties, int ringSize) throws
         Exception {
         byte[] ringNameBytes = partitionName.getRingName();
@@ -48,6 +49,7 @@ public class AmzaClientService {
         return ringReader.getRing(partitionName.getRingName());
     }
 
+    @Override
     public void configPartition(RingTopology ring, IWriteable writeable) throws Exception {
         byte[] lengthBuffer = new byte[4];
         UIO.writeInt(writeable, ring.entries.size(), "ringSize", lengthBuffer);
@@ -58,29 +60,20 @@ public class AmzaClientService {
         }
     }
 
+    @Override
     public void ensurePartition(PartitionName partitionName, long waitForLeaderElection) throws Exception {
         long start = System.currentTimeMillis();
         partitionProvider.awaitOnline(partitionName, waitForLeaderElection);
         partitionProvider.awaitLeader(partitionName, Math.max(0, waitForLeaderElection - (System.currentTimeMillis() - start)));
     }
 
+    @Override
     public RingLeader ring(PartitionName partitionName, long waitForLeaderElection) throws Exception {
         RingMember leader = partitionName.isSystemPartition() ? null : partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
         return new RingLeader(ringReader.getRing(partitionName.getRingName()), leader);
     }
 
-    public static class RingLeader {
-
-        final RingTopology ringTopology;
-        final RingMember leader;
-
-        public RingLeader(RingTopology ringTopology, RingMember leader) {
-            this.ringTopology = ringTopology;
-            this.leader = leader;
-        }
-
-    }
-
+    @Override
     public void ring(RingLeader ringLeader, IWriteable writeable) throws IOException {
         byte[] lengthBuffer = new byte[4];
         UIO.writeInt(writeable, ringLeader.ringTopology.entries.size(), "ringSize", lengthBuffer);
@@ -92,6 +85,7 @@ public class AmzaClientService {
         }
     }
 
+    @Override
     public StateMessageCause commit(PartitionName partitionName,
         Consistency consistency,
         boolean checkLeader,
@@ -123,11 +117,13 @@ public class AmzaClientService {
         return null;
     }
 
+    @Override
     public StateMessageCause status(PartitionName partitionName, Consistency consistency, boolean checkLeader,
         long partitionAwaitOnlineTimeoutMillis) {
         return checkForReadyState(partitionName, consistency, checkLeader, partitionAwaitOnlineTimeoutMillis);
     }
 
+    @Override
     public void get(PartitionName partitionName, Consistency consistency, IReadable in, IWriteable out) throws Exception {
         Partition partition = partitionProvider.getPartition(partitionName);
         byte[] intLongBuffer = new byte[8];
@@ -163,6 +159,7 @@ public class AmzaClientService {
         UIO.writeByte(out, (byte) 1, "eos");
     }
 
+    @Override
     public void scan(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
@@ -185,6 +182,7 @@ public class AmzaClientService {
         UIO.writeByte(out, (byte) 1, "eos");
     }
 
+    @Override
     public void takeFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
         byte[] intLongBuffer = new byte[8];
         long transactionId = UIO.readLong(in, "transactionId", intLongBuffer);
@@ -192,6 +190,7 @@ public class AmzaClientService {
         take(out, partition, false, null, transactionId, intLongBuffer);
     }
 
+    @Override
     public void takePrefixFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
@@ -246,51 +245,6 @@ public class AmzaClientService {
             UIO.writeByteArray(out, ringMemberHighwater.ringMember.toBytes(), "ringMember", lengthBuffer);
             UIO.writeLong(out, ringMemberHighwater.transactionId, "txId");
         }
-    }
-
-    public static enum State {
-        ok, failed_to_come_online, lacks_leader, not_the_leader, error
-    }
-
-    public static class StateMessageCause {
-
-        public final PartitionName partitionName;
-        public final Consistency consistency;
-        public final boolean checkLeader;
-        public final long partitionAwaitOnlineTimeoutMillis;
-        public final State state;
-        public final String message;
-        public final Exception cause;
-
-        public StateMessageCause(PartitionName partitionName,
-            Consistency consistency,
-            boolean checkLeader,
-            long partitionAwaitOnlineTimeoutMillis,
-            State state,
-            String message,
-            Exception cause) {
-            this.partitionName = partitionName;
-            this.consistency = consistency;
-            this.checkLeader = checkLeader;
-            this.partitionAwaitOnlineTimeoutMillis = partitionAwaitOnlineTimeoutMillis;
-            this.state = state;
-            this.message = message;
-            this.cause = cause;
-        }
-
-        @Override
-        public String toString() {
-            return "StateMessageCause{"
-                + "partitionName=" + partitionName
-                + ", consistency=" + consistency
-                + ", checkLeader=" + checkLeader
-                + ", partitionAwaitOnlineTimeoutMillis=" + partitionAwaitOnlineTimeoutMillis
-                + ", state=" + state
-                + ", message=" + message
-                + ", cause=" + cause
-                + '}';
-        }
-
     }
 
     private StateMessageCause checkForReadyState(PartitionName partitionName,

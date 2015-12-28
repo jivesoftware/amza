@@ -44,6 +44,7 @@ import com.jivesoftware.os.amza.transport.http.replication.HttpRowsTaker;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaClientRestEndpoints;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaClientService;
 import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaReplicationRestEndpoints;
+import com.jivesoftware.os.amza.transport.http.replication.endpoints.AmzaRestClient;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
@@ -56,6 +57,8 @@ import com.jivesoftware.os.routing.bird.endpoints.base.HasUI;
 import com.jivesoftware.os.routing.bird.health.api.HealthCheckRegistry;
 import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
+import com.jivesoftware.os.routing.bird.health.api.ScheduledMinMaxHealthCheckConfig;
+import com.jivesoftware.os.routing.bird.health.checkers.DiskFreeHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
@@ -69,8 +72,22 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.Executors;
+import org.merlin.config.defaults.LongDefault;
+import org.merlin.config.defaults.StringDefault;
 
 public class AmzaMain {
+
+    static interface DiskFreeCheck extends ScheduledMinMaxHealthCheckConfig {
+
+        @StringDefault("disk>free")
+        @Override
+        public String getName();
+
+        @LongDefault(80)
+        @Override
+        public Long getMax();
+
+    }
 
     public static void main(String[] args) throws Exception {
         new AmzaMain().run(args);
@@ -105,7 +122,14 @@ public class AmzaMain {
 
             AmzaConfig amzaConfig = deployable.config(AmzaConfig.class);
 
-            final String[] workingDirs = amzaConfig.getWorkingDirs().split(",");
+            String[] workingDirs = amzaConfig.getWorkingDirs().split(",");
+            File[] paths = new File[workingDirs.length];
+            for (int i = 0; i < workingDirs.length; i++) {
+                paths[i] = new File(workingDirs[i].trim());
+            }
+
+            HealthFactory.scheduleHealthChecker(DiskFreeCheck.class,
+                config1 -> (HealthChecker) new DiskFreeHealthChecker(config1, paths));
 
             final AmzaServiceInitializer.AmzaServiceConfig amzaServiceConfig = new AmzaServiceInitializer.AmzaServiceConfig();
             amzaServiceConfig.checkIfCompactionIsNeededIntervalInMillis = amzaConfig.getCheckIfCompactionIsNeededIntervalInMillis();
@@ -201,8 +225,9 @@ public class AmzaMain {
             deployable.addEndpoints(AmzaReplicationRestEndpoints.class);
             deployable.addInjectables(AmzaInstance.class, amzaService);
             deployable.addEndpoints(AmzaClientRestEndpoints.class);
-            deployable.addInjectables(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
-            
+            deployable.addInjectables(AmzaRestClient.class, new AmzaRestClientHealthCheckDelegate(
+                new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService)));
+
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
                 new AmzaUIInitializer.InjectionCallback() {
 

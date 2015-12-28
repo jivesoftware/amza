@@ -40,10 +40,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.commons.lang.builder.HashCodeBuilder;
 
 public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
 
@@ -184,7 +184,8 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
         List<RingMember> ringAsList = Lists.newArrayList(Lists.transform(ring.entries, input -> input.ringMember));
-        Collections.sort(ringAsList, (o1, o2) -> Integer.compare(Objects.hash(o1, ringName), Objects.hash(o2, ringName)));
+        Collections.sort(ringAsList, (o1, o2) -> Integer.compare(new HashCodeBuilder().append(o1).append(ringName).toHashCode(),
+            new HashCodeBuilder().append(o2).append(ringName).toHashCode()));
 
         RingTopology existingRing = ringStoreReader.getRing(ringName);
         Set<RingMember> orderedRing = new HashSet<>();

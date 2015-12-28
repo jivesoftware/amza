@@ -107,7 +107,7 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
         Ring leaderlessRing = tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 
             HttpStreamResponse got = client.streamingPost("/amza/v1/ring/"
-                + partitionName.toBase64() + "/" + waitForLeaderElection, "", null);
+                + partitionName.toBase64(), "", null);
             Ring ring = consumeRing(partitionName, got, intBuffer);
             return new ClientCall.ClientResponse<>(ring, true);
         });
@@ -123,7 +123,7 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
             strategy = new ConnectionDescriptorSelectiveStrategy(chooseFrom);
             return tenantAwareHttpClient.call("", strategy, "ringLeader", (client) -> {
 
-                HttpStreamResponse got = client.streamingPost("/amza/v1/ring/"
+                HttpStreamResponse got = client.streamingPost("/amza/v1/ringLeader/"
                     + partitionName.toBase64() + "/" + waitForLeaderElection, "", null);
                 Ring ring = consumeRing(partitionName, got, intBuffer);
                 return new ClientCall.ClientResponse<>(ring, true);

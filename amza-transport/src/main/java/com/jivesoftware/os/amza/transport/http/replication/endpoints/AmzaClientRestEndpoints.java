@@ -106,13 +106,41 @@ public class AmzaClientRestEndpoints {
 
     @POST
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/ring/{base64PartitionName}/{waitForLeaderElection}")
-    public Object ring(@PathParam("base64PartitionName") String base64PartitionName,
+    @Path("/ring/{base64PartitionName}")
+    public Object ring(@PathParam("base64PartitionName") String base64PartitionName) {
+
+        PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
+        try {
+            AmzaClientService.RingLeader ringLeader = client.ring(partitionName);
+            ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
+            chunkExecutors.submit(() -> {
+                ChunkedOutputFiler out = null;
+                try {
+                    out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                    client.ring(ringLeader, out);
+                    out.flush(true);
+                } catch (Exception x) {
+                    LOG.warn("Failed to stream ring", x);
+                } finally {
+                    closeStreams("commit", null, out);
+                }
+            });
+            return chunkedOutput;
+        } catch (Exception e) {
+            LOG.error("Failed while attempting to get ring:{}", new Object[]{partitionName}, e);
+            return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
+        }
+    }
+
+    @POST
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/ringLeader/{base64PartitionName}/{waitForLeaderElection}")
+    public Object ringLeader(@PathParam("base64PartitionName") String base64PartitionName,
         @PathParam("waitForLeaderElection") long waitForLeaderElection) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            AmzaClientService.RingLeader ringLeader = client.ring(partitionName, waitForLeaderElection);
+            AmzaClientService.RingLeader ringLeader = client.ringLeader(partitionName, waitForLeaderElection);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;

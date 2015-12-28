@@ -26,7 +26,9 @@ public interface AmzaRestClient {
 
     void get(PartitionName partitionName, Consistency consistency, IReadable in, IWriteable out) throws Exception;
 
-    RingLeader ring(PartitionName partitionName, long waitForLeaderElection) throws Exception;
+    RingLeader ring(PartitionName partitionName) throws Exception;
+
+    RingLeader ringLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception;
 
     void ring(RingLeader ringLeader, IWriteable writeable) throws IOException;
 

@@ -104,50 +104,74 @@ public class HttpPartitionHostsProvider implements PartitionHostsProvider {
             new HostPort(value.ringHost.getHost(), value.ringHost.getPort())
         })).orElse(roundRobinStrategy);
         byte[] intBuffer = new byte[4];
-        return tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
+        Ring leaderlessRing = tenantAwareHttpClient.call("", strategy, "getPartitionHosts", (client) -> {
 
             HttpStreamResponse got = client.streamingPost("/amza/v1/ring/"
                 + partitionName.toBase64() + "/" + waitForLeaderElection, "", null);
-            try {
-                if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
-                    FilerInputStream fis = null;
-                    try {
-                        fis = new FilerInputStream(got.getInputStream());
-                        int ringSize = UIO.readInt(fis, "ringSize", intBuffer);
-                        int leaderIndex = -1;
-                        RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
-                        for (int i = 0; i < ringSize; i++) {
-                            RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember", intBuffer));
-                            RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost", intBuffer));
-                            ring[i] = new RingMemberAndHost(ringMember, ringHost);
-                            if (UIO.readBoolean(fis, "leader")) {
-                                if (leaderIndex == -1) {
-                                    leaderIndex = i;
-                                } else {
-                                    throw new RuntimeException("We suck! Gave back more than one leader!");
-                                }
-                            }
-                        }
-                        return new ClientCall.ClientResponse<>(new Ring(leaderIndex, ring), true);
+            Ring ring = consumeRing(partitionName, got, intBuffer);
+            return new ClientCall.ClientResponse<>(ring, true);
+        });
+        if (waitForLeaderElection > 0) {
 
-                    } catch (Exception x) {
-                        throw new RuntimeException("Failed loading routes for " + partitionName, x);
-                    } finally {
-                        if (fis != null) {
-                            try {
-                                fis.close();
-                            } catch (IOException e) {
-                                LOG.warn("Failed to close input stream", e);
+            RingMemberAndHost[] actualRing = leaderlessRing.actualRing();
+            HostPort[] chooseFrom = new HostPort[actualRing.length];
+            for (int i = 0; i < chooseFrom.length; i++) {
+                RingHost ringHost = actualRing[i].ringHost;
+                chooseFrom[i] = new HostPort(ringHost.getHost(), ringHost.getPort());
+            }
+
+            strategy = new ConnectionDescriptorSelectiveStrategy(chooseFrom);
+            return tenantAwareHttpClient.call("", strategy, "ringLeader", (client) -> {
+
+                HttpStreamResponse got = client.streamingPost("/amza/v1/ring/"
+                    + partitionName.toBase64() + "/" + waitForLeaderElection, "", null);
+                Ring ring = consumeRing(partitionName, got, intBuffer);
+                return new ClientCall.ClientResponse<>(ring, true);
+            });
+
+        } else {
+            return leaderlessRing;
+        }
+    }
+
+    private Ring consumeRing(PartitionName partitionName, HttpStreamResponse got, byte[] intBuffer) {
+        try {
+            if (got.getStatusCode() >= 200 && got.getStatusCode() < 300) {
+                FilerInputStream fis = null;
+                try {
+                    fis = new FilerInputStream(got.getInputStream());
+                    int ringSize = UIO.readInt(fis, "ringSize", intBuffer);
+                    int leaderIndex = -1;
+                    RingMemberAndHost[] ring = new RingMemberAndHost[ringSize];
+                    for (int i = 0; i < ringSize; i++) {
+                        RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(fis, "ringMember", intBuffer));
+                        RingHost ringHost = RingHost.fromBytes(UIO.readByteArray(fis, "ringHost", intBuffer));
+                        ring[i] = new RingMemberAndHost(ringMember, ringHost);
+                        if (UIO.readBoolean(fis, "leader")) {
+                            if (leaderIndex == -1) {
+                                leaderIndex = i;
+                            } else {
+                                throw new RuntimeException("We suck! Gave back more than one leader!");
                             }
                         }
                     }
+                    return new Ring(leaderIndex, ring);
+
+                } catch (Exception x) {
+                    throw new RuntimeException("Failed loading routes for " + partitionName, x);
+                } finally {
+                    if (fis != null) {
+                        try {
+                            fis.close();
+                        } catch (IOException e) {
+                            LOG.warn("Failed to close input stream", e);
+                        }
+                    }
                 }
-            } finally {
-                got.close();
             }
-            throw new RuntimeException("No routes to partition:" + partitionName);
-        });
+        } finally {
+            got.close();
+        }
+        throw new RuntimeException("No routes to partition:" + partitionName);
     }
-
-
 }

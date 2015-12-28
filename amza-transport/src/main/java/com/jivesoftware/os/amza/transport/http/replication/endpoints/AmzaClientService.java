@@ -68,7 +68,12 @@ public class AmzaClientService implements AmzaRestClient {
     }
 
     @Override
-    public RingLeader ring(PartitionName partitionName, long waitForLeaderElection) throws Exception {
+    public RingLeader ring(PartitionName partitionName) throws Exception {
+        return new RingLeader(ringReader.getRing(partitionName.getRingName()), null);
+    }
+
+    @Override
+    public RingLeader ringLeader(PartitionName partitionName, long waitForLeaderElection) throws Exception {
         RingMember leader = partitionName.isSystemPartition() ? null : partitionProvider.awaitLeader(partitionName, waitForLeaderElection);
         return new RingLeader(ringReader.getRing(partitionName.getRingName()), leader);
     }

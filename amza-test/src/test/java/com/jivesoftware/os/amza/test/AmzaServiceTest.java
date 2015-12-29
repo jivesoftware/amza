@@ -145,7 +145,7 @@ public class AmzaServiceTest {
         Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
         for (AmzaNode node : clusterNodes) {
             AmzaService.AmzaPartitionRoute route = node.getPartitionRoute(partitionName);
-            assertEquals(route.orderedPartitionHosts.size(), clusterNodes.size());
+            assertEquals(route.orderedMembers.size(), clusterNodes.size());
             assertNotNull(route.leader);
         }
 

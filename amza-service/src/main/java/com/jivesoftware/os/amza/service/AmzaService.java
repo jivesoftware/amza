@@ -22,7 +22,6 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
-import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
@@ -62,7 +61,6 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -245,10 +243,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingTopology ring = ringStoreReader.getRing(partitionName.getRingName());
         PartitionProperties properties = partitionIndex.getProperties(partitionName);
         if (properties == null) {
-            return new AmzaPartitionRoute(Lists.transform(ring.entries, input -> input.ringHost), null);
+            return new AmzaPartitionRoute(ring.entries, null);
         }
 
-        List<RingHost> orderedPartitionHosts = new ArrayList<>();
+        List<RingMemberAndHost> orderedPartitionHosts = new ArrayList<>();
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             partitionStateStorage.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
                 if (!livelyEndState.isOnline()) {
@@ -260,16 +258,16 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             });
         }
 
-        RingMember leader = null;
+        RingMemberAndHost leader = null;
         for (RingMemberAndHost entry : ring.entries) {
             RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(entry.ringMember, partitionName);
             if (remoteVersionedState != null) {
                 State state = remoteVersionedState.waterline.getState();
                 if (state == State.leader) {
-                    leader = entry.ringMember;
+                    leader = entry;
                 }
                 if (state == State.leader || state == State.follower) {
-                    orderedPartitionHosts.add(entry.ringHost);
+                    orderedPartitionHosts.add(entry);
                 }
             }
         }
@@ -286,11 +284,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public static class AmzaPartitionRoute {
 
-        public final List<RingHost> orderedPartitionHosts;
-        public final RingMember leader;
+        public final List<RingMemberAndHost> orderedMembers;
+        public final RingMemberAndHost leader;
 
-        public AmzaPartitionRoute(List<RingHost> orderedPartitionHosts, RingMember leader) {
-            this.orderedPartitionHosts = orderedPartitionHosts;
+        public AmzaPartitionRoute(List<RingMemberAndHost> orderedMembers, RingMemberAndHost leader) {
+            this.orderedMembers = orderedMembers;
             this.leader = leader;
         }
     }

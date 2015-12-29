@@ -245,20 +245,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingTopology ring = ringStoreReader.getRing(partitionName.getRingName());
         PartitionProperties properties = partitionIndex.getProperties(partitionName);
         if (properties == null) {
-            return new AmzaPartitionRoute(Lists.transform(ring.entries, input -> input.ringHost),
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList(),
-                Collections.emptyList());
+            return new AmzaPartitionRoute(Lists.transform(ring.entries, input -> input.ringHost), null);
         }
 
         List<RingHost> orderedPartitionHosts = new ArrayList<>();
-        List<RingMember> unregisteredRingMembers = new ArrayList<>();
-        List<RingMember> ketchupRingMembers = new ArrayList<>();
-        List<RingMember> expungedRingMembers = new ArrayList<>();
-        List<RingMember> missingRingMembers = new ArrayList<>();
-
         if (ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
             partitionStateStorage.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
                 if (!livelyEndState.isOnline()) {
@@ -270,23 +260,20 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
             });
         }
 
+        RingMember leader = null;
         for (RingMemberAndHost entry : ring.entries) {
-            if (entry.ringHost == RingHost.UNKNOWN_RING_HOST) {
-                unregisteredRingMembers.add(entry.ringMember);
-            }
             RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(entry.ringMember, partitionName);
-            if (remoteVersionedState == null) {
-                missingRingMembers.add(entry.ringMember);
-            } else if (remoteVersionedState.waterline.getState() == State.expunged) {
-                expungedRingMembers.add(entry.ringMember);
-            } else if (remoteVersionedState.waterline.getState() == State.bootstrap) {
-                ketchupRingMembers.add(entry.ringMember);
-            } else {
-                orderedPartitionHosts.add(entry.ringHost);
+            if (remoteVersionedState != null) {
+                State state = remoteVersionedState.waterline.getState();
+                if (state == State.leader) {
+                    leader = entry.ringMember;
+                }
+                if (state == State.leader || state == State.follower) {
+                    orderedPartitionHosts.add(entry.ringHost);
+                }
             }
         }
-        return new AmzaPartitionRoute(Collections.emptyList(), orderedPartitionHosts, unregisteredRingMembers, ketchupRingMembers, expungedRingMembers,
-            missingRingMembers);
+        return new AmzaPartitionRoute(orderedPartitionHosts, leader);
     }
 
     public void visualizePartition(byte[] rawRingName, byte[] rawPartitionName, RowStream rowStream) throws Exception {
@@ -299,27 +286,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public static class AmzaPartitionRoute {
 
-        public List<RingHost> uninitializedHosts;
-        public List<RingHost> orderedPartitionHosts;
-        public List<RingMember> unregisteredRingMembers;
-        public List<RingMember> ketchupRingMembers;
-        public List<RingMember> expungedRingMembers;
-        public List<RingMember> missingRingMembers;
+        public final List<RingHost> orderedPartitionHosts;
+        public final RingMember leader;
 
-        public AmzaPartitionRoute(List<RingHost> uninitializedHosts,
-            List<RingHost> orderedPartitionHosts,
-            List<RingMember> unregisteredRingMembers,
-            List<RingMember> ketchupRingMembers,
-            List<RingMember> expungedRingMembers,
-            List<RingMember> missingRingMembers) {
-            this.uninitializedHosts = uninitializedHosts;
+        public AmzaPartitionRoute(List<RingHost> orderedPartitionHosts, RingMember leader) {
             this.orderedPartitionHosts = orderedPartitionHosts;
-            this.unregisteredRingMembers = unregisteredRingMembers;
-            this.ketchupRingMembers = ketchupRingMembers;
-            this.expungedRingMembers = expungedRingMembers;
-            this.missingRingMembers = missingRingMembers;
+            this.leader = leader;
         }
-
     }
 
     @Override

@@ -662,5 +662,9 @@ public class AmzaTestCluster {
                 "partition:" + new String(partitionName.getName()) + " vs:" + new String(partitionName.getName()) + " compared:" + compared + " keys");
             return passed.booleanValue();
         }
+
+        public AmzaService.AmzaPartitionRoute getPartitionRoute(PartitionName partitionName) throws Exception {
+            return amzaService.getPartitionRoute(partitionName);
+        }
     }
 }

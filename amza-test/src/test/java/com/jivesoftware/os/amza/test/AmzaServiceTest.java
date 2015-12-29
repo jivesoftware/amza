@@ -19,15 +19,21 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import junit.framework.Assert;
 import org.testng.annotations.Test;
+
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotNull;
 
 public class AmzaServiceTest {
 
@@ -136,11 +142,18 @@ public class AmzaServiceTest {
 
         latch.await();
 
+        Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
+        for (AmzaNode node : clusterNodes) {
+            AmzaService.AmzaPartitionRoute route = node.getPartitionRoute(partitionName);
+            assertEquals(route.orderedPartitionHosts.size(), clusterNodes.size());
+            assertNotNull(route.leader);
+        }
+
         int falseCount = -1;
         while (falseCount != 0) {
             falseCount = 0;
             System.out.println("---- checking for inconsistencies ----");
-            List<AmzaNode> nodes = new ArrayList<>(cluster.getAllNodes());
+            List<AmzaNode> nodes = new ArrayList<>(clusterNodes);
             DONE:
             for (int i = 0; i < nodes.size(); i++) {
                 AmzaNode a = nodes.get(i);
@@ -163,12 +176,12 @@ public class AmzaServiceTest {
             }
         }
 
-        for (AmzaNode a : cluster.getAllNodes()) {
+        for (AmzaNode a : clusterNodes) {
             Assert.assertFalse(a.isEmpty());
         }
 
         System.out.println("\n------stopping---------");
-        for (AmzaNode a : cluster.getAllNodes()) {
+        for (AmzaNode a : clusterNodes) {
             a.stop();
         }
 

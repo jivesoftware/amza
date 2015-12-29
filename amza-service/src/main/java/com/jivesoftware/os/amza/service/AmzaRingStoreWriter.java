@@ -185,7 +185,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
         List<RingMember> ringAsList = Lists.newArrayList(Lists.transform(ring.entries, input -> input.ringMember));
-        Random random = new Random(Arrays.hashCode(ringName));
+        Random random = new Random(new Random(Arrays.hashCode(ringName)).nextLong());
         Collections.shuffle(ringAsList, random);
 
         RingTopology existingRing = ringStoreReader.getRing(ringName);
@@ -198,6 +198,33 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         }
 
         setInternal(ringName, orderedRing);
+    }
+
+    public static void main(String[] args) {
+        List<RingMember> ringAsList = Lists.newArrayList(new RingMember("00001_1077136992649612651"),
+            new RingMember("00002_4053064556854798872"),
+            new RingMember("00003_5256283699038146569"),
+            new RingMember("00004_5599652090478273320")/*,
+            new RingMember("00005_6299655090478243321"),
+            new RingMember("00006_7532656030788251312")*/);
+
+        String[] ringNames = new String[] { "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8", "z9" };
+        for (int i = 0; i < ringNames.length; i++) {
+            //Random random = new Random(Arrays.hashCode(ringNames[i].getBytes()));
+            //Random random = new Random(new Random(Arrays.hashCode(ringNames[i].getBytes())).nextLong());
+            byte[] bytes = ringNames[i].getBytes();
+            Random random = new Random(hash(bytes));
+            Collections.shuffle(ringAsList, random);
+            System.out.println(ringNames[i] + " (" + hash(bytes) + ") -> " + ringAsList);
+        }
+    }
+
+    private static long hash(byte[] bytes) {
+        long hashed = (long) Arrays.hashCode(bytes) << 32;
+        for (int i = 0; i < bytes.length; i++) {
+            hashed ^= (bytes[i] & 0xFF) << i;
+        }
+        return hashed;
     }
 
     @Override

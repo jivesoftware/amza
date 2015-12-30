@@ -267,27 +267,29 @@ public class DeltaStripeWALStorage {
         }
         amzaStats.beginCompaction("Merging Delta Stripe:" + index);
         try {
-            mergeDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create);
+            long had = updateSinceLastMerge.get();
+            if (mergeDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create)) {
+                updateSinceLastMerge.addAndGet(-had);
+            }
         } finally {
             merging.set(false);
             amzaStats.endCompaction("Merging Delta Stripe:" + index);
         }
     }
 
-    private void mergeDelta(final PartitionIndex partitionIndex, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
+    private boolean mergeDelta(final PartitionIndex partitionIndex, DeltaWAL wal, Callable<DeltaWAL> newWAL) throws Exception {
         final List<Future<Boolean>> futures = new ArrayList<>();
         acquireAll();
         try {
             for (Map.Entry<VersionedPartitionName, PartitionDelta> e : partitionDeltas.entrySet()) {
                 if (e.getValue().merging.get() != null) {
                     LOG.warn("Ingress is faster than we can merge!");
-                    return;
+                    return false;
                 }
             }
             LOG.info("Merging delta partitions...");
             DeltaWAL newDeltaWAL = newWAL.call();
             deltaWAL.set(newDeltaWAL);
-            updateSinceLastMerge.set(0);
 
             AtomicLong mergeable = new AtomicLong();
             AtomicLong merged = new AtomicLong();
@@ -337,6 +339,7 @@ public class DeltaStripeWALStorage {
         } finally {
             releaseAll();
         }
+        return !failed;
     }
 
     public RowsChanged update(RowType rowType,

@@ -26,7 +26,7 @@ public class AmzaStats {
 
     private final Map<RingMember, AtomicLong> took = new ConcurrentSkipListMap<>();
 
-    private final Map<String, Long> ongoingCompaction = new ConcurrentHashMap<>();
+    private final Map<CompactionFamily, Map<String, Long>> ongoingCompaction = new ConcurrentHashMap<>();
     private final List<Entry<String, Long>> recentCompaction = new ArrayList<>();
 
     private final AtomicLong totalCompactions = new AtomicLong();
@@ -45,8 +45,12 @@ public class AmzaStats {
     public final AtomicLong removeMember = new AtomicLong();
     public final AtomicLong getRing = new AtomicLong();
     public final AtomicLong rowsStream = new AtomicLong();
+    public final AtomicLong completedRowsStream = new AtomicLong();
+
     public final AtomicLong availableRowsStream = new AtomicLong();
     public final AtomicLong rowsTaken = new AtomicLong();
+    public final AtomicLong completedRowsTake = new AtomicLong();
+
     public final AtomicLong backPressure = new AtomicLong();
     public final AtomicLong pushBacks = new AtomicLong();
 
@@ -134,16 +138,27 @@ public class AmzaStats {
         return got.get();
     }
 
-    public void beginCompaction(String name) {
-        ongoingCompaction.put(name, System.currentTimeMillis());
+    public static enum CompactionFamily {
+        expunge, tombstone, merge;
     }
 
-    public void endCompaction(String name) {
-        Long start = ongoingCompaction.remove(name);
+    public int ongoingCompaction(CompactionFamily family) {
+        Map<String, Long> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        return got.size();
+    }
+
+    public void beginCompaction(CompactionFamily family, String name) {
+        Map<String, Long> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        got.put(name, System.currentTimeMillis());
+    }
+
+    public void endCompaction(CompactionFamily family, String name) {
+        Map<String, Long> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
+        Long start = got.remove(name);
         totalCompactions.incrementAndGet();
         if (start != null) {
-            recentCompaction.add(new AbstractMap.SimpleEntry<>(name, System.currentTimeMillis() - start));
-            while (recentCompaction.size() > 30) {
+            recentCompaction.add(new AbstractMap.SimpleEntry<>(family+" "+name, System.currentTimeMillis() - start));
+            while (recentCompaction.size() > 10_000) {
                 recentCompaction.remove(0);
             }
         }
@@ -153,10 +168,15 @@ public class AmzaStats {
         return recentCompaction;
     }
 
-    public List<Entry<String, Long>> ongoingCompactions() {
+    public List<Entry<String, Long>> ongoingCompactions(CompactionFamily... families) {
         List<Entry<String, Long>> ongoing = new ArrayList<>();
-        for (Entry<String, Long> e : ongoingCompaction.entrySet()) {
-            ongoing.add(new AbstractMap.SimpleEntry<>(e.getKey(), System.currentTimeMillis() - e.getValue()));
+        for (CompactionFamily family : families) {
+            Map<String, Long> got = ongoingCompaction.get(family);
+            if (got != null) {
+                for (Entry<String, Long> e : got.entrySet()) {
+                    ongoing.add(new AbstractMap.SimpleEntry<>(e.getKey(), System.currentTimeMillis() - e.getValue()));
+                }
+            }
         }
         return ongoing;
     }

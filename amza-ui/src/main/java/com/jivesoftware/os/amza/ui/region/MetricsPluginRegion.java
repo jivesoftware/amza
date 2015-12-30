@@ -395,7 +395,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -440,10 +440,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             (int) (((double) amzaStats.availableRowsStream.get() / 100d) * 100), ""));
 
         sb.append(progress("Active Row Streaming (" + numberFormat.format(amzaStats.rowsStream.get()) + ")",
-            (int) (((double) amzaStats.rowsStream.get() / 100d) * 100), ""));
+            (int) (((double) amzaStats.rowsStream.get() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsStream.get())));
 
         sb.append(progress("Active Row Acknowledging (" + numberFormat.format(amzaStats.rowsTaken.get()) + ")",
-            (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100), ""));
+            (int) (((double) amzaStats.rowsTaken.get() / 100d) * 100), "" + numberFormat.format(amzaStats.completedRowsTake.get())));
 
         sb.append(progress("Back Pressure (" + numberFormat.format(amzaStats.backPressure.get()) + ")",
             (int) (((double) amzaStats.backPressure.get() / 10000d) * 100), "" + amzaStats.pushBacks.get()));
@@ -459,6 +459,19 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     numberFormat.format(mergeCount[i]) + " partitions"));
             }
         }
+
+        int tombostoneCompaction = amzaStats.ongoingCompaction(AmzaStats.CompactionFamily.tombstone);
+        int mergeCompaction = amzaStats.ongoingCompaction(AmzaStats.CompactionFamily.merge);
+        int expungeCompaction = amzaStats.ongoingCompaction(AmzaStats.CompactionFamily.expunge);
+
+        sb.append(progress("Tombstone Compactions (" + numberFormat.format(tombostoneCompaction) + ")",
+            (int) (((double) tombostoneCompaction / 10d) * 100), "" + tombostoneCompaction));
+
+        sb.append(progress("Merge Compactions (" + numberFormat.format(mergeCompaction) + ")",
+            (int) (((double) mergeCompaction / 10d) * 100), "" + mergeCompaction));
+
+        sb.append(progress("Expunge Compactions (" + numberFormat.format(expungeCompaction) + ")",
+            (int) (((double) expungeCompaction / 10d) * 100), "" + expungeCompaction));
 
         sb.append("<p><pre>");
         for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {
@@ -487,7 +500,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;

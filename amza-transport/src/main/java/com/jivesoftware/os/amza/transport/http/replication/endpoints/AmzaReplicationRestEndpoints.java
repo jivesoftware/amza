@@ -92,6 +92,7 @@ public class AmzaReplicationRestEndpoints {
                 } finally {
                     dos.flush();
                     amzaStats.rowsStream.decrementAndGet();
+                    amzaStats.completedRowsStream.incrementAndGet();
                 }
             };
             return Response.ok(stream).build();
@@ -165,6 +166,7 @@ public class AmzaReplicationRestEndpoints {
             return ResponseHelper.INSTANCE.errorResponse("Failed to ack.", x);
         } finally {
             amzaStats.rowsTaken.decrementAndGet();
+            amzaStats.completedRowsTake.incrementAndGet();
         }
     }
 

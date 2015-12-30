@@ -96,7 +96,7 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
         Waterline remoteState = aquarium.getState(remoteRingMember.asAquariumMember());
 
         StorageVersion remoteStorageVersion = storageVersionProvider.getRemote(remoteRingMember, partitionName);
-        return new RemoteVersionedState(remoteState, remoteStorageVersion.partitionVersion);
+        return remoteStorageVersion != null ? new RemoteVersionedState(remoteState, remoteStorageVersion.partitionVersion) : null;
     }
 
     public VersionedState markAsBootstrap(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception {

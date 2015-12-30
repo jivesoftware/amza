@@ -1,11 +1,12 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -102,13 +103,13 @@ public class PartitionTombstoneCompactor {
                     try {
                         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                         if (force || partitionStore.compactableTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId)) {
-                            amzaStats.beginCompaction("Compacting Tombstones:" + versionedPartitionName);
+                            amzaStats.beginCompaction(CompactionFamily.tombstone, versionedPartitionName.toString());
                             try {
                                 LOG.info("Compacting removeTombstonedOlderThanTimestampId:{} ttlTimestampId:{} versionedPartitionName:{}",
                                     removeTombstonedOlderThanTimestampId, ttlTimestampId, versionedPartitionName);
                                 partitionStore.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
                             } finally {
-                                amzaStats.endCompaction("Compacting Tombstones:" + versionedPartitionName);
+                                amzaStats.endCompaction(CompactionFamily.tombstone, versionedPartitionName.toString());
                             }
                         } else {
                             LOG.debug("Ignored removeTombstonedOlderThanTimestampId:{} ttlTimestampId:{} versionedPartitionName:{}",

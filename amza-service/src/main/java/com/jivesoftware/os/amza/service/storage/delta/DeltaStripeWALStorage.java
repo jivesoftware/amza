@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.scan.Scannable;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
@@ -265,7 +266,7 @@ public class DeltaStripeWALStorage {
             LOG.warn("Trying to merge DeltaStripe:" + partitionIndex + " while another merge is already in progress.");
             return;
         }
-        amzaStats.beginCompaction("Merging Delta Stripe:" + index);
+        amzaStats.beginCompaction(CompactionFamily.merge, "Delta Stripe:" + index);
         try {
             long had = updateSinceLastMerge.get();
             if (mergeDelta(partitionIndex, deltaWAL.get(), deltaWALFactory::create)) {
@@ -273,7 +274,7 @@ public class DeltaStripeWALStorage {
             }
         } finally {
             merging.set(false);
-            amzaStats.endCompaction("Merging Delta Stripe:" + index);
+            amzaStats.endCompaction(CompactionFamily.merge, "Delta Stripe:" + index);
         }
     }
 

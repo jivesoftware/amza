@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -72,7 +73,7 @@ public class PartitionComposter {
         partitionStateStorage.streamLocalState((partitionName, ringMember, versionedState) -> {
             if (versionedState.isCurrentState(State.expunged)) {
                 try {
-                    amzaStats.beginCompaction("Expunge " + partitionName + " " + versionedState);
+                    amzaStats.beginCompaction(CompactionFamily.expunge, partitionName + " " + versionedState);
                     partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
                         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName,
                             versionedState.getPartitionVersion());
@@ -85,7 +86,7 @@ public class PartitionComposter {
                         return null;
                     });
                 } finally {
-                    amzaStats.endCompaction("Expunge " + partitionName + " " + versionedState);
+                    amzaStats.endCompaction(CompactionFamily.expunge, partitionName + " " + versionedState);
                 }
 
             } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName()) || !partitionProvider.hasPartition(partitionName)) {

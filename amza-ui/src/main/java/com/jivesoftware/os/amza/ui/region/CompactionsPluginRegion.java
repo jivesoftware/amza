@@ -76,7 +76,7 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
                 });
             }
 
-            List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions();
+            List<Map.Entry<String, Long>> ongoingCompactions = amzaStats.ongoingCompactions(AmzaStats.CompactionFamily.values());
             data.put("ongoingCompactions", (Object) Iterables.transform(Iterables.filter(ongoingCompactions, Predicates.notNull()),
                 (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
                     input1.getKey(), "elapse", numberFormat.format(input1.getValue()))));

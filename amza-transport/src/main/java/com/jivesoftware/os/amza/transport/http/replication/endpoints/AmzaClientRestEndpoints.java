@@ -15,6 +15,7 @@
  */
 package com.jivesoftware.os.amza.transport.http.replication.endpoints;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
@@ -49,7 +50,7 @@ public class AmzaClientRestEndpoints {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRestClient client;
-    private final ExecutorService chunkExecutors = Executors.newCachedThreadPool(); // TODO config!!!
+    private final ExecutorService chunkExecutors = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("stream-chunks-%d").build());
 
     public AmzaClientRestEndpoints(@Context AmzaRestClient client) {
         this.client = client;

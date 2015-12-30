@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.PartitionClient;
@@ -135,7 +136,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                     }
                 }
                 if (input.action.equals("start")) {
-                    ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 10);
+                    ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 10,
+                        new ThreadFactoryBuilder().setNameFormat("stress-%d").build());
                     Stress stress = new Stress(System.currentTimeMillis(), executor, new AtomicLong(0), input);
                     Stress existing = STRESS_MAP.putIfAbsent(input.name, stress);
                     LOG.info("Added {}", input.name);

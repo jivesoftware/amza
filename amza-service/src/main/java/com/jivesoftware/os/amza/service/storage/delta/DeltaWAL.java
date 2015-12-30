@@ -117,7 +117,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                     estimatedSizeInBytes += primaryRowMarshaller.sizeInBytes(pkSizeInBytes, valueSizeInBytes);
                 }
                 rowWriter.write(transactionId,
-                    RowType.primary,
+                    rowType,
                     keyValueHighwaters.length,
                     estimatedSizeInBytes,
                     rowStream -> {

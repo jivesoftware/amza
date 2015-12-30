@@ -19,6 +19,7 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
 import java.io.File;
@@ -32,30 +33,73 @@ import junit.framework.Assert;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertNotNull;
 
 public class AmzaServiceTest {
 
     @Test(enabled = true)
     public void testAddToReplicatedWAL() throws Exception {
+        final int maxNumberOfServices = 5;
+
+        File createTempDir = Files.createTempDir();
+        AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
+        for (int i = 0; i < maxNumberOfServices; i++) {
+            cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i));
+        }
+        Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
+
+        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition1".getBytes()), RowType.primary);
+        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition2".getBytes()), RowType.snappy_primary);
+
+        int falseCount = -1;
+        while (falseCount != 0) {
+            falseCount = 0;
+            System.out.println("---- checking for inconsistencies ----");
+            List<AmzaNode> nodes = new ArrayList<>(clusterNodes);
+            DONE:
+            for (int i = 0; i < nodes.size(); i++) {
+                AmzaNode a = nodes.get(i);
+                for (int j = 0; j < nodes.size(); j++) {
+                    if (i == j) {
+                        continue;
+                    }
+                    AmzaNode b = nodes.get(j);
+                    if (!a.compare(b)) {
+                        System.out.println(a + " is NOT consistent with " + b);
+                        falseCount++;
+                        break DONE;
+                    }
+                    System.out.println(a + " is consistent with " + b);
+                }
+            }
+            if (falseCount > 0) {
+                Thread.sleep(1000);
+                System.out.println("---------------------------------------------------------------------\n\n\n\n");
+            }
+        }
+
+        for (AmzaNode a : clusterNodes) {
+            Assert.assertFalse(a.isEmpty());
+        }
+
+        System.out.println("\n------stopping---------");
+        for (AmzaNode a : clusterNodes) {
+            a.stop();
+        }
+
+        System.out.println("\n------PASSED :) ---------");
+    }
+
+    private void testRowType(AmzaTestCluster cluster, int maxNumberOfServices, PartitionName partitionName, RowType rowType) throws Exception {
         final int maxUpdates = 100;
         final int delayBetweenUpdates = 0;
         final int maxFields = 10;
         final int maxOffServices = 0;
         final int maxRemovedServices = 0;
         final int maxAddService = 0;
-        final int maxNumberOfServices = 5;
 
         final Random random = new Random();
 
-        File createTempDir = Files.createTempDir();
-        final AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
-
-        final PartitionName partitionName = new PartitionName(false, "test".getBytes(), "partition1".getBytes());
-        for (int i = 0; i < maxNumberOfServices; i++) {
-            cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i), partitionName);
-        }
         final CountDownLatch latch = new CountDownLatch(1);
         Executors.newCachedThreadPool().submit(new Runnable() {
             int removeService = maxRemovedServices;
@@ -68,7 +112,7 @@ public class AmzaServiceTest {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     try {
                         if (node != null) {
-                            node.create(partitionName);
+                            node.create(partitionName, rowType);
                             boolean tombstone = random.nextBoolean();
                             String prefix = "a";
                             String key = String.valueOf(random.nextInt(maxFields));
@@ -105,7 +149,7 @@ public class AmzaServiceTest {
                         node = cluster.get(key);
                         try {
                             if (node == null) {
-                                cluster.newNode(new RingMember("localhost-" + port), new RingHost("localhost", port), partitionName);
+                                cluster.newNode(new RingMember("localhost-" + port), new RingHost("localhost", port));
                                 addService--;
                             }
                         } catch (Exception x) {
@@ -148,45 +192,6 @@ public class AmzaServiceTest {
             assertEquals(route.orderedMembers.size(), clusterNodes.size());
             assertNotNull(route.leader);
         }
-
-        int falseCount = -1;
-        while (falseCount != 0) {
-            falseCount = 0;
-            System.out.println("---- checking for inconsistencies ----");
-            List<AmzaNode> nodes = new ArrayList<>(clusterNodes);
-            DONE:
-            for (int i = 0; i < nodes.size(); i++) {
-                AmzaNode a = nodes.get(i);
-                for (int j = 0; j < nodes.size(); j++) {
-                    if (i == j) {
-                        continue;
-                    }
-                    AmzaNode b = nodes.get(j);
-                    if (!a.compare(b)) {
-                        System.out.println(a + " is NOT consistent with " + b);
-                        falseCount++;
-                        break DONE;
-                    }
-                    System.out.println(a + " is consistent with " + b);
-                }
-            }
-            if (falseCount > 0) {
-                Thread.sleep(1000);
-                System.out.println("---------------------------------------------------------------------\n\n\n\n");
-            }
-        }
-
-        for (AmzaNode a : clusterNodes) {
-            Assert.assertFalse(a.isEmpty());
-        }
-
-        System.out.println("\n------stopping---------");
-        for (AmzaNode a : clusterNodes) {
-            a.stop();
-        }
-
-        System.out.println("\n------PASSED :) ---------");
-
     }
 
 }

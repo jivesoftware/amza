@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -213,7 +214,7 @@ public class AmzaMain {
                 new HttpPartitionClientFactory(),
                 new HttpPartitionHostsProvider(httpClient, mapper),
                 new RingHostHttpClientProvider(httpClient),
-                Executors.newCachedThreadPool(),
+                Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
                 10_000); //TODO expose to conf
 
             System.out.println("-----------------------------------------------------------------------");

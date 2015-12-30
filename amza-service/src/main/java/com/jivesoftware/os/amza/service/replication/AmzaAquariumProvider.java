@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -76,7 +77,8 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
     private final AwaitNotify<PartitionName> awaitLivelyEndState;
 
     private final ConcurrentHashMap<VersionedPartitionName, Aquarium> aquariums = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(
+        new ThreadFactoryBuilder().setNameFormat("aquarium-scheduled-%d").build());
     private final Set<PartitionName> smellsFishy = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileNominated = new ConcurrentHashMap<>();
@@ -225,10 +227,10 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
                         && properties.consistency.requiresLeader()) {
                         Waterline demoted = State.highest(rootAquariumMember, State.demoted, readCurrent, existing);
                         // if there is no demoted member, assume this is the first election and declare the node repaired
-                        if (demoted == null ||
-                            (demoted.isAtQuorum()
-                                && liveliness.isAlive(demoted.getMember())
-                                && leadershipTokenAndTookFully.tookFully.contains(RingMember.fromAquariumMember(demoted.getMember())))) {
+                        if (demoted == null
+                            || (demoted.isAtQuorum()
+                            && liveliness.isAlive(demoted.getMember())
+                            && leadershipTokenAndTookFully.tookFully.contains(RingMember.fromAquariumMember(demoted.getMember())))) {
                             repairedFromDemoted = true;
                         }
                     }
@@ -313,21 +315,21 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
             atQuorum,
             rootRingMember.asAquariumMember(),
             new AwaitLivelyEndState() {
-                @Override
-                public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
-                    return awaitLivelyEndState.awaitChange(versionedPartitionName.getPartitionName(),
-                        () -> {
-                            LivelyEndState state = awaiter.call();
-                            return state != null ? Optional.of(state) : null;
-                        },
-                        timeoutMillis);
-                }
+            @Override
+            public LivelyEndState awaitChange(Callable<LivelyEndState> awaiter, long timeoutMillis) throws Exception {
+                return awaitLivelyEndState.awaitChange(versionedPartitionName.getPartitionName(),
+                    () -> {
+                        LivelyEndState state = awaiter.call();
+                        return state != null ? Optional.of(state) : null;
+                    },
+                    timeoutMillis);
+            }
 
-                @Override
-                public void notifyChange(Callable<Boolean> change) throws Exception {
-                    awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
-                }
-            });
+            @Override
+            public void notifyChange(Callable<Boolean> change) throws Exception {
+                awaitLivelyEndState.notifyChange(versionedPartitionName.getPartitionName(), change);
+            }
+        });
     }
 
     @Override
@@ -391,24 +393,24 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
             int ackSizeInBytes = 4 + ackRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8 + 1 + ackSizeInBytes);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
             UIO.writeLong(filer, partitionVersion, "partitionVersion");
-            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[] { (byte) 1 } : new byte[] { (byte) 0 }, "isOther");
+            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[]{(byte) 1} : new byte[]{(byte) 0}, "isOther");
             UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember", lengthBuffer);
             return filer.getBytes();
         } else if (rootRingMember != null) {
             int rootSizeInBytes = 4 + rootRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1 + rootSizeInBytes + 8);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
             UIO.writeLong(filer, partitionVersion, "partitionVersion");
             return filer.getBytes();
         } else {
             HeapFiler filer = new HeapFiler(partitionSizeInBytes + 1);
             UIO.writeByteArray(filer, partitionName.toBytes(), "partitionName", lengthBuffer);
-            filer.write(new byte[] { context }, 0, 1);
+            filer.write(new byte[]{context}, 0, 1);
             return filer.getBytes();
         }
     }
@@ -448,7 +450,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
             int ackSizeInBytes = 4 + ackRingMember.getMember().length;
             HeapFiler filer = new HeapFiler(rootSizeInBytes + 1 + ackSizeInBytes);
             UIO.writeByteArray(filer, rootRingMember.getMember(), "rootRingMember", lengthBuffer);
-            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[] { (byte) 1 } : new byte[] { (byte) 0 }, "isOther");
+            UIO.write(filer, !rootRingMember.equals(ackRingMember) ? new byte[]{(byte) 1} : new byte[]{(byte) 0}, "isOther");
             UIO.writeByteArray(filer, ackRingMember.getMember(), "ackRingMember", lengthBuffer);
             return filer.getBytes();
         } else {

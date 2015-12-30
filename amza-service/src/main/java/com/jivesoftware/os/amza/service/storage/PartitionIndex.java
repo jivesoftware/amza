@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -67,7 +68,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         get(PartitionCreator.AQUARIUM_STATE_INDEX);
         get(PartitionCreator.AQUARIUM_LIVELINESS_INDEX);
 
-        final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+        final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2,
+            new ThreadFactoryBuilder().setNameFormat("open-index-%d").build());
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);

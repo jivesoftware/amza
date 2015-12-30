@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.base.Optional;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -181,7 +182,7 @@ public class Main {
             new HttpPartitionClientFactory(),
             new HttpPartitionHostsProvider(httpClient, mapper),
             new RingHostHttpClientProvider(httpClient),
-            Executors.newCachedThreadPool(),
+            Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("client-%d").build()),
             10_000); //TODO expose to conf
 
         final JerseyEndpoints jerseyEndpoints = new JerseyEndpoints()

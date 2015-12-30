@@ -4,6 +4,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -58,18 +59,18 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
 
         try {
             if (input.action.equals("forceCompactionDeltas")) {
-                Executors.newSingleThreadExecutor().submit(() -> {
+                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("forceCompactionDeltas-%d").build()).submit(() -> {
                     amzaService.mergeAllDeltas(true);
                 });
             }
             if (input.action.equals("forceCompactionTombstones")) {
-                Executors.newSingleThreadExecutor().submit(() -> {
+                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("forceCompactionTombstones-%d").build()).submit(() -> {
                     amzaService.compactAllTombstones();
                     return null;
                 });
             }
             if (input.action.equals("forceExpunge")) {
-                Executors.newSingleThreadExecutor().submit(() -> {
+                Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setNameFormat("forceExpunge-%d").build()).submit(() -> {
                     amzaService.expunge();
                     return null;
                 });

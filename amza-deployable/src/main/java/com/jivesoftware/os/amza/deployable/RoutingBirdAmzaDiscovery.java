@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.base.Strings;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaRingStoreWriter;
@@ -25,7 +26,8 @@ import java.util.concurrent.TimeUnit;
 public class RoutingBirdAmzaDiscovery implements Runnable {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private final ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+    private final ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1,
+        new ThreadFactoryBuilder().setNameFormat("routing-bird-discovery-%d").build());
 
     private final Deployable deployable;
     private final String serviceName;

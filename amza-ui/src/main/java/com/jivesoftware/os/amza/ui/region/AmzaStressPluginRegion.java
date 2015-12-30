@@ -11,6 +11,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.client.http.exceptions.NotSolveableException;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.EmbeddedPartitionClient;
@@ -77,6 +78,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         final boolean requireConsistency;
         final boolean orderedInsertion;
         final String action;
+        final RowType rowType;
 
         public AmzaStressPluginRegionInput(String name,
             boolean client,
@@ -94,7 +96,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             String consistency,
             boolean requireConsistency,
             boolean orderedInsertion,
-            String action) {
+            String action,
+            RowType rowType) {
             this.name = name;
             this.client = client;
             this.indexClassName = indexClassName;
@@ -112,6 +115,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             this.requireConsistency = requireConsistency;
             this.orderedInsertion = orderedInsertion;
             this.action = action;
+            this.rowType = rowType;
         }
     }
 
@@ -215,7 +219,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                         Consistency.valueOf(input.consistency),
                         input.requireConsistency,
                         j,
-                        input.orderedInsertion));
+                        input.orderedInsertion,
+                        input.rowType));
                 }
             }
         }
@@ -234,6 +239,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             private final boolean requireConsistency;
             private final int threadIndex;
             private final boolean orderedInsertion;
+            private final RowType rowType;
 
             public Feeder(boolean client,
                 String indexClassName,
@@ -245,7 +251,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 Consistency consistency,
                 boolean requireConsistency,
                 int threadIndex,
-                boolean orderedInsertion) {
+                boolean orderedInsertion,
+                RowType rowType) {
                 this.client = client;
                 this.indexClassName = indexClassName;
                 this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
@@ -257,6 +264,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 this.requireConsistency = requireConsistency;
                 this.threadIndex = threadIndex;
                 this.orderedInsertion = orderedInsertion;
+                this.rowType = rowType;
             }
 
             @Override
@@ -265,7 +273,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                     int b = batch.incrementAndGet();
                     if (b <= input.numBatches && !forcedStop.get()) {
                         feed(client, indexClassName, maxUpdatesBetweenCompactionHintMarker, maxUpdatesBetweenIndexCommitMarker,
-                            ringName, regionName, ringSize, consistency, requireConsistency, b, threadIndex);
+                            ringName, regionName, ringSize, consistency, requireConsistency, b, threadIndex, rowType);
                         executor.submit(this);
                     } else {
                         completed();
@@ -298,7 +306,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
             Consistency consistency,
             boolean requireConsistency,
             int batch,
-            int threadIndex) throws Exception {
+            int threadIndex,
+            RowType rowType) throws Exception {
             PartitionClient partition = createPartitionIfAbsent(client,
                 indexClassName,
                 maxUpdatesBetweenCompactionHintMarker,
@@ -307,7 +316,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 regionName,
                 consistency,
                 requireConsistency,
-                ringSize);
+                ringSize,
+                rowType);
 
             while (true) {
                 try {
@@ -358,7 +368,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         String simplePartitionName,
         Consistency consistency,
         boolean requireConsistency,
-        int ringSize) throws Exception {
+        int ringSize,
+        RowType rowType) throws Exception {
 
         if (ringSize < 1) {
             amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes());
@@ -370,7 +381,7 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
             new PrimaryIndexDescriptor(indexClassName, 0, false, null),
             null, maxUpdatesBetweenCompactionHintMarker, maxUpdatesBetweenIndexCommitMarker);
-        PartitionProperties partitionProperties = new PartitionProperties(storageDescriptor, consistency, requireConsistency, 2, false);
+        PartitionProperties partitionProperties = new PartitionProperties(storageDescriptor, consistency, requireConsistency, 2, false, rowType);
         long timeoutMillis = 10_000;
         PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
 

@@ -69,9 +69,9 @@ public class AmzaPartitionUpdates implements Commitable {
         changes.compute(key, (byte[] k, WALValue existing) -> {
             if (existing == null) {
                 approximateSize.incrementAndGet();
-                return new WALValue(value, timestampId, tombstone, -1);
+                return new WALValue(null, value, timestampId, tombstone, -1);
             } else if (timestampId >= existing.getTimestampId()) {
-                return new WALValue(value, timestampId, tombstone, -1);
+                return new WALValue(null, value, timestampId, tombstone, -1);
             } else {
                 return existing;
             }

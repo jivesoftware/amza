@@ -271,7 +271,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
             RowType rowType = RowType.fromByte(UIO.readByte(fis, "type"));
             if (rowType == RowType.highwater) {
                 highwaters.highwater(readHighwaters(fis, intLongBuffer));
-            } else if (rowType == RowType.primary) {
+            } else if (rowType.isPrimary()) {
                 long rowTxId = UIO.readLong(fis, "rowTxId", intLongBuffer);
                 if (done && rowTxId > maxTxId) {
                     return new TakeResult(ringMember, maxTxId, null);

@@ -18,13 +18,14 @@ package com.jivesoftware.os.amza.deployable;
 import com.google.common.base.Splitter;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.Partition;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
@@ -158,7 +159,7 @@ public class AmzaEndpoints {
                     }
                     return true;
                 },
-                (_prefix, _key, value, timestamp, tombstoned, version) -> {
+                (rowType, _prefix, _key, value, timestamp, tombstoned, version) -> {
                     if (timestamp != -1 && !tombstoned) {
                         got.add(new String(value, StandardCharsets.UTF_8));
                     }
@@ -197,13 +198,14 @@ public class AmzaEndpoints {
         String simplePartitionName, Consistency consistency, boolean requireConsistency) throws Exception {
 
         amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes(StandardCharsets.UTF_8));
-        
+
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
             new PrimaryIndexDescriptor(indexClassName, 0, false, null),
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, ringName.getBytes(StandardCharsets.UTF_8), simplePartitionName.getBytes(StandardCharsets.UTF_8));
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, requireConsistency, 1, false));
+        amzaService.setPropertiesIfAbsent(partitionName,
+            new PartitionProperties(storageDescriptor, consistency, requireConsistency, 1, false, RowType.primary));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);
         return amzaService.getPartition(partitionName);

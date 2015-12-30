@@ -2,13 +2,14 @@ package com.jivesoftware.os.amza.lsm.pointers;
 
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.amza.lsm.pointers.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerStream;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
@@ -69,10 +70,10 @@ public class LSMPointerIndexWALIndex implements WALIndex {
         return stream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, pointer);
     }
 
-    private boolean entryToWALPointer(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
+    private boolean entryToWALPointer(RowType rowType, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
         long timestamp, boolean tombstoned, long version, long pointer,
         KeyValuePointerStream stream) throws Exception {
-        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, pointer);
+        return stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, pointer);
     }
 
     @Override
@@ -210,11 +211,11 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     public boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
         lock.acquire();
         try {
-            return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            return keyValues.consume((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.getPointer(pk, (pointer) -> {
                     return pointer.next((rawKey, timestamp, tombstoned, version, pointer1) -> {
-                        return entryToWALPointer(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
+                        return entryToWALPointer(rowType,prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
                             timestamp, tombstoned, version, pointer1, stream);
                     });
                 });

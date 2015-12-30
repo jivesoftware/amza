@@ -15,13 +15,14 @@
  */
 package com.jivesoftware.os.amza.shared.wal;
 
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
 
-public interface PrimaryRowMarshaller<R> {
+public interface PrimaryRowMarshaller {
 
-    R toRow(byte[] key, byte[] value, long timestamp, boolean tombstoned, long version) throws Exception;
+    byte[] toRow(RowType rowType, byte[] key, byte[] value, long timestamp, boolean tombstoned, long version) throws Exception;
 
     int sizeInBytes(int pkSizeInBytes, int valueSizeInBytes);
 
@@ -32,7 +33,7 @@ public interface PrimaryRowMarshaller<R> {
 
     interface FpRowStream {
 
-        boolean stream(long fp, byte[] row) throws Exception;
+        boolean stream(long fp, RowType rowType, byte[] row) throws Exception;
     }
 
     interface TxFpRows {
@@ -42,8 +43,10 @@ public interface PrimaryRowMarshaller<R> {
 
     interface TxFpRowStream {
 
-        boolean stream(long txId, long fp, byte[] row) throws Exception;
+        boolean stream(long txId, long fp, RowType rowType, byte[] row) throws Exception;
     }
+
+    byte[] convert(RowType fromType, byte[] row, RowType toType) throws Exception;
 
     boolean fromRows(FpRows fpRows, FpKeyValueStream fpKeyValueStream) throws Exception;
 
@@ -53,11 +56,11 @@ public interface PrimaryRowMarshaller<R> {
 
     boolean fromRows(TxFpRows txFpRows, WALKey.TxFpKeyValueEntryStream<byte[]> txFpKeyValueEntryStream) throws Exception;
 
-    byte[] valueFromRow(R row) throws Exception;
+    byte[] valueFromRow(RowType rowType, byte[] row, int offset) throws Exception;
 
-    long timestampFromRow(R row) throws Exception;
+    long timestampFromRow(byte[] row, int offset) throws Exception;
 
-    boolean tombstonedFromRow(R row) throws Exception;
+    boolean tombstonedFromRow(byte[] row, int offset) throws Exception;
 
-    long versionFromRow(R row) throws Exception;
+    long versionFromRow(byte[] row, int offset) throws Exception;
 }

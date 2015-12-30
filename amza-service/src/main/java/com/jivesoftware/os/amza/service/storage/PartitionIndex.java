@@ -5,16 +5,17 @@ import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.TxPartitionState;
-import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.TxPartitionState;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
+import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.shared.wal.WALValue;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -70,7 +71,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);
-        partitionIndexStore.rowScan((prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+        partitionIndexStore.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             final PartitionName partitionName = PartitionName.fromBytes(key);
             try {
                 total.incrementAndGet();
@@ -171,7 +172,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
             }
 
             WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, properties.walStorageDescriptor);
-            partitionStore = new PartitionStore(walStorage, hardFlush);
+            partitionStore = new PartitionStore(properties, walStorage, hardFlush);
             partitionStore.load();
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
@@ -211,7 +212,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 null,
                 1000,
                 1000);
-            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 0, false);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 0, false, RowType.primary);
         } else if (partitionName.equals(AQUARIUM_LIVELINESS_INDEX.getPartitionName()) || partitionName.equals(AQUARIUM_STATE_INDEX.getPartitionName())) {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 true,
@@ -219,7 +220,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 null,
                 Integer.MAX_VALUE,
                 Integer.MAX_VALUE);
-            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false, RowType.primary);
         } else {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(
                 false,
@@ -227,7 +228,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                 null,
                 1000,
                 1000);
-            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false);
+            properties = new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false, RowType.primary);
         }
         return properties;
     }
@@ -245,7 +246,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                     if (versionedPartitionStores != null) {
                         for (PartitionStore store : versionedPartitionStores.values()) {
                             PartitionProperties properties = getProperties(partitionName);
-                            store.updatedStorageDescriptor(properties.walStorageDescriptor);
+                            store.updateProperties(properties);
                         }
                     }
                 }

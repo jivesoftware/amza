@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.RowType;
 
 /**
  *
@@ -25,7 +26,8 @@ public interface WALTx<I> {
 
     boolean delete(boolean ifEmpty) throws Exception;
 
-    Optional<Compacted<I>> compact(long removeTombstonedOlderThanTimestampId,
+    Optional<Compacted<I>> compact(RowType compactToRowType,
+        long removeTombstonedOlderThanTimestampId,
         long ttlTimestampId,
         I rowIndex,
         boolean force) throws Exception;

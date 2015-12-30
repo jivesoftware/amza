@@ -1,14 +1,14 @@
 package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
+import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.shared.wal.WALIndex;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 
 /**
@@ -17,13 +17,13 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 public class IndexedWALStorageProvider {
 
     private final WALIndexProviderRegistry indexProviderRegistry;
-    private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
+    private final PrimaryRowMarshaller primaryRowMarshaller;
     private final BinaryHighwaterRowMarshaller highwaterRowMarshaller;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final int tombstoneCompactionFactor;
 
     public IndexedWALStorageProvider(WALIndexProviderRegistry indexProviderRegistry,
-        BinaryPrimaryRowMarshaller primaryRowMarshaller,
+        PrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         TimestampedOrderIdProvider orderIdProvider,
         int tombstoneCompactionFactor) {
@@ -74,19 +74,4 @@ public class IndexedWALStorageProvider {
             primaryRowMarshaller,
             walIndexProvider);
     }
-
-    /*public Set<VersionedPartitionName> listExisting(String[] workingDirectories, String domain) throws IOException {
-        Set<VersionedPartitionName> versionedPartitionNames = Sets.newHashSet();
-        for (String workingDirectory : workingDirectories) {
-            File directory = new File(workingDirectory, domain);
-            if (directory.exists() && directory.isDirectory()) {
-                Set<String> partitions = BinaryWALTx.listExisting(directory, rowIOProvider);
-                for (String partition : partitions) {
-                    versionedPartitionNames.add(VersionedPartitionName.fromBase64(partition));
-                }
-            }
-        }
-        return versionedPartitionNames;
-    }*/
-
 }

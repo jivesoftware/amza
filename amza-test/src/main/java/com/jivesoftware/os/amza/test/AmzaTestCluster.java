@@ -29,6 +29,7 @@ import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
@@ -163,7 +164,6 @@ public class AmzaTestCluster {
         long awaitLeaderElectionForNMillis = 30_000;
         return new AmzaClientProvider(partitionClientFactory, partitionHostsProvider, clientProvider, callerThreads, awaitLeaderElectionForNMillis);
     }*/
-
     public Collection<AmzaNode> getAllNodes() {
         return cluster.values();
     }
@@ -395,7 +395,7 @@ public class AmzaTestCluster {
                 new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 1000, 1000);
 
             // TODO test other consistencies. Hehe
-            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false));
+            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false, RowType.primary));
             amzaService.awaitOnline(partitionName, 10_000);
         }
 
@@ -596,7 +596,7 @@ public class AmzaTestCluster {
                             byte[][] bvalue = new byte[1][];
                             long[] bversion = new long[1];
                             b.get(Consistency.leader, prefix, stream -> stream.stream(key),
-                                (_prefix, _key, value, timestamp, tombstoned, version) -> {
+                                (rowType, _prefix, _key, value, timestamp, tombstoned, version) -> {
                                     if (timestamp != -1 && !tombstoned) {
                                         btimestamp[0] = timestamp;
                                         bvalue[0] = value;

@@ -25,13 +25,13 @@ public class DeltaWALFactory {
     private final OrderIdProvider idProvider;
     private final File walDir;
     private final RowIOProvider<File> ioProvider;
-    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
+    private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
 
     public DeltaWALFactory(OrderIdProvider idProvider,
         File walDir,
         RowIOProvider<File> ioProvider,
-        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
+        PrimaryRowMarshaller primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller) {
         this.idProvider = idProvider;
         this.walDir = walDir;

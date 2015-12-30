@@ -241,7 +241,7 @@ public class BinaryRowReader implements WALReader {
     }
 
     @Override
-    public byte[] read(long position) throws IOException {
+    public byte[] readTypeByteTxIdAndRow(long position) throws IOException {
         int length = -1;
         try {
             IReadable filer = parent.bestFiler(null, position + 4);
@@ -251,8 +251,8 @@ public class BinaryRowReader implements WALReader {
 
             filer = parent.bestFiler(filer, position + 4 + length);
 
-            filer.seek(position + 4 + 1 + 8);
-            byte[] row = new byte[length - (1 + 8)];
+            filer.seek(position + 4);
+            byte[] row = new byte[length];
             if (row.length > 0) {
                 filer.read(row);
             }

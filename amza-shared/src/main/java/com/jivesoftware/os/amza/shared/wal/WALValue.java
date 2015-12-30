@@ -17,10 +17,12 @@ package com.jivesoftware.os.amza.shared.wal;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import java.util.Arrays;
 
 public class WALValue {
 
+    private final RowType rowType;
     private final byte[] value;
     private final long timestamp;
     private final boolean tombstoned;
@@ -28,14 +30,20 @@ public class WALValue {
 
     @JsonCreator
     public WALValue(
+        @JsonProperty("rowType") RowType rowType,
         @JsonProperty("value") byte[] value,
         @JsonProperty("timestamp") long timestamp,
         @JsonProperty("tombstoned") boolean tombstoned,
-         @JsonProperty("version") long version) {
+        @JsonProperty("version") long version) {
+        this.rowType = rowType;
         this.timestamp = timestamp;
         this.value = value;
         this.tombstoned = tombstoned;
         this.version = version;
+    }
+
+    public RowType getRowType() {
+        return rowType;
     }
 
     public byte[] getValue() {
@@ -54,12 +62,11 @@ public class WALValue {
         return version;
     }
 
-    
-
     @Override
     public String toString() {
         return "WALValue{"
-            + "timestamp=" + timestamp
+            + "rowType=" + rowType
+            + ", timestamp=" + timestamp
             + ", tombstoned=" + tombstoned
             + ", version=" + version
             + ", value=" + (value != null ? Arrays.toString(value) : "null") + '}';
@@ -67,16 +74,14 @@ public class WALValue {
 
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 97 * hash + (int) (this.timestamp ^ (this.timestamp >>> 32));
-        hash = 97 * hash + (this.tombstoned ? 1 : 0);
-        hash = 97 * hash + (int) (this.version ^ (this.version >>> 32));
-        hash = 97 * hash + Arrays.hashCode(this.value);
-        return hash;
+        throw new UnsupportedOperationException("NOPE");
     }
 
     @Override
     public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
         if (obj == null) {
             return false;
         }
@@ -93,7 +98,13 @@ public class WALValue {
         if (this.version != other.version) {
             return false;
         }
-        return Arrays.equals(this.value, other.value);
+        if (this.rowType != other.rowType) {
+            return false;
+        }
+        if (!Arrays.equals(this.value, other.value)) {
+            return false;
+        }
+        return true;
     }
 
 }

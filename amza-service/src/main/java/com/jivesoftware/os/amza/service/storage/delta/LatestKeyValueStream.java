@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
 import com.jivesoftware.os.amza.shared.wal.KeyUtil;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
@@ -23,37 +24,47 @@ class LatestKeyValueStream implements KeyValueStream {
     }
 
     @Override
-    public boolean stream(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) throws Exception {
+    public boolean stream(RowType rowType,
+        byte[] prefix,
+        byte[] key,
+        byte[] value,
+        long valueTimestamp,
+        boolean valueTombstoned,
+        long valueVersion) throws Exception {
         if (d == null && iterator.hasNext()) {
             d = iterator.next();
         }
         boolean[] needsKey = {true};
         byte[] pk = WALKey.compose(prefix, key);
-        boolean complete = WALKey.decompose((com.jivesoftware.os.amza.shared.wal.WALKey.TxFpRawKeyValueEntryStream<java.lang.Object> txFpKeyValueStream) -> {
-            while (d != null && KeyUtil.compare(d.getKey(), pk) <= 0) {
-                WALValue got = d.getValue();
-                if (Arrays.equals(d.getKey(), pk)) {
-                    needsKey[0] = false;
+        boolean complete = WALKey.decompose(
+            (txFpKeyValueStream) -> {
+                while (d != null && KeyUtil.compare(d.getKey(), pk) <= 0) {
+                    WALValue got = d.getValue();
+                    if (Arrays.equals(d.getKey(), pk)) {
+                        needsKey[0] = false;
+                    }
+                    if (!txFpKeyValueStream
+                    .stream(-1, -1, got.getRowType(), d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), got.getVersion(), null)) {
+                        return false;
+                    }
+                    if (iterator.hasNext()) {
+                        d = iterator.next();
+                    } else {
+                        iterator.eos();
+                        d = null;
+                        break;
+                    }
                 }
-                if (!txFpKeyValueStream.stream(-1, -1, d.getKey(), got.getValue(), got.getTimestampId(), got.getTombstoned(), got.getVersion(), null)) {
-                    return false;
-                }
-                if (iterator.hasNext()) {
-                    d = iterator.next();
-                } else {
-                    iterator.eos();
-                    d = null;
-                    break;
-                }
+                return true;
+            },
+            (txId, fp, rowType2, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, streamValueVersion, row) -> {
+                return keyValueStream.stream(rowType2, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, streamValueVersion);
             }
-            return true;
-        },
-            (txId, fp, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, streamValueVersion, row) -> keyValueStream.stream(streamPrefix,
-            streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, streamValueVersion));
+        );
         if (!complete) {
             return false;
         } else if (needsKey[0]) {
-            return keyValueStream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+            return keyValueStream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
         } else {
             return true;
         }

@@ -33,7 +33,7 @@ public interface WALReader {
 
     boolean reverseScan(RowStream rowStream) throws Exception;
 
-    byte[] read(long fp) throws Exception;
+    byte[] readTypeByteTxIdAndRow(long fp) throws Exception;
 
     boolean read(Fps fps, RowStream rowStream) throws Exception;
 

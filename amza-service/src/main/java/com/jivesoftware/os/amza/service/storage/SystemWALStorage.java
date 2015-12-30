@@ -30,13 +30,13 @@ public class SystemWALStorage {
     private static final Predicate<VersionedPartitionName> IS_SYSTEM_PREDICATE = input -> input.getPartitionName().isSystemPartition();
 
     private final PartitionIndex partitionIndex;
-    private final PrimaryRowMarshaller<byte[]> rowMarshaller;
+    private final PrimaryRowMarshaller rowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final RowChanges allRowChanges;
     private final boolean hardFlush;
 
     public SystemWALStorage(PartitionIndex partitionIndex,
-        PrimaryRowMarshaller<byte[]> rowMarshaller,
+        PrimaryRowMarshaller rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         RowChanges allRowChanges,
         boolean hardFlush) {
@@ -54,7 +54,7 @@ public class SystemWALStorage {
 
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-        RowsChanged changed = partitionStore.getWalStorage().update(-1, false, prefix, updates);
+        RowsChanged changed = partitionStore.getWalStorage().update(partitionStore.getProperties().rowType, -1, false, prefix, updates);
         if (allRowChanges != null && !changed.isEmpty()) {
             allRowChanges.changes(changed);
         }
@@ -77,11 +77,11 @@ public class SystemWALStorage {
         KeyValueStream stream) throws Exception {
         Preconditions.checkArgument(versionedPartitionName.getPartitionName().isSystemPartition(), "Must be a system partition");
         return partitionIndex.get(versionedPartitionName).streamValues(prefix, keys,
-            (_prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+            (rowType, _prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (valueTimestamp == -1) {
-                    return stream.stream(prefix, key, null, -1, false, -1);
+                    return stream.stream(rowType, prefix, key, null, -1, false, -1);
                 } else {
-                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
+                    return stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion);
                 }
             });
     }
@@ -116,8 +116,8 @@ public class SystemWALStorage {
                 if (rowType == RowType.highwater && highwaters != null) {
                     WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
                     highwaters.highwater(highwater);
-                } else if (rowType == RowType.primary && rowTxId > transactionId) {
-                    return rowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(rowTxId, rowFP, row), txKeyValueStream);
+                } else if (rowType.isPrimary() && rowTxId > transactionId) {
+                    return rowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(rowTxId, rowFP, rowType, row), txKeyValueStream);
                 }
                 return true;
             });
@@ -135,8 +135,8 @@ public class SystemWALStorage {
                 if (rowType == RowType.highwater && highwaters != null) {
                     WALHighwater highwater = highwaterRowMarshaller.fromBytes(row);
                     highwaters.highwater(highwater);
-                } else if (rowType == RowType.primary && rowTxId > transactionId) {
-                    return rowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(rowTxId, rowFP, row), txKeyValueStream);
+                } else if (rowType.isPrimary() && rowTxId > transactionId) {
+                    return rowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(rowTxId, rowFP, rowType, row), txKeyValueStream);
                 }
                 return true;
             });

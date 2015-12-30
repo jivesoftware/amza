@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.ui.region.AmzaStressPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaStressPluginRegion.AmzaStressPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
@@ -35,7 +36,7 @@ public class AmzaStressPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new AmzaStressPluginRegionInput("", false, "", 1000, 1000, "", "", 0, 0, 0, 0, 0, 0, "none", true, false, ""));
+            new AmzaStressPluginRegionInput("", false, "", 1000, 1000, "", "", 0, 0, 0, 0, 0, 0, "none", true, false, "", RowType.primary));
         return Response.ok(rendered).build();
     }
 
@@ -59,7 +60,8 @@ public class AmzaStressPluginEndpoints {
         @FormParam("consistency") @DefaultValue("none") String consistency,
         @FormParam("requireConsistency") @DefaultValue("false") boolean requireConsistency,
         @FormParam("orderedInsertion") @DefaultValue("false") boolean orderedInsertion,
-        @FormParam("action") @DefaultValue("") String action) {
+        @FormParam("action") @DefaultValue("") String action,
+        @FormParam("rowType") @DefaultValue("primary") String rowType) {
         String rendered = soyService.renderPlugin(pluginRegion,
             new AmzaStressPluginRegionInput(name.trim(),
                 client,
@@ -77,7 +79,8 @@ public class AmzaStressPluginEndpoints {
                 consistency,
                 requireConsistency,
                 orderedInsertion,
-                action));
+                action,
+                RowType.valueOf(rowType)));
         return Response.ok(rendered).build();
     }
 }

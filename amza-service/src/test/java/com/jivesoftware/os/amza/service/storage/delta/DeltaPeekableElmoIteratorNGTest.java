@@ -4,6 +4,7 @@ import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.shared.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.shared.stream.Fps;
 import com.jivesoftware.os.amza.shared.wal.KeyUtil;
@@ -41,9 +42,10 @@ public class DeltaPeekableElmoIteratorNGTest {
                     byte[] prefix = new byte[]{(byte) i};
                     byte[] key = new byte[]{(byte) i};
                     WALPointer pointer = new WALPointer((long) i, timestamp, false, timestamp);
-                    WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false, timestamp);
+                    WALValue value = new WALValue(RowType.primary, UIO.longBytes((long) i), timestamp, false, timestamp);
                     wal.put(WALKey.compose(prefix, key), pointer);
-                    fpRows.put((long) i, new WALRow(prefix, key, value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion()));
+                    fpRows.put((long) i, new WALRow(RowType.primary, prefix, key, value.getValue(), value.getTimestampId(), value.getTombstoned(), value
+                        .getVersion()));
                     expected.add((byte) i);
                     expectedBoth.add((byte) i);
                 }
@@ -52,9 +54,10 @@ public class DeltaPeekableElmoIteratorNGTest {
                     byte[] prefix = new byte[]{(byte) i};
                     byte[] key = new byte[]{(byte) i};
                     WALPointer pointer = new WALPointer((long) i, timestamp, false, timestamp);
-                    WALValue value = new WALValue(UIO.longBytes((long) i), timestamp, false, timestamp);
+                    WALValue value = new WALValue(RowType.primary, UIO.longBytes((long) i), timestamp, false, timestamp);
                     other.put(WALKey.compose(prefix, key), pointer);
-                    fpRows.put((long) i, new WALRow(prefix, key, value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion()));
+                    fpRows.put((long) i, new WALRow(RowType.primary, prefix, key, value.getValue(), value.getTimestampId(), value.getTombstoned(), value
+                        .getVersion()));
                     expectedBoth.add((byte) i);
                 }
             }
@@ -64,14 +67,14 @@ public class DeltaPeekableElmoIteratorNGTest {
                 public boolean hydrate(Fps fps, FpKeyValueStream fpKeyValueStream) throws Exception {
                     return fps.consume(fp -> {
                         WALRow row = fpRows.get(fp);
-                        return fpKeyValueStream.stream(fp, row.prefix, row.key, row.value, row.timestamp, row.tombstoned, row.version);
+                        return fpKeyValueStream.stream(fp, row.rowType, row.prefix, row.key, row.value, row.timestamp, row.tombstoned, row.version);
                     });
                 }
 
                 @Override
                 public WALValue hydrate(long fp) throws Exception {
                     WALRow row = fpRows.get(fp);
-                    return new WALValue(row.value, row.timestamp, row.tombstoned, row.version);
+                    return new WALValue(row.rowType, row.value, row.timestamp, row.tombstoned, row.version);
                 }
             };
             DeltaPeekableElmoIterator deltaPeekableElmoIterator = new DeltaPeekableElmoIterator(
@@ -84,8 +87,8 @@ public class DeltaPeekableElmoIteratorNGTest {
             long[] lastV = {-1};
             while (deltaPeekableElmoIterator.hasNext()) {
                 byte[] pk = deltaPeekableElmoIterator.next().getKey();
-                WALKey.decompose(txFpRawKeyValueEntryStream -> txFpRawKeyValueEntryStream.stream(-1, -1, pk, null, -1, false, -1, null),
-                    (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
+                WALKey.decompose(txFpRawKeyValueEntryStream -> txFpRawKeyValueEntryStream.stream(-1, -1, null, pk, null, -1, false, -1, null),
+                    (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
                         byte v = key[0];
                         had.add(v);
                         Assert.assertTrue(lastV[0] < v);
@@ -105,8 +108,8 @@ public class DeltaPeekableElmoIteratorNGTest {
             lastV[0] = -1;
             while (deltaPeekableElmoIterator.hasNext()) {
                 byte[] pk = deltaPeekableElmoIterator.next().getKey();
-                WALKey.decompose(txFpRawKeyValueEntryStream -> txFpRawKeyValueEntryStream.stream(-1, -1, pk, null, -1, false, -1, null),
-                    (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
+                WALKey.decompose(txFpRawKeyValueEntryStream -> txFpRawKeyValueEntryStream.stream(-1, -1, null, pk, null, -1, false, -1, null),
+                    (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
                         byte v = key[0];
                         had.add(v);
                         Assert.assertTrue(lastV[0] < v);

@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.shared.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
@@ -40,7 +41,7 @@ public class RowPartitionNGTest {
         File walDir = Files.createTempDir();
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
-        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[] { walDir.getAbsolutePath() }, ioStats, 1, false);
+        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
@@ -66,7 +67,7 @@ public class RowPartitionNGTest {
         ScheduledExecutorService compact = Executors.newScheduledThreadPool(1);
         compact.scheduleAtFixedRate(() -> {
             try {
-                indexedWAL.compactTombstone(0, Long.MAX_VALUE, false);
+                indexedWAL.compactTombstone(RowType.primary, 0, Long.MAX_VALUE, false);
             } catch (Exception x) {
                 x.printStackTrace();
             }
@@ -116,9 +117,9 @@ public class RowPartitionNGTest {
             byte[] key = UIO.intBytes(r.nextInt(range));
             byte[] value = UIO.intBytes(i);
             long timestampAndVersion = idProvider.nextId();
-            updates.add(new WALRow(prefix, key, value, timestampAndVersion, false, timestampAndVersion));
+            updates.add(new WALRow(RowType.primary, prefix, key, value, timestampAndVersion, false, timestampAndVersion));
         }
-        indexedWAL.update(-1, false, prefix, new MemoryWALUpdates(updates, null));
+        indexedWAL.update(RowType.primary, -1, false, prefix, new MemoryWALUpdates(updates, null));
     }
 
     @Test
@@ -126,7 +127,7 @@ public class RowPartitionNGTest {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
 
-        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[] { walDir.getAbsolutePath() }, ioStats, 1, false);
+        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, false);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
@@ -143,7 +144,7 @@ public class RowPartitionNGTest {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
 
-        RowIOProvider<File> binaryRowIOProvider = new MemoryBackedRowIOProvider(new String[] { walDir.getAbsolutePath() }, ioStats, 1, 4_096, 4_096,
+        RowIOProvider<File> binaryRowIOProvider = new MemoryBackedRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, 4_096, 4_096,
             new HeapByteBufferFactory());
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
@@ -226,7 +227,7 @@ public class RowPartitionNGTest {
 
     private void update(WALStorage indexedWAL, byte[] prefix, byte[] key, byte[] value, long timestamp, boolean remove) throws Exception {
         List<WALRow> updates = Lists.newArrayList();
-        updates.add(new WALRow(prefix, key, value, timestamp, remove, timestamp));
-        indexedWAL.update(-1, false, prefix, new MemoryWALUpdates(updates, null));
+        updates.add(new WALRow(RowType.primary, prefix, key, value, timestamp, remove, timestamp));
+        indexedWAL.update(RowType.primary, -1, false, prefix, new MemoryWALUpdates(updates, null));
     }
 }

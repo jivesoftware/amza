@@ -71,12 +71,13 @@ public class PartitionComposter {
     public void compost() throws Exception {
         List<VersionedPartitionName> composted = new ArrayList<>();
         partitionStateStorage.streamLocalState((partitionName, ringMember, versionedState) -> {
+            long partitionVersion = versionedState.getPartitionVersion();
+            VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, partitionVersion);
             if (versionedState.isCurrentState(State.expunged)) {
                 try {
+                    LOG.info("Expunging {} {}.", partitionName, partitionVersion);
                     amzaStats.beginCompaction(CompactionFamily.expunge, partitionName + " " + versionedState);
                     partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName,
-                            versionedState.getPartitionVersion());
                         if (stripe.expungePartition(versionedPartitionName)) {
                             PartitionStore partitionStore = partitionIndex.remove(versionedPartitionName);
                             partitionStore.getWalStorage().expunge();
@@ -85,17 +86,20 @@ public class PartitionComposter {
                         }
                         return null;
                     });
+                    LOG.info("Expunged {} {}.", partitionName, partitionVersion);
                 } finally {
                     amzaStats.endCompaction(CompactionFamily.expunge, partitionName + " " + versionedState);
                 }
 
-            } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName()) || !partitionProvider.hasPartition(partitionName)) {
-                partitionStateStorage.markForDisposal(new VersionedPartitionName(partitionName, versionedState.getPartitionVersion()), ringMember);
+            } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
+                LOG.info("Marked {} {} for disposal because it not a member of ring {}.", partitionName, partitionVersion, partitionName.getRingName());
+                partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
+            } else if (!partitionProvider.hasPartition(partitionName)) {
+                LOG.info("Marked {} {} for disposal because  no partition is defined on this node.", partitionName, partitionVersion);
+                partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
             }
             return true;
         });
         partitionStateStorage.expunged(composted);
-
     }
-
 }

@@ -118,7 +118,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
     }
 
     @Override
-    public boolean fromRows(TxFpRows txFpRows, WALKey.TxFpKeyValueEntryStream txFpKeyValueStream) throws Exception {
+    public boolean fromRows(TxFpRows txFpRows, WALKey.TxFpKeyValueEntryStream<byte[]> txFpKeyValueStream) throws Exception {
         byte[] intLongBuffer = new byte[8];
         return WALKey.decompose(
             txFpRawKeyValueEntryStream -> txFpRows.consume((txId, fp, rowType, row) -> {

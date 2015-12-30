@@ -176,7 +176,7 @@ public class AmzaTestCluster {
         cluster.remove(ringMember);
     }
 
-    public AmzaNode newNode(final RingMember localRingMember, final RingHost localRingHost, PartitionName partitionName) throws Exception {
+    public AmzaNode newNode(final RingMember localRingMember, final RingHost localRingHost) throws Exception {
 
         AmzaNode service = cluster.get(localRingMember);
         if (service != null) {
@@ -184,7 +184,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         config.aquariumLivelinessFeedEveryMillis = 500;
         //config.useMemMap = true;
@@ -309,16 +309,6 @@ public class AmzaTestCluster {
 
         amzaService.start();
 
-        amzaService.watch(partitionName,
-            (RowsChanged changes) -> {
-                /*if (changes.getApply().size() > 0) {
-                 System.out.println("Service:" + localRingMember
-                 + " Partition:" + partitionName.getName()
-                 + " Changed:" + changes.getApply().size());
-                 }*/
-            }
-        );
-
         try {
             //amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, localRingMember); // ?? Hacky
             TimestampedRingHost timestampedRingHost = amzaService.getRingReader().getRingHost();
@@ -390,12 +380,17 @@ public class AmzaTestCluster {
             amzaService.stop();
         }
 
-        public void create(PartitionName partitionName) throws Exception {
+        public void create(PartitionName partitionName, RowType rowType) throws Exception {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
                 new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 1000, 1000);
 
             // TODO test other consistencies. Hehe
-            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, Consistency.none, true, 2, false, RowType.primary));
+            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor,
+                Consistency.none,
+                true,
+                2,
+                false,
+                rowType));
             amzaService.awaitOnline(partitionName, 10_000);
         }
 
@@ -427,6 +422,18 @@ public class AmzaTestCluster {
                     return true;
                 });
             return got.get(0);
+        }
+
+        public void watch(PartitionName partitionName) throws Exception {
+            amzaService.watch(partitionName,
+                (RowsChanged changes) -> {
+                    /*if (changes.getApply().size() > 0) {
+                     System.out.println("Service:" + localRingMember
+                     + " Partition:" + partitionName.getName()
+                     + " Changed:" + changes.getApply().size());
+                     }*/
+                }
+            );
         }
 
         void remoteMemberTookToTxId(RingMember remoteRingMember,
@@ -495,7 +502,7 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = {0};
+                    int[] count = { 0 };
                     partition.scan(null, null, null, null, (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
@@ -609,7 +616,7 @@ public class AmzaTestCluster {
                             byte[] bValue = bvalue[0];
                             long bVersion = bversion[0];
                             String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                                + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                             if (bValue == null) {
                                 System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)

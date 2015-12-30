@@ -31,7 +31,7 @@ public class BinaryPrimaryRowMarshaller implements PrimaryRowMarshaller {
     @Override
     public byte[] toRow(RowType rowType, byte[] pk, byte[] value, long timestamp, boolean tombstoned, long version) throws Exception {
 
-        return toRowBytes(compress(rowType, pk), uncompress(rowType, value), timestamp, tombstoned, version);
+        return toRowBytes(compress(rowType, pk), compress(rowType, value), timestamp, tombstoned, version);
     }
 
     private byte[] toRowBytes(byte[] pk, byte[] value, long timestamp, boolean tombstoned, long version) throws IOException {

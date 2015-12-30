@@ -626,7 +626,7 @@ public class DeltaStripeWALStorage {
                     if (d != null || iterator.hasNext()) {
                         if (d != null) {
                             WALValue got = d.getValue();
-                            if (!fpRawKeyValueStream.stream(-1, -1, RowType.primary, d.getKey(),
+                            if (!fpRawKeyValueStream.stream(-1, -1, got.getRowType(), d.getKey(),
                                 got.getValue(), got.getTimestampId(), got.getTombstoned(), got.getVersion(), null)) {
                                 return false;
                             }
@@ -634,7 +634,7 @@ public class DeltaStripeWALStorage {
                         while (iterator.hasNext()) {
                             d = iterator.next();
                             WALValue got = d.getValue();
-                            if (!fpRawKeyValueStream.stream(-1, -1, RowType.primary, d.getKey(),
+                            if (!fpRawKeyValueStream.stream(-1, -1, got.getRowType(), d.getKey(),
                                 got.getValue(), got.getTimestampId(), got.getTombstoned(), got.getVersion(), null)) {
                                 return false;
                             }
@@ -665,7 +665,7 @@ public class DeltaStripeWALStorage {
                         Map.Entry<byte[], WALValue> last = d;
                         if (last != null) {
                             WALValue got = last.getValue();
-                            if (!fpRawKeyValueStream.stream(-1, -1, RowType.primary, last.getKey(),
+                            if (!fpRawKeyValueStream.stream(-1, -1, got.getRowType(), last.getKey(),
                                 got.getValue(), got.getTimestampId(), got.getTombstoned(), got.getVersion(), null)) {
                                 return false;
                             }
@@ -673,7 +673,7 @@ public class DeltaStripeWALStorage {
                         while (iterator.hasNext()) {
                             last = iterator.next();
                             WALValue got = last.getValue();
-                            if (!fpRawKeyValueStream.stream(-1, -1, RowType.primary, last.getKey(),
+                            if (!fpRawKeyValueStream.stream(-1, -1, got.getRowType(), last.getKey(),
                                 got.getValue(), got.getTimestampId(), got.getTombstoned(), got.getVersion(), null)) {
                                 return false;
                             }

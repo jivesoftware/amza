@@ -178,7 +178,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                     valueTimestamp,
                     valueTombstoned,
                     valueVersion);
-                if (!rowStream.row(fp, txId, RowType.primary, deltaRow)) {
+                if (!rowStream.row(fp, txId, rowType, deltaRow)) {
                     return false;
                 }
                 if (UIO.readBoolean(filer, "hasHighwaterHints")) {

@@ -45,7 +45,7 @@ class AmzaStateStorage implements StateStorage<Long> {
     public boolean scan(Member rootMember, Member otherMember, Long lifecycle, StateStream<Long> stream) throws Exception {
         byte[] fromKey = AmzaAquariumProvider.stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
         return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_STATE_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
-            (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
                     return AmzaAquariumProvider.streamStateKey(key,
                         (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {

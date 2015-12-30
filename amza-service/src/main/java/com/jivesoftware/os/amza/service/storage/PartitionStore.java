@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.scan.RangeScannable;
@@ -23,18 +24,23 @@ import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 
 public class PartitionStore implements RangeScannable {
 
+    private PartitionProperties properties;
     private final WALStorage walStorage;
     private final boolean hardFlush;
 
-    public PartitionStore(WALStorage walStorage,
+    public PartitionStore(PartitionProperties properties,
+        WALStorage walStorage,
         boolean hardFlush) {
-
+        this.properties = properties;
         this.walStorage = walStorage;
         this.hardFlush = hardFlush;
+    }
+
+    public PartitionProperties getProperties() {
+        return properties;
     }
 
     public WALStorage getWalStorage() {
@@ -64,7 +70,7 @@ public class PartitionStore implements RangeScannable {
     }
 
     public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId, boolean force) throws Exception {
-        walStorage.compactTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
+        walStorage.compactTombstone(properties.rowType, removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
     }
 
     public TimestampedValue getTimestampedValue(byte[] prefix, byte[] key) throws Exception {
@@ -92,14 +98,15 @@ public class PartitionStore implements RangeScannable {
         walStorage.takeRowUpdatesSince(transactionId, rowStream);
     }
 
-    public RowsChanged merge(long forceTxId, byte[] prefix, Commitable updates) throws Exception {
-        RowsChanged changes = walStorage.update(forceTxId, true, prefix, updates);
+    public RowsChanged merge(PartitionProperties partitionProperties, long forceTxId, byte[] prefix, Commitable updates) throws Exception {
+        RowsChanged changes = walStorage.update(partitionProperties.rowType, forceTxId, true, prefix, updates);
         walStorage.flush(hardFlush);
         return changes;
     }
 
-    public void updatedStorageDescriptor(WALStorageDescriptor storageDescriptor) throws Exception {
-        walStorage.updatedStorageDescriptor(storageDescriptor);
+    public void updateProperties(PartitionProperties properties) throws Exception {
+        this.properties = properties;
+        walStorage.updatedStorageDescriptor(properties.walStorageDescriptor);
     }
 
     public long highestTxId() {

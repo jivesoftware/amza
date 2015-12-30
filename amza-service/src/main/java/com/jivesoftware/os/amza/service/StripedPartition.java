@@ -18,8 +18,10 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
@@ -31,9 +33,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.shared.AckWaters;
-import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.shared.Partition;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.shared.scan.RowsChanged;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
@@ -173,7 +173,7 @@ public class StripedPartition implements Partition {
         KeyValueTimestampStream scan) throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             if (fromKey == null && toKey == null) {
-                stripe.rowScan(partitionName, (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                stripe.rowScan(partitionName, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
                     -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             } else {
                 stripe.rangeScan(partitionName,
@@ -181,7 +181,7 @@ public class StripedPartition implements Partition {
                     fromKey,
                     toPrefix,
                     toKey,
-                    (prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                    (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
                     -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             }
             return true;

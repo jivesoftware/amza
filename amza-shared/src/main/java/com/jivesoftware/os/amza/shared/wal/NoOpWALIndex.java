@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.shared.wal;
 
-import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
@@ -43,8 +43,8 @@ public class NoOpWALIndex implements WALIndex {
 
     @Override
     public boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
-        return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
-            -> stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1));
+        return keyValues.consume((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
+            -> stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1));
     }
 
     @Override

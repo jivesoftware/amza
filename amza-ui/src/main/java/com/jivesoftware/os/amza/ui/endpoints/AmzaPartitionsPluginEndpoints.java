@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
@@ -34,7 +35,7 @@ public class AmzaPartitionsPluginEndpoints {
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
-        String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput("", "", "", "", "none", true, -1));
+        String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput("", "", "", "", "none", true, -1, RowType.primary));
         return Response.ok(rendered).build();
     }
 
@@ -48,14 +49,16 @@ public class AmzaPartitionsPluginEndpoints {
         @FormParam("name") @DefaultValue("") String partitionName,
         @FormParam("consistency") @DefaultValue("none") String consistency,
         @FormParam("requireConsistency") @DefaultValue("false") boolean requireConsistency,
-        @FormParam("takeFromFactor") @DefaultValue("1") int takeFromFactor) {
+        @FormParam("takeFromFactor") @DefaultValue("1") int takeFromFactor,
+        @FormParam("rowType") @DefaultValue("primary") String rowType) {
         String rendered = soyService.renderPlugin(partitions, new AmzaPartitionsPluginRegionInput(action,
             ringName,
             indexClassName,
             partitionName,
             consistency,
             requireConsistency,
-            takeFromFactor));
+            takeFromFactor,
+            RowType.valueOf(rowType)));
         return Response.ok(rendered).build();
     }
 }

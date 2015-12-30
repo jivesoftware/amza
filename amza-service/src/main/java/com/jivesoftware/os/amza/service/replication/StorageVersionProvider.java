@@ -122,7 +122,7 @@ public class StorageVersionProvider implements RowChanges {
         byte[] intBuffer = new byte[4];
 
         systemWALStorage.rangeScan(PartitionCreator.PARTITION_VERSION_INDEX, null, fromKey, null, toKey,
-            (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+            (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 HeapFiler filer = new HeapFiler(key);
                 UIO.readByte(filer, "serializationVersion");
                 RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));

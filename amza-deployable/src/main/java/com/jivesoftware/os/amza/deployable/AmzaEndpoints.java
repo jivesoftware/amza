@@ -18,13 +18,14 @@ package com.jivesoftware.os.amza.deployable;
 import com.google.common.base.Splitter;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.shared.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.shared.Partition;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.routing.bird.shared.ResponseHelper;
@@ -59,7 +60,7 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/set")
     public Response set(@QueryParam("ring") @DefaultValue("default") String ring,
-        @QueryParam("indexClassName")  @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
         @QueryParam("partition") String partitionName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
@@ -86,7 +87,7 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/multiSet/{partition}")
     public Response multiSet(@PathParam("partition") String partitionName,
-        @QueryParam("indexClassName")  @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         Map<String, String> values) {
@@ -112,7 +113,7 @@ public class AmzaEndpoints {
     @Path("/multiSet/{ring}/{partition}")
     public Response multiSet(
         @PathParam("partition") String partitionName,
-        @QueryParam("indexClassName")  @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
         @PathParam("ring") String ring,
@@ -138,7 +139,7 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/get")
     public Response get(@QueryParam("ring") @DefaultValue("default") String ring,
-        @QueryParam("indexClassName")  @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
         @QueryParam("partition") String partitionName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
@@ -156,7 +157,7 @@ public class AmzaEndpoints {
                     }
                     return true;
                 },
-                (_prefix, _key, value, timestamp, tombstoned, version) -> {
+                (rowType, _prefix, _key, value, timestamp, tombstoned, version) -> {
                     if (timestamp != -1 && !tombstoned) {
                         got.add(value);
                     }
@@ -173,7 +174,7 @@ public class AmzaEndpoints {
     @Consumes("application/json")
     @Path("/remove")
     public Response remove(@QueryParam("ring") @DefaultValue("default") String ring,
-        @QueryParam("indexClassName")  @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
+        @QueryParam("indexClassName") @DefaultValue(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME) String indexClassName,
         @QueryParam("partition") String partitionName,
         @QueryParam("consistency") @DefaultValue("none") String consistency,
         @QueryParam("requireConsistency") @DefaultValue("true") boolean requireConsistency,
@@ -198,13 +199,14 @@ public class AmzaEndpoints {
         boolean requireConsistency) throws Exception {
 
         amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes());
-        
+
         WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
             new PrimaryIndexDescriptor(indexClassName, 0, false, null),
             null, 1000, 1000);
 
         PartitionName partitionName = new PartitionName(false, ringName.getBytes(), simplePartitionName.getBytes());
-        amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor, consistency, requireConsistency, 1, false));
+        amzaService.setPropertiesIfAbsent(partitionName,
+            new PartitionProperties(storageDescriptor, consistency, requireConsistency, 1, false, RowType.primary));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);
         return amzaService.getPartition(partitionName);

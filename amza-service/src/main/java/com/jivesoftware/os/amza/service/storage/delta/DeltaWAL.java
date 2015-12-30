@@ -30,7 +30,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
 
     private final long id;
     private final OrderIdProvider orderIdProvider;
-    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
+    private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final WALTx<I> wal;
     private final AtomicLong updateCount = new AtomicLong();
@@ -38,7 +38,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
 
     public DeltaWAL(long id,
         OrderIdProvider orderIdProvider,
-        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
+        PrimaryRowMarshaller primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         WALTx<I> wal) {
         this.id = id;
@@ -85,7 +85,8 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
         }
     }
 
-    public DeltaWALApplied update(final VersionedPartitionName versionedPartitionName,
+    public DeltaWALApplied update(RowType rowType,
+        VersionedPartitionName versionedPartitionName,
         Map<WALKey, WALValue> apply,
         WALHighwater highwaterHint) throws Exception {
 
@@ -99,7 +100,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
             byte[] key = entry.getKey().key;
             WALValue value = entry.getValue();
             WALHighwater highwater = (index == numApplies - 1) ? highwaterHint : null;
-            keyValueHighwaters[index] = new KeyValueHighwater(prefix, key,
+            keyValueHighwaters[index] = new KeyValueHighwater(rowType, prefix, key,
                 value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion(), highwater);
             index++;
         }
@@ -123,7 +124,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                         for (KeyValueHighwater kvh : keyValueHighwaters) {
                             byte[] pk = WALKey.compose(versionedPartitionName.toBytes(), WALKey.compose(kvh.prefix, kvh.key));
                             byte[] value = appendHighwaterHints(kvh.value, kvh.highwater);
-                            byte[] row = primaryRowMarshaller.toRow(pk, value, kvh.valueTimestamp, kvh.valueTombstone, kvh.valueVersion);
+                            byte[] row = primaryRowMarshaller.toRow(rowType, pk, value, kvh.valueTimestamp, kvh.valueTombstone, kvh.valueVersion);
                             if (!rowStream.stream(row)) {
                                 return false;
                             }
@@ -168,10 +169,15 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                     }
                     return true;
                 },
-                (rowFP, rowTxId, rowType, row) -> txFpRowStream.stream(rowTxId, rowFP, row))),
-            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                (rowFP, rowTxId, rowType, row) -> txFpRowStream.stream(rowTxId, rowFP, rowType, row))),
+            (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 HeapFiler filer = new HeapFiler(value);
-                byte[] deltaRow = primaryRowMarshaller.toRow(key, UIO.readByteArray(filer, "value", intBuffer), valueTimestamp, valueTombstoned, valueVersion);
+                byte[] deltaRow = primaryRowMarshaller.toRow(rowType,
+                    key,
+                    UIO.readByteArray(filer, "value", intBuffer),
+                    valueTimestamp,
+                    valueTombstoned,
+                    valueVersion);
                 if (!rowStream.row(fp, txId, RowType.primary, deltaRow)) {
                     return false;
                 }
@@ -187,14 +193,15 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
     @Override
     public WALValue hydrate(long fp) throws Exception {
         try {
-            byte[] row = wal.read(rowReader -> rowReader.read(fp));
-            byte[] value = primaryRowMarshaller.valueFromRow(row);
+            byte[] typeByteTxIdAndRow = wal.read(rowReader -> rowReader.readTypeByteTxIdAndRow(fp));
+            RowType rowType = RowType.fromByte(typeByteTxIdAndRow[0]);
+            byte[] value = primaryRowMarshaller.valueFromRow(rowType, typeByteTxIdAndRow, 1 + 8);
             byte[] deltaValue = UIO.readByteArray(value, 0, "value");
-            return new WALValue(
+            return new WALValue(rowType,
                 deltaValue,
-                primaryRowMarshaller.timestampFromRow(row),
-                primaryRowMarshaller.tombstonedFromRow(row),
-                primaryRowMarshaller.versionFromRow(row)
+                primaryRowMarshaller.timestampFromRow(typeByteTxIdAndRow, 1 + 8),
+                primaryRowMarshaller.tombstonedFromRow(typeByteTxIdAndRow, 1 + 8),
+                primaryRowMarshaller.versionFromRow(typeByteTxIdAndRow, 1 + 8)
             );
         } catch (Exception x) {
             throw new RuntimeException("Failed to hydrate fp:" + fp + ", WAL length:" + wal.length(), x);
@@ -208,14 +215,14 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                 decomposeStream -> {
                     return primaryRowMarshaller.fromRows(
                         (PrimaryRowMarshaller.FpRows) fpRowStream -> wal.read(
-                            reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, row))),
-                        (fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                            reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
+                        (fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                             byte[] deltaValue = UIO.readByteArray(value, 0, "value");
-                            return decomposeStream.stream(-1, fp, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion, null);
+                            return decomposeStream.stream(-1, fp, rowType, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion, null);
                         });
                 },
-                (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
-                    return fpKeyValueStream.stream(fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
+                (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
+                    return fpKeyValueStream.stream(fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion);
                 });
         } catch (Exception x) {
             throw new RuntimeException("Failed to hydrate fps, WAL length:" + wal.length(), x);
@@ -227,8 +234,8 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
         return primaryRowMarshaller.fromRows(
             fpRowStream -> wal.read(
                 reader -> reader.read(fps,
-                    (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, row))),
-            (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                    (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, rowType, row))),
+            (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 try {
                     HeapFiler filer = new HeapFiler(value);
                     byte[] hydrateValue = UIO.readByteArray(filer, "value", intBuffer);
@@ -236,7 +243,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                     if (UIO.readBoolean(filer, "hasHighwaterHint")) {
                         highwater = highwaterRowMarshaller.fromBytes(UIO.readByteArray(filer, "highwaters", intBuffer));
                     }
-                    return stream.stream(fp, prefix, key, hydrateValue, valueTimestamp, valueTombstoned, valueVersion, highwater);
+                    return stream.stream(fp, rowType, prefix, key, hydrateValue, valueTimestamp, valueTombstoned, valueVersion, highwater);
                 } catch (Exception x) {
                     throw new RuntimeException("Failed to hydrate fp:" + fp + " length:" + wal.length(), x);
                 }
@@ -275,6 +282,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
 
     public static class KeyValueHighwater {
 
+        public final RowType rowType;
         public final byte[] prefix;
         public final byte[] key;
         public final byte[] value;
@@ -283,7 +291,15 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
         public final long valueVersion;
         public final WALHighwater highwater;
 
-        public KeyValueHighwater(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstone, long valueVersion, WALHighwater highwater) {
+        public KeyValueHighwater(RowType rowType,
+            byte[] prefix,
+            byte[] key,
+            byte[] value,
+            long valueTimestamp,
+            boolean valueTombstone,
+            long valueVersion,
+            WALHighwater highwater) {
+            this.rowType = rowType;
             this.prefix = prefix;
             this.key = key;
             this.value = value;

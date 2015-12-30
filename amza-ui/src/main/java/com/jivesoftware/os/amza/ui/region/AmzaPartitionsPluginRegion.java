@@ -5,21 +5,22 @@ import com.google.common.collect.Maps;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
+import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.aquarium.Liveliness;
@@ -69,6 +70,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
         final String consistency;
         final boolean requireConsistency;
         final int takeFromFactor;
+        final RowType rowType;
 
         public AmzaPartitionsPluginRegionInput(String action,
             String ringName,
@@ -76,7 +78,8 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             String partitionName,
             String consistency,
             boolean requireConsistency,
-            int takeFromFactor) {
+            int takeFromFactor,
+            RowType rowType) {
             this.action = action;
             this.ringName = ringName;
             this.indexClassName = indexClassName;
@@ -84,6 +87,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             this.consistency = consistency;
             this.requireConsistency = requireConsistency;
             this.takeFromFactor = takeFromFactor;
+            this.rowType = rowType;
         }
 
     }
@@ -99,7 +103,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             if (input.action.equals("add")) {
                 if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
                     amzaService.getRingWriter().ensureMaximalRing(ringNameBytes);
-                    
+
                     WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
                         new PrimaryIndexDescriptor(input.indexClassName, 0, false, null),
                         null, 1000, 1000);
@@ -110,7 +114,8 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                             Consistency.valueOf(input.consistency),
                             input.requireConsistency,
                             input.takeFromFactor,
-                            false));
+                            false,
+                            input.rowType));
                     amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
                 }
             } else if (input.action.equals("promote")) {

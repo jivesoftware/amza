@@ -3,7 +3,9 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -16,8 +18,6 @@ import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
-import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.scan.CommitTo;
 import com.jivesoftware.os.amza.shared.scan.RowChanges;
@@ -232,6 +232,7 @@ public class RowChangeTaker implements RowChanges {
     }
 
     private static class SessionedTxId {
+
         private final long sessionId;
         private final long txId;
 
@@ -302,7 +303,7 @@ public class RowChangeTaker implements RowChanges {
                 } catch (InterruptedException ie) {
                     return;
                 } catch (Exception x) {
-                    LOG.error("Failed to take partitions updated:{}", new Object[] { remoteRingMember }, x);
+                    LOG.error("Failed to take partitions updated:{}", new Object[]{remoteRingMember}, x);
                     try {
                         Thread.sleep(1_000);
                     } catch (InterruptedException ie) {
@@ -585,7 +586,7 @@ public class RowChangeTaker implements RowChanges {
                                     if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                         LOG.warn("Error while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                         LOG.trace("Error while taking from member:{} host:{} partition:{}",
-                                            new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, rowsResult.error);
+                                            new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, rowsResult.error);
                                     }
                                     amzaStats.takeErrors.add(remoteRingMember);
                                 } else if (rowsResult.unreachable != null) {
@@ -597,7 +598,7 @@ public class RowChangeTaker implements RowChanges {
                                     if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                         LOG.debug("Unreachable while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                         LOG.trace("Unreachable while taking from member:{} host:{} partition:{}",
-                                            new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName },
+                                            new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName},
                                             rowsResult.unreachable);
                                     }
                                     amzaStats.takeErrors.add(remoteRingMember);
@@ -647,7 +648,7 @@ public class RowChangeTaker implements RowChanges {
                                     leadershipToken);
                             } catch (Exception x) {
                                 LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
+                                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
                             }
                         } finally {
                             LOG.stopTimer("take>all");
@@ -656,14 +657,14 @@ public class RowChangeTaker implements RowChanges {
 
                     } catch (Exception x) {
                         LOG.warn("Failed to take from member:{} host:{} partition:{}",
-                            new Object[] { remoteRingMember, remoteRingHost, localVersionedPartitionName }, x);
+                            new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
                     }
                     onCompletion.completed(this, flushed, currentVersion, version);
                     return null;
                 });
             } catch (Exception x) {
                 LOG.error("Failed to take from member:{} host:{} partition:{}",
-                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
+                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
                 onError.error(this, x);
             }
         }
@@ -704,7 +705,7 @@ public class RowChangeTaker implements RowChanges {
 
         @Override
         public boolean row(long rowFP, long txId, RowType rowType, byte[] row) throws Exception {
-            if (rowType == RowType.primary) {
+            if (rowType.isPrimary()) {
                 if (lastTxId.longValue() == Long.MIN_VALUE) {
                     lastTxId.setValue(txId);
                 } else if (lastTxId.longValue() != txId) {
@@ -714,8 +715,8 @@ public class RowChangeTaker implements RowChanges {
                     oldestTxId.setValue(Long.MAX_VALUE);
                 }
 
-                primaryRowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(txId, rowFP, row),
-                    (rowTxId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, _row) -> {
+                primaryRowMarshaller.fromRows(txFpRowStream -> txFpRowStream.stream(txId, rowFP, rowType, row),
+                    (rowTxId, fp, rowType2, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, _row) -> {
                         streamed.incrementAndGet();
                         if (highWaterMark.longValue() < txId) {
                             highWaterMark.setValue(txId);
@@ -723,7 +724,7 @@ public class RowChangeTaker implements RowChanges {
                         if (oldestTxId.longValue() > txId) {
                             oldestTxId.setValue(txId);
                         }
-                        batch.add(new WALRow(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
+                        batch.add(new WALRow(rowType2, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
                         return true;
                     });
 

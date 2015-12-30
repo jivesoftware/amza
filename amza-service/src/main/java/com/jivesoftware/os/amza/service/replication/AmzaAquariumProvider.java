@@ -492,7 +492,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         public boolean scan(Member rootMember, Member otherMember, LivelinessStream stream) throws Exception {
             byte[] intLongBuffer = new byte[8];
 
-            KeyValueStream keyValueStream = (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            KeyValueStream keyValueStream = (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
                     return streamLivelinessKey(key, (rootRingMember, isSelf, ackRingMember) -> {
                         if (!rootRingMember.equals(member) || valueVersion > startupVersion) {

@@ -54,7 +54,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
                     latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
                     return false;
                 }
-            } else if (rowType == RowType.primary) {
+            } else if (rowType.isPrimary()) {
                 updates.increment();
             }
             return true;
@@ -85,8 +85,9 @@ public class BinaryRowIO<K> implements RowIO<K> {
                 if (leaps.transactionIds[i] < transactionId) {
                     closestFP = Math.max(closestFP, leaps.fpIndex[i]);
                 } else {
+                    byte[] typeByteTxIdAndRow = readTypeByteTxIdAndRow(leaps.fpIndex[i]);
                     //TODO the leaps are basically fixed, so it would make sense to cache the fp -> leaps
-                    next = Leaps.fromBytes(read(leaps.fpIndex[i]));
+                    next = Leaps.fromBytes(typeByteTxIdAndRow, 1 + 8, typeByteTxIdAndRow.length - (1 + 8));
                     break;
                 }
             }
@@ -101,8 +102,8 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public byte[] read(long fp) throws Exception {
-        return rowReader.read(fp);
+    public byte[] readTypeByteTxIdAndRow(long fp) throws Exception {
+        return rowReader.readTypeByteTxIdAndRow(fp);
     }
 
     @Override
@@ -260,8 +261,8 @@ public class BinaryRowIO<K> implements RowIO<K> {
             return buf.array();
         }
 
-        private static Leaps fromBytes(byte[] bytes) {
-            ByteBuffer buf = ByteBuffer.wrap(bytes);
+        private static Leaps fromBytes(byte[] bytes, int offset, int length) {
+            ByteBuffer buf = ByteBuffer.wrap(bytes, offset, length);
             return fromByteBuffer(buf);
         }
 

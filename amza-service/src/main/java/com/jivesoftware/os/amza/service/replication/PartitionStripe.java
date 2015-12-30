@@ -45,7 +45,7 @@ public class PartitionStripe {
     private final DeltaStripeWALStorage storage;
     private final TxPartitionState txPartitionState;
     private final RowChanges allRowChanges;
-    private final PrimaryRowMarshaller<byte[]> primaryRowMarshaller;
+    private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
     private final Predicate<VersionedPartitionName> predicate;
 
@@ -54,7 +54,7 @@ public class PartitionStripe {
         DeltaStripeWALStorage storage,
         TxPartitionState txPartitionState,
         RowChanges allRowChanges,
-        PrimaryRowMarshaller<byte[]> primaryRowMarshaller,
+        PrimaryRowMarshaller primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         Predicate<VersionedPartitionName> stripingPredicate) {
         this.name = name;
@@ -149,7 +149,8 @@ public class PartitionStripe {
                 if (partitionStore == null) {
                     throw new IllegalStateException("No partition defined for " + partitionName);
                 } else {
-                    RowsChanged changes = storage.update(highwaterStorage,
+                    RowsChanged changes = storage.update(partitionStore.getProperties().rowType,
+                        highwaterStorage,
                         versionedPartitionName,
                         partitionStore.getWalStorage(),
                         prefix,
@@ -296,8 +297,8 @@ public class PartitionStripe {
                     WALHighwater[] highwater = new WALHighwater[1];
                     primaryRowMarshaller.fromRows(txFpRowStream -> {
                         RowStream stream = (rowFP, rowTxId, rowType, row) -> {
-                            if (rowType == RowType.primary) {
-                                return txFpRowStream.stream(rowTxId, rowFP, row);
+                            if (rowType.isPrimary()) {
+                                return txFpRowStream.stream(rowTxId, rowFP, rowType, row);
                             } else if (rowType == RowType.highwater) {
                                 highwaters.highwater(highwaterRowMarshaller.fromBytes(row));
                             }
@@ -333,8 +334,8 @@ public class PartitionStripe {
                     WALHighwater[] highwater = new WALHighwater[1];
                     primaryRowMarshaller.fromRows(txFpRowStream -> {
                         RowStream stream = (rowFP, rowTxId, rowType, row) -> {
-                            if (rowType == RowType.primary) {
-                                return txFpRowStream.stream(rowTxId, rowFP, row);
+                            if (rowType.isPrimary()) {
+                                return txFpRowStream.stream(rowTxId, rowFP, rowType, row);
                             } else if (rowType == RowType.highwater) {
                                 highwaters.highwater(highwaterRowMarshaller.fromBytes(row));
                             }

@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
@@ -10,7 +11,6 @@ import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.shared.wal.WALKey;
 import com.jivesoftware.os.amza.shared.wal.WALUpdated;
@@ -70,7 +70,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
             long removeTimestamp = orderIdProvider.nextId();
             systemWALStorage.rangeScan(PartitionCreator.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
-                (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                     systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, prefix,
                         (highwaters, txKeyValueStream) -> txKeyValueStream.row(-1, key, value, removeTimestamp, true, removeTimestamp),
                         walUpdated);
@@ -202,7 +202,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
         List<RingMemberHighwater> highwaters = new ArrayList<>();
         systemWALStorage.rangeScan(PartitionCreator.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
-            (prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+            (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 highwaters.add(new RingMemberHighwater(getMember(key), UIO.bytesLong(value)));
                 return true;
             });

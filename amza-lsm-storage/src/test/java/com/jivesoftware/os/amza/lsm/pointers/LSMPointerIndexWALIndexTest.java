@@ -5,6 +5,7 @@ import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeyStream;
 import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.stream.TxKeyPointerStream;
@@ -97,10 +98,10 @@ public class LSMPointerIndexWALIndexTest {
 
         index.getPointers((stream) -> {
             for (long i = 0; i < 100; i++) {
-                stream.stream(UIO.longBytes(i), UIO.longBytes(i), null, 0, false, 0);
+                stream.stream(RowType.primary, UIO.longBytes(i), UIO.longBytes(i), null, 0, false, 0);
             }
             return true;
-        }, (prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
+        }, (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
 
             System.out.println(
                 "getPointers "

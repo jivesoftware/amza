@@ -2,10 +2,11 @@ package com.jivesoftware.os.amza.berkeleydb;
 
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
-import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Type;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexName.Type;
 import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
@@ -94,14 +95,15 @@ public class BerkeleyDBWALIndex implements WALIndex {
         return stream.stream(prefix, key, timestamp, tombstoned, version, UIO.bytesLong(valueBytes));
     }
 
-    private boolean entryToWALPointer(byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
+    private boolean entryToWALPointer(RowType rowType, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
         byte[] entryBytes, KeyValuePointerStream stream) throws Exception {
         byte[] valueBytes = new byte[entryBytes.length - 8 - 1 - 8];
         System.arraycopy(entryBytes, 0, valueBytes, 0, valueBytes.length);
         long timestamp = UIO.bytesLong(entryBytes, valueBytes.length);
         boolean tombstoned = (entryBytes[valueBytes.length + 8] == (byte) 1);
         long version = UIO.bytesLong(entryBytes, valueBytes.length + 8 + 1);
-        return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version, UIO.bytesLong(valueBytes));
+        return stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, timestamp, tombstoned, version,
+            UIO.bytesLong(valueBytes));
     }
 
     private long entryToTimestamp(byte[] entryBytes) throws Exception {
@@ -197,13 +199,13 @@ public class BerkeleyDBWALIndex implements WALIndex {
                         if (KeyUtil.compare(keyEntry.getData(), toFpPk) >= 0) {
                             return false;
                         }
-                        if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, -1, null)) {
+                        if (!txFpRawKeyValueEntryStream.stream(-1, -1, null, keyEntry.getData(), null, -1, false, -1, null)) {
                             return false;
                         }
                     } while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
                 }
                 return true;
-            }, (txId, fp, _prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
+            }, (txId, fp, rowType, _prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
                 long takeTxId = UIO.bytesLong(key, 0);
                 long takeFp = UIO.bytesLong(key, 8);
                 return txFpStream.stream(takeTxId, takeFp);
@@ -262,14 +264,14 @@ public class BerkeleyDBWALIndex implements WALIndex {
             DatabaseEntry dbKey = new DatabaseEntry();
             DatabaseEntry dpPointerValue = new DatabaseEntry();
 
-            return keyValues.consume((prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            return keyValues.consume((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 byte[] pk = WALKey.compose(prefix, key);
                 dbKey.setData(pk);
                 OperationStatus status = primaryDb.get(null, dbKey, dpPointerValue, LockMode.READ_UNCOMMITTED);
                 if (status == OperationStatus.SUCCESS) {
-                    return entryToWALPointer(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, dpPointerValue.getData(), stream);
+                    return entryToWALPointer(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, dpPointerValue.getData(), stream);
                 } else {
-                    return stream.stream(prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1);
+                    return stream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, -1, false, -1, -1);
                 }
             });
         } finally {
@@ -394,12 +396,12 @@ public class BerkeleyDBWALIndex implements WALIndex {
             DatabaseEntry valueEntry = new DatabaseEntry();
             return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
                 while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
-                    if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, -1, valueEntry.getData())) {
+                    if (!txFpRawKeyValueEntryStream.stream(-1, -1, null, keyEntry.getData(), null, -1, false, -1, valueEntry.getData())) {
                         return false;
                     }
                 }
                 return true;
-            }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> entryToWALPointer(prefix, key, entry, stream));
+            }, (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> entryToWALPointer(prefix, key, entry, stream));
         } finally {
             lock.release();
         }
@@ -415,43 +417,49 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 // reverse scan
                 DatabaseEntry keyEntry = new DatabaseEntry(toPk);
                 DatabaseEntry valueEntry = new DatabaseEntry();
-                return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
-                    if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
-                        if (cursor.getPrev(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
-                            do {
-                                if (KeyUtil.compare(keyEntry.getData(), fromPk) < 0) {
-                                    return false;
-                                }
-                                if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, -1, valueEntry.getData())) {
-                                    return false;
-                                }
-                            } while (cursor.getPrev(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                return WALKey.decompose(
+                    (WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
+                        if (cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
+                            if (cursor.getPrev(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS) {
+                                do {
+                                    if (KeyUtil.compare(keyEntry.getData(), fromPk) < 0) {
+                                        return false;
+                                    }
+                                    if (!txFpRawKeyValueEntryStream.stream(-1, -1, null, keyEntry.getData(), null, -1, false, -1, valueEntry.getData())) {
+                                        return false;
+                                    }
+                                } while (cursor.getPrev(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                            }
                         }
-                    }
-                    return true;
-                }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> entryToWALPointer(prefix, key, entry, stream));
+                        return true;
+                    },
+                    (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> entryToWALPointer(prefix, key, entry,
+                        stream));
             } else {
                 DatabaseEntry keyEntry = new DatabaseEntry(fromPk);
                 DatabaseEntry valueEntry = new DatabaseEntry();
-                return WALKey.decompose((WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
-                    OperationStatus status;
-                    if (fromPk == null) {
-                        status = cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED);
-                    } else {
-                        status = cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED);
-                    }
-                    if (status == OperationStatus.SUCCESS) {
-                        do {
-                            if (toPk != null && KeyUtil.compare(keyEntry.getData(), toPk) >= 0) {
-                                return false;
-                            }
-                            if (!txFpRawKeyValueEntryStream.stream(-1, -1, keyEntry.getData(), null, -1, false, -1, valueEntry.getData())) {
-                                return false;
-                            }
-                        } while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
-                    }
-                    return true;
-                }, (txId, fp, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> entryToWALPointer(prefix, key, entry, stream));
+                return WALKey.decompose(
+                    (WALKey.TxFpRawKeyValueEntries<byte[]>) txFpRawKeyValueEntryStream -> {
+                        OperationStatus status;
+                        if (fromPk == null) {
+                            status = cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED);
+                        } else {
+                            status = cursor.getSearchKeyRange(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED);
+                        }
+                        if (status == OperationStatus.SUCCESS) {
+                            do {
+                                if (toPk != null && KeyUtil.compare(keyEntry.getData(), toPk) >= 0) {
+                                    return false;
+                                }
+                                if (!txFpRawKeyValueEntryStream.stream(-1, -1, null, keyEntry.getData(), null, -1, false, -1, valueEntry.getData())) {
+                                    return false;
+                                }
+                            } while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                        }
+                        return true;
+                    },
+                    (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> entryToWALPointer(prefix, key, entry,
+                        stream));
             }
         } finally {
             lock.release();

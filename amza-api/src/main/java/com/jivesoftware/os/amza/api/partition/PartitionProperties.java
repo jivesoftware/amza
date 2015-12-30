@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.api.partition;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.stream.RowType;
 
 /**
  * @author jonathan.colt
@@ -15,6 +16,7 @@ public class PartitionProperties {
     public boolean requireConsistency = true;
     public int takeFromFactor = 0;
     public boolean disabled = false;
+    public RowType rowType = RowType.primary;
 
     public PartitionProperties() {
     }
@@ -23,12 +25,14 @@ public class PartitionProperties {
         Consistency consistency,
         boolean requireConsistency,
         int takeFromFactor,
-        boolean disabled) {
+        boolean disabled,
+        RowType rowType) {
         this.walStorageDescriptor = walStorageDescriptor;
         this.consistency = consistency;
         this.requireConsistency = requireConsistency;
         this.takeFromFactor = takeFromFactor;
         this.disabled = disabled;
+        this.rowType = rowType;
     }
 
 }

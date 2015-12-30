@@ -1,12 +1,15 @@
 package com.jivesoftware.os.amza.shared.stream;
 
+import com.jivesoftware.os.amza.api.stream.RowType;
+
 /**
  *
  * @author jonathan.colt
  */
 public interface KeyValuePointerStream {
 
-    boolean stream(byte[] prefix,
+    boolean stream(RowType rowType,
+        byte[] prefix,
         byte[] key,
         byte[] value,
         long valueTimestamp,

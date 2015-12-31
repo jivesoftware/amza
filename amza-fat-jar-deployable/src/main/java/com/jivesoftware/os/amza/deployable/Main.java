@@ -35,6 +35,7 @@ import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
+import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
@@ -108,6 +109,7 @@ public class Main {
 
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
         final AmzaStats amzaStats = new AmzaStats();
+        final SickThreads sickThreads = new SickThreads();
 
         final String[] workingDirs = System.getProperty("amza.working.dirs", "./data1,./data2,./data3")
             .split(",");
@@ -138,6 +140,7 @@ public class Main {
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
+            sickThreads,
             ringMember,
             ringHost,
             orderIdProvider,

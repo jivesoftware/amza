@@ -33,6 +33,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
+import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
@@ -289,10 +290,12 @@ public class AmzaTestCluster {
         };
 
         AmzaStats amzaStats = new AmzaStats();
+        SickThreads sickThreads = new SickThreads();
         Optional<TakeFailureListener> absent = Optional.<TakeFailureListener>absent();
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
             amzaStats,
+            sickThreads,
             localRingMember,
             localRingHost,
             orderIdProvider,

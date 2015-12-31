@@ -22,6 +22,7 @@ public class EmbeddedAmzaServiceInitializer {
 
     public AmzaService initialize(final AmzaServiceConfig config,
         AmzaStats amzaStats,
+        SickThreads sickThreads,
         RingMember ringMember,
         RingHost ringHost,
         TimestampedOrderIdProvider orderIdProvider,
@@ -38,6 +39,7 @@ public class EmbeddedAmzaServiceInitializer {
 
         AmzaService service = new AmzaServiceInitializer().initialize(config,
             amzaStats,
+            sickThreads,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             ringMember,

@@ -34,6 +34,7 @@ import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
+import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.shared.AmzaInstance;
@@ -140,6 +141,9 @@ public class AmzaMain {
             amzaServiceConfig.workingDirectories = workingDirs;
 
             final AmzaStats amzaStats = new AmzaStats();
+            final SickThreads sickThreads = new SickThreads();
+
+            deployable.addHealthCheck(new SickThreadsHealthCheck(sickThreads));
 
             AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats);
 
@@ -178,6 +182,7 @@ public class AmzaMain {
 
             AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
                 amzaStats,
+                sickThreads,
                 ringMember,
                 ringHost,
                 orderIdProvider,

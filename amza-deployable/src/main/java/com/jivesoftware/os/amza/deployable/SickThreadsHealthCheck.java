@@ -60,7 +60,7 @@ public class SickThreadsHealthCheck implements HealthCheck {
                 public String getDescription() {
                     StringBuilder sb = new StringBuilder();
                     for (Map.Entry<Thread, Throwable> entry : sickThread.entrySet()) {
-                        sb.append(new StringBuilder().append("thread:").append(entry.getKey()).append(" cause:").append(entry.getValue()).toString());
+                        sb.append("thread:").append(entry.getKey()).append(" cause:").append(entry.getValue());
                     }
                     return sb.toString();
                 }

@@ -190,6 +190,7 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
     }
 
     public void expunged(List<VersionedPartitionName> composted) throws Exception {
+        LOG.info("Removing storage versions for composted partitions: {}", composted);
         for (VersionedPartitionName compost : composted) {
             LivelyEndState livelyEndState = aquariumProvider.getLivelyEndState(compost);
             if (livelyEndState.getCurrentState() == State.expunged) {

@@ -59,8 +59,10 @@ public class TakeRingCoordinator {
     }
 
     public void expunged(Set<VersionedPartitionName> versionedPartitionNames) {
+        LOG.info("Remove partition coordinators for composted partitions: {}", versionedPartitionNames);
         for (VersionedPartitionName versionedPartitionName : versionedPartitionNames) {
-            partitionCoordinators.remove(versionedPartitionName);
+            TakeVersionedPartitionCoordinator partitionCoordinator = partitionCoordinators.remove(versionedPartitionName);
+            partitionCoordinator.expunged();
         }
     }
 

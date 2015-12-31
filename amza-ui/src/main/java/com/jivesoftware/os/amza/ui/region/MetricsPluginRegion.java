@@ -352,7 +352,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
                 RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
                 neighborStates.add(ImmutableMap.of("version", neighborState != null ? String.valueOf(neighborState.version) : "unknown",
-                    "state", neighborState != null ? neighborState.waterline.getState().name() : "unknown",
+                    "state", neighborState != null && neighborState.waterline != null ? neighborState.waterline.getState().name() : "unknown",
                     "name", new String(ringMember.getMember().getBytes())));
             }
             map.put("neighborStates", neighborStates);

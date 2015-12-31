@@ -152,6 +152,7 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
     @Override
     public void eof() throws IOException {
         setLength(getFilePointer());
+        size.set(super.length());
     }
 
     @Override

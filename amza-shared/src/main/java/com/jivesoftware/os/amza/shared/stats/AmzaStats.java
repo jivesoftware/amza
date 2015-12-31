@@ -27,9 +27,9 @@ public class AmzaStats {
     private final Map<RingMember, AtomicLong> took = new ConcurrentSkipListMap<>();
 
     private final Map<CompactionFamily, Map<String, Long>> ongoingCompaction = new ConcurrentHashMap<>();
+    private final Map<CompactionFamily, AtomicLong> totalCompactions = new ConcurrentHashMap<>();
     private final List<Entry<String, Long>> recentCompaction = new ArrayList<>();
 
-    private final AtomicLong totalCompactions = new AtomicLong();
     public final Map<RingMember, AtomicLong> longPolled = new ConcurrentSkipListMap<>();
     public final Map<RingMember, AtomicLong> longPollAvailables = new ConcurrentSkipListMap<>();
 
@@ -158,7 +158,8 @@ public class AmzaStats {
     public void endCompaction(CompactionFamily family, String name) {
         Map<String, Long> got = ongoingCompaction.computeIfAbsent(family, (key) -> new ConcurrentHashMap<>());
         Long start = got.remove(name);
-        totalCompactions.incrementAndGet();
+
+        totalCompactions.computeIfAbsent(family, (key) -> new AtomicLong()).incrementAndGet();
         if (start != null) {
             recentCompaction.add(new AbstractMap.SimpleEntry<>(family+" "+name, System.currentTimeMillis() - start));
             while (recentCompaction.size() > 10_000) {
@@ -184,8 +185,8 @@ public class AmzaStats {
         return ongoing;
     }
 
-    public long getTotalCompactions() {
-        return totalCompactions.get();
+    public long getTotalCompactions(CompactionFamily family) {
+        return totalCompactions.computeIfAbsent(family, (key) -> new AtomicLong()).get();
     }
 
     public Totals getGrandTotal() {

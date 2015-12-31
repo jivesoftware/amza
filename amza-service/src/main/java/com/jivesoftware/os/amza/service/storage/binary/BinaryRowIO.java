@@ -69,6 +69,11 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
+    public void hackTruncation(int numBytes) {
+        rowReader.hackTruncation(numBytes);
+    }
+
+    @Override
     public boolean scan(long offsetFp, boolean allowRepairs, RowStream rowStream) throws Exception {
         return rowReader.scan(offsetFp, allowRepairs, rowStream);
     }

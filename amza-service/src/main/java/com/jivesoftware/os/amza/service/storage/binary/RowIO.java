@@ -21,4 +21,7 @@ public interface RowIO<K> extends WALReader, WALWriter {
     void initLeaps() throws Exception;
 
     boolean validate() throws Exception;
+
+    void hackTruncation(int numBytes);
+
 }

@@ -32,6 +32,8 @@ public interface WALTx<I> {
         I rowIndex,
         boolean force) throws Exception;
 
+    void hackTruncation(int numBytes);
+
     interface WALWrite<R> {
 
         R write(WALWriter writer) throws Exception;

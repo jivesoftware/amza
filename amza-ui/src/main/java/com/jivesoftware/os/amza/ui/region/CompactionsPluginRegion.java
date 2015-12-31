@@ -85,7 +85,11 @@ public class CompactionsPluginRegion implements PageRegion<CompactionsPluginRegi
             data.put("recentCompactions", (Object) Iterables.transform(Iterables.filter(recentCompaction, Predicates.notNull()),
                 (Map.Entry<String, Long> input1) -> ImmutableMap.of("name",
                     input1.getKey(), "elapse", numberFormat.format(input1.getValue()))));
-            data.put("totalCompactions", numberFormat.format(amzaStats.getTotalCompactions()));
+            long compactionTotal = 0;
+            for (AmzaStats.CompactionFamily compactionFamily : AmzaStats.CompactionFamily.values()) {
+                compactionTotal += amzaStats.getTotalCompactions(compactionFamily);
+            }
+            data.put("totalCompactions", numberFormat.format(compactionTotal));
 
         } catch (Exception e) {
             log.error("Unable to retrieve data", e);

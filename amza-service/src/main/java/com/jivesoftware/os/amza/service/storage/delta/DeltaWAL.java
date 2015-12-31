@@ -152,6 +152,10 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
         return new DeltaWALApplied(txId.longValue(), keyValueHighwaters, fps);
     }
 
+    public void hackTruncation(int numBytes) {
+        wal.hackTruncation(numBytes);
+    }
+
     public interface ConsumeTxFps {
 
         boolean consume(TxFpsStream txFpsStream) throws Exception;

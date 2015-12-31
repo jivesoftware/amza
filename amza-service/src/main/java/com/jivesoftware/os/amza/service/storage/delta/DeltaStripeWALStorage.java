@@ -77,6 +77,10 @@ public class DeltaStripeWALStorage {
 
     private final Reentrant reentrant = new Reentrant();
 
+    public void hackTruncation(int numBytes) {
+        deltaWAL.get().hackTruncation(numBytes);
+    }
+
     static class Reentrant extends ThreadLocal<Integer> {
 
         @Override

@@ -222,6 +222,11 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
     }
 
     @Override
+    public void hackTruncation(int numBytes) {
+        io.hackTruncation(numBytes);
+    }
+
+    @Override
     public Optional<Compacted<I>> compact(RowType compactToRowType,
         long removeTombstonedOlderThanTimestampId,
         long ttlTimestampId,

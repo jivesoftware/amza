@@ -179,7 +179,7 @@ public class BinaryRowReader implements WALReader {
                         int lengthOfTypeAndTxId = 1 + 8;
                         if (length < lengthOfTypeAndTxId || offsetFp + length + 8 > fileLength) {
                             if (allowRepairs) {
-                                return truncate(filer, offsetFp);
+                                return truncate(offsetFp);
                             } else {
                                 String msg = "Scan terminated prematurely due a corruption at fp:" + offsetFp + ". " + parent;
                                 LOG.error(msg);
@@ -203,7 +203,7 @@ public class BinaryRowReader implements WALReader {
                         }
                         if (trailingLength < 0 || trailingLength != length) {
                             if (allowRepairs) {
-                                return truncate(filer, offsetFp);
+                                return truncate(offsetFp);
                             } else {
                                 throw new IOException("The lead length of " + length + " didn't equal trailing length of " + trailingLength);
                             }
@@ -227,15 +227,15 @@ public class BinaryRowReader implements WALReader {
         }
     }
 
-    private boolean truncate(IReadable filer, long offsetFp) throws IOException {
+    private boolean truncate(long offsetFp) throws IOException {
         // Corruption encoutered.
         // There is a huge assumption here that this is only called once at startup.
         // If this is encountred some time other than startup there will be data loss and WALIndex corruption.
-        filer.seek(offsetFp);
         synchronized (parent.lock()) {
-            LOG.warn("Truncated corrupt WAL at " + offsetFp + " in " + parent);
+            long before = parent.length();
             parent.seek(offsetFp);
             parent.eof();
+            LOG.warn("Truncated corrupt WAL at {}, before={} after={} {}", offsetFp, before, parent.length(), parent);
             return false;
         }
     }
@@ -294,5 +294,13 @@ public class BinaryRowReader implements WALReader {
                 throw x;
             }
         });
+    }
+
+    public void hackTruncation(int numBytes) {
+        try {
+            truncate(parent.length() - numBytes);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

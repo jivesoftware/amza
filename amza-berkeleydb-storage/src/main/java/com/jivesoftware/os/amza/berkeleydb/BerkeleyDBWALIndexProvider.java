@@ -3,6 +3,9 @@ package com.jivesoftware.os.amza.berkeleydb;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
 import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.sleepycat.je.DatabaseNotFoundException;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
 import java.io.File;
@@ -11,6 +14,8 @@ import java.io.File;
  *
  */
 public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWALIndex> {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     public static final String INDEX_CLASS_NAME = "berkeleydb";
 
@@ -47,8 +52,19 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
         for (BerkeleyDBWALIndexName n : name.all()) {
-            environments[Math.abs(versionedPartitionName.hashCode() % environments.length)].removeDatabase(null, n.getPrimaryName());
-            environments[Math.abs(versionedPartitionName.hashCode() % environments.length)].removeDatabase(null, n.getPrefixName());
+            Environment env = environments[Math.abs(versionedPartitionName.hashCode() % environments.length)];
+            try {
+                env.removeDatabase(null, n.getPrimaryName());
+                LOG.info("Removed database: {}", n.getPrimaryName());
+            } catch (DatabaseNotFoundException x) {
+                // ignore
+            }
+            try {
+                env.removeDatabase(null, n.getPrefixName());
+                LOG.info("Removed database: {}", n.getPrefixName());
+            } catch (DatabaseNotFoundException x) {
+                // ignore
+            }
         }
     }
 

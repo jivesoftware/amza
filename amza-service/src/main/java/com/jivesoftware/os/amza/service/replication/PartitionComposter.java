@@ -95,7 +95,7 @@ public class PartitionComposter {
                 LOG.info("Marked {} {} for disposal because it not a member of ring {}.", partitionName, partitionVersion, partitionName.getRingName());
                 partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
             } else if (!partitionProvider.hasPartition(partitionName)) {
-                LOG.info("Marked {} {} for disposal because  no partition is defined on this node.", partitionName, partitionVersion);
+                LOG.info("Marked {} {} for disposal because no partition is defined on this node.", partitionName, partitionVersion);
                 partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
             }
             return true;

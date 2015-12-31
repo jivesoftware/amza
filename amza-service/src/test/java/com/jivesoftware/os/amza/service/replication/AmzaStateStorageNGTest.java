@@ -95,11 +95,10 @@ public class AmzaStateStorageNGTest {
         Member other1 = new Member(new byte[] { 2 });
         Member other2 = new Member(new byte[] { 3 });
 
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, new byte[] { 20 }, new byte[] { 30 }),
-            VersionedPartitionName.STATIC_VERSION);
+        PartitionName partitionName = new PartitionName(false, new byte[] { 20 }, new byte[] { 30 });
         byte context = 1;
         long startupVersion = 111;
-        AmzaStateStorage stateStorage = new AmzaStateStorage(systemWALStorage, updated, root, versionedPartitionName, context, startupVersion);
+        AmzaStateStorage stateStorage = new AmzaStateStorage(systemWALStorage, updated, root, partitionName, context, startupVersion);
 
         Long lifecycle1 = 1L;
         Long lifecycle2 = 2L;

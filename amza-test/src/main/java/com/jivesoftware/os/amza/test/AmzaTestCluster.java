@@ -671,7 +671,7 @@ public class AmzaTestCluster {
         }
 
         public AmzaService.AmzaPartitionRoute getPartitionRoute(PartitionName partitionName) throws Exception {
-            return amzaService.getPartitionRoute(partitionName);
+            return amzaService.getPartitionRoute(partitionName, 0);
         }
     }
 }

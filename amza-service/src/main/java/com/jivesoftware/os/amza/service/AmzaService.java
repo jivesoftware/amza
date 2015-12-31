@@ -238,7 +238,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         });
     }
 
-    public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName) throws Exception {
+    public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName, long waitForLeaderInMillis) throws Exception {
 
         RingTopology ring = ringStoreReader.getRing(partitionName.getRingName());
         PartitionProperties properties = partitionIndex.getProperties(partitionName);
@@ -256,6 +256,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 partitionCreator.createPartitionStoreIfAbsent(versionedPartitionName, properties);
                 return getPartition(partitionName);
             });
+        }
+
+        if (waitForLeaderInMillis > 0) {
+            partitionStateStorage.awaitLeader(partitionName, waitForLeaderInMillis);
         }
 
         RingMemberAndHost leader = null;

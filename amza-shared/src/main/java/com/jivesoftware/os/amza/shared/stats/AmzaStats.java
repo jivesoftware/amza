@@ -60,6 +60,9 @@ public class AmzaStats {
     public long[] deltaStripeMergePending = new long[0];
     public double[] deltaStripeMerge = new double[0];
 
+    public final AtomicLong deltaFirstCheckRemoves = new AtomicLong();
+    public final AtomicLong deltaSecondCheckRemoves = new AtomicLong();
+
     public AmzaStats() {
     }
 

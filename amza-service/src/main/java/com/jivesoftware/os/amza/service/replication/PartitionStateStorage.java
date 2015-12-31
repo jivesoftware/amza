@@ -7,12 +7,12 @@ import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.shared.AwaitNotify;
 import com.jivesoftware.os.amza.shared.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.shared.partition.VersionedPartitionTransactor;
 import com.jivesoftware.os.amza.shared.take.CheckState;
 import com.jivesoftware.os.amza.shared.take.TakeCoordinator;
-import com.jivesoftware.os.aquarium.Aquarium;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
@@ -28,6 +28,7 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private final RingMember rootRingMember;
+    private final AmzaRingStoreReader ringStoreReader;
     private final AmzaAquariumProvider aquariumProvider;
     private final StorageVersionProvider storageVersionProvider;
     private final TakeCoordinator takeCoordinator;
@@ -35,11 +36,13 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
     private final AwaitNotify<PartitionName> awaitNotify;
 
     public PartitionStateStorage(RingMember rootRingMember,
+        AmzaRingStoreReader ringStoreReader,
         AmzaAquariumProvider aquariumProvider,
         StorageVersionProvider storageVersionProvider,
         TakeCoordinator takeCoordinator,
         AwaitNotify<PartitionName> awaitNotify) {
         this.rootRingMember = rootRingMember;
+        this.ringStoreReader = ringStoreReader;
         this.aquariumProvider = aquariumProvider;
         this.storageVersionProvider = storageVersionProvider;
         this.takeCoordinator = takeCoordinator;
@@ -71,7 +74,7 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
     }
 
     public long getPartitionVersion(PartitionName partitionName) throws Exception {
-        return storageVersionProvider.createIfAbsent(partitionName).partitionVersion;
+        return storageVersionProvider.getPartitionVersion(partitionName);
     }
 
     @Override
@@ -90,13 +93,13 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
             return new RemoteVersionedState(Waterline.ALWAYS_ONLINE, 0);
         }
 
-        StorageVersion localStorageVersion = storageVersionProvider.createIfAbsent(partitionName);
-        VersionedPartitionName localVersionedPartitionName = new VersionedPartitionName(partitionName, localStorageVersion.partitionVersion);
-        Aquarium aquarium = aquariumProvider.getAquarium(localVersionedPartitionName);
-        Waterline remoteState = aquarium.getState(remoteRingMember.asAquariumMember());
-
         StorageVersion remoteStorageVersion = storageVersionProvider.getRemote(remoteRingMember, partitionName);
-        return remoteStorageVersion != null ? new RemoteVersionedState(remoteState, remoteStorageVersion.partitionVersion) : null;
+        if (remoteStorageVersion == null) {
+            return null;
+        }
+
+        Waterline remoteState = aquariumProvider.getCurrentState(partitionName, remoteRingMember, remoteStorageVersion.partitionVersion);
+        return new RemoteVersionedState(remoteState, remoteStorageVersion.partitionVersion);
     }
 
     public VersionedState markAsBootstrap(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception {
@@ -132,14 +135,18 @@ public class PartitionStateStorage implements TxPartitionState, CheckState {
             return null;
         }
 
-        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-        Waterline leaderWaterline = aquariumProvider.awaitOnline(versionedPartitionName,
-            timeoutMillis).getLeaderWaterline();
-        if (!aquariumProvider.isOnline(leaderWaterline)) {
-            wipeTheGlass(versionedPartitionName);
+        if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
+            StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+            VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+            Waterline leaderWaterline = aquariumProvider.awaitOnline(versionedPartitionName,
+                timeoutMillis).getLeaderWaterline();
+            if (!aquariumProvider.isOnline(leaderWaterline)) {
+                wipeTheGlass(versionedPartitionName);
+            }
+            return leaderWaterline;
+        } else {
+            return aquariumProvider.remoteAwaitProbableLeader(partitionName, timeoutMillis);
         }
-        return leaderWaterline;
     }
 
     @Override

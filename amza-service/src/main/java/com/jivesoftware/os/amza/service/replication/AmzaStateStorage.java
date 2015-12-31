@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication;
 
+import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
@@ -23,27 +24,27 @@ class AmzaStateStorage implements StateStorage<Long> {
     private final SystemWALStorage systemWALStorage;
     private final WALUpdated walUpdated;
     private final Member member;
-    private final VersionedPartitionName versionedPartitionName;
+    private final PartitionName partitionName;
     private final byte context;
     private final long startupVersion;
 
     public AmzaStateStorage(SystemWALStorage systemWALStorage,
         WALUpdated walUpdated,
         Member member,
-        VersionedPartitionName versionedPartitionName,
+        PartitionName partitionName,
         byte context,
         long startupVersion) {
         this.systemWALStorage = systemWALStorage;
         this.walUpdated = walUpdated;
         this.member = member;
-        this.versionedPartitionName = versionedPartitionName;
+        this.partitionName = partitionName;
         this.context = context;
         this.startupVersion = startupVersion;
     }
 
     @Override
     public boolean scan(Member rootMember, Member otherMember, Long lifecycle, StateStream<Long> stream) throws Exception {
-        byte[] fromKey = AmzaAquariumProvider.stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
+        byte[] fromKey = AmzaAquariumProvider.stateKey(partitionName, context, rootMember, lifecycle, otherMember);
         return systemWALStorage.rangeScan(PartitionCreator.AQUARIUM_STATE_INDEX, null, fromKey, null, WALKey.prefixUpperExclusive(fromKey),
             (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
@@ -66,11 +67,11 @@ class AmzaStateStorage implements StateStorage<Long> {
         AmzaPartitionUpdates amzaPartitionUpdates = new AmzaPartitionUpdates();
         boolean result = updates.updates(
             (rootMember, otherMember, lifecycle, state, timestamp) -> {
-                byte[] keyBytes = AmzaAquariumProvider.stateKey(versionedPartitionName.getPartitionName(), context, rootMember, lifecycle, otherMember);
+                byte[] keyBytes = AmzaAquariumProvider.stateKey(partitionName, context, rootMember, lifecycle, otherMember);
                 byte[] valueBytes = { state.getSerializedForm() };
                 /*
                 LOG.info("Context {} me:{} root:{} other:{} lifecycle:{} state:{} timestamp:{} on {}", context, member, rootMember, otherMember, lifecycle,
-                    state, timestamp, versionedPartitionName);
+                    state, timestamp, partitionName);
                 */
                 amzaPartitionUpdates.set(keyBytes, valueBytes, timestamp);
                 return true;

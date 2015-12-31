@@ -111,6 +111,14 @@ public class StorageVersionProvider implements RowChanges {
         }
     }
 
+    public long getPartitionVersion(PartitionName partitionName) {
+        if (partitionName.isSystemPartition()) {
+            return 0;
+        }
+        StorageVersion storageVersion = localVersionCache.get(partitionName);
+        return storageVersion != null ? storageVersion.partitionVersion : -1;
+    }
+
     public interface PartitionMemberStorageVersionStream {
 
         boolean stream(PartitionName partitionName, RingMember ringMember, StorageVersion storageVersion) throws Exception;

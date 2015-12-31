@@ -21,6 +21,7 @@ import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
+import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
@@ -138,7 +139,7 @@ public class DeltaStripeWALStorageNGTest {
         File tmp = Files.createTempDir();
         RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[]{tmp.getAbsolutePath()}, ioStats, 100, false);
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
-        deltaStripeWALStorage = new DeltaStripeWALStorage(1, new AmzaStats(), deltaWALFactory, 0);
+        deltaStripeWALStorage = new DeltaStripeWALStorage(1, new AmzaStats(), new SickThreads(), deltaWALFactory, 10);
         deltaStripeWALStorage.load(txPartitionState, partitionIndex, primaryRowMarshaller);
     }
 
@@ -169,7 +170,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage.count(keyStream -> true), 0);
         Assert.assertNull(storage.getTimestampedValue(walKey.prefix, walKey.key));
 
-        deltaStripeWALStorage.merge(partitionIndex, false);
+        deltaStripeWALStorage.merge(partitionIndex, true);
 
         Assert.assertEquals(deltaStripeWALStorage.get(versionedPartitionName, storage, walKey.prefix, walKey.key),
             new WALValue(RowType.primary, UIO.intBytes(1), 1, false, 1));
@@ -184,7 +185,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(1, 1, UIO.intBytes(1)));
         Assert.assertEquals(storage.count(keyStream -> true), 1);
 
-        deltaStripeWALStorage.merge(partitionIndex, false);
+        deltaStripeWALStorage.merge(partitionIndex, true);
 
         deltaStripeWALStorage.update(RowType.primary, highwaterStorage, versionedPartitionName, storage, prefix, new IntUpdate(1, 1, 2, true), updated);
         Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName, storage, walKey.prefix, walKey.key).getTombstoned());
@@ -192,7 +193,7 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertEquals(storage.getTimestampedValue(walKey.prefix, walKey.key), new TimestampedValue(1, 1, UIO.intBytes(1)));
         Assert.assertEquals(storage.count(keyStream -> true), 1);
 
-        deltaStripeWALStorage.merge(partitionIndex, false);
+        deltaStripeWALStorage.merge(partitionIndex, true);
         Assert.assertTrue(deltaStripeWALStorage.get(versionedPartitionName, storage, walKey.prefix, walKey.key).getTombstoned());
         deltaStripeWALStorage.containsKeys(versionedPartitionName, storage, prefix, keys(1), assertKeyIsContained(false));
         Assert.assertNull(storage.getTimestampedValue(walKey.prefix, walKey.key));

@@ -85,6 +85,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -96,7 +97,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = new String[]{"./var/data/"};
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -129,11 +130,13 @@ public class AmzaServiceInitializer {
     }
 
     public interface IndexProviderRegistryCallback {
+
         void call(WALIndexProviderRegistry indexProviderRegistry, RowIOProvider<?> ephemeralRowIOProvider, RowIOProvider<?> persistentRowIOProvider);
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
         AmzaStats amzaStats,
+        SickThreads sickThreads,
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         RingMember ringMember,
@@ -213,17 +216,15 @@ public class AmzaServiceInitializer {
                     stripeVersions[i] = input.readLong();
                     LOG.info("Loaded stripeVersion:" + stripeVersions[i] + " for stripe:" + i + " from " + versionFile);
                 }
-            } else {
-                if (versionFile.createNewFile()) {
-                    try (FileOutputStream fileOutputStream = new FileOutputStream(versionFile)) {
-                        DataOutput output = new DataOutputStream(fileOutputStream);
-                        stripeVersions[i] = orderIdProvider.nextId();
-                        output.writeLong(stripeVersions[i]);
-                        LOG.info("Created stripeVersion:" + stripeVersions[i] + " for stripe:" + i + " to " + versionFile);
-                    }
-                } else {
-                    throw new IllegalStateException("Please check your file permission. " + versionFile.getAbsolutePath());
+            } else if (versionFile.createNewFile()) {
+                try (FileOutputStream fileOutputStream = new FileOutputStream(versionFile)) {
+                    DataOutput output = new DataOutputStream(fileOutputStream);
+                    stripeVersions[i] = orderIdProvider.nextId();
+                    output.writeLong(stripeVersions[i]);
+                    LOG.info("Created stripeVersion:" + stripeVersions[i] + " for stripe:" + i + " to " + versionFile);
                 }
+            } else {
+                throw new IllegalStateException("Please check your file permission. " + versionFile.getAbsolutePath());
             }
         }
 
@@ -298,7 +299,7 @@ public class AmzaServiceInitializer {
 
             rowsTakers[i] = rowsTakerFactory.create();
 
-            RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[] { walDirs[i].getAbsolutePath() },
+            RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[]{walDirs[i].getAbsolutePath()},
                 amzaStats.ioStats,
                 config.corruptionParanoiaFactor,
                 config.useMemMap);
@@ -306,6 +307,7 @@ public class AmzaServiceInitializer {
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
                 i,
                 amzaStats,
+                sickThreads,
                 deltaWALFactory,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
@@ -357,10 +359,19 @@ public class AmzaServiceInitializer {
                 }
             }));
         }
+        int index = 0;
         for (Future future : futures) {
-            future.get();
+            LOG.info("Waiting for stripe:{} to load...", partitionStripes[index]);
+            try {
+                future.get();
+                index++;
+            } catch (InterruptedException | ExecutionException x) {
+                LOG.error("Failed to load stripe:{}.", partitionStripes[index], x);
+                throw x;
+            }
         }
         stripeLoaderThreadPool.shutdown();
+        LOG.info("All stripes {} have been loaded.", partitionStripes.length);
 
         ExecutorService compactDeltasThreadPool = Executors.newFixedThreadPool(config.numberOfDeltaStripes,
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());

@@ -20,6 +20,7 @@ import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.shared.ring.RingTopology;
 import com.jivesoftware.os.amza.shared.scan.RowStream;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats;
+import com.jivesoftware.os.amza.shared.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.shared.stats.AmzaStats.Totals;
 import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
@@ -467,13 +468,13 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         int expungeCompaction = amzaStats.ongoingCompaction(AmzaStats.CompactionFamily.expunge);
 
         sb.append(progress("Tombstone Compactions (" + numberFormat.format(tombostoneCompaction) + ")",
-            (int) (((double) tombostoneCompaction / 10d) * 100), "" + tombostoneCompaction));
+            (int) (((double) tombostoneCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.tombstone)));
 
         sb.append(progress("Merge Compactions (" + numberFormat.format(mergeCompaction) + ")",
-            (int) (((double) mergeCompaction / 10d) * 100), "" + mergeCompaction));
+            (int) (((double) mergeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.merge)));
 
         sb.append(progress("Expunge Compactions (" + numberFormat.format(expungeCompaction) + ")",
-            (int) (((double) expungeCompaction / 10d) * 100), "" + expungeCompaction));
+            (int) (((double) expungeCompaction / 10d) * 100), " total:" + amzaStats.getTotalCompactions(CompactionFamily.expunge)));
 
         sb.append("<p><pre>");
         for (String l : LoggerSummary.INSTANCE.lastNErrors.get()) {

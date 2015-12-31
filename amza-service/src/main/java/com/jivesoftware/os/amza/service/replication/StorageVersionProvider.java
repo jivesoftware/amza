@@ -198,6 +198,8 @@ public class StorageVersionProvider implements RowChanges {
                 true,
                 timestampAndVersion),
             walUpdated);
+
+        LOG.info("Storage version: {} {} was removed: {}", rootRingMember, versionedPartitionName, rowsChanged);
         invalidateLocalVersionCache(versionedPartitionName);
         return !rowsChanged.isEmpty();
     }

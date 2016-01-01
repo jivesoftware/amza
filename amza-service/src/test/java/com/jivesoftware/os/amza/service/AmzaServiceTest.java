@@ -13,14 +13,15 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.test;
+package com.jivesoftware.os.amza.service;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.test.AmzaTestCluster.AmzaNode;
+import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.service.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,14 +32,17 @@ import java.util.concurrent.Executors;
 import junit.framework.Assert;
 import org.testng.annotations.Test;
 
-public class AmzaClientTest {
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertNotNull;
+
+public class AmzaServiceTest {
 
     @Test(enabled = true)
     public void testAddToReplicatedWAL() throws Exception {
         final int maxNumberOfServices = 5;
 
         File createTempDir = Files.createTempDir();
-        final AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
+        AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
         for (int i = 0; i < maxNumberOfServices; i++) {
             cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i));
         }
@@ -108,7 +112,7 @@ public class AmzaClientTest {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     try {
                         if (node != null) {
-                            node.create(partitionName, RowType.primary);
+                            node.create(partitionName, rowType);
                             boolean tombstone = random.nextBoolean();
                             String prefix = "a";
                             String key = String.valueOf(random.nextInt(maxFields));
@@ -181,6 +185,13 @@ public class AmzaClientTest {
         }*/
 
         latch.await();
+
+        Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
+        for (AmzaNode node : clusterNodes) {
+            AmzaService.AmzaPartitionRoute route = node.getPartitionRoute(partitionName);
+            assertEquals(route.orderedMembers.size(), clusterNodes.size());
+            assertNotNull(route.leader);
+        }
     }
 
 }

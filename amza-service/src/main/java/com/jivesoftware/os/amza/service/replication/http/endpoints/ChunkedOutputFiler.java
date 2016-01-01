@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.jivesoftware.os.amza.transport.http.replication.endpoints;
+package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.shared.filer.HeapFiler;

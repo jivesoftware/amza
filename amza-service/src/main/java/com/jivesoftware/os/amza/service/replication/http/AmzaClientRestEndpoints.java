@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.jivesoftware.os.amza.transport.http.replication.endpoints;
+package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.Consistency;

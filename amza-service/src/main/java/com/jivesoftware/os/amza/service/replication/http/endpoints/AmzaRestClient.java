@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.transport.http.replication.endpoints;
+package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.filer.IReadable;

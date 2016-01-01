@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -60,7 +61,7 @@ public class AmzaClientTest {
                         continue;
                     }
                     AmzaNode b = nodes.get(j);
-                    if (!a.compare(b)) {
+                    if (!a.compare(Consistency.quorum, b)) {
                         System.out.println(a + " is NOT consistent with " + b);
                         falseCount++;
                         break DONE;
@@ -108,15 +109,15 @@ public class AmzaClientTest {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     try {
                         if (node != null) {
-                            node.create(partitionName, RowType.primary);
+                            node.create(Consistency.quorum, partitionName, RowType.primary);
                             boolean tombstone = random.nextBoolean();
                             String prefix = "a";
                             String key = String.valueOf(random.nextInt(maxFields));
                             byte[] indexPrefix = prefix.getBytes();
                             byte[] indexKey = key.getBytes();
-                            node.update(partitionName, indexPrefix, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
+                            node.update(Consistency.quorum, partitionName, indexPrefix, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
-                            node.get(partitionName, indexPrefix, indexKey);
+                            node.get(Consistency.quorum, partitionName, indexPrefix, indexKey);
                         }
                     } catch (Exception x) {
                         System.out.println("Failed to update node: " + node);
@@ -170,15 +171,6 @@ public class AmzaClientTest {
                 latch.countDown();
             }
         });
-
-        /*System.out.println("---------------------------------------------------------------------\n\n\n\n");
-        while (latch.getCount() > 0) {
-            for (AmzaNode node : cluster.getAllNodes()) {
-                node.printRings();
-            }
-            Thread.sleep(1000);
-            System.out.println("---------------------------------------------------------------------\n\n\n\n");
-        }*/
 
         latch.await();
     }

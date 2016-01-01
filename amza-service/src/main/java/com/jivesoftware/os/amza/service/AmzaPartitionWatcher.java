@@ -43,13 +43,7 @@ public class AmzaPartitionWatcher implements RowChanges {
     }
 
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
-        watchers.compute(partitionName, (key, value) -> {
-            if (value == null) {
-                value = new ArrayList<>();
-            }
-            value.add(rowChanges);
-            return value;
-        });
+        watchers.computeIfAbsent(partitionName, (PartitionName t) -> new ArrayList<>()).add(rowChanges);
     }
 
     public RowChanges unwatch(PartitionName partitionName) throws Exception {

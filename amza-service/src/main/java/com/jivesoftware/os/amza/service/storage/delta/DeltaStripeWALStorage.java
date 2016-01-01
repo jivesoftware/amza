@@ -149,7 +149,7 @@ public class DeltaStripeWALStorage {
                 deltaWAL.set(deltaWALFactory.create());
             } else {
                 for (int i = 0; i < deltaWALs.size(); i++) {
-                    final DeltaWAL wal = deltaWALs.get(i);
+                    DeltaWAL wal = deltaWALs.get(i);
                     if (i > 0) {
                         mergeDelta(partitionIndex, deltaWAL.get(), () -> wal);
                     }

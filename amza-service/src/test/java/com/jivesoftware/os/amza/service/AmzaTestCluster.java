@@ -30,10 +30,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
-import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
-import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
@@ -99,72 +96,6 @@ public class AmzaTestCluster {
         this.oddsOfAConnectionFailureWhenTaking = oddsOfAConnectionFailureWhenTaking;
     }
 
-    /*
-    class AmzaServiceRemotePartitionCaller implements RemotePartitionCaller<AmzaService, Exception> {
-
-        @Override
-        public PartitionResponse<NoOpCloseable> commit(RingMember leader, RingMember ringMember, AmzaService client, Consistency consistency, byte[] prefix,
-            ClientUpdates updates, long abandonSolutionAfterNMillis) throws Exception {
-
-        }
-
-        @Override
-        public PartitionResponse<CloseableStreamResponse> get(RingMember leader, RingMember ringMember, AmzaService client, Consistency consistency,
-            byte[] prefix, UnprefixedWALKeys keys) throws Exception {
-
-        }
-
-        @Override
-        public PartitionResponse<CloseableStreamResponse> scan(RingMember leader, RingMember ringMember, AmzaService client, Consistency consistency,
-            byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) throws Exception {
-
-        }
-
-        @Override
-        public PartitionResponse<CloseableStreamResponse> takeFromTransactionId(RingMember leader, RingMember ringMember, AmzaService client,
-            Map<RingMember, Long> membersTxId, TxKeyValueStream stream) throws Exception {
-
-        }
-
-        @Override
-        public PartitionResponse<CloseableStreamResponse> takePrefixFromTransactionId(RingMember leader, RingMember ringMember, AmzaService client,
-            byte[] prefix, Map<RingMember, Long> membersTxId, TxKeyValueStream stream) throws Exception {
-
-        }
-
-    }
-
-    public AmzaClientProvider getClientProvider(RingMember ringMember) {
-
-        PartitionHostsProvider partitionHostsProvider = new PartitionHostsProvider() {
-            @Override
-            public void ensurePartition(PartitionName partitionName, int desiredRingSize, PartitionProperties partitionProperties) throws Exception {
-
-            }
-
-            @Override
-            public Ring getPartitionHosts(PartitionName partitionName, java.util.Optional<RingMemberAndHost> useHost, long waitForLeaderElection) throws
-                Exception {
-
-            }
-        };
-        RingHostClientProvider<AmzaService, Exception> clientProvider = new RingHostClientProvider<AmzaService, Exception>() {
-            @Override
-            public <R> R call(PartitionName partitionName, RingMember leader, RingMemberAndHost ringMemberAndHost, String family,
-                PartitionCall<AmzaService, R, Exception> clientCall) throws Exception {
-
-                return
-            }
-        };
-        ExecutorService callerThreads = Executors.newCachedThreadPool();
-
-        PartitionClientFactory<AmzaService, Exception> partitionClientFactory =
-            (partitionName, partitionCallRouter, awaitLeaderElectionForNMillis) -> {
-                return new AmzaPartitionClient(partitionName, partitionCallRouter, new AmzaServiceRemotePartitionCaller(), awaitLeaderElectionForNMillis);
-            };
-        long awaitLeaderElectionForNMillis = 30_000;
-        return new AmzaClientProvider(partitionClientFactory, partitionHostsProvider, clientProvider, callerThreads, awaitLeaderElectionForNMillis);
-    }*/
     public Collection<AmzaNode> getAllNodes() {
         return cluster.values();
     }
@@ -185,10 +116,13 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.compactTombstoneIfOlderThanNMillis = 100000L;
         config.aquariumLivelinessFeedEveryMillis = 500;
-        //config.useMemMap = true;
+        config.maxUpdatesBeforeDeltaStripeCompaction = 10;
+        config.deltaStripeCompactionIntervalInMillis = 1000;
+        config.flushHighwatersAfterNUpdates = 10;
+
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
         OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()), idPacker,
             new JiveEpochTimestampProvider());
@@ -344,8 +278,8 @@ public class AmzaTestCluster {
     public class AmzaNode {
 
         private final Random random = new Random();
-        private final RingMember ringMember;
-        private final RingHost ringHost;
+        final RingMember ringMember;
+        final RingHost ringHost;
         private final AmzaService amzaService;
         private final TimestampedOrderIdProvider orderIdProvider;
         private boolean off = false;
@@ -383,13 +317,13 @@ public class AmzaTestCluster {
             amzaService.stop();
         }
 
-        public void create(PartitionName partitionName, RowType rowType) throws Exception {
+        public void create(Consistency consistency, PartitionName partitionName, RowType rowType) throws Exception {
             WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
                 new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 1000, 1000);
 
             // TODO test other consistencies. Hehe
             amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor,
-                Consistency.none,
+                consistency,
                 true,
                 2,
                 false,
@@ -397,7 +331,7 @@ public class AmzaTestCluster {
             amzaService.awaitOnline(partitionName, 10_000);
         }
 
-        public void update(PartitionName partitionName, byte[] p, byte[] k, byte[] v, boolean tombstone) throws Exception {
+        public void update(Consistency consistency, PartitionName partitionName, byte[] p, byte[] k, byte[] v, boolean tombstone) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
@@ -409,17 +343,17 @@ public class AmzaTestCluster {
             } else {
                 updates.set(k, v, timestamp);
             }
-            clientProvider.getClient(partitionName).commit(Consistency.quorum, p, updates, 10, TimeUnit.SECONDS);
+            clientProvider.getClient(partitionName).commit(consistency, p, updates, 10, TimeUnit.SECONDS);
 
         }
 
-        public byte[] get(PartitionName partitionName, byte[] prefix, byte[] key) throws Exception {
+        public byte[] get(Consistency consistency, PartitionName partitionName, byte[] prefix, byte[] key) throws Exception {
             if (off) {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
             List<byte[]> got = new ArrayList<>();
-            clientProvider.getClient(partitionName).get(Consistency.none, prefix, stream -> stream.stream(key),
+            clientProvider.getClient(partitionName).get(consistency, prefix, stream -> stream.stream(key),
                 (_prefix, _key, value, timestamp, version) -> {
                     got.add(value);
                     return true;
@@ -505,7 +439,7 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = { 0 };
+                    int[] count = {0};
                     partition.scan(null, null, null, null, (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
@@ -521,7 +455,7 @@ public class AmzaTestCluster {
         private final Set<PartitionName> IGNORED_PARTITION_NAMES = ImmutableSet.of(PartitionCreator.HIGHWATER_MARK_INDEX.getPartitionName(),
             PartitionCreator.AQUARIUM_LIVELINESS_INDEX.getPartitionName());
 
-        public boolean compare(AmzaNode service) throws Exception {
+        public boolean compare(Consistency consistency, AmzaNode service) throws Exception {
             if (off || service.off) {
                 return true;
             }
@@ -558,7 +492,7 @@ public class AmzaTestCluster {
                         + service.amzaService.getRingReader().getRingMember() + " " + b);
                     return false;
                 }
-                if (!compare(partitionName, a, b)) {
+                if (!compare(consistency, partitionName, a, b)) {
                     return false;
                 }
             }
@@ -594,7 +528,7 @@ public class AmzaTestCluster {
         }
 
         //  Use for testing
-        private boolean compare(PartitionName partitionName, Partition a, Partition b) throws Exception {
+        private boolean compare(Consistency consistency, PartitionName partitionName, Partition a, Partition b) throws Exception {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
             try {
@@ -605,7 +539,7 @@ public class AmzaTestCluster {
                             long[] btimestamp = new long[1];
                             byte[][] bvalue = new byte[1][];
                             long[] bversion = new long[1];
-                            b.get(Consistency.leader, prefix, stream -> stream.stream(key),
+                            b.get(consistency, prefix, stream -> stream.stream(key),
                                 (rowType, _prefix, _key, value, timestamp, tombstoned, version) -> {
                                     if (timestamp != -1 && !tombstoned) {
                                         btimestamp[0] = timestamp;
@@ -619,7 +553,7 @@ public class AmzaTestCluster {
                             byte[] bValue = bvalue[0];
                             long bVersion = bversion[0];
                             String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                                + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                             if (bValue == null) {
                                 System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)
@@ -675,6 +609,19 @@ public class AmzaTestCluster {
 
         public AmzaService.AmzaPartitionRoute getPartitionRoute(PartitionName partitionName) throws Exception {
             return amzaService.getPartitionRoute(partitionName, 0);
+        }
+
+        public void compactAllTombstones() throws Exception {
+            LOG.info("Manual compact all tombstones requests.");
+            amzaService.compactAllTombstones();
+        }
+
+        public void mergeAllDeltas(boolean force) {
+            amzaService.mergeAllDeltas(true);
+        }
+
+        public void expunge() throws Exception {
+            amzaService.expunge();
         }
     }
 }

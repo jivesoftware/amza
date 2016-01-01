@@ -48,30 +48,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
 
-    public enum Status {
-
-        online((byte) 2), joining((byte) 1), off((byte) 0), leaving((byte) -1), offline((byte) -2);
-
-        public final byte serializedByte;
-
-        Status(byte b) {
-            this.serializedByte = b;
-        }
-
-        public byte[] toBytes() {
-            return new byte[] { serializedByte };
-        }
-
-        static Status fromBytes(byte[] b) {
-            for (Status v : values()) {
-                if (v.serializedByte == b[0]) {
-                    return v;
-                }
-            }
-            return null;
-        }
-    }
-
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRingStoreReader ringStoreReader;
     private final SystemWALStorage systemWALStorage;

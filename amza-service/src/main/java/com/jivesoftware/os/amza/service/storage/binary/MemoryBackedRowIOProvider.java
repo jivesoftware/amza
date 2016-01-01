@@ -8,11 +8,9 @@ import com.jivesoftware.os.amza.shared.filer.ByteBufferFactory;
 import com.jivesoftware.os.amza.shared.stats.IoStats;
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 /**
  * @author jonathan.colt

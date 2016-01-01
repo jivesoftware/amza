@@ -56,7 +56,7 @@ public class PartitionTombstoneCompactor {
         for (int i = 0; i < numberOfCompactorThreads; i++) {
             int stripe = i;
             scheduledThreadPool.scheduleWithFixedDelay(new Runnable() {
-                int failedToCompact = 0;
+                private int failedToCompact = 0;
 
                 @Override
                 public void run() {

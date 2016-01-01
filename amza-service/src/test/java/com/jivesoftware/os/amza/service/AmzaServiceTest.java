@@ -16,11 +16,11 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.io.Files;
+import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
@@ -48,9 +48,67 @@ public class AmzaServiceTest {
         }
         Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
 
-        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition1".getBytes()), RowType.primary);
-        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition2".getBytes()), RowType.snappy_primary);
+        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition1".getBytes()), RowType.primary, Consistency.quorum,
+            Consistency.quorum);
+        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition2".getBytes()), RowType.snappy_primary,
+            Consistency.quorum, Consistency.quorum);
 
+        System.out.println("\n------ensuring non empty---------");
+        for (AmzaNode a : clusterNodes) {
+            Assert.assertFalse(a.isEmpty());
+        }
+
+        assertConsistency(Consistency.quorum, clusterNodes);
+
+        System.out.println("\n------force tombstone compaction---------");
+        for (AmzaNode a : clusterNodes) {
+            a.compactAllTombstones();
+        }
+        assertConsistency(Consistency.quorum, clusterNodes);
+
+        System.out.println("\n------force delta merge---------");
+        for (AmzaNode a : clusterNodes) {
+            a.mergeAllDeltas(true);
+        }
+        assertConsistency(Consistency.quorum, clusterNodes);
+
+        System.out.println("\n------force expunge---------");
+        for (AmzaNode a : clusterNodes) {
+            a.expunge();
+        }
+        assertConsistency(Consistency.quorum, clusterNodes);
+
+        System.out.println("\n------stopping---------");
+        for (AmzaNode a : clusterNodes) {
+            a.stop();
+        }
+
+        System.out.println("\n------restarting---------");
+        cluster = new AmzaTestCluster(createTempDir, 0, 0);
+        for (AmzaNode a : clusterNodes) {
+            cluster.newNode(a.ringMember, a.ringHost);
+        }
+
+        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition1".getBytes()), RowType.primary, Consistency.quorum,
+            Consistency.quorum);
+        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition2".getBytes()), RowType.snappy_primary,
+            Consistency.quorum, Consistency.quorum);
+
+        clusterNodes = cluster.getAllNodes();
+        for (AmzaNode a : clusterNodes) {
+            Assert.assertFalse(a.isEmpty());
+        }
+
+        assertConsistency(Consistency.quorum, clusterNodes);
+        System.out.println("\n------stopping---------");
+        for (AmzaNode a : clusterNodes) {
+            a.stop();
+        }
+
+        System.out.println("\n------PASSED :) ---------");
+    }
+
+    private void assertConsistency(Consistency readConsistency, Collection<AmzaNode> clusterNodes) throws Exception {
         int falseCount = -1;
         while (falseCount != 0) {
             falseCount = 0;
@@ -64,7 +122,7 @@ public class AmzaServiceTest {
                         continue;
                     }
                     AmzaNode b = nodes.get(j);
-                    if (!a.compare(b)) {
+                    if (!a.compare(readConsistency, b)) {
                         System.out.println(a + " is NOT consistent with " + b);
                         falseCount++;
                         break DONE;
@@ -77,20 +135,12 @@ public class AmzaServiceTest {
                 System.out.println("---------------------------------------------------------------------\n\n\n\n");
             }
         }
-
-        for (AmzaNode a : clusterNodes) {
-            Assert.assertFalse(a.isEmpty());
-        }
-
-        System.out.println("\n------stopping---------");
-        for (AmzaNode a : clusterNodes) {
-            a.stop();
-        }
-
-        System.out.println("\n------PASSED :) ---------");
     }
 
-    private void testRowType(AmzaTestCluster cluster, int maxNumberOfServices, PartitionName partitionName, RowType rowType) throws Exception {
+    private void testRowType(AmzaTestCluster cluster, int maxNumberOfServices, PartitionName partitionName, RowType rowType,
+        Consistency readConsistency,
+        Consistency writeConsistency
+    ) throws Exception {
         final int maxUpdates = 100;
         final int delayBetweenUpdates = 0;
         final int maxFields = 10;
@@ -112,15 +162,15 @@ public class AmzaServiceTest {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     try {
                         if (node != null) {
-                            node.create(partitionName, rowType);
+                            node.create(writeConsistency, partitionName, rowType);
                             boolean tombstone = random.nextBoolean();
                             String prefix = "a";
                             String key = String.valueOf(random.nextInt(maxFields));
                             byte[] indexPrefix = prefix.getBytes();
                             byte[] indexKey = key.getBytes();
-                            node.update(partitionName, indexPrefix, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
+                            node.update(writeConsistency, partitionName, indexPrefix, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
                             Thread.sleep(delayBetweenUpdates);
-                            node.get(partitionName, indexPrefix, indexKey);
+                            node.get(readConsistency, partitionName, indexPrefix, indexKey);
                         }
                     } catch (Exception x) {
                         System.out.println("Failed to update node: " + node);
@@ -174,15 +224,6 @@ public class AmzaServiceTest {
                 latch.countDown();
             }
         });
-
-        /*System.out.println("---------------------------------------------------------------------\n\n\n\n");
-        while (latch.getCount() > 0) {
-            for (AmzaNode node : cluster.getAllNodes()) {
-                node.printRings();
-            }
-            Thread.sleep(1000);
-            System.out.println("---------------------------------------------------------------------\n\n\n\n");
-        }*/
 
         latch.await();
 

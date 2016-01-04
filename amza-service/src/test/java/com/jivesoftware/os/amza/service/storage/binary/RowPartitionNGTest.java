@@ -7,15 +7,15 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.storage.WALStorage;
-import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
-import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.api.wal.MemoryWALIndex;
 import com.jivesoftware.os.amza.api.wal.MemoryWALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.MemoryWALUpdates;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALRow;
+import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
+import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
@@ -41,7 +41,7 @@ public class RowPartitionNGTest {
         File walDir = Files.createTempDir();
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
-        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, false);
+        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, 4096, 64, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
@@ -127,7 +127,7 @@ public class RowPartitionNGTest {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
 
-        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, false);
+        RowIOProvider<File> binaryRowIOProvider = new BinaryRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, 4096, 64, false);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
@@ -144,7 +144,7 @@ public class RowPartitionNGTest {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
 
-        RowIOProvider<File> binaryRowIOProvider = new MemoryBackedRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, 4_096, 4_096,
+        RowIOProvider<File> binaryRowIOProvider = new MemoryBackedRowIOProvider(new String[]{walDir.getAbsolutePath()}, ioStats, 1, 4_096, 4_096, 4_096, 64,
             new HeapByteBufferFactory());
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider();

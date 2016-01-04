@@ -3,8 +3,8 @@ package com.jivesoftware.os.amza.service.storage.binary;
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -20,12 +20,21 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
     private final String[] workingDirectories;
     private final IoStats ioStats;
     private final int corruptionParanoiaFactor;
+    private final int updatesBetweenLeaps;
+    private final int maxLeaps;
     private final boolean useMemMap;
 
-    public BinaryRowIOProvider(String[] workingDirectories, IoStats ioStats, int corruptionParanoiaFactor, boolean useMemMap) {
+    public BinaryRowIOProvider(String[] workingDirectories,
+        IoStats ioStats,
+        int corruptionParanoiaFactor,
+        int updatesBetweenLeaps,
+        int maxLeaps,
+        boolean useMemMap) {
         this.workingDirectories = workingDirectories;
         this.ioStats = ioStats;
         this.corruptionParanoiaFactor = corruptionParanoiaFactor;
+        this.updatesBetweenLeaps = updatesBetweenLeaps;
+        this.maxLeaps = maxLeaps;
         this.useMemMap = useMemMap;
     }
 
@@ -43,7 +52,7 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO<>(file, rowReader, rowWriter);
+        return new BinaryRowIO<>(file, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
     }
 
     @Override

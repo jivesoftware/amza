@@ -23,6 +23,9 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.filer.DirectByteBufferFactory;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider.AmzaLivelinessStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
@@ -37,6 +40,11 @@ import com.jivesoftware.os.amza.service.replication.StorageVersionProvider;
 import com.jivesoftware.os.amza.service.replication.StripedPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.SystemPartitionCommitChanges;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.service.ring.CacheId;
+import com.jivesoftware.os.amza.service.ring.RingSet;
+import com.jivesoftware.os.amza.service.ring.RingTopology;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
@@ -49,19 +57,11 @@ import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaStripeWALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWALFactory;
-import com.jivesoftware.os.amza.service.filer.DirectByteBufferFactory;
-import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.service.ring.CacheId;
-import com.jivesoftware.os.amza.service.ring.RingSet;
-import com.jivesoftware.os.amza.service.ring.RingTopology;
-import com.jivesoftware.os.amza.api.scan.RowChanges;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.RowsTakerFactory;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
-import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.aquarium.AtQuorum;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.Member;
@@ -104,6 +104,11 @@ public class AmzaServiceInitializer {
         public int numberOfTakerThreads = 8;
 
         public int corruptionParanoiaFactor = 10;
+        public int updatesBetweenLeaps = 4_096;
+        public int maxLeaps = 64;
+
+        public long initialBufferSegmentSize = 1_024 * 1_024;
+        public long maxBufferSegmentSize = 1_024 * 1_024 * 1_024;
 
         public int numberOfDeltaStripes = 4;
         public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
@@ -154,12 +159,16 @@ public class AmzaServiceInitializer {
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(config.workingDirectories,
             amzaStats.ioStats,
             config.corruptionParanoiaFactor,
-            1_024 * 1_024,
-            1_024 * 1_024 * 1_024,
+            config.initialBufferSegmentSize,
+            config.maxBufferSegmentSize,
+            config.updatesBetweenLeaps,
+            config.maxLeaps,
             new DirectByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(config.workingDirectories,
             amzaStats.ioStats,
             config.corruptionParanoiaFactor,
+            config.updatesBetweenLeaps,
+            config.maxLeaps,
             config.useMemMap);
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
         indexProviderRegistryCallback.call(indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider);
@@ -300,6 +309,8 @@ public class AmzaServiceInitializer {
             RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[]{walDirs[i].getAbsolutePath()},
                 amzaStats.ioStats,
                 config.corruptionParanoiaFactor,
+                config.updatesBetweenLeaps,
+                config.maxLeaps,
                 config.useMemMap);
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(

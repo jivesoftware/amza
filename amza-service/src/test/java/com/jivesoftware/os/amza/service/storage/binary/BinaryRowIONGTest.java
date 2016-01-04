@@ -2,13 +2,13 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
-import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.service.filer.AutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
-import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
+import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import java.io.File;
 import java.util.List;
 import java.util.Random;
@@ -16,7 +16,6 @@ import java.util.concurrent.Callable;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-import static com.jivesoftware.os.amza.service.storage.binary.BinaryRowIO.UPDATES_BETWEEN_LEAPS;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
@@ -32,7 +31,9 @@ public class BinaryRowIONGTest {
         IoStats ioStats = new IoStats();
         BinaryRowIO<File> binaryRowIO = new BinaryRowIO<>(file,
             new BinaryRowReader(filer, ioStats, 10),
-            new BinaryRowWriter(filer, ioStats));
+            new BinaryRowWriter(filer, ioStats),
+            4096,
+            64);
         write(10_000, () -> binaryRowIO);
     }
 
@@ -43,7 +44,9 @@ public class BinaryRowIONGTest {
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer,
             new BinaryRowReader(filer, ioStats, 10),
-            new BinaryRowWriter(filer, ioStats));
+            new BinaryRowWriter(filer, ioStats),
+            4096,
+            64);
         write(500, () -> binaryRowIO);
     }
 
@@ -104,7 +107,7 @@ public class BinaryRowIONGTest {
         File file = File.createTempFile("BinaryRowIO", "dat");
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false);
         IoStats ioStats = new IoStats();
-        leap(() -> new BinaryRowIO<>(file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats)));
+        leap(() -> new BinaryRowIO<>(file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats),4096, 64), 64);
     }
 
     @Test
@@ -112,11 +115,11 @@ public class BinaryRowIONGTest {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
-        BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats));
-        leap(() -> binaryRowIO);
+        BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats), 4096, 64);
+        leap(() -> binaryRowIO, 4096);
     }
 
-    private void leap(Callable<BinaryRowIO> reopen) throws Exception {
+    private void leap(Callable<BinaryRowIO> reopen, int updatesBetweenLeaps) throws Exception {
         BinaryRowIO rowIO = reopen.call();
         int numRows = 10_000;
 
@@ -155,8 +158,8 @@ public class BinaryRowIONGTest {
          System.out.println("[" + j + "] " + histos[i][j]);
          }
          }*/
-        final int[] histo = new int[UPDATES_BETWEEN_LEAPS];
-        for (long i = 0; i < numRows; i += (UPDATES_BETWEEN_LEAPS / 10)) {
+        final int[] histo = new int[updatesBetweenLeaps];
+        for (long i = 0; i < numRows; i += (updatesBetweenLeaps / 10)) {
             final long txId = i;
             long nextStartOfRow = rowIO.getInclusiveStartOfRow(txId);
             rowIO.scan(nextStartOfRow, false, new RowStream() {
@@ -175,11 +178,11 @@ public class BinaryRowIONGTest {
                             Assert.fail("Missed the desired txId: " + rowTxId + " > " + txId);
                             return false;
                         } else {
-                            if (count == UPDATES_BETWEEN_LEAPS) {
+                            if (count == updatesBetweenLeaps) {
                                 Assert.fail("Gave up without seeing the desired txId: " + txId);
                             }
                             count++;
-                            return count < UPDATES_BETWEEN_LEAPS;
+                            return count < updatesBetweenLeaps;
                         }
                     }
                     return true;

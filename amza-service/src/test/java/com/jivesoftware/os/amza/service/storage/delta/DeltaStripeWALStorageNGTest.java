@@ -16,14 +16,21 @@ import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
+import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
+import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStorage;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -35,14 +42,7 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshalle
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
-import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.service.stats.IoStats;
-import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
-import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.api.wal.WALUpdated;
-import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
@@ -94,10 +94,14 @@ public class DeltaStripeWALStorageNGTest {
             100,
             1_024,
             1_024 * 1_024,
+            4_096,
+            64,
             new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(workingDirectories,
             ioStats,
             100,
+            4_096,
+            64,
             false);
         WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
@@ -149,7 +153,7 @@ public class DeltaStripeWALStorageNGTest {
         highwaterStorage = new PartitionBackedHighwaterStorage(ids, new RingMember("localhost"), partitionIndex, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[]{tmp.getAbsolutePath()}, ioStats, 100, false);
+        RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[]{tmp.getAbsolutePath()}, ioStats, 100, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
         deltaStripeWALStorage = loadDeltaStripe();
     }

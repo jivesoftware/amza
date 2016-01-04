@@ -8,8 +8,11 @@ import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedState;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
+import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
+import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
@@ -17,9 +20,6 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
-import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
-import com.jivesoftware.os.amza.service.stats.IoStats;
-import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
@@ -46,16 +46,20 @@ public class AmzaStateStorageNGTest {
         JacksonPartitionPropertyMarshaller partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        String[] workingDirectories = { partitionTmpDir.getAbsolutePath() };
+        String[] workingDirectories = {partitionTmpDir.getAbsolutePath()};
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(workingDirectories, ioStats,
             100,
             1_024,
             1_024 * 1_024,
+            4_096,
+            64,
             new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(workingDirectories,
             ioStats,
             100,
+            4_096,
+            64,
             false);
         WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
@@ -91,11 +95,11 @@ public class AmzaStateStorageNGTest {
         WALUpdated updated = (versionedPartitionName, txId) -> {
         };
 
-        Member root = new Member(new byte[] { 1 });
-        Member other1 = new Member(new byte[] { 2 });
-        Member other2 = new Member(new byte[] { 3 });
+        Member root = new Member(new byte[]{1});
+        Member other1 = new Member(new byte[]{2});
+        Member other2 = new Member(new byte[]{3});
 
-        PartitionName partitionName = new PartitionName(false, new byte[] { 20 }, new byte[] { 30 });
+        PartitionName partitionName = new PartitionName(false, new byte[]{20}, new byte[]{30});
         byte context = 1;
         long startupVersion = 111;
         AmzaStateStorage stateStorage = new AmzaStateStorage(systemWALStorage, updated, root, partitionName, context, startupVersion);
@@ -105,7 +109,7 @@ public class AmzaStateStorageNGTest {
 
         stateStorage.update((setLiveliness) -> {
 
-            for (Long lifecycle : new Long[] { lifecycle1, lifecycle2 }) {
+            for (Long lifecycle : new Long[]{lifecycle1, lifecycle2}) {
                 setLiveliness.set(root, root, lifecycle, State.leader, 1);
                 setLiveliness.set(root, other1, lifecycle, State.follower, 1);
                 setLiveliness.set(root, other2, lifecycle, State.follower, 1);
@@ -124,8 +128,8 @@ public class AmzaStateStorageNGTest {
         System.out.println("--------------------------");
 
         int[] count = new int[1];
-        for (Long lifecycle : new Long[] { lifecycle1, lifecycle2 }) {
-            for (Member m : new Member[] { root, other1, other2 }) {
+        for (Long lifecycle : new Long[]{lifecycle1, lifecycle2}) {
+            for (Member m : new Member[]{root, other1, other2}) {
                 stateStorage.scan(m, null, lifecycle, (rootMember, isSelf, ackMember, alifecycle, state, timestamp, version) -> {
 
                     Assert.assertEquals(lifecycle, alifecycle);

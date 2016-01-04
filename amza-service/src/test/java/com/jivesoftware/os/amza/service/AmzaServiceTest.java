@@ -27,8 +27,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import junit.framework.Assert;
 import org.testng.annotations.Test;
 
@@ -150,15 +151,16 @@ public class AmzaServiceTest {
 
         final Random random = new Random();
 
-        final CountDownLatch latch = new CountDownLatch(1);
-        Executors.newCachedThreadPool().submit(new Runnable() {
-            int removeService = maxRemovedServices;
-            int addService = maxAddService;
-            int offService = maxOffServices;
+        ExecutorService threadPool = Executors.newCachedThreadPool();
+        List<Future> futures = new ArrayList<>();
+        for (int i = 0; i < maxUpdates; i++) {
+            futures.add(threadPool.submit(new Runnable() {
+                int removeService = maxRemovedServices;
+                int addService = maxAddService;
+                int offService = maxOffServices;
 
-            @Override
-            public void run() {
-                for (int i = 0; i < maxUpdates; i++) {
+                @Override
+                public void run() {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     try {
                         if (node != null) {
@@ -221,11 +223,12 @@ public class AmzaServiceTest {
                         }
                     }
                 }
-                latch.countDown();
-            }
-        });
+            }));
+        }
 
-        latch.await();
+        for (Future future : futures) {
+            future.get();
+        }
 
         Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
         for (AmzaNode node : clusterNodes) {

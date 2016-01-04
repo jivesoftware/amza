@@ -2,21 +2,21 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.FpKeyValueHighwaterStream;
 import com.jivesoftware.os.amza.api.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALReader;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.api.wal.WALWriter;
+import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -263,25 +263,6 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
     @Override
     public int compareTo(DeltaWAL o) {
         return Long.compare(id, o.id);
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 59 * hash + (int) (this.id ^ (this.id >>> 32));
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final DeltaWAL other = (DeltaWAL) obj;
-        return this.id == other.id;
     }
 
     public static class KeyValueHighwater {

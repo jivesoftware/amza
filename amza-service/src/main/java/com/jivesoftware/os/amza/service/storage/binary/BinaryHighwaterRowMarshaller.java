@@ -29,7 +29,7 @@ public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte
     @Override
     public byte[] toBytes(WALHighwater highwater) throws Exception {
         byte[] lengthBuffer = new byte[4];
-        HeapFiler filer = new HeapFiler(new byte[sizeInBytes(highwater)]);
+        HeapFiler filer = new HeapFiler(sizeInBytes(highwater));
         for (RingMemberHighwater rmh : highwater.ringMemberHighwater) {
             UIO.writeByte(filer, (byte) 1, "hasMore");
             UIO.writeByteArray(filer, rmh.ringMember.toBytes(), "ringMember", lengthBuffer);
@@ -51,7 +51,7 @@ public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte
 
     @Override
     public WALHighwater fromBytes(byte[] row) throws Exception {
-        HeapFiler filer = new HeapFiler(row);
+        HeapFiler filer = HeapFiler.fromBytes(row, row.length);
         List<RingMemberHighwater> rmh = new ArrayList<>();
         byte[] intLongBuffer = new byte[8];
         while (UIO.readBoolean(filer, "hasMore")) {

@@ -457,7 +457,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
     static boolean streamStateKey(byte[] keyBytes, StateKeyStream stream) throws Exception {
         byte[] intLongBuffer = new byte[8];
 
-        HeapFiler filer = new HeapFiler(keyBytes);
+        HeapFiler filer = HeapFiler.fromBytes(keyBytes, keyBytes.length);
         byte[] partitionNameBytes = UIO.readByteArray(filer, "partitionName", intLongBuffer);
         byte context = UIO.readByte(filer, "context");
         byte[] rootRingMemberBytes = UIO.readByteArray(filer, "rootRingMember", intLongBuffer);
@@ -501,7 +501,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
     }
 
     private static boolean streamLivelinessKey(byte[] keyBytes, LivelinessKeyStream stream, byte[] intLongBuffer) throws Exception {
-        HeapFiler filer = new HeapFiler(keyBytes);
+        HeapFiler filer = HeapFiler.fromBytes(keyBytes, keyBytes.length);
         byte[] rootRingMemberBytes = UIO.readByteArray(filer, "rootRingMember", intLongBuffer);
         boolean isSelf = !UIO.readBoolean(filer, "isOther");
         byte[] ackRingMemberBytes = UIO.readByteArray(filer, "ackRingMember", intLongBuffer);

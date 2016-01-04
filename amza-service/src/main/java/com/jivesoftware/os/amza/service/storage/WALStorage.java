@@ -428,9 +428,12 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     int estimatedSizeInBytes = 0;
                     for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                         byte[] value = row.getValue().getValue();
-                        estimatedSizeInBytes += primaryRowMarshaller.sizeInBytes(row.getKey().sizeOfComposed(), (value != null ? value.length : 0));
+                        estimatedSizeInBytes += primaryRowMarshaller.maximumSizeInBytes(rowType,
+                            row.getKey().sizeOfComposed(),
+                            (value != null ? value.length : 0));
                     }
-                    flush(rowType, forceTxId,
+                    flush(rowType,
+                        forceTxId,
                         apply.size(),
                         estimatedSizeInBytes,
                         rowStream -> {

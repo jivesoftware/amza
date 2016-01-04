@@ -131,7 +131,7 @@ public class StorageVersionProvider implements RowChanges {
 
         systemWALStorage.rangeScan(PartitionCreator.PARTITION_VERSION_INDEX, null, fromKey, null, toKey,
             (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                HeapFiler filer = new HeapFiler(key);
+                HeapFiler filer = HeapFiler.fromBytes(key, key.length);
                 UIO.readByte(filer, "serializationVersion");
                 RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));
                 PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition", intBuffer));
@@ -230,7 +230,7 @@ public class StorageVersionProvider implements RowChanges {
     void clearCache(byte[] walKey, byte[] walValue) throws Exception {
         byte[] intBuffer = new byte[4];
 
-        HeapFiler filer = new HeapFiler(walKey);
+        HeapFiler filer = HeapFiler.fromBytes(walKey, walKey.length);
         UIO.readByte(filer, "serializationVersion");
         RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));
         if (ringMember != null) {

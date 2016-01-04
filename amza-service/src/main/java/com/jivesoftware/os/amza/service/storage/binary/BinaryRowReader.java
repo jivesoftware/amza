@@ -17,13 +17,13 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.api.scan.RowStream;
-import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.api.stream.Fps;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALReader;
+import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.EOFException;
@@ -95,9 +95,9 @@ public class BinaryRowReader implements WALReader {
                 }
 
                 parentFiler.seek(nextBoundaryFp);
-                parentFiler.read(page);
+                int readLength = parentFiler.read(page);
 
-                HeapFiler filer = new HeapFiler(page);
+                HeapFiler filer = HeapFiler.fromBytes(page, readLength);
                 long seekTo = filer.length() - 4;
                 if (seekTo >= 0) {
                     while (true) {
@@ -181,7 +181,7 @@ public class BinaryRowReader implements WALReader {
                             if (allowRepairs) {
                                 return truncate(offsetFp);
                             } else {
-                                String msg = "Scan terminated prematurely due a corruption at fp:" + offsetFp + ". " + parent;
+                                String msg = "Scan terminated prematurely due to a corruption at fp:" + offsetFp + ". " + parent;
                                 LOG.error(msg);
                                 throw new EOFException(msg);
                             }
@@ -265,7 +265,7 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public boolean read(Fps fps, RowStream rowStream) throws Exception {
-        IReadable[] filerRef = {parent.bestFiler(null, 0)};
+        IReadable[] filerRef = { parent.bestFiler(null, 0) };
         byte[] rawLength = new byte[4];
         byte[] rowTypeByteAndTxId = new byte[1 + 8];
         return fps.consume(fp -> {

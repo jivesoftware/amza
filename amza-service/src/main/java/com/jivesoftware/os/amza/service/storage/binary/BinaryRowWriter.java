@@ -44,7 +44,7 @@ public class BinaryRowWriter implements WALWriter {
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream) throws Exception {
         byte[] lengthBuffer = new byte[4];
-        HeapFiler memoryFiler = new HeapFiler(new byte[(estimatedNumberOfRows * (4 + 1 + 8 + 4)) + estimatedSizeInBytes]);
+        HeapFiler memoryFiler = new HeapFiler((estimatedNumberOfRows * (4 + 1 + 8 + 4)) + estimatedSizeInBytes);
         TLongArrayList offsets = new TLongArrayList();
         rows.consume(row -> {
             offsets.add(memoryFiler.getFilePointer());

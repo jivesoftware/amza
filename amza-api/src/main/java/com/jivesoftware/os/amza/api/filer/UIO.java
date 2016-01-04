@@ -38,7 +38,7 @@ public class UIO {
             byteCount = 1024 * 1024; //1MB
         }
         byte[] chunk = new byte[(int) byteCount];
-        int bytesRead = -1;
+        int bytesRead;
         long size = 0;
         while ((bytesRead = _from.read(chunk)) > -1) {
             _to.write(chunk, 0, bytesRead);

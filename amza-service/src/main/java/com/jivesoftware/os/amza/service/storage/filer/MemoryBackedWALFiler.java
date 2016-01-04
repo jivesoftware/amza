@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.service.storage.filer;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
-import com.jivesoftware.os.amza.shared.filer.AutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.amza.service.filer.AutoGrowingByteBufferBackedFiler;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 

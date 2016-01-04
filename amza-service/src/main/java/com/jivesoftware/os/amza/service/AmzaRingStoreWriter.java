@@ -23,15 +23,15 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.shared.ring.AmzaRingWriter;
-import com.jivesoftware.os.amza.shared.ring.CacheId;
-import com.jivesoftware.os.amza.shared.ring.RingSet;
-import com.jivesoftware.os.amza.shared.ring.RingTopology;
-import com.jivesoftware.os.amza.shared.scan.RowChanges;
-import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.service.ring.AmzaRingWriter;
+import com.jivesoftware.os.amza.service.ring.CacheId;
+import com.jivesoftware.os.amza.service.ring.RingSet;
+import com.jivesoftware.os.amza.service.ring.RingTopology;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -47,30 +47,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
-
-    public enum Status {
-
-        online((byte) 2), joining((byte) 1), off((byte) 0), leaving((byte) -1), offline((byte) -2);
-
-        public final byte serializedByte;
-
-        Status(byte b) {
-            this.serializedByte = b;
-        }
-
-        public byte[] toBytes() {
-            return new byte[] { serializedByte };
-        }
-
-        static Status fromBytes(byte[] b) {
-            for (Status v : values()) {
-                if (v.serializedByte == b[0]) {
-                    return v;
-                }
-            }
-            return null;
-        }
-    }
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final AmzaRingStoreReader ringStoreReader;

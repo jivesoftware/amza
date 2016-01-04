@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
+import com.jivesoftware.os.amza.api.AmzaVersionConstants;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
-import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
+import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;

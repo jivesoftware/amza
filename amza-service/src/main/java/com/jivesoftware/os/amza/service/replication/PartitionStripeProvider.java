@@ -2,8 +2,8 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.take.RowsTaker;
+import com.jivesoftware.os.amza.service.take.HighwaterStorage;
+import com.jivesoftware.os.amza.service.take.RowsTaker;
 import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 

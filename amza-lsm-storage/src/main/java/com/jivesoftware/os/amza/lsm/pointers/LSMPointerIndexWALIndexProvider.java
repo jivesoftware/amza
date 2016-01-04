@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.lsm.pointers;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.AmzaVersionConstants;
-import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
+import com.jivesoftware.os.amza.api.AmzaVersionConstants;
+import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import java.io.File;
 
 /**

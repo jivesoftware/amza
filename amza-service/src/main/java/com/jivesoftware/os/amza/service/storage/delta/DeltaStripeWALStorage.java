@@ -16,25 +16,25 @@ import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater;
-import com.jivesoftware.os.amza.shared.scan.RangeScannable;
-import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.scan.Scannable;
-import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.stats.AmzaStats.CompactionFamily;
-import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
-import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
-import com.jivesoftware.os.amza.shared.stream.KeyValues;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.wal.KeyUtil;
-import com.jivesoftware.os.amza.shared.wal.KeyedTimestampId;
-import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
-import com.jivesoftware.os.amza.shared.wal.WALPointer;
-import com.jivesoftware.os.amza.shared.wal.WALTimestampId;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
+import com.jivesoftware.os.amza.api.scan.RangeScannable;
+import com.jivesoftware.os.amza.api.scan.RowStream;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.scan.Scannable;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
+import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.stream.KeyValues;
+import com.jivesoftware.os.amza.service.take.HighwaterStorage;
+import com.jivesoftware.os.amza.api.wal.KeyUtil;
+import com.jivesoftware.os.amza.api.wal.KeyedTimestampId;
+import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.api.wal.WALPointer;
+import com.jivesoftware.os.amza.api.wal.WALTimestampId;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -149,7 +149,7 @@ public class DeltaStripeWALStorage {
                 deltaWAL.set(deltaWALFactory.create());
             } else {
                 for (int i = 0; i < deltaWALs.size(); i++) {
-                    final DeltaWAL wal = deltaWALs.get(i);
+                    DeltaWAL wal = deltaWALs.get(i);
                     if (i > 0) {
                         mergeDelta(partitionIndex, deltaWAL.get(), () -> wal);
                     }

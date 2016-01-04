@@ -3,9 +3,9 @@ package com.jivesoftware.os.amza.service;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
-import com.jivesoftware.os.amza.shared.wal.MemoryWALIndexProvider;
-import com.jivesoftware.os.amza.shared.wal.NoOpWALIndexProvider;
-import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
+import com.jivesoftware.os.amza.api.wal.MemoryWALIndexProvider;
+import com.jivesoftware.os.amza.api.wal.NoOpWALIndexProvider;
+import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import java.util.concurrent.ConcurrentHashMap;
 

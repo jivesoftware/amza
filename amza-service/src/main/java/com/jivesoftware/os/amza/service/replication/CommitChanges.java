@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.shared.scan.CommitTo;
-import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
+import com.jivesoftware.os.amza.api.scan.CommitTo;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 
 /**
  *

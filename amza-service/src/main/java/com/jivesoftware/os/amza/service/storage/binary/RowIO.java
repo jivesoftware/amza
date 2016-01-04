@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.jivesoftware.os.amza.shared.wal.WALReader;
-import com.jivesoftware.os.amza.shared.wal.WALWriter;
+import com.jivesoftware.os.amza.api.wal.WALReader;
+import com.jivesoftware.os.amza.api.wal.WALWriter;
 
 /**
  * @author jonathan.colt

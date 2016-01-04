@@ -16,8 +16,8 @@
 package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.scan.RowChanges;
-import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,13 +43,7 @@ public class AmzaPartitionWatcher implements RowChanges {
     }
 
     public void watch(PartitionName partitionName, RowChanges rowChanges) throws Exception {
-        watchers.compute(partitionName, (key, value) -> {
-            if (value == null) {
-                value = new ArrayList<>();
-            }
-            value.add(rowChanges);
-            return value;
-        });
+        watchers.computeIfAbsent(partitionName, (PartitionName t) -> new ArrayList<>()).add(rowChanges);
     }
 
     public RowChanges unwatch(PartitionName partitionName) throws Exception {

@@ -66,13 +66,15 @@ public class BerkeleyDBWALIndex implements WALIndex {
         // Open the database, creating one if it does not exist
         this.primaryDbConfig = new DatabaseConfig()
             .setAllowCreate(true)
-            .setBtreeComparator(KeyUtil.lexicographicalComparator());
+            .setBtreeComparator(KeyUtil.lexicographicalComparator())
+            .setOverrideBtreeComparator(true);
         this.primaryDb = environment.openDatabase(null, name.getPrimaryName(), primaryDbConfig);
 
         // Open the database, creating one if it does not exist
         this.prefixDbConfig = new DatabaseConfig()
             .setAllowCreate(true)
-            .setBtreeComparator(KeyUtil.lexicographicalComparator());
+            .setBtreeComparator(KeyUtil.lexicographicalComparator())
+            .setOverrideBtreeComparator(true);
         this.prefixDb = environment.openDatabase(null, name.getPrefixName(), prefixDbConfig);
     }
 

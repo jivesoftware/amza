@@ -260,7 +260,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         RingMemberAndHost leader = null;
         for (RingMemberAndHost entry : ring.entries) {
             RemoteVersionedState remoteVersionedState = partitionStateStorage.getRemoteVersionedState(entry.ringMember, partitionName);
-            if (remoteVersionedState != null) {
+            if (remoteVersionedState != null && remoteVersionedState.waterline != null) {
                 State state = remoteVersionedState.waterline.getState();
                 if (state == State.leader) {
                     leader = entry;

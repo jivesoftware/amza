@@ -226,6 +226,8 @@ public class AmzaServiceTest {
                                 txId = ringMemberCursor.transactionId;
                             }
                         }
+                    } catch (IllegalStateException x) {
+                        // Swallow for now.
                     } catch (Exception x) {
                         x.printStackTrace();
                     }

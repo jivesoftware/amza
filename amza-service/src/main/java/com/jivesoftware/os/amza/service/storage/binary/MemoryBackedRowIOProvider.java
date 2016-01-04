@@ -2,10 +2,10 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.service.filer.AutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.service.filer.ByteBufferFactory;
 import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
@@ -22,6 +22,8 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
     private final int corruptionParanoiaFactor;
     private final long initialBufferSegmentSize;
     private final long maxBufferSegmentSize;
+    private final int updatesBetweenLeaps;
+    private final int maxLeaps;
     private final ByteBufferFactory byteBufferFactory;
 
     private final ConcurrentHashMap<File, MemoryBackedWALFiler> filers = new ConcurrentHashMap<>();
@@ -31,12 +33,16 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
         int corruptionParanoiaFactor,
         long initialBufferSegmentSize,
         long maxBufferSegmentSize,
+        int updatesBetweenLeaps,
+        int maxLeaps,
         ByteBufferFactory byteBufferFactory) {
         this.workingDirectories = workingDirectories;
         this.ioStats = ioStats;
         this.corruptionParanoiaFactor = corruptionParanoiaFactor;
         this.initialBufferSegmentSize = initialBufferSegmentSize;
         this.maxBufferSegmentSize = maxBufferSegmentSize;
+        this.updatesBetweenLeaps = updatesBetweenLeaps;
+        this.maxLeaps = maxLeaps;
         this.byteBufferFactory = byteBufferFactory;
     }
 
@@ -56,7 +62,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
         MemoryBackedWALFiler filer = getFiler(file);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO<>(file, rowReader, rowWriter);
+        return new BinaryRowIO<>(file, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
     }
 
     @Override

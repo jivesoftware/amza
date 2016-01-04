@@ -25,11 +25,6 @@ public class HeapByteBufferFactory implements ByteBufferFactory {
     }
 
     @Override
-    public boolean exists() {
-        return false;
-    }
-
-    @Override
     public long length() {
         return 0;
     }

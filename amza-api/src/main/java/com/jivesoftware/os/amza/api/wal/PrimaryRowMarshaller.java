@@ -24,7 +24,7 @@ public interface PrimaryRowMarshaller {
 
     byte[] toRow(RowType rowType, byte[] key, byte[] value, long timestamp, boolean tombstoned, long version) throws Exception;
 
-    int sizeInBytes(int pkSizeInBytes, int valueSizeInBytes);
+    int maximumSizeInBytes(RowType rowType, int pkSizeInBytes, int valueSizeInBytes);
 
     interface FpRows {
 

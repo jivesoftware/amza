@@ -5,18 +5,18 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
-import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.api.wal.NoOpWALIndex;
 import com.jivesoftware.os.amza.api.wal.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALValue;
+import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
@@ -39,7 +39,7 @@ public class DeltaWALNGTest {
 
         WALTx<NoOpWALIndex> walTX = new BinaryWALTx<>(tmp,
             "test",
-            new BinaryRowIOProvider(new String[]{tmp.getAbsolutePath()}, new IoStats(), 1, false),
+            new BinaryRowIOProvider(new String[]{tmp.getAbsolutePath()}, new IoStats(), 1, 4_096, 64, false),
             primaryRowMarshaller,
             new NoOpWALIndexProvider());
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));

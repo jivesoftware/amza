@@ -21,14 +21,21 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.take.TakeCursors;
+import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.service.AmzaTestCluster.AmzaNode;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import junit.framework.Assert;
 import org.testng.annotations.Test;
 
@@ -137,6 +144,53 @@ public class AmzaServiceTest {
         }
     }
 
+    static class Took implements TxKeyValueStream {
+
+        private final Map<WALKey, TookValue> took = new ConcurrentHashMap<>();
+
+        @Override
+        public boolean stream(long rowTxId, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) throws
+            Exception {
+            TookValue tookValue = new TookValue(rowTxId, value, valueTimestamp, valueTombstoned, valueVersion);
+            took.compute(new WALKey(prefix, key), (WALKey k, TookValue existing) -> {
+                if (existing == null) {
+                    return tookValue;
+                } else {
+                    return existing.compareTo(tookValue) >= 0 ? existing : tookValue;
+                }
+            });
+            return true;
+        }
+
+        static class TookValue implements Comparable<TookValue> {
+
+            private final long rowTxId;
+            private final byte[] value;
+            private final long valueTimestamp;
+            private final boolean valueTombstoned;
+            private final long valueVersion;
+
+            public TookValue(long rowTxId, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion) {
+                this.rowTxId = rowTxId;
+                this.value = value;
+                this.valueTimestamp = valueTimestamp;
+                this.valueTombstoned = valueTombstoned;
+                this.valueVersion = valueVersion;
+            }
+
+            @Override
+            public int compareTo(TookValue o) {
+                int c = Long.compare(valueTimestamp, o.valueTimestamp);
+                if (c != 0) {
+                    return c;
+                }
+                c = Long.compare(valueVersion, o.valueVersion);
+                return c;
+            }
+        }
+
+    }
+
     private void testRowType(AmzaTestCluster cluster, int maxNumberOfServices, PartitionName partitionName, RowType rowType,
         Consistency readConsistency,
         Consistency writeConsistency
@@ -149,16 +203,47 @@ public class AmzaServiceTest {
         final int maxAddService = 0;
 
         final Random random = new Random();
+        AtomicBoolean updating = new AtomicBoolean(true);
 
-        final CountDownLatch latch = new CountDownLatch(1);
-        Executors.newCachedThreadPool().submit(new Runnable() {
-            int removeService = maxRemovedServices;
-            int addService = maxAddService;
-            int offService = maxOffServices;
+        ExecutorService threadPool = Executors.newCachedThreadPool();
+        List<Future> takerFutures = new ArrayList<>();
+        Took[] took = new Took[maxNumberOfServices];
+        for (int i = 0; i < maxNumberOfServices; i++) {
+            int serviceId = i;
+            took[i] = new Took();
+            threadPool.submit(() -> {
+                RingMember ringMember = new RingMember("localhost-" + serviceId);
+                AmzaNode node = cluster.get(ringMember);
+                boolean tookToEnd = false;
+                long txId = -1;
+                while (!tookToEnd || updating.get()) {
+                    try {
+                        Thread.sleep(100);
+                        TakeCursors takeCursors = node.takeFromTransactionId(partitionName, txId, took[serviceId]);
+                        tookToEnd = takeCursors.tookToEnd;
+                        for (TakeCursors.RingMemberCursor ringMemberCursor : takeCursors.ringMemberCursors) {
+                            if (ringMemberCursor.ringMember.equals(ringMember)) {
+                                txId = ringMemberCursor.transactionId;
+                            }
+                        }
+                    } catch (IllegalStateException x) {
+                        // Swallow for now.
+                    } catch (Exception x) {
+                        x.printStackTrace();
+                    }
+                }
+            });
+        }
 
-            @Override
-            public void run() {
-                for (int i = 0; i < maxUpdates; i++) {
+        List<Future> updatesFutures = new ArrayList<>();
+        for (int i = 0; i < maxUpdates; i++) {
+            updatesFutures.add(threadPool.submit(new Runnable() {
+                int removeService = maxRemovedServices;
+                int addService = maxAddService;
+                int offService = maxOffServices;
+
+                @Override
+                public void run() {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     try {
                         if (node != null) {
@@ -211,21 +296,27 @@ public class AmzaServiceTest {
                     if (offService > 0) {
                         RingMember key = new RingMember("localhost-" + random.nextInt(maxNumberOfServices));
                         node = cluster.get(key);
-                        try {
-                            if (node != null) {
+                        if (node != null) {
+                            try {
                                 node.setOff(!node.isOff());
                                 offService--;
+                            } catch (Exception x) {
+                                System.out.println("Issues while turning node off:" + x.getMessage());
                             }
-                        } catch (Exception x) {
-                            System.out.println(x.getMessage());
                         }
+
                     }
                 }
-                latch.countDown();
-            }
-        });
+            }));
+        }
 
-        latch.await();
+        for (Future future : updatesFutures) {
+            future.get();
+        }
+        updating.set(false);
+        for (Future future : takerFutures) {
+            future.get();
+        }
 
         Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
         for (AmzaNode node : clusterNodes) {

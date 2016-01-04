@@ -1,8 +1,9 @@
-package com.jivesoftware.os.amza.service;
+package com.jivesoftware.os.amza.ui.region;
 
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
+import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
 
 /**
  *

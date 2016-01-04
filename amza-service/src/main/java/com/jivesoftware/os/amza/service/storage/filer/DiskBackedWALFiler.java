@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.service.storage.filer;
 
-import com.jivesoftware.os.amza.api.filer.IFiler;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.service.filer.ByteBufferBackedFiler;
 import java.io.IOException;
@@ -24,7 +23,7 @@ import java.nio.channels.FileChannel;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IFiler {
+public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler {
 
     private final String fileName;
     private final boolean useMemMap;
@@ -100,28 +99,8 @@ public class DiskBackedWALFiler extends RandomAccessFile implements WALFiler, IF
     }
 
     @Override
-    public long skip(long position) throws IOException {
-        throw new UnsupportedOperationException("No skipping! Call fileChannelFiler() to read!");
-    }
-
-    @Override
     public void seek(long _fp) throws IOException {
         super.seek(_fp);
-    }
-
-    @Override
-    public int read() throws IOException {
-        throw new UnsupportedOperationException("No reading! Call fileChannelFiler() to read!");
-    }
-
-    @Override
-    public int read(byte b[]) throws IOException {
-        throw new UnsupportedOperationException("No reading! Call fileChannelFiler() to read!");
-    }
-
-    @Override
-    public int read(byte b[], int _offset, int _len) throws IOException {
-        throw new UnsupportedOperationException("No reading! Call fileChannelFiler() to read!");
     }
 
     @Override

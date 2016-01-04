@@ -110,7 +110,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     RingMember getMember(byte[] rawMember) throws Exception {
         byte[] intBuffer = new byte[4];
 
-        HeapFiler filer = new HeapFiler(rawMember);
+        HeapFiler filer = HeapFiler.fromBytes(rawMember, rawMember.length);
         UIO.readByte(filer, "version");
         UIO.readByteArray(filer, "partition", intBuffer);
         UIO.readByteArray(filer, "rootMember", intBuffer);

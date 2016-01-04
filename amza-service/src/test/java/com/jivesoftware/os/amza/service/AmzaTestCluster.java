@@ -29,16 +29,18 @@ import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
-import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
-import com.jivesoftware.os.amza.service.storage.PartitionCreator;
-import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
-import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
+import com.jivesoftware.os.amza.api.take.TakeCursors;
+import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
+import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
+import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
@@ -119,6 +121,11 @@ public class AmzaTestCluster {
         config.maxUpdatesBeforeDeltaStripeCompaction = 10;
         config.deltaStripeCompactionIntervalInMillis = 1000;
         config.flushHighwatersAfterNUpdates = 10;
+
+        config.initialBufferSegmentSize = 1_024;
+        config.maxBufferSegmentSize = 10 * 1_024;
+
+        config.updatesBetweenLeaps = 10;
 
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
         OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()), idPacker,
@@ -356,6 +363,13 @@ public class AmzaTestCluster {
                     return true;
                 });
             return got.get(0);
+        }
+
+        public TakeCursors takeFromTransactionId(PartitionName partitionName, long transactionId, TxKeyValueStream stream) throws Exception {
+            if (off) {
+                throw new RuntimeException("Service is off:" + ringMember);
+            }
+            return clientProvider.getClient(partitionName).takeFromTransactionId(transactionId, stream);
         }
 
         public void watch(PartitionName partitionName) throws Exception {

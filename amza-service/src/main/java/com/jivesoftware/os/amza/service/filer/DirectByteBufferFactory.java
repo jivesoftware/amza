@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.filer;
 
-import com.jivesoftware.os.filer.io.*;
 import java.nio.ByteBuffer;
 
 /**
@@ -22,11 +21,6 @@ public class DirectByteBufferFactory implements ByteBufferFactory {
             newBuffer.position(0);
         }
         return newBuffer;
-    }
-
-    @Override
-    public boolean exists() {
-        return false;
     }
 
     @Override

@@ -2,21 +2,21 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.FpKeyValueHighwaterStream;
 import com.jivesoftware.os.amza.api.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALReader;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.api.wal.WALWriter;
+import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -64,13 +64,13 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
         byte[] lengthBuffer = new byte[4];
         if (hints != null) {
             byte[] hintsBytes = highwaterRowMarshaller.toBytes(hints);
-            HeapFiler filer = new HeapFiler(new byte[4 + (value != null ? value.length : 0) + 1 + 4 + hintsBytes.length]);
+            HeapFiler filer = new HeapFiler(4 + (value != null ? value.length : 0) + 1 + 4 + hintsBytes.length);
             UIO.writeByteArray(filer, value, "value", lengthBuffer);
             UIO.write(filer, new byte[]{1}, "hasHighwaterHints");
             UIO.writeByteArray(filer, hintsBytes, "highwaterHints", lengthBuffer);
             return filer.getBytes();
         } else {
-            HeapFiler filer = new HeapFiler(new byte[4 + (value != null ? value.length : 0) + 1]);
+            HeapFiler filer = new HeapFiler(4 + (value != null ? value.length : 0) + 1);
             UIO.writeByteArray(filer, value, "value", lengthBuffer);
             UIO.write(filer, new byte[]{0}, "hasHighwaterHints");
             return filer.getBytes();
@@ -114,7 +114,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                     int pkSizeInBytes = WALKey.sizeOfComposed(versionedPartitionName.sizeInBytes(),
                         WALKey.sizeOfComposed(kvh.prefix != null ? kvh.prefix.length : 0, kvh.key.length));
                     int valueSizeInBytes = sizeWithAppendedHighwaterHints(kvh.value, kvh.highwater);
-                    estimatedSizeInBytes += primaryRowMarshaller.sizeInBytes(pkSizeInBytes, valueSizeInBytes);
+                    estimatedSizeInBytes += primaryRowMarshaller.maximumSizeInBytes(rowType, pkSizeInBytes, valueSizeInBytes);
                 }
                 rowWriter.write(transactionId,
                     rowType,
@@ -175,7 +175,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                 },
                 (rowFP, rowTxId, rowType, row) -> txFpRowStream.stream(rowTxId, rowFP, rowType, row))),
             (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
-                HeapFiler filer = new HeapFiler(value);
+                HeapFiler filer = HeapFiler.fromBytes(value, value.length);
                 byte[] deltaRow = primaryRowMarshaller.toRow(rowType,
                     key,
                     UIO.readByteArray(filer, "value", intBuffer),
@@ -241,7 +241,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
                     (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, rowType, row))),
             (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 try {
-                    HeapFiler filer = new HeapFiler(value);
+                    HeapFiler filer = HeapFiler.fromBytes(value, value.length);
                     byte[] hydrateValue = UIO.readByteArray(filer, "value", intBuffer);
                     WALHighwater highwater = null;
                     if (UIO.readBoolean(filer, "hasHighwaterHint")) {
@@ -263,25 +263,6 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
     @Override
     public int compareTo(DeltaWAL o) {
         return Long.compare(id, o.id);
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 59 * hash + (int) (this.id ^ (this.id >>> 32));
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final DeltaWAL other = (DeltaWAL) obj;
-        return this.id == other.id;
     }
 
     public static class KeyValueHighwater {

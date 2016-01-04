@@ -70,7 +70,7 @@ public class AmzaClientRestEndpoints {
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
                 try {
-                    out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                    out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
                     client.configPartition(ringTopology, out);
                     out.flush(true);
                 } catch (Exception x) {
@@ -112,12 +112,12 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            AmzaClientService.RingLeader ringLeader = client.ring(partitionName);
+            com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.RingLeader ringLeader = client.ring(partitionName);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
                 try {
-                    out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                    out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
                     client.ring(ringLeader, out);
                     out.flush(true);
                 } catch (Exception x) {
@@ -141,12 +141,12 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            AmzaClientService.RingLeader ringLeader = client.ringLeader(partitionName, waitForLeaderElection);
+            com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.RingLeader ringLeader = client.ringLeader(partitionName, waitForLeaderElection);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
                 try {
-                    out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                    out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
                     client.ring(ringLeader, out);
                     out.flush(true);
                 } catch (Exception x) {
@@ -178,7 +178,7 @@ public class AmzaClientRestEndpoints {
         FilerInputStream in = null;
         try {
             in = new FilerInputStream(inputStream);
-            AmzaClientService.StateMessageCause stateMessageCause = client.commit(partitionName,
+            com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.StateMessageCause stateMessageCause = client.commit(partitionName,
                 Consistency.valueOf(consistencyName),
                 checkLeader, 10_000, in);
             if (stateMessageCause != null) {
@@ -211,7 +211,7 @@ public class AmzaClientRestEndpoints {
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        AmzaClientService.StateMessageCause stateMessageCause = client.status(partitionName,
+        com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
             checkLeader,
             10_000);
@@ -225,7 +225,7 @@ public class AmzaClientRestEndpoints {
             ChunkedOutputFiler out = null;
             try {
                 in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
                 client.get(partitionName, Consistency.none, in, out);
                 out.flush(true);
             } catch (Exception x) {
@@ -247,7 +247,7 @@ public class AmzaClientRestEndpoints {
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        AmzaClientService.StateMessageCause stateMessageCause = client.status(partitionName,
+        com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
             checkLeader,
             10_000);
@@ -261,7 +261,7 @@ public class AmzaClientRestEndpoints {
             ChunkedOutputFiler out = null;
             try {
                 in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
                 client.scan(partitionName, in, out);
                 out.flush(true);
 
@@ -287,7 +287,7 @@ public class AmzaClientRestEndpoints {
             ChunkedOutputFiler out = null;
             try {
                 in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
                 client.takeFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
                 out.flush(true);
             } catch (Exception x) {
@@ -313,7 +313,7 @@ public class AmzaClientRestEndpoints {
             ChunkedOutputFiler out = null;
             try {
                 in = new FilerInputStream(inputStream);
-                out = new ChunkedOutputFiler(new HeapFiler(new byte[4096]), chunkedOutput); // TODO config ?? or caller
+                out = new ChunkedOutputFiler(new HeapFiler(4096), chunkedOutput); // TODO config ?? or caller
                 client.takePrefixFromTransactionId(PartitionName.fromBase64(base64PartitionName), in, out);
                 out.flush(true);
             } catch (Exception x) {
@@ -342,7 +342,7 @@ public class AmzaClientRestEndpoints {
         }
     }
 
-    private Response stateMessageCauseToResponse(AmzaClientService.StateMessageCause stateMessageCause) {
+    private Response stateMessageCauseToResponse(com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.StateMessageCause stateMessageCause) {
         if (stateMessageCause != null && stateMessageCause.state != null) {
             LOG.warn("{}", stateMessageCause);
             switch (stateMessageCause.state) {

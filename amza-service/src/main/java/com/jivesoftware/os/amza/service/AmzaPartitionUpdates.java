@@ -29,32 +29,12 @@ public class AmzaPartitionUpdates implements Commitable {
     private final ConcurrentSkipListMap<byte[], WALValue> changes = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
     private final AtomicInteger approximateSize = new AtomicInteger(); // Because changes.size() walks the entire collection to compute size :(
 
-    public AmzaPartitionUpdates setAll(Iterable<Entry<byte[], byte[]>> updates) throws Exception {
-        setAll(updates, -1);
-        return this;
-    }
-
-    public AmzaPartitionUpdates setAll(Iterable<Entry<byte[], byte[]>> updates, long timestampId) throws Exception {
-        for (Entry<byte[], byte[]> update : updates) {
-            set(update.getKey(), update.getValue(), timestampId);
-        }
-        return this;
-    }
-
-    public AmzaPartitionUpdates set(byte[] key, byte[] value) throws Exception {
-        return set(key, value, -1);
-    }
-
     public AmzaPartitionUpdates set(byte[] key, byte[] value, long timestampId) throws Exception {
         if (key == null) {
             throw new IllegalArgumentException("key cannot be null.");
         }
         update(key, value, timestampId, false);
         return this;
-    }
-
-    public AmzaPartitionUpdates remove(byte[] key) throws Exception {
-        return remove(key, -1);
     }
 
     public AmzaPartitionUpdates remove(byte[] key, long timestampId) throws Exception {

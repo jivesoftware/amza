@@ -53,7 +53,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     }
 
     byte[] keyToRingName(WALKey walKey) throws IOException {
-        HeapFiler filer = new HeapFiler(walKey.key);
+        HeapFiler filer = HeapFiler.fromBytes(walKey.key, walKey.key.length);
         return UIO.readByteArray(filer, "ringName", new byte[4]);
     }
 
@@ -70,7 +70,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
     }
 
     RingMember keyToRingMember(byte[] key) throws Exception {
-        HeapFiler filer = new HeapFiler(key);
+        HeapFiler filer = HeapFiler.fromBytes(key, key.length);
         UIO.readByteArray(filer, "ringName", new byte[4]);
         UIO.readByte(filer, "separator");
         return RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", new byte[4]));
@@ -186,7 +186,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
                     byte[] intBuffer = new byte[4];
                     ringIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         if (!valueTombstone) {
-                            HeapFiler filer = new HeapFiler(key);
+                            HeapFiler filer = HeapFiler.fromBytes(key, key.length);
                             byte[] ringName = UIO.readByteArray(filer, "ringName", intBuffer);
                             UIO.readByte(filer, "separator");
                             RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", intBuffer));
@@ -231,7 +231,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
         byte[] intBuffer = new byte[4];
         ringIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             if (!valueTombstone) {
-                HeapFiler filer = new HeapFiler(key);
+                HeapFiler filer = HeapFiler.fromBytes(key, key.length);
                 byte[] ringName = UIO.readByteArray(filer, "ringName", intBuffer);
                 UIO.readByte(filer, "separator");
                 RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", intBuffer));

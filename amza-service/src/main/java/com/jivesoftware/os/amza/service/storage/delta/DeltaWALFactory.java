@@ -1,12 +1,12 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
-import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.amza.api.wal.NoOpWALIndex;
 import com.jivesoftware.os.amza.api.wal.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALTx;
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
+import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -57,7 +57,7 @@ public class DeltaWALFactory {
                 long id = Long.parseLong(filename);
                 deltaWALs.add(createOrOpen(id));
             } catch (Exception x) {
-                LOG.warn("Encountered " + filename + " which doesn't conform to a WAL file naming conventions.");
+                LOG.warn("Encountered {} which doesn't conform to a WAL file naming conventions.", filename);
             }
         }
         Collections.sort(deltaWALs);

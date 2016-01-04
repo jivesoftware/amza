@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.filer;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
-import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.service.filer.AutoGrowingByteBufferBackedFiler;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -10,7 +9,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @author jonathan.colt
  */
-public class MemoryBackedWALFiler implements WALFiler, IReadable, IWriteable {
+public class MemoryBackedWALFiler implements WALFiler {
 
     private final AutoGrowingByteBufferBackedFiler filer;
     private final AtomicLong size = new AtomicLong(0);
@@ -30,21 +29,6 @@ public class MemoryBackedWALFiler implements WALFiler, IReadable, IWriteable {
             return current;
         }
         return filer.duplicateAll();
-    }
-
-    @Override
-    public int read() throws IOException {
-        return filer.read();
-    }
-
-    @Override
-    public int read(byte[] b) throws IOException {
-        return filer.read(b);
-    }
-
-    @Override
-    public int read(byte[] b, int _offset, int _len) throws IOException {
-        return filer.read(b, _offset, _len);
     }
 
     @Override

@@ -1,9 +1,9 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
@@ -15,23 +15,26 @@ import org.apache.commons.lang.mutable.MutableLong;
  */
 public class BinaryRowIO<K> implements RowIO<K> {
 
-    private static final int MAX_LEAPS = 64; //TODO config?
-    public static final int UPDATES_BETWEEN_LEAPS = 4_096; //TODO config?
-
     private final K key;
     private final BinaryRowReader rowReader;
     private final BinaryRowWriter rowWriter;
+    private final int updatesBetweenLeaps;
+    private final int maxLeaps;
 
     private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
 
     public BinaryRowIO(K key,
         BinaryRowReader rowReader,
-        BinaryRowWriter rowWriter) throws Exception {
+        BinaryRowWriter rowWriter,
+        int updatesBetweenLeaps,
+        int maxLeaps) throws Exception {
 
         this.key = key;
         this.rowReader = rowReader;
         this.rowWriter = rowWriter;
+        this.updatesBetweenLeaps = updatesBetweenLeaps;
+        this.maxLeaps = maxLeaps;
     }
 
     @Override
@@ -135,9 +138,9 @@ public class BinaryRowIO<K> implements RowIO<K> {
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream) throws Exception {
         int count = rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream);
-        if (updatesSinceLeap.addAndGet(count) >= UPDATES_BETWEEN_LEAPS) {
+        if (updatesSinceLeap.addAndGet(count) >= updatesBetweenLeaps) {
             LeapFrog latest = latestLeapFrog.get();
-            Leaps leaps = computeNextLeaps(txId, latest);
+            Leaps leaps = computeNextLeaps(txId, latest, maxLeaps);
             long leapFp = rowWriter.writeSystem(leaps.toBytes());
             latestLeapFrog.set(new LeapFrog(leapFp, leaps));
             updatesSinceLeap.set(0);
@@ -165,13 +168,13 @@ public class BinaryRowIO<K> implements RowIO<K> {
         rowWriter.close();
     }
 
-    static private Leaps computeNextLeaps(long lastTransactionId, BinaryRowIO.LeapFrog latest) {
+    static private Leaps computeNextLeaps(long lastTransactionId, BinaryRowIO.LeapFrog latest, int maxLeaps) {
         long[] fpIndex;
         long[] transactionIds;
         if (latest == null) {
             fpIndex = new long[0];
             transactionIds = new long[0];
-        } else if (latest.leaps.fpIndex.length < MAX_LEAPS) {
+        } else if (latest.leaps.fpIndex.length < maxLeaps) {
             int numLeaps = latest.leaps.fpIndex.length + 1;
             fpIndex = new long[numLeaps];
             transactionIds = new long[numLeaps];
@@ -181,35 +184,35 @@ public class BinaryRowIO<K> implements RowIO<K> {
             transactionIds[numLeaps - 1] = latest.leaps.lastTransactionId;
         } else {
             fpIndex = new long[0];
-            transactionIds = new long[MAX_LEAPS];
+            transactionIds = new long[maxLeaps];
 
-            long[] idealFpIndex = new long[MAX_LEAPS];
+            long[] idealFpIndex = new long[maxLeaps];
             // b^n = fp
             // b^32 = 123_456
             // ln b^32 = ln 123_456
             // 32 ln b = ln 123_456
             // ln b = ln 123_456 / 32
             // b = e^(ln 123_456 / 32)
-            double base = Math.exp(Math.log(latest.fp) / MAX_LEAPS);
+            double base = Math.exp(Math.log(latest.fp) / maxLeaps);
             for (int i = 0; i < idealFpIndex.length; i++) {
-                idealFpIndex[i] = latest.fp - (long) Math.pow(base, (MAX_LEAPS - i - 1));
+                idealFpIndex[i] = latest.fp - (long) Math.pow(base, (maxLeaps - i - 1));
             }
 
             double smallestDistance = Double.MAX_VALUE;
 
             for (int i = 0; i < latest.leaps.fpIndex.length; i++) {
-                long[] testFpIndex = new long[MAX_LEAPS];
+                long[] testFpIndex = new long[maxLeaps];
 
                 System.arraycopy(latest.leaps.fpIndex, 0, testFpIndex, 0, i);
-                System.arraycopy(latest.leaps.fpIndex, i + 1, testFpIndex, i, MAX_LEAPS - 1 - i);
-                testFpIndex[MAX_LEAPS - 1] = latest.fp;
+                System.arraycopy(latest.leaps.fpIndex, i + 1, testFpIndex, i, maxLeaps - 1 - i);
+                testFpIndex[maxLeaps - 1] = latest.fp;
 
                 double distance = euclidean(testFpIndex, idealFpIndex);
                 if (distance < smallestDistance) {
                     fpIndex = testFpIndex;
                     System.arraycopy(latest.leaps.transactionIds, 0, transactionIds, 0, i);
-                    System.arraycopy(latest.leaps.transactionIds, i + 1, transactionIds, i, MAX_LEAPS - 1 - i);
-                    transactionIds[MAX_LEAPS - 1] = latest.leaps.lastTransactionId;
+                    System.arraycopy(latest.leaps.transactionIds, i + 1, transactionIds, i, maxLeaps - 1 - i);
+                    transactionIds[maxLeaps - 1] = latest.leaps.lastTransactionId;
                     smallestDistance = distance;
                 }
             }

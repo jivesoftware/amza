@@ -6,10 +6,9 @@ import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.EmbeddedPartitionClient;
-import com.jivesoftware.os.amza.service.AmzaClientUpdates;
-import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.service.Partition;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -225,7 +224,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     long start = System.currentTimeMillis();
                     AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                     for (byte[] rawKey : rawKeys) {
-                        updates.set(rawKey, hexStringToByteArray(input.value));
+                        updates.set(rawKey, hexStringToByteArray(input.value), -1);
                     }
                     partition.commit(input.consistency,
                         getPrefix(input.prefix),
@@ -282,7 +281,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                                 updates.reset();
                             }
                             lastPrefix[0] = prefix;
-                            updates.remove(key);
+                            updates.remove(key, -1);
                             return true;
                         },
                         30_000L,

@@ -8,7 +8,7 @@ import java.io.IOException;
  *
  * @author jonathan.colt
  */
-public interface WALFiler extends IWriteable, IReadable {
+public interface WALFiler extends IWriteable {
 
     void eof() throws IOException;
 

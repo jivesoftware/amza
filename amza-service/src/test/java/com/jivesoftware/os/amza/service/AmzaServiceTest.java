@@ -17,6 +17,7 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -31,6 +32,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -205,13 +207,13 @@ public class AmzaServiceTest {
         final Random random = new Random();
         AtomicBoolean updating = new AtomicBoolean(true);
 
-        ExecutorService threadPool = Executors.newCachedThreadPool();
+        ExecutorService takerThreadPool = Executors.newFixedThreadPool(maxNumberOfServices + maxAddService);
         List<Future> takerFutures = new ArrayList<>();
         Took[] took = new Took[maxNumberOfServices];
         for (int i = 0; i < maxNumberOfServices; i++) {
             int serviceId = i;
             took[i] = new Took();
-            threadPool.submit(() -> {
+            takerThreadPool.submit(() -> {
                 RingMember ringMember = new RingMember("localhost-" + serviceId);
                 AmzaNode node = cluster.get(ringMember);
                 boolean tookToEnd = false;
@@ -235,31 +237,35 @@ public class AmzaServiceTest {
             });
         }
 
+        ExecutorService updateThreadPool = Executors.newFixedThreadPool(maxNumberOfServices + maxAddService);
         List<Future> updatesFutures = new ArrayList<>();
         for (int i = 0; i < maxUpdates; i++) {
-            updatesFutures.add(threadPool.submit(new Runnable() {
+            updatesFutures.add(updateThreadPool.submit(new Callable<Void>() {
                 int removeService = maxRemovedServices;
                 int addService = maxAddService;
                 int offService = maxOffServices;
 
                 @Override
-                public void run() {
+                public Void call() throws Exception {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
-                    try {
-                        if (node != null) {
-                            node.create(writeConsistency, partitionName, rowType);
-                            boolean tombstone = random.nextBoolean();
-                            String prefix = "a";
-                            String key = String.valueOf(random.nextInt(maxFields));
-                            byte[] indexPrefix = prefix.getBytes();
-                            byte[] indexKey = key.getBytes();
-                            node.update(writeConsistency, partitionName, indexPrefix, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
-                            Thread.sleep(delayBetweenUpdates);
-                            node.get(readConsistency, partitionName, indexPrefix, indexKey);
+                    if (node != null) {
+                        node.create(writeConsistency, partitionName, rowType);
+                        boolean tombstone = random.nextBoolean();
+                        String prefix = "a";
+                        String key = String.valueOf(random.nextInt(maxFields));
+                        byte[] indexPrefix = prefix.getBytes();
+                        byte[] indexKey = key.getBytes();
+                        while (true) {
+                            try {
+                                node.update(writeConsistency, partitionName, indexPrefix, indexKey, ("" + random.nextInt()).getBytes(), tombstone);
+                                Thread.sleep(delayBetweenUpdates);
+                                node.get(readConsistency, partitionName, indexPrefix, indexKey);
+                                break;
+                            } catch (DeltaOverCapacityException x) {
+                                System.out.println("Delta over capacity, waiting...");
+                                Thread.sleep(100);
+                            }
                         }
-                    } catch (Exception x) {
-                        System.out.println("Failed to update node: " + node);
-                        x.printStackTrace();
                     }
 
                     if (removeService > 0) {
@@ -306,6 +312,8 @@ public class AmzaServiceTest {
                         }
 
                     }
+
+                    return null;
                 }
             }));
         }
@@ -324,6 +332,9 @@ public class AmzaServiceTest {
             assertEquals(route.orderedMembers.size(), clusterNodes.size());
             assertNotNull(route.leader);
         }
+
+        takerThreadPool.shutdownNow();
+        updateThreadPool.shutdownNow();
     }
 
 }

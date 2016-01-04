@@ -74,11 +74,6 @@
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-shared</artifactId>
-            <version>0.169-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-api</artifactId>
             <version>0.169-SNAPSHOT</version>
         </dependency>

@@ -2,8 +2,8 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
-import com.jivesoftware.os.amza.shared.take.HighwaterStorage;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.take.HighwaterStorage;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
 
 /**
  * @author jonathan.colt

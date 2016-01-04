@@ -17,9 +17,9 @@ import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshal
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
 import com.jivesoftware.os.amza.service.storage.binary.MemoryBackedRowIOProvider;
-import com.jivesoftware.os.amza.shared.filer.HeapByteBufferFactory;
-import com.jivesoftware.os.amza.shared.stats.IoStats;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
+import com.jivesoftware.os.amza.service.stats.IoStats;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;

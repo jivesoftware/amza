@@ -6,7 +6,7 @@ import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.shared.ring.RingTopology;
+import com.jivesoftware.os.amza.service.ring.RingTopology;
 import java.io.IOException;
 
 /**

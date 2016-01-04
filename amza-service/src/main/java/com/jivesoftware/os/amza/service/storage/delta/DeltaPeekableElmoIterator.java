@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.shared.wal.KeyUtil;
-import com.jivesoftware.os.amza.shared.wal.WALPointer;
-import com.jivesoftware.os.amza.shared.wal.WALValue;
+import com.jivesoftware.os.amza.api.wal.KeyUtil;
+import com.jivesoftware.os.amza.api.wal.WALPointer;
+import com.jivesoftware.os.amza.api.wal.WALValue;
 import java.util.AbstractMap;
 import java.util.Iterator;
 import java.util.Map;

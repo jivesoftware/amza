@@ -15,7 +15,6 @@
     <modules>
         <module>inheritance-poms</module>
         <module>amza-service</module>
-        <module>amza-shared</module>
         <module>amza-api</module>
         <module>amza-client</module>
         <module>amza-berkeleydb-storage</module>

@@ -43,10 +43,10 @@ import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientRes
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaRestClient;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
-import com.jivesoftware.os.amza.shared.AmzaInstance;
-import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.stats.AmzaStats;
-import com.jivesoftware.os.amza.shared.take.AvailableRowsTaker;
+import com.jivesoftware.os.amza.service.AmzaInstance;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.ui.AmzaUIInitializer;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;

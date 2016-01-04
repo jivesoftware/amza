@@ -19,11 +19,11 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
-import com.jivesoftware.os.amza.shared.scan.RangeScannable;
-import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.scan.RangeScannable;
+import com.jivesoftware.os.amza.api.scan.RowStream;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 
 public class PartitionStore implements RangeScannable {
 

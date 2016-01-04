@@ -6,9 +6,9 @@ import com.jivesoftware.os.amza.service.storage.WALStorage;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.amza.service.storage.binary.RowIOProvider;
-import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.WALIndex;
-import com.jivesoftware.os.amza.shared.wal.WALIndexProvider;
+import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.WALIndex;
+import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 
 /**

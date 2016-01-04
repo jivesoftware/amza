@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service.replication.http.endpoints;
 
 import com.jivesoftware.os.amza.api.filer.IWriteable;
-import com.jivesoftware.os.amza.shared.filer.HeapFiler;
+import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import java.io.IOException;
 import org.glassfish.jersey.server.ChunkedOutput;
 

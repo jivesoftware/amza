@@ -13,13 +13,13 @@ import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
-import com.jivesoftware.os.amza.shared.scan.RowChanges;
-import com.jivesoftware.os.amza.shared.scan.RowStream;
-import com.jivesoftware.os.amza.shared.scan.RowsChanged;
-import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.stream.KeyValueStream;
-import com.jivesoftware.os.amza.shared.wal.PrimaryRowMarshaller;
-import com.jivesoftware.os.amza.shared.wal.WALUpdated;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
+import com.jivesoftware.os.amza.api.scan.RowStream;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 
 /**

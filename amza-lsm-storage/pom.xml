@@ -24,7 +24,7 @@
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-shared</artifactId>
+            <artifactId>amza-api</artifactId>
             <version>0.169-SNAPSHOT</version>
         </dependency>
         <dependency>
@@ -40,12 +40,6 @@
             <groupId>com.sleepycat</groupId>
             <artifactId>je</artifactId>
             <version>6.2.31</version>
-        </dependency>
-        <dependency>
-            <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-service</artifactId>
-            <version>0.169-SNAPSHOT</version>
-            <type>jar</type>
         </dependency>
     </dependencies>
 </project>

@@ -10,19 +10,19 @@ import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.amza.lsm.pointers.api.NextPointer;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerIndex;
 import com.jivesoftware.os.amza.lsm.pointers.api.PointerStream;
-import com.jivesoftware.os.amza.shared.scan.CompactionWALIndex;
-import com.jivesoftware.os.amza.shared.stream.KeyContainedStream;
-import com.jivesoftware.os.amza.shared.stream.KeyValuePointerStream;
-import com.jivesoftware.os.amza.shared.stream.KeyValues;
-import com.jivesoftware.os.amza.shared.stream.MergeTxKeyPointerStream;
-import com.jivesoftware.os.amza.shared.stream.TxFpStream;
-import com.jivesoftware.os.amza.shared.stream.TxKeyPointers;
-import com.jivesoftware.os.amza.shared.stream.WALKeyPointerStream;
-import com.jivesoftware.os.amza.shared.stream.WALKeyPointers;
-import com.jivesoftware.os.amza.shared.stream.WALMergeKeyPointerStream;
-import com.jivesoftware.os.amza.shared.wal.KeyUtil;
-import com.jivesoftware.os.amza.shared.wal.WALIndex;
-import com.jivesoftware.os.amza.shared.wal.WALKey;
+import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
+import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
+import com.jivesoftware.os.amza.api.stream.KeyValues;
+import com.jivesoftware.os.amza.api.stream.MergeTxKeyPointerStream;
+import com.jivesoftware.os.amza.api.stream.TxFpStream;
+import com.jivesoftware.os.amza.api.stream.TxKeyPointers;
+import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
+import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
+import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
+import com.jivesoftware.os.amza.api.wal.KeyUtil;
+import com.jivesoftware.os.amza.api.wal.WALIndex;
+import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;
@@ -32,8 +32,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static com.jivesoftware.os.amza.shared.wal.WALKey.rawKeyKey;
-import static com.jivesoftware.os.amza.shared.wal.WALKey.rawKeyPrefix;
+import static com.jivesoftware.os.amza.api.wal.WALKey.rawKeyKey;
+import static com.jivesoftware.os.amza.api.wal.WALKey.rawKeyPrefix;
 
 /**
  * @author jonathan.colt

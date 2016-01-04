@@ -17,7 +17,7 @@ package com.jivesoftware.os.amza.service.storage.filer;
 
 import com.jivesoftware.os.amza.api.filer.IFiler;
 import com.jivesoftware.os.amza.api.filer.IReadable;
-import com.jivesoftware.os.amza.shared.filer.ByteBufferBackedFiler;
+import com.jivesoftware.os.amza.service.filer.ByteBufferBackedFiler;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;

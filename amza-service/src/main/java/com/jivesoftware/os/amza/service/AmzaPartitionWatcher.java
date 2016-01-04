@@ -16,8 +16,8 @@
 package com.jivesoftware.os.amza.service;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.shared.scan.RowChanges;
-import com.jivesoftware.os.amza.shared.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;

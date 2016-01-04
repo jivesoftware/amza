@@ -4,7 +4,7 @@ import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
-import com.jivesoftware.os.amza.shared.stats.IoStats;
+import com.jivesoftware.os.amza.service.stats.IoStats;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;

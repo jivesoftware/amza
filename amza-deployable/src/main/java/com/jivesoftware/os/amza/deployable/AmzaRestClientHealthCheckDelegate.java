@@ -8,7 +8,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaRestClient;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaRestClient.RingLeader;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaRestClient.StateMessageCause;
-import com.jivesoftware.os.amza.shared.ring.RingTopology;
+import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
 import com.jivesoftware.os.routing.bird.health.api.TimerHealthCheckConfig;

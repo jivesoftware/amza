@@ -130,18 +130,20 @@ public class StorageVersionProvider implements RowChanges {
         byte[] intBuffer = new byte[4];
 
         systemWALStorage.rangeScan(PartitionCreator.PARTITION_VERSION_INDEX, null, fromKey, null, toKey,
-            (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                HeapFiler filer = HeapFiler.fromBytes(key, key.length);
-                UIO.readByte(filer, "serializationVersion");
-                RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));
-                PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition", intBuffer));
-                StorageVersion storageVersion = StorageVersion.fromBytes(value);
 
-                if (storageVersion.stripeVersion == stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
-                    return stream.stream(partitionName, ringMember, storageVersion);
-                } else {
-                    return true;
+            (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                if (valueTimestamp != -1 && !valueTombstoned) {
+                    HeapFiler filer = HeapFiler.fromBytes(key, key.length);
+                    UIO.readByte(filer, "serializationVersion");
+                    RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "member", intBuffer));
+                    PartitionName partitionName = PartitionName.fromBytes(UIO.readByteArray(filer, "partition", intBuffer));
+                    StorageVersion storageVersion = StorageVersion.fromBytes(value);
+
+                    if (storageVersion.stripeVersion == stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
+                        return stream.stream(partitionName, ringMember, storageVersion);
+                    }
                 }
+                return true;
             });
     }
 

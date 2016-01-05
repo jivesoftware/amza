@@ -131,8 +131,8 @@ public class SystemPartition implements Partition {
                 fromKey,
                 toPrefix,
                 toKey,
-                (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
+                -> valueTombstoned || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
         }
     }
 

@@ -70,7 +70,8 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
             byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
             long removeTimestamp = orderIdProvider.nextId();
             systemWALStorage.rangeScan(PartitionCreator.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
-                (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    // could skip entries with valueTombstoned, but we ensure better consistency by adding a tombstone with a newer timestamp
                     systemWALStorage.update(PartitionCreator.HIGHWATER_MARK_INDEX, prefix,
                         (highwaters, txKeyValueStream) -> txKeyValueStream.row(-1, key, value, removeTimestamp, true, removeTimestamp),
                         walUpdated);
@@ -201,8 +202,10 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         byte[] toKey = WALKey.prefixUpperExclusive(fromKey);
         List<RingMemberHighwater> highwaters = new ArrayList<>();
         systemWALStorage.rangeScan(PartitionCreator.HIGHWATER_MARK_INDEX, null, fromKey, null, toKey,
-            (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                highwaters.add(new RingMemberHighwater(getMember(key), UIO.bytesLong(value)));
+            (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                if (valueTimestamp != -1 && !valueTombstoned) {
+                    highwaters.add(new RingMemberHighwater(getMember(key), UIO.bytesLong(value)));
+                }
                 return true;
             });
         return new WALHighwater(highwaters);

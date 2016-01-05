@@ -8,16 +8,17 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.RingMembership;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
-import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALValue;
+import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
+import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -57,7 +58,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         this.hardFlush = hardFlush;
     }
 
-    public void open(TxPartitionState txPartitionState) throws Exception {
+    public void open(TxPartitionState txPartitionState, RingMembership ringMembership) throws Exception {
 
         PartitionStore partitionIndexStore = get(PartitionCreator.REGION_INDEX);
         get(PartitionCreator.RING_INDEX);
@@ -75,24 +76,26 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         final AtomicInteger total = new AtomicInteger(0);
         partitionIndexStore.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             final PartitionName partitionName = PartitionName.fromBytes(key);
-            try {
-                total.incrementAndGet();
-                openExecutor.submit(() -> {
-                    try {
-                        txPartitionState.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
-                            if (versionedPartitionName != null) {
-                                get(versionedPartitionName);
-                            }
-                            return null;
-                        });
-                        numOpened.incrementAndGet();
-                    } catch (Throwable t) {
-                        LOG.warn("Encountered the following opening partition:" + partitionName, t);
-                        numFailed.incrementAndGet();
-                    }
-                });
-            } catch (Exception x) {
-                LOG.warn("Encountered the following getting properties for partition:" + partitionName, x);
+            if (ringMembership.isMemberOfRing(partitionName.getRingName())) {
+                try {
+                    total.incrementAndGet();
+                    openExecutor.submit(() -> {
+                        try {
+                            txPartitionState.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
+                                if (versionedPartitionName != null) {
+                                    get(versionedPartitionName);
+                                }
+                                return null;
+                            });
+                            numOpened.incrementAndGet();
+                        } catch (Throwable t) {
+                            LOG.warn("Encountered the following opening partition:" + partitionName, t);
+                            numFailed.incrementAndGet();
+                        }
+                    });
+                } catch (Exception x) {
+                    LOG.warn("Encountered the following getting properties for partition:" + partitionName, x);
+                }
             }
             return true;
         });
@@ -155,12 +158,15 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         return store;
     }
 
-    public PartitionStore remove(VersionedPartitionName versionedPartitionName) {
+    public void delete(VersionedPartitionName versionedPartitionName) throws Exception {
         ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.get(versionedPartitionName.getPartitionName());
         if (versionedStores != null) {
-            return versionedStores.remove(versionedPartitionName.getPartitionVersion());
+            PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
+            if (partitionStore != null) {
+                partitionStore.delete();
+                versionedStores.remove(versionedPartitionName.getPartitionVersion());
+            }
         }
-        return null;
     }
 
     private PartitionStore open(VersionedPartitionName versionedPartitionName, PartitionProperties properties) throws Exception {

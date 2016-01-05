@@ -119,7 +119,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean delete() throws Exception {
+    public void delete() throws Exception {
         close();
         lock.acquire(numPermits);
         try {
@@ -128,11 +128,9 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 if (wali != null) {
                     wali.close();
                 }
-                removeDatabase(Type.active);
-                removeDatabase(Type.backup);
-                removeDatabase(Type.compacted);
-                removeDatabase(Type.compacting);
-                return true;
+                for (Type type : Type.values()) {
+                    removeDatabase(type);
+                }
             }
         } finally {
             lock.release(numPermits);

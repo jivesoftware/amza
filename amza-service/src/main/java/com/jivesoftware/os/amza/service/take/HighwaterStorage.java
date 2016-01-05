@@ -34,6 +34,6 @@ public interface HighwaterStorage {
 
     void flush(Callable<Void> preFlush) throws Exception;
 
-    boolean expunge(VersionedPartitionName versionedPartitionName) throws Exception;
+    void delete(VersionedPartitionName versionedPartitionName) throws Exception;
 
 }

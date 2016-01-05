@@ -283,9 +283,8 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean delete() throws Exception {
+    public void delete() throws Exception {
         index.clear();
-        return true;
     }
 
     private static class TxFp {

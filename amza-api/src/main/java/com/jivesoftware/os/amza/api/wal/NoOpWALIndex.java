@@ -127,8 +127,7 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public boolean delete() throws Exception {
-        return true;
+    public void delete() throws Exception {
     }
 
 }

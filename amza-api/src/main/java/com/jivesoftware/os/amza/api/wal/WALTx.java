@@ -24,7 +24,7 @@ public interface WALTx<I> {
 
     void flush(boolean fsync) throws Exception;
 
-    boolean delete(boolean ifEmpty) throws Exception;
+    void delete() throws Exception;
 
     Optional<Compacted<I>> compact(RowType compactToRowType,
         long removeTombstonedOlderThanTimestampId,

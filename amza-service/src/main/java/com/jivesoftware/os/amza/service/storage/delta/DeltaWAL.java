@@ -256,7 +256,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
 
     void destroy() throws Exception {
         synchronized (oneTxAtATimeLock) {
-            wal.delete(false);
+            wal.delete();
         }
     }
 

@@ -40,7 +40,7 @@ public interface WALIndex extends RangeScannablePointers {
 
     void close() throws Exception;
 
-    boolean delete() throws Exception;
+    void delete() throws Exception;
 
     void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors);
 

@@ -156,19 +156,17 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         return versionedPartitionName;
     }
 
-    public boolean expunge() throws Exception {
-        boolean expunged = true;
+    public void delete() throws Exception {
         acquireAll();
         try {
-            expunged &= walTx.delete(false);
+            walTx.delete();
             I wali = walIndex.get();
             if (wali != null) {
-                expunged &= wali.delete();
+                wali.delete();
             }
         } finally {
             releaseAll();
         }
-        return expunged;
     }
 
     public boolean compactableTombstone(long removeTombstonedOlderTimestampId, long ttlTimestampId) throws Exception {

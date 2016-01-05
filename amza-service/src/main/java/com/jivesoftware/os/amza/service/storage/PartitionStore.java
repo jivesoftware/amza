@@ -113,4 +113,7 @@ public class PartitionStore implements RangeScannable {
         return walStorage.highestTxId();
     }
 
+    public void delete() throws Exception {
+        walStorage.delete();
+    }
 }

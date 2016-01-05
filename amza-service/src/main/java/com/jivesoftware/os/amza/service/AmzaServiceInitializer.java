@@ -192,10 +192,10 @@ public class AmzaServiceInitializer {
         ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache = new ConcurrentHashMap<>();
         ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
         AtomicLong nodeCacheId = new AtomicLong(0);
-        AmzaRingStoreReader amzaRingReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringsCache, ringMemberRingNamesCache, nodeCacheId);
+        AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringsCache, ringMemberRingNamesCache, nodeCacheId);
 
         WALUpdated walUpdated = (versionedPartitionName, txId) -> {
-            takeCoordinator.update(amzaRingReader, Preconditions.checkNotNull(versionedPartitionName), txId);
+            takeCoordinator.update(ringStoreReader, Preconditions.checkNotNull(versionedPartitionName), txId);
         };
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
@@ -249,7 +249,7 @@ public class AmzaServiceInitializer {
         long startupVersion = orderIdProvider.nextId();
         Member rootAquariumMember = ringMember.asAquariumMember();
         AmzaLivelinessStorage livelinessStorage = new AmzaLivelinessStorage(systemWALStorage, walUpdated, rootAquariumMember, startupVersion);
-        AtQuorum livelinessAtQuorm = count -> count > amzaRingReader.getRingSize(AmzaRingReader.SYSTEM_RING) / 2;
+        AtQuorum livelinessAtQuorm = count -> count > ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING) / 2;
         Liveliness liveliness = new Liveliness(System::currentTimeMillis,
             livelinessStorage,
             rootAquariumMember,
@@ -260,7 +260,7 @@ public class AmzaServiceInitializer {
         AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(startupVersion,
             ringMember,
             orderIdProvider,
-            amzaRingReader,
+            ringStoreReader,
             systemWALStorage,
             storageVersionProvider,
             partitionIndex,
@@ -271,7 +271,7 @@ public class AmzaServiceInitializer {
             awaitOnline);
 
         PartitionStateStorage partitionStateStorage = new PartitionStateStorage(ringMember,
-            amzaRingReader,
+            ringStoreReader,
             aquariumProvider,
             storageVersionProvider,
             takeCoordinator,
@@ -280,19 +280,19 @@ public class AmzaServiceInitializer {
         amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), storageVersionProvider);
         amzaPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
 
-        partitionIndex.open(partitionStateStorage);
+        partitionIndex.open(partitionStateStorage, ringStoreReader);
         // cold start
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             long partitionVersion = partitionStateStorage.getPartitionVersion(versionedPartitionName.getPartitionName());
             if (partitionVersion == versionedPartitionName.getPartitionVersion()) {
-                takeCoordinator.update(amzaRingReader, versionedPartitionName, partitionStore.highestTxId());
+                takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
             } else {
                 LOG.warn("Version:{} wasn't aligned with versioned partition:{}", partitionVersion, versionedPartitionName);
             }
         }
 
-        takeCoordinator.start(amzaRingReader, aquariumProvider);
+        takeCoordinator.start(ringStoreReader, aquariumProvider);
 
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
@@ -348,7 +348,7 @@ public class AmzaServiceInitializer {
             allRowChanges);
 
         HighestPartitionTx<Void> takeHighestPartitionTx = (versionedPartitionName, livelyEndState, highestTxId) -> {
-            takeCoordinator.update(amzaRingReader, versionedPartitionName, highestTxId);
+            takeCoordinator.update(ringStoreReader, versionedPartitionName, highestTxId);
             return null;
         };
 
@@ -403,7 +403,7 @@ public class AmzaServiceInitializer {
             });
         }
 
-        AmzaRingStoreWriter amzaRingWriter = new AmzaRingStoreWriter(amzaRingReader,
+        AmzaRingStoreWriter amzaRingWriter = new AmzaRingStoreWriter(ringStoreReader,
             systemWALStorage,
             orderIdProvider,
             walUpdated,
@@ -421,7 +421,7 @@ public class AmzaServiceInitializer {
             walUpdated,
             config.flushHighwatersAfterNUpdates);
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
-            amzaRingReader,
+            ringStoreReader,
             ringHost,
             systemHighwaterStorage,
             rowsTakerFactory.create(),
@@ -443,14 +443,14 @@ public class AmzaServiceInitializer {
             config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
-        PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionProvider, amzaRingReader, partitionStateStorage,
+        PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionProvider, ringStoreReader, partitionStateStorage,
             partitionStripeProvider);
 
         AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
 
         return new AmzaService(orderIdProvider,
             amzaStats,
-            amzaRingReader,
+            ringStoreReader,
             amzaRingWriter,
             ackWaters,
             systemWALStorage,

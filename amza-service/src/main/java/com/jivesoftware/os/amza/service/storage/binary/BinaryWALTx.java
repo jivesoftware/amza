@@ -3,13 +3,13 @@ package com.jivesoftware.os.amza.service.storage.binary;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.api.AmzaVersionConstants;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.AmzaVersionConstants;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALTx;
@@ -168,7 +168,7 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
                 final MutableLong repair = new MutableLong();
                 walIndex.merge(
                     stream -> primaryRowMarshaller.fromRows(txFpRowStream -> {
-                        long[] commitedUpToTxId = {Long.MIN_VALUE};
+                        long[] commitedUpToTxId = { Long.MIN_VALUE };
                         return io.reverseScan((rowFP, rowTxId, rowType, row) -> {
                             if (rowType.isPrimary()) {
                                 if (!txFpRowStream.stream(rowTxId, rowFP, rowType, row)) {
@@ -203,19 +203,11 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
     }
 
     @Override
-    public boolean delete(boolean ifEmpty) throws Exception {
+    public void delete() throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
-            if (!ifEmpty || io.sizeInBytes() == 0) {
-                try {
-                    io.close();
-                } catch (Exception x) {
-                    LOG.warn("Failed to close IO before deleting WAL: {}", new Object[]{io.getKey()}, x);
-                }
-                ioProvider.delete(io.getKey());
-                return true;
-            }
-            return false;
+            io.close();
+            ioProvider.delete(io.getKey());
         } finally {
             compactionLock.release(NUM_PERMITS);
         }

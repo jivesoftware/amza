@@ -127,7 +127,7 @@ public class DeltaStripeWALStorageNGTest {
             }
         };
 
-        partitionIndex.open(txPartitionState);
+        partitionIndex.open(txPartitionState, ringName -> true);
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,

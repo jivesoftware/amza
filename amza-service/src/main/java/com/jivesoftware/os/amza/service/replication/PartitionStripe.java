@@ -75,12 +75,8 @@ public class PartitionStripe {
         return storage.getAwakeCompactionLock();
     }
 
-    boolean expungePartition(VersionedPartitionName versionedPartitionName) throws Exception {
-        PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-        if (partitionStore != null) {
-            return storage.expunge(versionedPartitionName, partitionStore.getWalStorage());
-        }
-        return false;
+    void deleteDelta(VersionedPartitionName versionedPartitionName) throws Exception {
+        storage.delete(versionedPartitionName);
     }
 
     public void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {

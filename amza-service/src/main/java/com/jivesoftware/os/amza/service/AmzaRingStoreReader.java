@@ -4,6 +4,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.RingMembership;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
@@ -27,7 +28,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class AmzaRingStoreReader implements AmzaRingReader {
+public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -90,6 +91,7 @@ public class AmzaRingStoreReader implements AmzaRingReader {
         }
     }
 
+    @Override
     public boolean isMemberOfRing(byte[] ringName) throws Exception {
         return getRing(ringName).rootMemberIndex >= 0;
     }

@@ -60,7 +60,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public boolean expunge(VersionedPartitionName versionedPartitionName) throws Exception {
+    public void delete(VersionedPartitionName versionedPartitionName) throws Exception {
         bigBird.acquire();
         try {
             for (ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> got : hostToPartitionToHighwaterUpdates.values()) {
@@ -76,7 +76,6 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                         walUpdated);
                     return true;
                 });
-            return true;
         } finally {
             bigBird.release();
         }

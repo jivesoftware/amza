@@ -127,11 +127,10 @@ public class DeltaStripeWALStorage {
         return awakeCompactionsLock;
     }
 
-    public boolean expunge(VersionedPartitionName versionedPartitionName, WALStorage walStorage) throws Exception {
+    public void delete(VersionedPartitionName versionedPartitionName) throws Exception {
         acquireAll();
         try {
             partitionDeltas.remove(versionedPartitionName);
-            return true;
         } finally {
             releaseAll();
         }

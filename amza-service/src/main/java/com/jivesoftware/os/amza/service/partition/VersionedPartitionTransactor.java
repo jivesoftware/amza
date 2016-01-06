@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.service.partition;
 
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.aquarium.LivelyEndState;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -21,29 +21,27 @@ public class VersionedPartitionTransactor {
         this.numPermits = numPermits;
     }
 
-    public <R> R doWithOne(VersionedPartitionName versionedPartitionName,
-        LivelyEndState livelyEndState,
+    public <R> R doWithOne(VersionedAquarium versionedAquarium,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedPartitionName, livelyEndState, 1, tx);
+        return doWith(versionedAquarium, 1, tx);
     }
 
-    public <R> R doWithAll(VersionedPartitionName versionedPartitionName,
-        LivelyEndState livelyEndState,
+    public <R> R doWithAll(VersionedAquarium versionedAquarium,
         PartitionTx<R> tx) throws Exception {
 
-        return doWith(versionedPartitionName, livelyEndState, numPermits, tx);
+        return doWith(versionedAquarium, numPermits, tx);
     }
 
-    private <R> R doWith(VersionedPartitionName versionedPartitionName,
-        LivelyEndState livelyEndState,
+    private <R> R doWith(VersionedAquarium versionedAquarium,
         int count,
         PartitionTx<R> tx) throws Exception {
 
+        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
         Semaphore semaphore = semaphore(versionedPartitionName);
         semaphore.acquire(count);
         try {
-            return tx.tx(versionedPartitionName, livelyEndState);
+            return tx.tx(versionedAquarium);
         } finally {
             semaphore.release(count);
         }

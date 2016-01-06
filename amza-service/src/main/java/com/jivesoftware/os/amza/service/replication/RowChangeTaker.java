@@ -5,31 +5,34 @@ import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
-import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.service.storage.PartitionIndex;
-import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
-import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.api.scan.CommitTo;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.wal.MemoryWALUpdates;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
+import com.jivesoftware.os.amza.api.wal.WALRow;
+import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
+import com.jivesoftware.os.amza.service.NotARingMemberException;
+import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
+import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
+import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
+import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.amza.service.take.RowsTaker.StreamingRowsResult;
-import com.jivesoftware.os.amza.api.wal.MemoryWALUpdates;
-import com.jivesoftware.os.amza.api.wal.WALRow;
+import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -37,6 +40,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -303,7 +307,7 @@ public class RowChangeTaker implements RowChanges {
                 } catch (InterruptedException ie) {
                     return;
                 } catch (Exception x) {
-                    LOG.error("Failed to take partitions updated:{}", new Object[]{remoteRingMember}, x);
+                    LOG.error("Failed to take partitions updated:{}", new Object[] { remoteRingMember }, x);
                     try {
                         Thread.sleep(1_000);
                     } catch (InterruptedException ie) {
@@ -315,11 +319,23 @@ public class RowChangeTaker implements RowChanges {
 
         public boolean consume(Predicate<VersionedPartitionName> partitionNamePredicate) throws Exception {
             boolean consumed = false;
-            for (VersionedPartitionName remoteVersionedPartitionName : availablePartitionTxIds.keySet()) {
+            Iterator<VersionedPartitionName> iter = availablePartitionTxIds.keySet().iterator();
+            while (iter.hasNext()) {
+                VersionedPartitionName remoteVersionedPartitionName = iter.next();
                 if (partitionNamePredicate.test(remoteVersionedPartitionName)) {
                     SessionedTxId sessionedTxId = availablePartitionTxIds.remove(remoteVersionedPartitionName);
                     if (sessionedTxId != null) {
-                        consumed |= consumePartitionTxId(remoteVersionedPartitionName, sessionedTxId);
+                        try {
+                            consumed |= consumePartitionTxId(remoteVersionedPartitionName, sessionedTxId);
+                        } catch (PropertiesNotPresentException e) {
+                            LOG.info("Properties not present yet for {}", remoteVersionedPartitionName.getPartitionName());
+                        } catch (PartitionIsExpungedException e) {
+                            LOG.warn("Partition is expunged for {}", remoteVersionedPartitionName.getPartitionName());
+                            iter.remove();
+                        } catch (NotARingMemberException e) {
+                            LOG.warn("Not a ring member for {}", remoteVersionedPartitionName.getPartitionName());
+                            iter.remove();
+                        }
                     }
                 }
             }
@@ -344,56 +360,41 @@ public class RowChangeTaker implements RowChanges {
              partitionName,
              remoteVersionedPartitionName.getPartitionVersion());*/
             Long[] highwater = new Long[1];
-            VersionedPartitionName currentLocalVersionedPartitionName = partitionStateStorage.tx(partitionName,
-                (localVersionedPartitionName, livelyEndState) -> {
-                    if (localVersionedPartitionName == null) {
-                        PartitionProperties properties = partitionIndex.getProperties(partitionName);
-                        if (properties == null) {
-                            //LOG.info("MISSING PROPERTIES: local:{} remote:{}  txId:{} partition:{} state:{}",
-                            //      ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
-                            return null;
-                        }
-                        VersionedState versionedState = partitionStateStorage.getLocalVersionedState(partitionName);
-                        localVersionedPartitionName = new VersionedPartitionName(partitionName, versionedState.getPartitionVersion());
-                        partitionStateStorage.wipeTheGlass(localVersionedPartitionName);
-                        //LOG.info("FORCE KETCHUP: local:{} remote:{}  txId:{} partition:{} state:{}",
-                        //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
-                    }
-
-                    highwater[0] = systemHighwaterStorage.get(remoteRingMember, localVersionedPartitionName);
-                    PartitionStore store = partitionIndex.get(localVersionedPartitionName);
-                    if (store == null) {
-                        //LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} state:{}",
+            VersionedPartitionName currentLocalVersionedPartitionName = partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                VersionedPartitionName localVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                highwater[0] = systemHighwaterStorage.get(remoteRingMember, localVersionedPartitionName);
+                PartitionStore store = partitionIndex.get(localVersionedPartitionName);
+                if (store == null) {
+                    //LOG.info("NO STORAGE: local:{} remote:{}  txId:{} partition:{} state:{}",
+                    //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
+                    return null;
+                }
+                if (livelyEndState.getCurrentState() == State.expunged) {
+                    //LOG.info("EXPUNGED: local:{} remote:{}  txId:{} partition:{} localState:{} remoteState:{}",
+                    //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, partitionState, remoteState);
+                    return null;
+                }
+                if (partitionName.isSystemPartition()) {
+                    if (highwater[0] != null && highwater[0] >= sessionedTxId.txId) {
+                        //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                         return null;
+                    } else {
+                        return localVersionedPartitionName;
                     }
-                    if (livelyEndState.getCurrentState() == State.expunged) {
-                        //LOG.info("EXPUNGED: local:{} remote:{}  txId:{} partition:{} localState:{} remoteState:{}",
-                        //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, partitionState, remoteState);
-                        return null;
-                    }
-                    if (partitionName.isSystemPartition()) {
-                        if (highwater[0] != null && highwater[0] >= sessionedTxId.txId) {
+                } else {
+                    return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
+                        if (highwater[0] != null && highwater[0] >= sessionedTxId.txId && livelyEndState.isOnline()) {
                             //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
                             //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                             return null;
                         } else {
                             return localVersionedPartitionName;
                         }
-                    } else {
-                        VersionedPartitionName txLocalVersionPartitionName = localVersionedPartitionName;
-                        return partitionStripeProvider.txPartition(partitionName,
-                            (stripe, highwaterStorage) -> {
-                                if (highwater[0] != null && highwater[0] >= sessionedTxId.txId && livelyEndState.isOnline()) {
-                                    //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
-                                    //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
-                                    return null;
-                                } else {
-                                    return txLocalVersionPartitionName;
-                                }
-                            });
-                    }
-                });
+                    });
+                }
+            });
 
             /*if (currentLocalVersionedPartitionName == null) {
                 LOG.info("PUSHBACK: remote:{} partition:{}",
@@ -546,7 +547,7 @@ public class RowChangeTaker implements RowChanges {
                             }
 
                             // TODO could avoid leadership lookup for partitions that have been configs to not care about leadership.
-                            Waterline leader = partitionStateStorage.getLeader(localVersionedPartitionName);
+                            Waterline leader = partitionStateStorage.tx(partitionName, VersionedAquarium::getLeader);
                             long leadershipToken = (leader != null) ? leader.getTimestamp() : -1;
                             TakeRowStream takeRowStream = new TakeRowStream(amzaStats,
                                 remoteVersionedPartitionName,
@@ -562,10 +563,19 @@ public class RowChangeTaker implements RowChanges {
                                 if (takeFailureListener.isPresent()) {
                                     takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                 }
-                                partitionStateStorage.tookFully(remoteRingMember,
+                                //TODO REVIEW!
+                                partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                                    VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                                    if (currentVersionedPartitionName.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
+                                        versionedAquarium.tookFully(remoteRingMember, leadershipToken);
+                                        versionedAquarium.wipeTheGlass();
+                                    }
+                                    return null;
+                                });
+                                /*partitionStateStorage.tookFully(remoteRingMember,
                                     leadershipToken,
                                     localVersionedPartitionName);
-                                partitionStateStorage.wipeTheGlass(localVersionedPartitionName);
+                                partitionStateStorage.wipeTheGlass(localVersionedPartitionName);*/
                             } else {
                                 int updates = 0;
 
@@ -586,7 +596,7 @@ public class RowChangeTaker implements RowChanges {
                                     if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                         LOG.warn("Error while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                         LOG.trace("Error while taking from member:{} host:{} partition:{}",
-                                            new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, rowsResult.error);
+                                            new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, rowsResult.error);
                                     }
                                     amzaStats.takeErrors.add(remoteRingMember);
                                 } else if (rowsResult.unreachable != null) {
@@ -598,7 +608,7 @@ public class RowChangeTaker implements RowChanges {
                                     if (amzaStats.takeErrors.count(remoteRingMember) == 0) {
                                         LOG.debug("Unreachable while taking from member:{} host:{}", remoteRingMember, remoteRingHost);
                                         LOG.trace("Unreachable while taking from member:{} host:{} partition:{}",
-                                            new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName},
+                                            new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName },
                                             rowsResult.unreachable);
                                     }
                                     amzaStats.takeErrors.add(remoteRingMember);
@@ -624,13 +634,30 @@ public class RowChangeTaker implements RowChanges {
                                     if (takeFailureListener.isPresent()) {
                                         takeFailureListener.get().tookFrom(remoteRingMember, remoteRingHost);
                                     }
-                                    partitionStateStorage.tookFully(remoteRingMember, rowsResult.leadershipToken, localVersionedPartitionName);
-                                    partitionStateStorage.wipeTheGlass(localVersionedPartitionName);
+                                    //TODO REVIEW!
+                                    partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                                        VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                                        if (currentVersionedPartitionName.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
+                                            versionedAquarium.tookFully(remoteRingMember, leadershipToken);
+                                            versionedAquarium.wipeTheGlass();
+                                        }
+                                        return null;
+                                    });
                                 } else if (rowsResult.error == null) {
-                                    partitionStateStorage.wipeTheGlass(localVersionedPartitionName);
+                                    partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                                        versionedAquarium.wipeTheGlass();
+                                        return null;
+                                    });
                                 } else if (rowsResult.leadershipToken > 0 && rowsResult.partitionVersion == -1) {
                                     // Took from node in bootstrap.
-                                    partitionStateStorage.tookFully(remoteRingMember, rowsResult.leadershipToken, localVersionedPartitionName);
+                                    //TODO REVIEW!
+                                    partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                                        VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                                        if (currentVersionedPartitionName.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
+                                            versionedAquarium.tookFully(remoteRingMember, leadershipToken);
+                                        }
+                                        return null;
+                                    });
                                 }
                                 if (updates > 0) {
                                     flushed = true;
@@ -648,7 +675,7 @@ public class RowChangeTaker implements RowChanges {
                                     leadershipToken);
                             } catch (Exception x) {
                                 LOG.warn("Failed to ack for member:{} host:{} partition:{}",
-                                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
                             }
                         } finally {
                             LOG.stopTimer("take>all");
@@ -657,14 +684,14 @@ public class RowChangeTaker implements RowChanges {
 
                     } catch (Exception x) {
                         LOG.warn("Failed to take from member:{} host:{} partition:{}",
-                            new Object[]{remoteRingMember, remoteRingHost, localVersionedPartitionName}, x);
+                            new Object[] { remoteRingMember, remoteRingHost, localVersionedPartitionName }, x);
                     }
                     onCompletion.completed(this, flushed, currentVersion, version);
                     return null;
                 });
             } catch (Exception x) {
                 LOG.error("Failed to take from member:{} host:{} partition:{}",
-                    new Object[]{remoteRingMember, remoteRingHost, remoteVersionedPartitionName}, x);
+                    new Object[] { remoteRingMember, remoteRingHost, remoteVersionedPartitionName }, x);
                 onError.error(this, x);
             }
         }

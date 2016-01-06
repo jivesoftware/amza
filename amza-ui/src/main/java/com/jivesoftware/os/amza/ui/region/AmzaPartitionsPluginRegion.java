@@ -8,8 +8,8 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -150,69 +150,69 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 }
                 return i;
             });
+            PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
             for (PartitionName partitionName : partitionNames) {
 
                 Map<String, Object> row = new HashMap<>();
-                VersionedState state = amzaService.getPartitionStateStorage().getLocalVersionedState(partitionName);
-                LivelyEndState livelyEndState = state != null ? state.getLivelyEndState() : null;
-                Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
+                partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                    VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                    LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                    Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
 
-                row.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
-                row.put("quorum", currentWaterline == null ? "unknown" : currentWaterline.isAtQuorum());
-                row.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
-                row.put("version", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getVersion()));
+                    row.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
+                    row.put("quorum", currentWaterline == null ? "unknown" : currentWaterline.isAtQuorum());
+                    row.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
+                    row.put("version", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getVersion()));
 
-                row.put("storageVersion", state == null ? "unknown" : Long.toHexString(state.getPartitionVersion()));
-                row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
-                row.put("name", new String(partitionName.getName()));
-                row.put("ringName", new String(partitionName.getRingName()));
+                    row.put("storageVersion", Long.toHexString(versionedPartitionName.getPartitionVersion()));
+                    row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
+                    row.put("name", new String(partitionName.getName()));
+                    row.put("ringName", new String(partitionName.getRingName()));
 
-                RingTopology ring = ringReader.getRing(partitionName.getRingName());
-                List<Map<String, Object>> ringHosts = new ArrayList<>();
-                for (RingMemberAndHost entry : ring.entries) {
-                    Map<String, Object> ringHost = new HashMap<>();
-                    ringHost.put("member", entry.ringMember.getMember());
-                    ringHost.put("host", entry.ringHost.getHost());
-                    ringHost.put("port", String.valueOf(entry.ringHost.getPort()));
-                    ringHosts.add(ringHost);
-                }
-                row.put("ring", ringHosts);
+                    RingTopology ring = ringReader.getRing(partitionName.getRingName());
+                    List<Map<String, Object>> ringHosts = new ArrayList<>();
+                    for (RingMemberAndHost entry : ring.entries) {
+                        Map<String, Object> ringHost = new HashMap<>();
+                        ringHost.put("member", entry.ringMember.getMember());
+                        ringHost.put("host", entry.ringHost.getHost());
+                        ringHost.put("port", String.valueOf(entry.ringHost.getPort()));
+                        ringHosts.add(ringHost);
+                    }
+                    row.put("ring", ringHosts);
 
-                PartitionProperties partitionProperties = amzaService.getPartitionProperties(partitionName);
-                if (partitionProperties == null) {
-                    row.put("disabled", "?");
-                    row.put("consistency", "none");
-                    row.put("requireConsistency", "true");
-                    row.put("takeFromFactor", "?");
+                    PartitionProperties partitionProperties = amzaService.getPartitionProperties(partitionName);
+                    if (partitionProperties == null) {
+                        row.put("disabled", "?");
+                        row.put("consistency", "none");
+                        row.put("requireConsistency", "true");
+                        row.put("takeFromFactor", "?");
 
-                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-                        new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 1000, 1000);
-                    row.put("walStorageDescriptor", walStorageDescriptor(storageDescriptor));
+                        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
+                            new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 1000, 1000);
+                        row.put("walStorageDescriptor", walStorageDescriptor(storageDescriptor));
 
-                } else {
-                    row.put("disabled", partitionProperties.disabled);
-                    row.put("takeFromFactor", partitionProperties.takeFromFactor);
-                    row.put("consistency", partitionProperties.consistency.name());
-                    row.put("requireConsistency", partitionProperties.requireConsistency);
-                    row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
-                }
+                    } else {
+                        row.put("disabled", partitionProperties.disabled);
+                        row.put("takeFromFactor", partitionProperties.takeFromFactor);
+                        row.put("consistency", partitionProperties.consistency.name());
+                        row.put("requireConsistency", partitionProperties.requireConsistency);
+                        row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
+                    }
 
-                PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
-                VersionedState localState = partitionStateStorage.getLocalVersionedState(partitionName);
-                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, localState.getPartitionVersion());
-
-                if (partitionName.isSystemPartition()) {
-                    HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                    WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
-                    row.put("highwaters", renderHighwaters(partitionHighwater));
-                } else {
-                    PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
-                    partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                    if (partitionName.isSystemPartition()) {
+                        HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
+                        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
                         row.put("highwaters", renderHighwaters(partitionHighwater));
-                        return null;
-                    });
-                }
+                    } else {
+                        PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
+                        partitionStripeProvider.txPartition(partitionName, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
+                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
+                            row.put("highwaters", renderHighwaters(partitionHighwater));
+                            return null;
+                        });
+                    }
+                    return null;
+                });
 
                 rows.add(row);
             }

@@ -9,10 +9,9 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.Commitable;
@@ -25,6 +24,7 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
+import com.jivesoftware.os.amza.service.LivelyEndStateTransactor;
 import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
@@ -87,7 +87,7 @@ public class DeltaStripeWALStorageNGTest {
         JacksonPartitionPropertyMarshaller partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        String[] workingDirectories = {partitionTmpDir.getAbsolutePath()};
+        String[] workingDirectories = { partitionTmpDir.getAbsolutePath() };
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(workingDirectories,
             ioStats,
@@ -118,12 +118,7 @@ public class DeltaStripeWALStorageNGTest {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                return tx.tx(new VersionedPartitionName(partitionName, 0), livelyEndState);
-            }
-
-            @Override
-            public VersionedState getLocalVersionedState(PartitionName partitionName) throws Exception {
-                return new VersionedState(livelyEndState, new StorageVersion(0, 0));
+                return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), new LivelyEndStateTransactor(livelyEndState), 0));
             }
         };
 
@@ -153,7 +148,7 @@ public class DeltaStripeWALStorageNGTest {
         highwaterStorage = new PartitionBackedHighwaterStorage(ids, new RingMember("localhost"), partitionIndex, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[]{tmp.getAbsolutePath()}, ioStats, 100, 4_096, 64, false);
+        RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[] { tmp.getAbsolutePath() }, ioStats, 100, 4_096, 64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
         deltaStripeWALStorage = loadDeltaStripe();
     }

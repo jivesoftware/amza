@@ -109,10 +109,9 @@ public class StripedPartition implements Partition {
         long version = orderIdProvider.nextId();
         partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             RowsChanged commit = stripe.commit(highwaterStorage, partitionName, Optional.absent(), true, prefix,
-                (versionedPartitionName) -> {
+                versionedAquarium -> {
                     if (takeQuorum > 0) {
-                        Aquarium aquarium = aquariumProvider.getAquarium(versionedPartitionName);
-                        LivelyEndState livelyEndState = aquarium.livelyEndState();
+                        LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
                         if (consistency.requiresLeader() && (!livelyEndState.isOnline() || livelyEndState.getCurrentState() != State.leader)) {
                             throw new FailedToAchieveQuorumException("Leader has changed.");
                         }

@@ -3,6 +3,8 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
+import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
@@ -10,6 +12,7 @@ import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.aquarium.State;
+import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -29,24 +32,26 @@ public class PartitionComposter {
 
     private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
-    private final PartitionCreator partitionProvider;
+    private final PartitionCreator partitionCreator;
     private final AmzaRingStoreReader amzaRingReader;
     private final PartitionStripeProvider partitionStripeProvider;
     private final PartitionStateStorage partitionStateStorage;
+    private final StripingLocksProvider<PartitionName> stripingLocksProvider;
 
     public PartitionComposter(AmzaStats amzaStats,
         PartitionIndex partitionIndex,
-        PartitionCreator partitionProvider,
+        PartitionCreator partitionCreator,
         AmzaRingStoreReader amzaRingReader,
         PartitionStateStorage partitionStateStorage,
         PartitionStripeProvider partitionStripeProvider) {
 
         this.amzaStats = amzaStats;
         this.partitionIndex = partitionIndex;
-        this.partitionProvider = partitionProvider;
+        this.partitionCreator = partitionCreator;
         this.amzaRingReader = amzaRingReader;
         this.partitionStateStorage = partitionStateStorage;
         this.partitionStripeProvider = partitionStripeProvider;
+        this.stripingLocksProvider = new StripingLocksProvider<>(64); //TODO config
     }
 
     public void start() throws Exception {
@@ -55,7 +60,7 @@ public class PartitionComposter {
             new ThreadFactoryBuilder().setNameFormat("partition-composter-%d").build());
         scheduledThreadPool.scheduleWithFixedDelay(() -> {
             try {
-                compost();
+                compostAll();
             } catch (Exception x) {
                 LOG.debug("Failing to compact tombstones.", x);
 
@@ -68,40 +73,74 @@ public class PartitionComposter {
         this.scheduledThreadPool = null;
     }
 
-    public void compost() throws Exception {
+    public void compostAll() throws Exception {
         List<VersionedPartitionName> composted = new ArrayList<>();
-        partitionStateStorage.streamLocalState((partitionName, ringMember, versionedState) -> {
-            long partitionVersion = versionedState.getPartitionVersion();
-            VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, partitionVersion);
-            if (versionedState.isCurrentState(State.expunged)) {
-                compostPartition(composted, versionedPartitionName);
-            } else if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
-                if (versionedState.isCurrentState(State.bootstrap) || versionedState.isCurrentState(null)) {
-                    LOG.info("Composting {} state:{} because we are not a member of the ring",
-                        versionedPartitionName, versionedState.getLivelyEndState().getCurrentState());
-                    compostPartition(composted, versionedPartitionName);
-                } else {
-                    LOG.info("Marking {} state:{} for disposal because we are not a member of the ring",
-                        versionedPartitionName, versionedState.getLivelyEndState().getCurrentState());
-                    partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
-                }
-            } else if (!partitionProvider.hasPartition(partitionName)) {
-                if (versionedState.isCurrentState(State.bootstrap) || versionedState.isCurrentState(null)) {
-                    LOG.info("Composting {} state:{} because no partition is defined on this node",
-                        versionedPartitionName, versionedState.getLivelyEndState().getCurrentState());
-                    compostPartition(composted, versionedPartitionName);
-                } else {
-                    LOG.info("Marking {} state:{} for disposal because no partition is defined on this node",
-                        versionedPartitionName, versionedState.getLivelyEndState().getCurrentState());
-                    partitionStateStorage.markForDisposal(versionedPartitionName, ringMember);
-                }
+        partitionStateStorage.streamLocalState((partitionName, ringMember, versionedAquarium) -> {
+            if (compostIfNecessary(ringMember, versionedAquarium)) {
+                composted.add(versionedAquarium.getVersionedPartitionName());
             }
             return true;
         });
-        partitionStateStorage.expunged(composted);
+        for (VersionedPartitionName compost : composted) {
+            partitionStateStorage.expunged(compost);
+        }
     }
 
-    private void compostPartition(List<VersionedPartitionName> composted, VersionedPartitionName versionedPartitionName) {
+    public void compostPartitionIfNecessary(PartitionName partitionName) throws Exception {
+        VersionedPartitionName compost = partitionStateStorage.tx(partitionName, versionedAquarium -> {
+            if (compostIfNecessary(amzaRingReader.getRingMember(), versionedAquarium)) {
+                return versionedAquarium.getVersionedPartitionName();
+            } else {
+                return null;
+            }
+        });
+        if (compost != null) {
+            partitionStateStorage.expunged(compost);
+        }
+    }
+
+    private boolean compostIfNecessary(RingMember ringMember, VersionedAquarium versionedAquarium) throws Exception {
+        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
+        synchronized (stripingLocksProvider.lock(partitionName, 0)) {
+            State currentState = versionedAquarium.getLivelyEndState().getCurrentState();
+            //TODO or partitionName is marked for destruction
+            if (currentState == State.expunged || partitionCreator.isPartitionDisposed(partitionName)) {
+                deletePartition(versionedPartitionName);
+                return true;
+            } else {
+                if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
+                    if (currentState == State.bootstrap || currentState == null) {
+                        LOG.info("Composting {} state:{} because we are not a member of the ring",
+                            versionedPartitionName, currentState);
+                        deletePartition(versionedPartitionName);
+                        return true;
+                    } else {
+                        LOG.info("Marking {} state:{} for disposal because we are not a member of the ring",
+                            versionedPartitionName, currentState);
+                        versionedAquarium.suggestState(State.expunged);
+                        return false;
+                    }
+                } else if (!partitionCreator.hasPartition(partitionName)) {
+                    if (currentState == State.bootstrap || currentState == null) {
+                        LOG.info("Composting {} state:{} because no partition is defined on this node",
+                            versionedPartitionName, currentState);
+                        deletePartition(versionedPartitionName);
+                        return true;
+                    } else {
+                        LOG.info("Marking {} state:{} for disposal because no partition is defined on this node",
+                            versionedPartitionName, currentState);
+                        versionedAquarium.suggestState(State.expunged);
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+    }
+
+    private void deletePartition(VersionedPartitionName versionedPartitionName) {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         long partitionVersion = versionedPartitionName.getPartitionVersion();
         amzaStats.beginCompaction(CompactionFamily.expunge, versionedPartitionName.toString());
@@ -111,7 +150,6 @@ public class PartitionComposter {
                 stripe.deleteDelta(versionedPartitionName);
                 partitionIndex.delete(versionedPartitionName);
                 highwaterStorage.delete(versionedPartitionName);
-                composted.add(versionedPartitionName);
                 return null;
             });
             LOG.info("Expunged {} {}.", partitionName, partitionVersion);

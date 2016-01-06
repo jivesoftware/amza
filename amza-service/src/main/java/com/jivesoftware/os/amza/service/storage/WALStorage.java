@@ -21,23 +21,23 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
-import com.jivesoftware.os.amza.api.stream.Commitable;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
-import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValues;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyPointerStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
 import com.jivesoftware.os.amza.api.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALIndexable;
 import com.jivesoftware.os.amza.api.wal.WALKey;
@@ -160,9 +160,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireAll();
         try {
             walTx.delete();
-            I wali = walIndex.get();
+            WALIndex wali = walIndex.get();
             if (wali != null) {
                 wali.delete();
+                walIndex.set(null);
             }
         } finally {
             releaseAll();
@@ -335,9 +336,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId}));
+                indexCommitedUpToTxId }));
         }
     }
 
@@ -378,6 +379,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
+            if (wali == null) {
+                throw new IllegalStateException("Attempted to commit against a nonexistent index, it has likely been deleted");
+            }
             RowsChanged rowsChanged;
             MutableBoolean flushCompactionHint = new MutableBoolean(false);
             MutableLong indexCommittedFromTxId = new MutableLong(Long.MAX_VALUE);
@@ -390,13 +394,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         for (int k = 0; k < keys.size(); k++) {
                             WALValue value = values.get(k);
                             if (!stream
-                            .stream(rowType, prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
+                                .stream(rowType, prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
                                 return false;
                             }
                         }
                         return true;
                     },
-                    (_rowType, _prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
+                    (_rowType, _prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion,
+                        pointerFp) -> {
                         WALKey walKey = new WALKey(prefix, key);
                         WALValue walValue = new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion);
                         if (pointerFp == -1) {
@@ -560,7 +565,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
-            return wali.rowScan((prefix, key, timestamp, tombstoned, version, fp) -> {
+            return wali == null || wali.rowScan((prefix, key, timestamp, tombstoned, version, fp) -> {
                 byte[] hydrateRowIndexValue = hydrateRowIndexValue(fp);
                 RowType rowType = RowType.fromByte(hydrateRowIndexValue[0]);
                 byte[] value = primaryRowMarshaller.valueFromRow(rowType, hydrateRowIndexValue, 1 + 8);
@@ -595,8 +600,12 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public TimestampedValue getTimestampedValue(byte[] prefix, byte[] key) throws Exception {
         acquireOne();
         try {
+            WALIndex wali = walIndex.get();
+            if (wali == null) {
+                return null;
+            }
             TimestampedValue[] values = new TimestampedValue[1];
-            walIndex.get().getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
+            wali.getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
                 if (fp != -1 && !tombstoned) {
                     byte[] hydrateRowIndexValue = hydrateRowIndexValue(fp);
                     RowType rowType = RowType.fromByte(hydrateRowIndexValue[0]);
@@ -614,7 +623,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean streamValues(byte[] prefix, UnprefixedWALKeys keys, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().getPointers(prefix, keys,
+            WALIndex wali = walIndex.get();
+            return wali == null || wali.getPointers(prefix, keys,
                 (_prefix, key, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
                     if (pointerFp != -1) {
                         RowType rowType = null;
@@ -646,7 +656,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean streamPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().getPointers(
+            WALIndex wali = walIndex.get();
+            return wali == null || wali.getPointers(
                 indexStream -> keyValues.consume(
                     (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         if (valueTimestamp > getLargestTimestampForKeyStripe(prefix, key)) {
@@ -664,7 +675,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().containsKeys(prefix, keys, stream);
+            WALIndex wali = walIndex.get();
+            return wali != null && wali.containsKeys(prefix, keys, stream);
         } finally {
             releaseOne();
         }
@@ -706,15 +718,17 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             long[] takeMetrics = new long[1];
-            Boolean readFromTransactionId = walTx.readFromTransactionId(sinceTransactionId, (offset, reader) -> reader.scan(offset, false,
-                (rowPointer, rowTxId, rowType, row) -> {
-                    if (rowType != RowType.system && rowTxId > sinceTransactionId) {
-                        return rowStream.row(rowPointer, rowTxId, rowType, row);
-                    } else {
-                        takeMetrics[0]++;
-                    }
-                    return true;
-                }));
+            boolean readFromTransactionId = walIndex.get() == null || walTx.readFromTransactionId(sinceTransactionId,
+                (offset, reader) -> reader.scan(offset,
+                    false,
+                    (rowPointer, rowTxId, rowType, row) -> {
+                        if (rowType != RowType.system && rowTxId > sinceTransactionId) {
+                            return rowStream.row(rowPointer, rowTxId, rowType, row);
+                        } else {
+                            takeMetrics[0]++;
+                        }
+                        return true;
+                    }));
             LOG.inc("excessTakes", takeMetrics[0]);
             return readFromTransactionId;
         } finally {
@@ -730,8 +744,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         try {
             long[] takeMetrics = new long[1];
             WALIndex wali = walIndex.get();
-            Boolean readFromTransactionId = walTx.read(reader
-                -> reader.read(fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
+            boolean readFromTransactionId = wali == null || walTx.read(
+                reader -> reader.read(
+                    fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
                     (rowPointer, rowTxId, rowType, row) -> {
                         if (rowType != RowType.system && rowTxId > sinceTransactionId) {
                             return rowStream.row(rowPointer, rowTxId, rowType, row);
@@ -750,7 +765,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean takeAllRows(final RowStream rowStream) throws Exception {
         acquireOne();
         try {
-            return walTx.readFromTransactionId(0, (offset, reader) -> reader.scan(offset, false, rowStream::row));
+            return walIndex.get() == null || walTx.readFromTransactionId(0, (offset, reader) -> reader.scan(offset, false, rowStream::row));
         } finally {
             releaseOne();
         }
@@ -762,7 +777,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
-            wali.updatedDescriptors(walStorageDescriptor.primaryIndexDescriptor, walStorageDescriptor.secondaryIndexDescriptors);
+            if (wali != null) {
+                wali.updatedDescriptors(walStorageDescriptor.primaryIndexDescriptor, walStorageDescriptor.secondaryIndexDescriptors);
+            }
         } finally {
             releaseOne();
         }
@@ -771,7 +788,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public long count(WALKeyPointers keyPointers) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().deltaCount(keyPointers) + keyCount.get();
+            WALIndex wali = walIndex.get();
+            return wali == null ? 0 : wali.deltaCount(keyPointers) + keyCount.get();
         } finally {
             releaseOne();
         }

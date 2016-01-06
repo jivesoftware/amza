@@ -1,12 +1,13 @@
 package com.jivesoftware.os.amza.service.take;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.SetMultimap;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
+import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
@@ -17,7 +18,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -33,8 +33,8 @@ public class TakeCoordinator {
 
     private final AmzaStats amzaStats;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
-    private final VersionedPartitionProvider versionedPartitionProvider;
     private final IdPacker idPacker;
+    private final VersionedPartitionProvider versionedPartitionProvider;
 
     private final ConcurrentHashMap<IBA, TakeRingCoordinator> takeRingCoordinators = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Object> ringMembersLocks = new ConcurrentHashMap<>();
@@ -120,18 +120,10 @@ public class TakeCoordinator {
         });
     }
 
-    public void expunged(List<VersionedPartitionName> versionedPartitionNames) {
-        SetMultimap<IBA, VersionedPartitionName> expunged = HashMultimap.create();
-
-        for (VersionedPartitionName versionedPartitionName : versionedPartitionNames) {
-            expunged.put(new IBA(versionedPartitionName.getPartitionName().getRingName()), versionedPartitionName);
-        }
-
-        for (IBA ringName : expunged.keySet()) {
-            TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(ringName);
-            if (takeRingCoordinator != null) {
-                takeRingCoordinator.expunged(expunged.get(ringName));
-            }
+    public void expunged(VersionedPartitionName versionedPartitionName) {
+        TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(new IBA(versionedPartitionName.getPartitionName().getRingName()));
+        if (takeRingCoordinator != null) {
+            takeRingCoordinator.expunged(versionedPartitionName);
         }
     }
 
@@ -177,8 +169,8 @@ public class TakeCoordinator {
 
     public void availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
         AmzaRingReader ringReader,
+        PartitionStateStorage partitionStateStorage,
         RingMember remoteRingMember,
-        CheckState checkState,
         long takeSessionId,
         long heartbeatIntervalMillis,
         AvailableStream availableStream,
@@ -211,9 +203,9 @@ public class TakeCoordinator {
                 });
                 if (ring != null) {
                     suggestedWaitInMillis[0] = Math.min(suggestedWaitInMillis[0],
-                        ring.availableRowsStream(txHighestPartitionTx,
+                        ring.availableRowsStream(partitionStateStorage,
+                            txHighestPartitionTx,
                             remoteRingMember,
-                            checkState,
                             takeSessionId,
                             watchAvailableStream));
                 }
@@ -255,14 +247,14 @@ public class TakeCoordinator {
     public void rowsTaken(TxHighestPartitionTx<Long> txHighestPartitionTx,
         RingMember remoteRingMember,
         long takeSessionId,
-        VersionedPartitionName localVersionedPartitionName,
+        VersionedAquarium versionedAquarium,
         long localTxId) throws Exception {
 
         //LOG.info("TAKEN remote:{} took local:{} txId:{} partition:{}",
         //    remoteRingMember, null, localTxId, localVersionedPartitionName);
-        byte[] ringName = localVersionedPartitionName.getPartitionName().getRingName();
+        byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
-        ring.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, localVersionedPartitionName, localTxId);
+        ring.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, versionedAquarium, localTxId);
     }
 
 }

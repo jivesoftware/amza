@@ -7,5 +7,5 @@ import com.jivesoftware.os.aquarium.LivelyEndState;
  */
 public interface HighestPartitionTx<R> {
 
-    R tx(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState, long highestTxId) throws Exception;
+    R tx(VersionedAquarium versionedAquarium, long highestTxId) throws Exception;
 }

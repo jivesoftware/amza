@@ -32,7 +32,7 @@ public class StripedPartitionCommitChanges implements CommitChanges {
                 Optional.of(versionedPartitionName.getPartitionVersion()),
                 false,
                 prefix,
-                versionedPartitionName1 -> -1,
+                versionedAquarium -> -1,
                 commitable,
                 (versionedPartitionName1, leadershipToken, largestCommittedTxId) -> {
                 },

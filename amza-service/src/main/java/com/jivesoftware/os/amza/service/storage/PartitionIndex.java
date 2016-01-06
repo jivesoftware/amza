@@ -81,10 +81,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
                     total.incrementAndGet();
                     openExecutor.submit(() -> {
                         try {
-                            txPartitionState.tx(partitionName, (versionedPartitionName, livelyEndState) -> {
-                                if (versionedPartitionName != null) {
-                                    get(versionedPartitionName);
-                                }
+                            txPartitionState.tx(partitionName, versionedAquarium -> {
+                                get(versionedAquarium.getVersionedPartitionName());
                                 return null;
                             });
                             numOpened.incrementAndGet();
@@ -264,4 +262,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
     }
 
+    public void invalidate(PartitionName partitionName) {
+        partitionStores.remove(partitionName);
+        partitionProperties.remove(partitionName);
+    }
 }

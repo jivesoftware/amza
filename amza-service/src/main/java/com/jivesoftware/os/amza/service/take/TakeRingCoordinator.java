@@ -1,10 +1,12 @@
 package com.jivesoftware.os.amza.service.take;
 
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
@@ -12,7 +14,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.LinkedHashMap;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -58,10 +59,10 @@ public class TakeRingCoordinator {
         return existingRing != updatedRing; // reference equality is OK
     }
 
-    public void expunged(Set<VersionedPartitionName> versionedPartitionNames) {
-        LOG.info("Remove partition coordinators for composted partitions: {}", versionedPartitionNames);
-        for (VersionedPartitionName versionedPartitionName : versionedPartitionNames) {
-            TakeVersionedPartitionCoordinator partitionCoordinator = partitionCoordinators.remove(versionedPartitionName);
+    public void expunged(VersionedPartitionName versionedPartitionName) {
+        TakeVersionedPartitionCoordinator partitionCoordinator = partitionCoordinators.remove(versionedPartitionName);
+        if (partitionCoordinator != null) {
+            LOG.info("Remove partition coordinator for composted partition: {}", versionedPartitionName);
             partitionCoordinator.expunged();
         }
     }
@@ -86,9 +87,9 @@ public class TakeRingCoordinator {
                 reofferDeltaMillis));
     }
 
-    long availableRowsStream(TxHighestPartitionTx<Long> txHighestPartitionTx,
+    long availableRowsStream(PartitionStateStorage partitionStateStorage,
+        TxHighestPartitionTx<Long> txHighestPartitionTx,
         RingMember ringMember,
-        CheckState checkState,
         long takeSessionId,
         AvailableStream availableStream) throws Exception {
 
@@ -97,14 +98,15 @@ public class TakeRingCoordinator {
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
             if (!coordinator.isSteadyState(ringMember, takeSessionId)) {
                 PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
+                Long timeout = coordinator.availableRowsStream(partitionStateStorage,
+                    txHighestPartitionTx,
+                    takeSessionId,
+                    ring,
+                    ringMember,
+                    properties.takeFromFactor,
+                    availableStream);
                 suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
-                    coordinator.availableRowsStream(txHighestPartitionTx,
-                        takeSessionId,
-                        ring,
-                        ringMember,
-                        checkState.isOnline(ringMember, coordinator.versionedPartitionName),
-                        properties.takeFromFactor,
-                        availableStream));
+                    timeout);
             }
         }
         return suggestedWaitInMillis;
@@ -113,12 +115,18 @@ public class TakeRingCoordinator {
     void rowsTaken(TxHighestPartitionTx<Long> txHighestPartitionTx,
         RingMember remoteRingMember,
         long takeSessionId,
-        VersionedPartitionName localVersionedPartitionName,
+        VersionedAquarium versionedAquarium,
         long localTxId) throws Exception {
-        TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(localVersionedPartitionName);
+        TakeVersionedPartitionCoordinator coordinator = partitionCoordinators.get(versionedAquarium.getVersionedPartitionName());
         if (coordinator != null) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-            coordinator.rowsTaken(txHighestPartitionTx, takeSessionId, versionedRing.get(), remoteRingMember, localTxId, properties.takeFromFactor);
+            coordinator.rowsTaken(txHighestPartitionTx,
+                takeSessionId,
+                versionedAquarium,
+                versionedRing.get(),
+                remoteRingMember,
+                localTxId,
+                properties.takeFromFactor);
         }
     }
 

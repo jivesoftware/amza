@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.partition;
 
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 
 /**
  *
@@ -9,5 +10,5 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
  */
 public interface TxHighestPartitionTx<R> {
 
-    R tx(PartitionName partitionName, HighestPartitionTx<R> highestPartitionTx) throws Exception;
+    R tx(VersionedAquarium versionedAquarium, HighestPartitionTx<R> highestPartitionTx) throws Exception;
 }

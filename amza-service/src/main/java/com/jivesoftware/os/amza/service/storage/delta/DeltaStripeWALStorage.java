@@ -30,7 +30,6 @@ import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.SickThreads;
-import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -416,7 +415,7 @@ public class DeltaStripeWALStorage {
 
         acquireOne();
         try {
-            DeltaWAL<?> wal = deltaWAL.get();
+            DeltaWAL wal = deltaWAL.get();
             RowsChanged rowsChanged;
 
             getPointers(versionedPartitionName,

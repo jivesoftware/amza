@@ -1,19 +1,23 @@
 package com.jivesoftware.os.amza.service.storage.filer;
 
+import com.jivesoftware.os.amza.api.filer.IAppendOnly;
+import com.jivesoftware.os.amza.api.filer.ICloseable;
 import com.jivesoftware.os.amza.api.filer.IReadable;
-import com.jivesoftware.os.amza.api.filer.IWriteable;
 import java.io.IOException;
 
 /**
  *
  * @author jonathan.colt
  */
-public interface WALFiler extends IWriteable {
+public interface WALFiler extends ICloseable {
 
-    void eof() throws IOException;
+    void truncate(long size) throws IOException;
 
-    IReadable fileChannelFiler() throws IOException;
+    IReadable reader(IReadable current, long requiredLength, int bufferSize) throws IOException;
 
-    IReadable bestFiler(IReadable current, long boundaryFp) throws IOException;
+    IAppendOnly appender() throws IOException;
 
+    long length() throws IOException;
+
+    Object lock();
 }

@@ -180,7 +180,7 @@ public class BerkeleyDBWALIndexTest {
             });
         }
 
-        CompactionWALIndex compactionWALIndex = index.startCompaction();
+        CompactionWALIndex compactionWALIndex = index.startCompaction(true);
         compactionWALIndex.merge((TxKeyPointerStream stream) -> {
             for (long i = 100; i < 200; i++) {
                 if (!stream.stream(i, UIO.longBytes(-i), UIO.longBytes(i), System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
@@ -189,7 +189,7 @@ public class BerkeleyDBWALIndexTest {
             }
             return true;
         });
-        compactionWALIndex.commit();
+        compactionWALIndex.commit(null);
 
         for (long i = 100; i < 200; i++) {
             long expected = i;

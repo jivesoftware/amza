@@ -37,13 +37,14 @@ import com.jivesoftware.os.amza.service.AmzaInstance;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
+import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.replication.http.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientRestEndpoints;
-import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService;
+import com.jivesoftware.os.amza.service.replication.http.AmzaClientService;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -110,6 +111,7 @@ public class Main {
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
         final AmzaStats amzaStats = new AmzaStats();
         final SickThreads sickThreads = new SickThreads();
+        final SickPartitions sickPartitions = new SickPartitions();
 
         final String[] workingDirs = System.getProperty("amza.working.dirs", "./data1,./data2,./data3")
             .split(",");
@@ -141,6 +143,7 @@ public class Main {
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             sickThreads,
+            sickPartitions,
             ringMember,
             ringHost,
             orderIdProvider,

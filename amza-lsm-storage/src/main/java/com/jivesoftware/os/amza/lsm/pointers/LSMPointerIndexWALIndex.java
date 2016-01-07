@@ -27,6 +27,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;
 import java.io.IOException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -161,7 +162,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                     long takeFp = UIO.bytesLong(key, 8);
                     return txFpStream.stream(takeTxId, takeFp);
                 };
-                while (rangeScan.next(stream));
+                while (rangeScan.next(stream)) ;
                 return false;
             });
         } finally {
@@ -213,7 +214,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                 byte[] pk = WALKey.compose(prefix, key);
                 return primaryDb.getPointer(pk, (pointer) -> {
                     return pointer.next((rawKey, timestamp, tombstoned, version, pointer1) -> {
-                        return entryToWALPointer(rowType,prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
+                        return entryToWALPointer(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
                             timestamp, tombstoned, version, pointer1, stream);
                     });
                 });
@@ -363,7 +364,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     }
 
     @Override
-    public CompactionWALIndex startCompaction() throws Exception {
+    public CompactionWALIndex startCompaction(boolean hasActive) throws Exception {
 
         synchronized (compactingTo) {
             WALIndex got = compactingTo.get();
@@ -375,6 +376,9 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                 throw new IllegalStateException("Tried to compact a index that has been expunged: " + name);
             }
 
+            if (!hasActive) {
+                removeDatabase(Type.active);
+            }
             removeDatabase(Type.compacting);
             removeDatabase(Type.compacted);
             removeDatabase(Type.backup);
@@ -392,17 +396,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                 }
 
                 @Override
-                public void abort() throws Exception {
-                    try {
-                        compactingTo.set(null);
-                        compactingWALIndex.close();
-                    } catch (IOException ex) {
-                        throw new RuntimeException();
-                    }
-                }
-
-                @Override
-                public void commit() throws Exception {
+                public void commit(Callable<Void> commit) throws Exception {
                     lock.acquire(numPermits);
                     try {
                         compactingTo.set(null);
@@ -419,7 +413,13 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                             primaryDb = null;
                             prefixDb.close();
                             prefixDb = null;
-                            rename(Type.active, Type.backup);
+                            if (hasActive) {
+                                rename(Type.active, Type.backup);
+                            }
+
+                            if (commit != null) {
+                                commit.call();
+                            }
 
                             rename(Type.compacted, Type.active);
                             removeDatabase(Type.backup);

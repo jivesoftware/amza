@@ -32,7 +32,7 @@ import com.sleepycat.je.DiskOrderedCursorConfig;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
-import java.io.IOException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -202,7 +202,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
                         if (!txFpRawKeyValueEntryStream.stream(-1, -1, null, keyEntry.getData(), null, -1, false, -1, null)) {
                             return false;
                         }
-                    } while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                    }
+                    while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
                 }
                 return true;
             }, (txId, fp, rowType, _prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry) -> {
@@ -428,7 +429,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
                                     if (!txFpRawKeyValueEntryStream.stream(-1, -1, null, keyEntry.getData(), null, -1, false, -1, valueEntry.getData())) {
                                         return false;
                                     }
-                                } while (cursor.getPrev(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                                }
+                                while (cursor.getPrev(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
                             }
                         }
                         return true;
@@ -454,7 +456,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
                                 if (!txFpRawKeyValueEntryStream.stream(-1, -1, null, keyEntry.getData(), null, -1, false, -1, valueEntry.getData())) {
                                     return false;
                                 }
-                            } while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
+                            }
+                            while (cursor.getNext(keyEntry, valueEntry, LockMode.READ_UNCOMMITTED) == OperationStatus.SUCCESS);
                         }
                         return true;
                     },
@@ -467,7 +470,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public CompactionWALIndex startCompaction() throws Exception {
+    public CompactionWALIndex startCompaction(boolean hasActive) throws Exception {
 
         synchronized (compactingTo) {
             WALIndex got = compactingTo.get();
@@ -479,6 +482,9 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 throw new IllegalStateException("Tried to compact a index that has been expunged: " + name);
             }
 
+            if (!hasActive) {
+                removeDatabase(Type.active);
+            }
             removeDatabase(Type.compacting);
             removeDatabase(Type.compacted);
             removeDatabase(Type.backup);
@@ -494,17 +500,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 }
 
                 @Override
-                public void abort() throws Exception {
-                    try {
-                        compactingTo.set(null);
-                        compactingWALIndex.close();
-                    } catch (IOException ex) {
-                        throw new RuntimeException();
-                    }
-                }
-
-                @Override
-                public void commit() throws Exception {
+                public void commit(Callable<Void> commit) throws Exception {
                     lock.acquire(numPermits);
                     try {
                         compactingTo.set(null);
@@ -520,7 +516,13 @@ public class BerkeleyDBWALIndex implements WALIndex {
                             primaryDb = null;
                             prefixDb.close();
                             prefixDb = null;
-                            renameDatabase(Type.active, Type.backup);
+                            if (hasActive) {
+                                renameDatabase(Type.active, Type.backup);
+                            }
+
+                            if (commit != null) {
+                                commit.call();
+                            }
 
                             renameDatabase(Type.compacted, Type.active);
                             removeDatabase(Type.backup);

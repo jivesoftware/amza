@@ -36,14 +36,15 @@ import com.jivesoftware.os.amza.service.AmzaInstance;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
+import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.replication.http.AmzaClientService;
+import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
 import com.jivesoftware.os.amza.service.replication.http.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientRestEndpoints;
-import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaReplicationRestEndpoints;
-import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaRestClient;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.storage.PartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
@@ -142,8 +143,10 @@ public class AmzaMain {
 
             final AmzaStats amzaStats = new AmzaStats();
             final SickThreads sickThreads = new SickThreads();
+            final SickPartitions sickPartitions = new SickPartitions();
 
             deployable.addHealthCheck(new SickThreadsHealthCheck(sickThreads));
+            deployable.addHealthCheck(new SickPartitionsHealthCheck(sickPartitions));
 
             AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats);
 
@@ -183,6 +186,7 @@ public class AmzaMain {
             AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
                 amzaStats,
                 sickThreads,
+                sickPartitions,
                 ringMember,
                 ringHost,
                 orderIdProvider,
@@ -237,16 +241,16 @@ public class AmzaMain {
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
                 new AmzaUIInitializer.InjectionCallback() {
 
-                @Override
-                public void addEndpoint(Class clazz) {
-                    deployable.addEndpoints(clazz);
-                }
+                    @Override
+                    public void addEndpoint(Class clazz) {
+                        deployable.addEndpoints(clazz);
+                    }
 
-                @Override
-                public void addInjectable(Class clazz, Object instance) {
-                    deployable.addInjectables(clazz, instance);
-                }
-            });
+                    @Override
+                    public void addInjectable(Class clazz, Object instance) {
+                        deployable.addInjectables(clazz, instance);
+                    }
+                });
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());

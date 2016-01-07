@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import java.io.File;
 import java.util.List;
 
 /**
@@ -10,7 +11,7 @@ public interface RowIOProvider<K> {
 
     K baseKey(VersionedPartitionName versionedPartitionName);
 
-    RowIO<K> create(K key, String name) throws Exception;
+    RowIO<K> open(K key, String name, boolean createIfAbsent) throws Exception;
 
     List<String> listExisting(K key);
 
@@ -25,4 +26,6 @@ public interface RowIOProvider<K> {
     void delete(K key) throws Exception;
 
     boolean ensure(K key);
+
+    boolean exists(K key);
 }

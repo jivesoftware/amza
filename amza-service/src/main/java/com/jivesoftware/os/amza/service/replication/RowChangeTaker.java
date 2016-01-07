@@ -307,6 +307,9 @@ public class RowChangeTaker implements RowChanges {
                 } catch (InterruptedException ie) {
                     return;
                 } catch (Exception x) {
+                    if (x.getCause() instanceof InterruptedException) {
+                        return;
+                    }
                     LOG.error("Failed to take partitions updated:{}", new Object[] { remoteRingMember }, x);
                     try {
                         Thread.sleep(1_000);

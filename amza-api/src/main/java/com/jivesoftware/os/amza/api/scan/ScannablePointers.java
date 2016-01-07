@@ -17,7 +17,7 @@ package com.jivesoftware.os.amza.api.scan;
 
 import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
 
-public interface ScannablePointers extends CompactableWALIndex {
+public interface ScannablePointers {
 
     boolean rowScan(WALKeyPointerStream stream) throws Exception;
 

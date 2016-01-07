@@ -13,6 +13,7 @@ import com.jivesoftware.os.amza.api.stream.TxKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
+import java.util.concurrent.Callable;
 
 /**
  * @author jonathan.colt
@@ -87,7 +88,7 @@ public class NoOpWALIndex implements WALIndex {
     }
 
     @Override
-    public CompactionWALIndex startCompaction() throws Exception {
+    public CompactionWALIndex startCompaction(boolean hasActive) throws Exception {
         return new NoOpCompactionWALIndex();
     }
 
@@ -99,11 +100,7 @@ public class NoOpWALIndex implements WALIndex {
         }
 
         @Override
-        public void abort() throws Exception {
-        }
-
-        @Override
-        public void commit() throws Exception {
+        public void commit(Callable<Void> commit) throws Exception {
         }
     }
 

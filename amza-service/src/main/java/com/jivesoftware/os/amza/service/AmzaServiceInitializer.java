@@ -140,6 +140,7 @@ public class AmzaServiceInitializer {
     public AmzaService initialize(AmzaServiceConfig config,
         AmzaStats amzaStats,
         SickThreads sickThreads,
+        SickPartitions sickPartitions,
         BinaryPrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         RingMember ringMember,
@@ -175,7 +176,7 @@ public class AmzaServiceInitializer {
 
         int tombstoneCompactionFactor = 2; // TODO expose to config;
         IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller,
-            orderIdProvider, tombstoneCompactionFactor);
+            orderIdProvider, sickPartitions, tombstoneCompactionFactor);
         PartitionIndex partitionIndex = new PartitionIndex(walStorageProvider, partitionPropertyMarshaller, config.hardFsync);
 
         TakeCoordinator takeCoordinator = new TakeCoordinator(amzaStats,

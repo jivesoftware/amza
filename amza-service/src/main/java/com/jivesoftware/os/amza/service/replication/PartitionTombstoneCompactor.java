@@ -116,7 +116,7 @@ public class PartitionTombstoneCompactor {
                                 removeTombstonedOlderThanTimestampId, ttlTimestampId, versionedPartitionName);
                         }
                     } catch (Exception x) {
-                        LOG.warn("Failed to compact tombstones partition:" + versionedPartitionName, x);
+                        LOG.error("Failed to compact tombstones for partition: {}", new Object[] { versionedPartitionName }, x);
                     } finally {
                         compacting.remove(versionedPartitionName);
                     }

@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.LivelyEndStateTransactor;
+import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
@@ -106,7 +107,7 @@ public class DeltaStripeWALStorageNGTest {
         WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
-            walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, -1);
+            walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
         partitionIndex = new PartitionIndex(indexedWALStorageProvider,
             partitionPropertyMarshaller,
             false);

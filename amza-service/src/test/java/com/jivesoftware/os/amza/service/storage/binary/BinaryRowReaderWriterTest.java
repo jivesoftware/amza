@@ -21,7 +21,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
-import com.jivesoftware.os.amza.service.filer.AutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.service.stats.IoStats;
@@ -46,7 +46,7 @@ public class BinaryRowReaderWriterTest {
 
         File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
-        DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false);
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false, 0);
         validate(filer, ioStats);
 
     }
@@ -55,7 +55,7 @@ public class BinaryRowReaderWriterTest {
     public void testValidateHeapBacked() throws Exception {
 
         IoStats ioStats = new IoStats();
-        WALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
+        WALFiler filer = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         validate(filer, ioStats);
 
@@ -71,8 +71,8 @@ public class BinaryRowReaderWriterTest {
 
         Assert.assertTrue(binaryRowReader.validate());
 
-        filer.seek(filer.length());
-        UIO.writeByte(filer, (byte) 56, "corrupt");
+        //filer.seek(filer.length());
+        UIO.writeByte(filer.appender(), (byte) 56, "corrupt");
 
         Assert.assertFalse(binaryRowReader.validate());
     }
@@ -81,7 +81,7 @@ public class BinaryRowReaderWriterTest {
     public void testDiskBackedRead() throws Exception {
         File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
-        DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false);
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false, 0);
         read(filer, ioStats);
 
     }
@@ -89,7 +89,7 @@ public class BinaryRowReaderWriterTest {
     @Test
     public void testMemoryBackedRead() throws Exception {
         IoStats ioStats = new IoStats();
-        WALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
+        WALFiler filer = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         read(filer, ioStats);
 
@@ -133,7 +133,7 @@ public class BinaryRowReaderWriterTest {
     public void testReverseReadPerformance() throws Exception {
         File dir = Files.createTempDir();
         IoStats ioStats = new IoStats();
-        DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false);
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "booya").getAbsolutePath(), "rw", false, 0);
         BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
         BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 
@@ -170,7 +170,7 @@ public class BinaryRowReaderWriterTest {
         IoStats ioStats = new IoStats();
         Random rand = new Random();
         for (long i = 0; i < 1000; i++) {
-            DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "foo").getAbsolutePath(), "rw", false);
+            DiskBackedWALFiler filer = new DiskBackedWALFiler(new File(dir, "foo").getAbsolutePath(), "rw", false, 0);
             BinaryRowReader binaryRowReader = new BinaryRowReader(filer, ioStats, 1);
             BinaryRowWriter binaryRowWriter = new BinaryRowWriter(filer, ioStats);
 

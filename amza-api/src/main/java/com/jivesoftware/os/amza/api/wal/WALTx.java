@@ -2,13 +2,13 @@ package com.jivesoftware.os.amza.api.wal;
 
 import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
 
 /**
- *
  * @author jonathan.colt
  */
-public interface WALTx<I> {
+public interface WALTx {
 
     <R> R write(WALWrite<R> write) throws Exception;
 
@@ -18,7 +18,9 @@ public interface WALTx<I> {
 
     void validateAndRepair() throws Exception;
 
-    I load(VersionedPartitionName partitionName, int maxUpdatesBetweenIndexCommitMarker) throws Exception;
+    <I extends CompactableWALIndex> I load(WALIndexProvider<I> walIndexProvider,
+        VersionedPartitionName partitionName,
+        int maxUpdatesBetweenIndexCommitMarker) throws Exception;
 
     long length() throws Exception;
 
@@ -26,7 +28,7 @@ public interface WALTx<I> {
 
     void delete() throws Exception;
 
-    Optional<Compacted<I>> compact(RowType compactToRowType,
+    <I extends CompactableWALIndex> Optional<Compacted<I>> compact(RowType compactToRowType,
         long removeTombstonedOlderThanTimestampId,
         long ttlTimestampId,
         I rowIndex,

@@ -43,6 +43,7 @@ import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.assertTrue;
 
 public class AmzaServiceTest {
 
@@ -228,7 +229,10 @@ public class AmzaServiceTest {
                                 txId = ringMemberCursor.transactionId;
                             }
                         }
-                    } catch (IllegalStateException x) {
+                    } catch (InterruptedException x) {
+                        Thread.interrupted();
+                        break;
+                    } catch (IllegalStateException | PropertiesNotPresentException x) {
                         // Swallow for now.
                     } catch (Exception x) {
                         x.printStackTrace();
@@ -331,6 +335,8 @@ public class AmzaServiceTest {
             AmzaService.AmzaPartitionRoute route = node.getPartitionRoute(partitionName);
             assertEquals(route.orderedMembers.size(), clusterNodes.size());
             assertNotNull(route.leader);
+            assertTrue(node.sickThreads.getSickThread().isEmpty());
+            assertTrue(node.sickPartitions.getSickPartitions().isEmpty());
         }
 
         takerThreadPool.shutdownNow();

@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.storage.filer;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 
 /**
@@ -11,8 +12,10 @@ import java.nio.channels.FileChannel;
 public class DiskBackedWALFilerChannelReader implements IReadable {
 
     private final DiskBackedWALFiler parent;
-    private final FileChannel fc;
+    private FileChannel fc;
     private long fp;
+
+    private final ByteBuffer singleByteBuffer = ByteBuffer.allocate(1);
 
     public DiskBackedWALFilerChannelReader(DiskBackedWALFiler parent, FileChannel fc) {
         this.parent = parent;
@@ -26,7 +29,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
 
     @Override
     public void seek(long position) throws IOException {
-        if (position > parent.length()) {
+        if (position < 0 || position > parent.length()) {
             throw new IOException("seek overflow " + position + " " + this);
         }
         fp = position;
@@ -44,27 +47,37 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
 
     @Override
     public int read() throws IOException {
-        ByteBuffer bb = ByteBuffer.allocate(1);
-        fc.read(bb, fp);
-        fp++;
-        bb.position(0);
-        return (int) bb.get();
+        while (true) {
+            try {
+                singleByteBuffer.position(0);
+                int read = fc.read(singleByteBuffer, fp);
+                fp++;
+                singleByteBuffer.position(0);
+                return read != 1 ? -1 : singleByteBuffer.get();
+            } catch (ClosedChannelException e) {
+                fc = parent.getFileChannel();
+            }
+        }
     }
 
     @Override
     public int read(byte[] b) throws IOException {
-        ByteBuffer bb = ByteBuffer.wrap(b);
-        fc.read(bb, fp);
-        fp += b.length;
-        return bb.capacity();
+        return read(b, 0, b.length);
     }
 
     @Override
     public int read(byte[] b, int _offset, int _len) throws IOException {
         ByteBuffer bb = ByteBuffer.wrap(b, _offset, _len);
-        fc.read(bb, fp);
-        fp += _len;
-        return _len;
+        while (true) {
+            try {
+                fc.read(bb, fp);
+                fp += _len;
+                return _len;
+            } catch (ClosedChannelException e) {
+                fc = parent.getFileChannel();
+                bb.position(0);
+            }
+        }
     }
 
     @Override

@@ -75,12 +75,19 @@ public class TakeVersionedPartitionCoordinator {
                         VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                         if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
                             return txHighestPartitionTx.tx(versionedAquarium,
-                                (versionedAquarium1, highestTxId) -> streamHighestTxId(versionedAquarium1,
-                                    highestTxId,
-                                    takeSessionId,
-                                    versionedRing,
-                                    ringMember,
-                                    availableStream));
+                                (versionedAquarium1, highestTxId) -> {
+                                    if (versionedAquarium1 != null) {
+                                        return streamHighestTxId(versionedAquarium1,
+                                            highestTxId,
+                                            takeSessionId,
+                                            versionedRing,
+                                            ringMember,
+                                            availableStream);
+                                    } else {
+                                        LOG.warn("Highest txId unavailable for {}", versionedPartitionName);
+                                        return Long.MAX_VALUE;
+                                    }
+                                });
                         } else {
                             LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
                             return Long.MAX_VALUE;

@@ -11,6 +11,7 @@ package com.jivesoftware.os.amza.service.filer;
 import com.jivesoftware.os.amza.api.filer.IFiler;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 
 /**
  *
@@ -68,6 +69,9 @@ public class ByteBufferBackedFiler implements IFiler {
 
     @Override
     public void flush(boolean fsync) throws IOException {
+        if (fsync && buffer instanceof MappedByteBuffer) {
+            ((MappedByteBuffer) buffer).force();
+        }
     }
 
     @Override
@@ -98,7 +102,6 @@ public class ByteBufferBackedFiler implements IFiler {
 
     @Override
     public void close() throws IOException {
-
     }
 
     @Override

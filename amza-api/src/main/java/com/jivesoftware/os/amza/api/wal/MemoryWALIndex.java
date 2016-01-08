@@ -32,6 +32,7 @@ import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
 import java.util.Map.Entry;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -254,7 +255,7 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public CompactionWALIndex startCompaction() throws Exception {
+    public CompactionWALIndex startCompaction(boolean hasActive) throws Exception {
 
         final MemoryWALIndex rowsIndex = new MemoryWALIndex();
         return new CompactionWALIndex() {
@@ -265,12 +266,11 @@ public class MemoryWALIndex implements WALIndex {
             }
 
             @Override
-            public void abort() throws Exception {
-            }
-
-            @Override
-            public void commit() throws Exception {
+            public void commit(Callable<Void> commit) throws Exception {
                 index.clear();
+                if (commit != null) {
+                    commit.call();
+                }
                 index.putAll(rowsIndex.index);
             }
         };

@@ -6,28 +6,31 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.AquariumTransactor;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
-import com.jivesoftware.os.amza.service.storage.PartitionCreator;
-import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AwaitNotify;
+import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.api.scan.RowChanges;
-import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.api.stream.KeyValueStream;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
-import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.api.wal.WALUpdated;
-import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.aquarium.Aquarium;
+import com.jivesoftware.os.aquarium.Aquarium.Tx;
 import com.jivesoftware.os.aquarium.AtQuorum;
 import com.jivesoftware.os.aquarium.AwaitLivelyEndState;
 import com.jivesoftware.os.aquarium.Liveliness;
@@ -56,7 +59,7 @@ import java.util.concurrent.TimeUnit;
 /**
  *
  */
-public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions, RowChanges {
+public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator.BootstrapPartitions, RowChanges {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -71,6 +74,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
     private final SystemWALStorage systemWALStorage;
     private final StorageVersionProvider storageVersionProvider;
     private final VersionedPartitionProvider versionedPartitionProvider;
+    private final PartitionCreator partitionCreator;
     private final TakeCoordinator takeCoordinator;
     private final WALUpdated walUpdated;
     private final Liveliness liveliness;
@@ -92,6 +96,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         SystemWALStorage systemWALStorage,
         StorageVersionProvider storageVersionProvider,
         VersionedPartitionProvider versionedPartitionProvider,
+        PartitionCreator partitionCreator,
         TakeCoordinator takeCoordinator,
         WALUpdated walUpdated,
         Liveliness liveliness,
@@ -105,6 +110,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         this.systemWALStorage = systemWALStorage;
         this.storageVersionProvider = storageVersionProvider;
         this.versionedPartitionProvider = versionedPartitionProvider;
+        this.partitionCreator = partitionCreator;
         this.takeCoordinator = takeCoordinator;
         this.walUpdated = walUpdated;
         this.liveliness = liveliness;
@@ -149,7 +155,12 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         scheduledExecutorService.shutdownNow();
     }
 
-    public void tookFully(RingMember fromRingMember, long leadershipToken, VersionedPartitionName versionedPartitionName) throws Exception {
+    public <R> R tx(VersionedPartitionName versionedPartitionName, Tx<R> tx) throws Exception {
+        return getAquarium(versionedPartitionName).tx(tx);
+    }
+
+    @Override
+    public void tookFully(VersionedPartitionName versionedPartitionName, RingMember fromRingMember, long leadershipToken) throws Exception {
         Aquarium aquarium = getAquarium(versionedPartitionName);
         Waterline leader = aquarium.getLeader();
         if (leader != null
@@ -184,7 +195,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         }
     }
 
-    public Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
+    private Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         if (versionedPartitionProvider.getProperties(partitionName) == null) {
             throw new PropertiesNotPresentException("Properties missing for " + partitionName);
@@ -204,7 +215,7 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
     public Waterline getCurrentState(PartitionName partitionName, RingMember remoteRingMember, long remotePartitionVersion) throws Exception {
         VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, remotePartitionVersion);
         return new ReadWaterline<>(
-            new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, CURRENT, startupVersion),
+            currentStateStorage(partitionName),
             new AmzaMemberLifecycle(storageVersionProvider, versionedPartitionName, rootAquariumMember),
             new AmzaAtQuorum(versionedPartitionProvider, ringStoreReader, versionedPartitionName),
             Long.class)
@@ -316,8 +327,8 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
             -> writeDesired.put(rootAquariumMember, nextState, nextTimestamp);
 
         return new Aquarium(orderIdProvider,
-            new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName.getPartitionName(), CURRENT, startupVersion),
-            new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, versionedPartitionName.getPartitionName(), DESIRED, startupVersion),
+            currentStateStorage(versionedPartitionName.getPartitionName()),
+            desiredStateStorage(versionedPartitionName.getPartitionName()),
             currentTransitionQuorum,
             desiredTransitionQuorum,
             liveliness,
@@ -357,26 +368,37 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         return true;
     }
 
+    @Override
     public LivelyEndState getLivelyEndState(VersionedPartitionName versionedPartitionName) throws Exception {
         return getAquarium(versionedPartitionName).livelyEndState();
     }
 
-    public void wipeTheGlass(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception {
-        if ((!livelyEndState.isOnline() || !isOnline(livelyEndState.getLeaderWaterline()))
+    @Override
+    public boolean isLivelyEndState(VersionedPartitionName versionedPartitionName, RingMember ringMember) throws Exception {
+        return getAquarium(versionedPartitionName).isLivelyEndState(ringMember.asAquariumMember());
+    }
+
+    @Override
+    public void wipeTheGlass(VersionedPartitionName versionedPartitionName) throws Exception {
+        LivelyEndState livelyEndState = getLivelyEndState(versionedPartitionName);
+        if (livelyEndState.getCurrentState() == State.expunged) {
+            throw new PartitionIsExpungedException("Partition " + versionedPartitionName + " is expunged");
+        } else if ((!livelyEndState.isOnline() || !isOnline(livelyEndState.getLeaderWaterline()))
             && ringStoreReader.isMemberOfRing(versionedPartitionName.getPartitionName().getRingName())) {
-            Aquarium aquarium = getAquarium(versionedPartitionName);
-            if (livelyEndState.getCurrentState() == State.expunged) {
-                // reenter the aquarium
-                aquarium.suggestState(State.follower);
-            }
-            aquarium.tapTheGlass();
+            getAquarium(versionedPartitionName).tapTheGlass();
         }
+    }
+
+    @Override
+    public boolean suggestState(VersionedPartitionName versionedPartitionName, State state) throws Exception {
+        return getAquarium(versionedPartitionName).suggestState(state);
     }
 
     public boolean isOnline(Waterline waterline) throws Exception {
         return waterline != null && waterline.isAtQuorum() && liveliness.isAlive(waterline.getMember());
     }
 
+    @Override
     public LivelyEndState awaitOnline(VersionedPartitionName versionedPartitionName, long timeoutMillis) throws Exception {
         Aquarium aquarium = getAquarium(versionedPartitionName);
         LivelyEndState livelyEndState = aquarium.livelyEndState();
@@ -392,8 +414,13 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         return aquarium.awaitOnline(timeoutMillis);
     }
 
+    @Override
+    public Waterline getLeader(VersionedPartitionName versionedPartitionName) throws Exception {
+        return getAquarium(versionedPartitionName).getLeader();
+    }
+
     public Waterline remoteAwaitProbableLeader(PartitionName partitionName, long timeoutMillis) throws Exception {
-        AmzaStateStorage amzaStateStorage = new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, CURRENT, startupVersion);
+        AmzaStateStorage amzaStateStorage = currentStateStorage(partitionName);
 
         Waterline[] leader = new Waterline[1];
         long doneAfterTimestamp = System.currentTimeMillis() + timeoutMillis;
@@ -418,6 +445,36 @@ public class AmzaAquariumProvider implements TakeCoordinator.BootstrapPartitions
         }
 
         return leader[0];
+    }
+
+    @Override
+    public void delete(VersionedPartitionName versionedPartitionName) throws Exception {
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
+        long partitionVersion = versionedPartitionName.getPartitionVersion();
+
+        AmzaStateStorage currentStateStorage = currentStateStorage(partitionName);
+        AmzaStateStorage desiredStateStorage = desiredStateStorage(partitionName);
+
+        AmzaPartitionUpdates amzaPartitionUpdates = new AmzaPartitionUpdates();
+        currentStateStorage.scan(rootAquariumMember, null, partitionVersion, (rootMember1, isSelf, ackMember, lifecycle1, state, timestamp, version) -> {
+            byte[] keyBytes = AmzaAquariumProvider.stateKey(partitionName, CURRENT, rootMember1, lifecycle1, ackMember);
+            amzaPartitionUpdates.remove(keyBytes, timestamp);
+            return true;
+        });
+        desiredStateStorage.scan(rootAquariumMember, null, partitionVersion, (rootMember1, isSelf, ackMember, lifecycle1, state, timestamp, version) -> {
+            byte[] keyBytes = AmzaAquariumProvider.stateKey(partitionName, DESIRED, rootMember1, lifecycle1, ackMember);
+            amzaPartitionUpdates.remove(keyBytes, timestamp);
+            return true;
+        });
+        systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, amzaPartitionUpdates, walUpdated);
+    }
+
+    private AmzaStateStorage currentStateStorage(PartitionName partitionName) {
+        return new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, CURRENT, startupVersion);
+    }
+
+    private AmzaStateStorage desiredStateStorage(PartitionName partitionName) {
+        return new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, DESIRED, startupVersion);
     }
 
     static byte[] stateKey(PartitionName partitionName,

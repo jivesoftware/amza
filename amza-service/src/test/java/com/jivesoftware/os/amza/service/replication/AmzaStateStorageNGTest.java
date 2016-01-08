@@ -4,12 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
-import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
+import com.jivesoftware.os.amza.service.LivelyEndStateTransactor;
+import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.stats.IoStats;
@@ -64,7 +65,7 @@ public class AmzaStateStorageNGTest {
         WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
-            walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, -1);
+            walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
         PartitionIndex partitionIndex = new PartitionIndex(indexedWALStorageProvider,
             partitionPropertyMarshaller,
             false);
@@ -75,12 +76,7 @@ public class AmzaStateStorageNGTest {
 
             @Override
             public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                return tx.tx(new VersionedPartitionName(partitionName, 0), livelyEndState);
-            }
-
-            @Override
-            public VersionedState getLocalVersionedState(PartitionName partitionName) throws Exception {
-                return new VersionedState(livelyEndState, new StorageVersion(0, 0));
+                return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), new LivelyEndStateTransactor(livelyEndState), 0));
             }
         };
 

@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.service.filer.AutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.service.filer.ByteBufferFactory;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
@@ -57,7 +57,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
     }
 
     @Override
-    public RowIO<File> create(File key, String name) throws Exception {
+    public RowIO<File> open(File key, String name, boolean createIfAbsent) throws Exception {
         File file = new File(key, name);
         MemoryBackedWALFiler filer = getFiler(file);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
@@ -91,7 +91,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
     }
 
     private MemoryBackedWALFiler createFiler() throws IOException {
-        return new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(initialBufferSegmentSize, maxBufferSegmentSize, byteBufferFactory));
+        return new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(initialBufferSegmentSize, maxBufferSegmentSize, byteBufferFactory));
     }
 
     @Override
@@ -107,6 +107,11 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
 
     @Override
     public boolean ensure(File key) {
+        return true;
+    }
+
+    @Override
+    public boolean exists(File key) {
         return true;
     }
 }

@@ -1,7 +1,5 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.api.wal.NoOpWALIndex;
-import com.jivesoftware.os.amza.api.wal.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
@@ -40,14 +38,14 @@ public class DeltaWALFactory {
         this.highwaterRowMarshaller = highwaterRowMarshaller;
     }
 
-    public DeltaWAL<NoOpWALIndex> create() throws Exception {
+    public DeltaWAL create() throws Exception {
         return createOrOpen(idProvider.nextId());
     }
 
-    private DeltaWAL<NoOpWALIndex> createOrOpen(long id) throws Exception {
-        WALTx<NoOpWALIndex> deltaWALRowsTx = new BinaryWALTx<>(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller, new NoOpWALIndexProvider());
+    private DeltaWAL createOrOpen(long id) throws Exception {
+        WALTx deltaWALRowsTx = new BinaryWALTx<>(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller);
         deltaWALRowsTx.validateAndRepair();
-        return new DeltaWAL<>(id, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
+        return new DeltaWAL(id, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
     }
 
     public List<DeltaWAL> list() throws Exception {

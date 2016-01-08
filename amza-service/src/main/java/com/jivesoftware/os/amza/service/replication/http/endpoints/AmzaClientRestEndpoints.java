@@ -24,6 +24,9 @@ import com.jivesoftware.os.amza.api.filer.ICloseable;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
+import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient.RingLeader;
+import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient.StateMessageCause;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -81,7 +84,7 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (Exception e) {
-            LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[]{partitionName, partitionProperties, ringSize}, e);
+            LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[] { partitionName, partitionProperties, ringSize }, e);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to configPartition.", e);
         }
     }
@@ -97,10 +100,10 @@ public class AmzaClientRestEndpoints {
             client.ensurePartition(partitionName, waitForLeaderElection);
             return Response.ok().build();
         } catch (TimeoutException e) {
-            LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
+            LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
-            LOG.error("Failed while attempting to ensurePartition:{}", new Object[]{partitionName}, e);
+            LOG.error("Failed while attempting to ensurePartition:{}", new Object[] { partitionName }, e);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
@@ -112,7 +115,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.RingLeader ringLeader = client.ring(partitionName);
+            RingLeader ringLeader = client.ring(partitionName);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
@@ -128,7 +131,7 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (Exception e) {
-            LOG.error("Failed while attempting to get ring:{}", new Object[]{partitionName}, e);
+            LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
@@ -141,7 +144,7 @@ public class AmzaClientRestEndpoints {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
         try {
-            com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.RingLeader ringLeader = client.ringLeader(partitionName, waitForLeaderElection);
+            RingLeader ringLeader = client.ringLeader(partitionName, waitForLeaderElection);
             ChunkedOutput<byte[]> chunkedOutput = new ChunkedOutput<>(byte[].class);
             chunkExecutors.submit(() -> {
                 ChunkedOutputFiler out = null;
@@ -157,10 +160,10 @@ public class AmzaClientRestEndpoints {
             });
             return chunkedOutput;
         } catch (TimeoutException e) {
-            LOG.error("No leader elected within timeout:{} {} millis", new Object[]{partitionName, waitForLeaderElection}, e);
+            LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
-            LOG.error("Failed while attempting to get ring:{}", new Object[]{partitionName}, e);
+            LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
@@ -178,7 +181,7 @@ public class AmzaClientRestEndpoints {
         FilerInputStream in = null;
         try {
             in = new FilerInputStream(inputStream);
-            com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.StateMessageCause stateMessageCause = client.commit(partitionName,
+            StateMessageCause stateMessageCause = client.commit(partitionName,
                 Consistency.valueOf(consistencyName),
                 checkLeader, 10_000, in);
             if (stateMessageCause != null) {
@@ -193,7 +196,7 @@ public class AmzaClientRestEndpoints {
             LOG.warn("FailedToAchieveQuorumException for {} {}", base64PartitionName, x);
             return ResponseHelper.INSTANCE.errorResponse(Response.Status.ACCEPTED, "Failed to achieve quorum exception.");
         } catch (Exception x) {
-            Object[] vals = new Object[]{partitionName, consistencyName};
+            Object[] vals = new Object[] { partitionName, consistencyName };
             LOG.warn("Failed to commit to {} at {}.", vals, x);
             return ResponseHelper.INSTANCE.errorResponse("Failed to commit: " + Arrays.toString(vals), x);
         } finally {
@@ -211,7 +214,7 @@ public class AmzaClientRestEndpoints {
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.StateMessageCause stateMessageCause = client.status(partitionName,
+        StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
             checkLeader,
             10_000);
@@ -247,7 +250,7 @@ public class AmzaClientRestEndpoints {
         InputStream inputStream) {
 
         PartitionName partitionName = PartitionName.fromBase64(base64PartitionName);
-        com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.StateMessageCause stateMessageCause = client.status(partitionName,
+        StateMessageCause stateMessageCause = client.status(partitionName,
             Consistency.valueOf(consistencyName),
             checkLeader,
             10_000);
@@ -342,7 +345,7 @@ public class AmzaClientRestEndpoints {
         }
     }
 
-    private Response stateMessageCauseToResponse(com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService.StateMessageCause stateMessageCause) {
+    private Response stateMessageCauseToResponse(StateMessageCause stateMessageCause) {
         if (stateMessageCause != null && stateMessageCause.state != null) {
             LOG.warn("{}", stateMessageCause);
             switch (stateMessageCause.state) {

@@ -4,21 +4,21 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedState;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
+import com.jivesoftware.os.amza.service.Partition;
+import com.jivesoftware.os.amza.service.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.service.Partition;
-import com.jivesoftware.os.amza.service.partition.RemoteVersionedState;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
-import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.Totals;
@@ -294,32 +294,49 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("count", "disabled");
             }
 
-            partition.highestTxId((versionedPartitionName, livelyEndState, highestTxId) -> {
+            partition.highestTxId((versionedAquarium, highestTxId) -> {
+                VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
                 State currentState = livelyEndState.getCurrentState();
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
                 map.put("state", currentState != null ? currentState.name() : "unknown");
                 map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
+
+                if (name.isSystemPartition()) {
+                    HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
+                    WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(
+                        new VersionedPartitionName(name, versionedPartitionName.getPartitionVersion()));
+                    map.put("highwaters", renderHighwaters(partitionHighwater));
+                } else {
+                    PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
+                    partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
+                        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(
+                            new VersionedPartitionName(name, versionedPartitionName.getPartitionVersion()));
+                        map.put("highwaters", renderHighwaters(partitionHighwater));
+                        return null;
+                    });
+                }
+
+                map.put("localState", ImmutableMap.of("online", livelyEndState.isOnline(),
+                    "state", currentState != null ? currentState.name() : "unknown",
+                    "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
+                    "partitionVersion", String.valueOf(versionedPartitionName.getPartitionVersion()),
+                    "stripeVersion", String.valueOf(versionedAquarium.getStripeVersion())));
+
+                List<Map<String, Object>> neighborStates = new ArrayList<>();
+                Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
+                for (RingMember ringMember : neighboringRingMembers) {
+
+                    RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
+                    neighborStates.add(ImmutableMap.of("version", neighborState != null ? String.valueOf(neighborState.version) : "unknown",
+                        "state", neighborState != null && neighborState.waterline != null ? neighborState.waterline.getState().name() : "unknown",
+                        "name", new String(ringMember.getMember().getBytes())));
+                }
+                map.put("neighborStates", neighborStates);
+
                 return null;
             });
-
-            PartitionStateStorage partitionStateStorage = amzaService.getPartitionStateStorage();
-            VersionedState localState = partitionStateStorage.getLocalVersionedState(name);
-
-            if (name.isSystemPartition()) {
-                HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(
-                    new VersionedPartitionName(name, localState.getPartitionVersion()));
-                map.put("highwaters", renderHighwaters(partitionHighwater));
-            } else {
-                PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
-                partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                    WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(
-                        new VersionedPartitionName(name, localState.getPartitionVersion()));
-                    map.put("highwaters", renderHighwaters(partitionHighwater));
-                    return null;
-                });
-            }
         }
         map.put("gets", numberFormat.format(totals.gets.get()));
         map.put("getsLag", getDurationBreakdown(totals.getsLag.get()));
@@ -335,28 +352,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         map.put("takesLag", getDurationBreakdown(totals.takesLag.get()));
         map.put("takeApplies", numberFormat.format(totals.takeApplies.get()));
         map.put("takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()));
-
-        if (name != null) {
-            VersionedState localVersionedWaterline = amzaService.getPartitionStateStorage().getLocalVersionedState(name);
-            LivelyEndState livelyEndState = localVersionedWaterline.getLivelyEndState();
-            State currentState = livelyEndState.getCurrentState();
-            map.put("localState", ImmutableMap.of("online", livelyEndState.isOnline(),
-                "state", currentState != null ? currentState.name() : "unknown",
-                "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
-                "partitionVersion", String.valueOf(localVersionedWaterline.getPartitionVersion()),
-                "stripeVersion", String.valueOf(localVersionedWaterline.getStorageVersion().stripeVersion)));
-
-            List<Map<String, Object>> neighborStates = new ArrayList<>();
-            Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
-            for (RingMember ringMember : neighboringRingMembers) {
-
-                RemoteVersionedState neighborState = amzaService.getPartitionStateStorage().getRemoteVersionedState(ringMember, name);
-                neighborStates.add(ImmutableMap.of("version", neighborState != null ? String.valueOf(neighborState.version) : "unknown",
-                    "state", neighborState != null && neighborState.waterline != null ? neighborState.waterline.getState().name() : "unknown",
-                    "name", new String(ringMember.getMember().getBytes())));
-            }
-            map.put("neighborStates", neighborStates);
-        }
 
         return map;
     }

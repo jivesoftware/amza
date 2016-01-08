@@ -21,24 +21,25 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
-import com.jivesoftware.os.amza.api.stream.Commitable;
-import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
-import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValues;
+import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyPointerStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
 import com.jivesoftware.os.amza.api.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
+import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALIndexable;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALReader;
@@ -49,6 +50,7 @@ import com.jivesoftware.os.amza.api.wal.WALWriter;
 import com.jivesoftware.os.amza.api.wal.WALWriter.IndexableKeys;
 import com.jivesoftware.os.amza.api.wal.WALWriter.RawRows;
 import com.jivesoftware.os.amza.api.wal.WALWriter.TxKeyPointerFpStream;
+import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -61,6 +63,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -78,7 +81,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
-    private final WALTx<I> walTx;
+    private final WALTx walTx;
+    private final WALIndexProvider<I> walIndexProvider;
+    private final SickPartitions sickPartitions;
     private final AtomicInteger maxUpdatesBetweenCompactionHintMarker;
     private final AtomicInteger maxUpdatesBetweenIndexCommitMarker;
     private final long[] stripedKeyHighwaterTimestamps;
@@ -94,9 +99,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     private final AtomicLong highestTxId = new AtomicLong(-1);
     private final int tombstoneCompactionFactor;
 
-    private final ThreadLocal<Integer> reentrant = new ReentrantTheadLocal();
+    private final ThreadLocal<Integer> reentrant = new ReentrantThreadLocal();
+    private final AtomicBoolean sick = new AtomicBoolean();
 
-    static class ReentrantTheadLocal extends ThreadLocal<Integer> {
+    static class ReentrantThreadLocal extends ThreadLocal<Integer> {
 
         @Override
         protected Integer initialValue() {
@@ -108,7 +114,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller rowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
-        WALTx<I> walTx,
+        WALTx walTx,
+        WALIndexProvider<I> walIndexProvider,
+        SickPartitions sickPartitions,
         int maxUpdatesBetweenCompactionHintMarker,
         int maxUpdatesBetweenIndexCommitMarker,
         int tombstoneCompactionFactor) {
@@ -118,6 +126,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         this.primaryRowMarshaller = rowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.walTx = walTx;
+        this.walIndexProvider = walIndexProvider;
+        this.sickPartitions = sickPartitions;
         this.maxUpdatesBetweenCompactionHintMarker = new AtomicInteger(maxUpdatesBetweenCompactionHintMarker);
         this.maxUpdatesBetweenIndexCommitMarker = new AtomicInteger(maxUpdatesBetweenIndexCommitMarker);
         this.tombstoneCompactionFactor = tombstoneCompactionFactor;
@@ -125,6 +135,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     }
 
     private void acquireOne() {
+        if (sick.get()) {
+            throw new IllegalStateException("Partition is sick: " + versionedPartitionName);
+        }
         try {
             int enters = reentrant.get();
             if (enters == 0) {
@@ -145,6 +158,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     }
 
     private void acquireAll() throws InterruptedException {
+        if (sick.get()) {
+            throw new IllegalStateException("Partition is sick: " + versionedPartitionName);
+        }
         tickleMeElmophore.acquire(numTickleMeElmaphore);
     }
 
@@ -163,6 +179,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             I wali = walIndex.get();
             if (wali != null) {
                 wali.delete();
+                walIndex.set(null);
             }
         } finally {
             releaseAll();
@@ -180,7 +197,15 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         if (compact.isPresent()) {
             acquireAll();
             try {
-                WALTx.CommittedCompacted<I> compacted = compact.get().commit();
+                WALTx.CommittedCompacted<I> compacted;
+                try {
+                    compacted = compact.get().commit();
+                } catch (Exception e) {
+                    LOG.inc(metricPrefix + "failedCompaction");
+                    LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
+                    loadInternal(true);
+                    return -1;
+                }
                 walIndex.set(compacted.index);
                 keyCount.set(compacted.keyCount + compacted.catchupKeyCount);
                 clobberCount.set(0);
@@ -219,8 +244,20 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public void load() throws Exception {
         acquireAll();
         try {
+            loadInternal(false);
+        } finally {
+            releaseAll();
+        }
+    }
 
-            walIndex.compareAndSet(null, walTx.load(versionedPartitionName, maxUpdatesBetweenCompactionHintMarker.get()));
+    private void loadInternal(boolean recovery) throws Exception {
+        try {
+            long initialHighestTxId = highestTxId.get();
+            if (!recovery && initialHighestTxId != -1) {
+                throw new IllegalStateException("Load should have completed before highestTxId:" + initialHighestTxId + " is modified.");
+            }
+
+            walIndex.compareAndSet(null, walTx.load(walIndexProvider, versionedPartitionName, maxUpdatesBetweenCompactionHintMarker.get()));
 
             MutableLong lastTxId = new MutableLong(-1);
             MutableLong rowsVisited = new MutableLong(maxUpdatesBetweenCompactionHintMarker.get());
@@ -277,14 +314,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             }, mergeStripedKeyHighwaters);
 
             if (!completed) {
-                throw new IllegalStateException("WALStorage failed to load completely for: " + versionedPartitionName);
+                throw new IllegalStateException("WALStorage failed to load completely for: " + versionedPartitionName + ", recovery:" + recovery);
             }
 
             keyCount.set(keys.longValue());
             clobberCount.set(clobbers.longValue());
 
-            if (!highestTxId.compareAndSet(-1, lastTxId.longValue())) {
-                throw new RuntimeException("Load should have completed before highestTxId:" + highestTxId.get() + " is modified.");
+            if (!highestTxId.compareAndSet(initialHighestTxId, Math.max(lastTxId.longValue(), initialHighestTxId))) {
+                throw new IllegalStateException("Load should have completed before highestTxId:" + initialHighestTxId + " is modified, recovery:" + recovery);
             }
             LOG.info("Loaded partition:{} with a highestTxId:{}", versionedPartitionName, lastTxId.longValue());
 
@@ -292,9 +329,11 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 writeCompactionHintMarker(writer);
                 return null;
             });
-
-        } finally {
-            releaseAll();
+        } catch (Exception e) {
+            LOG.error("Partition {} is irreparably sick, intervention is required, partition will be parked, recovery:{}",
+                new Object[] { versionedPartitionName, recovery }, e);
+            sick.set(true);
+            sickPartitions.sick(versionedPartitionName, e);
         }
     }
 
@@ -335,9 +374,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+            rowWriter.writeSystem(UIO.longsBytes(new long[] {
                 RowType.COMMIT_KEY,
-                indexCommitedUpToTxId}));
+                indexCommitedUpToTxId }));
         }
     }
 
@@ -378,6 +417,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
+            if (wali == null) {
+                throw new IllegalStateException("Attempted to commit against a nonexistent index, it has likely been deleted");
+            }
             RowsChanged rowsChanged;
             MutableBoolean flushCompactionHint = new MutableBoolean(false);
             MutableLong indexCommittedFromTxId = new MutableLong(Long.MAX_VALUE);
@@ -390,13 +432,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         for (int k = 0; k < keys.size(); k++) {
                             WALValue value = values.get(k);
                             if (!stream
-                            .stream(rowType, prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
+                                .stream(rowType, prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
                                 return false;
                             }
                         }
                         return true;
                     },
-                    (_rowType, _prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
+                    (_rowType, _prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion,
+                        pointerFp) -> {
                         WALKey walKey = new WALKey(prefix, key);
                         WALValue walValue = new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion);
                         if (pointerFp == -1) {
@@ -560,7 +603,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
-            return wali.rowScan((prefix, key, timestamp, tombstoned, version, fp) -> {
+            return wali == null || wali.rowScan((prefix, key, timestamp, tombstoned, version, fp) -> {
                 byte[] hydrateRowIndexValue = hydrateRowIndexValue(fp);
                 RowType rowType = RowType.fromByte(hydrateRowIndexValue[0]);
                 byte[] value = primaryRowMarshaller.valueFromRow(rowType, hydrateRowIndexValue, 1 + 8);
@@ -595,8 +638,12 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public TimestampedValue getTimestampedValue(byte[] prefix, byte[] key) throws Exception {
         acquireOne();
         try {
+            WALIndex wali = walIndex.get();
+            if (wali == null) {
+                return null;
+            }
             TimestampedValue[] values = new TimestampedValue[1];
-            walIndex.get().getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
+            wali.getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
                 if (fp != -1 && !tombstoned) {
                     byte[] hydrateRowIndexValue = hydrateRowIndexValue(fp);
                     RowType rowType = RowType.fromByte(hydrateRowIndexValue[0]);
@@ -614,7 +661,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean streamValues(byte[] prefix, UnprefixedWALKeys keys, KeyValueStream keyValueStream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().getPointers(prefix, keys,
+            WALIndex wali = walIndex.get();
+            return wali == null || wali.getPointers(prefix, keys,
                 (_prefix, key, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
                     if (pointerFp != -1) {
                         RowType rowType = null;
@@ -646,7 +694,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean streamPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().getPointers(
+            WALIndex wali = walIndex.get();
+            return wali == null || wali.getPointers(
                 indexStream -> keyValues.consume(
                     (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                         if (valueTimestamp > getLargestTimestampForKeyStripe(prefix, key)) {
@@ -664,7 +713,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean containsKeys(byte[] prefix, UnprefixedWALKeys keys, KeyContainedStream stream) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().containsKeys(prefix, keys, stream);
+            WALIndex wali = walIndex.get();
+            return wali != null && wali.containsKeys(prefix, keys, stream);
         } finally {
             releaseOne();
         }
@@ -706,15 +756,17 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             long[] takeMetrics = new long[1];
-            Boolean readFromTransactionId = walTx.readFromTransactionId(sinceTransactionId, (offset, reader) -> reader.scan(offset, false,
-                (rowPointer, rowTxId, rowType, row) -> {
-                    if (rowType != RowType.system && rowTxId > sinceTransactionId) {
-                        return rowStream.row(rowPointer, rowTxId, rowType, row);
-                    } else {
-                        takeMetrics[0]++;
-                    }
-                    return true;
-                }));
+            boolean readFromTransactionId = walIndex.get() == null || walTx.readFromTransactionId(sinceTransactionId,
+                (offset, reader) -> reader.scan(offset,
+                    false,
+                    (rowPointer, rowTxId, rowType, row) -> {
+                        if (rowType != RowType.system && rowTxId > sinceTransactionId) {
+                            return rowStream.row(rowPointer, rowTxId, rowType, row);
+                        } else {
+                            takeMetrics[0]++;
+                        }
+                        return true;
+                    }));
             LOG.inc("excessTakes", takeMetrics[0]);
             return readFromTransactionId;
         } finally {
@@ -730,8 +782,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         try {
             long[] takeMetrics = new long[1];
             WALIndex wali = walIndex.get();
-            Boolean readFromTransactionId = walTx.read(reader
-                -> reader.read(fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
+            boolean readFromTransactionId = wali == null || walTx.read(
+                reader -> reader.read(
+                    fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
                     (rowPointer, rowTxId, rowType, row) -> {
                         if (rowType != RowType.system && rowTxId > sinceTransactionId) {
                             return rowStream.row(rowPointer, rowTxId, rowType, row);
@@ -750,7 +803,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public boolean takeAllRows(final RowStream rowStream) throws Exception {
         acquireOne();
         try {
-            return walTx.readFromTransactionId(0, (offset, reader) -> reader.scan(offset, false, rowStream::row));
+            return walIndex.get() == null || walTx.readFromTransactionId(0, (offset, reader) -> reader.scan(offset, false, rowStream::row));
         } finally {
             releaseOne();
         }
@@ -762,7 +815,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         acquireOne();
         try {
             WALIndex wali = walIndex.get();
-            wali.updatedDescriptors(walStorageDescriptor.primaryIndexDescriptor, walStorageDescriptor.secondaryIndexDescriptors);
+            if (wali != null) {
+                wali.updatedDescriptors(walStorageDescriptor.primaryIndexDescriptor, walStorageDescriptor.secondaryIndexDescriptors);
+            }
         } finally {
             releaseOne();
         }
@@ -771,7 +826,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     public long count(WALKeyPointers keyPointers) throws Exception {
         acquireOne();
         try {
-            return walIndex.get().deltaCount(keyPointers) + keyCount.get();
+            WALIndex wali = walIndex.get();
+            return wali == null ? 0 : wali.deltaCount(keyPointers) + keyCount.get();
         } finally {
             releaseOne();
         }

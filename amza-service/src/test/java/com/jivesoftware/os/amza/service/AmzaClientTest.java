@@ -41,7 +41,7 @@ public class AmzaClientTest {
         File createTempDir = Files.createTempDir();
         final AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
         for (int i = 0; i < maxNumberOfServices; i++) {
-            cluster.newNode(new RingMember("localhost-" + i), new RingHost("localhost", i));
+            cluster.newNode(new RingMember("localhost-" + i), new RingHost("datacenter", "rack", "localhost", i));
         }
         Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
 
@@ -146,7 +146,7 @@ public class AmzaClientTest {
                         node = cluster.get(key);
                         try {
                             if (node == null) {
-                                cluster.newNode(new RingMember("localhost-" + port), new RingHost("localhost", port));
+                                cluster.newNode(new RingMember("localhost-" + port), new RingHost("datacenter", "rack", "localhost", port));
                                 addService--;
                             }
                         } catch (Exception x) {

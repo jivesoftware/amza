@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.replication.http.endpoints;
+package com.jivesoftware.os.amza.service.replication.http;
 
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.filer.IReadable;
@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.util.Arrays;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaClientService implements AmzaRestClient {
@@ -276,7 +275,7 @@ public class AmzaClientService implements AmzaRestClient {
                         State.not_the_leader, "Leader has changed.", null);
                 }
             } catch (Exception x) {
-                Object[] vals = new Object[]{partitionName, consistency};
+                Object[] vals = new Object[] { partitionName, consistency };
                 LOG.warn("Failed while determining leader {} at {}. ", vals, x);
                 return new StateMessageCause(partitionName, consistency, checkLeader, partitionAwaitOnlineTimeoutMillis,
                     State.error, "Failed while determining leader: " + Arrays.toString(vals), x);

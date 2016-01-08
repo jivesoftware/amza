@@ -15,18 +15,19 @@
  */
 package com.jivesoftware.os.amza.api.wal;
 
-import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.scan.RangeScannablePointers;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.api.stream.KeyValues;
 import com.jivesoftware.os.amza.api.stream.TxFpStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 
-public interface WALIndex extends RangeScannablePointers {
+public interface WALIndex extends RangeScannablePointers, CompactableWALIndex {
 
     boolean getPointers(byte[] prefix, UnprefixedWALKeys keys, WALKeyPointerStream stream) throws Exception;
 

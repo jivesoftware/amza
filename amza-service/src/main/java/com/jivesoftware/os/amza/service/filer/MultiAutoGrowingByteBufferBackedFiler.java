@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 /**
  *
  */
-public class AutoGrowingByteBufferBackedFiler implements IFiler {
+public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
 
     public static final long MAX_BUFFER_SEGMENT_SIZE = UIO.chunkLength(30);
     public static long MAX_POSITION = MAX_BUFFER_SEGMENT_SIZE * 100;
@@ -24,7 +24,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
     private final int fShift;
     private final long fseekMask;
 
-    public AutoGrowingByteBufferBackedFiler(long initialBufferSegmentSize,
+    public MultiAutoGrowingByteBufferBackedFiler(long initialBufferSegmentSize,
         long maxBufferSegmentSize,
         ByteBufferFactory byteBufferFactory) throws IOException {
         this.initialBufferSegmentSize = initialBufferSegmentSize > 0 ? UIO.chunkLength(UIO.chunkPower(initialBufferSegmentSize, 0)) : -1;
@@ -45,7 +45,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
         }
     }
 
-    private AutoGrowingByteBufferBackedFiler(long maxBufferSegmentSize,
+    private MultiAutoGrowingByteBufferBackedFiler(long maxBufferSegmentSize,
         ByteBufferFactory byteBufferFactory,
         ByteBufferBackedFiler[] filers,
         long length,
@@ -61,7 +61,7 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
         this.fseekMask = fseekMask;
     }
 
-    public AutoGrowingByteBufferBackedFiler duplicate(long startFP, long endFp) {
+    public MultiAutoGrowingByteBufferBackedFiler duplicate(long startFP, long endFp) {
         ByteBufferBackedFiler[] duplicate = new ByteBufferBackedFiler[filers.length];
         for (int i = 0; i < duplicate.length; i++) {
             if ((i + 1) * maxBufferSegmentSize < startFP || (i - 1) * maxBufferSegmentSize > endFp) {
@@ -69,24 +69,24 @@ public class AutoGrowingByteBufferBackedFiler implements IFiler {
             }
             duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
         }
-        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
+        return new MultiAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
     }
 
-    public AutoGrowingByteBufferBackedFiler duplicateNew(AutoGrowingByteBufferBackedFiler current) {
+    public MultiAutoGrowingByteBufferBackedFiler duplicateNew(MultiAutoGrowingByteBufferBackedFiler current) {
         ByteBufferBackedFiler[] duplicate = new ByteBufferBackedFiler[filers.length];
         System.arraycopy(current.filers, 0, duplicate, 0, current.filers.length - 1);
         for (int i = current.filers.length - 1; i < duplicate.length; i++) {
             duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
         }
-        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
+        return new MultiAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
     }
 
-    public AutoGrowingByteBufferBackedFiler duplicateAll() {
+    public MultiAutoGrowingByteBufferBackedFiler duplicateAll() {
         ByteBufferBackedFiler[] duplicate = new ByteBufferBackedFiler[filers.length];
         for (int i = 0; i < duplicate.length; i++) {
             duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
         }
-        return new AutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
+        return new MultiAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
     }
 
     final long ensure(long bytesToWrite) throws IOException {

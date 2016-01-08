@@ -37,13 +37,14 @@ public class DeltaWALNGTest {
         final PrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
 
-        WALTx<NoOpWALIndex> walTX = new BinaryWALTx<>(tmp,
+        WALTx walTX = new BinaryWALTx<>(tmp,
             "test",
             new BinaryRowIOProvider(new String[]{tmp.getAbsolutePath()}, new IoStats(), 1, 4_096, 64, false),
-            primaryRowMarshaller,
-            new NoOpWALIndexProvider());
+            primaryRowMarshaller);
+        walTX.validateAndRepair();
+
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        DeltaWAL<NoOpWALIndex> deltaWAL = new DeltaWAL<>(0, ids, primaryRowMarshaller, highwaterRowMarshaller, walTX);
+        DeltaWAL deltaWAL = new DeltaWAL(0, ids, primaryRowMarshaller, highwaterRowMarshaller, walTX);
 
         Map<WALKey, WALValue> apply1 = Maps.newLinkedHashMap();
         for (int i = 0; i < 10; i++) {

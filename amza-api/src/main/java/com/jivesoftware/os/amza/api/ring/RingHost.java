@@ -23,17 +23,34 @@ import java.util.Objects;
 
 public class RingHost {
 
-    public static final RingHost UNKNOWN_RING_HOST = new RingHost("unknownRingHost", 0);
+    public static final RingHost UNKNOWN_RING_HOST = new RingHost("", "", "unknownRingHost", 0);
 
+    private final String datacenter;
+    private final String rack;
     private final String host;
     private final int port;
 
     public byte[] toBytes() { // TODO convert to lex byte ordering?
         byte[] hostBytes = host.getBytes(StandardCharsets.UTF_8);
-        byte[] bytes = new byte[1 + 4 + hostBytes.length];
-        bytes[0] = 0; // version;
-        UIO.intBytes(port, bytes, 1);
-        UIO.bytes(hostBytes, bytes, 1 + 4);
+        byte[] rackBytes = rack.getBytes(StandardCharsets.UTF_8);
+        byte[] datacenterBytes = datacenter.getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = new byte[1 + 4 + 4 + hostBytes.length + 4 + rackBytes.length + 4 + datacenterBytes.length];
+        int i = 0;
+        bytes[i] = 1; // version;
+        i++;
+        UIO.intBytes(port, bytes, i);
+        i += 4;
+        UIO.intBytes(hostBytes.length, bytes, i);
+        i += 4;
+        UIO.bytes(hostBytes, bytes, i);
+        i += hostBytes.length;
+        UIO.intBytes(rackBytes.length, bytes, i);
+        i += 4;
+        UIO.bytes(rackBytes, bytes, i);
+        i += rackBytes.length;
+        UIO.intBytes(datacenterBytes.length, bytes, i);
+        i += 4;
+        UIO.bytes(datacenterBytes, bytes, i);
         return bytes;
     }
 
@@ -41,16 +58,44 @@ public class RingHost {
         if (bytes[0] == 0) {
             int port = UIO.bytesInt(bytes, 1);
             String host = new String(bytes, 1 + 4, bytes.length - (1 + 4), StandardCharsets.UTF_8);
-            return new RingHost(host, port);
+            return new RingHost("", "", host, port);
+        } else if (bytes[0] == 1) {
+            int i = 1;
+            int port = UIO.bytesInt(bytes, i);
+            i += 4;
+            int hostLength = UIO.bytesInt(bytes, i);
+            i += 4;
+            String host = new String(bytes, i, hostLength, StandardCharsets.UTF_8);
+            i += hostLength;
+            int rackLength = UIO.bytesInt(bytes, i);
+            i += 4;
+            String rack = new String(bytes, i, rackLength, StandardCharsets.UTF_8);
+            i += rackLength;
+            int datacenterLength = UIO.bytesInt(bytes, i);
+            i += 4;
+            String datacenter = new String(bytes, i, datacenterLength, StandardCharsets.UTF_8);
+            return new RingHost(datacenter, rack, host, port);
         }
         return null; // Sorry caller
     }
 
     @JsonCreator
-    public RingHost(@JsonProperty("host") String host,
+    public RingHost(@JsonProperty("datacenter") String datacenter,
+        @JsonProperty("rack") String rack,
+        @JsonProperty("host") String host,
         @JsonProperty("port") int port) {
+        this.datacenter = datacenter == null ? "" : datacenter;
+        this.rack = rack == null ? "" : rack;
         this.host = host;
         this.port = port;
+    }
+
+    public String getDatacenter() {
+        return datacenter;
+    }
+
+    public String getRack() {
+        return rack;
     }
 
     public String getHost() {
@@ -62,29 +107,47 @@ public class RingHost {
     }
 
     public String toCanonicalString() {
-        return host + ":" + port;
+        return datacenter + ":" + rack + ":" + host + ":" + port;
     }
 
     public static RingHost fromCanonicalString(String canonical) {
-        int index = canonical.lastIndexOf(':');
-        return new RingHost(canonical.substring(0, index), Integer.parseInt(canonical.substring(index + 1)));
+        String[] split = new String[4];
+        int i = 0;
+        int fromIndex = 0;
+        for (int toIndex = canonical.indexOf(':'); toIndex >= 0; toIndex = canonical.indexOf(':', toIndex + 1)) {
+            split[i] = canonical.substring(fromIndex, toIndex);
+            fromIndex = toIndex + 1;
+            i++;
+        }
+        split[i] = canonical.substring(fromIndex);
+        i++;
+        if (i == 2) {
+            return new RingHost("", "", split[0], Integer.parseInt(split[1]));
+        } else if (i == 4) {
+            return new RingHost(split[0], split[1], split[2], Integer.parseInt(split[3]));
+        } else {
+            throw new IllegalArgumentException("Malformed canonical:" + canonical + " expect: host:port or datacenter:rack:host:port");
+        }
     }
 
     @Override
     public String toString() {
-        return "RingHost{" + "host=" + host + ", port=" + port + '}';
+        return "RingHost{" + "datacenter=" + datacenter + ", rack=" + rack + ", host=" + host + ", port=" + port + '}';
     }
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 79 * hash + Objects.hashCode(this.host);
-        hash = 79 * hash + this.port;
+        int hash = 3;
+        hash = 17 * hash + Objects.hashCode(this.host);
+        hash = 17 * hash + this.port;
         return hash;
     }
 
     @Override
     public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
         if (obj == null) {
             return false;
         }
@@ -92,10 +155,13 @@ public class RingHost {
             return false;
         }
         final RingHost other = (RingHost) obj;
+        if (this.port != other.port) {
+            return false;
+        }
         if (!Objects.equals(this.host, other.host)) {
             return false;
         }
-        return this.port == other.port;
+        return true;
     }
 
 }

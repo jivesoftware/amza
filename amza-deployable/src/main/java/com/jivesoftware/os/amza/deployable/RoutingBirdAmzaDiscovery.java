@@ -62,8 +62,12 @@ public class RoutingBirdAmzaDiscovery implements Runnable {
                     Strings.padStart(String.valueOf(routingInstanceDescriptor.instanceName), 5, '0') + "_" + routingInstanceDescriptor.instanceKey);
 
                 HostPort hostPort = connectionDescriptor.getHostPort();
+                InstanceDescriptor instanceDescriptor = connectionDescriptor.getInstanceDescriptor();
                 AmzaRingStoreWriter ringWriter = amzaService.getRingWriter();
-                ringWriter.register(routingRingMember, new RingHost(hostPort.getHost(), hostPort.getPort()), -1);
+                ringWriter.register(routingRingMember, new RingHost(instanceDescriptor.datacenter,
+                    instanceDescriptor.rack,
+                    hostPort.getHost(),
+                    hostPort.getPort()), -1);
             }
         } catch (Exception x) {
             LOG.warn("Failed while calling routing bird discovery.", x);

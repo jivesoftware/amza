@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.replication.http.endpoints;
+package com.jivesoftware.os.amza.service.replication.http;
 
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.filer.IReadable;
@@ -10,7 +10,6 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import java.io.IOException;
 
 /**
- *
  * @author jonathan.colt
  */
 public interface AmzaRestClient {

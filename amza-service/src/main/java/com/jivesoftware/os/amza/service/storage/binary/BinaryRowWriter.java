@@ -15,23 +15,24 @@
  */
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.jivesoftware.os.amza.api.filer.IWriteable;
+import com.jivesoftware.os.amza.api.filer.IAppendOnly;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.wal.WALWriter;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.stats.IoStats;
-import com.jivesoftware.os.amza.api.wal.WALWriter;
+import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import gnu.trove.iterator.TLongIterator;
 import gnu.trove.list.array.TLongArrayList;
 import java.io.IOException;
 
 public class BinaryRowWriter implements WALWriter {
 
-    private final IWriteable filer;
+    private final IAppendOnly appendOnly;
     private final IoStats ioStats;
 
-    public BinaryRowWriter(IWriteable filer, IoStats ioStats) {
-        this.filer = filer;
+    public BinaryRowWriter(WALFiler filer, IoStats ioStats) throws IOException {
+        this.appendOnly = filer.appender();
         this.ioStats = ioStats;
     }
 
@@ -43,6 +44,7 @@ public class BinaryRowWriter implements WALWriter {
         RawRows rows,
         IndexableKeys indexableKeys,
         TxKeyPointerFpStream stream) throws Exception {
+
         byte[] lengthBuffer = new byte[4];
         HeapFiler memoryFiler = new HeapFiler((estimatedNumberOfRows * (4 + 1 + 8 + 4)) + estimatedSizeInBytes);
         TLongArrayList offsets = new TLongArrayList();
@@ -60,11 +62,10 @@ public class BinaryRowWriter implements WALWriter {
         long l = memoryFiler.length();
         long startFp;
         ioStats.wrote.addAndGet(l);
-        synchronized (filer.lock()) {
-            startFp = filer.length();
-            filer.seek(startFp); // seek to end of file.
-            filer.write(memoryFiler.leakBytes(), 0, (int) l);
-            filer.flush(false); // TODO expose to config
+        synchronized (appendOnly.lock()) {
+            startFp = appendOnly.length();
+            appendOnly.write(memoryFiler.leakBytes(), 0, (int) l);
+            appendOnly.flush(false); // TODO expose to config
         }
 
         TLongIterator iter = offsets.iterator();
@@ -100,21 +101,21 @@ public class BinaryRowWriter implements WALWriter {
 
     @Override
     public long getEndOfLastRow() throws Exception {
-        synchronized (filer.lock()) {
-            return filer.length();
+        synchronized (appendOnly.lock()) {
+            return appendOnly.length();
         }
     }
 
     public long length() throws IOException {
-        return filer.length();
+        return appendOnly.length();
     }
 
     public void flush(boolean fsync) throws IOException {
-        filer.flush(fsync);
+        appendOnly.flush(fsync);
     }
 
     public void close() throws IOException {
-        filer.close();
+        appendOnly.close();
     }
 
 }

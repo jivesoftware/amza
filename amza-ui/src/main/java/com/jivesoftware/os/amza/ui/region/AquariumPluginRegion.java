@@ -11,7 +11,6 @@ import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.ui.region.AquariumPluginRegion.AquariumPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
-import com.jivesoftware.os.aquarium.Aquarium;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
@@ -92,12 +91,11 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
                 ? new PartitionName(false, ringNameBytes, partitionNameBytes) : null;
             long partitionVersion = Long.parseLong(input.hexPartitionVersion, 16);
             VersionedPartitionName versionedPartitionName = partitionName != null ? new VersionedPartitionName(partitionName, partitionVersion) : null;
-            Aquarium aquarium = versionedPartitionName != null ? aquariumProvider.getAquarium(versionedPartitionName) : null;
-            if (aquarium != null) {
+            if (versionedPartitionName != null) {
                 List<Map<String, Object>> states = new ArrayList<>();
-                for (RingMemberAndHost entry : ring.entries) {
-                    Member asMember = entry.ringMember.asAquariumMember();
-                    aquarium.tx((readCurrent, readDesired, writeCurrent, writeDesired) -> {
+                aquariumProvider.tx(versionedPartitionName, (readCurrent, readDesired, writeCurrent, writeDesired) -> {
+                    for (RingMemberAndHost entry : ring.entries) {
+                        Member asMember = entry.ringMember.asAquariumMember();
 
                         Map<String, Object> state = new HashMap<>();
                         state.put("partitionName", input.partitionName);
@@ -116,12 +114,11 @@ public class AquariumPluginRegion implements PageRegion<AquariumPluginRegionInpu
                             }
                         }
                         states.add(state);
-                        return true;
-                    });
-                }
+                    }
+                    return true;
+                });
                 data.put("aquarium", states);
             }
-
         } catch (Exception e) {
             log.error("Unable to retrieve data", e);
         }

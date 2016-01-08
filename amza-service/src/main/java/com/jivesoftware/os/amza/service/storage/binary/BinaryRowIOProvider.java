@@ -44,12 +44,15 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
     }
 
     @Override
-    public RowIO<File> create(File dir, String name) throws Exception {
+    public RowIO<File> open(File dir, String name, boolean createIfAbsent) throws Exception {
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("Failed trying to mkdirs for " + dir);
         }
         File file = new File(dir, name);
-        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap);
+        if (!createIfAbsent && !file.exists()) {
+            return null;
+        }
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap, 0);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
         return new BinaryRowIO<>(file, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
@@ -73,6 +76,11 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
     @Override
     public boolean ensure(File key) {
         return key.exists() || key.mkdirs();
+    }
+
+    @Override
+    public boolean exists(File key) {
+        return key.exists();
     }
 
     @Override

@@ -5,9 +5,7 @@ import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaRestClient;
-import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaRestClient.RingLeader;
-import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaRestClient.StateMessageCause;
+import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.api.HealthTimer;
@@ -18,7 +16,6 @@ import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.StringDefault;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
@@ -192,7 +189,7 @@ public class AmzaRestClientHealthCheckDelegate implements AmzaRestClient {
         }
     }
 
-     public static interface RingLeaderRequestLatency extends TimerHealthCheckConfig {
+    public static interface RingLeaderRequestLatency extends TimerHealthCheckConfig {
 
         @StringDefault("client>ringLeader>request>latency")
         @Override

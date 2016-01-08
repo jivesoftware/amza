@@ -20,18 +20,21 @@ public class IndexedWALStorageProvider {
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final BinaryHighwaterRowMarshaller highwaterRowMarshaller;
     private final TimestampedOrderIdProvider orderIdProvider;
+    private final SickPartitions sickPartitions;
     private final int tombstoneCompactionFactor;
 
     public IndexedWALStorageProvider(WALIndexProviderRegistry indexProviderRegistry,
         PrimaryRowMarshaller primaryRowMarshaller,
         BinaryHighwaterRowMarshaller highwaterRowMarshaller,
         TimestampedOrderIdProvider orderIdProvider,
+        SickPartitions sickPartitions,
         int tombstoneCompactionFactor) {
 
         this.indexProviderRegistry = indexProviderRegistry;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
         this.orderIdProvider = orderIdProvider;
+        this.sickPartitions = sickPartitions;
         this.tombstoneCompactionFactor = tombstoneCompactionFactor;
     }
 
@@ -43,12 +46,17 @@ public class IndexedWALStorageProvider {
         WALIndexProvider<I> walIndexProvider = (WALIndexProvider<I>) indexProviderRegistry.getWALIndexProvider(storageDescriptor);
         @SuppressWarnings("unchecked")
         RowIOProvider<K> rowIOProvider = (RowIOProvider<K>) indexProviderRegistry.getRowIOProvider(storageDescriptor);
-        BinaryWALTx<I, K> binaryWALTx = buildBinaryWALTx(baseKey, versionedPartitionName, rowIOProvider, walIndexProvider);
+        BinaryWALTx<K> binaryWALTx = new BinaryWALTx<>(baseKey,
+            versionedPartitionName.toBase64(),
+            rowIOProvider,
+            primaryRowMarshaller);
         return new WALStorage<>(versionedPartitionName,
             orderIdProvider,
             primaryRowMarshaller,
             highwaterRowMarshaller,
             binaryWALTx,
+            walIndexProvider,
+            sickPartitions,
             storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
             storageDescriptor.maxUpdatesBetweenIndexCommitMarker,
             tombstoneCompactionFactor);
@@ -62,16 +70,5 @@ public class IndexedWALStorageProvider {
         @SuppressWarnings("unchecked")
         RowIOProvider<K> rowIOProvider = (RowIOProvider<K>) indexProviderRegistry.getRowIOProvider(storageDescriptor);
         return rowIOProvider.baseKey(versionedPartitionName);
-    }
-
-    private <I extends WALIndex, K> BinaryWALTx<I, K> buildBinaryWALTx(K baseKey,
-        VersionedPartitionName versionedPartitionName,
-        RowIOProvider<K> rowIOProvider,
-        WALIndexProvider<I> walIndexProvider) throws Exception {
-        return new BinaryWALTx<>(baseKey,
-            versionedPartitionName.toBase64(),
-            rowIOProvider,
-            primaryRowMarshaller,
-            walIndexProvider);
     }
 }

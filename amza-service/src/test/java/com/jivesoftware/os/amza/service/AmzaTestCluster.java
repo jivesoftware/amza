@@ -136,7 +136,7 @@ public class AmzaTestCluster {
 
                 AmzaNode amzaNode = cluster.get(remoteRingMember);
                 if (amzaNode == null) {
-                    throw new IllegalStateException("Service doesn't exists for " + remoteRingMember);
+                    throw new IllegalStateException("Service doesn't exist for " + remoteRingMember);
                 } else {
                     amzaNode.takePartitionUpdates(localRingMember1,
                         localTimestampedRingHost,
@@ -229,11 +229,13 @@ public class AmzaTestCluster {
 
         AmzaStats amzaStats = new AmzaStats();
         SickThreads sickThreads = new SickThreads();
+        SickPartitions sickPartitions = new SickPartitions();
         Optional<TakeFailureListener> absent = Optional.<TakeFailureListener>absent();
 
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(config,
             amzaStats,
             sickThreads,
+            sickPartitions,
             localRingMember,
             localRingHost,
             orderIdProvider,
@@ -271,7 +273,7 @@ public class AmzaTestCluster {
             System.exit(1);
         }
 
-        service = new AmzaNode(localRingMember, localRingHost, amzaService, orderIdProvider);
+        service = new AmzaNode(localRingMember, localRingHost, amzaService, orderIdProvider, sickThreads, sickPartitions);
 
         cluster.put(localRingMember, service);
 
@@ -286,6 +288,8 @@ public class AmzaTestCluster {
         final RingHost ringHost;
         private final AmzaService amzaService;
         private final TimestampedOrderIdProvider orderIdProvider;
+        final SickThreads sickThreads;
+        final SickPartitions sickPartitions;
         private boolean off = false;
         private int flapped = 0;
         private final ExecutorService asIfOverTheWire = Executors.newSingleThreadExecutor();
@@ -294,13 +298,17 @@ public class AmzaTestCluster {
         public AmzaNode(RingMember ringMember,
             RingHost ringHost,
             AmzaService amzaService,
-            TimestampedOrderIdProvider orderIdProvider) {
+            TimestampedOrderIdProvider orderIdProvider,
+            SickThreads sickThreads,
+            SickPartitions sickPartitions) {
 
             this.ringMember = ringMember;
             this.ringHost = ringHost;
             this.amzaService = amzaService;
             this.clientProvider = new EmbeddedClientProvider(amzaService);
             this.orderIdProvider = orderIdProvider;
+            this.sickThreads = sickThreads;
+            this.sickPartitions = sickPartitions;
         }
 
         @Override
@@ -610,6 +618,7 @@ public class AmzaTestCluster {
                     });
             } catch (Exception e) {
                 System.out.println("EXCEPTION: " + e.getMessage());
+                e.printStackTrace();
                 passed.setValue(false);
             }
 

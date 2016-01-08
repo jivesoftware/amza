@@ -64,7 +64,7 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
                 AmzaClusterPluginRegionInput input = optionalInput.get();
 
                 if (input.action.equals("add")) {
-                    ringWriter.register(new RingMember(input.member), new RingHost(input.host, input.port), -1);
+                    ringWriter.register(new RingMember(input.member), new RingHost("", "", input.host, input.port), 0);
                 } else if (input.action.equals("remove")) {
                     ringWriter.deregister(new RingMember(input.member));
                 }
@@ -74,6 +74,8 @@ public class AmzaClusterPluginRegion implements PageRegion<Optional<AmzaClusterP
                 for (RingMemberAndHost entry : ring.entries) {
                     Map<String, String> row = new HashMap<>();
                     row.put("member", entry.ringMember.getMember());
+                    row.put("datacenter", entry.ringHost.getDatacenter());
+                    row.put("rack", entry.ringHost.getRack());
                     row.put("host", entry.ringHost.getHost());
                     row.put("port", String.valueOf(entry.ringHost.getPort()));
                     rows.add(row);

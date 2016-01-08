@@ -26,13 +26,13 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<DeltaWAL> {
+public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
 
     private final long id;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
-    private final WALTx<I> wal;
+    private final WALTx wal;
     private final AtomicLong updateCount = new AtomicLong();
     private final Object oneTxAtATimeLock = new Object();
 
@@ -40,7 +40,7 @@ public class DeltaWAL<I extends WALIndex> implements WALRowHydrator, Comparable<
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
-        WALTx<I> wal) {
+        WALTx wal) {
         this.id = id;
         this.orderIdProvider = orderIdProvider;
         this.primaryRowMarshaller = primaryRowMarshaller;

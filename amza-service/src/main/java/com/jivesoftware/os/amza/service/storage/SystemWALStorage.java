@@ -5,21 +5,22 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
+import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
+import com.jivesoftware.os.amza.api.scan.RowStream;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
-import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.service.replication.PartitionStripe;
-import com.jivesoftware.os.amza.api.scan.RowChanges;
-import com.jivesoftware.os.amza.api.scan.RowStream;
-import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
-import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 
 /**
@@ -181,7 +182,7 @@ public class SystemWALStorage {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();
-                tx.tx(versionedPartitionName, LivelyEndState.ALWAYS_ONLINE, highestTxId);
+                tx.tx(new VersionedAquarium(versionedPartitionName, null, 0), highestTxId);
             }
         }
     }
@@ -190,9 +191,9 @@ public class SystemWALStorage {
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         if (partitionStore != null) {
             long highestTxId = partitionStore.getWalStorage().highestTxId();
-            return tx.tx(versionedPartitionName, LivelyEndState.ALWAYS_ONLINE, highestTxId);
+            return tx.tx(new VersionedAquarium(versionedPartitionName, null, 0), highestTxId);
         } else {
-            return tx.tx(null, null, -1);
+            return tx.tx(null, -1);
         }
 
     }

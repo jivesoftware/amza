@@ -45,7 +45,7 @@ public class BinaryRowReader implements WALReader {
     boolean validate() throws IOException {
         byte[] intBuffer = new byte[4];
         synchronized (parent.lock()) {
-            IReadable filer = parent.fileChannelFiler();
+            IReadable filer = parent.reader(null, parent.length(), 1024*1024);
             boolean valid = true;
             long seekTo = filer.length();
             for (int i = 0; i < corruptionParanoiaFactor; i++) {
@@ -80,7 +80,7 @@ public class BinaryRowReader implements WALReader {
             return true;
         }
         byte[] intLongBuffer = new byte[8];
-        IReadable parentFiler = parent.bestFiler(null, boundaryFp);
+        IReadable parentFiler = parent.reader(null, boundaryFp, 0);
         long read = 0;
         try {
             int pageSize = 1024 * 1024;
@@ -159,7 +159,7 @@ public class BinaryRowReader implements WALReader {
             byte[] intLongBuffer = new byte[8];
             while (fileLength < parent.length()) {
                 fileLength = parent.length();
-                filer = parent.bestFiler(filer, fileLength);
+                filer = parent.reader(filer, fileLength, 1024*1024); //TODO config
                 while (true) {
                     long rowFP;
                     long rowTxId = -1;
@@ -233,8 +233,7 @@ public class BinaryRowReader implements WALReader {
         // If this is encountred some time other than startup there will be data loss and WALIndex corruption.
         synchronized (parent.lock()) {
             long before = parent.length();
-            parent.seek(offsetFp);
-            parent.eof();
+            parent.truncate(offsetFp);
             LOG.warn("Truncated corrupt WAL at {}, before={} after={} {}", offsetFp, before, parent.length(), parent);
             return false;
         }
@@ -244,12 +243,12 @@ public class BinaryRowReader implements WALReader {
     public byte[] readTypeByteTxIdAndRow(long position) throws IOException {
         int length = -1;
         try {
-            IReadable filer = parent.bestFiler(null, position + 4);
+            IReadable filer = parent.reader(null, position + 4, 0);
 
             filer.seek(position);
             length = UIO.readInt(filer, "length", new byte[4]);
 
-            filer = parent.bestFiler(filer, position + 4 + length);
+            filer = parent.reader(filer, position + 4 + length, 0);
 
             filer.seek(position + 4);
             byte[] row = new byte[length];
@@ -265,18 +264,18 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public boolean read(Fps fps, RowStream rowStream) throws Exception {
-        IReadable[] filerRef = { parent.bestFiler(null, 0) };
+        IReadable[] filerRef = { parent.reader(null, 0, 0) };
         byte[] rawLength = new byte[4];
         byte[] rowTypeByteAndTxId = new byte[1 + 8];
         return fps.consume(fp -> {
             int length = -1;
             try {
-                IReadable filer = parent.bestFiler(filerRef[0], fp + 4);
+                IReadable filer = parent.reader(filerRef[0], fp + 4, 0);
                 filer.seek(fp);
                 filer.read(rawLength);
                 length = UIO.bytesInt(rawLength);
 
-                filer = parent.bestFiler(filer, fp + 4 + length);
+                filer = parent.reader(filer, fp + 4 + length, 0);
                 filer.seek(fp + 4);
                 filer.read(rowTypeByteAndTxId);
                 RowType rowType = RowType.fromByte(rowTypeByteAndTxId[0]);

@@ -1,9 +1,5 @@
 package com.jivesoftware.os.amza.service.filer;
 
-import com.jivesoftware.os.amza.service.filer.ByteBufferFactory;
-import com.jivesoftware.os.amza.service.filer.AutoGrowingByteBufferBackedFiler;
-import com.jivesoftware.os.amza.service.filer.DirectByteBufferFactory;
-import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -11,7 +7,7 @@ import org.testng.annotations.Test;
 /**
  *
  */
-public class AutoGrowingByteBufferBackedFilerTest {
+public class MultiAutoGrowingByteBufferBackedFilerTest {
 
     @Test
     public void writeALongTest() throws Exception {
@@ -26,7 +22,7 @@ public class AutoGrowingByteBufferBackedFilerTest {
             for (ByteBufferFactory bf : bufferFactorys) {
 
                 System.out.println("i:" + i);
-                AutoGrowingByteBufferBackedFiler filer = new AutoGrowingByteBufferBackedFiler(i, i, bf);
+                MultiAutoGrowingByteBufferBackedFiler filer = new MultiAutoGrowingByteBufferBackedFiler(i, i, bf);
                 UIO.writeLong(filer, Long.MAX_VALUE, "a long");
                 filer.seek(0);
                 Assert.assertEquals(UIO.readLong(filer, "a long", intLongBuffer), Long.MAX_VALUE, "Booya");
@@ -46,7 +42,7 @@ public class AutoGrowingByteBufferBackedFilerTest {
             };
             for (ByteBufferFactory bf : bufferFactorys) {
 
-                AutoGrowingByteBufferBackedFiler filer = new AutoGrowingByteBufferBackedFiler(b, b, bf);
+                MultiAutoGrowingByteBufferBackedFiler filer = new MultiAutoGrowingByteBufferBackedFiler(b, b, bf);
                 for (int i = 0; i < b * 4; i++) {
                     System.out.println(b + " " + i + " " + bf);
                     filer.write(new byte[] { (byte) i }, 0, 1);
@@ -70,7 +66,7 @@ public class AutoGrowingByteBufferBackedFilerTest {
             };
             for (ByteBufferFactory bf : bufferFactorys) {
 
-                AutoGrowingByteBufferBackedFiler filer = new AutoGrowingByteBufferBackedFiler(b, b, bf);
+                MultiAutoGrowingByteBufferBackedFiler filer = new MultiAutoGrowingByteBufferBackedFiler(b, b, bf);
                 for (int i = 0; i < b * 4; i++) {
                     System.out.println(b + " " + i + " " + bf);
                     UIO.writeInt(filer, i, "", new byte[4]);

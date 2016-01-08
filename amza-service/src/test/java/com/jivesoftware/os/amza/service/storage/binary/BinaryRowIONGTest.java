@@ -4,7 +4,7 @@ import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.service.filer.AutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
@@ -27,7 +27,7 @@ public class BinaryRowIONGTest {
     @Test
     public void testDiskWrite() throws Exception {
         File file = File.createTempFile("BinaryRowIO", "dat");
-        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false);
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false, 0);
         IoStats ioStats = new IoStats();
         BinaryRowIO<File> binaryRowIO = new BinaryRowIO<>(file,
             new BinaryRowReader(filer, ioStats, 10),
@@ -39,7 +39,7 @@ public class BinaryRowIONGTest {
 
     @Test
     public void testMemoryWrite() throws Exception {
-        MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
+        MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer,
@@ -105,14 +105,14 @@ public class BinaryRowIONGTest {
     @Test
     public void testDiskLeap() throws Exception {
         File file = File.createTempFile("BinaryRowIO", "dat");
-        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false);
+        DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false, 0);
         IoStats ioStats = new IoStats();
         leap(() -> new BinaryRowIO<>(file, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats),4096, 64), 64);
     }
 
     @Test
     public void testMemoryLeap() throws Exception {
-        MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new AutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
+        MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer, new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats), 4096, 64);

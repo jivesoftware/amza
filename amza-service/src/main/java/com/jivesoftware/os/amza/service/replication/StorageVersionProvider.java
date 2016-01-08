@@ -3,20 +3,22 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.RingMembership;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.service.storage.PartitionCreator;
-import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
-import com.jivesoftware.os.amza.service.AwaitNotify;
-import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
-import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
+import com.jivesoftware.os.amza.service.AwaitNotify;
+import com.jivesoftware.os.amza.service.NotARingMemberException;
+import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
+import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -35,6 +37,7 @@ public class StorageVersionProvider implements RowChanges {
     private final RingMember rootRingMember;
     private final SystemWALStorage systemWALStorage;
     private final VersionedPartitionProvider versionedPartitionProvider;
+    private final RingMembership ringMembership;
     private final PartitionStripeFunction partitionStripeFunction;
     private final long[] stripeVersions;
     private final WALUpdated walUpdated;
@@ -47,6 +50,7 @@ public class StorageVersionProvider implements RowChanges {
         RingMember rootRingMember,
         SystemWALStorage systemWALStorage,
         VersionedPartitionProvider versionedPartitionProvider,
+        RingMembership ringMembership,
         PartitionStripeFunction partitionStripeFunction,
         long[] stripeVersions,
         WALUpdated walUpdated,
@@ -55,6 +59,7 @@ public class StorageVersionProvider implements RowChanges {
         this.rootRingMember = rootRingMember;
         this.systemWALStorage = systemWALStorage;
         this.versionedPartitionProvider = versionedPartitionProvider;
+        this.ringMembership = ringMembership;
         this.partitionStripeFunction = partitionStripeFunction;
         this.stripeVersions = stripeVersions;
         this.walUpdated = walUpdated;
@@ -87,9 +92,6 @@ public class StorageVersionProvider implements RowChanges {
         if (partitionName.isSystemPartition()) {
             return new StorageVersion(0, 0);
         }
-        if (versionedPartitionProvider.getProperties(partitionName) == null) {
-            throw new PropertiesNotPresentException("Properties missing for " + partitionName);
-        }
         synchronized (versionStripingLocks.lock(partitionName, 0)) {
             StorageVersion storageVersion = localVersionCache.computeIfAbsent(partitionName, key -> {
                 try {
@@ -105,6 +107,12 @@ public class StorageVersionProvider implements RowChanges {
                 }
             });
             if (storageVersion == null || storageVersion.stripeVersion != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
+                if (versionedPartitionProvider.getProperties(partitionName) == null) {
+                    throw new PropertiesNotPresentException("Properties missing for " + partitionName);
+                }
+                if (!ringMembership.isMemberOfRing(partitionName.getRingName())) {
+                    throw new NotARingMemberException("Not a member of ring for " + partitionName);
+                }
                 storageVersion = set(partitionName, orderIdProvider.nextId());
             }
             return storageVersion;

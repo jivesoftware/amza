@@ -37,13 +37,14 @@ import com.jivesoftware.os.amza.service.AmzaInstance;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
+import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.discovery.AmzaDiscovery;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
+import com.jivesoftware.os.amza.service.replication.http.AmzaClientService;
 import com.jivesoftware.os.amza.service.replication.http.HttpAvailableRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.HttpRowsTaker;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientRestEndpoints;
-import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaClientService;
 import com.jivesoftware.os.amza.service.replication.http.endpoints.AmzaReplicationRestEndpoints;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -92,9 +93,11 @@ public class Main {
         String hostPortPeers = (args.length > 2 ? args[2] : null);
 
         String logicalName = System.getProperty("amza.logicalName", hostname + ":" + port);
+        String datacenter = System.getProperty("datacenter", "unknownDatacenetr");
+        String rack = System.getProperty("rack", "unknownRack");
 
         RingMember ringMember = new RingMember(logicalName);
-        RingHost ringHost = new RingHost(hostname, port);
+        RingHost ringHost = new RingHost(datacenter, rack, hostname, port);
 
         // todo need a better way to create writter id.
         int writerId = Integer.parseInt(System.getProperty("amza.id", String.valueOf(new Random().nextInt(512))));
@@ -110,6 +113,7 @@ public class Main {
         final AmzaServiceConfig amzaServiceConfig = new AmzaServiceConfig();
         final AmzaStats amzaStats = new AmzaStats();
         final SickThreads sickThreads = new SickThreads();
+        final SickPartitions sickPartitions = new SickPartitions();
 
         final String[] workingDirs = System.getProperty("amza.working.dirs", "./data1,./data2,./data3")
             .split(",");
@@ -141,6 +145,7 @@ public class Main {
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             sickThreads,
+            sickPartitions,
             ringMember,
             ringHost,
             orderIdProvider,
@@ -159,7 +164,7 @@ public class Main {
             (RowsChanged changes) -> {
             });
 
-        InstanceDescriptor instanceDescriptor = new InstanceDescriptor("", "", "", "", "", "", "", "", 0, "", "", 0L, true);
+        InstanceDescriptor instanceDescriptor = new InstanceDescriptor(datacenter, rack, "", "", "", "", "", "", "", "", 0, "", "", 0L, true);
         ConnectionDescriptorsProvider connectionsProvider = connectionDescriptorsRequest -> {
             try {
                 RingTopology systemRing = amzaService.getRingReader().getRing(AmzaRingReader.SYSTEM_RING);
@@ -243,7 +248,7 @@ public class Main {
                         String peerPort = (hostPort.length == 2) ? hostPort[1] : hostPort[2];
 
                         RingMember peerRingMember = new RingMember(peerLogicalName);
-                        RingHost peerRingHost = new RingHost(peerHostname, Integer.parseInt(peerPort));
+                        RingHost peerRingHost = new RingHost("unknown", "unknown", peerHostname, Integer.parseInt(peerPort));
 
                         System.out.println("|     Adding ringMember:" + peerRingMember + " on host:" + peerRingHost + " to cluster: " + clusterName);
                         amzaService.getRingWriter().register(peerRingMember, peerRingHost, writerId);

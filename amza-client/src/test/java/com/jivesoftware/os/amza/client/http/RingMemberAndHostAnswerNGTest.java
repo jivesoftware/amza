@@ -16,7 +16,7 @@ public class RingMemberAndHostAnswerNGTest {
     public void testGetRingMemberAndHost() {
 
         RingMember ringMember = new RingMember("m1");
-        RingHost ringHost = new RingHost("localhost", 1);
+        RingHost ringHost = new RingHost("dc1", "rack1", "localhost", 1);
         RingMemberAndHost ringMemberAndHost = new RingMemberAndHost(ringMember, ringHost);
         RingMemberAndHostAnswer<String> rmaha = new RingMemberAndHostAnswer<>(ringMemberAndHost, "bla");
         Assert.assertEquals("bla", rmaha.getAnswer());

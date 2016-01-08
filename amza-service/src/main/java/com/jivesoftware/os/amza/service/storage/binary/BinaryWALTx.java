@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableInt;
@@ -29,7 +30,7 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
+public class BinaryWALTx<K> implements WALTx {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -40,7 +41,6 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
     private final K key;
     private final String name;
     private final PrimaryRowMarshaller primaryRowMarshaller;
-    private final WALIndexProvider<I> walIndexProvider;
 
     private final RowIOProvider<K> ioProvider;
     private RowIO<K> io;
@@ -48,14 +48,11 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
     public BinaryWALTx(K baseKey,
         String prefix,
         RowIOProvider<K> ioProvider,
-        PrimaryRowMarshaller rowMarshaller,
-        WALIndexProvider<I> walIndexProvider) throws Exception {
+        PrimaryRowMarshaller rowMarshaller) throws Exception {
         this.key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
         this.name = prefix + SUFFIX;
         this.ioProvider = ioProvider;
         this.primaryRowMarshaller = rowMarshaller;
-        this.walIndexProvider = walIndexProvider;
-        this.io = ioProvider.create(key, name);
     }
 
     public static <K> Set<String> listExisting(K baseKey, RowIOProvider<K> ioProvider) throws Exception {
@@ -103,22 +100,35 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
 
     @Override
     public long length() throws Exception {
-        return io.sizeInBytes();
+        compactionLock.acquire();
+        try {
+            return io.sizeInBytes();
+        } finally {
+            compactionLock.release();
+        }
     }
 
     @Override
     public void flush(boolean fsync) throws Exception {
-        io.flush(fsync);
+        compactionLock.acquire();
+        try {
+            io.flush(fsync);
+        } finally {
+            compactionLock.release();
+        }
     }
 
     @Override
     public void validateAndRepair() throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
+            initIO();
+
             if (!io.validate()) {
                 LOG.info("Recovering for WAL {}", name);
                 final MutableLong count = new MutableLong(0);
-                io.scan(0, true, (final long rowPointer, long rowTxId, RowType rowType, byte[] row) -> {
+                // scan with allowRepairs=true to truncate at point of corruption
+                io.scan(0, true, (rowPointer, rowTxId, rowType, row) -> {
                     count.increment();
                     return true;
                 });
@@ -130,9 +140,13 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
     }
 
     @Override
-    public I load(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+    public <I extends CompactableWALIndex> I load(WALIndexProvider<I> walIndexProvider,
+        VersionedPartitionName versionedPartitionName,
+        int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+
         compactionLock.acquire(NUM_PERMITS);
         try {
+            initIO();
 
             if (!io.validate()) {
                 LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", versionedPartitionName);
@@ -142,64 +156,94 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
 
             final I walIndex = walIndexProvider.createIndex(versionedPartitionName, maxUpdatesBetweenCompactionHintMarker);
             if (walIndex.isEmpty()) {
-                LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedPartitionName);
-
-                MutableLong rebuilt = new MutableLong();
-                walIndex.merge(
-                    stream -> primaryRowMarshaller.fromRows(txFpRowStream -> {
-                        return io.scan(0, true,
-                            (rowPointer, rowTxId, rowType, row) -> {
-                                if (rowType.isPrimary()) {
-                                    return txFpRowStream.stream(rowTxId, rowPointer, rowType, row);
-                                }
-                                return true;
-                            });
-                    }, (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
-                        rebuilt.increment();
-                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
-                    }),
-                    (mode, txId, prefix, key, timestamp, tombstoned, version, fp) -> true);
-
-                LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
-                walIndex.commit();
+                rebuildIndex(versionedPartitionName, walIndex);
             } else {
-                LOG.info("Checking {} for {}.", walIndex.getClass().getSimpleName(), versionedPartitionName);
-
-                final MutableLong repair = new MutableLong();
-                walIndex.merge(
-                    stream -> primaryRowMarshaller.fromRows(txFpRowStream -> {
-                        long[] commitedUpToTxId = { Long.MIN_VALUE };
-                        return io.reverseScan((rowFP, rowTxId, rowType, row) -> {
-                            if (rowType.isPrimary()) {
-                                if (!txFpRowStream.stream(rowTxId, rowFP, rowType, row)) {
-                                    return false;
-                                }
-                            }
-                            if (rowType == RowType.system && commitedUpToTxId[0] == Long.MIN_VALUE) {
-                                long[] key_CommitedUpToTxId = UIO.bytesLongs(row);
-                                if (key_CommitedUpToTxId[0] == RowType.COMMIT_KEY) {
-                                    commitedUpToTxId[0] = key_CommitedUpToTxId[1];
-                                    LOG.info("Looking for txId:{} for versionedPartitionName:{} ", commitedUpToTxId, versionedPartitionName);
-                                }
-                                return true;
-                            } else {
-                                return rowTxId >= commitedUpToTxId[0];
-                            }
-                        });
-                    }, (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
-                        repair.increment();
-                        return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
-                    }),
-                    (mode, txId, prefix, key, timestamp, tombstoned, version, fp) -> true);
-
-                LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
-                walIndex.commit();
+                validateIndex(versionedPartitionName, walIndex);
             }
             io.initLeaps();
             return walIndex;
         } finally {
             compactionLock.release(NUM_PERMITS);
         }
+    }
+
+    private void initIO() throws Exception {
+        io = ioProvider.open(key, name, false);
+        if (io == null) {
+            K backup = ioProvider.buildKey(key, "bkp");
+            if (ioProvider.exists(backup)) {
+                ioProvider.moveTo(backup, key);
+                io = ioProvider.open(key, name, false);
+                if (io == null) {
+                    throw new IllegalStateException("Failed to recover backup WAL " + name);
+                }
+            } else {
+                io = ioProvider.open(key, name, true);
+                if (io == null) {
+                    throw new IllegalStateException("Failed to initialize WAL " + name);
+                }
+            }
+        }
+    }
+
+    private <I extends CompactableWALIndex> void rebuildIndex(VersionedPartitionName versionedPartitionName, I walIndex) throws Exception {
+        LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedPartitionName);
+
+        MutableLong rebuilt = new MutableLong();
+        CompactionWALIndex compactionWALIndex = walIndex.startCompaction(false);
+        compactionWALIndex.merge(
+            stream -> primaryRowMarshaller.fromRows(
+                txFpRowStream -> {
+                    // scan with allowRepairs=true to truncate at point of corruption
+                    return io.scan(0, true, (rowPointer, rowTxId, rowType, row) -> {
+                        if (rowType.isPrimary()) {
+                            return txFpRowStream.stream(rowTxId, rowPointer, rowType, row);
+                        }
+                        return true;
+                    });
+                },
+                (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                    rebuilt.increment();
+                    return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
+                }));
+        compactionWALIndex.commit(null);
+
+        LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
+        walIndex.commit();
+    }
+
+    private <I extends CompactableWALIndex> void validateIndex(VersionedPartitionName versionedPartitionName, I walIndex) throws Exception {
+        LOG.info("Checking {} for {}.", walIndex.getClass().getSimpleName(), versionedPartitionName);
+
+        final MutableLong repair = new MutableLong();
+        walIndex.merge(
+            stream -> primaryRowMarshaller.fromRows(txFpRowStream -> {
+                long[] commitedUpToTxId = { Long.MIN_VALUE };
+                return io.reverseScan((rowFP, rowTxId, rowType, row) -> {
+                    if (rowType.isPrimary()) {
+                        if (!txFpRowStream.stream(rowTxId, rowFP, rowType, row)) {
+                            return false;
+                        }
+                    }
+                    if (rowType == RowType.system && commitedUpToTxId[0] == Long.MIN_VALUE) {
+                        long[] key_CommitedUpToTxId = UIO.bytesLongs(row);
+                        if (key_CommitedUpToTxId[0] == RowType.COMMIT_KEY) {
+                            commitedUpToTxId[0] = key_CommitedUpToTxId[1];
+                            LOG.info("Looking for txId:{} for versionedPartitionName:{} ", commitedUpToTxId, versionedPartitionName);
+                        }
+                        return true;
+                    } else {
+                        return rowTxId >= commitedUpToTxId[0];
+                    }
+                });
+            }, (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
+                repair.increment();
+                return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
+            }),
+            (mode, txId, prefix, key, timestamp, tombstoned, version, fp) -> true);
+
+        LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
+        walIndex.commit();
     }
 
     @Override
@@ -219,7 +263,7 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
     }
 
     @Override
-    public Optional<Compacted<I>> compact(RowType compactToRowType,
+    public <I extends CompactableWALIndex> Optional<Compacted<I>> compact(RowType compactToRowType,
         long removeTombstonedOlderThanTimestampId,
         long ttlTimestampId,
         I compactableWALIndex,
@@ -228,10 +272,10 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
         long endOfLastRow = io.getEndOfLastRow();
         long start = System.currentTimeMillis();
 
-        CompactionWALIndex compactionRowIndex = compactableWALIndex != null ? compactableWALIndex.startCompaction() : null;
+        CompactionWALIndex compactionRowIndex = compactableWALIndex != null ? compactableWALIndex.startCompaction(true) : null;
 
         K tempKey = ioProvider.createTempKey();
-        RowIO<K> compactionIO = ioProvider.create(tempKey, name);
+        RowIO<K> compactionIO = ioProvider.open(tempKey, name, true);
 
         AtomicLong keyCount = new AtomicLong();
         AtomicLong clobberCount = new AtomicLong();
@@ -271,25 +315,31 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
                 if (!ioProvider.ensure(backup)) {
                     throw new IOException("Failed trying to clean " + backup);
                 }
-                /*backup.delete();
-                if (!backup.exists() && !backup.mkdirs()) {
-                    throw new IOException("Failed trying to mkdirs for " + backup);
-                }*/
+
                 long sizeBeforeCompaction = io.sizeInBytes();
-                io.close();
-                ioProvider.moveTo(io.getKey(), backup);
-                if (!ioProvider.ensure(key)) {
-                    throw new IOException("Failed trying to ensure " + key);
-                }
-                ioProvider.moveTo(compactionIO.getKey(), key);
-                // Reopen the world
-                io = ioProvider.create(key, name);
-                LOG.info("Compacted partition " + key + "/" + name
-                    + " was:" + sizeBeforeCompaction + "bytes "
-                    + " isNow:" + sizeAfterCompaction + "bytes.");
+
+                Callable<Void> commit = () -> {
+                    io.close();
+                    ioProvider.moveTo(io.getKey(), backup);
+                    if (!ioProvider.ensure(key)) {
+                        throw new IOException("Failed trying to ensure " + key);
+                    }
+                    ioProvider.moveTo(compactionIO.getKey(), key);
+                    // Reopen the world
+                    io = ioProvider.open(key, name, false);
+                    if (io == null) {
+                        throw new IOException("Failed to reopen " + key);
+                    }
+                    LOG.info("Compacted partition {}/{} was:{} bytes isNow:{} bytes.", key, name, sizeBeforeCompaction, sizeAfterCompaction);
+                    return null;
+                };
+
                 if (compactionRowIndex != null) {
-                    compactionRowIndex.commit();
+                    compactionRowIndex.commit(commit);
+                } else {
+                    commit.call();
                 }
+
                 return new CommittedCompacted<>(compactableWALIndex,
                     sizeBeforeCompaction,
                     sizeAfterCompaction,
@@ -303,6 +353,9 @@ public class BinaryWALTx<I extends CompactableWALIndex, K> implements WALTx<I> {
                     catchupTombstoneCount.longValue(),
                     catchupTTLCount.longValue(),
                     System.currentTimeMillis() - startCatchup);
+            } catch (Exception x) {
+                //TODO cleanup
+                throw x;
             } finally {
                 compactionLock.release(NUM_PERMITS);
             }

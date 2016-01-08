@@ -100,11 +100,13 @@ public class AmzaDiscovery {
                             if (clusterMemberHostPort.size() == 4 && clusterMemberHostPort.get(0) != null && clusterMemberHostPort.get(0).equals(clusterName)) {
                                 LOG.debug("received:" + clusterMemberHostPort);
                                 String member = clusterMemberHostPort.get(1).trim();
-                                String host = clusterMemberHostPort.get(2).trim();
-                                int port = Integer.parseInt(clusterMemberHostPort.get(3).trim());
-                                long timestampId = Long.parseLong(clusterMemberHostPort.get(4).trim());
+                                String datacenter = clusterMemberHostPort.get(2).trim();
+                                String rack = clusterMemberHostPort.get(3).trim();
+                                String host = clusterMemberHostPort.get(4).trim();
+                                int port = Integer.parseInt(clusterMemberHostPort.get(5).trim());
+                                long timestampId = Long.parseLong(clusterMemberHostPort.get(6).trim());
                                 RingMember ringMember = new RingMember(member);
-                                RingHost anotherRingHost = new RingHost(host, port);
+                                RingHost anotherRingHost = new RingHost(datacenter, rack, host, port);
                                 RingTopology ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
                                 //TODO this is a little heavy handed
                                 RingMemberAndHost entry = Iterables.find(ring.entries, input -> input.ringMember.equals(ringMember));
@@ -148,11 +150,13 @@ public class AmzaDiscovery {
                 RingMember ringMember = ringStoreReader.getRingMember();
                 TimestampedRingHost timestampedRingHost = ringStoreReader.getRingHost();
                 if (timestampedRingHost.ringHost != RingHost.UNKNOWN_RING_HOST) {
-                    message = (clusterName +
-                        "|" + ringMember.getMember() +
-                        "|" + timestampedRingHost.ringHost.getHost() +
-                        "|" + timestampedRingHost.ringHost.getPort() +
-                        "|" + timestampedRingHost.timestampId);
+                    message = (clusterName
+                        + "|" + ringMember.getMember()
+                        + "|" + timestampedRingHost.ringHost.getDatacenter()
+                        + "|" + timestampedRingHost.ringHost.getRack()
+                        + "|" + timestampedRingHost.ringHost.getHost()
+                        + "|" + timestampedRingHost.ringHost.getPort()
+                        + "|" + timestampedRingHost.timestampId);
                     byte[] buf = new byte[512];
                     byte[] rawMessage = message.getBytes(StandardCharsets.UTF_8);
                     System.arraycopy(rawMessage, 0, buf, 0, rawMessage.length);

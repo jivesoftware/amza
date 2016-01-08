@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.take;
 
-import com.jivesoftware.os.amza.service.take.TakeRingCoordinator;
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -48,7 +47,7 @@ public class VersionedRingTest {
     }
 
     private RingMemberAndHost memberAndHost(String name) {
-        return new RingMemberAndHost(member(name), new RingHost(name, 1));
+        return new RingMemberAndHost(member(name), new RingHost("datacenter", "rack",name, 1));
     }
 
     private RingMember member(String name) {

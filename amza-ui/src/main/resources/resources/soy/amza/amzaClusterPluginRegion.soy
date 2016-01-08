@@ -18,6 +18,8 @@
                                 <th>Logical Name</th>
                                 <th>Host</th>
                                 <th>Port</th>
+                                <th>Rack</th>
+                                <th>Datacenter</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -39,6 +41,10 @@
                                         <input type="number" name="port" min="1" max="65536" padding-left:10px;"
                                         class="form-control" placeholder="Port" value="" title="">
                                     </td>
+                                    <td>
+                                    </td>
+                                    <td>
+                                    </td>
                                     <input type="hidden" name="action" value="add">
                                 </tr>
                             </form>
@@ -55,6 +61,8 @@
                                         <td>{$r.member}</td>
                                         <td>{$r.host}</td>
                                         <td>{$r.port}</td>
+                                        <td>{$r.rack}</td>
+                                        <td>{$r.datacenter}</td>
                                     </tr>
                                 </form>
                             {/foreach}

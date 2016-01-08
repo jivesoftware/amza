@@ -174,7 +174,7 @@ public class AmzaMain {
                 }
             };
 
-            RingHost ringHost = new RingHost(instanceConfig.getHost(), instanceConfig.getMainPort());
+            RingHost ringHost = new RingHost(instanceConfig.getDatacenter(), instanceConfig.getRack(), instanceConfig.getHost(), instanceConfig.getMainPort());
             SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
             TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(instanceConfig.getInstanceName()),
                 idPacker,
@@ -241,16 +241,16 @@ public class AmzaMain {
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
                 new AmzaUIInitializer.InjectionCallback() {
 
-                    @Override
-                    public void addEndpoint(Class clazz) {
-                        deployable.addEndpoints(clazz);
-                    }
+                @Override
+                public void addEndpoint(Class clazz) {
+                    deployable.addEndpoints(clazz);
+                }
 
-                    @Override
-                    public void addInjectable(Class clazz, Object instance) {
-                        deployable.addInjectables(clazz, instance);
-                    }
-                });
+                @Override
+                public void addInjectable(Class clazz, Object instance) {
+                    deployable.addInjectables(clazz, instance);
+                }
+            });
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());

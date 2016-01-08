@@ -21,26 +21,29 @@ import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.service.storage.PartitionCreator;
-import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
+import com.jivesoftware.os.amza.api.scan.RowChanges;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.service.ring.CacheId;
 import com.jivesoftware.os.amza.service.ring.RingSet;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
-import com.jivesoftware.os.amza.api.scan.RowChanges;
-import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.storage.PartitionCreator;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
@@ -139,7 +142,6 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         ensureSubRing(ringName, ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING));
     }
 
-
     @Override
     public void ensureSubRing(byte[] ringName, int desiredRingSize) throws Exception {
         if (ringName == null) {
@@ -160,17 +162,29 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (ring.entries.size() < desiredRingSize) {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
-        List<RingMember> ringAsList = Lists.newArrayList(Lists.transform(ring.entries, input -> input.ringMember));
+
+        Map<String, List<RingMemberAndHost>> perRackMembers = new HashMap<>();
+        for (RingMemberAndHost entry : ring.entries) {
+            perRackMembers.computeIfAbsent(entry.ringHost.getRack(), (key) -> new ArrayList<>()).add(entry);
+        }
+
         Random random = new Random(new Random(Arrays.hashCode(ringName)).nextLong());
-        Collections.shuffle(ringAsList, random);
+        for (List<RingMemberAndHost> rackMembers : perRackMembers.values()) {
+            Collections.shuffle(rackMembers, random);
+        }
 
-        RingTopology existingRing = ringStoreReader.getRing(ringName);
+        List<String> racks = new ArrayList<>(perRackMembers.keySet());
+        Collections.shuffle(racks, random);
+
         Set<RingMember> orderedRing = new HashSet<>();
-        orderedRing.addAll(Lists.transform(existingRing.entries, input -> input.ringMember));
-
-        Iterator<RingMember> ringIter = ringAsList.iterator();
-        while (orderedRing.size() < desiredRingSize && ringIter.hasNext()) {
-            orderedRing.add(ringIter.next());
+        for (String cycleRack : Iterables.cycle(racks)) {
+            List<RingMemberAndHost> rackMembers = perRackMembers.get(cycleRack);
+            if (!rackMembers.isEmpty()) {
+                orderedRing.add(rackMembers.remove(rackMembers.size() - 1).ringMember);
+                if (orderedRing.size() >= desiredRingSize) {
+                    break;
+                }
+            }
         }
 
         setInternal(ringName, orderedRing);
@@ -184,7 +198,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
             new RingMember("00005_6299655090478243321"),
             new RingMember("00006_7532656030788251312")*/);
 
-        String[] ringNames = new String[] { "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8", "z9" };
+        String[] ringNames = new String[]{"a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8", "z9"};
         for (int i = 0; i < ringNames.length; i++) {
             //Random random = new Random(Arrays.hashCode(ringNames[i].getBytes()));
             //Random random = new Random(new Random(Arrays.hashCode(ringNames[i].getBytes())).nextLong());

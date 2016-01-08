@@ -70,7 +70,11 @@ public class ByteBufferBackedFiler implements IFiler {
     @Override
     public void flush(boolean fsync) throws IOException {
         if (fsync && buffer instanceof MappedByteBuffer) {
-            ((MappedByteBuffer) buffer).force();
+            try {
+                ((MappedByteBuffer) buffer).force();
+            } catch (UnsupportedOperationException e) {
+                // HMMM
+            }
         }
     }
 

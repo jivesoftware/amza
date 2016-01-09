@@ -47,7 +47,7 @@ import static org.testng.Assert.assertTrue;
 
 public class AmzaServiceTest {
 
-    @Test(enabled = true, invocationCount = 100, singleThreaded = true)
+    @Test(enabled = true)
     public void testAddToReplicatedWAL() throws Exception {
         final int maxNumberOfServices = 5;
 

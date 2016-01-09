@@ -13,7 +13,8 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
 
     private final DiskBackedWALFiler parent;
     private FileChannel fc;
-    private long fp;
+    private volatile long fp;
+    private volatile boolean closed = false;
 
     private final ByteBuffer singleByteBuffer = ByteBuffer.allocate(1);
 
@@ -47,7 +48,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
 
     @Override
     public int read() throws IOException {
-        while (true) {
+        while (!closed) {
             try {
                 singleByteBuffer.position(0);
                 int read = fc.read(singleByteBuffer, fp);
@@ -58,6 +59,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
                 fc = parent.getFileChannel();
             }
         }
+        return -1;
     }
 
     @Override
@@ -68,7 +70,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
     @Override
     public int read(byte[] b, int _offset, int _len) throws IOException {
         ByteBuffer bb = ByteBuffer.wrap(b, _offset, _len);
-        while (true) {
+        while (!closed) {
             try {
                 fc.read(bb, fp);
                 fp += _len;
@@ -78,10 +80,12 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
                 bb.position(0);
             }
         }
+        return -1;
     }
 
     @Override
     public void close() throws IOException {
+        closed = true;
         fc.close();
     }
 

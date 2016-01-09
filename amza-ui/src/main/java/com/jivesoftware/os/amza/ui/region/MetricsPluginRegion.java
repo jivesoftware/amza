@@ -291,7 +291,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             if (includeCount) {
                 map.put("count", numberFormat.format(partition.count()));
             } else {
-                map.put("count", "disabled");
+                map.put("count", "(requires watch)");
             }
 
             partition.highestTxId((versionedAquarium, highestTxId) -> {
@@ -303,19 +303,23 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
 
-                if (name.isSystemPartition()) {
-                    HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                    WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(
-                        new VersionedPartitionName(name, versionedPartitionName.getPartitionVersion()));
-                    map.put("highwaters", renderHighwaters(partitionHighwater));
-                } else {
-                    PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
-                    partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                        WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(
+                if (includeCount) {
+                    if (name.isSystemPartition()) {
+                        HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
+                        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(
                             new VersionedPartitionName(name, versionedPartitionName.getPartitionVersion()));
                         map.put("highwaters", renderHighwaters(partitionHighwater));
-                        return null;
-                    });
+                    } else {
+                        PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
+                        partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
+                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(
+                                new VersionedPartitionName(name, versionedPartitionName.getPartitionVersion()));
+                            map.put("highwaters", renderHighwaters(partitionHighwater));
+                            return null;
+                        });
+                    }
+                } else {
+                    map.put("highwaters", "(requires watch)");
                 }
 
                 map.put("localState", ImmutableMap.of("online", livelyEndState.isOnline(),

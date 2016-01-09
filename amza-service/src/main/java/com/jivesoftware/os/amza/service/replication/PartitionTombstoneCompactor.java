@@ -3,15 +3,14 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.service.storage.PartitionIndex;
-import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
+import com.jivesoftware.os.amza.service.storage.PartitionIndex;
+import com.jivesoftware.os.amza.service.storage.PartitionStore;
+import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -31,7 +30,7 @@ public class PartitionTombstoneCompactor {
     private final long checkIfTombstoneCompactionIsNeededIntervalInMillis;
     private final long removeTombstonedOlderThanNMillis;
     private final int numberOfCompactorThreads;
-    private final Map<VersionedPartitionName, Boolean> compacting = new ConcurrentHashMap<>();
+    private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024);
 
     public PartitionTombstoneCompactor(AmzaStats amzaStats,
         PartitionIndex partitionIndex,
@@ -98,8 +97,7 @@ public class PartitionTombstoneCompactor {
                         ttlTimestampId = orderIdProvider.getApproximateId(orderIdProvider.nextId(), -ttlInMillis);
                     }
                 }
-
-                if (compacting.putIfAbsent(versionedPartitionName, Boolean.TRUE) == null) {
+                synchronized (locksProvider.lock(versionedPartitionName, 1)) {
                     try {
                         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
                         if (force || partitionStore.compactableTombstone(removeTombstonedOlderThanTimestampId, ttlTimestampId)) {
@@ -116,12 +114,8 @@ public class PartitionTombstoneCompactor {
                                 removeTombstonedOlderThanTimestampId, ttlTimestampId, versionedPartitionName);
                         }
                     } catch (Exception x) {
-                        LOG.error("Failed to compact tombstones for partition: {}", new Object[] { versionedPartitionName }, x);
-                    } finally {
-                        compacting.remove(versionedPartitionName);
+                        LOG.error("Failed to compact tombstones for partition: {}", new Object[]{versionedPartitionName}, x);
                     }
-                } else {
-                    LOG.warn("Tried to compact tombstones for {} but there was already a compaction underway.", versionedPartitionName);
                 }
             }
         }

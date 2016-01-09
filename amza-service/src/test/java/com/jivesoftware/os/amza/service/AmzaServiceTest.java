@@ -115,7 +115,13 @@ public class AmzaServiceTest {
             a.stop();
         }
 
-        System.out.println("\n------PASSED :) ---------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("------PASSED :) ---------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
     }
 
     private void assertConsistency(Consistency readConsistency, Collection<AmzaNode> clusterNodes) throws Exception {

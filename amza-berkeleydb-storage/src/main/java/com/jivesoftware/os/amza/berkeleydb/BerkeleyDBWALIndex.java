@@ -482,9 +482,6 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 throw new IllegalStateException("Tried to compact a index that has been expunged: " + name);
             }
 
-            if (!hasActive) {
-                removeDatabase(Type.active);
-            }
             removeDatabase(Type.compacting);
             removeDatabase(Type.compacted);
             removeDatabase(Type.backup);
@@ -518,6 +515,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
                             prefixDb = null;
                             if (hasActive) {
                                 renameDatabase(Type.active, Type.backup);
+                            } else {
+                                removeDatabase(Type.active);
                             }
 
                             if (commit != null) {

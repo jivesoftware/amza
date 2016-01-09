@@ -52,6 +52,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -327,6 +328,7 @@ public class AmzaTestCluster {
 
         public void stop() throws Exception {
             amzaService.stop();
+            asIfOverTheWire.shutdownNow();
         }
 
         public void create(Consistency consistency, PartitionName partitionName, RowType rowType) throws Exception {
@@ -340,7 +342,7 @@ public class AmzaTestCluster {
                 2,
                 false,
                 rowType));
-            amzaService.awaitOnline(partitionName, 10_000);
+            amzaService.awaitOnline(partitionName, Integer.MAX_VALUE); //TODO lololol
         }
 
         public void update(Consistency consistency, PartitionName partitionName, byte[] p, byte[] k, byte[] v, boolean tombstone) throws Exception {

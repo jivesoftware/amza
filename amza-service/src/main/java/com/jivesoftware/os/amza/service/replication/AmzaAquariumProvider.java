@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
@@ -26,6 +27,7 @@ import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
@@ -88,6 +90,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
 
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileNominated = new ConcurrentHashMap<>();
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileInactive = new ConcurrentHashMap<>();
+    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileBootstrap = new ConcurrentHashMap<>();
 
     public AmzaAquariumProvider(long startupVersion,
         RingMember rootRingMember,
@@ -163,14 +166,15 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     public void tookFully(VersionedPartitionName versionedPartitionName, RingMember fromRingMember, long leadershipToken) throws Exception {
         Aquarium aquarium = getAquarium(versionedPartitionName);
         Waterline leader = aquarium.getLeader();
+        Waterline currentWaterline = aquarium.getState(rootAquariumMember);
         if (leader != null
             && leadershipToken == leader.getTimestamp()
             && rootAquariumMember.equals(leader.getMember())
-            && aquarium.isLivelyState(rootAquariumMember, State.nominated)) {
+            && currentWaterline.isAtQuorum() && currentWaterline.getState() == State.nominated) {
 
             tookFullyWhileNominated.compute(versionedPartitionName, (key, current) -> {
-                if (current == null || current.leadershipToken < leader.getTimestamp()) {
-                    current = new LeadershipTokenAndTookFully(leader.getTimestamp());
+                if (current == null || current.leadershipToken < leadershipToken) {
+                    current = new LeadershipTokenAndTookFully(leadershipToken);
                 }
                 current.add(fromRingMember);
                 return current;
@@ -181,11 +185,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
 
         if (leader != null
             && leadershipToken == leader.getTimestamp()
-            && aquarium.isLivelyState(rootAquariumMember, State.inactive)) {
+            && currentWaterline.isAtQuorum() && currentWaterline.getState() == State.inactive) {
 
             tookFullyWhileInactive.compute(versionedPartitionName, (key, current) -> {
-                if (current == null || current.leadershipToken < leader.getTimestamp()) {
-                    current = new LeadershipTokenAndTookFully(leader.getTimestamp());
+                if (current == null || current.leadershipToken < leadershipToken) {
+                    current = new LeadershipTokenAndTookFully(leadershipToken);
                 }
                 current.add(fromRingMember);
                 return current;
@@ -193,6 +197,44 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         } else {
             tookFullyWhileInactive.remove(versionedPartitionName);
         }
+
+        //if (!versionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TOOK FULLY +++ {}={} from {} in {} at {}", rootRingMember, currentWaterline.getState(), fromRingMember, versionedPartitionName, leadershipToken);
+        if (currentWaterline.getState() == State.bootstrap && (leader == null || leadershipToken == leader.getTimestamp())) {
+            tookFullyWhileBootstrap.compute(versionedPartitionName, (key, current) -> {
+                if (current == null || current.leadershipToken < leadershipToken) {
+                    current = new LeadershipTokenAndTookFully(leadershipToken);
+                }
+                current.add(fromRingMember);
+                return current;
+            });
+        } else {
+            tookFullyWhileBootstrap.remove(versionedPartitionName);
+        }
+    }
+
+    @Override
+    public boolean isColdstart(VersionedPartitionName versionedPartitionName) throws Exception {
+        RingTopology ring = ringStoreReader.getRing(versionedPartitionName.getPartitionName().getRingName());
+        int quorumCount = (ring.entries.size() + 1) / 2;
+
+        Aquarium aquarium = getAquarium(versionedPartitionName);
+        int bootstrapCount = 0;
+        for (RingMemberAndHost ringMemberAndHost : ring.entries) {
+            Waterline waterline = aquarium.getState(ringMemberAndHost.ringMember.asAquariumMember());
+            if (waterline.getState() == State.bootstrap) {
+                bootstrapCount++;
+                if (bootstrapCount >= quorumCount) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isMemberInState(VersionedPartitionName versionedPartitionName, RingMember ringMember, State state) throws Exception {
+        Aquarium aquarium = getAquarium(versionedPartitionName);
+        return state == aquarium.getState(ringMember.asAquariumMember()).getState();
     }
 
     private Aquarium getAquarium(VersionedPartitionName versionedPartitionName) throws Exception {
@@ -259,10 +301,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                     if (leadershipTokenAndTookFully == null
                         || leadershipTokenAndTookFully.leadershipToken != nextTimestamp
                         || (leadershipTokenAndTookFully.tookFully() < quorum && !repairedFromDemoted)) {
-                        LOG.info("{} is nominated for version {} and has taken fully {} out of {}.", versionedPartitionName,
+                        LOG.info("{} is nominated for version {} and has taken fully {} out of {}: {}", versionedPartitionName,
                             leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.leadershipToken,
                             leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.tookFully(),
-                            quorum);
+                            quorum,
+                            leadershipTokenAndTookFully == null ? Collections.emptyList() : leadershipTokenAndTookFully.tookFully);
                         return false;
                     } else if (repairedFromDemoted) {
                         LOG.info("{} is nominated for version {} and has taken fully from the demoted member.", versionedPartitionName,
@@ -274,8 +317,12 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                 } else {
                     LOG.info("{} is nominated and does not need repair.", versionedPartitionName);
                 }
-            } else if (existing.getState() == State.inactive && nextState == State.follower) {
-                //TODO consider merging with the above condition
+            } else if (existing.getState() == State.inactive && nextState == State.follower
+                || existing.getState() == State.bootstrap && nextState == State.inactive) {
+
+                Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyInCurrentState =
+                    existing.getState() == State.inactive ? tookFullyWhileInactive : tookFullyWhileBootstrap;
+
                 int ringSize = ringStoreReader.getRingSize(versionedPartitionName.getPartitionName().getRingName());
                 int quorum;
                 boolean needsRepair;
@@ -288,8 +335,9 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                     needsRepair = quorum > 0;
                 }
                 if (needsRepair) {
-                    LeadershipTokenAndTookFully leadershipTokenAndTookFully = tookFullyWhileInactive.get(versionedPartitionName);
+                    LeadershipTokenAndTookFully leadershipTokenAndTookFully = tookFullyInCurrentState.get(versionedPartitionName);
                     Waterline leader = State.highest(rootAquariumMember, State.leader, readDesired, readDesired.get(rootAquariumMember));
+                    long leaderToken = leader != null ? leader.getTimestamp() : -1;
                     boolean repairedFromLeader = false;
                     if (leader != null
                         && leadershipTokenAndTookFully != null
@@ -304,20 +352,31 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                         || leadershipTokenAndTookFully == null
                         || leadershipTokenAndTookFully.leadershipToken != leader.getTimestamp()
                         || (leadershipTokenAndTookFully.tookFully() < quorum && !repairedFromLeader)) {
-                        LOG.info("{} is inactive for version {} and has taken fully {} out of {}.", versionedPartitionName,
-                            leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.leadershipToken,
+                        LOG.info("{} {} is {} for version {}/{} and has taken fully {} out of {}.", rootRingMember,
+                            versionedPartitionName,
+                            existing.getState(),
+                            leadershipTokenAndTookFully == null ? -1 : leadershipTokenAndTookFully.leadershipToken,
+                            leaderToken,
                             leadershipTokenAndTookFully == null ? 0 : leadershipTokenAndTookFully.tookFully(),
                             quorum);
                         return false;
                     } else if (repairedFromLeader) {
-                        LOG.info("{} is inactive for version {} and has taken fully from the leader.", versionedPartitionName,
-                            leadershipTokenAndTookFully.leadershipToken);
+                        LOG.info("{} {} is {} for version {}/{} and has taken fully from the leader.", rootRingMember,
+                            versionedPartitionName,
+                            existing.getState(),
+                            leadershipTokenAndTookFully.leadershipToken,
+                            leaderToken);
                     } else {
-                        LOG.info("{} is inactive for version {} and has taken fully {} out of {}.", versionedPartitionName,
-                            leadershipTokenAndTookFully.leadershipToken, leadershipTokenAndTookFully.tookFully(), quorum);
+                        LOG.info("{} {} is {} for version {}/{} and has taken fully {} out of {}.", rootRingMember,
+                            versionedPartitionName,
+                            existing.getState(),
+                            leadershipTokenAndTookFully.leadershipToken,
+                            leaderToken,
+                            leadershipTokenAndTookFully.tookFully(),
+                            quorum);
                     }
                 } else {
-                    LOG.info("{} is inactive and does not need repair.", versionedPartitionName);
+                    LOG.info("{} is {} and does not need repair.", versionedPartitionName);
                 }
             }
 

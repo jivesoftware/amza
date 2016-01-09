@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class TakeVersionedPartitionCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    final RingMember rootMember;
     final VersionedPartitionName versionedPartitionName;
     final TimestampedOrderIdProvider timestampedOrderIdProvider;
     final long slowTakeMillis;
@@ -39,13 +40,15 @@ public class TakeVersionedPartitionCoordinator {
     final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
     final ConcurrentHashMap<RingMember, Long> steadyState = new ConcurrentHashMap<>();
 
-    public TakeVersionedPartitionCoordinator(VersionedPartitionName versionedPartitionName,
+    public TakeVersionedPartitionCoordinator(RingMember rootMember,
+        VersionedPartitionName versionedPartitionName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         long slowTakeMillis,
         long slowTakeId,
         long systemReofferDeltaMillis,
         long reofferDeltaMillis) {
 
+        this.rootMember = rootMember;
         this.versionedPartitionName = versionedPartitionName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.systemReofferDeltaMillis = systemReofferDeltaMillis;
@@ -55,7 +58,7 @@ public class TakeVersionedPartitionCoordinator {
         this.currentCategory = new AtomicInteger(1);
     }
 
-    boolean isSteadyState(RingMember ringMember, long takeSessionId) {
+    private boolean isSteadyState(RingMember ringMember, long takeSessionId) throws Exception {
         Long steadySessionId = steadyState.get(ringMember);
         return steadySessionId != null && steadySessionId == takeSessionId;
     }
@@ -73,21 +76,24 @@ public class TakeVersionedPartitionCoordinator {
                 try {
                     return partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
                         VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                        if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                            return txHighestPartitionTx.tx(versionedAquarium,
-                                (versionedAquarium1, highestTxId) -> {
-                                    if (versionedAquarium1 != null) {
-                                        return streamHighestTxId(versionedAquarium1,
-                                            highestTxId,
-                                            takeSessionId,
-                                            versionedRing,
-                                            ringMember,
-                                            availableStream);
-                                    } else {
-                                        LOG.warn("Highest txId unavailable for {}", versionedPartitionName);
-                                        return Long.MAX_VALUE;
-                                    }
-                                });
+                        boolean takerIsOnline = versionedAquarium.isLivelyEndState(ringMember);
+                        if (takerIsOnline && isSteadyState(ringMember, takeSessionId)) {
+                            return Long.MAX_VALUE;
+                        } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
+                            return txHighestPartitionTx.tx(versionedAquarium, (versionedAquarium1, highestTxId) -> {
+                                if (versionedAquarium1 != null) {
+                                    return streamHighestTxId(versionedAquarium1,
+                                        highestTxId,
+                                        takeSessionId,
+                                        versionedRing,
+                                        ringMember,
+                                        takerIsOnline,
+                                        availableStream);
+                                } else {
+                                    LOG.warn("Highest txId unavailable for {}", versionedPartitionName);
+                                    return Long.MAX_VALUE;
+                                }
+                            });
                         } else {
                             LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
                             return Long.MAX_VALUE;
@@ -111,6 +117,7 @@ public class TakeVersionedPartitionCoordinator {
         long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
+        boolean takerIsOnline,
         AvailableStream availableStream) throws Exception {
 
         /*if (versionedPartitionName1 == null || versionedPartitionName1.getPartitionVersion() != versionedPartitionName.getPartitionVersion()) {
@@ -118,7 +125,6 @@ public class TakeVersionedPartitionCoordinator {
         }*/
 
         LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-        boolean takerIsOnline = versionedAquarium.isLivelyEndState(ringMember);
 
         Integer category = versionedRing.getCategory(ringMember);
         if (!takerIsOnline
@@ -175,6 +181,7 @@ public class TakeVersionedPartitionCoordinator {
             });
             if (available.get()) {
                 steadyState.remove(ringMember);
+                //if (!versionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("Available rows: {} for member:{} partition:{} session:{}", rootMember, ringMember, versionedPartitionName, takeSessionId);
                 availableStream.available(versionedPartitionName, highestTxId);
                 return reofferDelta;
             } else {

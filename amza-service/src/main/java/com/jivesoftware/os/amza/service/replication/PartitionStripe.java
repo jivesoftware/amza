@@ -277,7 +277,7 @@ public class PartitionStripe {
         if (partitionStore == null) {
             return takeRowUpdates.give(null, null, null);
         } else {
-            RowStreamer streamer = (livelyEndState.getCurrentState() != State.bootstrap)
+            RowStreamer streamer = (livelyEndState.getCurrentState() != State.expunged)
                 ? rowStream -> storage.takeRowsFromTransactionId(versionedPartitionName, partitionStore.getWalStorage(), transactionId, rowStream)
                 : null;
             return takeRowUpdates.give(versionedPartitionName, livelyEndState, streamer);

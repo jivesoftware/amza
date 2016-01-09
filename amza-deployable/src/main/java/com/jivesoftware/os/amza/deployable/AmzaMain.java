@@ -37,7 +37,6 @@ import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.EmbeddedAmzaServiceInitializer;
 import com.jivesoftware.os.amza.service.SickPartitions;
-import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.replication.http.AmzaClientService;
 import com.jivesoftware.os.amza.service.replication.http.AmzaRestClient;
@@ -61,9 +60,12 @@ import com.jivesoftware.os.routing.bird.health.api.HealthCheckRegistry;
 import com.jivesoftware.os.routing.bird.health.api.HealthChecker;
 import com.jivesoftware.os.routing.bird.health.api.HealthFactory;
 import com.jivesoftware.os.routing.bird.health.api.ScheduledMinMaxHealthCheckConfig;
+import com.jivesoftware.os.routing.bird.health.api.SickHealthCheckConfig;
 import com.jivesoftware.os.routing.bird.health.checkers.DiskFreeHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.GCLoadHealthChecker;
 import com.jivesoftware.os.routing.bird.health.checkers.ServiceStartupHealthCheck;
+import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
+import com.jivesoftware.os.routing.bird.health.checkers.SickThreadsHealthCheck;
 import com.jivesoftware.os.routing.bird.http.client.HttpClient;
 import com.jivesoftware.os.routing.bird.http.client.HttpClientException;
 import com.jivesoftware.os.routing.bird.http.client.HttpDeliveryClientHealthProvider;
@@ -75,6 +77,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.Executors;
+import org.merlin.config.defaults.DoubleDefault;
 import org.merlin.config.defaults.LongDefault;
 import org.merlin.config.defaults.StringDefault;
 
@@ -94,6 +97,21 @@ public class AmzaMain {
 
     public static void main(String[] args) throws Exception {
         new AmzaMain().run(args);
+    }
+
+    interface AmzaSickThreadsHealthConfig extends SickHealthCheckConfig {
+
+        @Override
+        @StringDefault("sick>threads")
+        String getName();
+
+        @Override
+        @StringDefault("No sick threads")
+        String getDescription();
+
+        @Override
+        @DoubleDefault(0.2)
+        Double getSickHealth();
     }
 
     public void run(String[] args) throws Exception {
@@ -145,7 +163,7 @@ public class AmzaMain {
             final SickThreads sickThreads = new SickThreads();
             final SickPartitions sickPartitions = new SickPartitions();
 
-            deployable.addHealthCheck(new SickThreadsHealthCheck(sickThreads));
+            deployable.addHealthCheck(new SickThreadsHealthCheck(deployable.config(AmzaSickThreadsHealthConfig.class), sickThreads));
             deployable.addHealthCheck(new SickPartitionsHealthCheck(sickPartitions));
 
             AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats);

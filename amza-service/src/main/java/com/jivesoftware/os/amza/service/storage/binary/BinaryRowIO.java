@@ -165,6 +165,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
 
     @Override
     public void close() throws IOException {
+        rowReader.close();
         rowWriter.close();
     }
 

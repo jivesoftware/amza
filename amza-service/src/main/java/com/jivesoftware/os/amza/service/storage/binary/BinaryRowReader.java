@@ -32,7 +32,7 @@ import java.io.IOException;
 public class BinaryRowReader implements WALReader {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    private final WALFiler parent; // TODO use mem-mapping and bb.dupliate to remove all the hard locks
+    private final WALFiler parent;
     private final IoStats ioStats;
     private final int corruptionParanoiaFactor;
 
@@ -47,20 +47,28 @@ public class BinaryRowReader implements WALReader {
         synchronized (parent.lock()) {
             IReadable filer = parent.reader(null, parent.length(), 1024*1024);
             boolean valid = true;
-            long seekTo = filer.length();
+            long filerLength = filer.length();
+            long seekTo = filerLength;
             for (int i = 0; i < corruptionParanoiaFactor; i++) {
                 if (seekTo > 0) {
                     filer.seek(seekTo - 4);
                     int tailLength = UIO.readInt(filer, "length", intBuffer);
-                    seekTo -= (tailLength + 8);
+                    if (tailLength <= 0 || tailLength >= filerLength) {
+                        LOG.error("Validation found tail length of {} at offset {} with file length {}", tailLength, seekTo, filerLength);
+                        valid = false;
+                        break;
+                    }
+                    seekTo = seekTo - tailLength - 8;
                     if (seekTo < 0) {
+                        LOG.error("Validation required seek to {} with file length {}", seekTo, filerLength);
                         valid = false;
                         break;
                     } else {
                         filer.seek(seekTo);
                         int headLength = UIO.readInt(filer, "length", intBuffer);
                         if (tailLength != headLength) {
-                            LOG.error("Read a head length of " + headLength + " and tail length of " + tailLength);
+                            LOG.warn("Validation read a head length of {} but a tail length of {} at offset {} with file length {}",
+                                headLength, tailLength, seekTo, filerLength);
                             valid = false;
                             break;
                         }

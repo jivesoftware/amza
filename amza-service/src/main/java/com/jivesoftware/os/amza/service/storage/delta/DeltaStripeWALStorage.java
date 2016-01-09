@@ -29,7 +29,6 @@ import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
-import com.jivesoftware.os.amza.service.SickThreads;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -39,6 +38,7 @@ import com.jivesoftware.os.amza.service.storage.delta.DeltaWAL.KeyValueHighwater
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -174,7 +174,6 @@ public class DeltaStripeWALStorage {
                             (rowTxId, rowFP, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                                 VersionedPartitionName versionedPartitionName = VersionedPartitionName.fromBytes(prefix);
                                 try {
-                                    //TODO REVIEW!
                                     boolean acceptable;
                                     if (accepted.contains(versionedPartitionName)) {
                                         acceptable = true;

@@ -78,6 +78,20 @@ public class VersionedAquarium {
         aquariumTransactor.tookFully(versionedPartitionName, fromMember, leadershipToken);
     }
 
+    public boolean isColdstart() throws Exception {
+        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
+            return false;
+        }
+        return aquariumTransactor.isColdstart(versionedPartitionName);
+    }
+
+    public boolean isMemberInState(RingMember ringMember, State state) throws Exception {
+        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
+            return state == State.follower;
+        }
+        return aquariumTransactor.isMemberInState(versionedPartitionName, ringMember, state);
+    }
+
     public void delete() throws Exception {
         if (versionedPartitionName.getPartitionName().isSystemPartition()) {
             return;

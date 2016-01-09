@@ -6,7 +6,6 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -31,6 +30,7 @@ public class TakeCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final RingMember rootMember;
     private final AmzaStats amzaStats;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
     private final IdPacker idPacker;
@@ -45,7 +45,8 @@ public class TakeCoordinator {
     private final long systemReofferDeltaMillis;
     private final long reofferDeltaMillis;
 
-    public TakeCoordinator(AmzaStats amzaStats,
+    public TakeCoordinator(RingMember rootMember,
+        AmzaStats amzaStats,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
         VersionedPartitionProvider versionedPartitionProvider,
@@ -53,6 +54,7 @@ public class TakeCoordinator {
         long slowTakeInMillis,
         long systemReofferDeltaMillis,
         long reofferDeltaMillis) {
+        this.rootMember = rootMember;
         this.amzaStats = amzaStats;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.idPacker = idPacker;
@@ -146,7 +148,8 @@ public class TakeCoordinator {
 
     private TakeRingCoordinator ensureRingCoordinator(byte[] ringName, RingSupplier ringSupplier) {
         return takeRingCoordinators.computeIfAbsent(new IBA(ringName),
-            key -> new TakeRingCoordinator(ringName,
+            key -> new TakeRingCoordinator(rootMember,
+                ringName,
                 timestampedOrderIdProvider,
                 idPacker,
                 versionedPartitionProvider,

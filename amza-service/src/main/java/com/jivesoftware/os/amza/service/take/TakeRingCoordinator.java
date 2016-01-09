@@ -24,6 +24,7 @@ public class TakeRingCoordinator {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final RingMember rootMember;
     private final byte[] ringName;
     private final TimestampedOrderIdProvider timestampedOrderIdProvider;
     private final IdPacker idPacker;
@@ -34,7 +35,8 @@ public class TakeRingCoordinator {
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
-    public TakeRingCoordinator(byte[] ringName,
+    public TakeRingCoordinator(RingMember rootMember,
+        byte[] ringName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
         IdPacker idPacker,
         VersionedPartitionProvider versionedPartitionProvider,
@@ -42,6 +44,7 @@ public class TakeRingCoordinator {
         long slowTakeInMillis,
         long reofferDeltaMillis,
         RingTopology ring) {
+        this.rootMember = rootMember;
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
         this.idPacker = idPacker;
@@ -79,7 +82,8 @@ public class TakeRingCoordinator {
 
     private TakeVersionedPartitionCoordinator ensureCoordinator(VersionedPartitionName versionedPartitionName) {
         return partitionCoordinators.computeIfAbsent(versionedPartitionName,
-            key -> new TakeVersionedPartitionCoordinator(versionedPartitionName,
+            key -> new TakeVersionedPartitionCoordinator(rootMember,
+                versionedPartitionName,
                 timestampedOrderIdProvider,
                 slowTakeInMillis,
                 idPacker.pack(slowTakeInMillis, 0, 0), //TODO need orderIdProvider.deltaMillisToIds()
@@ -96,18 +100,16 @@ public class TakeRingCoordinator {
         long suggestedWaitInMillis = Long.MAX_VALUE;
         VersionedRing ring = versionedRing.get();
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
-            if (!coordinator.isSteadyState(ringMember, takeSessionId)) {
-                PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-                Long timeout = coordinator.availableRowsStream(partitionStateStorage,
-                    txHighestPartitionTx,
-                    takeSessionId,
-                    ring,
-                    ringMember,
-                    properties.takeFromFactor,
-                    availableStream);
-                suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
-                    timeout);
-            }
+            PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
+            Long timeout = coordinator.availableRowsStream(partitionStateStorage,
+                txHighestPartitionTx,
+                takeSessionId,
+                ring,
+                ringMember,
+                properties.takeFromFactor,
+                availableStream);
+            suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
+                timeout);
         }
         return suggestedWaitInMillis;
     }

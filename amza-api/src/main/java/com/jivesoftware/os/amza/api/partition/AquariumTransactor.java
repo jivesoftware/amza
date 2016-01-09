@@ -24,5 +24,9 @@ public interface AquariumTransactor {
 
     void tookFully(VersionedPartitionName versionedPartitionName, RingMember fromMember, long leadershipToken) throws Exception;
 
+    boolean isColdstart(VersionedPartitionName versionedPartitionName) throws Exception;
+
+    boolean isMemberInState(VersionedPartitionName versionedPartitionName, RingMember ringMember, State state) throws Exception;
+
     void delete(VersionedPartitionName versionedPartitionName) throws Exception;
 }

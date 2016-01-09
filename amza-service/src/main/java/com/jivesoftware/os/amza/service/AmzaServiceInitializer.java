@@ -72,6 +72,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
@@ -179,7 +180,8 @@ public class AmzaServiceInitializer {
             orderIdProvider, sickPartitions, tombstoneCompactionFactor);
         PartitionIndex partitionIndex = new PartitionIndex(walStorageProvider, partitionPropertyMarshaller, config.hardFsync);
 
-        TakeCoordinator takeCoordinator = new TakeCoordinator(amzaStats,
+        TakeCoordinator takeCoordinator = new TakeCoordinator(ringMember,
+            amzaStats,
             orderIdProvider,
             idPacker,
             partitionIndex,

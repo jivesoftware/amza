@@ -464,7 +464,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             if (apply.isEmpty()) {
                 rowsChanged = new RowsChanged(versionedPartitionName, apply, removes, clobbers, -1, -1);
             } else {
-                List<WALIndexable> indexables = new ArrayList<>(apply.size());
+                int size = apply.size();
+                List<WALIndexable> indexables = new ArrayList<>(size);
                 walTx.write((WALWriter rowWriter) -> {
                     int estimatedSizeInBytes = 0;
                     for (Entry<WALKey, WALValue> row : apply.entrySet()) {
@@ -473,43 +474,47 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             row.getKey().sizeOfComposed(),
                             (value != null ? value.length : 0));
                     }
-                    flush(rowType,
-                        forceTxId,
-                        apply.size(),
-                        estimatedSizeInBytes,
-                        rowStream -> {
-                            for (Entry<WALKey, WALValue> row : apply.entrySet()) {
-                                WALValue value = row.getValue();
-                                if (!rowStream.stream(primaryRowMarshaller.toRow(rowType,
-                                    row.getKey().compose(),
-                                    value.getValue(),
-                                    value.getTimestampId(),
-                                    value.getTombstoned(),
-                                    value.getVersion()))) {
-                                    return false;
+                    try {
+                        flush(rowType,
+                            forceTxId,
+                            size,
+                            estimatedSizeInBytes,
+                            rowStream -> {
+                                for (Entry<WALKey, WALValue> row : apply.entrySet()) {
+                                    WALValue value = row.getValue();
+                                    if (!rowStream.stream(primaryRowMarshaller.toRow(rowType,
+                                        row.getKey().compose(),
+                                        value.getValue(),
+                                        value.getTimestampId(),
+                                        value.getTombstoned(),
+                                        value.getVersion()))) {
+                                        return false;
+                                    }
                                 }
-                            }
-                            return true;
-                        },
-                        indexableKeyStream -> {
-                            for (Entry<WALKey, WALValue> row : apply.entrySet()) {
-                                WALValue value = row.getValue();
-                                if (!indexableKeyStream.stream(row.getKey().prefix, row.getKey().key,
-                                    value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
-                                    return false;
+                                return true;
+                            },
+                            indexableKeyStream -> {
+                                for (Entry<WALKey, WALValue> row : apply.entrySet()) {
+                                    WALValue value = row.getValue();
+                                    if (!indexableKeyStream.stream(row.getKey().prefix, row.getKey().key,
+                                        value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
+                                        return false;
+                                    }
                                 }
-                            }
-                            return true;
-                        },
-                        indexCommittedFromTxId,
-                        indexCommittedUpToTxId,
-                        rowWriter,
-                        highwater[0],
-                        flushCompactionHint,
-                        (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
-                            indexables.add(new WALIndexable(rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
-                            return true;
-                        });
+                                return true;
+                            },
+                            indexCommittedFromTxId,
+                            indexCommittedUpToTxId,
+                            rowWriter,
+                            highwater[0],
+                            flushCompactionHint,
+                            (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
+                                indexables.add(new WALIndexable(rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
+                                return true;
+                            });
+                    } catch (NullPointerException e) {
+                        throw e;
+                    }
 
                     return null;
                 });

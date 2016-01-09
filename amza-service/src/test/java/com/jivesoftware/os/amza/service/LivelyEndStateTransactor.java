@@ -52,6 +52,16 @@ public class LivelyEndStateTransactor implements AquariumTransactor {
     }
 
     @Override
+    public boolean isColdstart(VersionedPartitionName versionedPartitionName) throws Exception {
+        return false;
+    }
+
+    @Override
+    public boolean isMemberInState(VersionedPartitionName versionedPartitionName, RingMember ringMember, State state) throws Exception {
+        return false;
+    }
+
+    @Override
     public void delete(VersionedPartitionName versionedPartitionName) throws Exception {
     }
 }

@@ -47,7 +47,7 @@ import static org.testng.Assert.assertTrue;
 
 public class AmzaServiceTest {
 
-    @Test(enabled = true)
+    @Test(enabled = true, invocationCount = 100, singleThreaded = true)
     public void testAddToReplicatedWAL() throws Exception {
         final int maxNumberOfServices = 5;
 
@@ -115,7 +115,13 @@ public class AmzaServiceTest {
             a.stop();
         }
 
-        System.out.println("\n------PASSED :) ---------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("------PASSED :) ---------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
     }
 
     private void assertConsistency(Consistency readConsistency, Collection<AmzaNode> clusterNodes) throws Exception {

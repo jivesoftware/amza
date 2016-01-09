@@ -197,6 +197,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         if (compact.isPresent()) {
             acquireAll();
             try {
+
                 WALTx.CommittedCompacted<I> compacted;
                 try {
                     compacted = compact.get().commit();

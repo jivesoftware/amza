@@ -45,7 +45,7 @@ public class BinaryRowReader implements WALReader {
     boolean validate() throws IOException {
         byte[] intBuffer = new byte[4];
         synchronized (parent.lock()) {
-            IReadable filer = parent.reader(null, parent.length(), 1024*1024);
+            IReadable filer = parent.reader(null, parent.length(), 1024 * 1024);
             boolean valid = true;
             long filerLength = filer.length();
             long seekTo = filerLength;
@@ -167,7 +167,7 @@ public class BinaryRowReader implements WALReader {
             byte[] intLongBuffer = new byte[8];
             while (fileLength < parent.length()) {
                 fileLength = parent.length();
-                filer = parent.reader(filer, fileLength, 1024*1024); //TODO config
+                filer = parent.reader(filer, fileLength, 1024 * 1024); //TODO config
                 while (true) {
                     long rowFP;
                     long rowTxId = -1;
@@ -272,7 +272,7 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public boolean read(Fps fps, RowStream rowStream) throws Exception {
-        IReadable[] filerRef = { parent.reader(null, 0, 0) };
+        IReadable[] filerRef = {parent.reader(null, 0, 0)};
         byte[] rawLength = new byte[4];
         byte[] rowTypeByteAndTxId = new byte[1 + 8];
         return fps.consume(fp -> {
@@ -309,5 +309,9 @@ public class BinaryRowReader implements WALReader {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    void close() throws IOException {
+        parent.close();
     }
 }

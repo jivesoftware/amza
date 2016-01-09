@@ -22,9 +22,11 @@ import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.filer.SingleAutoGrowingByteBufferBackedFiler;
 import java.io.File;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class DiskBackedWALFiler implements WALFiler {
@@ -44,6 +46,7 @@ public class DiskBackedWALFiler implements WALFiler {
 
     private final Object fileLock = new Object();
     private final Object memMapLock = new Object();
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     public DiskBackedWALFiler(String fileName, String mode, boolean useMemMap, int appendBufferSize) throws IOException {
         this.fileName = fileName;
@@ -65,7 +68,7 @@ public class DiskBackedWALFiler implements WALFiler {
             if (current != null) {
                 return current;
             } else {
-                DiskBackedWALFilerChannelReader reader = new DiskBackedWALFilerChannelReader(this, channel);
+                DiskBackedWALFilerChannelReader reader = new DiskBackedWALFilerChannelReader(this, channel, closed);
                 return bufferSize > 0 ? new HeapBufferedReadable(reader, bufferSize) : reader;
             }
         }
@@ -114,6 +117,7 @@ public class DiskBackedWALFiler implements WALFiler {
 
             @Override
             public void close() throws IOException {
+                closed.compareAndSet(false, true);
                 if (filer != null) {
                     filer.reset();
                 }
@@ -156,6 +160,7 @@ public class DiskBackedWALFiler implements WALFiler {
 
     @Override
     public void close() throws IOException {
+        closed.compareAndSet(false, true);
         randomAccessFile.close();
     }
 
@@ -165,12 +170,15 @@ public class DiskBackedWALFiler implements WALFiler {
     }
 
     private void write(byte[] b, int _offset, int _len) throws IOException {
-        while (true) {
+        while (!closed.get()) {
             try {
                 randomAccessFile.write(b, _offset, _len);
                 size.addAndGet(_len);
                 break;
             } catch (ClosedChannelException e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedIOException();
+                }
                 ensureOpen();
             }
         }
@@ -178,11 +186,14 @@ public class DiskBackedWALFiler implements WALFiler {
 
     private void flush(boolean fsync) throws IOException {
         if (fsync) {
-            while (true) {
+            while (!closed.get()) {
                 try {
                     randomAccessFile.getFD().sync();
                     break;
                 } catch (ClosedChannelException e) {
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw new InterruptedIOException();
+                    }
                     ensureOpen();
                 }
             }
@@ -191,7 +202,7 @@ public class DiskBackedWALFiler implements WALFiler {
 
     public void truncate(long size) throws IOException {
         // should only be called with a write AND a read lock
-        while (true) {
+        while (!closed.get()) {
             try {
                 randomAccessFile.setLength(size);
 
@@ -201,13 +212,16 @@ public class DiskBackedWALFiler implements WALFiler {
                 }
                 break;
             } catch (ClosedChannelException e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedIOException();
+                }
                 ensureOpen();
             }
         }
     }
 
     private void ensureOpen() throws IOException {
-        if (!channel.isOpen()) {
+        if (!channel.isOpen() && !closed.get()) {
             synchronized (fileLock) {
                 if (!channel.isOpen()) {
                     randomAccessFile = new RandomAccessFile(fileName, mode);

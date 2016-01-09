@@ -328,6 +328,7 @@ public class AmzaTestCluster {
 
         public void stop() throws Exception {
             amzaService.stop();
+            asIfOverTheWire.shutdownNow();
         }
 
         public void create(Consistency consistency, PartitionName partitionName, RowType rowType) throws Exception {

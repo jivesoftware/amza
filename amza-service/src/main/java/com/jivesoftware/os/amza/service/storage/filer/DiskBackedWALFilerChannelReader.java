@@ -2,9 +2,11 @@ package com.jivesoftware.os.amza.service.storage.filer;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author jonathan.colt
@@ -12,15 +14,16 @@ import java.nio.channels.FileChannel;
 public class DiskBackedWALFilerChannelReader implements IReadable {
 
     private final DiskBackedWALFiler parent;
+    private final AtomicBoolean closed;
     private FileChannel fc;
     private volatile long fp;
-    private volatile boolean closed = false;
-
+    
     private final ByteBuffer singleByteBuffer = ByteBuffer.allocate(1);
 
-    public DiskBackedWALFilerChannelReader(DiskBackedWALFiler parent, FileChannel fc) {
+    public DiskBackedWALFilerChannelReader(DiskBackedWALFiler parent, FileChannel fc, AtomicBoolean closed) {
         this.parent = parent;
         this.fc = fc;
+        this.closed = closed;
     }
 
     @Override
@@ -48,7 +51,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
 
     @Override
     public int read() throws IOException {
-        while (!closed) {
+        while (!closed.get()) {
             try {
                 singleByteBuffer.position(0);
                 int read = fc.read(singleByteBuffer, fp);
@@ -56,6 +59,10 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
                 singleByteBuffer.position(0);
                 return read != 1 ? -1 : singleByteBuffer.get();
             } catch (ClosedChannelException e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedIOException();
+                }
+                System.out.println("*****************************************************************");
                 fc = parent.getFileChannel();
             }
         }
@@ -70,12 +77,16 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
     @Override
     public int read(byte[] b, int _offset, int _len) throws IOException {
         ByteBuffer bb = ByteBuffer.wrap(b, _offset, _len);
-        while (!closed) {
+        while (!closed.get()) {
             try {
                 fc.read(bb, fp);
                 fp += _len;
                 return _len;
             } catch (ClosedChannelException e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedIOException();
+                }
+                System.out.println("*****************************************************************");
                 fc = parent.getFileChannel();
                 bb.position(0);
             }
@@ -85,7 +96,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
 
     @Override
     public void close() throws IOException {
-        closed = true;
+        closed.compareAndSet(false, true);
         fc.close();
     }
 

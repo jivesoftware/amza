@@ -40,6 +40,7 @@ public class BinaryWALTx<K> implements WALTx {
     private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
     private final K key;
     private final String name;
+    private final K backupKey;
     private final PrimaryRowMarshaller primaryRowMarshaller;
 
     private final RowIOProvider<K> ioProvider;
@@ -51,6 +52,7 @@ public class BinaryWALTx<K> implements WALTx {
         PrimaryRowMarshaller rowMarshaller) throws Exception {
         this.key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
         this.name = prefix + SUFFIX;
+        this.backupKey = ioProvider.buildKey(key, "bkp");
         this.ioProvider = ioProvider;
         this.primaryRowMarshaller = rowMarshaller;
     }
@@ -170,9 +172,8 @@ public class BinaryWALTx<K> implements WALTx {
     private void initIO() throws Exception {
         io = ioProvider.open(key, name, false);
         if (io == null) {
-            K backup = ioProvider.buildKey(key, "bkp");
-            if (ioProvider.exists(backup)) {
-                ioProvider.moveTo(backup, ioProvider.buildKey(key, name));
+            if (ioProvider.exists(backupKey, name)) {
+                ioProvider.moveTo(backupKey, name, key, name);
                 io = ioProvider.open(key, name, false);
                 if (io == null) {
                     throw new IllegalStateException("Failed to recover backup WAL " + name);
@@ -251,7 +252,7 @@ public class BinaryWALTx<K> implements WALTx {
         compactionLock.acquire(NUM_PERMITS);
         try {
             io.close();
-            ioProvider.delete(io.getKey());
+            ioProvider.delete(key, name);
         } finally {
             compactionLock.release(NUM_PERMITS);
         }
@@ -310,21 +311,20 @@ public class BinaryWALTx<K> implements WALTx {
                 compactionIO.flush(true);
                 long sizeAfterCompaction = compactionIO.sizeInBytes();
                 compactionIO.close();
-                K backup = ioProvider.buildKey(key, "bkp");
-                ioProvider.delete(backup);
-                if (!ioProvider.ensure(backup)) {
-                    throw new IOException("Failed trying to clean " + backup);
+                ioProvider.delete(backupKey, name);
+                if (!ioProvider.ensureKey(backupKey)) {
+                    throw new IOException("Failed trying to ensure " + backupKey);
                 }
 
                 long sizeBeforeCompaction = io.sizeInBytes();
 
                 Callable<Void> commit = () -> {
                     io.close();
-                    ioProvider.moveTo(io.getKey(), backup);
-                    if (!ioProvider.ensure(key)) {
+                    ioProvider.moveTo(key, name, backupKey, name);
+                    if (!ioProvider.ensureKey(key)) {
                         throw new IOException("Failed trying to ensure " + key);
                     }
-                    ioProvider.moveTo(compactionIO.getKey(), key);
+                    ioProvider.moveTo(compactionIO.getKey(), compactionIO.getName(), key, name);
                     // Reopen the world
                     io = ioProvider.open(key, name, false);
                     if (io == null) {

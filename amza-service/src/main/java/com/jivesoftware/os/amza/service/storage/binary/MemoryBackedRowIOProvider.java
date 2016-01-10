@@ -62,7 +62,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
         MemoryBackedWALFiler filer = getFiler(file);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO<>(file, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
+        return new BinaryRowIO<>(key, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
     }
 
     @Override
@@ -95,23 +95,23 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
     }
 
     @Override
-    public void moveTo(File key, File to) throws Exception {
-        MemoryBackedWALFiler filer = filers.remove(key);
-        filers.put(new File(to, key.getName()), filer);
+    public void moveTo(File fromKey, String fromName, File toKey, String toName) throws Exception {
+        MemoryBackedWALFiler filer = filers.remove(new File(fromKey, fromName));
+        filers.put(new File(toKey, toName), filer);
     }
 
     @Override
-    public void delete(File key) throws Exception {
-        filers.remove(key);
+    public void delete(File key, String name) throws Exception {
+        filers.remove(new File(key, name));
     }
 
     @Override
-    public boolean ensure(File key) {
+    public boolean ensureKey(File key) {
         return true;
     }
 
     @Override
-    public boolean exists(File key) {
+    public boolean exists(File key, String name) {
         return true;
     }
 }

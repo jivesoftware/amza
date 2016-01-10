@@ -10,6 +10,8 @@ public interface RowIO<K> extends WALReader, WALWriter {
 
     K getKey();
 
+    String getName();
+
     long getInclusiveStartOfRow(long transactionId) throws Exception;
 
     long sizeInBytes() throws Exception;

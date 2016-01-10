@@ -172,7 +172,7 @@ public class BinaryWALTx<K> implements WALTx {
         if (io == null) {
             K backup = ioProvider.buildKey(key, "bkp");
             if (ioProvider.exists(backup)) {
-                ioProvider.moveTo(backup, key);
+                ioProvider.moveTo(backup, ioProvider.buildKey(key, name));
                 io = ioProvider.open(key, name, false);
                 if (io == null) {
                     throw new IllegalStateException("Failed to recover backup WAL " + name);

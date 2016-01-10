@@ -55,7 +55,7 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap, 0);
         BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO<>(file, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
+        return new BinaryRowIO<>(dir, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
     }
 
     @Override
@@ -74,13 +74,13 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
     }
 
     @Override
-    public boolean ensure(File key) {
+    public boolean ensureKey(File key) {
         return key.exists() || key.mkdirs();
     }
 
     @Override
-    public boolean exists(File key) {
-        return key.exists();
+    public boolean exists(File dir, String name) {
+        return new File(dir, name).exists();
     }
 
     @Override
@@ -94,13 +94,14 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
     }
 
     @Override
-    public void moveTo(File key, File to) throws Exception {
-        File destinationFile = new File(to, key.getName());
-        Files.move(key, destinationFile);
+    public void moveTo(File fromDir, String fromName, File toDir, String toName) throws Exception {
+        File from = new File(fromDir, fromName);
+        File to = new File(toDir, toName);
+        Files.move(from, to);
     }
 
     @Override
-    public void delete(File key) throws Exception {
-        FileUtils.deleteQuietly(key);
+    public void delete(File dir, String name) throws Exception {
+        FileUtils.deleteQuietly(new File(dir, name));
     }
 }

@@ -21,11 +21,11 @@ public interface RowIOProvider<K> {
 
     K createTempKey() throws Exception;
 
-    void moveTo(K key, K to) throws Exception;
+    void moveTo(K fromKey, String fromName, K toKey, String toName) throws Exception;
 
-    void delete(K key) throws Exception;
+    void delete(K key, String name) throws Exception;
 
-    boolean ensure(K key);
+    boolean ensureKey(K key);
 
-    boolean exists(K key);
+    boolean exists(K key, String name);
 }

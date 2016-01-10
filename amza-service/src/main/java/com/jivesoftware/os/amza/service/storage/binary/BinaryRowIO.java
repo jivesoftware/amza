@@ -16,6 +16,7 @@ import org.apache.commons.lang.mutable.MutableLong;
 public class BinaryRowIO<K> implements RowIO<K> {
 
     private final K key;
+    private final String name;
     private final BinaryRowReader rowReader;
     private final BinaryRowWriter rowWriter;
     private final int updatesBetweenLeaps;
@@ -25,12 +26,14 @@ public class BinaryRowIO<K> implements RowIO<K> {
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
 
     public BinaryRowIO(K key,
+        String name,
         BinaryRowReader rowReader,
         BinaryRowWriter rowWriter,
         int updatesBetweenLeaps,
         int maxLeaps) throws Exception {
 
         this.key = key;
+        this.name = name;
         this.rowReader = rowReader;
         this.rowWriter = rowWriter;
         this.updatesBetweenLeaps = updatesBetweenLeaps;
@@ -40,6 +43,11 @@ public class BinaryRowIO<K> implements RowIO<K> {
     @Override
     public K getKey() {
         return key;
+    }
+
+    @Override
+    public String getName() {
+        return name;
     }
 
     @Override

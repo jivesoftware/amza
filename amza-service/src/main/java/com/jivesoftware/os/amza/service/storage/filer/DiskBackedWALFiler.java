@@ -20,6 +20,8 @@ import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.service.filer.FileBackedMemMappedByteBufferFactory;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.filer.SingleAutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.mlogger.core.MetricLogger;
+import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -30,6 +32,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class DiskBackedWALFiler implements WALFiler {
+
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
     private static final long BUFFER_SEGMENT_SIZE = 1024L * 1024 * 1024;
 
@@ -176,9 +180,6 @@ public class DiskBackedWALFiler implements WALFiler {
                 size.addAndGet(_len);
                 break;
             } catch (ClosedChannelException e) {
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedIOException();
-                }
                 ensureOpen();
             }
         }
@@ -191,9 +192,6 @@ public class DiskBackedWALFiler implements WALFiler {
                     randomAccessFile.getFD().sync();
                     break;
                 } catch (ClosedChannelException e) {
-                    if (Thread.currentThread().isInterrupted()) {
-                        throw new InterruptedIOException();
-                    }
                     ensureOpen();
                 }
             }
@@ -212,18 +210,22 @@ public class DiskBackedWALFiler implements WALFiler {
                 }
                 break;
             } catch (ClosedChannelException e) {
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedIOException();
-                }
                 ensureOpen();
             }
         }
     }
 
     private void ensureOpen() throws IOException {
-        if (!channel.isOpen() && !closed.get()) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedIOException();
+        }
+        if (!channel.isOpen()) {
+            if (closed.get()) {
+                throw new IOException("The WAL filer has been closed");
+            }
             synchronized (fileLock) {
                 if (!channel.isOpen()) {
+                    LOG.warn("File channel is closed and must be reopened for {}", fileName);
                     randomAccessFile = new RandomAccessFile(fileName, mode);
                     channel = randomAccessFile.getChannel();
                     randomAccessFile.seek(size.get());

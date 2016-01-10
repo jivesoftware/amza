@@ -59,10 +59,6 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
                 singleByteBuffer.position(0);
                 return read != 1 ? -1 : singleByteBuffer.get();
             } catch (ClosedChannelException e) {
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedIOException();
-                }
-                System.out.println("*****************************************************************");
                 fc = parent.getFileChannel();
             }
         }
@@ -83,10 +79,6 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
                 fp += _len;
                 return _len;
             } catch (ClosedChannelException e) {
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedIOException();
-                }
-                System.out.println("*****************************************************************");
                 fc = parent.getFileChannel();
                 bb.position(0);
             }

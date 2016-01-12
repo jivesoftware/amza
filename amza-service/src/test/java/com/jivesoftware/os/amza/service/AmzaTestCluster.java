@@ -452,7 +452,7 @@ public class AmzaTestCluster {
         }
 
         public boolean isEmpty() throws Exception {
-            Set<PartitionName> allAPartitions = amzaService.getPartitionNames();
+            Set<PartitionName> allAPartitions = amzaService.getAllPartitionNames();
             if (allAPartitions.isEmpty()) {
                 return true;
             }
@@ -481,8 +481,8 @@ public class AmzaTestCluster {
                 return true;
             }
 
-            Set<PartitionName> allAPartitions = amzaService.getPartitionNames();
-            Set<PartitionName> allBPartitions = service.amzaService.getPartitionNames();
+            Set<PartitionName> allAPartitions = amzaService.getAllPartitionNames();
+            Set<PartitionName> allBPartitions = service.amzaService.getAllPartitionNames();
 
             if (allAPartitions.size() != allBPartitions.size()) {
                 System.out.println(allAPartitions + " -vs- " + allBPartitions);

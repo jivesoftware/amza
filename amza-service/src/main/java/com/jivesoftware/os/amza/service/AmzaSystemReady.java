@@ -57,7 +57,7 @@ public class AmzaSystemReady {
         }
     }
 
-    private void checkReady() throws Exception {
+    public void checkReady() throws Exception {
         int systemRingSize = ringStoreReader.getRingSize(AmzaRingReader.SYSTEM_RING);
         int quorum = systemRingSize / 2;
         boolean ready = true;

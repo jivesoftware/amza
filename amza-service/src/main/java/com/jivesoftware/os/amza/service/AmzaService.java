@@ -192,6 +192,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
         // last minute initialization
         aquariumProvider.start();
+        systemReady.checkReady();
     }
 
     public void stop() throws Exception {

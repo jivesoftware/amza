@@ -646,12 +646,17 @@ public class RowChangeTaker implements RowChanges {
                                             LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
                                             State currentState = livelyEndState.getCurrentState();
                                             if ((currentState == State.bootstrap || currentState == null) && versionedAquarium.isColdstart()) {
-                                                LOG.info("{} took from bootstrap {} and will coldstart with token {}", amzaRingReader.getRingMember(),
-                                                    remoteRingMember, rowsResult.leadershipToken);
+                                                LOG.info("{} took {} from bootstrap {} and will coldstart with token {}", amzaRingReader.getRingMember(),
+                                                    currentVersionedPartitionName,
+                                                    remoteRingMember,
+                                                    rowsResult.leadershipToken);
                                                 tookFully(versionedAquarium, remoteRingMember, rowsResult.leadershipToken);
                                             } else {
-                                                LOG.info("{} took from bootstrap {} but our state is {} and coldstart is {}", amzaRingReader.getRingMember(),
-                                                    remoteRingMember, currentState, versionedAquarium.isColdstart());
+                                                LOG.info("{} took {} from bootstrap {} but our state is {} and coldstart is {}", amzaRingReader.getRingMember(),
+                                                    currentVersionedPartitionName,
+                                                    remoteRingMember,
+                                                    currentState,
+                                                    versionedAquarium.isColdstart());
                                                 versionedAquarium.wipeTheGlass();
                                             }
                                         }

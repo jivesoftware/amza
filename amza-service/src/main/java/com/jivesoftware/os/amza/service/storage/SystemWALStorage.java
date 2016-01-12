@@ -178,7 +178,7 @@ public class SystemWALStorage {
     }
 
     public void highestPartitionTxIds(HighestPartitionTx<Void> tx) throws Exception {
-        for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getAllPartitions(), IS_SYSTEM_PREDICATE)) {
+        for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore != null) {
                 long highestTxId = partitionStore.getWalStorage().highestTxId();

@@ -295,7 +295,7 @@ public class AmzaServiceInitializer {
 
         partitionIndex.open(partitionStateStorage, ringStoreReader);
         // cold start
-        for (VersionedPartitionName versionedPartitionName : partitionIndex.getAllPartitions()) {
+        for (VersionedPartitionName versionedPartitionName : partitionIndex.getMemberPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
                 long partitionVersion = versionedAquarium.getVersionedPartitionName().getPartitionVersion();

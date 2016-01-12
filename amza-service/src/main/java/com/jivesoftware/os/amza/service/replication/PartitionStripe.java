@@ -81,7 +81,7 @@ public class PartitionStripe {
     }
 
     public void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
-        for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getAllPartitions(), predicate)) {
+        for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getMemberPartitions(), predicate)) {
             txPartitionState.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
                 VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                 if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {

@@ -1,7 +1,9 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
@@ -22,6 +24,7 @@ import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -58,22 +61,28 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         this.hardFlush = hardFlush;
     }
 
-    public void open(TxPartitionState txPartitionState, RingMembership ringMembership) throws Exception {
+    private final List<VersionedPartitionName> SYSTEM_PARTITIONS = ImmutableList.of(
+        PartitionCreator.REGION_INDEX,
+        PartitionCreator.RING_INDEX,
+        PartitionCreator.NODE_INDEX,
+        PartitionCreator.HIGHWATER_MARK_INDEX,
+        PartitionCreator.PARTITION_VERSION_INDEX,
+        PartitionCreator.REGION_PROPERTIES,
+        PartitionCreator.AQUARIUM_STATE_INDEX,
+        PartitionCreator.AQUARIUM_LIVELINESS_INDEX);
 
-        PartitionStore partitionIndexStore = get(PartitionCreator.REGION_INDEX);
-        get(PartitionCreator.RING_INDEX);
-        get(PartitionCreator.NODE_INDEX);
-        get(PartitionCreator.HIGHWATER_MARK_INDEX);
-        get(PartitionCreator.PARTITION_VERSION_INDEX);
-        get(PartitionCreator.REGION_PROPERTIES);
-        get(PartitionCreator.AQUARIUM_STATE_INDEX);
-        get(PartitionCreator.AQUARIUM_LIVELINESS_INDEX);
+    public void open(TxPartitionState txPartitionState, RingMembership ringMembership) throws Exception {
+        for (VersionedPartitionName versionedPartitionName : SYSTEM_PARTITIONS) {
+            get(versionedPartitionName);
+        }
 
         final ExecutorService openExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2,
             new ThreadFactoryBuilder().setNameFormat("open-index-%d").build());
         final AtomicInteger numOpened = new AtomicInteger(0);
         final AtomicInteger numFailed = new AtomicInteger(0);
         final AtomicInteger total = new AtomicInteger(0);
+
+        PartitionStore partitionIndexStore = get(PartitionCreator.REGION_INDEX);
         partitionIndexStore.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
             final PartitionName partitionName = PartitionName.fromBytes(key);
             if (ringMembership.isMemberOfRing(partitionName.getRingName())) {
@@ -201,12 +210,29 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     @Override
-    public Iterable<VersionedPartitionName> getAllPartitions() {
+    public Iterable<PartitionName> getAllPartitions() throws Exception {
+        PartitionStore propertiesStore = get(PartitionCreator.REGION_PROPERTIES);
+        List<PartitionName> partitionNames = Lists.newArrayList();
+        propertiesStore.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            if (!valueTombstoned && valueTimestamp != -1) {
+                partitionNames.add(PartitionName.fromBytes(key));
+            }
+            return true;
+        });
+        return partitionNames;
+    }
+
+    @Override
+    public Iterable<VersionedPartitionName> getMemberPartitions() {
         return Iterables.concat(Iterables.transform(partitionStores.entrySet(), (partitionVersions) -> {
             return Iterables.transform(partitionVersions.getValue().keySet(), (partitionVersion) -> {
                 return new VersionedPartitionName(partitionVersions.getKey(), partitionVersion);
             });
         }));
+    }
+
+    public Iterable<VersionedPartitionName> getSystemPartitions() {
+        return SYSTEM_PARTITIONS;
     }
 
     private PartitionProperties coldstartSystemPartitionProperties(PartitionName partitionName) {

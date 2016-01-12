@@ -45,6 +45,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 import org.glassfish.jersey.server.ChunkedOutput;
 
 @Singleton
@@ -85,7 +86,7 @@ public class AmzaClientRestEndpoints {
             return chunkedOutput;
         } catch (Exception e) {
             LOG.error("Failed while attempting to configPartition:{} {} {}", new Object[] { partitionName, partitionProperties, ringSize }, e);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to configPartition.", e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to configPartition.", e);
         }
     }
 
@@ -101,10 +102,10 @@ public class AmzaClientRestEndpoints {
             return Response.ok().build();
         } catch (TimeoutException e) {
             LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
             LOG.error("Failed while attempting to ensurePartition:{}", new Object[] { partitionName }, e);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
 
@@ -132,7 +133,7 @@ public class AmzaClientRestEndpoints {
             return chunkedOutput;
         } catch (Exception e) {
             LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
 
@@ -161,10 +162,10 @@ public class AmzaClientRestEndpoints {
             return chunkedOutput;
         } catch (TimeoutException e) {
             LOG.error("No leader elected within timeout:{} {} millis", new Object[] { partitionName, waitForLeaderElection }, e);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "No leader elected within timeout.", e);
         } catch (Exception e) {
             LOG.error("Failed while attempting to get ring:{}", new Object[] { partitionName }, e);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
+            return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, "Failed while attempting to ensurePartition.", e);
         }
     }
 
@@ -191,10 +192,10 @@ public class AmzaClientRestEndpoints {
 
         } catch (DeltaOverCapacityException x) {
             LOG.warn("Delta over capacity for {} {}", base64PartitionName, x);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, "Delta over capacity.");
+            return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, "Delta over capacity.");
         } catch (FailedToAchieveQuorumException x) {
             LOG.warn("FailedToAchieveQuorumException for {} {}", base64PartitionName, x);
-            return ResponseHelper.INSTANCE.errorResponse(Response.Status.ACCEPTED, "Failed to achieve quorum exception.");
+            return ResponseHelper.INSTANCE.errorResponse(Status.ACCEPTED, "Failed to achieve quorum exception.");
         } catch (Exception x) {
             Object[] vals = new Object[] { partitionName, consistencyName };
             LOG.warn("Failed to commit to {} at {}.", vals, x);
@@ -349,14 +350,18 @@ public class AmzaClientRestEndpoints {
         if (stateMessageCause != null && stateMessageCause.state != null) {
             LOG.warn("{}", stateMessageCause);
             switch (stateMessageCause.state) {
+                case properties_not_present:
+                    return ResponseHelper.INSTANCE.errorResponse(Status.NOT_FOUND, stateMessageCause.message, stateMessageCause.cause);
+                case not_a_ring_member:
+                    return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, stateMessageCause.message, stateMessageCause.cause);
                 case failed_to_come_online:
-                    return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, stateMessageCause.message, stateMessageCause.cause);
+                    return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, stateMessageCause.message, stateMessageCause.cause);
                 case lacks_leader:
-                    return ResponseHelper.INSTANCE.errorResponse(Response.Status.SERVICE_UNAVAILABLE, stateMessageCause.message, stateMessageCause.cause);
+                    return ResponseHelper.INSTANCE.errorResponse(Status.SERVICE_UNAVAILABLE, stateMessageCause.message, stateMessageCause.cause);
                 case not_the_leader:
-                    return ResponseHelper.INSTANCE.errorResponse(Response.Status.CONFLICT, stateMessageCause.message, stateMessageCause.cause);
+                    return ResponseHelper.INSTANCE.errorResponse(Status.CONFLICT, stateMessageCause.message, stateMessageCause.cause);
                 case error:
-                    return ResponseHelper.INSTANCE.errorResponse(Response.Status.INTERNAL_SERVER_ERROR, stateMessageCause.message, stateMessageCause.cause);
+                    return ResponseHelper.INSTANCE.errorResponse(Status.INTERNAL_SERVER_ERROR, stateMessageCause.message, stateMessageCause.cause);
                 default:
                     break;
             }

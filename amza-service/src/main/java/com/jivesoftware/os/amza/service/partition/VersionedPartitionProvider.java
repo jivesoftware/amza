@@ -11,5 +11,7 @@ public interface VersionedPartitionProvider {
 
     PartitionProperties getProperties(PartitionName partitionName) throws Exception;
 
-    Iterable<VersionedPartitionName> getAllPartitions();
+    Iterable<PartitionName> getAllPartitions() throws Exception;
+
+    Iterable<VersionedPartitionName> getMemberPartitions();
 }

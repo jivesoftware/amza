@@ -217,13 +217,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     @Override
     public void awaitOnline(PartitionName partitionName, long timeoutMillis) throws Exception {
-        if (!ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
-            throw new IllegalStateException("Not a member of the ring for partition: " + partitionName);
-        }
-
         PartitionProperties properties = partitionIndex.getProperties(partitionName);
         if (properties == null) {
-            throw new IllegalStateException("No properties for partition: " + partitionName);
+            throw new PropertiesNotPresentException("No properties for partition: " + partitionName);
+        }
+
+        if (!ringStoreWriter.isMemberOfRing(partitionName.getRingName())) {
+            throw new NotARingMemberException("Not a member of the ring for partition: " + partitionName);
         }
 
         long endAfterTimestamp = System.currentTimeMillis() + timeoutMillis;
@@ -371,8 +371,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     @Override
-    public Set<PartitionName> getPartitionNames() {
-        return Sets.newHashSet(Lists.newArrayList(Iterables.transform(partitionIndex.getAllPartitions(), VersionedPartitionName::getPartitionName)));
+    public Set<PartitionName> getPartitionNames() throws Exception {
+        return Sets.newHashSet(partitionIndex.getAllPartitions());
     }
 
     public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {

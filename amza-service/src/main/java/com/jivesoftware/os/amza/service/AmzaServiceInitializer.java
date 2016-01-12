@@ -269,14 +269,12 @@ public class AmzaServiceInitializer {
             config.aquariumLeaderDeadAfterMillis,
             new AtomicLong(-1));
 
-        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(startupVersion,
-            ringMember,
+        AmzaAquariumProvider aquariumProvider = new AmzaAquariumProvider(ringMember,
             orderIdProvider,
             ringStoreReader,
             systemWALStorage,
             storageVersionProvider,
             partitionIndex,
-            partitionCreator,
             takeCoordinator,
             walUpdated,
             liveliness,
@@ -422,6 +420,7 @@ public class AmzaServiceInitializer {
         amzaPartitionWatcher.watch(PartitionCreator.NODE_INDEX.getPartitionName(), amzaRingWriter);
         amzaRingWriter.register(ringMember, ringHost, -1);
 
+        AmzaSystemReady systemReady = new AmzaSystemReady(ringStoreReader, partitionIndex, sickPartitions);
         PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider,
             ringMember,
             partitionIndex,
@@ -430,6 +429,7 @@ public class AmzaServiceInitializer {
             config.flushHighwatersAfterNUpdates);
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             ringStoreReader,
+            systemReady,
             ringHost,
             systemHighwaterStorage,
             rowsTakerFactory.create(),
@@ -474,7 +474,7 @@ public class AmzaServiceInitializer {
             walUpdated,
             amzaPartitionWatcher,
             aquariumProvider,
-            liveliness
-        );
+            systemReady,
+            liveliness);
     }
 }

@@ -87,6 +87,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final WALUpdated walUpdated;
     private final AmzaPartitionWatcher partitionWatcher;
     private final AmzaAquariumProvider aquariumProvider;
+    private final AmzaSystemReady systemReady;
     private final Liveliness liveliness;
     private final TxHighestPartitionTx<Long> txHighestPartitionTx;
 
@@ -108,6 +109,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         WALUpdated walUpdated,
         AmzaPartitionWatcher partitionWatcher,
         AmzaAquariumProvider aquariumProvider,
+        AmzaSystemReady systemReady,
         Liveliness liveliness) {
 
         this.amzaStats = amzaStats;
@@ -128,6 +130,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         this.walUpdated = walUpdated;
         this.partitionWatcher = partitionWatcher;
         this.aquariumProvider = aquariumProvider;
+        this.systemReady = systemReady;
         this.liveliness = liveliness;
         this.txHighestPartitionTx = (versionedAquarium, highestPartitionTx) -> {
             VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
@@ -333,7 +336,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 partitionStripeProvider,
                 ackWaters,
                 ringStoreReader,
-                aquariumProvider);
+                systemReady);
         }
     }
 

@@ -23,27 +23,26 @@ import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
-import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
-import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
-import com.jivesoftware.os.aquarium.Aquarium;
+import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
+import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StripedPartition implements Partition {
 
@@ -58,7 +57,7 @@ public class StripedPartition implements Partition {
     private final PartitionStripeProvider partitionStripeProvider;
     private final AckWaters ackWaters;
     private final AmzaRingStoreReader ringReader;
-    private final AmzaAquariumProvider aquariumProvider;
+    private final AmzaSystemReady systemReady;
 
     public StripedPartition(AmzaStats amzaStats,
         OrderIdProvider orderIdProvider,
@@ -69,7 +68,7 @@ public class StripedPartition implements Partition {
         PartitionStripeProvider partitionStripeProvider,
         AckWaters ackWaters,
         AmzaRingStoreReader ringReader,
-        AmzaAquariumProvider aquariumProvider) {
+        AmzaSystemReady systemReady) {
 
         this.amzaStats = amzaStats;
         this.orderIdProvider = orderIdProvider;
@@ -80,7 +79,7 @@ public class StripedPartition implements Partition {
         this.partitionStripeProvider = partitionStripeProvider;
         this.ackWaters = ackWaters;
         this.ringReader = ringReader;
-        this.aquariumProvider = aquariumProvider;
+        this.systemReady = systemReady;
     }
 
     public PartitionName getPartitionName() {
@@ -92,6 +91,10 @@ public class StripedPartition implements Partition {
         byte[] prefix,
         Commitable updates,
         long timeoutInMillis) throws Exception {
+
+        long start = System.currentTimeMillis();
+        systemReady.await(timeoutInMillis);
+        long remainingTimeInMillis = Math.max(timeoutInMillis - (start - System.currentTimeMillis()), 0);
 
         PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
         if (properties.requireConsistency && !properties.consistency.supportsWrites(consistency)) {
@@ -125,12 +128,12 @@ public class StripedPartition implements Partition {
                     }),
                 (versionedPartitionName, leadershipToken, largestCommittedTxId) -> {
                     if (takeQuorum > 0) {
-                        LOG.debug("Awaiting quorum for {} ms", timeoutInMillis);
+                        LOG.debug("Awaiting quorum for {} ms", remainingTimeInMillis);
                         int takenBy = ackWaters.await(versionedPartitionName,
                             largestCommittedTxId,
                             neighbors,
                             takeQuorum,
-                            timeoutInMillis,
+                            remainingTimeInMillis,
                             leadershipToken);
                         if (takenBy < takeQuorum) {
                             throw new FailedToAchieveQuorumException("Timed out attempting to achieve desired take quorum:" + takeQuorum + " got:" + takenBy);
@@ -157,6 +160,7 @@ public class StripedPartition implements Partition {
 
     @Override
     public boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception {
+        systemReady.await(0);
         checkReadConsistencySupport(consistency);
         return partitionStripeProvider.txPartition(partitionName,
             (stripe, highwaterStorage) -> stripe.get(partitionName, prefix, keys, stream));
@@ -168,6 +172,8 @@ public class StripedPartition implements Partition {
         byte[] toPrefix,
         byte[] toKey,
         KeyValueTimestampStream scan) throws Exception {
+
+        systemReady.await(0);
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
             if (fromKey == null && toKey == null) {
                 stripe.rowScan(partitionName, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
@@ -189,6 +195,8 @@ public class StripedPartition implements Partition {
     public TakeResult takeFromTransactionId(long txId,
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
+
+        systemReady.await(0);
         return takeFromTransactionIdInternal(false, null, txId, highwaters, stream);
     }
 
@@ -199,6 +207,7 @@ public class StripedPartition implements Partition {
         TxKeyValueStream stream) throws Exception {
 
         Preconditions.checkNotNull(prefix, "Must specify a prefix");
+        systemReady.await(0);
         return takeFromTransactionIdInternal(true, prefix, txId, highwaters, stream);
     }
 

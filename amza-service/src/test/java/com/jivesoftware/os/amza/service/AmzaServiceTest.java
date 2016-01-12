@@ -18,6 +18,7 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.DeltaOverCapacityException;
+import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -235,6 +236,8 @@ public class AmzaServiceTest {
                                 txId = ringMemberCursor.transactionId;
                             }
                         }
+                    } catch (FailedToAchieveQuorumException x) {
+                        System.out.println("Waiting for system ready...");
                     } catch (InterruptedException x) {
                         Thread.interrupted();
                         break;

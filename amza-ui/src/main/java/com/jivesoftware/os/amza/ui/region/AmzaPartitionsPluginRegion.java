@@ -8,7 +8,6 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
@@ -133,7 +132,7 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             }
             Liveliness liveliness = amzaService.getLiveliness();
             List<Map<String, Object>> rows = new ArrayList<>();
-            Set<PartitionName> allPartitionNames = amzaService.getPartitionNames();
+            Set<PartitionName> allPartitionNames = amzaService.getMemberPartitionNames();
             List<PartitionName> partitionNames = Lists.newArrayList(allPartitionNames);
             Collections.sort(partitionNames, (o1, o2) -> {
                 int i = -Boolean.compare(o1.isSystemPartition(), o2.isSystemPartition());

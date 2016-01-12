@@ -16,7 +16,6 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
@@ -371,8 +370,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     @Override
-    public Set<PartitionName> getPartitionNames() throws Exception {
+    public Set<PartitionName> getAllPartitionNames() throws Exception {
         return Sets.newHashSet(partitionIndex.getAllPartitions());
+    }
+
+    @Override
+    public Set<PartitionName> getMemberPartitionNames() throws Exception {
+        return Sets.newHashSet(Iterables.transform(partitionIndex.getMemberPartitions(), VersionedPartitionName::getPartitionName));
     }
 
     public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {

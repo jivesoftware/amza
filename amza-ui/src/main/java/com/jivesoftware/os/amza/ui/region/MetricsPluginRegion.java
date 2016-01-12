@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
@@ -14,7 +13,6 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.Partition;
 import com.jivesoftware.os.amza.service.partition.RemoteVersionedState;
-import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
@@ -229,7 +227,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
                 data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal(), false));
                 List<Map<String, Object>> regionTotals = new ArrayList<>();
-                ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
+                ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getMemberPartitionNames());
                 Collections.sort(partitionNames);
                 for (PartitionName partitionName : partitionNames) {
                     Totals totals = amzaStats.getPartitionTotals().get(partitionName);
@@ -253,7 +251,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         try {
             data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal(), true));
             List<Map<String, Object>> regionTotals = new ArrayList<>();
-            ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getPartitionNames());
+            ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getMemberPartitionNames());
             Collections.sort(partitionNames);
             for (PartitionName partitionName : partitionNames) {
                 if (new String(partitionName.getName()).contains(filter)) {

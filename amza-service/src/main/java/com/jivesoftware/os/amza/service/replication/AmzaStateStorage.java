@@ -21,20 +21,17 @@ class AmzaStateStorage implements StateStorage<Long> {
     private final Member member;
     private final PartitionName partitionName;
     private final byte context;
-    private final long startupVersion;
 
     public AmzaStateStorage(SystemWALStorage systemWALStorage,
         WALUpdated walUpdated,
         Member member,
         PartitionName partitionName,
-        byte context,
-        long startupVersion) {
+        byte context) {
         this.systemWALStorage = systemWALStorage;
         this.walUpdated = walUpdated;
         this.member = member;
         this.partitionName = partitionName;
         this.context = context;
-        this.startupVersion = startupVersion;
     }
 
     @Override
@@ -45,12 +42,8 @@ class AmzaStateStorage implements StateStorage<Long> {
                 if (valueTimestamp != -1 && !valueTombstoned) {
                     return AmzaAquariumProvider.streamStateKey(key,
                         (partitionName, context, rootRingMember, partitionVersion, isSelf, ackRingMember) -> {
-                            if (!rootRingMember.equals(member) || valueVersion > startupVersion) {
-                                State state = State.fromSerializedForm(value[0]);
-                                return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion, state, valueTimestamp, valueVersion);
-                            } else {
-                                return true;
-                            }
+                            State state = State.fromSerializedForm(value[0]);
+                            return stream.stream(rootRingMember, isSelf, ackRingMember, partitionVersion, state, valueTimestamp, valueVersion);
                         });
                 }
                 return true;

@@ -97,8 +97,7 @@ public class AmzaStateStorageNGTest {
 
         PartitionName partitionName = new PartitionName(false, new byte[] { 20 }, new byte[] { 30 });
         byte context = 1;
-        long startupVersion = 111;
-        AmzaStateStorage stateStorage = new AmzaStateStorage(systemWALStorage, updated, root, partitionName, context, startupVersion);
+        AmzaStateStorage stateStorage = new AmzaStateStorage(systemWALStorage, updated, root, partitionName, context);
 
         Long lifecycle1 = 1L;
         Long lifecycle2 = 2L;

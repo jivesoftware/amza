@@ -68,7 +68,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private static final byte CURRENT = 0;
     private static final byte DESIRED = 1;
 
-    private final long startupVersion;
     private final RingMember rootRingMember;
     private final Member rootAquariumMember;
     private final OrderIdProvider orderIdProvider;
@@ -76,7 +75,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private final SystemWALStorage systemWALStorage;
     private final StorageVersionProvider storageVersionProvider;
     private final VersionedPartitionProvider versionedPartitionProvider;
-    private final PartitionCreator partitionCreator;
     private final TakeCoordinator takeCoordinator;
     private final WALUpdated walUpdated;
     private final Liveliness liveliness;
@@ -92,20 +90,17 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileInactive = new ConcurrentHashMap<>();
     private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileBootstrap = new ConcurrentHashMap<>();
 
-    public AmzaAquariumProvider(long startupVersion,
-        RingMember rootRingMember,
+    public AmzaAquariumProvider(RingMember rootRingMember,
         OrderIdProvider orderIdProvider,
         AmzaRingStoreReader ringStoreReader,
         SystemWALStorage systemWALStorage,
         StorageVersionProvider storageVersionProvider,
         VersionedPartitionProvider versionedPartitionProvider,
-        PartitionCreator partitionCreator,
         TakeCoordinator takeCoordinator,
         WALUpdated walUpdated,
         Liveliness liveliness,
         long feedEveryMillis,
         AwaitNotify<PartitionName> awaitLivelyEndState) {
-        this.startupVersion = startupVersion;
         this.rootRingMember = rootRingMember;
         this.rootAquariumMember = rootRingMember.asAquariumMember();
         this.orderIdProvider = orderIdProvider;
@@ -113,7 +108,6 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         this.systemWALStorage = systemWALStorage;
         this.storageVersionProvider = storageVersionProvider;
         this.versionedPartitionProvider = versionedPartitionProvider;
-        this.partitionCreator = partitionCreator;
         this.takeCoordinator = takeCoordinator;
         this.walUpdated = walUpdated;
         this.liveliness = liveliness;
@@ -529,11 +523,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     private AmzaStateStorage currentStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, CURRENT, startupVersion);
+        return new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, CURRENT);
     }
 
     private AmzaStateStorage desiredStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, DESIRED, startupVersion);
+        return new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, DESIRED);
     }
 
     static byte[] stateKey(PartitionName partitionName,

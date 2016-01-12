@@ -231,7 +231,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }));
     }
 
-    public Iterable<VersionedPartitionName> getSystemPartitions() {
+    public List<VersionedPartitionName> getSystemPartitions() {
         return SYSTEM_PARTITIONS;
     }
 

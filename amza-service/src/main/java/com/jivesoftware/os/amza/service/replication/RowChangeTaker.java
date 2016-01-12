@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
 import com.jivesoftware.os.amza.api.wal.WALRow;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
+import com.jivesoftware.os.amza.service.AmzaSystemReady;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PartitionIsExpungedException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
@@ -66,6 +67,7 @@ public class RowChangeTaker implements RowChanges {
 
     private final AmzaStats amzaStats;
     private final AmzaRingStoreReader amzaRingReader;
+    private final AmzaSystemReady systemReady;
     private final RingHost ringHost;
     private final HighwaterStorage systemHighwaterStorage;
     private final RowsTaker systemRowsTaker;
@@ -91,6 +93,7 @@ public class RowChangeTaker implements RowChanges {
 
     public RowChangeTaker(AmzaStats amzaStats,
         AmzaRingStoreReader amzaRingReader,
+        AmzaSystemReady systemReady,
         RingHost ringHost,
         HighwaterStorage systemHighwaterStorage,
         RowsTaker systemRowsTaker, PartitionIndex partitionIndex,
@@ -106,6 +109,7 @@ public class RowChangeTaker implements RowChanges {
 
         this.amzaStats = amzaStats;
         this.amzaRingReader = amzaRingReader;
+        this.systemReady = systemReady;
         this.ringHost = ringHost;
         this.systemHighwaterStorage = systemHighwaterStorage;
         this.systemRowsTaker = systemRowsTaker;
@@ -219,6 +223,15 @@ public class RowChangeTaker implements RowChanges {
 
             return null;
         });
+    }
+
+    private void tookFully(VersionedAquarium versionedAquarium, RingMember remoteRingMember, long leadershipToken) throws Exception {
+        VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
+            systemReady.tookFully(versionedPartitionName, remoteRingMember);
+        } else {
+            versionedAquarium.tookFully(remoteRingMember, leadershipToken);
+        }
     }
 
     // TODO needs to be connected.
@@ -410,7 +423,7 @@ public class RowChangeTaker implements RowChanges {
                 partitionStateStorage.tx(partitionName, versionedAquarium -> {
                     Waterline leader = versionedAquarium.getLeader();
                     long leadershipToken = (leader != null) ? leader.getTimestamp() : -1;
-                    versionedAquarium.tookFully(remoteRingMember, leadershipToken);
+                    tookFully(versionedAquarium, remoteRingMember, leadershipToken);
                     return null;
                 });
 
@@ -566,7 +579,6 @@ public class RowChangeTaker implements RowChanges {
                                 highwaterMark);
 
                             if (highwaterMark >= takeToTxId.get()) {
-                                //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TAKE: (a) local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                                 LOG.inc("take>fully>all");
                                 LOG.inc("take>fully>" + metricName);
                                 amzaStats.took(remoteRingMember);
@@ -577,17 +589,12 @@ public class RowChangeTaker implements RowChanges {
                                 partitionStateStorage.tx(partitionName, versionedAquarium -> {
                                     VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                                     if (currentVersionedPartitionName.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
-                                        versionedAquarium.tookFully(remoteRingMember, leadershipToken);
+                                        tookFully(versionedAquarium, remoteRingMember, leadershipToken);
                                     }
                                     versionedAquarium.wipeTheGlass();
                                     return null;
                                 });
-                                /*partitionStateStorage.tookFully(remoteRingMember,
-                                    leadershipToken,
-                                    localVersionedPartitionName);
-                                partitionStateStorage.wipeTheGlass(localVersionedPartitionName);*/
                             } else {
-                                //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TAKE: (b) local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                                 int updates = 0;
 
                                 StreamingRowsResult rowsResult = rowsTaker.rowsStream(amzaRingReader.getRingMember(),
@@ -631,9 +638,7 @@ public class RowChangeTaker implements RowChanges {
                                     highwaterStorage.setIfLarger(entry.getKey(), localVersionedPartitionName, updates, entry.getValue());
                                 }
 
-                                //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TAKE: (c) local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                                 if (rowsResult.partitionVersion == -1) {
-                                    //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TAKE: (d3) local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                                     // Took from node in bootstrap.
                                     partitionStateStorage.tx(partitionName, versionedAquarium -> {
                                         VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
@@ -641,19 +646,23 @@ public class RowChangeTaker implements RowChanges {
                                             LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
                                             State currentState = livelyEndState.getCurrentState();
                                             if ((currentState == State.bootstrap || currentState == null) && versionedAquarium.isColdstart()) {
-                                                LOG.info("{} took from bootstrap {} and will coldstart with token {}", amzaRingReader.getRingMember(),
-                                                    remoteRingMember, rowsResult.leadershipToken);
-                                                versionedAquarium.tookFully(remoteRingMember, rowsResult.leadershipToken);
+                                                LOG.info("{} took {} from bootstrap {} and will coldstart with token {}", amzaRingReader.getRingMember(),
+                                                    currentVersionedPartitionName,
+                                                    remoteRingMember,
+                                                    rowsResult.leadershipToken);
+                                                tookFully(versionedAquarium, remoteRingMember, rowsResult.leadershipToken);
                                             } else {
-                                                LOG.info("{} took from bootstrap {} but our state is {} and coldstart is {}", amzaRingReader.getRingMember(),
-                                                    remoteRingMember, currentState, versionedAquarium.isColdstart());
+                                                LOG.info("{} took {} from bootstrap {} but our state is {} and coldstart is {}", amzaRingReader.getRingMember(),
+                                                    currentVersionedPartitionName,
+                                                    remoteRingMember,
+                                                    currentState,
+                                                    versionedAquarium.isColdstart());
                                                 versionedAquarium.wipeTheGlass();
                                             }
                                         }
                                         return null;
                                     });
                                 } else if (rowsResult.otherHighwaterMarks != null) {
-                                    //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TAKE: (d1) local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                                     // Other highwater are provided when taken fully.
                                     for (Entry<RingMember, Long> otherHighwaterMark : rowsResult.otherHighwaterMarks.entrySet()) {
                                         highwaterStorage.setIfLarger(otherHighwaterMark.getKey(), localVersionedPartitionName, updates,
@@ -670,13 +679,12 @@ public class RowChangeTaker implements RowChanges {
                                     partitionStateStorage.tx(partitionName, versionedAquarium -> {
                                         VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                                         if (currentVersionedPartitionName.getPartitionVersion() == localVersionedPartitionName.getPartitionVersion()) {
-                                            versionedAquarium.tookFully(remoteRingMember, rowsResult.leadershipToken);
+                                            tookFully(versionedAquarium, remoteRingMember, rowsResult.leadershipToken);
                                         }
                                         versionedAquarium.wipeTheGlass();
                                         return null;
                                     });
                                 } else if (rowsResult.error == null) {
-                                    //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TAKE: (d2) local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
                                     partitionStateStorage.tx(partitionName, versionedAquarium -> {
                                         versionedAquarium.wipeTheGlass();
                                         return null;

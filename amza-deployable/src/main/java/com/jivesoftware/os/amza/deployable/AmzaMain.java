@@ -226,6 +226,13 @@ public class AmzaMain {
                 (RowsChanged changes) -> {
                 });
 
+            RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
+                instanceConfig.getServiceName(),
+                amzaService,
+                amzaConfig.getDiscoveryIntervalMillis());
+            // run once to populate system ring
+            routingBirdAmzaDiscovery.run();
+
             HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceConfig.getInstanceKey(),
                 HttpRequestHelperUtils.buildRequestHelper(instanceConfig.getRoutesHost(), instanceConfig.getRoutesPort()),
                 instanceConfig.getConnectionsHealth(), 5_000, 100);
@@ -286,10 +293,6 @@ public class AmzaMain {
             deployable.buildServer().start();
             serviceStartupHealthCheck.success();
 
-            RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
-                instanceConfig.getServiceName(),
-                amzaService,
-                amzaConfig.getDiscoveryIntervalMillis());
             routingBirdAmzaDiscovery.start();
 
         } catch (Throwable t) {

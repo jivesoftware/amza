@@ -13,8 +13,10 @@ import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.Partition;
 import com.jivesoftware.os.amza.service.PartitionProvider;
+import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -257,11 +259,19 @@ public class AmzaClientService implements AmzaRestClient {
         long partitionAwaitOnlineTimeoutMillis) {
 
         try {
-            partitionProvider.awaitOnline(partitionName, partitionAwaitOnlineTimeoutMillis); //TODO config
+            partitionProvider.awaitOnline(partitionName, partitionAwaitOnlineTimeoutMillis);
+        } catch (PropertiesNotPresentException e) {
+            return new StateMessageCause(partitionName, consistency, checkLeader, partitionAwaitOnlineTimeoutMillis,
+                State.properties_not_present,
+                "Properties for partition are not present.", e);
+        } catch (NotARingMemberException e) {
+            return new StateMessageCause(partitionName, consistency, checkLeader, partitionAwaitOnlineTimeoutMillis,
+                State.not_a_ring_member,
+                "This node is not a member of the requested ring.", e);
         } catch (Exception e) {
             return new StateMessageCause(partitionName, consistency, checkLeader, partitionAwaitOnlineTimeoutMillis,
                 State.failed_to_come_online,
-                "Partition didn't come online withing the alloted time of " + partitionAwaitOnlineTimeoutMillis + "millis", e);
+                "Partition didn't come online within the allotted time of " + partitionAwaitOnlineTimeoutMillis + "millis", e);
         }
         if (checkLeader && consistency.requiresLeader()) {
             try {

@@ -39,7 +39,7 @@ public interface AmzaRestClient {
 
     void takePrefixFromTransactionId(PartitionName partitionName, IReadable in, IWriteable out) throws Exception;
 
-    public static class RingLeader {
+    class RingLeader {
 
         final RingTopology ringTopology;
         final RingMember leader;
@@ -51,11 +51,11 @@ public interface AmzaRestClient {
 
     }
 
-    public static enum State {
-        ok, failed_to_come_online, lacks_leader, not_the_leader, error
+    enum State {
+        ok, properties_not_present, not_a_ring_member, failed_to_come_online, lacks_leader, not_the_leader, error
     }
 
-    public static class StateMessageCause {
+    class StateMessageCause {
 
         public final PartitionName partitionName;
         public final Consistency consistency;

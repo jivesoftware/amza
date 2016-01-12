@@ -24,7 +24,7 @@ import java.util.Set;
 
 public interface AmzaInstance {
 
-    Set<PartitionName> getPartitionNames();
+    Set<PartitionName> getPartitionNames() throws Exception;
 
     void destroyPartition(PartitionName partitionName) throws Exception;
 

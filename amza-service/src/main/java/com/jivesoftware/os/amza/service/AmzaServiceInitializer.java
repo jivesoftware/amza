@@ -32,7 +32,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStor
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
-import com.jivesoftware.os.amza.service.replication.PartitionStripeFunction;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
@@ -135,7 +135,10 @@ public class AmzaServiceInitializer {
 
     public interface IndexProviderRegistryCallback {
 
-        void call(WALIndexProviderRegistry indexProviderRegistry, RowIOProvider<?> ephemeralRowIOProvider, RowIOProvider<?> persistentRowIOProvider);
+        void call(WALIndexProviderRegistry indexProviderRegistry,
+            RowIOProvider<?> ephemeralRowIOProvider,
+            RowIOProvider<?> persistentRowIOProvider,
+            PartitionStripeFunction partitionStripeFunction);
     }
 
     public AmzaService initialize(AmzaServiceConfig config,
@@ -157,6 +160,9 @@ public class AmzaServiceInitializer {
 
         AmzaPartitionWatcher amzaPartitionWatcher = new AmzaPartitionWatcher(allRowChanges);
 
+        int deltaStorageStripes = config.numberOfDeltaStripes;
+        PartitionStripeFunction partitionStripeFunction = new PartitionStripeFunction(deltaStorageStripes);
+
         //TODO configure
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(config.workingDirectories,
             amzaStats.ioStats,
@@ -173,7 +179,7 @@ public class AmzaServiceInitializer {
             config.maxLeaps,
             config.useMemMap);
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
-        indexProviderRegistryCallback.call(indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider);
+        indexProviderRegistryCallback.call(indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction);
 
         int tombstoneCompactionFactor = 2; // TODO expose to config;
         IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller,
@@ -214,9 +220,6 @@ public class AmzaServiceInitializer {
             systemWALStorage,
             walUpdated,
             allRowChanges);
-
-        final int deltaStorageStripes = config.numberOfDeltaStripes;
-        PartitionStripeFunction partitionStripeFunction = new PartitionStripeFunction(deltaStorageStripes);
 
         File[] walDirs = new File[deltaStorageStripes];
         long[] stripeVersions = new long[deltaStorageStripes];
@@ -332,6 +335,7 @@ public class AmzaServiceInitializer {
                 amzaStats,
                 sickThreads,
                 deltaWALFactory,
+                indexProviderRegistry,
                 maxUpdatesBeforeCompaction);
             int stripeId = i;
             partitionStripes[i] = new PartitionStripe("stripe-" + i, partitionIndex, deltaWALStorage, partitionStateStorage, amzaPartitionWatcher,
@@ -366,7 +370,7 @@ public class AmzaServiceInitializer {
         for (PartitionStripe partitionStripe : partitionStripes) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
-                    partitionStripe.load(partitionStateStorage);
+                    partitionStripe.load();
                     partitionStripe.highestPartitionTxIds(takeHighestPartitionTx);
                 } catch (Exception x) {
                     LOG.error("Failed while loading " + partitionStripe, x);

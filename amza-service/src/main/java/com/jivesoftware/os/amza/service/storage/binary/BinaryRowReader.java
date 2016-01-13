@@ -83,6 +83,53 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public boolean reverseScan(RowStream stream) throws Exception {
+        long boundaryFp = parent.length(); // last length int
+        IReadable parentFiler = parent.reader(null, boundaryFp, 0);
+        if (boundaryFp < 0) {
+            return true;
+        }
+        long read = 0;
+        try {
+            byte[] intLongBuffer = new byte[8];
+            long seekTo = boundaryFp - 4;
+            while (true) {
+                long rowFP;
+                RowType rowType;
+                long rowTxId;
+                byte[] row;
+                if (seekTo >= 0) {
+                    parentFiler.seek(seekTo);
+                    int priorLength = UIO.readInt(parentFiler, "priorLength", intLongBuffer);
+                    seekTo -= (priorLength + 4);
+                    if (seekTo < 0) {
+                        break;
+                    }
+                    parentFiler.seek(seekTo);
+
+                    int length = UIO.readInt(parentFiler, "length", intLongBuffer);
+                    rowType = RowType.fromByte((byte) parentFiler.read());
+                    rowTxId = UIO.readLong(parentFiler, "txId", intLongBuffer);
+                    row = new byte[length - (1 + 8)];
+                    parentFiler.read(row);
+                    rowFP = seekTo;
+                    read += (parentFiler.getFilePointer() - seekTo);
+                    seekTo -= 4;
+                } else {
+                    break;
+                }
+
+                if (!stream.row(rowFP, rowTxId, rowType, row)) {
+                    return false;
+                }
+            }
+            return true;
+        } finally {
+            ioStats.read.addAndGet(read);
+        }
+    }
+
+    /*@Override
+    public boolean reverseScan(RowStream stream) throws Exception {
         long boundaryFp = parent.length();
         if (boundaryFp == 0) {
             return true;
@@ -155,7 +202,7 @@ public class BinaryRowReader implements WALReader {
         } finally {
             ioStats.read.addAndGet(read);
         }
-    }
+    }*/
 
     @Override
     public boolean scan(long offsetFp, boolean allowRepairs, RowStream stream) throws Exception {

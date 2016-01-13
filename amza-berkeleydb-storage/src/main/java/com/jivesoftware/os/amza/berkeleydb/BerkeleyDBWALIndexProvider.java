@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.berkeleydb;
 
+import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.AmzaVersionConstants;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -9,6 +11,7 @@ import com.sleepycat.je.DatabaseNotFoundException;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
 import java.io.File;
+import java.util.Set;
 
 /**
  *
@@ -19,10 +22,14 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
 
     public static final String INDEX_CLASS_NAME = "berkeleydb";
 
+    private final String name;
+    private final PartitionStripeFunction partitionStripeFunction;
     private final Environment[] environments;
 
-    public BerkeleyDBWALIndexProvider(String[] baseDirs, int stripes) {
-        this.environments = new Environment[stripes];
+    public BerkeleyDBWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, String[] baseDirs) {
+        this.name = name;
+        this.partitionStripeFunction = partitionStripeFunction;
+        this.environments = new Environment[partitionStripeFunction.getNumberOfStripes()];
         for (int i = 0; i < environments.length; i++) {
             File active = new File(
                 new File(
@@ -42,17 +49,26 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
         }
     }
 
+    private Environment getEnvironment(VersionedPartitionName versionedPartitionName) {
+        return environments[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())];
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
     @Override
     public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
-        BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
-        return new BerkeleyDBWALIndex(environments[Math.abs(versionedPartitionName.hashCode() % environments.length)], name);
+        BerkeleyDBWALIndexName indexName = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
+        return new BerkeleyDBWALIndex(name, versionedPartitionName, getEnvironment(versionedPartitionName), indexName);
     }
 
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         BerkeleyDBWALIndexName name = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
+        Environment env = getEnvironment(versionedPartitionName);
         for (BerkeleyDBWALIndexName n : name.all()) {
-            Environment env = environments[Math.abs(versionedPartitionName.hashCode() % environments.length)];
             try {
                 env.removeDatabase(null, n.getPrimaryName());
                 LOG.info("Removed database: {}", n.getPrimaryName());
@@ -65,6 +81,17 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
             } catch (DatabaseNotFoundException x) {
                 // ignore
             }
+        }
+    }
+
+    @Override
+    public void flush(Iterable<BerkeleyDBWALIndex> indexes, boolean fsync) throws Exception {
+        Set<Integer> stripes = Sets.newHashSet();
+        for (BerkeleyDBWALIndex index : indexes) {
+            stripes.add(partitionStripeFunction.stripe(index.getVersionedPartitionName().getPartitionName()));
+        }
+        for (int stripe : stripes) {
+            environments[stripe].flushLog(fsync);
         }
     }
 

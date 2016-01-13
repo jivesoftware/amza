@@ -24,9 +24,9 @@ public class PartitionTombstoneCompactor {
 
     private ScheduledExecutorService scheduledThreadPool;
 
-    private final TimestampedOrderIdProvider orderIdProvider;
     private final AmzaStats amzaStats;
     private final PartitionIndex partitionIndex;
+    private final TimestampedOrderIdProvider orderIdProvider;
     private final long checkIfTombstoneCompactionIsNeededIntervalInMillis;
     private final long removeTombstonedOlderThanNMillis;
     private final int numberOfCompactorThreads;
@@ -114,7 +114,7 @@ public class PartitionTombstoneCompactor {
                                 removeTombstonedOlderThanTimestampId, ttlTimestampId, versionedPartitionName);
                         }
                     } catch (Exception x) {
-                        LOG.error("Failed to compact tombstones for partition: {}", new Object[]{versionedPartitionName}, x);
+                        LOG.error("Failed to compact tombstones for partition: {}", new Object[] { versionedPartitionName }, x);
                     }
                 }
             }

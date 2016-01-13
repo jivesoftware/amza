@@ -14,6 +14,7 @@ public enum RowType {
     public static final long COMPACTION_HINTS_KEY = 0;
     public static final long COMMIT_KEY = 1;
     public static final long LEAP_KEY = 2;
+    public static final long LAST_TX_KEY = 3;
 
     private static final RowType[] MAPPED = new RowType[256];
 

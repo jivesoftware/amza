@@ -29,6 +29,8 @@ import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 
 public interface WALIndex extends RangeScannablePointers, CompactableWALIndex {
 
+    String getProviderName();
+
     boolean getPointers(byte[] prefix, UnprefixedWALKeys keys, WALKeyPointerStream stream) throws Exception;
 
     boolean getPointers(KeyValues keyValues, KeyValuePointerStream stream) throws Exception;

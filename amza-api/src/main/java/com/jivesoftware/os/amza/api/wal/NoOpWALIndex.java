@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.api.wal;
 
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
@@ -10,6 +9,7 @@ import com.jivesoftware.os.amza.api.stream.KeyValues;
 import com.jivesoftware.os.amza.api.stream.MergeTxKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.TxFpStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyPointers;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
@@ -19,6 +19,17 @@ import java.util.concurrent.Callable;
  * @author jonathan.colt
  */
 public class NoOpWALIndex implements WALIndex {
+
+    private final String providerName;
+
+    public NoOpWALIndex(String providerName) {
+        this.providerName = providerName;
+    }
+
+    @Override
+    public String getProviderName() {
+        return providerName;
+    }
 
     @Override
     public boolean merge(TxKeyPointers pointers, MergeTxKeyPointerStream stream) throws Exception {

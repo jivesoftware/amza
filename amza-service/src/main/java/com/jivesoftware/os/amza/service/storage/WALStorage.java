@@ -347,13 +347,14 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         walTx.flush(fsync);
     }
 
-    public void commitIndex() throws Exception {
+    public WALIndex commitIndex() throws Exception {
         WALIndex wali = walIndex.get();
         if (wali != null) {
             wali.commit();
         } else {
             LOG.warn("Trying to commit a nonexistent index:{}.", versionedPartitionName);
         }
+        return wali;
     }
 
     public boolean delete(boolean ifEmpty) throws Exception {

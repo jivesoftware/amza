@@ -4,6 +4,7 @@ import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
@@ -47,6 +48,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
     private static final int numPermits = 1024;
 
+    private final String providerName;
+    private final VersionedPartitionName versionedPartitionName;
     private final Environment environment;
     private final BerkeleyDBWALIndexName name;
     private final DatabaseConfig primaryDbConfig;
@@ -59,7 +62,13 @@ public class BerkeleyDBWALIndex implements WALIndex {
     private final AtomicInteger commits = new AtomicInteger(0);
     private final AtomicReference<WALIndex> compactingTo = new AtomicReference<>();
 
-    public BerkeleyDBWALIndex(Environment environment, BerkeleyDBWALIndexName name) throws Exception {
+    public BerkeleyDBWALIndex(String providerName,
+        VersionedPartitionName versionedPartitionName,
+        Environment environment,
+        BerkeleyDBWALIndexName name) throws Exception {
+
+        this.providerName = providerName;
+        this.versionedPartitionName = versionedPartitionName;
         this.environment = environment;
         this.name = name;
 
@@ -116,6 +125,15 @@ public class BerkeleyDBWALIndex implements WALIndex {
     private long entryToVersion(byte[] entryBytes) throws Exception {
         int valueLength = entryBytes.length - 8 - 1 - 8;
         return UIO.bytesLong(entryBytes, valueLength + 1 + 8);
+    }
+
+    @Override
+    public String getProviderName() {
+        return providerName;
+    }
+
+    public VersionedPartitionName getVersionedPartitionName() {
+        return versionedPartitionName;
     }
 
     @Override
@@ -486,7 +504,10 @@ public class BerkeleyDBWALIndex implements WALIndex {
             removeDatabase(Type.compacted);
             removeDatabase(Type.backup);
 
-            final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(environment, name.typeName(Type.compacting));
+            final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(providerName,
+                versionedPartitionName,
+                environment,
+                name.typeName(Type.compacting));
             compactingTo.set(compactingWALIndex);
 
             return new CompactionWALIndex() {

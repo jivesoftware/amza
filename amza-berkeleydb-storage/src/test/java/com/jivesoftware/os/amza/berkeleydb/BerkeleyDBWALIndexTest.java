@@ -4,6 +4,7 @@ import com.google.common.io.Files;
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.TxKeyPointerStream;
@@ -73,7 +74,7 @@ public class BerkeleyDBWALIndexTest {
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 0; i < 64; i++) {
-                byte[] key = {0, (byte) (i % 4), (byte) (i % 2), (byte) i};
+                byte[] key = { 0, (byte) (i % 4), (byte) (i % 2), (byte) i };
                 if (!stream.stream(i, null, key, System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
                     return false;
                 }
@@ -82,8 +83,8 @@ public class BerkeleyDBWALIndexTest {
         }, null);
 
         int[] count = new int[1];
-        byte[] fromKey = {0, 1, 0, 0};
-        byte[] toKey = {0, 2, 0, 0};
+        byte[] fromKey = { 0, 1, 0, 0 };
+        byte[] toKey = { 0, 2, 0, 0 };
         index.rangeScan(null, fromKey, null, toKey, (prefix, key, timestamp, tombstoned, version, fp) -> {
             count[0]++;
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(fromKey, key) <= 0);
@@ -104,8 +105,8 @@ public class BerkeleyDBWALIndexTest {
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 0; i < 64; i++) {
-                byte[] prefix = {0, (byte) (i % 4)};
-                byte[] key = {0, 0, (byte) (i % 2), (byte) i};
+                byte[] prefix = { 0, (byte) (i % 4) };
+                byte[] key = { 0, 0, (byte) (i % 2), (byte) i };
                 if (!stream.stream(i, prefix, key, System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
                     return false;
                 }
@@ -114,8 +115,8 @@ public class BerkeleyDBWALIndexTest {
         }, null);
 
         int[] count = new int[1];
-        byte[] fromPrefix = {0, 1};
-        byte[] toPrefix = {0, 2};
+        byte[] fromPrefix = { 0, 1 };
+        byte[] toPrefix = { 0, 2 };
         index.rangeScan(fromPrefix, new byte[0], toPrefix, new byte[0], (prefix, key, timestamp, tombstoned, version, fp) -> {
             count[0]++;
             Assert.assertTrue(UnsignedBytes.lexicographicalComparator().compare(fromPrefix, prefix) <= 0);
@@ -136,8 +137,8 @@ public class BerkeleyDBWALIndexTest {
 
         index.merge((TxKeyPointerStream stream) -> {
             for (long i = 0; i < 64; i++) {
-                byte[] prefix = {0, (byte) (i % 4)};
-                byte[] key = {0, 0, (byte) (i % 2), (byte) i};
+                byte[] prefix = { 0, (byte) (i % 4) };
+                byte[] key = { 0, 0, (byte) (i % 2), (byte) i };
                 if (!stream.stream(i, prefix, key, System.currentTimeMillis(), false, Long.MAX_VALUE, i)) {
                     return false;
                 }
@@ -146,7 +147,7 @@ public class BerkeleyDBWALIndexTest {
         }, null);
 
         int[] count = new int[1];
-        byte[] prefix = {0, 1};
+        byte[] prefix = { 0, 1 };
         index.takePrefixUpdatesSince(prefix, 0, (txId, fp) -> {
             count[0]++;
             Assert.assertEquals(fp % 4, 1);
@@ -202,8 +203,9 @@ public class BerkeleyDBWALIndexTest {
         }
     }
 
-    private BerkeleyDBWALIndex getIndex(File dir0, VersionedPartitionName partitionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider(new String[]{dir0.getAbsolutePath()}, 1).createIndex(partitionName, 1000);
+    private BerkeleyDBWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
+        return new BerkeleyDBWALIndexProvider("berkeleydb", new PartitionStripeFunction(1), new String[] { dir.getAbsolutePath() })
+            .createIndex(partitionName, 1000);
     }
 
 }

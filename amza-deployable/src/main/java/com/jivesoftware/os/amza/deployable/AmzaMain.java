@@ -83,7 +83,11 @@ import org.merlin.config.defaults.StringDefault;
 
 public class AmzaMain {
 
-    static interface DiskFreeCheck extends ScheduledMinMaxHealthCheckConfig {
+    public static void main(String[] args) throws Exception {
+        new AmzaMain().run(args);
+    }
+
+    interface DiskFreeCheck extends ScheduledMinMaxHealthCheckConfig {
 
         @StringDefault("disk>free")
         @Override
@@ -93,10 +97,6 @@ public class AmzaMain {
         @Override
         public Long getMax();
 
-    }
-
-    public static void main(String[] args) throws Exception {
-        new AmzaMain().run(args);
     }
 
     interface AmzaSickThreadsHealthConfig extends SickHealthCheckConfig {
@@ -210,12 +210,14 @@ public class AmzaMain {
                 orderIdProvider,
                 idPacker,
                 partitionPropertyMarshaller,
-                (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider) -> {
-                    indexProviderRegistry.register(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME,
-                        new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+                (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
+                    indexProviderRegistry.register(
+                        new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingDirs),
+                        persistentRowIOProvider);
 
-                    indexProviderRegistry.register(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                        new LSMPointerIndexWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+                    indexProviderRegistry.register(
+                        new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingDirs),
+                        persistentRowIOProvider);
 
                 },
                 availableRowsTaker,
@@ -266,16 +268,16 @@ public class AmzaMain {
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
                 new AmzaUIInitializer.InjectionCallback() {
 
-                @Override
-                public void addEndpoint(Class clazz) {
-                    deployable.addEndpoints(clazz);
-                }
+                    @Override
+                    public void addEndpoint(Class clazz) {
+                        deployable.addEndpoints(clazz);
+                    }
 
-                @Override
-                public void addInjectable(Class clazz, Object instance) {
-                    deployable.addInjectables(clazz, instance);
-                }
-            });
+                    @Override
+                    public void addInjectable(Class clazz, Object instance) {
+                        deployable.addInjectables(clazz, instance);
+                    }
+                });
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());

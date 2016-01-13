@@ -151,12 +151,14 @@ public class Main {
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,
-            (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider) -> {
-                indexProviderRegistry.register(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME,
-                    new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+            (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
+                indexProviderRegistry.register(
+                    new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingDirs),
+                    persistentRowIOProvider);
 
-                indexProviderRegistry.register(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                    new LSMPointerIndexWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+                indexProviderRegistry.register(
+                    new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingDirs),
+                    persistentRowIOProvider);
             },
             availableRowsTaker,
             () -> new HttpRowsTaker(amzaStats),

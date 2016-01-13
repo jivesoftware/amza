@@ -76,6 +76,7 @@ public class DeltaStripeWALStorageNGTest {
     private PartitionStore partitionStore2;
     private TxPartitionState txPartitionState;
     private DeltaWALFactory deltaWALFactory;
+    private WALIndexProviderRegistry walIndexProviderRegistry;
     private DeltaStripeWALStorage deltaStripeWALStorage;
     private HighwaterStorage highwaterStorage;
     private RowType testRowType1 = RowType.snappy_primary;
@@ -104,7 +105,7 @@ public class DeltaStripeWALStorageNGTest {
             4_096,
             64,
             false);
-        WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
+        walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
             walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
@@ -155,7 +156,7 @@ public class DeltaStripeWALStorageNGTest {
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
-        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(1, new AmzaStats(), new SickThreads(), deltaWALFactory, 20_000);
+        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(1, new AmzaStats(), new SickThreads(), deltaWALFactory, walIndexProviderRegistry, 20_000);
         delta.load(txPartitionState, partitionIndex, primaryRowMarshaller);
         return delta;
     }

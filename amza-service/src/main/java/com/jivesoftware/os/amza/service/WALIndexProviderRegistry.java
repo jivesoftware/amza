@@ -19,23 +19,23 @@ public class WALIndexProviderRegistry {
 
     public WALIndexProviderRegistry(MemoryBackedRowIOProvider ephemeralRowIOProvider, BinaryRowIOProvider persistentRowIOProvider) {
     //public WALIndexProviderRegistry(String[] workingDirectories, IoStats ioStats, int corruptionParanoiaFactor, boolean useMemMap) {
-        register("memory_ephemeral", new MemoryWALIndexProvider(), ephemeralRowIOProvider);
-        register("memory_persistent", new MemoryWALIndexProvider(), persistentRowIOProvider);
-        register("noop_persistent", new NoOpWALIndexProvider(), persistentRowIOProvider);
+        register(new MemoryWALIndexProvider("memory_ephemeral"), ephemeralRowIOProvider);
+        register(new MemoryWALIndexProvider("memory_persistent"), persistentRowIOProvider);
+        register(new NoOpWALIndexProvider("noop_persistent"), persistentRowIOProvider);
     }
 
-    public WALIndexProvider<?> getWALIndexProvider(WALStorageDescriptor storageDescriptor) throws Exception {
+    public WALIndexProvider<?> getWALIndexProvider(String name) throws Exception {
         // TODO figure out how to get storageDescriptor into WALIndexProvider
         // TODO add loading of WALIndexProvider based on classForName crap! (We love plugins)
-        return indexRegistry.get(storageDescriptor.primaryIndexDescriptor.className);
+        return indexRegistry.get(name);
     }
 
-    public RowIOProvider<?> getRowIOProvider(WALStorageDescriptor storageDescriptor) throws Exception {
-        return rowIORegistry.get(storageDescriptor.primaryIndexDescriptor.className);
+    public RowIOProvider<?> getRowIOProvider(String name) throws Exception {
+        return rowIORegistry.get(name);
     }
 
-    final public void register(String name, WALIndexProvider<?> indexProvider, RowIOProvider<?> rowIOProvider) {
-        indexRegistry.put(name, indexProvider);
-        rowIORegistry.put(name, rowIOProvider);
+    final public void register(WALIndexProvider<?> indexProvider, RowIOProvider<?> rowIOProvider) {
+        indexRegistry.put(indexProvider.getName(), indexProvider);
+        rowIORegistry.put(indexProvider.getName(), rowIOProvider);
     }
 }

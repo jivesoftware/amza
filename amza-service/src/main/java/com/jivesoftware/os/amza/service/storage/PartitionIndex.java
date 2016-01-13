@@ -235,6 +235,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         return SYSTEM_PARTITIONS;
     }
 
+    //TODO NOT THIS
     private PartitionProperties coldstartSystemPartitionProperties(PartitionName partitionName) {
         PartitionProperties properties;
         if (partitionName.equals(HIGHWATER_MARK_INDEX.getPartitionName())) {

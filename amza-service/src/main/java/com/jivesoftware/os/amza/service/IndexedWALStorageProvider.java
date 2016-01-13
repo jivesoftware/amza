@@ -42,10 +42,11 @@ public class IndexedWALStorageProvider {
         VersionedPartitionName versionedPartitionName,
         WALStorageDescriptor storageDescriptor) throws Exception {
 
+        String providerName = storageDescriptor.primaryIndexDescriptor.className;
         @SuppressWarnings("unchecked")
-        WALIndexProvider<I> walIndexProvider = (WALIndexProvider<I>) indexProviderRegistry.getWALIndexProvider(storageDescriptor);
+        WALIndexProvider<I> walIndexProvider = (WALIndexProvider<I>) indexProviderRegistry.getWALIndexProvider(providerName);
         @SuppressWarnings("unchecked")
-        RowIOProvider<K> rowIOProvider = (RowIOProvider<K>) indexProviderRegistry.getRowIOProvider(storageDescriptor);
+        RowIOProvider<K> rowIOProvider = (RowIOProvider<K>) indexProviderRegistry.getRowIOProvider(providerName);
         BinaryWALTx<K> binaryWALTx = new BinaryWALTx<>(baseKey,
             versionedPartitionName.toBase64(),
             rowIOProvider,
@@ -68,7 +69,7 @@ public class IndexedWALStorageProvider {
 
     private <K> K baseKey(VersionedPartitionName versionedPartitionName, WALStorageDescriptor storageDescriptor) throws Exception {
         @SuppressWarnings("unchecked")
-        RowIOProvider<K> rowIOProvider = (RowIOProvider<K>) indexProviderRegistry.getRowIOProvider(storageDescriptor);
+        RowIOProvider<K> rowIOProvider = (RowIOProvider<K>) indexProviderRegistry.getRowIOProvider(storageDescriptor.primaryIndexDescriptor.className);
         return rowIOProvider.baseKey(versionedPartitionName);
     }
 }

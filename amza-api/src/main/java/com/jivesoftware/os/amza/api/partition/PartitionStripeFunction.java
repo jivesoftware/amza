@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.replication;
+package com.jivesoftware.os.amza.api.partition;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 

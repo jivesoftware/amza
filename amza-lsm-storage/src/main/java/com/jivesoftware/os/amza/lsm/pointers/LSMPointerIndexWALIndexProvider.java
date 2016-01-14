@@ -24,7 +24,7 @@ public class LSMPointerIndexWALIndexProvider implements WALIndexProvider<LSMPoin
     private final PartitionStripeFunction partitionStripeFunction;
     private final LSMPointerIndexEnvironment[] environments;
 
-    public LSMPointerIndexWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, String[] baseDirs) {
+    public LSMPointerIndexWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, File[] baseDirs) {
         this.name = name;
         this.partitionStripeFunction = partitionStripeFunction;
         this.environments = new LSMPointerIndexEnvironment[partitionStripeFunction.getNumberOfStripes()];

@@ -2,13 +2,14 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.api.wal.WALReader;
 import com.jivesoftware.os.amza.api.wal.WALWriter;
+import java.io.File;
 
 /**
  * @author jonathan.colt
  */
-public interface RowIO<K> extends WALReader, WALWriter {
+public interface RowIO extends WALReader, WALWriter {
 
-    K getKey();
+    File getKey();
 
     String getName();
 

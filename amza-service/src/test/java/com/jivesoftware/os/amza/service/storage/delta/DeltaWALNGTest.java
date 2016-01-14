@@ -5,8 +5,6 @@ import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.wal.NoOpWALIndex;
-import com.jivesoftware.os.amza.api.wal.NoOpWALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALTx;
@@ -36,10 +34,11 @@ public class DeltaWALNGTest {
         File tmp = Files.createTempDir();
         final PrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
+        String[] workingDirs = new String[]{tmp.getAbsolutePath()};
 
-        WALTx walTX = new BinaryWALTx<>(tmp,
+        WALTx walTX = new BinaryWALTx(tmp,
             "test",
-            new BinaryRowIOProvider(new String[]{tmp.getAbsolutePath()}, new IoStats(), 1, 4_096, 64, false),
+            new BinaryRowIOProvider(new IoStats(), 1, 4_096, 64, false),
             primaryRowMarshaller);
         walTX.validateAndRepair();
 

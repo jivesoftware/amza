@@ -42,7 +42,6 @@ import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StripedPartition implements Partition {
 

@@ -26,7 +26,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     private final PartitionStripeFunction partitionStripeFunction;
     private final Environment[] environments;
 
-    public BerkeleyDBWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, String[] baseDirs) {
+    public BerkeleyDBWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, File[] baseDirs) {
         this.name = name;
         this.partitionStripeFunction = partitionStripeFunction;
         this.environments = new Environment[partitionStripeFunction.getNumberOfStripes()];

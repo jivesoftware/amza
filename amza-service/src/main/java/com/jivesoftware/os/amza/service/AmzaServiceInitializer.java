@@ -20,6 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -32,7 +33,6 @@ import com.jivesoftware.os.amza.service.replication.PartitionBackedHighwaterStor
 import com.jivesoftware.os.amza.service.replication.PartitionComposter;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.replication.PartitionStripe;
-import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.service.replication.PartitionStripeProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionTombstoneCompactor;
 import com.jivesoftware.os.amza.service.replication.RowChangeTaker;
@@ -96,7 +96,7 @@ public class AmzaServiceInitializer {
 
     public static class AmzaServiceConfig {
 
-        public String[] workingDirectories = new String[] { "./var/data/" };
+        public String[] workingDirectories = null;
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
         public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
@@ -111,7 +111,6 @@ public class AmzaServiceInitializer {
         public long initialBufferSegmentSize = 1_024 * 1_024;
         public long maxBufferSegmentSize = 1_024 * 1_024 * 1_024;
 
-        public int numberOfDeltaStripes = 4;
         public int maxUpdatesBeforeDeltaStripeCompaction = 1_000_000;
         public int deltaStripeCompactionIntervalInMillis = 1_000 * 60;
 
@@ -135,9 +134,10 @@ public class AmzaServiceInitializer {
 
     public interface IndexProviderRegistryCallback {
 
-        void call(WALIndexProviderRegistry indexProviderRegistry,
-            RowIOProvider<?> ephemeralRowIOProvider,
-            RowIOProvider<?> persistentRowIOProvider,
+        void call(File[] workingIndexDirectories,
+            WALIndexProviderRegistry indexProviderRegistry,
+            RowIOProvider ephemeralRowIOProvider,
+            RowIOProvider persistentRowIOProvider,
             PartitionStripeFunction partitionStripeFunction);
     }
 
@@ -160,11 +160,11 @@ public class AmzaServiceInitializer {
 
         AmzaPartitionWatcher amzaPartitionWatcher = new AmzaPartitionWatcher(allRowChanges);
 
-        int deltaStorageStripes = config.numberOfDeltaStripes;
+        int deltaStorageStripes = config.workingDirectories.length;
         PartitionStripeFunction partitionStripeFunction = new PartitionStripeFunction(deltaStorageStripes);
 
         //TODO configure
-        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(config.workingDirectories,
+        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             amzaStats.ioStats,
             config.corruptionParanoiaFactor,
             config.initialBufferSegmentSize,
@@ -172,18 +172,36 @@ public class AmzaServiceInitializer {
             config.updatesBetweenLeaps,
             config.maxLeaps,
             new DirectByteBufferFactory());
-        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(config.workingDirectories,
+
+        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             amzaStats.ioStats,
             config.corruptionParanoiaFactor,
             config.updatesBetweenLeaps,
             config.maxLeaps,
             config.useMemMap);
+
+        File[] workingWALDirectories = new File[config.workingDirectories.length];
+        File[] workingIndexDirectories = new File[config.workingDirectories.length];
+        for (int i = 0; i < workingWALDirectories.length; i++) {
+            workingWALDirectories[i] = new File(config.workingDirectories[i], "wal");
+            workingIndexDirectories[i] = new File(config.workingDirectories[i], "index");
+        }
+
         WALIndexProviderRegistry indexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
-        indexProviderRegistryCallback.call(indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction);
+        indexProviderRegistryCallback.call(workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider,
+            partitionStripeFunction);
 
         int tombstoneCompactionFactor = 2; // TODO expose to config;
-        IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(indexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller,
-            orderIdProvider, sickPartitions, tombstoneCompactionFactor);
+
+        IndexedWALStorageProvider walStorageProvider = new IndexedWALStorageProvider(partitionStripeFunction,
+            workingWALDirectories,
+            indexProviderRegistry,
+            primaryRowMarshaller,
+            highwaterRowMarshaller,
+            orderIdProvider,
+            sickPartitions,
+            tombstoneCompactionFactor);
+
         PartitionIndex partitionIndex = new PartitionIndex(walStorageProvider, partitionPropertyMarshaller, config.hardFsync);
 
         TakeCoordinator takeCoordinator = new TakeCoordinator(ringMember,
@@ -323,13 +341,9 @@ public class AmzaServiceInitializer {
 
             rowsTakers[i] = rowsTakerFactory.create();
 
-            RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[] { walDirs[i].getAbsolutePath() },
-                amzaStats.ioStats,
-                config.corruptionParanoiaFactor,
-                config.updatesBetweenLeaps,
-                config.maxLeaps,
-                config.useMemMap);
-            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
+            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], persistentRowIOProvider, primaryRowMarshaller,
+                highwaterRowMarshaller);
+
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
                 i,
                 amzaStats,
@@ -337,12 +351,13 @@ public class AmzaServiceInitializer {
                 deltaWALFactory,
                 indexProviderRegistry,
                 maxUpdatesBeforeCompaction);
+
             int stripeId = i;
             partitionStripes[i] = new PartitionStripe("stripe-" + i, partitionIndex, deltaWALStorage, partitionStateStorage, amzaPartitionWatcher,
                 primaryRowMarshaller, highwaterRowMarshaller,
                 (versionedPartitionName) -> {
                     if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
-                        return Math.abs(versionedPartitionName.getPartitionName().hashCode() % deltaStorageStripes) == stripeId;
+                        return partitionStripeFunction.stripe(versionedPartitionName.getPartitionName()) == stripeId;
                     }
                     return false;
                 });
@@ -392,7 +407,7 @@ public class AmzaServiceInitializer {
         stripeLoaderThreadPool.shutdown();
         LOG.info("All stripes {} have been loaded.", partitionStripes.length);
 
-        ExecutorService compactDeltasThreadPool = Executors.newFixedThreadPool(config.numberOfDeltaStripes,
+        ExecutorService compactDeltasThreadPool = Executors.newFixedThreadPool(config.workingDirectories.length,
             new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
         for (PartitionStripe partitionStripe : partitionStripes) {
             compactDeltasThreadPool.submit(() -> {
@@ -431,6 +446,7 @@ public class AmzaServiceInitializer {
             systemWALStorage,
             walUpdated,
             config.flushHighwatersAfterNUpdates);
+
         RowChangeTaker changeTaker = new RowChangeTaker(amzaStats,
             ringStoreReader,
             systemReady,
@@ -450,6 +466,7 @@ public class AmzaServiceInitializer {
 
         PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(amzaStats,
             partitionIndex,
+            partitionStripeFunction,
             orderIdProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
             config.compactTombstoneIfOlderThanNMillis,

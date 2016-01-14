@@ -17,13 +17,13 @@ package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.stream.Commitable;
-import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
+import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
+import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 
 public class PartitionStore implements RangeScannable {
 
@@ -69,8 +69,8 @@ public class PartitionStore implements RangeScannable {
         return walStorage.compactableTombstone(removeTombstonedOlderTimestampId, ttlTimestampId);
     }
 
-    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId, boolean force) throws Exception {
-        walStorage.compactTombstone(properties.rowType, removeTombstonedOlderThanTimestampId, ttlTimestampId, force);
+    public void compactTombstone(long removeTombstonedOlderThanTimestampId, long ttlTimestampId, boolean force, boolean expectEndOfMerge) throws Exception {
+        walStorage.compactTombstone(properties.rowType, removeTombstonedOlderThanTimestampId, ttlTimestampId, force, expectEndOfMerge);
     }
 
     public TimestampedValue getTimestampedValue(byte[] prefix, byte[] key) throws Exception {

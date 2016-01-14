@@ -521,6 +521,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 public void commit(Callable<Void> commit) throws Exception {
                     lock.acquire(numPermits);
                     try {
+                        environment.flushLog(true);
                         compactingTo.set(null);
                         if (primaryDb == null || prefixDb == null) {
                             LOG.warn("Was not commited because index has been closed.");
@@ -549,7 +550,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
                             primaryDb = environment.openDatabase(null, name.getPrimaryName(), primaryDbConfig);
                             prefixDb = environment.openDatabase(null, name.getPrefixName(), prefixDbConfig);
-
+                            environment.flushLog(true);
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }
                     } finally {

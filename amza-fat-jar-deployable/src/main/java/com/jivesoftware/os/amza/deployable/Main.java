@@ -151,13 +151,13 @@ public class Main {
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,
-            (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
+            (workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
                 indexProviderRegistry.register(
-                    new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingDirs),
+                    new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                     persistentRowIOProvider);
 
                 indexProviderRegistry.register(
-                    new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingDirs),
+                    new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                     persistentRowIOProvider);
             },
             availableRowsTaker,

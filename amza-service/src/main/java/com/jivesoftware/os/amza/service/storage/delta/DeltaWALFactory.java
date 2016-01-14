@@ -22,13 +22,13 @@ public class DeltaWALFactory {
 
     private final OrderIdProvider idProvider;
     private final File walDir;
-    private final RowIOProvider<File> ioProvider;
+    private final RowIOProvider ioProvider;
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
 
     public DeltaWALFactory(OrderIdProvider idProvider,
         File walDir,
-        RowIOProvider<File> ioProvider,
+        RowIOProvider ioProvider,
         PrimaryRowMarshaller primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller) {
         this.idProvider = idProvider;
@@ -43,7 +43,7 @@ public class DeltaWALFactory {
     }
 
     private DeltaWAL createOrOpen(long id) throws Exception {
-        WALTx deltaWALRowsTx = new BinaryWALTx<>(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller);
+        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller);
         deltaWALRowsTx.validateAndRepair();
         return new DeltaWAL(id, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
     }

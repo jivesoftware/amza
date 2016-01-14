@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
@@ -89,9 +90,9 @@ public class DeltaStripeWALStorageNGTest {
         JacksonPartitionPropertyMarshaller partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        String[] workingDirectories = { partitionTmpDir.getAbsolutePath() };
+        File[] workingDirectories = {partitionTmpDir};
         IoStats ioStats = new IoStats();
-        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(workingDirectories,
+        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
             100,
             1_024,
@@ -99,7 +100,7 @@ public class DeltaStripeWALStorageNGTest {
             4_096,
             64,
             new HeapByteBufferFactory());
-        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(workingDirectories,
+        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             ioStats,
             100,
             4_096,
@@ -107,7 +108,8 @@ public class DeltaStripeWALStorageNGTest {
             false);
         walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
-        IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
+        IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(new PartitionStripeFunction(workingDirectories.length),
+            workingDirectories,
             walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
         partitionIndex = new PartitionIndex(indexedWALStorageProvider,
             partitionPropertyMarshaller,
@@ -150,7 +152,9 @@ public class DeltaStripeWALStorageNGTest {
         highwaterStorage = new PartitionBackedHighwaterStorage(ids, new RingMember("localhost"), partitionIndex, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[] { tmp.getAbsolutePath() }, ioStats, 100, 4_096, 64, false);
+        workingDirectories = new File[]{tmp};
+        RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 100, 4_096,
+            64, false);
         deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
         deltaStripeWALStorage = loadDeltaStripe();
     }
@@ -221,8 +225,8 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
-        storage1.compactTombstone(testRowType1, 10, Long.MAX_VALUE, false);
-        storage1.compactTombstone(testRowType1, 10, Long.MAX_VALUE, false); // Bla
+        storage1.compactTombstone(testRowType1, 10, Long.MAX_VALUE, false, true);
+        storage1.compactTombstone(testRowType1, 10, Long.MAX_VALUE, false, true); // Bla
 
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
 

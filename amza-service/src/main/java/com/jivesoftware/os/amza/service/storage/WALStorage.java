@@ -15,7 +15,6 @@
  */
 package com.jivesoftware.os.amza.service.storage;
 
-import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -67,6 +66,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.zip.CRC32;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -190,56 +190,57 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         return (clobberCount.get() + 1) / (keyCount.get() + 1) > tombstoneCompactionFactor;
     }
 
-    public long compactTombstone(RowType rowType, long removeTombstonedOlderThanTimestampId, long ttlTimestampId, boolean force) throws Exception {
+    public long compactTombstone(RowType rowType,
+        long removeTombstonedOlderThanTimestampId,
+        long ttlTimestampId,
+        boolean force,
+        boolean expectedEndOfMerge) throws Exception {
+
         final String metricPrefix = "partition>" + new String(versionedPartitionName.getPartitionName().getName())
             + ">ring>" + new String(versionedPartitionName.getPartitionName().getRingName()) + ">";
-        Optional<WALTx.Compacted<I>> compact = walTx.compact(rowType, removeTombstonedOlderThanTimestampId, ttlTimestampId, walIndex.get(), force);
-        if (compact.isPresent()) {
-            acquireAll();
+
+        WALTx.Compacted<I> compact = walTx.compact(rowType,
+            removeTombstonedOlderThanTimestampId,
+            ttlTimestampId,
+            walIndex.get(),
+            force,
+            expectedEndOfMerge);
+
+        acquireAll();
+        try {
+
+            WALTx.CommittedCompacted<I> compacted;
             try {
-
-                WALTx.CommittedCompacted<I> compacted;
-                try {
-                    compacted = compact.get().commit();
-                } catch (Exception e) {
-                    LOG.inc(metricPrefix + "failedCompaction");
-                    LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
-                    loadInternal(true);
-                    return -1;
-                }
-                walIndex.set(compacted.index);
-                keyCount.set(compacted.keyCount + compacted.catchupKeyCount);
-                clobberCount.set(0);
-                walTx.write((WALWriter writer) -> {
-
-                    writeCompactionHintMarker(writer);
-                    writeIndexCommitMarker(writer, highestTxId()); // Kevin said this would be ok!
-                    return null;
-                });
-
-                LOG.set(ValueType.COUNT, metricPrefix + "sizeBeforeCompaction", compacted.sizeBeforeCompaction);
-                LOG.set(ValueType.COUNT, metricPrefix + "sizeAfterCompaction", compacted.sizeAfterCompaction);
-                LOG.set(ValueType.COUNT, metricPrefix + "keeps", compacted.keyCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "clobbers", compacted.clobberCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "tombstones", compacted.tombstoneCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "ttl", compacted.ttlCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "duration", compacted.duration);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", compacted.catchupKeyCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupClobbers", compacted.catchupClobberCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", compacted.catchupTombstoneCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", compacted.catchupTTLCount);
-                LOG.set(ValueType.COUNT, metricPrefix + "catchupDuration", compacted.catchupDuration);
-                LOG.inc(metricPrefix + "compacted");
-
-                return compacted.sizeAfterCompaction;
-            } finally {
-                releaseAll();
+                compacted = compact.commit();
+            } catch (Exception e) {
+                LOG.inc(metricPrefix + "failedCompaction");
+                LOG.error("Failed to compact {}, attempting to reload", new Object[]{versionedPartitionName}, e);
+                loadInternal(true);
+                return -1;
             }
+            walIndex.set(compacted.index);
+            keyCount.set(compacted.keyCount + compacted.catchupKeyCount);
+            clobberCount.set(0);
 
-        } else {
-            LOG.inc(metricPrefix + "checks");
+            LOG.set(ValueType.COUNT, metricPrefix + "sizeBeforeCompaction", compacted.sizeBeforeCompaction);
+            LOG.set(ValueType.COUNT, metricPrefix + "sizeAfterCompaction", compacted.sizeAfterCompaction);
+            LOG.set(ValueType.COUNT, metricPrefix + "keeps", compacted.keyCount);
+            LOG.set(ValueType.COUNT, metricPrefix + "clobbers", compacted.clobberCount);
+            LOG.set(ValueType.COUNT, metricPrefix + "tombstones", compacted.tombstoneCount);
+            LOG.set(ValueType.COUNT, metricPrefix + "ttl", compacted.ttlCount);
+            LOG.set(ValueType.COUNT, metricPrefix + "duration", compacted.duration);
+            LOG.set(ValueType.COUNT, metricPrefix + "catchupKeeps", compacted.catchupKeyCount);
+            LOG.set(ValueType.COUNT, metricPrefix + "catchupClobbers", compacted.catchupClobberCount);
+            LOG.set(ValueType.COUNT, metricPrefix + "catchupTombstones", compacted.catchupTombstoneCount);
+            LOG.set(ValueType.COUNT, metricPrefix + "catchupTtl", compacted.catchupTTLCount);
+            LOG.set(ValueType.COUNT, metricPrefix + "catchupDuration", compacted.catchupDuration);
+            LOG.inc(metricPrefix + "compacted");
+
+            return compacted.sizeAfterCompaction;
+        } finally {
+            releaseAll();
         }
-        return -1;
+
     }
 
     public void load() throws Exception {
@@ -326,13 +327,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             }
             LOG.info("Loaded partition:{} with a highestTxId:{}", versionedPartitionName, lastTxId.longValue());
 
-            walTx.write((WALWriter writer) -> {
-                writeCompactionHintMarker(writer);
-                return null;
-            });
+//            walTx.write((WALWriter writer) -> {
+//                writeCompactionHintMarker(writer);
+//                return null;
+//            });
         } catch (Exception e) {
             LOG.error("Partition {} is irreparably sick, intervention is required, partition will be parked, recovery:{}",
-                new Object[] { versionedPartitionName, recovery }, e);
+                new Object[]{versionedPartitionName, recovery}, e);
             sick.set(true);
             sickPartitions.sick(versionedPartitionName, e);
         }
@@ -361,27 +362,53 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         throw new UnsupportedOperationException("Not yet!");
     }
 
-    private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
-        synchronized (oneTransactionAtATimeLock) {
-            long[] hints = new long[3 + numKeyHighwaterStripes];
-            hints[0] = RowType.COMPACTION_HINTS_KEY;
-            hints[1] = keyCount.get();
-            hints[2] = clobberCount.get();
-            System.arraycopy(stripedKeyHighwaterTimestamps, 0, hints, 3, numKeyHighwaterStripes);
+    public void endOfMergeMarker(long highestTxId) throws Exception {
+        walTx.write((WALWriter writer) -> {
+            long[] marker = new long[5 + numKeyHighwaterStripes];
+            marker[0] = 1; // version
+            marker[1] = 0;// placehoder checksum;
+            marker[2] = highestTxId;
+            marker[3] = keyCount.get();
+            marker[4] = clobberCount.get();
+            System.arraycopy(stripedKeyHighwaterTimestamps, 0, marker, 5, numKeyHighwaterStripes);
 
-            rowWriter.writeSystem(UIO.longsBytes(hints));
+            CRC32 crC32 = new CRC32();
+            byte[] hintsAsBytes = UIO.longsBytes(marker);
+            crC32.update(hintsAsBytes, 16, hintsAsBytes.length); // 16 skips the version and checksum
+            marker[1] = crC32.getValue();
+            byte[] endOfMergeMarker = UIO.longsBytes(marker);
+
+            writer.write(-1, RowType.end_of_merge, 1, endOfMergeMarker.length, (WALWriter.RawRowStream stream) -> {
+                return stream.stream(endOfMergeMarker);
+            }, (WALWriter.IndexableKeyStream stream) -> {
+                return true;
+            }, (long txId, byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion, long fp) -> {
+                return true;
+            });
             updateCount.set(0);
-        }
+            return null;
+        });
     }
 
-    private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
-        synchronized (oneTransactionAtATimeLock) {
-            rowWriter.writeSystem(UIO.longsBytes(new long[] {
-                RowType.COMMIT_KEY,
-                indexCommitedUpToTxId }));
-        }
-    }
-
+//    private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
+//        synchronized (oneTransactionAtATimeLock) {
+//            long[] hints = new long[3 + numKeyHighwaterStripes];
+//            hints[0] = RowType.COMPACTION_HINTS_KEY;
+//            hints[1] = keyCount.get();
+//            hints[2] = clobberCount.get();
+//            System.arraycopy(stripedKeyHighwaterTimestamps, 0, hints, 3, numKeyHighwaterStripes);
+//
+//            rowWriter.writeSystem(UIO.longsBytes(hints));
+//            updateCount.set(0);
+//        }
+//    }
+//    private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
+//        synchronized (oneTransactionAtATimeLock) {
+//            rowWriter.writeSystem(UIO.longsBytes(new long[]{
+//                RowType.COMMIT_KEY,
+//                indexCommitedUpToTxId}));
+//        }
+//    }
     public void writeHighwaterMarker(WALWriter rowWriter, WALHighwater highwater) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
             rowWriter.writeHighwater(highwaterRowMarshaller.toBytes(highwater));
@@ -434,7 +461,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         for (int k = 0; k < keys.size(); k++) {
                             WALValue value = values.get(k);
                             if (!stream
-                                .stream(rowType, prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
+                            .stream(rowType, prefix, keys.get(k), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
                                 return false;
                             }
                         }
@@ -550,22 +577,22 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 }
             }
 
-            final boolean commitAndWriteMarker = apply.size() > 0 && indexUpdates.addAndGet(apply.size()) > maxUpdatesBetweenIndexCommitMarker.get();
-            if (commitAndWriteMarker) {
-                wali.commit();
-                indexUpdates.set(0);
-            }
-            if (commitAndWriteMarker || flushCompactionHint.isTrue()) {
-                walTx.write((WALWriter writer) -> {
-                    if (flushCompactionHint.isTrue()) {
-                        writeCompactionHintMarker(writer);
-                    }
-                    if (commitAndWriteMarker) {
-                        writeIndexCommitMarker(writer, indexCommittedUpToTxId.longValue());
-                    }
-                    return null;
-                });
-            }
+//            final boolean commitAndWriteMarker = apply.size() > 0 && indexUpdates.addAndGet(apply.size()) > maxUpdatesBetweenIndexCommitMarker.get();
+//            if (commitAndWriteMarker) {
+//                wali.commit();
+//                indexUpdates.set(0);
+//            }
+//            if (commitAndWriteMarker || flushCompactionHint.isTrue()) {
+//                walTx.write((WALWriter writer) -> {
+//                    if (flushCompactionHint.isTrue()) {
+//                        writeCompactionHintMarker(writer);
+//                    }
+//                    if (commitAndWriteMarker) {
+//                        writeIndexCommitMarker(writer, indexCommittedUpToTxId.longValue());
+//                    }
+//                    return null;
+//                });
+//            }
             return rowsChanged;
         } finally {
             releaseOne();

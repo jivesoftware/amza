@@ -4,6 +4,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
@@ -13,9 +14,9 @@ import org.apache.commons.lang.mutable.MutableLong;
 /**
  * @author jonathan.colt
  */
-public class BinaryRowIO<K> implements RowIO<K> {
+public class BinaryRowIO implements RowIO {
 
-    private final K key;
+    private final File key;
     private final String name;
     private final BinaryRowReader rowReader;
     private final BinaryRowWriter rowWriter;
@@ -25,7 +26,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
     private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
 
-    public BinaryRowIO(K key,
+    public BinaryRowIO(File key,
         String name,
         BinaryRowReader rowReader,
         BinaryRowWriter rowWriter,
@@ -41,7 +42,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public K getKey() {
+    public File getKey() {
         return key;
     }
 

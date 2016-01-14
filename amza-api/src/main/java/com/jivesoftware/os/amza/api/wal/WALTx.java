@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.api.wal;
 
-import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -28,11 +27,12 @@ public interface WALTx {
 
     void delete() throws Exception;
 
-    <I extends CompactableWALIndex> Optional<Compacted<I>> compact(RowType compactToRowType,
+    <I extends CompactableWALIndex> Compacted<I> compact(RowType compactToRowType,
         long removeTombstonedOlderThanTimestampId,
         long ttlTimestampId,
         I rowIndex,
-        boolean force) throws Exception;
+        boolean force,
+        boolean expectedEndOfMerge) throws Exception;
 
     void hackTruncation(int numBytes);
 

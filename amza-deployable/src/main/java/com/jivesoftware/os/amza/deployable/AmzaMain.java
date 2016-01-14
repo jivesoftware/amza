@@ -210,13 +210,13 @@ public class AmzaMain {
                 orderIdProvider,
                 idPacker,
                 partitionPropertyMarshaller,
-                (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
+                (workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
                     indexProviderRegistry.register(
-                        new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingDirs),
+                        new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                         persistentRowIOProvider);
 
                     indexProviderRegistry.register(
-                        new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingDirs),
+                        new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                         persistentRowIOProvider);
 
                 },
@@ -268,16 +268,16 @@ public class AmzaMain {
             new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
                 new AmzaUIInitializer.InjectionCallback() {
 
-                    @Override
-                    public void addEndpoint(Class clazz) {
-                        deployable.addEndpoints(clazz);
-                    }
+                @Override
+                public void addEndpoint(Class clazz) {
+                    deployable.addEndpoints(clazz);
+                }
 
-                    @Override
-                    public void addInjectable(Class clazz, Object instance) {
-                        deployable.addInjectables(clazz, instance);
-                    }
-                });
+                @Override
+                public void addInjectable(Class clazz, Object instance) {
+                    deployable.addInjectables(clazz, instance);
+                }
+            });
 
             File staticResourceDir = new File(System.getProperty("user.dir"));
             System.out.println("Static resources rooted at " + staticResourceDir.getAbsolutePath());

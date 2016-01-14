@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
@@ -47,16 +48,16 @@ public class AmzaStateStorageNGTest {
         JacksonPartitionPropertyMarshaller partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        String[] workingDirectories = { partitionTmpDir.getAbsolutePath() };
+        File[] workingDirectories = {partitionTmpDir};
         IoStats ioStats = new IoStats();
-        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(workingDirectories, ioStats,
+        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(ioStats,
             100,
             1_024,
             1_024 * 1_024,
             4_096,
             64,
             new HeapByteBufferFactory());
-        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(workingDirectories,
+        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             ioStats,
             100,
             4_096,
@@ -64,8 +65,10 @@ public class AmzaStateStorageNGTest {
             false);
         WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
-        IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
+        IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(new PartitionStripeFunction(workingDirectories.length),
+            workingDirectories,
             walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
+        
         PartitionIndex partitionIndex = new PartitionIndex(indexedWALStorageProvider,
             partitionPropertyMarshaller,
             false);
@@ -91,11 +94,11 @@ public class AmzaStateStorageNGTest {
         WALUpdated updated = (versionedPartitionName, txId) -> {
         };
 
-        Member root = new Member(new byte[] { 1 });
-        Member other1 = new Member(new byte[] { 2 });
-        Member other2 = new Member(new byte[] { 3 });
+        Member root = new Member(new byte[]{1});
+        Member other1 = new Member(new byte[]{2});
+        Member other2 = new Member(new byte[]{3});
 
-        PartitionName partitionName = new PartitionName(false, new byte[] { 20 }, new byte[] { 30 });
+        PartitionName partitionName = new PartitionName(false, new byte[]{20}, new byte[]{30});
         byte context = 1;
         AmzaStateStorage stateStorage = new AmzaStateStorage(systemWALStorage, updated, root, partitionName, context);
 
@@ -104,7 +107,7 @@ public class AmzaStateStorageNGTest {
 
         stateStorage.update((setLiveliness) -> {
 
-            for (Long lifecycle : new Long[] { lifecycle1, lifecycle2 }) {
+            for (Long lifecycle : new Long[]{lifecycle1, lifecycle2}) {
                 setLiveliness.set(root, root, lifecycle, State.leader, 1);
                 setLiveliness.set(root, other1, lifecycle, State.follower, 1);
                 setLiveliness.set(root, other2, lifecycle, State.follower, 1);
@@ -123,8 +126,8 @@ public class AmzaStateStorageNGTest {
         System.out.println("--------------------------");
 
         int[] count = new int[1];
-        for (Long lifecycle : new Long[] { lifecycle1, lifecycle2 }) {
-            for (Member m : new Member[] { root, other1, other2 }) {
+        for (Long lifecycle : new Long[]{lifecycle1, lifecycle2}) {
+            for (Member m : new Member[]{root, other1, other2}) {
                 stateStorage.scan(m, null, lifecycle, (rootMember, isSelf, ackMember, alifecycle, state, timestamp, version) -> {
 
                     Assert.assertEquals(lifecycle, alifecycle);

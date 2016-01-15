@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
+import com.jivesoftware.os.amza.api.wal.RowIO;
 import java.io.File;
 import java.util.List;
 

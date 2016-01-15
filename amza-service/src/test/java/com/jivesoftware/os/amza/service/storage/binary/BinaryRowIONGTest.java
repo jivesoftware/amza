@@ -32,7 +32,7 @@ public class BinaryRowIONGTest {
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO(file,
             "test",
-            new BinaryRowReader(filer, ioStats, 10),
+            new BinaryRowReader(filer, ioStats),
             new BinaryRowWriter(filer, ioStats),
             4096,
             64);
@@ -46,7 +46,7 @@ public class BinaryRowIONGTest {
         IoStats ioStats = new IoStats();
         BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(),
             "test",
-            new BinaryRowReader(filer, ioStats, 10),
+            new BinaryRowReader(filer, ioStats),
             new BinaryRowWriter(filer, ioStats),
             4096,
             64);
@@ -110,7 +110,7 @@ public class BinaryRowIONGTest {
         File file = File.createTempFile("BinaryRowIO", "dat");
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false, 0);
         IoStats ioStats = new IoStats();
-        leap(() -> new BinaryRowIO(file, "test", new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats), 4096, 64), 64);
+        leap(() -> new BinaryRowIO(file, "test", new BinaryRowReader(filer, ioStats), new BinaryRowWriter(filer, ioStats), 4096, 64), 64);
     }
 
     @Test
@@ -118,7 +118,7 @@ public class BinaryRowIONGTest {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
-        BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(), "test", new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats),
+        BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(), "test", new BinaryRowReader(filer, ioStats), new BinaryRowWriter(filer, ioStats),
             4096, 64);
         leap(() -> binaryRowIO, 4096);
     }

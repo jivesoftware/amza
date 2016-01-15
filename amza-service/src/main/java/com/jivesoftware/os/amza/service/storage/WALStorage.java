@@ -24,7 +24,6 @@ import com.jivesoftware.os.amza.api.scan.RangeScannable;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.Commitable;
-import com.jivesoftware.os.amza.api.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
@@ -36,12 +35,12 @@ import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
 import com.jivesoftware.os.amza.api.wal.KeyedTimestampId;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.RowIO;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALIndexable;
 import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.api.wal.WALReader;
 import com.jivesoftware.os.amza.api.wal.WALTimestampId;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALValue;
@@ -204,7 +203,19 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             ttlTimestampId,
             walIndex.get(),
             force,
-            expectedEndOfMerge);
+            (!expectedEndOfMerge) ? null : (io, raw) -> {
+                    long[] oldMarker = loadEndOfMergeMarker(-1, raw, io);
+
+                    long[] marker = buildEndOfMergeMarker(oldMarker[EOM_DELTA_WAL_ID_INDEX],
+                        oldMarker[EOM_HIGHEST_TX_ID_INDEX],
+                        oldMarker[EOM_KEY_COUNT_INDEX],
+                        0,
+                        io.getFpOfLastLeap(),
+                        io.getUpdatesSinceLeap(),
+                        oldMarker, EOM_HIGHWATER_STRIPES_OFFSET);
+
+                    return UIO.longsBytes(marker);
+                });
 
         acquireAll();
         try {
@@ -215,7 +226,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } catch (Exception e) {
                 LOG.inc(metricPrefix + "failedCompaction");
                 LOG.error("Failed to compact {}, attempting to reload", new Object[]{versionedPartitionName}, e);
-                loadInternal(true);
+                loadInternal(-1, true, false);
                 return -1;
             }
             walIndex.set(compacted.index);
@@ -243,94 +254,57 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     }
 
-    public void load() throws Exception {
+    public void load(long deltaWALId, boolean truncateToEndOfMergeMarker) throws Exception {
         acquireAll();
         try {
-            loadInternal(false);
+            loadInternal(deltaWALId, false, truncateToEndOfMergeMarker);
         } finally {
             releaseAll();
         }
     }
 
-    private void loadInternal(boolean recovery) throws Exception {
+    private void loadInternal(long deltaWALId, boolean recovery, boolean truncateToEndOfMergeMarker) throws Exception {
         try {
+
             long initialHighestTxId = highestTxId.get();
             if (!recovery && initialHighestTxId != -1) {
                 throw new IllegalStateException("Load should have completed before highestTxId:" + initialHighestTxId + " is modified.");
             }
 
-            walIndex.compareAndSet(null, walTx.load(walIndexProvider, versionedPartitionName, maxUpdatesBetweenCompactionHintMarker.get()));
-
-            MutableLong lastTxId = new MutableLong(-1);
-            MutableLong rowsVisited = new MutableLong(maxUpdatesBetweenCompactionHintMarker.get());
-            MutableBoolean needCompactionHints = new MutableBoolean(true);
-            MutableBoolean needKeyHighwaterStripes = new MutableBoolean(true);
-            MutableBoolean needHighestTxId = new MutableBoolean(true);
-
-            FpKeyValueStream mergeStripedKeyHighwaters = (fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
-                mergeStripedKeyHighwaters(prefix, key, valueTimestamp);
-                return true;
-            };
-
-            MutableLong keys = new MutableLong(0);
-            MutableLong clobbers = new MutableLong(0);
-            boolean completed = primaryRowMarshaller.fromRows(fpRowStream -> {
-                return walTx.read(rowReader -> {
-                    rowReader.reverseScan((rowFP, rowTxId, rowType, row) -> {
-                        if (rowTxId > lastTxId.longValue()) {
-                            lastTxId.setValue(rowTxId);
-                            needHighestTxId.setValue(false);
-                        }
-                        if ((needCompactionHints.booleanValue() || needKeyHighwaterStripes.booleanValue()) && rowType == RowType.system) {
-                            long key = UIO.bytesLong(row, 0);
-                            if (key == RowType.COMPACTION_HINTS_KEY) {
-                                long[] parts = UIO.bytesLongs(row);
-                                if (needCompactionHints.booleanValue()) {
-                                    keys.add(parts[1]);
-                                    clobbers.add(parts[2]);
-                                    needCompactionHints.setValue(false);
-                                }
-                                if (needKeyHighwaterStripes.booleanValue()) {
-                                    if (parts.length - 3 == numKeyHighwaterStripes) {
-                                        for (int i = 0; i < numKeyHighwaterStripes; i++) {
-                                            stripedKeyHighwaterTimestamps[i] = Math.max(stripedKeyHighwaterTimestamps[i], parts[i + 3]);
-                                        }
-                                        needKeyHighwaterStripes.setValue(false);
-                                    }
-                                }
+            walTx.open(io -> {
+                long[] truncate = new long[]{0};
+                boolean valid = io.validate(truncateToEndOfMergeMarker,
+                    (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+                        if (rowType == RowType.end_of_merge) {
+                            long[] marker = loadEndOfMergeMarker(deltaWALId, row, io);
+                            if (marker == null) {
+                                return -1;
                             }
+                            appyMergeMarker(marker, io);
+                            return rowFP;
                         }
-                        if (rowType.isPrimary()) {
-                            if (needCompactionHints.booleanValue()) {
-                                keys.increment();
+                        return -1;
+                    }, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+                        if (rowType == RowType.end_of_merge) {
+                            long[] marker = loadEndOfMergeMarker(deltaWALId, row, io);
+                            if (marker == null) {
+                                return truncate[0];
                             }
-                            if (needKeyHighwaterStripes.booleanValue() && !fpRowStream.stream(rowFP, rowType, row)) {
-                                return false;
-                            }
+                            appyMergeMarker(marker, io);
+                            truncate[0] = rowFP;
                         }
-                        rowsVisited.decrement();
-                        return needHighestTxId.booleanValue() || needCompactionHints.booleanValue() || needKeyHighwaterStripes.booleanValue();
+                        return -1;
                     });
-                    return true;
-                });
-            }, mergeStripedKeyHighwaters);
 
-            if (!completed) {
-                throw new IllegalStateException("WALStorage failed to load completely for: " + versionedPartitionName + ", recovery:" + recovery);
-            }
+                if (!valid) {
+                    LOG.warn("Encountered corruption during load for {} {}", versionedPartitionName, deltaWALId);
+                }
+                return null;
+            });
 
-            keyCount.set(keys.longValue());
-            clobberCount.set(clobbers.longValue());
+            I index = walTx.openIndex(walIndexProvider, versionedPartitionName, maxUpdatesBetweenCompactionHintMarker.get());
+            walIndex.compareAndSet(null, index);
 
-            if (!highestTxId.compareAndSet(initialHighestTxId, Math.max(lastTxId.longValue(), initialHighestTxId))) {
-                throw new IllegalStateException("Load should have completed before highestTxId:" + initialHighestTxId + " is modified, recovery:" + recovery);
-            }
-            LOG.info("Loaded partition:{} with a highestTxId:{}", versionedPartitionName, lastTxId.longValue());
-
-//            walTx.write((WALWriter writer) -> {
-//                writeCompactionHintMarker(writer);
-//                return null;
-//            });
         } catch (Exception e) {
             LOG.error("Partition {} is irreparably sick, intervention is required, partition will be parked, recovery:{}",
                 new Object[]{versionedPartitionName, recovery}, e);
@@ -358,27 +332,16 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         return wali;
     }
 
-    public boolean delete(boolean ifEmpty) throws Exception {
-        throw new UnsupportedOperationException("Not yet!");
-    }
+    public void endOfMergeMarker(long deltaWALId, long highestTxId) throws Exception {
 
-    public void endOfMergeMarker(long highestTxId) throws Exception {
-        walTx.write((WALWriter writer) -> {
-            long[] marker = new long[5 + numKeyHighwaterStripes];
-            marker[0] = 1; // version
-            marker[1] = 0;// placehoder checksum;
-            marker[2] = highestTxId;
-            marker[3] = keyCount.get();
-            marker[4] = clobberCount.get();
-            System.arraycopy(stripedKeyHighwaterTimestamps, 0, marker, 5, numKeyHighwaterStripes);
-
-            CRC32 crC32 = new CRC32();
-            byte[] hintsAsBytes = UIO.longsBytes(marker);
-            crC32.update(hintsAsBytes, 16, hintsAsBytes.length); // 16 skips the version and checksum
-            marker[1] = crC32.getValue();
+        // TODO call me!!!!! Figure out system wals.... Recovery Repairs.. Blah
+        // TODO need a way to get to last leap for open bootstraping
+        walTx.tx((io) -> {
+            long[] marker = buildEndOfMergeMarker(deltaWALId, highestTxId, keyCount.get(), clobberCount.get(), io.getFpOfLastLeap(), io.getUpdatesSinceLeap(),
+                stripedKeyHighwaterTimestamps, 0);
             byte[] endOfMergeMarker = UIO.longsBytes(marker);
 
-            writer.write(-1, RowType.end_of_merge, 1, endOfMergeMarker.length, (WALWriter.RawRowStream stream) -> {
+            io.write(-1, RowType.end_of_merge, 1, endOfMergeMarker.length, (WALWriter.RawRowStream stream) -> {
                 return stream.stream(endOfMergeMarker);
             }, (WALWriter.IndexableKeyStream stream) -> {
                 return true;
@@ -388,6 +351,66 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             updateCount.set(0);
             return null;
         });
+    }
+
+    private static final int EOM_VERSION_INDEX = 0;
+    private static final int EOM_CHECKSUM_INDEX = 1;
+    private static final int EOM_DELTA_WAL_ID_INDEX = 2;
+    private static final int EOM_HIGHEST_TX_ID_INDEX = 3;
+    private static final int EOM_KEY_COUNT_INDEX = 4;
+    private static final int EOM_CLOBBER_COUNT_INDEX = 5;
+    private static final int EOM_FP_OF_LAST_LEAP_INDEX = 6;
+    private static final int EOM_UPDATES_SINCE_LAST_LEAP_INDEX = 7;
+    private static final int EOM_HIGHWATER_STRIPES_OFFSET = 8;
+
+    private static long[] buildEndOfMergeMarker(long deltaWALId, long highestTxId, long keyCount, long clobberCount, long fpOfLastLeap, long updatesSinceLeap,
+        long[] stripedKeyHighwaterTimestamps, int offset) {
+        final long[] marker = new long[8 + numKeyHighwaterStripes];
+        marker[EOM_VERSION_INDEX] = 1; // version
+        marker[EOM_CHECKSUM_INDEX] = 0;// placehoder checksum;
+        marker[EOM_DELTA_WAL_ID_INDEX] = deltaWALId;
+        marker[EOM_HIGHEST_TX_ID_INDEX] = highestTxId;
+        marker[EOM_KEY_COUNT_INDEX] = keyCount;
+        marker[EOM_CLOBBER_COUNT_INDEX] = clobberCount;
+
+        marker[EOM_FP_OF_LAST_LEAP_INDEX] = fpOfLastLeap;
+        marker[EOM_UPDATES_SINCE_LAST_LEAP_INDEX] = updatesSinceLeap;
+
+        System.arraycopy(stripedKeyHighwaterTimestamps, offset, marker, EOM_HIGHWATER_STRIPES_OFFSET, numKeyHighwaterStripes);
+
+        CRC32 crC32 = new CRC32();
+        byte[] hintsAsBytes = UIO.longsBytes(marker);
+        crC32.update(hintsAsBytes, 16, hintsAsBytes.length - 16); // 16 skips the version and checksum
+        marker[EOM_CHECKSUM_INDEX] = crC32.getValue();
+        return marker;
+    }
+
+    private long[] loadEndOfMergeMarker(long deltaWALId, byte[] row, RowIO io) throws Exception {
+        long[] marker = UIO.bytesLongs(row);
+        if (marker[EOM_VERSION_INDEX] != 1) {
+            return null;
+        }
+        CRC32 crC32 = new CRC32();
+        byte[] hintsAsBytes = UIO.longsBytes(marker);
+        crC32.update(hintsAsBytes, 16, hintsAsBytes.length - 16); // 16 skips the version and checksum
+        if (marker[EOM_CHECKSUM_INDEX] != crC32.getValue()) {
+            return null;
+        }
+        if (deltaWALId > -1 && marker[EOM_DELTA_WAL_ID_INDEX] >= deltaWALId) {
+            return null;
+        }
+        return marker;
+
+    }
+
+    private void appyMergeMarker(long[] marker, RowIO io) throws Exception {
+
+        highestTxId.set(marker[EOM_HIGHEST_TX_ID_INDEX]);
+        keyCount.set(marker[EOM_KEY_COUNT_INDEX]);
+        clobberCount.set(marker[EOM_CLOBBER_COUNT_INDEX]);
+        io.initLeaps(marker[EOM_FP_OF_LAST_LEAP_INDEX], marker[EOM_UPDATES_SINCE_LAST_LEAP_INDEX]);
+
+        System.arraycopy(marker, EOM_HIGHWATER_STRIPES_OFFSET, stripedKeyHighwaterTimestamps, 0, numKeyHighwaterStripes);
     }
 
 //    private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
@@ -495,7 +518,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } else {
                 int size = apply.size();
                 List<WALIndexable> indexables = new ArrayList<>(size);
-                walTx.write((WALWriter rowWriter) -> {
+                walTx.tx((io) -> {
                     int estimatedSizeInBytes = 0;
                     for (Entry<WALKey, WALValue> row : apply.entrySet()) {
                         byte[] value = row.getValue().getValue();
@@ -534,7 +557,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             },
                             indexCommittedFromTxId,
                             indexCommittedUpToTxId,
-                            rowWriter,
+                            io,
                             highwater[0],
                             flushCompactionHint,
                             (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
@@ -763,7 +786,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
     //TODO replace with stream!
     private byte[] hydrateRowIndexValue(long indexFP) {
         try {
-            return walTx.read((WALReader rowReader) -> rowReader.readTypeByteTxIdAndRow(indexFP));
+            return walTx.tx((io) -> io.readTypeByteTxIdAndRow(indexFP));
         } catch (Exception x) {
             String base64;
             try {
@@ -816,8 +839,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         try {
             long[] takeMetrics = new long[1];
             WALIndex wali = walIndex.get();
-            boolean readFromTransactionId = wali == null || walTx.read(
-                reader -> reader.read(
+            boolean readFromTransactionId = wali == null || walTx.tx(
+                io -> io.read(
                     fpStream -> wali.takePrefixUpdatesSince(prefix, sinceTransactionId, (txId, fp) -> fpStream.stream(fp)),
                     (rowPointer, rowTxId, rowType, row) -> {
                         if (rowType != RowType.system && rowTxId > sinceTransactionId) {

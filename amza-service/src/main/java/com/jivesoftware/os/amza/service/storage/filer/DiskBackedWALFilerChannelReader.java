@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service.storage.filer;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;

@@ -166,7 +166,6 @@ public class AmzaServiceInitializer {
         //TODO configure
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             amzaStats.ioStats,
-            config.corruptionParanoiaFactor,
             config.initialBufferSegmentSize,
             config.maxBufferSegmentSize,
             config.updatesBetweenLeaps,
@@ -175,7 +174,6 @@ public class AmzaServiceInitializer {
 
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             amzaStats.ioStats,
-            config.corruptionParanoiaFactor,
             config.updatesBetweenLeaps,
             config.maxLeaps,
             config.useMemMap);
@@ -342,7 +340,7 @@ public class AmzaServiceInitializer {
             rowsTakers[i] = rowsTakerFactory.create();
 
             DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], persistentRowIOProvider, primaryRowMarshaller,
-                highwaterRowMarshaller);
+                highwaterRowMarshaller, config.corruptionParanoiaFactor);
 
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
                 i,

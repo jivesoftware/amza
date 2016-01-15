@@ -56,6 +56,10 @@ class PartitionDelta {
         this.merging = new AtomicReference<>(merging);
     }
 
+    public long getDeltaWALId() {
+        return deltaWAL.getId();
+    }
+
     public long size() {
         return pointerIndex.size();
     }
@@ -184,7 +188,7 @@ class PartitionDelta {
                 return true;
             },
             (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry)
-                -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
+            -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
@@ -279,7 +283,7 @@ class PartitionDelta {
 
     void onLoadAppendTxFp(byte[] prefix, long rowTxId, long rowFP) {
         if (txIdWAL.isEmpty() || txIdWAL.last().txId != rowTxId) {
-            txIdWAL.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
+            txIdWAL.add(new TxFps(prefix, rowTxId, new long[]{rowFP}));
         } else {
             txIdWAL.onLoadAddFpToTail(rowFP);
         }
@@ -287,7 +291,7 @@ class PartitionDelta {
             AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.computeIfAbsent(new WALPrefix(prefix),
                 walPrefix -> new AppendOnlyConcurrentArrayList(8));
             if (prefixTxFps.isEmpty() || prefixTxFps.last().txId != rowTxId) {
-                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
+                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[]{rowFP}));
             } else {
                 prefixTxFps.onLoadAddFpToTail(rowFP);
             }
@@ -413,6 +417,7 @@ class PartitionDelta {
                             }));
                     return !eos.booleanValue();
                 });
+                partitionStore.getWalStorage().endOfMergeMarker(merge.getDeltaWALId(), lastTxId);
                 walIndex = partitionStore.getWalStorage().commitIndex();
                 LOG.info("Merged deltas for {}", merge.versionedPartitionName);
             }

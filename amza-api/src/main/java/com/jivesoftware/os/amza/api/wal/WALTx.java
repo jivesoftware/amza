@@ -9,15 +9,13 @@ import com.jivesoftware.os.amza.api.stream.RowType;
  */
 public interface WALTx {
 
-    <R> R write(WALWrite<R> write) throws Exception;
-
-    <R> R read(WALRead<R> read) throws Exception;
+    <R> R tx(Tx<R> write) throws Exception;
 
     <R> R readFromTransactionId(long sinceTransactionId, WALReadWithOffset<R> readWithOffset) throws Exception;
 
-    void validateAndRepair() throws Exception;
+    <R> R open(Tx<R> tx) throws Exception;
 
-    <I extends CompactableWALIndex> I load(WALIndexProvider<I> walIndexProvider,
+    <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider,
         VersionedPartitionName partitionName,
         int maxUpdatesBetweenIndexCommitMarker) throws Exception;
 
@@ -32,18 +30,18 @@ public interface WALTx {
         long ttlTimestampId,
         I rowIndex,
         boolean force,
-        boolean expectedEndOfMerge) throws Exception;
+        EndOfMerge endOfMerge) throws Exception;
+
+    interface EndOfMerge {
+
+        byte[] endOfMerge(RowIO io, byte[] raw) throws Exception;
+    }
 
     void hackTruncation(int numBytes);
 
-    interface WALWrite<R> {
+    interface Tx<R> {
 
-        R write(WALWriter writer) throws Exception;
-    }
-
-    interface WALRead<R> {
-
-        R read(WALReader reader) throws Exception;
+        R tx(RowIO io) throws Exception;
     }
 
     interface WALReadWithOffset<R> {

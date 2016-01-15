@@ -20,8 +20,8 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.wal.RowIO.ValidationStream;
 import com.jivesoftware.os.amza.api.wal.WALReader;
-import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.WALFiler;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -34,47 +34,88 @@ public class BinaryRowReader implements WALReader {
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final WALFiler parent;
     private final IoStats ioStats;
-    private final int corruptionParanoiaFactor;
 
-    public BinaryRowReader(WALFiler parent, IoStats ioStats, int corruptionParanoiaFactor) {
+    public BinaryRowReader(WALFiler parent, IoStats ioStats) {
         this.parent = parent;
         this.ioStats = ioStats;
-        this.corruptionParanoiaFactor = corruptionParanoiaFactor;
     }
 
-    boolean validate() throws IOException {
-        byte[] intBuffer = new byte[4];
+    boolean validate(boolean truncateToEndOfMergeMarker, ValidationStream backward, ValidationStream forward) throws Exception {
+        byte[] intLongBuffer = new byte[8];
         synchronized (parent.lock()) {
             IReadable filer = parent.reader(null, parent.length(), 1024 * 1024);
             boolean valid = true;
             long filerLength = filer.length();
             long seekTo = filerLength;
-            for (int i = 0; i < corruptionParanoiaFactor; i++) {
-                if (seekTo > 0) {
-                    filer.seek(seekTo - 4);
-                    int tailLength = UIO.readInt(filer, "length", intBuffer);
-                    if (tailLength <= 0 || tailLength >= filerLength) {
-                        LOG.error("Validation found tail length of {} at offset {} with file length {}", tailLength, seekTo, filerLength);
-                        valid = false;
-                        break;
-                    }
-                    seekTo = seekTo - tailLength - 8;
-                    if (seekTo < 0) {
-                        LOG.error("Validation required seek to {} with file length {}", seekTo, filerLength);
-                        valid = false;
-                        break;
-                    } else {
-                        filer.seek(seekTo);
-                        int headLength = UIO.readInt(filer, "length", intBuffer);
-                        if (tailLength != headLength) {
-                            LOG.warn("Validation read a head length of {} but a tail length of {} at offset {} with file length {}",
-                                headLength, tailLength, seekTo, filerLength);
-                            valid = false;
-                            break;
-                        }
-                    }
-                } else {
+            while (seekTo > 0) {
+                filer.seek(seekTo - 4);
+                int tailLength = UIO.readInt(filer, "length", intLongBuffer);
+                if (tailLength <= 0 || tailLength >= filerLength) {
+                    LOG.error("Validation found tail length of {} at offset {} with file length {}", tailLength, seekTo, filerLength);
+                    valid = false;
                     break;
+                }
+                seekTo = seekTo - tailLength - 8;
+                if (seekTo < 0) {
+                    LOG.error("Validation required seek to {} with file length {}", seekTo, filerLength);
+                    valid = false;
+                    break;
+                } else {
+                    filer.seek(seekTo);
+                    int headLength = UIO.readInt(filer, "length", intLongBuffer);
+                    if (tailLength != headLength) {
+                        LOG.warn("Validation read a head length of {} but a tail length of {} at offset {} with file length {}",
+                            headLength, tailLength, seekTo, filerLength);
+                        valid = false;
+                        break;
+                    }
+
+                    RowType rowType = RowType.fromByte((byte) filer.read());
+                    long rowTxId = UIO.readLong(filer, "txId", intLongBuffer);
+                    byte[] row = new byte[headLength - (1 + 8)];
+                    filer.read(row);
+                    long truncateAfterRowAtFp = backward.row(seekTo, rowTxId, rowType, row);
+
+                    if (truncateAfterRowAtFp > -1) {
+                        if (truncateToEndOfMergeMarker) {
+                            filer.seek(truncateAfterRowAtFp);
+                            headLength = UIO.readInt(filer, "length", intLongBuffer);
+                            long truncatedLength = truncateAfterRowAtFp + 4 + headLength + 4;
+                            if (truncatedLength != filerLength) {
+                                truncate(truncatedLength);
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            if (valid) {
+                // We look at the entire WAL and didn't find what we are looking for.
+                if (truncateToEndOfMergeMarker) {
+                    truncate(0);
+                }
+            } else {
+                long[] truncateAfterRowAtFp = new long[]{Long.MIN_VALUE};
+                scan(0, true, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+                    long result = forward.row(rowFP, rowTxId, rowType, row);
+                    if (result > -1) {
+                        truncateAfterRowAtFp[0] = result;
+                        return false;
+                    }
+                    return true;
+                });
+                if (truncateToEndOfMergeMarker) {
+                    if (truncateAfterRowAtFp[0] == Long.MIN_VALUE) {
+                        truncate(0);
+                    } else {
+                        // Have to reaquire filer because scan may have truncated
+                        filer = parent.reader(filer, parent.length(), 1024 * 1024);
+                        filer.seek(truncateAfterRowAtFp[0]);
+                        long headLength = UIO.readInt(filer, "length", intLongBuffer);
+                        long truncatedLength = truncateAfterRowAtFp[0] + 4 + headLength + 4;
+                        truncate(truncatedLength);
+                    }
                 }
             }
             return valid;
@@ -203,7 +244,6 @@ public class BinaryRowReader implements WALReader {
             ioStats.read.addAndGet(read);
         }
     }*/
-
     @Override
     public boolean scan(long offsetFp, boolean allowRepairs, RowStream stream) throws Exception {
         long fileLength = 0;

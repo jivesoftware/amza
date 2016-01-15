@@ -43,8 +43,7 @@ public class RowPartitionNGTest {
         //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
         String[] workingDirs = new String[]{walDir.getAbsolutePath()};
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, 4096, 64,
-            false);
+        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 4096, 64, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider("memory");
         VersionedPartitionName partitionName = new VersionedPartitionName(new PartitionName(false, "ring".getBytes(), "booya".getBytes()),
@@ -65,7 +64,7 @@ public class RowPartitionNGTest {
             1000,
             2);
 
-        indexedWAL.load();
+        indexedWAL.load(1, false);
 
         final Random r = new Random();
 
@@ -133,7 +132,7 @@ public class RowPartitionNGTest {
         IoStats ioStats = new IoStats();
         String[] workingDirs = new String[]{walDir.getAbsolutePath()};
 
-        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 1, 4096, 64,
+        RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 4096, 64,
             false);
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider("memory");
@@ -151,7 +150,7 @@ public class RowPartitionNGTest {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
 
-        RowIOProvider binaryRowIOProvider = new MemoryBackedRowIOProvider(ioStats, 1, 4_096, 4_096, 4_096, 64,
+        RowIOProvider binaryRowIOProvider = new MemoryBackedRowIOProvider(ioStats, 4_096, 4_096, 4_096, 64,
             new HeapByteBufferFactory());
 
         WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider("memory");
@@ -181,7 +180,7 @@ public class RowPartitionNGTest {
             1000,
             2);
 
-        indexedWAL.load();
+        indexedWAL.load(-1, false);
         WALKey walKey = k(1);
         TimestampedValue value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertNull(value);

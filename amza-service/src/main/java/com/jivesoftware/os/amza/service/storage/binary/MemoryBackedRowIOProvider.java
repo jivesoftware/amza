@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
+import com.jivesoftware.os.amza.api.wal.RowIO;
 import com.jivesoftware.os.amza.service.filer.ByteBufferFactory;
 import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.service.stats.IoStats;
@@ -16,7 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MemoryBackedRowIOProvider implements RowIOProvider {
 
     private final IoStats ioStats;
-    private final int corruptionParanoiaFactor;
     private final long initialBufferSegmentSize;
     private final long maxBufferSegmentSize;
     private final int updatesBetweenLeaps;
@@ -26,14 +26,12 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     private final ConcurrentHashMap<File, MemoryBackedWALFiler> filers = new ConcurrentHashMap<>();
 
     public MemoryBackedRowIOProvider(IoStats ioStats,
-        int corruptionParanoiaFactor,
         long initialBufferSegmentSize,
         long maxBufferSegmentSize,
         int updatesBetweenLeaps,
         int maxLeaps,
         ByteBufferFactory byteBufferFactory) {
         this.ioStats = ioStats;
-        this.corruptionParanoiaFactor = corruptionParanoiaFactor;
         this.initialBufferSegmentSize = initialBufferSegmentSize;
         this.maxBufferSegmentSize = maxBufferSegmentSize;
         this.updatesBetweenLeaps = updatesBetweenLeaps;
@@ -55,7 +53,7 @@ public class MemoryBackedRowIOProvider implements RowIOProvider {
     public RowIO open(File key, String name, boolean createIfAbsent) throws Exception {
         File file = new File(key, name);
         MemoryBackedWALFiler filer = getFiler(file);
-        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
+        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
         return new BinaryRowIO(key, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
     }

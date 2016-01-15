@@ -51,7 +51,6 @@ public class AmzaStateStorageNGTest {
         File[] workingDirectories = {partitionTmpDir};
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(ioStats,
-            100,
             1_024,
             1_024 * 1_024,
             4_096,
@@ -59,7 +58,6 @@ public class AmzaStateStorageNGTest {
             new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             ioStats,
-            100,
             4_096,
             64,
             false);

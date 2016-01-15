@@ -2,14 +2,15 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
+import com.jivesoftware.os.amza.api.stream.FpStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.wal.RowIO;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
@@ -52,32 +53,44 @@ public class BinaryRowIO implements RowIO {
     }
 
     @Override
-    public void initLeaps() throws Exception {
-        final MutableLong updates = new MutableLong(0);
+    public void initLeaps(long fpOfLastLeap, long updates) throws Exception {
 
-        reverseScan((long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
-            if (rowType == RowType.system) {
-                ByteBuffer buf = ByteBuffer.wrap(row);
-                byte[] keyBytes = new byte[8];
-                buf.get(keyBytes);
-                long key = UIO.bytesLong(keyBytes);
-                if (key == RowType.LEAP_KEY) {
-                    buf.rewind();
-                    latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
-                    return false;
+        if (fpOfLastLeap > -1) {
+            rowReader.read((FpStream fpStream) -> {
+                return fpStream.stream(fpOfLastLeap);
+            }, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
+                if (rowType == RowType.system) {
+                    ByteBuffer buf = ByteBuffer.wrap(row);
+                    byte[] keyBytes = new byte[8];
+                    buf.get(keyBytes);
+                    long key = UIO.bytesLong(keyBytes);
+                    if (key == RowType.LEAP_KEY) {
+                        buf.rewind();
+                        latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
+                        return false;
+                    }
                 }
-            } else if (rowType.isPrimary()) {
-                updates.increment();
-            }
-            return true;
-        });
+                throw new IllegalStateException("Invalid leapFp:" + fpOfLastLeap);
+            });
+        }
 
-        updatesSinceLeap.addAndGet(updates.longValue());
+        updatesSinceLeap.addAndGet(updates);
     }
 
     @Override
-    public boolean validate() throws Exception {
-        return rowReader.validate();
+    public long getUpdatesSinceLeap() {
+        return updatesSinceLeap.get();
+    }
+
+    @Override
+    public long getFpOfLastLeap() {
+        LeapFrog frog = latestLeapFrog.get();
+        return (frog == null) ? -1 : frog.fp;
+    }
+
+    @Override
+    public boolean validate(boolean truncateToEndOfMergeMarker, ValidationStream backward, ValidationStream forward) throws Exception {
+        return rowReader.validate(truncateToEndOfMergeMarker, backward, forward);
     }
 
     @Override

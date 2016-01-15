@@ -7,14 +7,12 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryHighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryPrimaryRowMarshaller;
 import com.jivesoftware.os.amza.service.storage.binary.BinaryRowIOProvider;
-import com.jivesoftware.os.amza.service.storage.binary.BinaryWALTx;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
 import java.io.File;
@@ -36,14 +34,12 @@ public class DeltaWALNGTest {
         final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
         String[] workingDirs = new String[]{tmp.getAbsolutePath()};
 
-        WALTx walTX = new BinaryWALTx(tmp,
-            "test",
-            new BinaryRowIOProvider(new IoStats(), 1, 4_096, 64, false),
-            primaryRowMarshaller);
-        walTX.validateAndRepair();
+        BinaryRowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(new IoStats(), 4_096, 64, false);
 
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        DeltaWAL deltaWAL = new DeltaWAL(0, ids, primaryRowMarshaller, highwaterRowMarshaller, walTX);
+        DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, binaryRowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, 1);
+
+        DeltaWAL deltaWAL = deltaWALFactory.create();
 
         Map<WALKey, WALValue> apply1 = Maps.newLinkedHashMap();
         for (int i = 0; i < 10; i++) {

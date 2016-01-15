@@ -67,6 +67,7 @@ public class DiskBackedWALFiler implements WALFiler {
         return fileName;
     }
 
+    @Override
     public IReadable reader(IReadable current, long requiredLength, int bufferSize) throws IOException {
         if (!useMemMap) {
             if (current != null) {
@@ -77,17 +78,18 @@ public class DiskBackedWALFiler implements WALFiler {
             }
         }
 
-        if (current != null && current.length() >= requiredLength) {
-            return current;
-        }
         synchronized (memMapLock) {
             long length = size.get();
+            if (current != null && current.length() <= length && current.length() >= requiredLength) {
+                return current;
+            }
             memMapFiler.seek(length);
             memMapFilerLength.set(length);
         }
         return memMapFiler.duplicateAll();
     }
 
+    @Override
     public IAppendOnly appender() throws IOException {
         return appendOnly;
     }
@@ -198,11 +200,13 @@ public class DiskBackedWALFiler implements WALFiler {
         }
     }
 
-    public void truncate(long size) throws IOException {
+    @Override
+    public void truncate(long truncatedSize) throws IOException {
         // should only be called with a write AND a read lock
         while (!closed.get()) {
             try {
-                randomAccessFile.setLength(size);
+                randomAccessFile.setLength(truncatedSize);
+                size.set(randomAccessFile.length());
 
                 synchronized (memMapLock) {
                     memMapFiler = createMemMap();

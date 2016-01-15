@@ -72,6 +72,8 @@ public class DeltaStripeWALStorageNGTest {
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
     private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
 
+    private JacksonPartitionPropertyMarshaller partitionPropertyMarshaller;
+    private IndexedWALStorageProvider indexedWALStorageProvider;
     private PartitionIndex partitionIndex;
     private PartitionStore partitionStore1;
     private PartitionStore partitionStore2;
@@ -87,14 +89,13 @@ public class DeltaStripeWALStorageNGTest {
     public void setup() throws Exception {
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         ObjectMapper mapper = new ObjectMapper();
-        JacksonPartitionPropertyMarshaller partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
+        partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
         File[] workingDirectories = {partitionTmpDir};
         IoStats ioStats = new IoStats();
         MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
-            100,
             1_024,
             1_024 * 1_024,
             4_096,
@@ -102,13 +103,12 @@ public class DeltaStripeWALStorageNGTest {
             new HeapByteBufferFactory());
         BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             ioStats,
-            100,
             4_096,
             64,
             false);
         walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
-        IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(new PartitionStripeFunction(workingDirectories.length),
+        indexedWALStorageProvider = new IndexedWALStorageProvider(new PartitionStripeFunction(workingDirectories.length),
             workingDirectories,
             walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
         partitionIndex = new PartitionIndex(indexedWALStorageProvider,
@@ -153,9 +153,8 @@ public class DeltaStripeWALStorageNGTest {
 
         File tmp = Files.createTempDir();
         workingDirectories = new File[]{tmp};
-        RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 100, 4_096,
-            64, false);
-        deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
+        RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
+        deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
     }
 
@@ -246,6 +245,9 @@ public class DeltaStripeWALStorageNGTest {
         }
 
         deltaStripeWALStorage.hackTruncation(4);
+
+        partitionIndex = new PartitionIndex(indexedWALStorageProvider, partitionPropertyMarshaller, false);
+        partitionIndex.open(txPartitionState, ringName -> true);
         deltaStripeWALStorage = loadDeltaStripe();
 
         for (int i = 2; i <= 10; i++) {

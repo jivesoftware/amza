@@ -216,7 +216,7 @@ public class DeltaStripeWALStorage {
                                 }
                             }),
                         (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, versionedPartitionName) -> {
-                            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                            PartitionStore partitionStore = partitionIndex.getAndValidate(wal.getId(), versionedPartitionName);
                             if (partitionStore == null) {
                                 LOG.warn("Dropping values on the floor for versionedPartitionName:{} "
                                     + " this is typical when loading an expunged partition", versionedPartitionName);
@@ -386,7 +386,7 @@ public class DeltaStripeWALStorage {
         List<MergeResult> results = Lists.newArrayListWithCapacity(futures.size());
         for (Future<MergeResult> f : futures) {
             results.add(f.get());
-        }
+        }        
         ListMultimap<String, WALIndex> providerIndexes = ArrayListMultimap.create();
         for (MergeResult result : results) {
             partitionIndex.get(result.versionedPartitionName).flush(true);

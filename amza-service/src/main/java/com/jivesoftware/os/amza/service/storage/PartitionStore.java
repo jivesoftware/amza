@@ -24,12 +24,14 @@ import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class PartitionStore implements RangeScannable {
 
     private PartitionProperties properties;
     private final WALStorage walStorage;
     private final boolean hardFlush;
+    private final AtomicLong loadedAtDeltaWALId = new AtomicLong(-1);
 
     public PartitionStore(PartitionProperties properties,
         WALStorage walStorage,
@@ -47,8 +49,17 @@ public class PartitionStore implements RangeScannable {
         return walStorage;
     }
 
-    public void load() throws Exception {
-        walStorage.load();
+    public void load(long deltaWALId) throws Exception {
+        if (deltaWALId > -1) {
+            long loaded = loadedAtDeltaWALId.get();
+            if (deltaWALId < loaded) {
+                throw new IllegalStateException("DeltasWALId are being used out of order. attempted:" + deltaWALId + " loaded:" + loaded);
+            } else if(deltaWALId == loaded) {
+                return;
+            }
+        }
+        walStorage.load(deltaWALId, deltaWALId != -1);
+        loadedAtDeltaWALId.set(deltaWALId);
     }
 
     public void flush(boolean fsync) throws Exception {

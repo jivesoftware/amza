@@ -9,12 +9,9 @@ import com.jivesoftware.os.amza.api.stream.Fps;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.api.wal.WALReader;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALValue;
-import com.jivesoftware.os.amza.api.wal.WALWriter;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
@@ -48,9 +45,13 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         this.wal = wal;
     }
 
+    public long getId() {
+        return id;
+    }
+
     public void load(final RowStream rowStream) throws Exception {
-        wal.read((WALReader reader) -> {
-            reader.scan(0, true, rowStream);
+        wal.tx(io -> {
+            io.scan(0, true, rowStream);
             return null;
         });
     }
@@ -104,7 +105,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                 value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion(), highwater);
             index++;
         }
-        wal.write((WALWriter rowWriter) -> {
+        wal.tx(io -> {
             long transactionId;
             MutableInt fpIndex = new MutableInt(0);
             synchronized (oneTxAtATimeLock) {
@@ -116,7 +117,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                     int valueSizeInBytes = sizeWithAppendedHighwaterHints(kvh.value, kvh.highwater);
                     estimatedSizeInBytes += primaryRowMarshaller.maximumSizeInBytes(rowType, pkSizeInBytes, valueSizeInBytes);
                 }
-                rowWriter.write(transactionId,
+                io.write(transactionId,
                     rowType,
                     keyValueHighwaters.length,
                     estimatedSizeInBytes,
@@ -163,8 +164,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
 
     boolean takeRows(ConsumeTxFps consumeTxFps, RowStream rowStream) throws Exception {
         byte[] intBuffer = new byte[4];
-        return wal.read(reader -> primaryRowMarshaller.fromRows(
-            txFpRowStream -> consumeTxFps.consume(txFps -> reader.read(
+        return wal.tx(io -> primaryRowMarshaller.fromRows(
+            txFpRowStream -> consumeTxFps.consume(txFps -> io.read(
                 fpStream -> {
                     for (long fp : txFps.fps) {
                         if (!fpStream.stream(fp)) {
@@ -197,7 +198,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     @Override
     public WALValue hydrate(long fp) throws Exception {
         try {
-            byte[] typeByteTxIdAndRow = wal.read(rowReader -> rowReader.readTypeByteTxIdAndRow(fp));
+            byte[] typeByteTxIdAndRow = wal.tx(io -> io.readTypeByteTxIdAndRow(fp));
             RowType rowType = RowType.fromByte(typeByteTxIdAndRow[0]);
             byte[] value = primaryRowMarshaller.valueFromRow(rowType, typeByteTxIdAndRow, 1 + 8);
             byte[] deltaValue = UIO.readByteArray(value, 0, "value");
@@ -218,8 +219,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
             return WALKey.decompose(
                 decomposeStream -> {
                     return primaryRowMarshaller.fromRows(
-                        (PrimaryRowMarshaller.FpRows) fpRowStream -> wal.read(
-                            reader -> reader.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
+                        (PrimaryRowMarshaller.FpRows) fpRowStream -> wal.tx(
+                            io -> io.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
                         (fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                             byte[] deltaValue = UIO.readByteArray(value, 0, "value");
                             return decomposeStream.stream(-1, fp, rowType, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion, null);
@@ -236,8 +237,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     public boolean hydrateKeyValueHighwaters(Fps fps, FpKeyValueHighwaterStream stream) throws Exception {
         byte[] intBuffer = new byte[4];
         return primaryRowMarshaller.fromRows(
-            fpRowStream -> wal.read(
-                reader -> reader.read(fps,
+            fpRowStream -> wal.tx(
+                io -> io.read(fps,
                     (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowTxId, rowFP, rowType, row))),
             (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 try {

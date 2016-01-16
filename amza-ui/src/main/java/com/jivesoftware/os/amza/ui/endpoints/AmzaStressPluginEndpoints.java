@@ -36,7 +36,7 @@ public class AmzaStressPluginEndpoints {
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
         String rendered = soyService.renderPlugin(pluginRegion,
-            new AmzaStressPluginRegionInput("", false, "", 1000, 1000, "", "", 0, 0, 0, 0, 0, 0, "none", true, false, "", RowType.primary));
+            new AmzaStressPluginRegionInput("", false, "", "", "", 0, 0, 0, 0, 0, 0, "none", true, false, "", RowType.primary));
         return Response.ok(rendered).build();
     }
 
@@ -47,8 +47,6 @@ public class AmzaStressPluginEndpoints {
     public Response action(@FormParam("client") @DefaultValue("false") boolean client,
         @FormParam("name") @DefaultValue("") String name,
         @FormParam("indexClassName") @DefaultValue("berkeleydb") String indexClassName,
-        @FormParam("maxUpdatesBetweenCompactionHintMarker") @DefaultValue("1000") int maxUpdatesBetweenCompactionHintMarker,
-        @FormParam("maxUpdatesBetweenIndexCommitMarker") @DefaultValue("1000") int maxUpdatesBetweenIndexCommitMarker,
         @FormParam("ringName") @DefaultValue("default") String ringName,
         @FormParam("regionPrefix") @DefaultValue("") String regionPrefix,
         @FormParam("ringSize") @DefaultValue("3") int ringSize,
@@ -66,8 +64,6 @@ public class AmzaStressPluginEndpoints {
             new AmzaStressPluginRegionInput(name.trim(),
                 client,
                 indexClassName.trim(),
-                maxUpdatesBetweenCompactionHintMarker,
-                maxUpdatesBetweenIndexCommitMarker,
                 ringName,
                 regionPrefix.trim(),
                 ringSize,

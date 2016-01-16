@@ -21,7 +21,7 @@ public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
     }
 
     @Override
-    public NoOpWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+    public NoOpWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         return new NoOpWALIndex(name);
     }
 

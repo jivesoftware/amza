@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;

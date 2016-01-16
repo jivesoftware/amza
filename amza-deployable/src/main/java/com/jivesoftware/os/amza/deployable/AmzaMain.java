@@ -154,7 +154,6 @@ public class AmzaMain {
 
             final AmzaServiceInitializer.AmzaServiceConfig amzaServiceConfig = new AmzaServiceInitializer.AmzaServiceConfig();
             amzaServiceConfig.checkIfCompactionIsNeededIntervalInMillis = amzaConfig.getCheckIfCompactionIsNeededIntervalInMillis();
-            amzaServiceConfig.compactTombstoneIfOlderThanNMillis = amzaConfig.getCompactTombstoneIfOlderThanNMillis();
             amzaServiceConfig.numberOfCompactorThreads = amzaConfig.getNumberOfCompactorThreads();
             amzaServiceConfig.numberOfTakerThreads = amzaConfig.getNumberOfTakerThreads();
             amzaServiceConfig.workingDirectories = workingDirs;

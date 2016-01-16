@@ -2,8 +2,6 @@ package com.jivesoftware.os.amza.lsm.pointers;
 
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
@@ -27,6 +25,7 @@ import com.jivesoftware.os.amza.lsm.pointers.api.PointerStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -48,7 +47,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     private final String providerName;
     private final VersionedPartitionName versionedPartitionName;
     private final LSMPointerIndexWALIndexName name;
-    private final int maxUpdatesBetweenCompactionHintMarker;
+    private final int maxUpdatesBeforeFlush;
     private final LSMPointerIndexEnvironment environment;
     private PointerIndex primaryDb;
     private PointerIndex prefixDb;
@@ -62,14 +61,14 @@ public class LSMPointerIndexWALIndex implements WALIndex {
         VersionedPartitionName versionedPartitionName,
         LSMPointerIndexEnvironment environment,
         LSMPointerIndexWALIndexName name,
-        int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+        int maxUpdatesBeforeFlush) throws Exception {
         this.providerName = providerName;
         this.versionedPartitionName = versionedPartitionName;
         this.name = name;
-        this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
+        this.maxUpdatesBeforeFlush = maxUpdatesBeforeFlush;
         this.environment = environment;
-        this.primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBetweenCompactionHintMarker);
-        this.prefixDb = environment.open(name.getPrefixName(), maxUpdatesBetweenCompactionHintMarker);
+        this.primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBeforeFlush);
+        this.prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush);
     }
 
     private boolean entryToWALPointer(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion, long pointer,
@@ -399,8 +398,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
             removeDatabase(Type.backup);
 
             final LSMPointerIndexWALIndex compactingWALIndex = new LSMPointerIndexWALIndex(providerName, versionedPartitionName, environment,
-                name.typeName(Type.compacting),
-                maxUpdatesBetweenCompactionHintMarker);
+                name.typeName(Type.compacting), maxUpdatesBeforeFlush);
             compactingTo.set(compactingWALIndex);
 
             return new CompactionWALIndex() {
@@ -439,8 +437,8 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                             rename(Type.compacted, Type.active);
                             removeDatabase(Type.backup);
 
-                            primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBetweenCompactionHintMarker);
-                            prefixDb = environment.open(name.getPrefixName(), maxUpdatesBetweenCompactionHintMarker);
+                            primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBeforeFlush);
+                            prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush);
 
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }
@@ -471,7 +469,7 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     }
 
     @Override
-    public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
+    public void updatedProperties(Map<String, String> properties) {
     }
 
     @Override

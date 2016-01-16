@@ -16,7 +16,7 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;

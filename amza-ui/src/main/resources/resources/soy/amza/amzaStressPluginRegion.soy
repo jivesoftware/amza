@@ -69,23 +69,6 @@
                     {/if}
                 </tr>
 
-                <tr><td>Compaction Hint Frequency</td>
-                    {if $stress}
-                        {foreach $s in $stress}
-                            <td>{$s.maxUpdatesBetweenCompactionHintMarker}</td>
-                        {/foreach}
-                    {/if}
-                </tr>
-
-                <tr><td>Index Commit Frequency</td>
-                    {if $stress}
-                        {foreach $s in $stress}
-                            <td>{$s.maxUpdatesBetweenIndexCommitMarker}</td>
-                        {/foreach}
-                    {/if}
-                </tr>
-
-
                 <tr><td>Ring Name</td>
                     {if $stress}
                         {foreach $s in $stress}
@@ -180,16 +163,6 @@
                                 <option value="memory_persistent">memory_persistent</option>
                                 <option value="noop_persistent">memory_ephemeral</option>
                             </select>
-                        </td></tr>
-                        <tr><td>Compaction Hint Frequency</td><td>
-                            <input type="number" name="maxUpdatesBetweenCompactionHintMarker" min="1" style="padding-left:10px;"
-                                class="form-control" placeholder="maxUpdatesBetweenCompactionHintMarker" value="1000"
-                                data-original-title="" title="">
-                        </td></tr>
-                        <tr><td>Index Commit Frequency</td><td>
-                            <input type="number" name="maxUpdatesBetweenIndexCommitMarker" min="1" style="padding-left:10px;"
-                                class="form-control" placeholder="maxUpdatesBetweenIndexCommitMarker" value="1000"
-                                data-original-title="" title="">
                         </td></tr>
                         <tr><td>Ring Name</td><td>
                             <input type="text" autocomplete="off" role="combobox" style="padding-left:10px;"

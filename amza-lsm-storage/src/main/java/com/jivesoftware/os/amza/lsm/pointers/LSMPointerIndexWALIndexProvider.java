@@ -51,13 +51,14 @@ public class LSMPointerIndexWALIndexProvider implements WALIndexProvider<LSMPoin
     }
 
     @Override
-    public LSMPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+    public LSMPointerIndexWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         LSMPointerIndexWALIndexName indexName = new LSMPointerIndexWALIndexName(Type.active, versionedPartitionName.toBase64());
+        //TODO config flush interval
         return new LSMPointerIndexWALIndex(name,
             versionedPartitionName,
             getEnvironment(versionedPartitionName),
             indexName,
-            maxUpdatesBetweenCompactionHintMarker);
+            100_000);
     }
 
     @Override

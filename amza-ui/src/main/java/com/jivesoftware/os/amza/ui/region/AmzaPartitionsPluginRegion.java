@@ -3,13 +3,11 @@ package com.jivesoftware.os.amza.ui.region;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
@@ -103,18 +101,18 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 if (ringNameBytes.length > 0 && partitionNameBytes.length > 0) {
                     amzaService.getRingWriter().ensureMaximalRing(ringNameBytes);
 
-                    WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-                        new PrimaryIndexDescriptor(input.indexClassName, 0, false, null),
-                        null, 1000, 1000);
-
                     PartitionName partitionName = new PartitionName(false, ringNameBytes, partitionNameBytes);
                     amzaService.setPropertiesIfAbsent(partitionName,
-                        new PartitionProperties(storageDescriptor,
+                        new PartitionProperties(Durability.fsync_never,
+                            0, 0, 0, 0, 0, 0, 0, 0,
+                            false,
                             Consistency.valueOf(input.consistency),
                             input.requireConsistency,
                             input.takeFromFactor,
                             false,
-                            input.rowType));
+                            input.rowType,
+                            input.indexClassName,
+                            null));
                     amzaService.awaitOnline(partitionName, TimeUnit.SECONDS.toMillis(30));
                 }
             } else if (input.action.equals("promote")) {
@@ -186,16 +184,14 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                         row.put("requireConsistency", "true");
                         row.put("takeFromFactor", "?");
 
-                        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-                            new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 1000, 1000);
-                        row.put("walStorageDescriptor", walStorageDescriptor(storageDescriptor));
+                        row.put("partitionProperties", "none");
 
                     } else {
                         row.put("disabled", partitionProperties.disabled);
                         row.put("takeFromFactor", partitionProperties.takeFromFactor);
                         row.put("consistency", partitionProperties.consistency.name());
                         row.put("requireConsistency", partitionProperties.requireConsistency);
-                        row.put("walStorageDescriptor", walStorageDescriptor(partitionProperties.walStorageDescriptor));
+                        row.put("partitionProperties", partitionProperties.toString());
                     }
 
                     if (partitionName.isSystemPartition()) {
@@ -233,39 +229,6 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
             sb.append("</p>");
         }
         return sb.toString();
-    }
-
-    Map<String, Object> walStorageDescriptor(WALStorageDescriptor storageDescriptor) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("maxUpdatesBetweenCompactionHintMarker", numberFormat.format(storageDescriptor.maxUpdatesBetweenCompactionHintMarker));
-        map.put("maxUpdatesBetweenIndexCommitMarker", numberFormat.format(storageDescriptor.maxUpdatesBetweenIndexCommitMarker));
-        map.put("primaryIndexDescriptor", primaryIndexDescriptor(storageDescriptor.primaryIndexDescriptor));
-
-        List<Map<String, Object>> secondary = new ArrayList<>();
-        if (storageDescriptor.secondaryIndexDescriptors != null) {
-            for (SecondaryIndexDescriptor secondaryIndexDescriptor : storageDescriptor.secondaryIndexDescriptors) {
-                secondary.add(secondaryIndexDescriptor(secondaryIndexDescriptor));
-            }
-        }
-        map.put("secondaryIndexDescriptor", secondary);
-        return map;
-    }
-
-    Map<String, Object> primaryIndexDescriptor(PrimaryIndexDescriptor primaryIndexDescriptor) {
-
-        Map<String, Object> map = new HashMap<>();
-        map.put("className", primaryIndexDescriptor.className);
-        map.put("ttlInMillis", numberFormat.format(primaryIndexDescriptor.ttlInMillis));
-        map.put("forceCompactionOnStartup", primaryIndexDescriptor.forceCompactionOnStartup);
-        //public Map<String, String> properties; //TODO
-        return map;
-    }
-
-    Map<String, Object> secondaryIndexDescriptor(SecondaryIndexDescriptor secondaryIndexDescriptor) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("className", secondaryIndexDescriptor.className);
-        //public Map<String, String> properties; //TODO
-        return map;
     }
 
     @Override

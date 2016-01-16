@@ -59,7 +59,7 @@ public class BerkeleyDBWALIndexProvider implements WALIndexProvider<BerkeleyDBWA
     }
 
     @Override
-    public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+    public BerkeleyDBWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         BerkeleyDBWALIndexName indexName = new BerkeleyDBWALIndexName(BerkeleyDBWALIndexName.Type.active, versionedPartitionName.toBase64());
         return new BerkeleyDBWALIndex(name, versionedPartitionName, getEnvironment(versionedPartitionName), indexName);
     }

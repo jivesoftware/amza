@@ -14,6 +14,7 @@ import com.jivesoftware.os.amza.service.LivelyEndStateTransactor;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.filer.HeapByteBufferFactory;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.JacksonPartitionPropertyMarshaller;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -27,7 +28,10 @@ import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import java.io.File;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -66,22 +70,16 @@ public class AmzaStateStorageNGTest {
         IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(new PartitionStripeFunction(workingDirectories.length),
             workingDirectories,
             walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
-        
-        PartitionIndex partitionIndex = new PartitionIndex(indexedWALStorageProvider,
-            partitionPropertyMarshaller,
-            false);
 
-        Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true);
-        LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
-        TxPartitionState txPartitionState = new TxPartitionState() {
+        TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
+            new JiveEpochTimestampProvider());
+        AmzaStats amzaStats = new AmzaStats();
+        PartitionIndex partitionIndex = new PartitionIndex(amzaStats,
+            orderIdProvider,
+            indexedWALStorageProvider,
+            partitionPropertyMarshaller);
 
-            @Override
-            public <R> R tx(PartitionName partitionName, PartitionTx<R> tx) throws Exception {
-                return tx.tx(new VersionedAquarium(new VersionedPartitionName(partitionName, 0), new LivelyEndStateTransactor(livelyEndState), 0));
-            }
-        };
-
-        partitionIndex.open(txPartitionState, ringName -> true);
+        partitionIndex.open();
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,

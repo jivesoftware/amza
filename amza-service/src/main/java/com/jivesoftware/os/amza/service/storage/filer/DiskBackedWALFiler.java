@@ -79,6 +79,10 @@ public class DiskBackedWALFiler implements WALFiler {
         }
 
         synchronized (memMapLock) {
+            long parentSize = size.get();
+            if (current != null && current.length() <= parentSize && current.length() >= requiredLength) {
+                return current;
+            }
             long length = size.get();
             if (current != null && current.length() <= length && current.length() >= requiredLength) {
                 return current;

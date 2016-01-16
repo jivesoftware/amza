@@ -16,9 +16,6 @@ public interface AmzaConfig extends Config {
     @LongDefault(60_000)
     long getCheckIfCompactionIsNeededIntervalInMillis();
 
-    @LongDefault(30 * 24 * 60 * 60 * 1000L)
-    long getCompactTombstoneIfOlderThanNMillis();
-
     @IntDefault(8)
     int getNumberOfCompactorThreads();
 

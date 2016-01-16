@@ -204,8 +204,7 @@ public class BerkeleyDBWALIndexTest {
     }
 
     private BerkeleyDBWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
-        return new BerkeleyDBWALIndexProvider("berkeleydb", new PartitionStripeFunction(1), new File[]{dir})
-            .createIndex(partitionName, 1000);
+        return new BerkeleyDBWALIndexProvider("berkeleydb", new PartitionStripeFunction(1), new File[]{dir}).createIndex(partitionName);
     }
 
 }

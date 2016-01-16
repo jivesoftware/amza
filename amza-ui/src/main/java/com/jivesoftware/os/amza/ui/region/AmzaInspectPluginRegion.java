@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.PartitionClientProvider;
 import com.jivesoftware.os.amza.api.partition.PartitionName;

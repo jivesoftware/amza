@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;

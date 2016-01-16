@@ -15,8 +15,6 @@
  */
 package com.jivesoftware.os.amza.api.wal;
 
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.scan.RangeScannablePointers;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
@@ -26,6 +24,7 @@ import com.jivesoftware.os.amza.api.stream.TxFpStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
+import java.util.Map;
 
 public interface WALIndex extends RangeScannablePointers, CompactableWALIndex {
 
@@ -45,6 +44,6 @@ public interface WALIndex extends RangeScannablePointers, CompactableWALIndex {
 
     void delete() throws Exception;
 
-    void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors);
+    void updatedProperties(Map<String, String> properties);
 
 }

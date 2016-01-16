@@ -17,8 +17,6 @@ package com.jivesoftware.os.amza.api.wal;
 
 import com.google.common.primitives.UnsignedBytes;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
@@ -31,6 +29,7 @@ import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.WALKeyPointers;
 import com.jivesoftware.os.amza.api.stream.WALMergeKeyPointerStream;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -289,8 +288,7 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
-
+    public void updatedProperties(Map<String, String> properties) {
     }
 
     @Override

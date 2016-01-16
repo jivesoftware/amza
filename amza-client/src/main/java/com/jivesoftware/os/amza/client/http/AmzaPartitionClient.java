@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.client.http;
 
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.filer.FilerInputStream;
 import com.jivesoftware.os.amza.api.filer.UIO;

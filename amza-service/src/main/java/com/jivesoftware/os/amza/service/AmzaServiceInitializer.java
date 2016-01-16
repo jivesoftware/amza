@@ -99,7 +99,6 @@ public class AmzaServiceInitializer {
         public String[] workingDirectories = null;
 
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
-        public long compactTombstoneIfOlderThanNMillis = 30 * 24 * 60 * 60 * 1000L;
 
         public int numberOfCompactorThreads = 8;
         public int numberOfTakerThreads = 8;
@@ -200,7 +199,7 @@ public class AmzaServiceInitializer {
             sickPartitions,
             tombstoneCompactionFactor);
 
-        PartitionIndex partitionIndex = new PartitionIndex(walStorageProvider, partitionPropertyMarshaller, config.hardFsync);
+        PartitionIndex partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, walStorageProvider, partitionPropertyMarshaller);
 
         TakeCoordinator takeCoordinator = new TakeCoordinator(ringMember,
             amzaStats,
@@ -310,7 +309,7 @@ public class AmzaServiceInitializer {
         amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), storageVersionProvider);
         amzaPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
 
-        partitionIndex.open(partitionStateStorage, ringStoreReader);
+        partitionIndex.open();
         // cold start
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getMemberPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
@@ -333,13 +332,18 @@ public class AmzaServiceInitializer {
         RowsTaker[] rowsTakers = new RowsTaker[deltaStorageStripes];
         PartitionStripe[] partitionStripes = new PartitionStripe[deltaStorageStripes];
         HighwaterStorage[] highwaterStorages = new HighwaterStorage[deltaStorageStripes];
+        BinaryRowIOProvider deltaRowIOProvider = new BinaryRowIOProvider(
+            amzaStats.ioStats,
+            -1,
+            0,
+            config.useMemMap);
         for (int i = 0; i < deltaStorageStripes; i++) {
             rowTakerThreadPools[i] = Executors.newFixedThreadPool(config.numberOfTakerThreads,
                 new ThreadFactoryBuilder().setNameFormat("stripe-" + i + "-rowTakerThreadPool-%d").build());
 
             rowsTakers[i] = rowsTakerFactory.create();
 
-            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], persistentRowIOProvider, primaryRowMarshaller,
+            DeltaWALFactory deltaWALFactory = new DeltaWALFactory(orderIdProvider, walDirs[i], deltaRowIOProvider, primaryRowMarshaller,
                 highwaterRowMarshaller, config.corruptionParanoiaFactor);
 
             DeltaStripeWALStorage deltaWALStorage = new DeltaStripeWALStorage(
@@ -462,12 +466,9 @@ public class AmzaServiceInitializer {
             takeFailureListener,
             config.takeLongPollTimeoutMillis);
 
-        PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(amzaStats,
-            partitionIndex,
+        PartitionTombstoneCompactor partitionCompactor = new PartitionTombstoneCompactor(partitionIndex,
             partitionStripeFunction,
-            orderIdProvider,
             config.checkIfCompactionIsNeededIntervalInMillis,
-            config.compactTombstoneIfOlderThanNMillis,
             config.numberOfCompactorThreads);
 
         PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionCreator, ringStoreReader, partitionStateStorage,

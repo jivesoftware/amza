@@ -2,8 +2,8 @@ package com.jivesoftware.os.amza.api.partition;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import java.util.Map;
 
 /**
  * @author jonathan.colt
@@ -11,28 +11,87 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 @JsonInclude(Include.NON_NULL)
 public class PartitionProperties {
 
-    public WALStorageDescriptor walStorageDescriptor = new WALStorageDescriptor();
+    public Durability durability;
+
+    public long tombstoneTimestampAgeInMillis = 0;
+    public long tombstoneTimestampIntervalMillis = 0;
+    public long tombstoneVersionAgeInMillis = 0;
+    public long tombstoneVersionIntervalMillis = 0;
+    public long ttlTimestampAgeInMillis = 0;
+    public long ttlTimestampIntervalMillis = 0;
+    public long ttlVersionAgeInMillis = 0;
+    public long ttlVersionIntervalMillis = 0;
+
+    public boolean forceCompactionOnStartup = false;
+
     public Consistency consistency;
     public boolean requireConsistency = true;
     public int takeFromFactor = 0;
     public boolean disabled = false;
     public RowType rowType = RowType.primary;
 
+    public String indexClassName;
+    public Map<String, String> indexProperties;
+
     public PartitionProperties() {
     }
 
-    public PartitionProperties(WALStorageDescriptor walStorageDescriptor,
+    public PartitionProperties(Durability durability,
+        long tombstoneTimestampAgeInMillis,
+        long tombstoneTimestampIntervalMillis,
+        long tombstoneVersionAgeInMillis,
+        long tombstoneVersionIntervalMillis,
+        long ttlTimestampAgeInMillis,
+        long ttlTimestampIntervalMillis,
+        long ttlVersionAgeInMillis,
+        long ttlVersionIntervalMillis,
+        boolean forceCompactionOnStartup,
         Consistency consistency,
         boolean requireConsistency,
         int takeFromFactor,
         boolean disabled,
-        RowType rowType) {
-        this.walStorageDescriptor = walStorageDescriptor;
+        RowType rowType,
+        String indexClassName,
+        Map<String, String> indexProperties) {
+        this.durability = durability;
+        this.tombstoneTimestampAgeInMillis = tombstoneTimestampAgeInMillis;
+        this.tombstoneTimestampIntervalMillis = tombstoneTimestampIntervalMillis;
+        this.tombstoneVersionAgeInMillis = tombstoneVersionAgeInMillis;
+        this.tombstoneVersionIntervalMillis = tombstoneVersionIntervalMillis;
+        this.ttlTimestampAgeInMillis = ttlTimestampAgeInMillis;
+        this.ttlTimestampIntervalMillis = ttlTimestampIntervalMillis;
+        this.ttlVersionAgeInMillis = ttlVersionAgeInMillis;
+        this.ttlVersionIntervalMillis = ttlVersionIntervalMillis;
+        this.forceCompactionOnStartup = forceCompactionOnStartup;
         this.consistency = consistency;
         this.requireConsistency = requireConsistency;
         this.takeFromFactor = takeFromFactor;
         this.disabled = disabled;
         this.rowType = rowType;
+        this.indexClassName = indexClassName;
+        this.indexProperties = indexProperties;
     }
 
+    @Override
+    public String toString() {
+        return "PartitionProperties{" +
+            "durability=" + durability +
+            ", tombstoneTimestampAgeInMillis=" + tombstoneTimestampAgeInMillis +
+            ", tombstoneTimestampIntervalMillis=" + tombstoneTimestampIntervalMillis +
+            ", tombstoneVersionAgeInMillis=" + tombstoneVersionAgeInMillis +
+            ", tombstoneVersionIntervalMillis=" + tombstoneVersionIntervalMillis +
+            ", ttlTimestampAgeInMillis=" + ttlTimestampAgeInMillis +
+            ", ttlTimestampIntervalMillis=" + ttlTimestampIntervalMillis +
+            ", ttlVersionAgeInMillis=" + ttlVersionAgeInMillis +
+            ", ttlVersionIntervalMillis=" + ttlVersionIntervalMillis +
+            ", forceCompactionOnStartup=" + forceCompactionOnStartup +
+            ", consistency=" + consistency +
+            ", requireConsistency=" + requireConsistency +
+            ", takeFromFactor=" + takeFromFactor +
+            ", disabled=" + disabled +
+            ", rowType=" + rowType +
+            ", indexClassName='" + indexClassName + '\'' +
+            ", indexProperties=" + indexProperties +
+            '}';
+    }
 }

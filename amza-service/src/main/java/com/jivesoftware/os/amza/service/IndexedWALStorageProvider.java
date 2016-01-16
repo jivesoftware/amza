@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.service;
 
+import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
@@ -50,15 +50,15 @@ public class IndexedWALStorageProvider {
         return workingDirectories[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())];
     }
 
-    public WALStorage<?> create(VersionedPartitionName versionedPartitionName, WALStorageDescriptor walStorageDescriptor) throws Exception {
-        return create(baseKey(versionedPartitionName), versionedPartitionName, walStorageDescriptor);
+    public WALStorage<?> create(VersionedPartitionName versionedPartitionName, PartitionProperties partitionProperties) throws Exception {
+        return create(baseKey(versionedPartitionName), versionedPartitionName, partitionProperties);
     }
 
     public <I extends WALIndex> WALStorage<I> create(File baseKey,
         VersionedPartitionName versionedPartitionName,
-        WALStorageDescriptor storageDescriptor) throws Exception {
+        PartitionProperties partitionProperties) throws Exception {
 
-        String providerName = storageDescriptor.primaryIndexDescriptor.className;
+        String providerName = partitionProperties.indexClassName;
         @SuppressWarnings("unchecked")
         WALIndexProvider<I> walIndexProvider = (WALIndexProvider<I>) indexProviderRegistry.getWALIndexProvider(providerName);
         @SuppressWarnings("unchecked")
@@ -67,6 +67,7 @@ public class IndexedWALStorageProvider {
             versionedPartitionName.toBase64(),
             rowIOProvider,
             primaryRowMarshaller);
+        boolean hardFsyncBeforeLeapBoundary = versionedPartitionName.getPartitionName().isSystemPartition();
         return new WALStorage<>(versionedPartitionName,
             orderIdProvider,
             primaryRowMarshaller,
@@ -74,8 +75,7 @@ public class IndexedWALStorageProvider {
             binaryWALTx,
             walIndexProvider,
             sickPartitions,
-            storageDescriptor.maxUpdatesBetweenCompactionHintMarker,
-            storageDescriptor.maxUpdatesBetweenIndexCommitMarker,
+            hardFsyncBeforeLeapBoundary,
             tombstoneCompactionFactor);
     }
 }

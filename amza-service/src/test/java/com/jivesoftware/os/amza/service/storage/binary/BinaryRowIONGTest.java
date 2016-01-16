@@ -73,7 +73,8 @@ public class BinaryRowIONGTest {
                 row.length,
                 stream -> stream.stream(row),
                 stream -> true,
-                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
+                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                false);
         }
 
         rowIO = reopen.call();
@@ -135,7 +136,8 @@ public class BinaryRowIONGTest {
                 row.length,
                 stream -> stream.stream(row),
                 stream -> true,
-                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
+                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                false);
             /*if (i % 10_000 == 0) {
              System.out.println("Wrote " + i);
              }*/

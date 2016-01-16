@@ -3,6 +3,7 @@ package com.jivesoftware.os.amza.service.replication;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
@@ -178,7 +179,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
         if (highwaterUpdates == null) {
             PartitionProperties partitionProperties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
             long txtId = -1L;
-            if (!partitionProperties.walStorageDescriptor.ephemeral) {
+            if (partitionProperties.durability != Durability.ephemeral) {
                 TimestampedValue got = systemWALStorage.getTimestampedValue(PartitionCreator.HIGHWATER_MARK_INDEX, null,
                     walKey(versionedPartitionName, member));
                 if (got != null) {
@@ -258,7 +259,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
                             for (Map.Entry<VersionedPartitionName, HighwaterUpdates> partitionEntry : ringEntry.getValue().entrySet()) {
                                 VersionedPartitionName versionedPartitionName = partitionEntry.getKey();
                                 PartitionProperties properties = partitionIndex.getProperties(versionedPartitionName.getPartitionName());
-                                if (!properties.walStorageDescriptor.ephemeral) {
+                                if (properties.durability != Durability.ephemeral) {
                                     HighwaterUpdates highwaterUpdates = partitionEntry.getValue();
                                     if (highwaterUpdates != null && highwaterUpdates.updates.get() > 0) {
                                         try {

@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.storage.delta;
 
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
@@ -51,15 +50,13 @@ public class DeltaWALFactory {
         WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller);
         MutableLong rows = new MutableLong();
         deltaWALRowsTx.open(io -> {
-            boolean valid = io.validate(false, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
-                rows.increment();
-                return (rows.longValue() < corruptionParanoiaFactor) ? -1 : rowFP;
-            }, (long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
-                return -1;
-            });
-            if (!valid) {
-                LOG.warn("Encountered corruption during createOrOpen for {} {}", walDir, id);
-            }
+            io.validate(false,
+                (rowFP, rowTxId, rowType, row) -> {
+                    rows.increment();
+                    return (rows.longValue() < corruptionParanoiaFactor) ? -1 : rowFP;
+                },
+                (rowFP, rowTxId, rowType, row) -> -1,
+                null);
             return null;
         });
         return new DeltaWAL(id, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);

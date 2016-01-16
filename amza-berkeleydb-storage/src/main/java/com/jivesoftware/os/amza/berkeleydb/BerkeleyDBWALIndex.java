@@ -2,8 +2,6 @@ package com.jivesoftware.os.amza.berkeleydb;
 
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
@@ -33,6 +31,7 @@ import com.sleepycat.je.DiskOrderedCursorConfig;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -580,7 +579,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
+    public void updatedProperties(Map<String, String> properties) {
     }
 
 }

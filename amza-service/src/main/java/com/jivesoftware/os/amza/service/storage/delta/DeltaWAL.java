@@ -144,7 +144,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                         fps[fpIndex.intValue()] = fp;
                         fpIndex.increment();
                         return true;
-                    });
+                    },
+                    false);
             }
             txId.setValue(transactionId);
             return null;

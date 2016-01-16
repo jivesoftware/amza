@@ -21,7 +21,7 @@ public class MemoryWALIndexProvider implements WALIndexProvider<MemoryWALIndex> 
     }
 
     @Override
-    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         return new MemoryWALIndex(name);
     }
 

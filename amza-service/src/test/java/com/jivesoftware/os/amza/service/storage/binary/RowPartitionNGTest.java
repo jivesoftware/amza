@@ -40,9 +40,7 @@ public class RowPartitionNGTest {
     @Test(enabled = false)
     public void concurrencyTest() throws Exception {
         File walDir = Files.createTempDir();
-        //RowIOProvider binaryRowIOProvider = new BufferedBinaryRowIOProvider();
         IoStats ioStats = new IoStats();
-        String[] workingDirs = new String[]{walDir.getAbsolutePath()};
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 4096, 64, false);
 
         final WALIndexProvider<MemoryWALIndex> indexProvider = new MemoryWALIndexProvider("memory");
@@ -60,8 +58,7 @@ public class RowPartitionNGTest {
             binaryWALTx,
             indexProvider,
             new SickPartitions(),
-            1000,
-            1000,
+            false,
             2);
 
         indexedWAL.load(1, false);
@@ -71,7 +68,7 @@ public class RowPartitionNGTest {
         ScheduledExecutorService compact = Executors.newScheduledThreadPool(1);
         compact.scheduleAtFixedRate(() -> {
             try {
-                indexedWAL.compactTombstone(RowType.primary, 0, Long.MAX_VALUE, false, false);
+                indexedWAL.compactTombstone(RowType.primary, 0, 0, Long.MAX_VALUE, Long.MAX_VALUE, false);
             } catch (Exception x) {
                 x.printStackTrace();
             }
@@ -176,8 +173,7 @@ public class RowPartitionNGTest {
             binaryWALTx,
             walIndexProvider,
             new SickPartitions(),
-            1000,
-            1000,
+            false,
             2);
 
         indexedWAL.load(-1, false);

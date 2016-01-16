@@ -388,7 +388,7 @@ public class PartitionStripe {
         });
     }
 
-    public void load(PartitionStateStorage partitionStateStorage) throws Exception {
+    public void load() throws Exception {
         storage.load(txPartitionState, partitionIndex, primaryRowMarshaller);
     }
 

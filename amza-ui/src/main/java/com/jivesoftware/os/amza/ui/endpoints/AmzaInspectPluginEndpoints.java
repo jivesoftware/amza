@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.ui.endpoints;
 
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.ui.region.AmzaInspectPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaInspectPluginRegion.AmzaInspectPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyService;

@@ -6,7 +6,6 @@ package com.jivesoftware.os.amza.client.http;
  */
 public class NoOpCloseable implements Closeable {
 
-    
     public NoOpCloseable() {
     }
 

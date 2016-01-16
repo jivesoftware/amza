@@ -1,21 +1,23 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
 import com.jivesoftware.os.amza.api.stream.RowType;
+import com.jivesoftware.os.amza.api.wal.RowIO;
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
  */
-public class BinaryRowIO<K> implements RowIO<K> {
+public class BinaryRowIO implements RowIO {
 
-    private final K key;
+    private final File key;
     private final String name;
     private final BinaryRowReader rowReader;
     private final BinaryRowWriter rowWriter;
@@ -25,7 +27,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
     private final AtomicReference<LeapFrog> latestLeapFrog = new AtomicReference<>();
     private final AtomicLong updatesSinceLeap = new AtomicLong(0);
 
-    public BinaryRowIO(K key,
+    public BinaryRowIO(File key,
         String name,
         BinaryRowReader rowReader,
         BinaryRowWriter rowWriter,
@@ -41,7 +43,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public K getKey() {
+    public File getKey() {
         return key;
     }
 
@@ -51,32 +53,49 @@ public class BinaryRowIO<K> implements RowIO<K> {
     }
 
     @Override
-    public void initLeaps() throws Exception {
-        final MutableLong updates = new MutableLong(0);
+    public void initLeaps(long fpOfLastLeap, long updates) throws Exception {
+        Preconditions.checkState(updatesBetweenLeaps > 0);
+        if (fpOfLastLeap > -1) {
+            rowReader.read(
+                fpStream -> fpStream.stream(fpOfLastLeap),
+                (rowFP, rowTxId, rowType, row) -> {
+                    if (rowType == RowType.system) {
+                        ByteBuffer buf = ByteBuffer.wrap(row);
+                        byte[] keyBytes = new byte[8];
+                        buf.get(keyBytes);
+                        long key = UIO.bytesLong(keyBytes);
+                        if (key == RowType.LEAP_KEY) {
+                            buf.rewind();
+                            latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
+                            return false;
+                        }
+                    }
+                    throw new IllegalStateException("Invalid leapFp:" + fpOfLastLeap);
+                });
+        }
 
-        reverseScan((long rowFP, long rowTxId, RowType rowType, byte[] row) -> {
-            if (rowType == RowType.system) {
-                ByteBuffer buf = ByteBuffer.wrap(row);
-                byte[] keyBytes = new byte[8];
-                buf.get(keyBytes);
-                long key = UIO.bytesLong(keyBytes);
-                if (key == RowType.LEAP_KEY) {
-                    buf.rewind();
-                    latestLeapFrog.set(new LeapFrog(rowFP, Leaps.fromByteBuffer(buf)));
-                    return false;
-                }
-            } else if (rowType.isPrimary()) {
-                updates.increment();
-            }
-            return true;
-        });
-
-        updatesSinceLeap.addAndGet(updates.longValue());
+        updatesSinceLeap.addAndGet(updates);
     }
 
     @Override
-    public boolean validate() throws Exception {
-        return rowReader.validate();
+    public long getUpdatesSinceLeap() {
+        Preconditions.checkState(updatesBetweenLeaps > 0);
+        return updatesSinceLeap.get();
+    }
+
+    @Override
+    public long getFpOfLastLeap() {
+        Preconditions.checkState(updatesBetweenLeaps > 0);
+        LeapFrog frog = latestLeapFrog.get();
+        return (frog == null) ? -1 : frog.fp;
+    }
+
+    @Override
+    public void validate(boolean truncateToEndOfMergeMarker,
+        ValidationStream backward,
+        ValidationStream forward,
+        ValidationNotifier validationNotifier) throws Exception {
+        rowReader.validate(truncateToEndOfMergeMarker, backward, forward, validationNotifier);
     }
 
     @Override
@@ -91,6 +110,7 @@ public class BinaryRowIO<K> implements RowIO<K> {
 
     @Override
     public long getInclusiveStartOfRow(long transactionId) throws Exception {
+        Preconditions.checkState(updatesBetweenLeaps > 0);
         LeapFrog leapFrog = latestLeapFrog.get();
         Leaps leaps = (leapFrog != null) ? leapFrog.leaps : null;
 
@@ -144,9 +164,11 @@ public class BinaryRowIO<K> implements RowIO<K> {
         int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys,
-        TxKeyPointerFpStream stream) throws Exception {
-        int count = rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream);
-        if (updatesSinceLeap.addAndGet(count) >= updatesBetweenLeaps) {
+        TxKeyPointerFpStream stream,
+        boolean hardFsyncBeforeLeapBoundary) throws Exception {
+        int count = rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream, false);
+        if (updatesBetweenLeaps > 0 && updatesSinceLeap.addAndGet(count) >= updatesBetweenLeaps) {
+            rowWriter.flush(hardFsyncBeforeLeapBoundary);
             LeapFrog latest = latestLeapFrog.get();
             Leaps leaps = computeNextLeaps(txId, latest, maxLeaps);
             long leapFp = rowWriter.writeSystem(leaps.toBytes());

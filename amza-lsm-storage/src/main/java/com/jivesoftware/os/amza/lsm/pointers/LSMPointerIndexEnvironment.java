@@ -43,4 +43,7 @@ public class LSMPointerIndexEnvironment {
         FileUtils.deleteDirectory(fileName);
     }
 
+    public void flush(boolean fsync) {
+        throw new UnsupportedOperationException("Not yet implemented");
+    }
 }

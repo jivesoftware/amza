@@ -16,15 +16,14 @@
 package com.jivesoftware.os.amza.deployable;
 
 import com.google.common.base.Splitter;
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
-import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
+import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.Partition;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -199,13 +198,20 @@ public class AmzaEndpoints {
 
         amzaService.getRingWriter().ensureMaximalRing(ringName.getBytes(StandardCharsets.UTF_8));
 
-        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-            new PrimaryIndexDescriptor(indexClassName, 0, false, null),
-            null, 1000, 1000);
-
-        PartitionName partitionName = new PartitionName(false, ringName.getBytes(StandardCharsets.UTF_8), simplePartitionName.getBytes(StandardCharsets.UTF_8));
+        PartitionName partitionName = new PartitionName(false,
+            ringName.getBytes(StandardCharsets.UTF_8),
+            simplePartitionName.getBytes(StandardCharsets.UTF_8));
         amzaService.setPropertiesIfAbsent(partitionName,
-            new PartitionProperties(storageDescriptor, consistency, requireConsistency, 1, false, RowType.primary));
+            new PartitionProperties(Durability.fsync_never,
+                0, 0, 0, 0, 0, 0, 0, 0,
+                false,
+                consistency,
+                requireConsistency,
+                1,
+                false,
+                RowType.primary,
+                indexClassName,
+                null));
         long maxSleep = TimeUnit.SECONDS.toMillis(30); // TODO expose to config
         amzaService.awaitOnline(partitionName, maxSleep);
         return amzaService.getPartition(partitionName);

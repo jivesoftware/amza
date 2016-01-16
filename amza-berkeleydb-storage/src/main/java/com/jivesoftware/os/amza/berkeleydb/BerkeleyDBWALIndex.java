@@ -2,8 +2,7 @@ package com.jivesoftware.os.amza.berkeleydb;
 
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
-import com.jivesoftware.os.amza.api.partition.SecondaryIndexDescriptor;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
 import com.jivesoftware.os.amza.api.stream.KeyValuePointerStream;
@@ -32,6 +31,7 @@ import com.sleepycat.je.DiskOrderedCursorConfig;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -47,6 +47,8 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
     private static final int numPermits = 1024;
 
+    private final String providerName;
+    private final VersionedPartitionName versionedPartitionName;
     private final Environment environment;
     private final BerkeleyDBWALIndexName name;
     private final DatabaseConfig primaryDbConfig;
@@ -59,7 +61,13 @@ public class BerkeleyDBWALIndex implements WALIndex {
     private final AtomicInteger commits = new AtomicInteger(0);
     private final AtomicReference<WALIndex> compactingTo = new AtomicReference<>();
 
-    public BerkeleyDBWALIndex(Environment environment, BerkeleyDBWALIndexName name) throws Exception {
+    public BerkeleyDBWALIndex(String providerName,
+        VersionedPartitionName versionedPartitionName,
+        Environment environment,
+        BerkeleyDBWALIndexName name) throws Exception {
+
+        this.providerName = providerName;
+        this.versionedPartitionName = versionedPartitionName;
         this.environment = environment;
         this.name = name;
 
@@ -116,6 +124,15 @@ public class BerkeleyDBWALIndex implements WALIndex {
     private long entryToVersion(byte[] entryBytes) throws Exception {
         int valueLength = entryBytes.length - 8 - 1 - 8;
         return UIO.bytesLong(entryBytes, valueLength + 1 + 8);
+    }
+
+    @Override
+    public String getProviderName() {
+        return providerName;
+    }
+
+    public VersionedPartitionName getVersionedPartitionName() {
+        return versionedPartitionName;
     }
 
     @Override
@@ -486,7 +503,10 @@ public class BerkeleyDBWALIndex implements WALIndex {
             removeDatabase(Type.compacted);
             removeDatabase(Type.backup);
 
-            final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(environment, name.typeName(Type.compacting));
+            final BerkeleyDBWALIndex compactingWALIndex = new BerkeleyDBWALIndex(providerName,
+                versionedPartitionName,
+                environment,
+                name.typeName(Type.compacting));
             compactingTo.set(compactingWALIndex);
 
             return new CompactionWALIndex() {
@@ -500,6 +520,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 public void commit(Callable<Void> commit) throws Exception {
                     lock.acquire(numPermits);
                     try {
+                        environment.flushLog(true);
                         compactingTo.set(null);
                         if (primaryDb == null || prefixDb == null) {
                             LOG.warn("Was not commited because index has been closed.");
@@ -528,7 +549,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
 
                             primaryDb = environment.openDatabase(null, name.getPrimaryName(), primaryDbConfig);
                             prefixDb = environment.openDatabase(null, name.getPrefixName(), prefixDbConfig);
-
+                            environment.flushLog(true);
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }
                     } finally {
@@ -558,7 +579,7 @@ public class BerkeleyDBWALIndex implements WALIndex {
     }
 
     @Override
-    public void updatedDescriptors(PrimaryIndexDescriptor primaryIndexDescriptor, SecondaryIndexDescriptor[] secondaryIndexDescriptors) {
+    public void updatedProperties(Map<String, String> properties) {
     }
 
 }

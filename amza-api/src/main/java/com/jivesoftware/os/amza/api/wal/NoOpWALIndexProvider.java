@@ -8,13 +8,27 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
  */
 public class NoOpWALIndexProvider implements WALIndexProvider<NoOpWALIndex> {
 
+    private final String name;
+
+    public NoOpWALIndexProvider(String name) {
+        this.name = name;
+    }
+
     @Override
-    public NoOpWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
-        return new NoOpWALIndex();
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public NoOpWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+        return new NoOpWALIndex(name);
     }
 
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
     }
 
+    @Override
+    public void flush(Iterable<NoOpWALIndex> partitionNames, boolean fsync) throws Exception {
+    }
 }

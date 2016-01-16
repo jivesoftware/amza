@@ -2,17 +2,17 @@ package com.jivesoftware.os.amza.service.storage.delta;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
+import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.KeyContainedStream;
@@ -47,7 +47,10 @@ import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.JiveEpochTimestampProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.io.File;
 import org.testng.Assert;
@@ -71,11 +74,16 @@ public class DeltaStripeWALStorageNGTest {
     private final BinaryPrimaryRowMarshaller primaryRowMarshaller = new BinaryPrimaryRowMarshaller();
     private final BinaryHighwaterRowMarshaller highwaterRowMarshaller = new BinaryHighwaterRowMarshaller();
 
+    private JacksonPartitionPropertyMarshaller partitionPropertyMarshaller;
+    private IndexedWALStorageProvider indexedWALStorageProvider;
+    private TimestampedOrderIdProvider orderIdProvider;
+    private AmzaStats amzaStats;
     private PartitionIndex partitionIndex;
     private PartitionStore partitionStore1;
     private PartitionStore partitionStore2;
     private TxPartitionState txPartitionState;
     private DeltaWALFactory deltaWALFactory;
+    private WALIndexProviderRegistry walIndexProviderRegistry;
     private DeltaStripeWALStorage deltaStripeWALStorage;
     private HighwaterStorage highwaterStorage;
     private RowType testRowType1 = RowType.snappy_primary;
@@ -85,32 +93,33 @@ public class DeltaStripeWALStorageNGTest {
     public void setup() throws Exception {
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         ObjectMapper mapper = new ObjectMapper();
-        JacksonPartitionPropertyMarshaller partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
+        partitionPropertyMarshaller = new JacksonPartitionPropertyMarshaller(mapper);
 
         File partitionTmpDir = Files.createTempDir();
-        String[] workingDirectories = { partitionTmpDir.getAbsolutePath() };
+        File[] workingDirectories = {partitionTmpDir};
         IoStats ioStats = new IoStats();
-        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(workingDirectories,
+        MemoryBackedRowIOProvider ephemeralRowIOProvider = new MemoryBackedRowIOProvider(
             ioStats,
-            100,
             1_024,
             1_024 * 1_024,
             4_096,
             64,
             new HeapByteBufferFactory());
-        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(workingDirectories,
+        BinaryRowIOProvider persistentRowIOProvider = new BinaryRowIOProvider(
             ioStats,
-            100,
             4_096,
             64,
             false);
-        WALIndexProviderRegistry walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
+        walIndexProviderRegistry = new WALIndexProviderRegistry(ephemeralRowIOProvider, persistentRowIOProvider);
 
-        IndexedWALStorageProvider indexedWALStorageProvider = new IndexedWALStorageProvider(
+        indexedWALStorageProvider = new IndexedWALStorageProvider(new PartitionStripeFunction(workingDirectories.length),
+            workingDirectories,
             walIndexProviderRegistry, primaryRowMarshaller, highwaterRowMarshaller, ids, new SickPartitions(), -1);
-        partitionIndex = new PartitionIndex(indexedWALStorageProvider,
-            partitionPropertyMarshaller,
-            false);
+        orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1), new SnowflakeIdPacker(),
+            new JiveEpochTimestampProvider());
+        amzaStats = new AmzaStats();
+        partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider,
+            partitionPropertyMarshaller);
 
         Waterline waterline = new Waterline(null, State.follower, System.currentTimeMillis(), 0, true);
         LivelyEndState livelyEndState = new LivelyEndState(null, waterline, waterline, null);
@@ -123,7 +132,7 @@ public class DeltaStripeWALStorageNGTest {
             }
         };
 
-        partitionIndex.open(txPartitionState, ringName -> true);
+        partitionIndex.open();
 
         SystemWALStorage systemWALStorage = new SystemWALStorage(partitionIndex,
             primaryRowMarshaller,
@@ -134,13 +143,26 @@ public class DeltaStripeWALStorageNGTest {
         PartitionCreator partitionProvider = new PartitionCreator(ids,
             partitionPropertyMarshaller, partitionIndex, systemWALStorage, updated, partitionIndex);
 
-        WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-            new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 100, 100);
-
-        partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName1, new PartitionProperties(storageDescriptor, Consistency.none, true, 0, false,
-            testRowType1));
-        partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName2, new PartitionProperties(storageDescriptor, Consistency.none, true, 0, false,
-            testRowType2));
+        partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName1, new PartitionProperties(Durability.fsync_never,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            false,
+            Consistency.none,
+            true,
+            0,
+            false,
+            testRowType1,
+            "memory_persistent",
+            null));
+        partitionProvider.createPartitionStoreIfAbsent(versionedPartitionName2, new PartitionProperties(Durability.fsync_never,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            false,
+            Consistency.none,
+            true,
+            0,
+            false,
+            testRowType2,
+            "memory_persistent",
+            null));
         partitionStore1 = partitionIndex.get(versionedPartitionName1);
         partitionStore2 = partitionIndex.get(versionedPartitionName2);
         Assert.assertNotNull(partitionStore1);
@@ -149,13 +171,14 @@ public class DeltaStripeWALStorageNGTest {
         highwaterStorage = new PartitionBackedHighwaterStorage(ids, new RingMember("localhost"), partitionIndex, systemWALStorage, updated, 100);
 
         File tmp = Files.createTempDir();
-        RowIOProvider<File> ioProvider = new BinaryRowIOProvider(new String[] { tmp.getAbsolutePath() }, ioStats, 100, 4_096, 64, false);
-        deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller);
+        workingDirectories = new File[]{tmp};
+        RowIOProvider ioProvider = new BinaryRowIOProvider(ioStats, 4_096, 64, false);
+        deltaWALFactory = new DeltaWALFactory(ids, tmp, ioProvider, primaryRowMarshaller, highwaterRowMarshaller, 100);
         deltaStripeWALStorage = loadDeltaStripe();
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
-        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(1, new AmzaStats(), new SickThreads(), deltaWALFactory, 20_000);
+        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(1, new AmzaStats(), new SickThreads(), deltaWALFactory, walIndexProviderRegistry, 20_000);
         delta.load(txPartitionState, partitionIndex, primaryRowMarshaller);
         return delta;
     }
@@ -220,8 +243,8 @@ public class DeltaStripeWALStorageNGTest {
         Assert.assertNull(storage1.getTimestampedValue(walKey.prefix, walKey.key));
         Assert.assertEquals(storage1.count(keyStream -> true), 1);
 
-        storage1.compactTombstone(testRowType1, 10, Long.MAX_VALUE, false);
-        storage1.compactTombstone(testRowType1, 10, Long.MAX_VALUE, false); // Bla
+        storage1.compactTombstone(testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, true);
+        storage1.compactTombstone(testRowType1, 10, 10, Long.MAX_VALUE, Long.MAX_VALUE, true); // Bla
 
         Assert.assertEquals(storage1.count(keyStream -> true), 0);
 
@@ -241,6 +264,9 @@ public class DeltaStripeWALStorageNGTest {
         }
 
         deltaStripeWALStorage.hackTruncation(4);
+
+        partitionIndex = new PartitionIndex(amzaStats, orderIdProvider, indexedWALStorageProvider, partitionPropertyMarshaller);
+        partitionIndex.open();
         deltaStripeWALStorage = loadDeltaStripe();
 
         for (int i = 2; i <= 10; i++) {

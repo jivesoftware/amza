@@ -32,7 +32,7 @@ public class LSMPointerIndex implements PointerIndex {
     private final ExecutorService destroy;
     private final ExecutorService merge;
     private final File indexRoot;
-    private final int maxUpdatesBetweenCompactionHintMarker;
+    private final int maxUpdatesBeforeFlush;
     private RawMemoryIndex memoryPointerIndex;
     private RawMemoryIndex flushingMemoryPointerIndex;
     private final AtomicLong largestIndexId = new AtomicLong();
@@ -40,11 +40,11 @@ public class LSMPointerIndex implements PointerIndex {
 
     private final LSMValueMarshaller marshaller = new LSMValueMarshaller();
 
-    public LSMPointerIndex(ExecutorService merge, ExecutorService destroy, File indexRoot, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
+    public LSMPointerIndex(ExecutorService merge, ExecutorService destroy, File indexRoot, int maxUpdatesBeforeFlush) throws Exception {
         this.merge = merge;
         this.destroy = destroy;
         this.indexRoot = indexRoot;
-        this.maxUpdatesBetweenCompactionHintMarker = maxUpdatesBetweenCompactionHintMarker;
+        this.maxUpdatesBeforeFlush = maxUpdatesBeforeFlush;
         this.memoryPointerIndex = new RawMemoryIndex(marshaller);
         this.mergeablePointerIndexs = new MergeableIndexes();
         TreeSet<IndexRangeId> ranges = new TreeSet<>();
@@ -165,9 +165,9 @@ public class LSMPointerIndex implements PointerIndex {
         boolean appended = memoryPointerIndex.append((stream) -> {
             return pointers.consume((key, timestamp, tombstoned, version, pointer) -> {
                 count[0]++;
-                if (count[0] > maxUpdatesBetweenCompactionHintMarker) { //  TODO flush on memory pressure.
+                if (count[0] > maxUpdatesBeforeFlush) { //  TODO flush on memory pressure.
                     count[0] = memoryPointerIndex.count();
-                    if (count[0] > maxUpdatesBetweenCompactionHintMarker) { //  TODO flush on memory pressure.
+                    if (count[0] > maxUpdatesBeforeFlush) { //  TODO flush on memory pressure.
                         commit();
                     }
                 }

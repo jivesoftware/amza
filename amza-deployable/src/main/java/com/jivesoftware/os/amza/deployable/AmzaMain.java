@@ -83,7 +83,11 @@ import org.merlin.config.defaults.StringDefault;
 
 public class AmzaMain {
 
-    static interface DiskFreeCheck extends ScheduledMinMaxHealthCheckConfig {
+    public static void main(String[] args) throws Exception {
+        new AmzaMain().run(args);
+    }
+
+    interface DiskFreeCheck extends ScheduledMinMaxHealthCheckConfig {
 
         @StringDefault("disk>free")
         @Override
@@ -93,10 +97,6 @@ public class AmzaMain {
         @Override
         public Long getMax();
 
-    }
-
-    public static void main(String[] args) throws Exception {
-        new AmzaMain().run(args);
     }
 
     interface AmzaSickThreadsHealthConfig extends SickHealthCheckConfig {
@@ -154,7 +154,6 @@ public class AmzaMain {
 
             final AmzaServiceInitializer.AmzaServiceConfig amzaServiceConfig = new AmzaServiceInitializer.AmzaServiceConfig();
             amzaServiceConfig.checkIfCompactionIsNeededIntervalInMillis = amzaConfig.getCheckIfCompactionIsNeededIntervalInMillis();
-            amzaServiceConfig.compactTombstoneIfOlderThanNMillis = amzaConfig.getCompactTombstoneIfOlderThanNMillis();
             amzaServiceConfig.numberOfCompactorThreads = amzaConfig.getNumberOfCompactorThreads();
             amzaServiceConfig.numberOfTakerThreads = amzaConfig.getNumberOfTakerThreads();
             amzaServiceConfig.workingDirectories = workingDirs;
@@ -210,12 +209,14 @@ public class AmzaMain {
                 orderIdProvider,
                 idPacker,
                 partitionPropertyMarshaller,
-                (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider) -> {
-                    indexProviderRegistry.register(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME,
-                        new BerkeleyDBWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+                (workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
+                    indexProviderRegistry.register(
+                        new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
+                        persistentRowIOProvider);
 
-                    indexProviderRegistry.register(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                        new LSMPointerIndexWALIndexProvider(workingDirs, workingDirs.length), persistentRowIOProvider);
+                    indexProviderRegistry.register(
+                        new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
+                        persistentRowIOProvider);
 
                 },
                 availableRowsTaker,

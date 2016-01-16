@@ -43,7 +43,8 @@ public class BinaryRowWriter implements WALWriter {
         int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys,
-        TxKeyPointerFpStream stream) throws Exception {
+        TxKeyPointerFpStream stream,
+        boolean hardFsyncBeforeLeapBoundary) throws Exception {
 
         byte[] lengthBuffer = new byte[4];
         HeapFiler memoryFiler = new HeapFiler((estimatedNumberOfRows * (4 + 1 + 8 + 4)) + estimatedSizeInBytes);
@@ -95,7 +96,8 @@ public class BinaryRowWriter implements WALWriter {
             (txId, prefix, key, valueTimestamp, valueTombstoned, valueVerion, fp) -> {
                 fps[0] = fp;
                 return true;
-            });
+            },
+            false);
         return fps[0];
     }
 

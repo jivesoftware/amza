@@ -18,7 +18,6 @@ class AmzaStateStorage implements StateStorage<Long> {
 
     private final SystemWALStorage systemWALStorage;
     private final WALUpdated walUpdated;
-    private final Member member;
     private final PartitionName partitionName;
     private final byte context;
 
@@ -29,7 +28,6 @@ class AmzaStateStorage implements StateStorage<Long> {
         byte context) {
         this.systemWALStorage = systemWALStorage;
         this.walUpdated = walUpdated;
-        this.member = member;
         this.partitionName = partitionName;
         this.context = context;
     }

@@ -23,7 +23,7 @@
                                 <th>Name</th>
                                 <th>RingName</th>
                                 <th>Disabled</th>
-                                <th>Index</th>
+                                <th>Properties</th>
                                 <th>Consistency</th>
                                 <th>Require Consistency</th>
                                 <th>TakeFromFactor</th>
@@ -130,7 +130,7 @@
                                                 name="name" id="hostPicker"  title="{$r.disabled}" {if $r.disabled}checked="checked"{/if}>
                                             {/if}
                                         </td>
-                                        <td>{$r.walStorageDescriptor}</td>
+                                        <td>{$r.partitionProperties}</td>
                                         <td>
                                             {if $r.type == 'SYSTEM'}
                                                 {$r.consistency}

@@ -6,6 +6,7 @@ package com.jivesoftware.os.amza.api.stream;
 public enum RowType {
 
     // when advancing a version, preserve old versions as legacy
+    end_of_merge((byte) -2, false, false),
     system((byte) -1, true, false),
     highwater((byte) 0, false, false),
     primary((byte) 1, false, true),

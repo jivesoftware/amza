@@ -18,7 +18,6 @@ package com.jivesoftware.os.amza.api.wal;
 import com.jivesoftware.os.amza.api.stream.Commitable;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.Highwaters;
-import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import java.util.List;
 
 public class MemoryWALUpdates implements Commitable {

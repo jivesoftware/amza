@@ -16,26 +16,26 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Preconditions;
-import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
+import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
-import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
-import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
-import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
-import com.jivesoftware.os.amza.api.stream.KeyValueStream;
-import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
+import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -94,11 +94,13 @@ public class SystemPartition implements Partition {
         }
 
         long timestampAndVersion = orderIdProvider.nextId();
-        RowsChanged commit = systemWALStorage.update(versionedPartitionName, prefix, (highwaters, scan)
-            -> updates.commitable(highwaters, (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampAndVersion;
-                return scan.row(rowTxId, key, value, timestamp, valueTombstone, timestampAndVersion);
-            }),
+        RowsChanged commit = systemWALStorage.update(versionedPartitionName,
+            prefix,
+            (highwaters, scan) -> updates.commitable(highwaters,
+                (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
+                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampAndVersion;
+                    return scan.row(rowTxId, key, value, timestamp, valueTombstone, timestampAndVersion);
+                }),
             walUpdated);
         amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getSmallestCommittedTxId());
 
@@ -132,7 +134,7 @@ public class SystemPartition implements Partition {
                 toPrefix,
                 toKey,
                 (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
-                -> valueTombstoned || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                    -> valueTombstoned || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
         }
     }
 
@@ -158,8 +160,8 @@ public class SystemPartition implements Partition {
         Highwaters highwaters,
         TxKeyValueStream stream) throws Exception {
 
-        long[] lastTxId = {-1};
-        boolean[] done = {false};
+        long[] lastTxId = { -1 };
+        boolean[] done = { false };
         WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
         TxKeyValueStream delegateStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
 

@@ -12,6 +12,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
@@ -22,20 +23,23 @@ public class DeltaWALFactory {
 
     private final OrderIdProvider idProvider;
     private final File walDir;
-    private final RowIOProvider<File> ioProvider;
+    private final RowIOProvider ioProvider;
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
+    private final long corruptionParanoiaFactor;
 
     public DeltaWALFactory(OrderIdProvider idProvider,
         File walDir,
-        RowIOProvider<File> ioProvider,
+        RowIOProvider ioProvider,
         PrimaryRowMarshaller primaryRowMarshaller,
-        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller) {
+        HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
+        long corruptionParanoiaFactor) {
         this.idProvider = idProvider;
         this.walDir = walDir;
         this.ioProvider = ioProvider;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
+        this.corruptionParanoiaFactor = corruptionParanoiaFactor;
     }
 
     public DeltaWAL create() throws Exception {
@@ -43,8 +47,18 @@ public class DeltaWALFactory {
     }
 
     private DeltaWAL createOrOpen(long id) throws Exception {
-        WALTx deltaWALRowsTx = new BinaryWALTx<>(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller);
-        deltaWALRowsTx.validateAndRepair();
+        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller);
+        MutableLong rows = new MutableLong();
+        deltaWALRowsTx.open(io -> {
+            io.validate(false,
+                (rowFP, rowTxId, rowType, row) -> {
+                    rows.increment();
+                    return (rows.longValue() < corruptionParanoiaFactor) ? -1 : rowFP;
+                },
+                (rowFP, rowTxId, rowType, row) -> -1,
+                null);
+            return null;
+        });
         return new DeltaWAL(id, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
     }
 

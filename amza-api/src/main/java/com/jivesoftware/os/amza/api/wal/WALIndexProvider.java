@@ -19,7 +19,11 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 
 public interface WALIndexProvider<T> {
 
-    T createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception;
+    String getName();
+
+    T createIndex(VersionedPartitionName versionedPartitionName) throws Exception;
 
     void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception;
+
+    void flush(Iterable<T> indexes, boolean fsync) throws Exception;
 }

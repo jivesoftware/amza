@@ -1,9 +1,8 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.google.common.io.Files;
-import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
+import com.jivesoftware.os.amza.api.wal.RowIO;
 import com.jivesoftware.os.amza.service.filer.ByteBufferFactory;
+import com.jivesoftware.os.amza.service.filer.MultiAutoGrowingByteBufferBackedFiler;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.MemoryBackedWALFiler;
 import java.io.File;
@@ -15,11 +14,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * @author jonathan.colt
  */
-public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
+public class MemoryBackedRowIOProvider implements RowIOProvider {
 
-    private final String[] workingDirectories;
     private final IoStats ioStats;
-    private final int corruptionParanoiaFactor;
     private final long initialBufferSegmentSize;
     private final long maxBufferSegmentSize;
     private final int updatesBetweenLeaps;
@@ -28,17 +25,13 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
 
     private final ConcurrentHashMap<File, MemoryBackedWALFiler> filers = new ConcurrentHashMap<>();
 
-    public MemoryBackedRowIOProvider(String[] workingDirectories,
-        IoStats ioStats,
-        int corruptionParanoiaFactor,
+    public MemoryBackedRowIOProvider(IoStats ioStats,
         long initialBufferSegmentSize,
         long maxBufferSegmentSize,
         int updatesBetweenLeaps,
         int maxLeaps,
         ByteBufferFactory byteBufferFactory) {
-        this.workingDirectories = workingDirectories;
         this.ioStats = ioStats;
-        this.corruptionParanoiaFactor = corruptionParanoiaFactor;
         this.initialBufferSegmentSize = initialBufferSegmentSize;
         this.maxBufferSegmentSize = maxBufferSegmentSize;
         this.updatesBetweenLeaps = updatesBetweenLeaps;
@@ -57,22 +50,17 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
     }
 
     @Override
-    public RowIO<File> open(File key, String name, boolean createIfAbsent) throws Exception {
+    public RowIO open(File key, String name, boolean createIfAbsent) throws Exception {
         File file = new File(key, name);
         MemoryBackedWALFiler filer = getFiler(file);
-        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
+        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO<>(key, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
+        return new BinaryRowIO(key, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
     }
 
     @Override
     public List<String> listExisting(File key) {
         return Collections.emptyList();
-    }
-
-    @Override
-    public File baseKey(VersionedPartitionName versionedPartitionName) {
-        return new File(workingDirectories[Math.abs(versionedPartitionName.hashCode() % workingDirectories.length)]);
     }
 
     @Override
@@ -83,11 +71,6 @@ public class MemoryBackedRowIOProvider implements RowIOProvider<File> {
     @Override
     public File buildKey(File versionedKey, String name) throws Exception {
         return new File(versionedKey, name);
-    }
-
-    @Override
-    public File createTempKey() throws Exception {
-        return Files.createTempDir();
     }
 
     private MemoryBackedWALFiler createFiler() throws IOException {

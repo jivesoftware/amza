@@ -8,12 +8,27 @@ import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
  */
 public class MemoryWALIndexProvider implements WALIndexProvider<MemoryWALIndex> {
 
+    private final String name;
+
+    public MemoryWALIndexProvider(String name) {
+        this.name = name;
+    }
+
     @Override
-    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
-        return new MemoryWALIndex();
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public MemoryWALIndex createIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+        return new MemoryWALIndex(name);
     }
 
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
+    }
+
+    @Override
+    public void flush(Iterable<MemoryWALIndex> indexes, boolean fsync) throws Exception {
     }
 }

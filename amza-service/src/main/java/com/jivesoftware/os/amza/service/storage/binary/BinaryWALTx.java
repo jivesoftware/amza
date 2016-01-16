@@ -1,36 +1,35 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.AmzaVersionConstants;
 import com.jivesoftware.os.amza.api.CompareTimestampVersions;
-import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.scan.CompactionWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.PrimaryRowMarshaller;
+import com.jivesoftware.os.amza.api.wal.RowIO;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALWriter.IndexableKeys;
 import com.jivesoftware.os.amza.api.wal.WALWriter.RawRows;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang.mutable.MutableInt;
 import org.apache.commons.lang.mutable.MutableLong;
 
 /**
  * @author jonathan.colt
  */
-public class BinaryWALTx<K> implements WALTx {
+public class BinaryWALTx implements WALTx {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -38,27 +37,29 @@ public class BinaryWALTx<K> implements WALTx {
     private static final int NUM_PERMITS = 1024;
 
     private final Semaphore compactionLock = new Semaphore(NUM_PERMITS, true);
-    private final K key;
+    private final File key;
     private final String name;
-    private final K backupKey;
+    private final File compactingKey;
+    private final File backupKey;
     private final PrimaryRowMarshaller primaryRowMarshaller;
 
-    private final RowIOProvider<K> ioProvider;
-    private RowIO<K> io;
+    private final RowIOProvider ioProvider;
+    private RowIO io;
 
-    public BinaryWALTx(K baseKey,
+    public BinaryWALTx(File baseKey,
         String prefix,
-        RowIOProvider<K> ioProvider,
+        RowIOProvider ioProvider,
         PrimaryRowMarshaller rowMarshaller) throws Exception {
         this.key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
         this.name = prefix + SUFFIX;
-        this.backupKey = ioProvider.buildKey(key, "bkp");
+        this.compactingKey = ioProvider.buildKey(key, "compacting");
+        this.backupKey = ioProvider.buildKey(key, "backup");
         this.ioProvider = ioProvider;
         this.primaryRowMarshaller = rowMarshaller;
     }
 
-    public static <K> Set<String> listExisting(K baseKey, RowIOProvider<K> ioProvider) throws Exception {
-        K key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
+    public static Set<String> listExisting(File baseKey, RowIOProvider ioProvider) throws Exception {
+        File key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
         List<String> names = ioProvider.listExisting(key);
         Set<String> matched = Sets.newHashSet();
         for (String name : names) {
@@ -70,20 +71,10 @@ public class BinaryWALTx<K> implements WALTx {
     }
 
     @Override
-    public <R> R write(WALWrite<R> write) throws Exception {
+    public <R> R tx(Tx<R> tx) throws Exception {
         compactionLock.acquire();
         try {
-            return write.write(io);
-        } finally {
-            compactionLock.release();
-        }
-    }
-
-    @Override
-    public <R> R read(WALRead<R> read) throws Exception {
-        compactionLock.acquire();
-        try {
-            return read.read(io);
+            return tx.tx(io);
         } finally {
             compactionLock.release();
         }
@@ -121,69 +112,30 @@ public class BinaryWALTx<K> implements WALTx {
     }
 
     @Override
-    public void validateAndRepair() throws Exception {
+    public <R> R open(Tx<R> tx) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
             initIO();
-
-            if (!io.validate()) {
-                LOG.info("Recovering for WAL {}", name);
-                final MutableLong count = new MutableLong(0);
-                // scan with allowRepairs=true to truncate at point of corruption
-                io.scan(0, true, (rowPointer, rowTxId, rowType, row) -> {
-                    count.increment();
-                    return true;
-                });
-                LOG.info("Recovered for WAL {}: {} rows", name, count.longValue());
-            }
+            return tx.tx(io);
         } finally {
             compactionLock.release(NUM_PERMITS);
         }
     }
 
     @Override
-    public <I extends CompactableWALIndex> I load(WALIndexProvider<I> walIndexProvider,
-        VersionedPartitionName versionedPartitionName,
-        int maxUpdatesBetweenCompactionHintMarker) throws Exception {
-
+    public <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider, VersionedPartitionName versionedPartitionName) throws Exception {
         compactionLock.acquire(NUM_PERMITS);
         try {
             initIO();
 
-            if (!io.validate()) {
-                LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", versionedPartitionName);
-                walIndexProvider.deleteIndex(versionedPartitionName);
-                LOG.warn("Removed wal index for {}.", versionedPartitionName);
-            }
-
-            final I walIndex = walIndexProvider.createIndex(versionedPartitionName, maxUpdatesBetweenCompactionHintMarker);
+            I walIndex = walIndexProvider.createIndex(versionedPartitionName);
             if (walIndex.isEmpty()) {
                 rebuildIndex(versionedPartitionName, walIndex);
-            } else {
-                validateIndex(versionedPartitionName, walIndex);
             }
-            io.initLeaps();
+
             return walIndex;
         } finally {
             compactionLock.release(NUM_PERMITS);
-        }
-    }
-
-    private void initIO() throws Exception {
-        io = ioProvider.open(key, name, false);
-        if (io == null) {
-            if (ioProvider.exists(backupKey, name)) {
-                ioProvider.moveTo(backupKey, name, key, name);
-                io = ioProvider.open(key, name, false);
-                if (io == null) {
-                    throw new IllegalStateException("Failed to recover backup WAL " + name);
-                }
-            } else {
-                io = ioProvider.open(key, name, true);
-                if (io == null) {
-                    throw new IllegalStateException("Failed to initialize WAL " + name);
-                }
-            }
         }
     }
 
@@ -213,38 +165,22 @@ public class BinaryWALTx<K> implements WALTx {
         walIndex.commit();
     }
 
-    private <I extends CompactableWALIndex> void validateIndex(VersionedPartitionName versionedPartitionName, I walIndex) throws Exception {
-        LOG.info("Checking {} for {}.", walIndex.getClass().getSimpleName(), versionedPartitionName);
-
-        final MutableLong repair = new MutableLong();
-        walIndex.merge(
-            stream -> primaryRowMarshaller.fromRows(txFpRowStream -> {
-                long[] commitedUpToTxId = { Long.MIN_VALUE };
-                return io.reverseScan((rowFP, rowTxId, rowType, row) -> {
-                    if (rowType.isPrimary()) {
-                        if (!txFpRowStream.stream(rowTxId, rowFP, rowType, row)) {
-                            return false;
-                        }
-                    }
-                    if (rowType == RowType.system && commitedUpToTxId[0] == Long.MIN_VALUE) {
-                        long[] key_CommitedUpToTxId = UIO.bytesLongs(row);
-                        if (key_CommitedUpToTxId[0] == RowType.COMMIT_KEY) {
-                            commitedUpToTxId[0] = key_CommitedUpToTxId[1];
-                            LOG.info("Looking for txId:{} for versionedPartitionName:{} ", commitedUpToTxId, versionedPartitionName);
-                        }
-                        return true;
-                    } else {
-                        return rowTxId >= commitedUpToTxId[0];
-                    }
-                });
-            }, (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
-                repair.increment();
-                return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
-            }),
-            (mode, txId, prefix, key, timestamp, tombstoned, version, fp) -> true);
-
-        LOG.info("Checked ({}) {} for {}.", repair.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
-        walIndex.commit();
+    private void initIO() throws Exception {
+        io = ioProvider.open(key, name, false);
+        if (io == null) {
+            if (ioProvider.exists(backupKey, name)) {
+                ioProvider.moveTo(backupKey, name, key, name);
+                io = ioProvider.open(key, name, false);
+                if (io == null) {
+                    throw new IllegalStateException("Failed to recover backup WAL " + name);
+                }
+            } else {
+                io = ioProvider.open(key, name, true);
+                if (io == null) {
+                    throw new IllegalStateException("Failed to initialize WAL " + name);
+                }
+            }
+        }
     }
 
     @Override
@@ -264,51 +200,90 @@ public class BinaryWALTx<K> implements WALTx {
     }
 
     @Override
-    public <I extends CompactableWALIndex> Optional<Compacted<I>> compact(RowType compactToRowType,
-        long removeTombstonedOlderThanTimestampId,
+    public <I extends CompactableWALIndex> Compacted<I> compact(RowType compactToRowType,
+        long tombstoneTimestampId,
+        long tombstoneVersion,
         long ttlTimestampId,
-        I compactableWALIndex,
-        boolean force) throws Exception {
+        long ttlVersion,
+        I compactableWALIndex) throws Exception {
 
-        long endOfLastRow = io.getEndOfLastRow();
         long start = System.currentTimeMillis();
 
         CompactionWALIndex compactionRowIndex = compactableWALIndex != null ? compactableWALIndex.startCompaction(true) : null;
 
-        K tempKey = ioProvider.createTempKey();
-        RowIO<K> compactionIO = ioProvider.open(tempKey, name, true);
+        ioProvider.delete(compactingKey, name);
+        if (!ioProvider.ensureKey(compactingKey)) {
+            throw new IOException("Failed remove " + compactingKey);
+        }
+        RowIO compactionIO = ioProvider.open(compactingKey, name, true);
 
-        AtomicLong keyCount = new AtomicLong();
-        AtomicLong clobberCount = new AtomicLong();
-        AtomicLong tombstoneCount = new AtomicLong();
-        AtomicLong ttlCount = new AtomicLong();
+        MutableLong oldestTimestamp = new MutableLong(Long.MAX_VALUE);
+        MutableLong oldestVersion = new MutableLong(Long.MAX_VALUE);
+        MutableLong oldestTombstonedTimestamp = new MutableLong(Long.MAX_VALUE);
+        MutableLong oldestTombstonedVersion = new MutableLong(Long.MAX_VALUE);
+        MutableLong keyCount = new MutableLong();
+        MutableLong clobberCount = new MutableLong();
+        MutableLong tombstoneCount = new MutableLong();
+        MutableLong ttlCount = new MutableLong();
 
-        compact(compactToRowType,
-            0,
-            endOfLastRow,
-            compactableWALIndex,
-            compactionRowIndex,
-            compactionIO,
-            keyCount,
-            clobberCount,
-            tombstoneCount,
-            ttlCount,
-            removeTombstonedOlderThanTimestampId,
-            ttlTimestampId);
+        byte[] carryOverEndOfMerge = null;
 
-        return Optional.of(() -> {
+        long prevEndOfLastRow = 0;
+        long endOfLastRow = io.getEndOfLastRow();
+
+        while (prevEndOfLastRow < endOfLastRow) {
+            carryOverEndOfMerge = compact(compactToRowType,
+                prevEndOfLastRow,
+                endOfLastRow,
+                carryOverEndOfMerge,
+                compactableWALIndex,
+                compactionRowIndex,
+                compactionIO,
+                oldestTimestamp,
+                oldestVersion,
+                oldestTombstonedTimestamp,
+                oldestTombstonedVersion,
+                keyCount,
+                clobberCount,
+                tombstoneCount,
+                ttlCount,
+                tombstoneTimestampId,
+                tombstoneVersion,
+                ttlTimestampId,
+                ttlVersion,
+                null);
+
+            prevEndOfLastRow = endOfLastRow;
+            endOfLastRow = io.getEndOfLastRow();
+        }
+
+        long finalEndOfLastRow = endOfLastRow;
+        byte[] finalCarryOverEndOfMerge = carryOverEndOfMerge;
+        return (endOfMerge) -> {
             compactionLock.acquire(NUM_PERMITS);
             try {
-                long startCatchup = System.currentTimeMillis();
-                AtomicLong catchupKeyCount = new AtomicLong();
-                AtomicLong catchupClobberCount = new AtomicLong();
-                AtomicLong catchupTombstoneCount = new AtomicLong();
-                AtomicLong catchupTTLCount = new AtomicLong();
-                compact(compactToRowType, endOfLastRow, Long.MAX_VALUE, compactableWALIndex, compactionRowIndex, compactionIO,
-                    catchupKeyCount, catchupClobberCount, catchupTombstoneCount, catchupTTLCount,
-                    removeTombstonedOlderThanTimestampId,
-                    ttlTimestampId);
+                compact(compactToRowType,
+                    finalEndOfLastRow,
+                    Long.MAX_VALUE,
+                    finalCarryOverEndOfMerge,
+                    compactableWALIndex,
+                    compactionRowIndex,
+                    compactionIO,
+                    oldestTimestamp,
+                    oldestVersion,
+                    oldestTombstonedTimestamp,
+                    oldestTombstonedVersion,
+                    keyCount,
+                    clobberCount,
+                    tombstoneCount,
+                    ttlCount,
+                    tombstoneTimestampId,
+                    tombstoneVersion,
+                    ttlTimestampId,
+                    ttlVersion,
+                    endOfMerge);
                 compactionIO.flush(true);
+
                 long sizeAfterCompaction = compactionIO.sizeInBytes();
                 compactionIO.close();
                 ioProvider.delete(backupKey, name);
@@ -330,6 +305,7 @@ public class BinaryWALTx<K> implements WALTx {
                     if (io == null) {
                         throw new IOException("Failed to reopen " + key);
                     }
+                    io.flush(true);
                     LOG.info("Compacted partition {}/{} was:{} bytes isNow:{} bytes.", key, name, sizeBeforeCompaction, sizeAfterCompaction);
                     return null;
                 };
@@ -347,40 +323,43 @@ public class BinaryWALTx<K> implements WALTx {
                     clobberCount.longValue(),
                     tombstoneCount.longValue(),
                     ttlCount.longValue(),
-                    System.currentTimeMillis() - start,
-                    catchupKeyCount.longValue(),
-                    catchupClobberCount.longValue(),
-                    catchupTombstoneCount.longValue(),
-                    catchupTTLCount.longValue(),
-                    System.currentTimeMillis() - startCatchup);
+                    (System.currentTimeMillis() - start));
             } catch (Exception x) {
                 //TODO cleanup
                 throw x;
             } finally {
                 compactionLock.release(NUM_PERMITS);
             }
-        });
-
+        };
     }
 
-    private void compact(RowType compactToRowType,
+    private byte[] compact(RowType compactToRowType,
         long startAtRow,
         long endOfLastRow,
+        byte[] carryOverEndOfMerge,
         CompactableWALIndex compactableWALIndex,
         CompactionWALIndex compactionWALIndex,
         RowIO compactionIO,
-        AtomicLong keyCount,
-        AtomicLong clobberCount,
-        AtomicLong tombstoneCount,
-        AtomicLong ttlCount,
-        long removeTombstonedOlderThanTimestampId,
-        long ttlTimestampId) throws Exception {
+        MutableLong oldestTimestamp,
+        MutableLong oldestVersion,
+        MutableLong oldestTombstonedTimestamp,
+        MutableLong oldestTombstonedVersion,
+        MutableLong keyCount,
+        MutableLong clobberCount,
+        MutableLong tombstoneCount,
+        MutableLong ttlCount,
+        long tombstoneTimestampId,
+        long tombstoneVersion,
+        long ttlTimestampId,
+        long ttlVersion,
+        EndOfMerge endOfMerge) throws Exception {
 
         Preconditions.checkNotNull(compactableWALIndex, "If you don't have one use NOOpWALIndex.");
 
         List<CompactionFlushable> flushables = new ArrayList<>();
         MutableInt estimatedSizeInBytes = new MutableInt(0);
         MutableLong flushTxId = new MutableLong(-1);
+        byte[][] keepCarryingOver = { carryOverEndOfMerge };
         primaryRowMarshaller.fromRows(
             txFpRowStream -> io.scan(startAtRow, false,
                 (rowFP, rowTxId, rowType, row) -> {
@@ -400,7 +379,14 @@ public class BinaryWALTx<K> implements WALTx {
                             flushables.size(),
                             estimatedSizeInBytes.intValue(),
                             flushables,
-                            lastTxId);
+                            lastTxId,
+                            -1L,
+                            -1L,
+                            -1L,
+                            -1L,
+                            -1L,
+                            null,
+                            null);
                         flushables.clear();
                         estimatedSizeInBytes.setValue(0);
                         flushTxId.setValue(rowTxId);
@@ -413,6 +399,8 @@ public class BinaryWALTx<K> implements WALTx {
                         }
                     } else if (rowType == RowType.highwater) {
                         compactionIO.writeHighwater(row);
+                    } else if (rowType == RowType.end_of_merge) {
+                        keepCarryingOver[0] = row;
                     } else {
                         // system is ignored
                     }
@@ -421,31 +409,49 @@ public class BinaryWALTx<K> implements WALTx {
             (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row) -> {
                 compactableWALIndex.getPointer(prefix, key, (_prefix, _key, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp) -> {
                     if (pointerFp == -1 || CompareTimestampVersions.compare(valueTimestamp, valueVersion, pointerTimestamp, pointerVersion) >= 0) {
-                        if (valueTombstoned && valueTimestamp < removeTombstonedOlderThanTimestampId) {
-                            tombstoneCount.incrementAndGet();
-                        } else if (valueTimestamp > ttlTimestampId) {
-                            estimatedSizeInBytes.add(row.length);
-                            flushables.add(new CompactionFlushable(prefix, key, valueTimestamp, valueTombstoned, valueVersion, row));
-                            keyCount.incrementAndGet();
+                        if (valueTombstoned && (valueTimestamp < tombstoneTimestampId || valueVersion < tombstoneVersion)) {
+                            tombstoneCount.increment();
+                        } else if (valueTimestamp < ttlTimestampId || valueVersion < ttlVersion) {
+                            ttlCount.increment();
                         } else {
-                            ttlCount.incrementAndGet();
+                            estimatedSizeInBytes.add(row.length);
+                            oldestTimestamp.setValue(Math.min(valueTimestamp, oldestTimestamp.longValue()));
+                            oldestVersion.setValue(Math.min(valueVersion, oldestVersion.longValue()));
+                            if (valueTombstoned) {
+                                oldestTombstonedTimestamp.setValue(Math.min(valueTimestamp, oldestTombstonedTimestamp.longValue()));
+                                oldestTombstonedVersion.setValue(Math.min(valueVersion, oldestTombstonedVersion.longValue()));
+                            }
+                            flushables.add(new CompactionFlushable(prefix, key, valueTimestamp, valueTombstoned, valueVersion, row));
+                            keyCount.increment();
                         }
                     } else {
-                        clobberCount.incrementAndGet();
+                        clobberCount.increment();
                     }
                     return true;
                 });
                 return true;
             });
+        if (endOfMerge != null && keepCarryingOver[0] == null) {
+            throw new IllegalStateException("Failed to encounter an end of merge hint while compacting.");
+        }
+
         flushBatch(compactToRowType,
             compactionWALIndex,
             compactionIO,
             flushables.size(),
             estimatedSizeInBytes.intValue(),
             flushables,
-            flushTxId.longValue());
+            flushTxId.longValue(),
+            oldestTimestamp.longValue(),
+            oldestVersion.longValue(),
+            oldestTombstonedTimestamp.longValue(),
+            oldestTombstonedVersion.longValue(),
+            keyCount.longValue(),
+            keepCarryingOver[0],
+            endOfMerge);
         estimatedSizeInBytes.setValue(0);
         flushables.clear();
+        return keepCarryingOver[0];
     }
 
     private void flushBatch(RowType rowType,
@@ -454,55 +460,79 @@ public class BinaryWALTx<K> implements WALTx {
         int estimatedNumberOfRows,
         int estimatedSizeInBytes,
         List<CompactionFlushable> flushables,
-        long lastTxId) throws Exception {
+        long lastTxId,
+        long oldestTimestamp,
+        long oldestVersion,
+        long oldestTombstonedTimestamp,
+        long oldestTombstonedVersion,
+        long keyCount,
+        byte[] carryOverEndOfMerge,
+        EndOfMerge endOfMerge) throws Exception {
 
-        if (flushables.isEmpty()) {
-            return;
-        }
-        flush(compactionWALIndex,
-            compactionIO,
-            lastTxId,
-            rowType,
-            estimatedNumberOfRows,
-            estimatedSizeInBytes,
-            rowStream -> {
+        if (!flushables.isEmpty()) {
+            RawRows rows = stream -> {
                 for (CompactionFlushable flushable : flushables) {
-                    if (!rowStream.stream(flushable.row)) {
+                    if (!stream.stream(flushable.row)) {
                         return false;
                     }
                 }
                 return true;
-            },
-            indexableKeyStream -> {
+            };
+
+            IndexableKeys indexableKeys = stream -> {
                 for (CompactionFlushable flushable : flushables) {
-                    if (!indexableKeyStream.stream(flushable.prefix, flushable.key,
+                    if (!stream.stream(flushable.prefix, flushable.key,
                         flushable.valueTimestamp, flushable.valueTombstoned, flushable.valueVersion)) {
                         return false;
                     }
                 }
                 return true;
-            });
-    }
+            };
 
-    private void flush(CompactionWALIndex compactionWALIndex,
-        RowIO compactionIO,
-        long txId,
-        RowType rowType,
-        int estimatedNumberOfRows,
-        int estimatedSizeInBytes,
-        RawRows rows,
-        IndexableKeys indexableKeys) throws Exception {
+            if (compactionWALIndex != null) {
+                compactionWALIndex.merge((stream) -> {
+                    compactionIO.write(lastTxId,
+                        rowType,
+                        estimatedNumberOfRows,
+                        estimatedSizeInBytes,
+                        rows,
+                        indexableKeys,
+                        (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> stream.stream(lastTxId, prefix, key,
+                            valueTimestamp, valueTombstoned, valueVersion, fp),
+                        false);
+                    return true;
+                });
+            } else {
+                compactionIO.write(lastTxId,
+                    rowType,
+                    estimatedNumberOfRows,
+                    estimatedSizeInBytes,
+                    rows,
+                    indexableKeys,
+                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                    false);
+            }
+        }
 
-        if (compactionWALIndex != null) {
-            compactionWALIndex.merge((stream) -> {
-                compactionIO.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys,
-                    (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> stream.stream(txId, prefix, key,
-                        valueTimestamp, valueTombstoned, valueVersion, fp));
-                return true;
-            });
-        } else {
-            compactionIO.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys,
-                (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
+        if (endOfMerge != null && carryOverEndOfMerge != null) {
+            byte[] finallyAnEndOfMerge = endOfMerge.endOfMerge(carryOverEndOfMerge,
+                lastTxId,
+                oldestTimestamp == Long.MAX_VALUE ? -1 : oldestTimestamp,
+                oldestVersion == Long.MAX_VALUE ? -1 : oldestVersion,
+                oldestTombstonedTimestamp == Long.MAX_VALUE ? -1 : oldestTombstonedTimestamp,
+                oldestTombstonedVersion == Long.MAX_VALUE ? -1 : oldestTombstonedVersion,
+                keyCount,
+                compactionIO.getFpOfLastLeap(),
+                compactionIO.getUpdatesSinceLeap());
+
+            compactionIO.write(lastTxId,
+                RowType.end_of_merge,
+                1,
+                finallyAnEndOfMerge.length,
+                stream -> stream.stream(finallyAnEndOfMerge),
+                stream -> true,
+                (rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                false);
         }
     }
 

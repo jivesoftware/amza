@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service.filer;
 
 import com.jivesoftware.os.amza.api.filer.IFiler;
 import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.filer.io.AutoGrowingByteBufferBackedFiler;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -60,26 +59,6 @@ public class SingleAutoGrowingByteBufferBackedFiler implements IFiler {
         this.length = length;
         this.fShift = fShift;
         this.fseekMask = fseekMask;
-    }
-
-    public SingleAutoGrowingByteBufferBackedFiler duplicate(long startFP, long endFp) {
-        ByteBufferBackedFiler[] duplicate = new ByteBufferBackedFiler[filers.length];
-        for (int i = 0; i < duplicate.length; i++) {
-            if ((i + 1) * maxBufferSegmentSize < startFP || (i - 1) * maxBufferSegmentSize > endFp) {
-                continue;
-            }
-            duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
-        }
-        return new SingleAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
-    }
-
-    public SingleAutoGrowingByteBufferBackedFiler duplicateNew(SingleAutoGrowingByteBufferBackedFiler current) {
-        ByteBufferBackedFiler[] duplicate = new ByteBufferBackedFiler[filers.length];
-        System.arraycopy(current.filers, 0, duplicate, 0, current.filers.length - 1);
-        for (int i = current.filers.length - 1; i < duplicate.length; i++) {
-            duplicate[i] = new ByteBufferBackedFiler(filers[i].buffer.duplicate());
-        }
-        return new SingleAutoGrowingByteBufferBackedFiler(maxBufferSegmentSize, byteBufferFactory, duplicate, length, fShift, fseekMask);
     }
 
     public SingleAutoGrowingByteBufferBackedFiler duplicateAll() {

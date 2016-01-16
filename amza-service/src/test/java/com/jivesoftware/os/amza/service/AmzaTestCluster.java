@@ -20,12 +20,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.jivesoftware.os.amza.api.Consistency;
+import com.jivesoftware.os.amza.api.partition.Consistency;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import com.jivesoftware.os.amza.api.partition.PrimaryIndexDescriptor;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.partition.WALStorageDescriptor;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
@@ -116,8 +115,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
-        config.compactTombstoneIfOlderThanNMillis = 100000L;
+        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
         config.aquariumLivelinessFeedEveryMillis = 500;
         config.maxUpdatesBeforeDeltaStripeCompaction = 10;
         config.deltaStripeCompactionIntervalInMillis = 1000;
@@ -127,6 +125,7 @@ public class AmzaTestCluster {
         config.maxBufferSegmentSize = 10 * 1_024;
 
         config.updatesBetweenLeaps = 10;
+        config.useMemMap = true;
 
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
         OrderIdProviderImpl orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(localRingHost.getPort()), idPacker,
@@ -242,11 +241,10 @@ public class AmzaTestCluster {
             orderIdProvider,
             idPacker,
             partitionPropertyMarshaller,
-            (indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider) -> {
+            (workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
             },
-            availableRowsTaker, () -> {
-                return updateTaker;
-            },
+            availableRowsTaker,
+            () -> updateTaker,
             absent,
             (RowsChanged changes) -> {
             });
@@ -332,16 +330,17 @@ public class AmzaTestCluster {
         }
 
         public void create(Consistency consistency, PartitionName partitionName, RowType rowType) throws Exception {
-            WALStorageDescriptor storageDescriptor = new WALStorageDescriptor(false,
-                new PrimaryIndexDescriptor("memory_persistent", 0, false, null), null, 1000, 1000);
-
-            // TODO test other consistencies. Hehe
-            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(storageDescriptor,
+            // TODO test other consistencies and durabilities and .... Hehe
+            amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(Durability.fsync_never,
+                0, 0, 0, 0, 0, 0, 0, 0,
+                false,
                 consistency,
                 true,
                 2,
                 false,
-                rowType));
+                rowType,
+                "memory_persistent",
+                null));
             amzaService.awaitOnline(partitionName, Integer.MAX_VALUE); //TODO lololol
         }
 
@@ -460,7 +459,7 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = {0};
+                    int[] count = { 0 };
                     partition.scan(null, null, null, null, (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
@@ -574,7 +573,7 @@ public class AmzaTestCluster {
                             byte[] bValue = bvalue[0];
                             long bVersion = bversion[0];
                             String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                                + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                             if (bValue == null) {
                                 System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)

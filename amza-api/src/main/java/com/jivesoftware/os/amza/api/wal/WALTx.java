@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.api.wal;
 
-import com.google.common.base.Optional;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.CompactableWALIndex;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -10,17 +9,13 @@ import com.jivesoftware.os.amza.api.stream.RowType;
  */
 public interface WALTx {
 
-    <R> R write(WALWrite<R> write) throws Exception;
-
-    <R> R read(WALRead<R> read) throws Exception;
+    <R> R tx(Tx<R> write) throws Exception;
 
     <R> R readFromTransactionId(long sinceTransactionId, WALReadWithOffset<R> readWithOffset) throws Exception;
 
-    void validateAndRepair() throws Exception;
+    <R> R open(Tx<R> tx) throws Exception;
 
-    <I extends CompactableWALIndex> I load(WALIndexProvider<I> walIndexProvider,
-        VersionedPartitionName partitionName,
-        int maxUpdatesBetweenIndexCommitMarker) throws Exception;
+    <I extends CompactableWALIndex> I openIndex(WALIndexProvider<I> walIndexProvider, VersionedPartitionName partitionName) throws Exception;
 
     long length() throws Exception;
 
@@ -28,22 +23,31 @@ public interface WALTx {
 
     void delete() throws Exception;
 
-    <I extends CompactableWALIndex> Optional<Compacted<I>> compact(RowType compactToRowType,
-        long removeTombstonedOlderThanTimestampId,
+    <I extends CompactableWALIndex> Compacted<I> compact(RowType compactToRowType,
+        long tombstoneTimestampId,
+        long tombstoneVersion,
         long ttlTimestampId,
-        I rowIndex,
-        boolean force) throws Exception;
+        long ttlVersion,
+        I rowIndex) throws Exception;
+
+    interface EndOfMerge {
+
+        byte[] endOfMerge(byte[] raw,
+            long highestTxId,
+            long oldestTimestamp,
+            long oldestVersion,
+            long oldestTombstonedTimestamp,
+            long oldestTombstonedVersion,
+            long keyCount,
+            long fpOfLastLeap,
+            long updatesSinceLeap) throws Exception;
+    }
 
     void hackTruncation(int numBytes);
 
-    interface WALWrite<R> {
+    interface Tx<R> {
 
-        R write(WALWriter writer) throws Exception;
-    }
-
-    interface WALRead<R> {
-
-        R read(WALReader reader) throws Exception;
+        R tx(RowIO io) throws Exception;
     }
 
     interface WALReadWithOffset<R> {
@@ -53,7 +57,7 @@ public interface WALTx {
 
     interface Compacted<II> {
 
-        CommittedCompacted<II> commit() throws Exception;
+        CommittedCompacted<II> commit(EndOfMerge endOfMerge) throws Exception;
     }
 
     class CommittedCompacted<III> {
@@ -66,15 +70,9 @@ public interface WALTx {
         public final long tombstoneCount;
         public final long ttlCount;
         public final long duration;
-        public final long catchupKeyCount;
-        public final long catchupClobberCount;
-        public final long catchupTombstoneCount;
-        public final long catchupTTLCount;
-        public final long catchupDuration;
 
         public CommittedCompacted(III index, long sizeBeforeCompaction, long sizeAfterCompaction, long keyCount, long removeCount,
-            long tombstoneCount, long ttlCount, long duration, long catchupKeyCount, long catchupClobberCount, long catchupTombstoneCount, long catchupTTLCount,
-            long catchupDuration) {
+            long tombstoneCount, long ttlCount, long duration) {
             this.index = index;
             this.sizeBeforeCompaction = sizeBeforeCompaction;
             this.sizeAfterCompaction = sizeAfterCompaction;
@@ -83,11 +81,6 @@ public interface WALTx {
             this.tombstoneCount = tombstoneCount;
             this.ttlCount = ttlCount;
             this.duration = duration;
-            this.catchupKeyCount = catchupKeyCount;
-            this.catchupClobberCount = catchupClobberCount;
-            this.catchupTombstoneCount = catchupTombstoneCount;
-            this.catchupTTLCount = catchupTTLCount;
-            this.catchupDuration = catchupDuration;
         }
 
     }

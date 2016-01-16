@@ -25,7 +25,6 @@ import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import java.util.Arrays;
 
 public class PartitionCreator {
 

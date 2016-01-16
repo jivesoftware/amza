@@ -30,7 +30,7 @@ public class OverviewPluginEndpoints {
     @Path("/")
     @Produces(MediaType.TEXT_HTML)
     public Response ring() {
-        String rendered = soyService.renderPlugin(pluginRegion,new OverviewInput());
+        String rendered = soyService.renderPlugin(pluginRegion, new OverviewInput());
         return Response.ok(rendered).build();
     }
 

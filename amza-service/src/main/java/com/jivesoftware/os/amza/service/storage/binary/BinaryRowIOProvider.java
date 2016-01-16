@@ -2,7 +2,7 @@ package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.collect.Lists;
 import com.google.common.io.Files;
-import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.wal.RowIO;
 import com.jivesoftware.os.amza.service.stats.IoStats;
 import com.jivesoftware.os.amza.service.storage.filer.DiskBackedWALFiler;
 import java.io.File;
@@ -15,36 +15,26 @@ import org.apache.commons.io.FileUtils;
 /**
  * @author jonathan.colt
  */
-public class BinaryRowIOProvider implements RowIOProvider<File> {
+public class BinaryRowIOProvider implements RowIOProvider {
 
-    private final String[] workingDirectories;
     private final IoStats ioStats;
-    private final int corruptionParanoiaFactor;
     private final int updatesBetweenLeaps;
     private final int maxLeaps;
     private final boolean useMemMap;
 
-    public BinaryRowIOProvider(String[] workingDirectories,
+    public BinaryRowIOProvider(
         IoStats ioStats,
-        int corruptionParanoiaFactor,
         int updatesBetweenLeaps,
         int maxLeaps,
         boolean useMemMap) {
-        this.workingDirectories = workingDirectories;
         this.ioStats = ioStats;
-        this.corruptionParanoiaFactor = corruptionParanoiaFactor;
         this.updatesBetweenLeaps = updatesBetweenLeaps;
         this.maxLeaps = maxLeaps;
         this.useMemMap = useMemMap;
     }
 
     @Override
-    public File baseKey(VersionedPartitionName versionedPartitionName) {
-        return new File(workingDirectories[Math.abs(versionedPartitionName.hashCode() % workingDirectories.length)]);
-    }
-
-    @Override
-    public RowIO<File> open(File dir, String name, boolean createIfAbsent) throws Exception {
+    public RowIO open(File dir, String name, boolean createIfAbsent) throws Exception {
         if (!dir.exists() && !dir.mkdirs()) {
             throw new IOException("Failed trying to mkdirs for " + dir);
         }
@@ -53,9 +43,9 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
             return null;
         }
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", useMemMap, 0);
-        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats, corruptionParanoiaFactor);
+        BinaryRowReader rowReader = new BinaryRowReader(filer, ioStats);
         BinaryRowWriter rowWriter = new BinaryRowWriter(filer, ioStats);
-        return new BinaryRowIO<>(dir, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
+        return new BinaryRowIO(dir, name, rowReader, rowWriter, updatesBetweenLeaps, maxLeaps);
     }
 
     @Override
@@ -86,11 +76,6 @@ public class BinaryRowIOProvider implements RowIOProvider<File> {
     @Override
     public File buildKey(File versionedKey, String name) {
         return new File(versionedKey, name);
-    }
-
-    @Override
-    public File createTempKey() {
-        return Files.createTempDir();
     }
 
     @Override

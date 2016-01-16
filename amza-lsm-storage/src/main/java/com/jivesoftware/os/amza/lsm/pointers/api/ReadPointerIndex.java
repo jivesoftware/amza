@@ -15,7 +15,7 @@ public interface ReadPointerIndex {
 
     <R> R rangeScan(byte[] from, byte[] to, PointerTx<R> tx) throws Exception;
 
-    <R> R rowScan( PointerTx<R> tx) throws Exception;
+    <R> R rowScan(PointerTx<R> tx) throws Exception;
 
     void close() throws Exception;
 

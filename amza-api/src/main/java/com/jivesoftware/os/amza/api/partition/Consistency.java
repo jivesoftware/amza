@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.api;
+package com.jivesoftware.os.amza.api.partition;
 
 import com.google.common.collect.ImmutableSet;
 import java.util.Set;

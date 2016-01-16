@@ -625,7 +625,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
 
     public void compactAllTombstones() throws Exception {
         LOG.info("Manual compact all tombstones requests.");
-        partitionTombstoneCompactor.compactTombstone(0, 1, partitionTombstoneCompactor.removeIfOlderThanTimestampId(), true);
+        partitionTombstoneCompactor.compactTombstone(-1, true);
     }
 
     public void mergeAllDeltas(boolean force) {

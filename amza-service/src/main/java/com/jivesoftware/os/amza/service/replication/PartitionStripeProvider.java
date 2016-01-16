@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
+import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import java.util.Arrays;
@@ -35,7 +36,7 @@ public class PartitionStripeProvider {
         int stripeIndex = partitionStripeFunction.stripe(partitionName);
         return tx.tx(deltaStripes[stripeIndex], highwaterStorages[stripeIndex]);
     }
-    
+
     public void flush(PartitionName partitionName, boolean hardFlush) throws Exception {
         int stripeIndex = partitionStripeFunction.stripe(partitionName);
         highwaterStorages[stripeIndex].flush(() -> {

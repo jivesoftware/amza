@@ -2,7 +2,6 @@ package com.jivesoftware.os.amza.service.storage.filer;
 
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import java.io.IOException;
-import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
@@ -17,7 +16,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
     private final AtomicBoolean closed;
     private FileChannel fc;
     private volatile long fp;
-    
+
     private final ByteBuffer singleByteBuffer = ByteBuffer.allocate(1);
 
     public DiskBackedWALFilerChannelReader(DiskBackedWALFiler parent, FileChannel fc, AtomicBoolean closed) {

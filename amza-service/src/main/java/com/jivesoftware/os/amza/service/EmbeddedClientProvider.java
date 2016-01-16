@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Maps;
-import com.jivesoftware.os.amza.api.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.Commitable;
@@ -86,7 +86,6 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
             byte[] toPrefix,
             byte[] toKey,
             KeyValueTimestampStream stream) throws Exception {
-            // TODO impl WTF quorum scan? Really
             partitionProvider.getPartition(partitionName).scan(fromPrefix, fromKey, toPrefix, toKey, stream);
         }
 

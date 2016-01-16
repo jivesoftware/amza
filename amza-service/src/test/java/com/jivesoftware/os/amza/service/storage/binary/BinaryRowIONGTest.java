@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.storage.binary;
 
 import com.google.common.collect.Lists;
+import com.google.common.io.Files;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
@@ -29,9 +30,9 @@ public class BinaryRowIONGTest {
         File file = File.createTempFile("BinaryRowIO", "dat");
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false, 0);
         IoStats ioStats = new IoStats();
-        BinaryRowIO<File> binaryRowIO = new BinaryRowIO<>(file,
+        BinaryRowIO binaryRowIO = new BinaryRowIO(file,
             "test",
-            new BinaryRowReader(filer, ioStats, 10),
+            new BinaryRowReader(filer, ioStats),
             new BinaryRowWriter(filer, ioStats),
             4096,
             64);
@@ -43,9 +44,9 @@ public class BinaryRowIONGTest {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
-        BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer,
+        BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(),
             "test",
-            new BinaryRowReader(filer, ioStats, 10),
+            new BinaryRowReader(filer, ioStats),
             new BinaryRowWriter(filer, ioStats),
             4096,
             64);
@@ -72,7 +73,8 @@ public class BinaryRowIONGTest {
                 row.length,
                 stream -> stream.stream(row),
                 stream -> true,
-                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
+                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                false);
         }
 
         rowIO = reopen.call();
@@ -109,7 +111,7 @@ public class BinaryRowIONGTest {
         File file = File.createTempFile("BinaryRowIO", "dat");
         DiskBackedWALFiler filer = new DiskBackedWALFiler(file.getAbsolutePath(), "rw", false, 0);
         IoStats ioStats = new IoStats();
-        leap(() -> new BinaryRowIO<>(file, "test", new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats), 4096, 64), 64);
+        leap(() -> new BinaryRowIO(file, "test", new BinaryRowReader(filer, ioStats), new BinaryRowWriter(filer, ioStats), 4096, 64), 64);
     }
 
     @Test
@@ -117,7 +119,8 @@ public class BinaryRowIONGTest {
         MemoryBackedWALFiler filer = new MemoryBackedWALFiler(new MultiAutoGrowingByteBufferBackedFiler(1_024, 1_024 * 1_024,
             new HeapByteBufferFactory()));
         IoStats ioStats = new IoStats();
-        BinaryRowIO binaryRowIO = new BinaryRowIO<>(filer, "test", new BinaryRowReader(filer, ioStats, 10), new BinaryRowWriter(filer, ioStats), 4096, 64);
+        BinaryRowIO binaryRowIO = new BinaryRowIO(Files.createTempDir(), "test", new BinaryRowReader(filer, ioStats), new BinaryRowWriter(filer, ioStats),
+            4096, 64);
         leap(() -> binaryRowIO, 4096);
     }
 
@@ -133,7 +136,8 @@ public class BinaryRowIONGTest {
                 row.length,
                 stream -> stream.stream(row),
                 stream -> true,
-                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true);
+                (txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> true,
+                false);
             /*if (i % 10_000 == 0) {
              System.out.println("Wrote " + i);
              }*/

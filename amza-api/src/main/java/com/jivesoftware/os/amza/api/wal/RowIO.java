@@ -26,7 +26,10 @@ public interface RowIO extends WALReader, WALWriter {
 
     long getFpOfLastLeap();
 
-    void validate(boolean truncateToEndOfMergeMarker, ValidationStream backward, ValidationStream forward, ValidationNotifier validationNotifier) throws Exception;
+    void validate(boolean truncateToEndOfMergeMarker,
+        ValidationStream backward,
+        ValidationStream forward,
+        ValidationNotifier validationNotifier) throws Exception;
 
     void hackTruncation(int numBytes);
 
@@ -46,6 +49,7 @@ public interface RowIO extends WALReader, WALWriter {
     }
 
     interface ValidationNotifier {
+
         void corrupt(long corruptAtFP, boolean reverse);
     }
 }

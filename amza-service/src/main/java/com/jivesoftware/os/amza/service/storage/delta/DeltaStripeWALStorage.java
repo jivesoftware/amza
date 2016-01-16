@@ -197,8 +197,8 @@ public class DeltaStripeWALStorage {
                                         acceptable = false;
                                     } else {
                                         acceptable = txPartitionState.tx(versionedPartitionName.getPartitionName(),
-                                            versionedAquarium -> (versionedAquarium.getVersionedPartitionName().getPartitionVersion() ==
-                                                versionedPartitionName.getPartitionVersion()));
+                                            versionedAquarium -> (versionedAquarium.getVersionedPartitionName().getPartitionVersion()
+                                            == versionedPartitionName.getPartitionVersion()));
                                         if (acceptable) {
                                             accepted.add(versionedPartitionName);
                                         } else {
@@ -227,11 +227,11 @@ public class DeltaStripeWALStorage {
                                     PartitionDelta delta = getPartitionDelta(versionedPartitionName);
                                     TimestampedValue partitionValue = partitionStore.getTimestampedValue(prefix, key);
                                     if (partitionValue == null
-                                        || CompareTimestampVersions.compare(partitionValue.getTimestampId(), partitionValue.getVersion(),
+                                    || CompareTimestampVersions.compare(partitionValue.getTimestampId(), partitionValue.getVersion(),
                                         valueTimestamp, valueVersion) < 0) {
                                         WALPointer got = delta.getPointer(prefix, key);
                                         if (got == null
-                                            || CompareTimestampVersions.compare(got.getTimestampId(), got.getVersion(),
+                                        || CompareTimestampVersions.compare(got.getTimestampId(), got.getVersion(),
                                             valueTimestamp, valueVersion) < 0) {
                                             delta.put(fp, prefix, key, valueTimestamp, valueTombstoned, valueVersion);
                                             delta.onLoadAppendTxFp(prefix, txId, fp);
@@ -249,7 +249,7 @@ public class DeltaStripeWALStorage {
             }
         }
 
-        amzaStats.deltaStripeLoad(index, updateSinceLastMerge.get(), (double) updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
+        amzaStats.deltaStripeLoad(index, updateSinceLastMerge.get(), updateSinceLastMerge.get() / (double) mergeAfterNUpdates);
 
         if (updateSinceLastMerge.get() > mergeAfterNUpdates) {
             synchronized (awakeCompactionsLock) {
@@ -363,7 +363,7 @@ public class DeltaStripeWALStorage {
                             sickThreads.sick(x);
                             LOG.error(
                                 "Failed to merge partition:{} Things are going south! We will retry in case the issue can be resolved in 30sec.",
-                                new Object[] { versionedPartitionName }, x);
+                                new Object[]{versionedPartitionName}, x);
                             Thread.sleep(30_000);
                         }
                     }
@@ -374,10 +374,10 @@ public class DeltaStripeWALStorage {
             sickThreads.sick(x);
             LOG.error(
                 "This is catastrophic."
-                    + " We have permanently parked this thread."
-                    + " This delta {} can no longer accept writes."
-                    + " You likely need to restart this instance",
-                new Object[] { index }, x);
+                + " We have permanently parked this thread."
+                + " This delta {} can no longer accept writes."
+                + " You likely need to restart this instance",
+                new Object[]{index}, x);
             LockSupport.park();
         } finally {
             releaseAll();
@@ -386,7 +386,7 @@ public class DeltaStripeWALStorage {
         List<MergeResult> results = Lists.newArrayListWithCapacity(futures.size());
         for (Future<MergeResult> f : futures) {
             results.add(f.get());
-        }        
+        }
         ListMultimap<String, WALIndex> providerIndexes = ArrayListMultimap.create();
         for (MergeResult result : results) {
             partitionIndex.get(result.versionedPartitionName).flush(true);
@@ -454,24 +454,24 @@ public class DeltaStripeWALStorage {
                     return true;
                 },
                 (_rowType, _prefix, key, value, valueTimestamp, valueTombstone, valueVersion, pointerTimestamp, pointerTombstoned, pointerVersion, pointerFp)
-                    -> {
-                    WALKey walKey = new WALKey(prefix, key);
-                    WALValue walValue = new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion);
-                    if (pointerFp == -1) {
-                        apply.put(walKey, walValue);
-                    } else if (CompareTimestampVersions.compare(pointerTimestamp, pointerVersion, valueTimestamp, valueVersion) < 0) {
-                        apply.put(walKey, walValue);
-                        WALTimestampId walTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
-                        KeyedTimestampId keyedTimestampId = new KeyedTimestampId(prefix, key, walTimestampId.getTimestampId(), walTimestampId.getTombstoned());
-                        clobbers.add(keyedTimestampId);
-                        if (valueTombstone && !pointerTombstoned) {
-                            removes.add(keyedTimestampId);
-                        }
-                    } else {
-                        amzaStats.deltaFirstCheckRemoves.incrementAndGet();
+                -> {
+                WALKey walKey = new WALKey(prefix, key);
+                WALValue walValue = new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion);
+                if (pointerFp == -1) {
+                    apply.put(walKey, walValue);
+                } else if (CompareTimestampVersions.compare(pointerTimestamp, pointerVersion, valueTimestamp, valueVersion) < 0) {
+                    apply.put(walKey, walValue);
+                    WALTimestampId walTimestampId = new WALTimestampId(pointerTimestamp, pointerTombstoned);
+                    KeyedTimestampId keyedTimestampId = new KeyedTimestampId(prefix, key, walTimestampId.getTimestampId(), walTimestampId.getTombstoned());
+                    clobbers.add(keyedTimestampId);
+                    if (valueTombstone && !pointerTombstoned) {
+                        removes.add(keyedTimestampId);
                     }
-                    return true;
-                });
+                } else {
+                    amzaStats.deltaFirstCheckRemoves.incrementAndGet();
+                }
+                return true;
+            });
 
             long appliedCount = 0;
             if (apply.isEmpty()) {
@@ -516,7 +516,7 @@ public class DeltaStripeWALStorage {
             }
 
             long unmergedUpdates = updateSinceLastMerge.addAndGet(appliedCount);
-            amzaStats.deltaStripeLoad(index, unmergedUpdates, (double) unmergedUpdates / (double) mergeAfterNUpdates);
+            amzaStats.deltaStripeLoad(index, unmergedUpdates, unmergedUpdates / (double) mergeAfterNUpdates);
             if (unmergedUpdates > mergeAfterNUpdates) {
                 synchronized (awakeCompactionsLock) {
                     awakeCompactionsLock.notifyAll();
@@ -646,13 +646,13 @@ public class DeltaStripeWALStorage {
         try {
             return storage.containsKeys(prefix,
                 storageKeyStream -> getPartitionDelta(versionedPartitionName).containsKeys(prefix, keys,
-                    (_prefix, key, tombstoned, exists) -> {
-                        if (exists) {
-                            return stream.stream(prefix, key, !tombstoned);
-                        } else {
-                            return storageKeyStream.stream(key);
-                        }
-                    }),
+                (_prefix, key, tombstoned, exists) -> {
+                    if (exists) {
+                        return stream.stream(prefix, key, !tombstoned);
+                    } else {
+                        return storageKeyStream.stream(key);
+                    }
+                }),
                 stream);
         } finally {
             releaseOne();
@@ -724,7 +724,7 @@ public class DeltaStripeWALStorage {
                     return true;
                 },
                 (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row)
-                    -> keyValueStream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
+                -> keyValueStream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
         } finally {
             releaseOne();
         }
@@ -762,7 +762,7 @@ public class DeltaStripeWALStorage {
                         return true;
                     },
                     (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, row)
-                        -> keyValueStream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
+                    -> keyValueStream.stream(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion));
             }
             return true;
         } finally {
@@ -804,7 +804,7 @@ public class DeltaStripeWALStorage {
             if (d == null && iterator.hasNext()) {
                 d = iterator.next();
             }
-            boolean[] needsKey = { true };
+            boolean[] needsKey = {true};
             byte[] pk = WALKey.compose(prefix, key);
             boolean complete = WALKey.decompose(
                 txFpKeyValueStream -> {
@@ -828,7 +828,7 @@ public class DeltaStripeWALStorage {
                     return true;
                 },
                 (txId, fp, rowType2, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, streamValueVersion, row)
-                    -> keyValueStream.stream(rowType2, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, streamValueVersion));
+                -> keyValueStream.stream(rowType2, streamPrefix, streamKey, streamValue, streamValueTimestamp, streamValueTombstoned, streamValueVersion));
 
             if (!complete) {
                 return false;

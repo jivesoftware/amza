@@ -19,8 +19,8 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.api.wal.WALHighwater.RingMemberHighwater;
-import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
+import com.jivesoftware.os.amza.service.storage.HighwaterRowMarshaller;
 import java.util.ArrayList;
 import java.util.List;
 

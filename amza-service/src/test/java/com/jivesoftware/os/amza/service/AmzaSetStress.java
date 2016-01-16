@@ -104,7 +104,7 @@ public class AmzaSetStress {
 
             if (key % 100 == 0) {
                 long elapse = System.currentTimeMillis() - start;
-                double millisPerAdd = ((double) elapse / (double) key);
+                double millisPerAdd = (elapse / (double) key);
                 System.out.println(partitionName + " millisPerAdd:" + millisPerAdd + " addsPerSec:" + (1000d / millisPerAdd) + " key:" + key);
             }
         }

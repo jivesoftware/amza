@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;

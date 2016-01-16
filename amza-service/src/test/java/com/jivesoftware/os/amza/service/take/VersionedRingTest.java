@@ -47,7 +47,7 @@ public class VersionedRingTest {
     }
 
     private RingMemberAndHost memberAndHost(String name) {
-        return new RingMemberAndHost(member(name), new RingHost("datacenter", "rack",name, 1));
+        return new RingMemberAndHost(member(name), new RingHost("datacenter", "rack", name, 1));
     }
 
     private RingMember member(String name) {

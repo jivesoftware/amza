@@ -1,7 +1,7 @@
 package com.jivesoftware.os.amza.service;
 
-import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.google.common.base.Optional;
+import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.mlogger.core.MetricLogger;

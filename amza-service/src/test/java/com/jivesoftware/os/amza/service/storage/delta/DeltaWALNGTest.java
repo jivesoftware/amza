@@ -67,8 +67,7 @@ public class DeltaWALNGTest {
 
         deltaWAL.load((long rowFP, long rowTxId, RowType rowType, byte[] rawRow) -> {
             if (rowType == RowType.primary) {
-                primaryRowMarshaller.fromRows(
-                    (PrimaryRowMarshaller.FpRows) fpRowStream -> fpRowStream.stream(rowFP, rowType, rawRow),
+                primaryRowMarshaller.fromRows(fpRowStream -> fpRowStream.stream(rowFP, rowType, rawRow),
                     (fp, rowType2, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                         System.out.println("rfp=" + rowFP + " rid" + rowTxId + " rt=" + rowType2
                             + " key=" + new String(key) + " value=" + new String(value)
@@ -87,7 +86,9 @@ public class DeltaWALNGTest {
             deltaWAL.hydrate(fpStream -> fpStream.stream(fp1),
                 (fp, rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                     System.out.println(fp + " hydrated:" + new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion));
-                    Assert.assertEquals(new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion), apply1.get(new WALKey(kvh.prefix, kvh.key)));
+                    Assert.assertEquals(
+                        new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion),
+                        apply1.get(new WALKey(kvh.prefix, kvh.key)));
                     return true;
                 });
         }
@@ -100,7 +101,9 @@ public class DeltaWALNGTest {
             deltaWAL.hydrate(fpStream -> fpStream.stream(fp2),
                 (fp, rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                     System.out.println(fp + " hydrated:" + new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion));
-                    Assert.assertEquals(new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion), apply2.get(new WALKey(kvh.prefix, kvh.key)));
+                    Assert.assertEquals(
+                        new WALValue(rowType, value, valueTimestamp, valueTombstone, valueVersion),
+                        apply2.get(new WALKey(kvh.prefix, kvh.key)));
                     return true;
                 });
 

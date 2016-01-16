@@ -219,9 +219,8 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
         try {
             return WALKey.decompose(
                 decomposeStream -> {
-                    return primaryRowMarshaller.fromRows(
-                        (PrimaryRowMarshaller.FpRows) fpRowStream -> wal.tx(
-                            io -> io.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
+                    return primaryRowMarshaller.fromRows(fpRowStream -> wal.tx(
+                        io -> io.read(fps, (rowFP, rowTxId, rowType, row) -> fpRowStream.stream(rowFP, rowType, row))),
                         (fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                             byte[] deltaValue = UIO.readByteArray(value, 0, "value");
                             return decomposeStream.stream(-1, fp, rowType, key, deltaValue, valueTimestamp, valueTombstoned, valueVersion, null);

@@ -15,10 +15,10 @@
  */
 package com.jivesoftware.os.amza.api.wal;
 
+import com.jivesoftware.os.amza.api.stream.FpKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
-import com.jivesoftware.os.amza.api.stream.FpKeyValueStream;
 
 public interface PrimaryRowMarshaller {
 

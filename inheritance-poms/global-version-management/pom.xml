@@ -374,7 +374,7 @@
                     </executions>
                     <configuration>
                         <configLocation>checkstyle-checker.xml</configLocation>
-                        <propertyExpansion>config_loc=${project.parent.basedir}/../global-build-management</propertyExpansion>
+                        <propertyExpansion>config_loc=${project.parent.basedir}/../global-version-management</propertyExpansion>
                         <consoleOutput>true</consoleOutput>
                         <failsOnError>${checkstyle.failsOnError}</failsOnError>
                         <failOnViolation>${checkstyle.failsOnError}</failOnViolation>

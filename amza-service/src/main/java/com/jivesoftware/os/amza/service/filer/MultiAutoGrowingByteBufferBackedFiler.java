@@ -162,7 +162,7 @@ public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
             return 0;
         }
         return ((filers.length - 1) * maxBufferSegmentSize) + filers[filers.length - 1].length();
-        */
+         */
     }
 
     @Override
@@ -228,7 +228,7 @@ public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
         }
         return offset;
     }
-    
+
     @Override
     public void write(byte[] b, int offset, int len) throws IOException {
         long count = ensure(len);

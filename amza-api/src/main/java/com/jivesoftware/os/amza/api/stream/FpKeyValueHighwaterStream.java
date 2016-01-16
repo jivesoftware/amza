@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.api.stream;
 
-import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 
 /**

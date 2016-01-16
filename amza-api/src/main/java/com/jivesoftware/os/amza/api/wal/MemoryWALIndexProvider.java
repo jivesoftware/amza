@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.api.wal;
 
-import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 
 /**

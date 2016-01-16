@@ -16,7 +16,7 @@ public class DiskBackedWALFilerChannelReader implements IReadable {
     private final AtomicBoolean closed;
     private FileChannel fc;
     private volatile long fp;
-    
+
     private final ByteBuffer singleByteBuffer = ByteBuffer.allocate(1);
 
     public DiskBackedWALFilerChannelReader(DiskBackedWALFiler parent, FileChannel fc, AtomicBoolean closed) {

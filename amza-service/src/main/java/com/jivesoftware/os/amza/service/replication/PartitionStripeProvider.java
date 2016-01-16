@@ -36,7 +36,7 @@ public class PartitionStripeProvider {
         int stripeIndex = partitionStripeFunction.stripe(partitionName);
         return tx.tx(deltaStripes[stripeIndex], highwaterStorages[stripeIndex]);
     }
-    
+
     public void flush(PartitionName partitionName, boolean hardFlush) throws Exception {
         int stripeIndex = partitionStripeFunction.stripe(partitionName);
         highwaterStorages[stripeIndex].flush(() -> {

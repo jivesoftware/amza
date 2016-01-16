@@ -1,8 +1,8 @@
 package com.jivesoftware.os.amza.service.partition;
 
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
-import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import java.util.concurrent.Semaphore;
 
 /**

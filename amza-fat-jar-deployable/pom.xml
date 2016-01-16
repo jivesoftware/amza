@@ -97,6 +97,25 @@
             <artifactId>amza-lsm-storage</artifactId>
             <version>0.188-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-client</artifactId>
+            <version>0.188-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.amza</groupId>
+            <artifactId>amza-api</artifactId>
+            <version>0.188-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.routing.bird</groupId>
+            <artifactId>routing-bird-health</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.routing.bird</groupId>
+            <artifactId>routing-bird-http-client</artifactId>
+        </dependency>
+
     </dependencies>
     <name>amza-fat-jar-deployable</name>
 </project>

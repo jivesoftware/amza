@@ -3,10 +3,10 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.AquariumTransactor;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.StorageVersion;
@@ -192,7 +192,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             tookFullyWhileInactive.remove(versionedPartitionName);
         }
 
-        //if (!versionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TOOK FULLY +++ {}={} from {} in {} at {}", rootRingMember, currentWaterline.getState(), fromRingMember, versionedPartitionName, leadershipToken);
+        //if (!versionedPartitionName.getPartitionName().isSystemPartition()) LOG.info("TOOK FULLY +++ {}={} from {} in {} at {}",
+        // rootRingMember, currentWaterline.getState(), fromRingMember, versionedPartitionName, leadershipToken);
         if (currentWaterline.getState() == State.bootstrap && (leader == null || leadershipToken == leader.getTimestamp())) {
             tookFullyWhileBootstrap.compute(versionedPartitionName, (key, current) -> {
                 if (current == null || current.leadershipToken < leadershipToken) {

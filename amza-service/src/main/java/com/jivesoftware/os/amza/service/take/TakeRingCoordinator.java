@@ -154,9 +154,8 @@ public class TakeRingCoordinator {
             int ringSize = ring.entries.size();
             int neighborsSize = ringSize - (ring.rootMemberIndex == -1 ? 0 : 1);
             RingMember[] ringMembers = new RingMember[neighborsSize];
-            for (int i = ring.rootMemberIndex + 1, j = 0; j < ringSize - 1; i++) {
+            for (int i = ring.rootMemberIndex + 1, j = 0; j < ringSize - 1; i++, j++) {
                 ringMembers[j] = ring.entries.get(i % ringSize).ringMember;
-                j++;
             }
 
             this.ring = ring;

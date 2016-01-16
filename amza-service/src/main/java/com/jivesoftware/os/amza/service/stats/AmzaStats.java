@@ -161,7 +161,7 @@ public class AmzaStats {
 
         totalCompactions.computeIfAbsent(family, (key) -> new AtomicLong()).incrementAndGet();
         if (start != null) {
-            recentCompaction.add(new AbstractMap.SimpleEntry<>(family+" "+name, System.currentTimeMillis() - start));
+            recentCompaction.add(new AbstractMap.SimpleEntry<>(family + " " + name, System.currentTimeMillis() - start));
             while (recentCompaction.size() > 10_000) {
                 recentCompaction.remove(0);
             }

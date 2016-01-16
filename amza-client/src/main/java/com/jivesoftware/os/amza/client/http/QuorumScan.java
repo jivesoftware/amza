@@ -49,17 +49,14 @@ class QuorumScan {
             this.version[wi]);
     }
 
-    @SuppressWarnings(value = "AssignmentToMethodParameter")
     int findWinningIndex() {
         int wi = -1;
         for (int i = 0; i < used.length; i++) {
             if (used[i]) {
+            } else if (wi == -1) {
+                wi = i;
             } else {
-                if (wi == -1) {
-                    wi = i;
-                } else {
-                    wi = winner(wi, i);
-                }
+                wi = winner(wi, i);
             }
         }
         return wi;

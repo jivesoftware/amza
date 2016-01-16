@@ -71,11 +71,6 @@ public class LSMPointerIndexWALIndex implements WALIndex {
         this.prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush);
     }
 
-    private boolean entryToWALPointer(byte[] prefix, byte[] key, long valueTimestamp, boolean valueTombstoned, long valueVersion, long pointer,
-        WALKeyPointerStream stream) throws Exception {
-        return stream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, pointer);
-    }
-
     private boolean entryToWALPointer(RowType rowType, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
         long timestamp, boolean tombstoned, long version, long pointer,
         KeyValuePointerStream stream) throws Exception {
@@ -176,7 +171,8 @@ public class LSMPointerIndexWALIndex implements WALIndex {
                     long takeFp = UIO.bytesLong(key, 8);
                     return txFpStream.stream(takeTxId, takeFp);
                 };
-                while (rangeScan.next(stream)) ;
+                while (rangeScan.next(stream)) {
+                }
                 return false;
             });
         } finally {
@@ -373,7 +369,8 @@ public class LSMPointerIndexWALIndex implements WALIndex {
     private boolean stream(WALKeyPointerStream stream, NextPointer nextPointer) throws Exception {
         PointerStream pointerStream = (rawKey, timestamp, tombstoned, version, pointer)
             -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned, version, pointer);
-        while (nextPointer.next(pointerStream)) ;
+        while (nextPointer.next(pointerStream)) {
+        }
         return false;
     }
 

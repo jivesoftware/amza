@@ -17,21 +17,14 @@ public class JacksonPartitionPropertyMarshaller implements PartitionPropertyMars
     }
 
     @Override
-    public PartitionProperties fromBytes(byte[] bytes) {
-        try {
-            return mapper.readValue(bytes, PartitionProperties.class);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
+    public PartitionProperties fromBytes(byte[] bytes) throws IOException {
+        return mapper.readValue(bytes, PartitionProperties.class);
+
     }
 
     @Override
-    public byte[] toBytes(PartitionProperties partitionProperties) {
-        try {
-            return mapper.writeValueAsBytes(partitionProperties);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
+    public byte[] toBytes(PartitionProperties partitionProperties) throws IOException {
+        return mapper.writeValueAsBytes(partitionProperties);
     }
 
 }

@@ -64,7 +64,7 @@ public class IndexedWALStorageProvider {
         @SuppressWarnings("unchecked")
         RowIOProvider rowIOProvider = indexProviderRegistry.getRowIOProvider(providerName);
         BinaryWALTx binaryWALTx = new BinaryWALTx(baseKey,
-            versionedPartitionName.toBase64(),
+            String.valueOf(versionedPartitionName.getPartitionVersion()),
             rowIOProvider,
             primaryRowMarshaller);
         boolean hardFsyncBeforeLeapBoundary = versionedPartitionName.getPartitionName().isSystemPartition();

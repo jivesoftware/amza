@@ -98,6 +98,8 @@ public class AmzaServiceInitializer {
 
         public String[] workingDirectories = null;
 
+
+        public long asyncFsyncIntervalMillis = 1_000;
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
 
         public int numberOfCompactorThreads = 8;
@@ -372,7 +374,7 @@ public class AmzaServiceInitializer {
         }
 
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(partitionStripeFunction,
-            partitionStripes, highwaterStorages, rowTakerThreadPools, rowsTakers);
+            partitionStripes, highwaterStorages, rowTakerThreadPools, rowsTakers, config.asyncFsyncIntervalMillis);
 
         HighestPartitionTx<Void> takeHighestPartitionTx = (versionedAquarium, highestTxId) -> {
             takeCoordinator.update(ringStoreReader, versionedAquarium.getVersionedPartitionName(), highestTxId);

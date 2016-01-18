@@ -91,9 +91,9 @@ public class StripedPartition implements Partition {
         Commitable updates,
         long timeoutInMillis) throws Exception {
 
-        long start = System.currentTimeMillis();
+        long end = System.currentTimeMillis() + timeoutInMillis;
         systemReady.await(timeoutInMillis);
-        long remainingTimeInMillis = Math.max(timeoutInMillis - (start - System.currentTimeMillis()), 0);
+        long remainingTimeInMillis = Math.max(end - System.currentTimeMillis(), 0);
 
         PartitionProperties properties = versionedPartitionProvider.getProperties(partitionName);
         if (properties.requireConsistency && !properties.consistency.supportsWrites(consistency)) {
@@ -147,6 +147,9 @@ public class StripedPartition implements Partition {
             return null;
         });
 
+        // TODO consider creating stripes per durability
+        long fsyncWaitInMillis = Math.max(end - System.currentTimeMillis(), 0);
+        partitionStripeProvider.flush(partitionName, properties.durability, fsyncWaitInMillis);
     }
 
     private void checkReadConsistencySupport(Consistency consistency) throws Exception {

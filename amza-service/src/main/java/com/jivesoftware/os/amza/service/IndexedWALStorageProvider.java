@@ -47,7 +47,8 @@ public class IndexedWALStorageProvider {
     }
 
     public File baseKey(VersionedPartitionName versionedPartitionName) {
-        return workingDirectories[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())];
+        return new File(workingDirectories[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())],
+            String.valueOf(versionedPartitionName.getPartitionVersion() % 1024));
     }
 
     public WALStorage<?> create(VersionedPartitionName versionedPartitionName, PartitionProperties partitionProperties) throws Exception {
@@ -63,8 +64,13 @@ public class IndexedWALStorageProvider {
         WALIndexProvider<I> walIndexProvider = (WALIndexProvider<I>) indexProviderRegistry.getWALIndexProvider(providerName);
         @SuppressWarnings("unchecked")
         RowIOProvider rowIOProvider = indexProviderRegistry.getRowIOProvider(providerName);
+
+        String name = (versionedPartitionName.getPartitionVersion() == VersionedPartitionName.STATIC_VERSION)
+            ? versionedPartitionName.toBase64()
+            : String.valueOf(versionedPartitionName.getPartitionVersion());
+
         BinaryWALTx binaryWALTx = new BinaryWALTx(baseKey,
-            String.valueOf(versionedPartitionName.getPartitionVersion()),
+            name,
             rowIOProvider,
             primaryRowMarshaller);
         boolean hardFsyncBeforeLeapBoundary = versionedPartitionName.getPartitionName().isSystemPartition();

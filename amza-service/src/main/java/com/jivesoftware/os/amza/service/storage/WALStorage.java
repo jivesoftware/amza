@@ -217,8 +217,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         try {
             WALTx.CommittedCompacted<I> compacted;
             try {
-                compacted = compact.commit((!expectedEndOfMerge) ? null :
-                    (raw, highestTxId, oldestTimestamp, oldestVersion, oldestTombstonedTimestamp, oldestTombstonedVersion, keyCount, fpOfLastLeap,
+                compacted = compact.commit((!expectedEndOfMerge) ? null
+                    : (raw, highestTxId, oldestTimestamp, oldestVersion, oldestTombstonedTimestamp, oldestTombstonedVersion, keyCount, fpOfLastLeap,
                         updatesSinceLeap) -> {
                         long[] oldMarker = loadEndOfMergeMarker(-1, raw);
                         if (oldMarker == null) {
@@ -240,7 +240,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     });
             } catch (Exception e) {
                 LOG.inc(metricPrefix + "failedCompaction");
-                LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
+                LOG.error("Failed to compact {}, attempting to reload", new Object[]{versionedPartitionName}, e);
                 loadInternal(-1, true, false);
                 return -1;
             }
@@ -282,20 +282,20 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             }
 
             walTx.open(io -> {
-                long[] lastTxId = { -1 };
-                long[] fpOfLastLeap = { -1 };
-                long[] updatesSinceLastMergeMarker = { 0 };
-                long[] updatesSinceLastLeap = { 0 };
+                long[] lastTxId = {-1};
+                long[] fpOfLastLeap = {-1};
+                long[] updatesSinceLastMergeMarker = {0};
+                long[] updatesSinceLastLeap = {0};
 
-                long[] loadOldestTimestamp = { -1 };
-                long[] loadOldestVersion = { -1 };
-                long[] loadOldestTombstonedTimestamp = { -1 };
-                long[] loadOldestTombstonedVersion = { -1 };
-                long[] loadKeyCount = { 0 };
-                long[] loadClobberCount = { 0 };
+                long[] loadOldestTimestamp = {-1};
+                long[] loadOldestVersion = {-1};
+                long[] loadOldestTombstonedTimestamp = {-1};
+                long[] loadOldestTombstonedVersion = {-1};
+                long[] loadKeyCount = {0};
+                long[] loadClobberCount = {0};
                 long[][] markerStripedTimestamps = new long[1][];
 
-                long[] truncate = { 0 };
+                long[] truncate = {0};
                 primaryRowMarshaller.fromRows(fpRowStream -> {
                     io.validate(truncateToEndOfMergeMarker,
                         (rowFP, rowTxId, rowType, row) -> {
@@ -331,7 +331,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                     Preconditions.checkState(fpRowStream.stream(rowFP, rowType, row), "Validation must accept all primary rows");
                                 } catch (IOException e) {
                                     LOG.error("Encountered I/O exception during forward validation for {}, WAL must be truncated",
-                                        new Object[] { versionedPartitionName }, e);
+                                        new Object[]{versionedPartitionName}, e);
                                     return rowFP;
                                 }
                             } else if (rowType == RowType.end_of_merge) {
@@ -408,7 +408,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
         } catch (Exception e) {
             LOG.error("Partition {} is irreparably sick, intervention is required, partition will be parked, recovery:{}",
-                new Object[] { versionedPartitionName, recovery }, e);
+                new Object[]{versionedPartitionName, recovery}, e);
             sick.set(true);
             sickPartitions.sick(versionedPartitionName, e);
         }
@@ -549,7 +549,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 //                indexCommitedUpToTxId}));
 //        }
 //    }
-
     public void writeHighwaterMarker(WALWriter rowWriter, WALHighwater highwater) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
             rowWriter.writeHighwater(highwaterRowMarshaller.toBytes(highwater));
@@ -892,12 +891,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         try {
             return walTx.tx((io) -> io.readTypeByteTxIdAndRow(indexFP));
         } catch (Exception x) {
-            String base64;
-            try {
-                base64 = versionedPartitionName.toBase64();
-            } catch (IOException e) {
-                base64 = e.getMessage();
-            }
 
             long length;
             try {
@@ -906,7 +899,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 length = -1;
             }
 
-            throw new RuntimeException("Failed to hydrate for " + versionedPartitionName + " base64=" + base64 + " size=" + length + " fp=" + indexFP, x);
+            throw new RuntimeException(
+                "Failed to hydrate for " + versionedPartitionName + " versionedPartitionName=" + versionedPartitionName + " size=" + length + " fp=" + indexFP,
+                x);
         }
     }
 

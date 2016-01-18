@@ -157,6 +157,7 @@ public class AmzaMain {
             amzaServiceConfig.numberOfCompactorThreads = amzaConfig.getNumberOfCompactorThreads();
             amzaServiceConfig.numberOfTakerThreads = amzaConfig.getNumberOfTakerThreads();
             amzaServiceConfig.workingDirectories = workingDirs;
+            amzaServiceConfig.asyncFsyncIntervalMillis = amzaConfig.getAsyncFsyncIntervalMillis();
 
             final AmzaStats amzaStats = new AmzaStats();
             final SickThreads sickThreads = new SickThreads();

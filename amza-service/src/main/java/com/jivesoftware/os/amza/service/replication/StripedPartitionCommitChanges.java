@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
+import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
@@ -38,7 +39,7 @@ public class StripedPartitionCommitChanges implements CommitChanges {
                 },
                 walUpdated));
         });
-        partitionStripeProvider.flush(partitionName, hardFlush);
+        partitionStripeProvider.flush(partitionName, hardFlush ? Durability.fsync_always : Durability.fsync_async, 0);
     }
 
     @Override

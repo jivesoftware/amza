@@ -25,4 +25,7 @@ public interface AmzaConfig extends Config {
     @LongDefault(30_000L)
     long getDiscoveryIntervalMillis();
 
+    @LongDefault(1_000L)
+    long getAsyncFsyncIntervalMillis();
+
 }

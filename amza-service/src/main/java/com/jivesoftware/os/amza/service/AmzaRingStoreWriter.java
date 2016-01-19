@@ -16,7 +16,9 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.ring.RingHost;
@@ -41,11 +43,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -158,36 +158,46 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (ringName == null) {
             throw new IllegalArgumentException("ringName cannot be null.");
         }
-        RingTopology ring = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
-        if (ring.entries.size() < desiredRingSize) {
+        RingTopology systemRing = ringStoreReader.getRing(AmzaRingReader.SYSTEM_RING);
+        if (systemRing.entries.size() < desiredRingSize) {
             throw new IllegalStateException("Current 'system' ring is not large enough to support a ring of size:" + desiredRingSize);
         }
 
-        Map<String, List<RingMemberAndHost>> perRackMembers = new HashMap<>();
-        for (RingMemberAndHost entry : ring.entries) {
-            perRackMembers.computeIfAbsent(entry.ringHost.getRack(), (key) -> new ArrayList<>()).add(entry);
+        ListMultimap<String, RingMemberAndHost> subRackMembers = ArrayListMultimap.create();
+        RingTopology subRing = ringStoreReader.getRing(ringName);
+        for (RingMemberAndHost entry : subRing.entries) {
+            subRackMembers.put(entry.ringHost.getRack(), entry);
+        }
+
+        Map<String, List<RingMemberAndHost>> systemRackMembers = new HashMap<>();
+        for (RingMemberAndHost entry : systemRing.entries) {
+            systemRackMembers.computeIfAbsent(entry.ringHost.getRack(), (key) -> new ArrayList<>()).add(entry);
         }
 
         Random random = new Random(new Random(Arrays.hashCode(ringName)).nextLong());
-        for (List<RingMemberAndHost> rackMembers : perRackMembers.values()) {
+        for (List<RingMemberAndHost> rackMembers : systemRackMembers.values()) {
             Collections.shuffle(rackMembers, random);
         }
 
-        List<String> racks = new ArrayList<>(perRackMembers.keySet());
-        Collections.shuffle(racks, random);
+        List<String> racks = new ArrayList<>(systemRackMembers.keySet());
 
-        Set<RingMember> orderedRing = new HashSet<>();
-        for (String cycleRack : Iterables.cycle(racks)) {
-            List<RingMemberAndHost> rackMembers = perRackMembers.get(cycleRack);
-            if (!rackMembers.isEmpty()) {
-                orderedRing.add(rackMembers.remove(rackMembers.size() - 1).ringMember);
-                if (orderedRing.size() >= desiredRingSize) {
+        while (subRackMembers.size() < desiredRingSize) {
+            Collections.sort(racks, (o1, o2) -> Integer.compare(subRackMembers.get(o1).size(), subRackMembers.get(o2).size()));
+            boolean advanced = false;
+            for (String cycleRack : racks) {
+                List<RingMemberAndHost> rackMembers = systemRackMembers.get(cycleRack);
+                if (!rackMembers.isEmpty()) {
+                    subRackMembers.put(cycleRack, rackMembers.remove(rackMembers.size() - 1));
+                    advanced = true;
                     break;
                 }
             }
+            if (!advanced) {
+                break;
+            }
         }
 
-        setInternal(ringName, orderedRing);
+        setInternal(ringName, Iterables.transform(subRackMembers.values(), input -> input.ringMember));
     }
 
     public static void main(String[] args) {

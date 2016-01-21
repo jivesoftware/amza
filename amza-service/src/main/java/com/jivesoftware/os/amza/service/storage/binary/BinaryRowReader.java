@@ -110,12 +110,14 @@ public class BinaryRowReader implements WALReader {
                             headLength = UIO.readInt(filer, "length", intLongBuffer);
                             long truncatedLength = truncateAfterRowAtFp + 4 + headLength + 4;
                             if (truncatedLength != filerLength) {
+                                LOG.warn("Truncating after row at fp {} for reverse scan", truncateAfterRowAtFp);
                                 truncate(truncatedLength);
                             }
                             return;
                         }
                     }
                     if (seekTo == 0) {
+                        LOG.warn("Truncating entire WAL");
                         truncate(0);
                         return;
                     }
@@ -137,6 +139,7 @@ public class BinaryRowReader implements WALReader {
             });
             if (truncateAfterRowAtFp[0] == Long.MIN_VALUE) {
                 if (truncateToEndOfMergeMarker) {
+                    LOG.warn("Truncating entire WAL due to lack of merge markers");
                     truncate(0);
                 }
             } else {
@@ -145,6 +148,7 @@ public class BinaryRowReader implements WALReader {
                 filer.seek(truncateAfterRowAtFp[0]);
                 long headLength = UIO.readInt(filer, "length", intLongBuffer);
                 long truncatedLength = truncateAfterRowAtFp[0] + 4 + headLength + 4;
+                LOG.warn("Truncating after row at fp {} for forward scan", truncateAfterRowAtFp[0]);
                 truncate(truncatedLength);
             }
         }
@@ -309,6 +313,7 @@ public class BinaryRowReader implements WALReader {
                                 preTruncationNotifier.corrupt(offsetFp, false);
                             }
                             if (allowRepairs) {
+                                LOG.warn("Truncating due to corruption while scanning");
                                 return truncate(offsetFp);
                             } else {
                                 String msg = "Scan terminated prematurely due to a corruption at fp:" + offsetFp + ". " + parent;
@@ -336,6 +341,7 @@ public class BinaryRowReader implements WALReader {
                                 preTruncationNotifier.corrupt(offsetFp, false);
                             }
                             if (allowRepairs) {
+                                LOG.warn("Truncating due to head-tail length mismatch while scanning");
                                 return truncate(offsetFp);
                             } else {
                                 throw new IOException("The lead length of " + length + " didn't equal trailing length of " + trailingLength);
@@ -357,7 +363,7 @@ public class BinaryRowReader implements WALReader {
                                 preTruncationNotifier.corrupt(rowFP, false);
                             }
                             if (allowRepairs) {
-                                LOG.error("Encountered I/O exception while streaming rows, we need to truncate", e);
+                                LOG.warn("Encountered I/O exception while streaming rows, we need to truncate", e);
                                 return truncate(rowFP);
                             } else {
                                 throw e;

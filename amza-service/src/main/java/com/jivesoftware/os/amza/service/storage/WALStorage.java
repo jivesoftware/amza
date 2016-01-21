@@ -219,28 +219,28 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             try {
                 compacted = compact.commit((!expectedEndOfMerge) ? null
                     : (raw, highestTxId, oldestTimestamp, oldestVersion, oldestTombstonedTimestamp, oldestTombstonedVersion, keyCount, fpOfLastLeap,
-                        updatesSinceLeap) -> {
-                        long[] oldMarker = loadEndOfMergeMarker(-1, raw);
-                        if (oldMarker == null) {
-                            throw new IllegalStateException("Invalid end of merge marker");
-                        }
-                        long[] marker = buildEndOfMergeMarker(oldMarker[EOM_DELTA_WAL_ID_INDEX],
-                            highestTxId,
-                            oldestTimestamp,
-                            oldestVersion,
-                            oldestTombstonedTimestamp,
-                            oldestTombstonedVersion,
-                            keyCount,
-                            0,
-                            fpOfLastLeap,
-                            updatesSinceLeap,
-                            stripedKeyHighwaterTimestamps, 0);
+                    updatesSinceLeap) -> {
+                    long[] oldMarker = loadEndOfMergeMarker(-1, raw);
+                    if (oldMarker == null) {
+                        throw new IllegalStateException("Invalid end of merge marker");
+                    }
+                    long[] marker = buildEndOfMergeMarker(oldMarker[EOM_DELTA_WAL_ID_INDEX],
+                        highestTxId,
+                        oldestTimestamp,
+                        oldestVersion,
+                        oldestTombstonedTimestamp,
+                        oldestTombstonedVersion,
+                        keyCount,
+                        0,
+                        fpOfLastLeap,
+                        updatesSinceLeap,
+                        stripedKeyHighwaterTimestamps, 0);
 
-                        return UIO.longsBytes(marker);
-                    });
+                    return UIO.longsBytes(marker);
+                });
             } catch (Exception e) {
                 LOG.inc(metricPrefix + "failedCompaction");
-                LOG.error("Failed to compact {}, attempting to reload", new Object[]{versionedPartitionName}, e);
+                LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
                 loadInternal(-1, true, false);
                 return -1;
             }
@@ -282,20 +282,20 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             }
 
             walTx.open(io -> {
-                long[] lastTxId = {-1};
-                long[] fpOfLastLeap = {-1};
-                long[] updatesSinceLastMergeMarker = {0};
-                long[] updatesSinceLastLeap = {0};
+                long[] lastTxId = { -1 };
+                long[] fpOfLastLeap = { -1 };
+                long[] updatesSinceLastMergeMarker = { 0 };
+                long[] updatesSinceLastLeap = { 0 };
 
-                long[] loadOldestTimestamp = {-1};
-                long[] loadOldestVersion = {-1};
-                long[] loadOldestTombstonedTimestamp = {-1};
-                long[] loadOldestTombstonedVersion = {-1};
-                long[] loadKeyCount = {0};
-                long[] loadClobberCount = {0};
+                long[] loadOldestTimestamp = { -1 };
+                long[] loadOldestVersion = { -1 };
+                long[] loadOldestTombstonedTimestamp = { -1 };
+                long[] loadOldestTombstonedVersion = { -1 };
+                long[] loadKeyCount = { 0 };
+                long[] loadClobberCount = { 0 };
                 long[][] markerStripedTimestamps = new long[1][];
 
-                long[] truncate = {0};
+                long[] truncate = { 0 };
                 primaryRowMarshaller.fromRows(fpRowStream -> {
                     io.validate(truncateToEndOfMergeMarker,
                         (rowFP, rowTxId, rowType, row) -> {
@@ -331,7 +331,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                     Preconditions.checkState(fpRowStream.stream(rowFP, rowType, row), "Validation must accept all primary rows");
                                 } catch (IOException e) {
                                     LOG.error("Encountered I/O exception during forward validation for {}, WAL must be truncated",
-                                        new Object[]{versionedPartitionName}, e);
+                                        new Object[] { versionedPartitionName }, e);
                                     return rowFP;
                                 }
                             } else if (rowType == RowType.end_of_merge) {
@@ -371,7 +371,11 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             }
                             return -(truncate[0] + 1);
                         },
-                        null);
+                        (corruptAtFP, reverse) -> {
+                            LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", versionedPartitionName);
+                            walIndexProvider.deleteIndex(versionedPartitionName);
+                            LOG.warn("Removed wal index for {}.", versionedPartitionName);
+                        });
                     return true;
                 }, (fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     loadOldestTimestamp[0] = Math.min(loadOldestTimestamp[0], valueTimestamp);
@@ -408,7 +412,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
         } catch (Exception e) {
             LOG.error("Partition {} is irreparably sick, intervention is required, partition will be parked, recovery:{}",
-                new Object[]{versionedPartitionName, recovery}, e);
+                new Object[] { versionedPartitionName, recovery }, e);
             sick.set(true);
             sickPartitions.sick(versionedPartitionName, e);
         }
@@ -530,7 +534,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     }
 
-//    private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
+    //    private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
 //        synchronized (oneTransactionAtATimeLock) {
 //            long[] hints = new long[3 + numKeyHighwaterStripes];
 //            hints[0] = RowType.COMPACTION_HINTS_KEY;

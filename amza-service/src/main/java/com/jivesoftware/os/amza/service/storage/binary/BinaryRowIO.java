@@ -94,8 +94,8 @@ public class BinaryRowIO implements RowIO {
     public void validate(boolean truncateToEndOfMergeMarker,
         ValidationStream backward,
         ValidationStream forward,
-        ValidationNotifier validationNotifier) throws Exception {
-        rowReader.validate(truncateToEndOfMergeMarker, backward, forward, validationNotifier);
+        PreTruncationNotifier preTruncationNotifier) throws Exception {
+        rowReader.validate(truncateToEndOfMergeMarker, backward, forward, preTruncationNotifier);
     }
 
     @Override

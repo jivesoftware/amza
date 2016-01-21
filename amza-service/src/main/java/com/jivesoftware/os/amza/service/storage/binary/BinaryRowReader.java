@@ -20,7 +20,7 @@ import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.scan.RowStream;
 import com.jivesoftware.os.amza.api.stream.Fps;
 import com.jivesoftware.os.amza.api.stream.RowType;
-import com.jivesoftware.os.amza.api.wal.RowIO.ValidationNotifier;
+import com.jivesoftware.os.amza.api.wal.RowIO.PreTruncationNotifier;
 import com.jivesoftware.os.amza.api.wal.RowIO.ValidationStream;
 import com.jivesoftware.os.amza.api.wal.WALReader;
 import com.jivesoftware.os.amza.service.stats.IoStats;
@@ -44,7 +44,7 @@ public class BinaryRowReader implements WALReader {
     void validate(boolean truncateToEndOfMergeMarker,
         ValidationStream backward,
         ValidationStream forward,
-        ValidationNotifier validationNotifier) throws Exception {
+        PreTruncationNotifier preTruncationNotifier) throws Exception {
 
         byte[] intLongBuffer = new byte[8];
         synchronized (parent.lock()) {
@@ -55,8 +55,8 @@ public class BinaryRowReader implements WALReader {
                 while (seekTo > 0) {
                     if (seekTo < 4) {
                         LOG.error("Validation had insufficient bytes to read tail length at offset {} with file length {}", seekTo, filerLength);
-                        if (validationNotifier != null) {
-                            validationNotifier.corrupt(seekTo, true);
+                        if (preTruncationNotifier != null) {
+                            preTruncationNotifier.corrupt(seekTo, true);
                         }
                         break;
                     }
@@ -65,16 +65,16 @@ public class BinaryRowReader implements WALReader {
                     int tailLength = UIO.readInt(filer, "length", intLongBuffer);
                     if (tailLength <= 0 || tailLength >= filerLength) {
                         LOG.error("Validation found tail length of {} at offset {} with file length {}", tailLength, seekTo, filerLength);
-                        if (validationNotifier != null) {
-                            validationNotifier.corrupt(seekTo, true);
+                        if (preTruncationNotifier != null) {
+                            preTruncationNotifier.corrupt(seekTo, true);
                         }
                         break;
                     }
                     seekTo = seekTo - tailLength - 8;
                     if (seekTo < 0) {
                         LOG.error("Validation required seek to {} with file length {}", seekTo, filerLength);
-                        if (validationNotifier != null) {
-                            validationNotifier.corrupt(seekTo, true);
+                        if (preTruncationNotifier != null) {
+                            preTruncationNotifier.corrupt(seekTo, true);
                         }
                         break;
                     } else {
@@ -83,8 +83,8 @@ public class BinaryRowReader implements WALReader {
                         if (tailLength != headLength) {
                             LOG.warn("Validation read a head length of {} but a tail length of {} at offset {} with file length {}",
                                 headLength, tailLength, seekTo, filerLength);
-                            if (validationNotifier != null) {
-                                validationNotifier.corrupt(seekTo, true);
+                            if (preTruncationNotifier != null) {
+                                preTruncationNotifier.corrupt(seekTo, true);
                             }
                             break;
                         }
@@ -99,8 +99,8 @@ public class BinaryRowReader implements WALReader {
                             truncateAfterRowAtFp = backward.row(seekTo, rowTxId, rowType, row);
                         } catch (IOException e) {
                             LOG.warn("Validation encountered an I/O exception at offset {} with file length {}", new Object[] { seekTo, filerLength }, e);
-                            if (validationNotifier != null) {
-                                validationNotifier.corrupt(seekTo, true);
+                            if (preTruncationNotifier != null) {
+                                preTruncationNotifier.corrupt(seekTo, true);
                             }
                             break;
                         }
@@ -110,12 +110,14 @@ public class BinaryRowReader implements WALReader {
                             headLength = UIO.readInt(filer, "length", intLongBuffer);
                             long truncatedLength = truncateAfterRowAtFp + 4 + headLength + 4;
                             if (truncatedLength != filerLength) {
+                                LOG.warn("Truncating after row at fp {} for reverse scan", truncateAfterRowAtFp);
                                 truncate(truncatedLength);
                             }
                             return;
                         }
                     }
                     if (seekTo == 0) {
+                        LOG.warn("Truncating entire WAL");
                         truncate(0);
                         return;
                     }
@@ -123,7 +125,7 @@ public class BinaryRowReader implements WALReader {
             }
 
             long[] truncateAfterRowAtFp = new long[] { Long.MIN_VALUE };
-            scan(0, true, validationNotifier, (rowFP, rowTxId, rowType, row) -> {
+            scan(0, true, preTruncationNotifier, (rowFP, rowTxId, rowType, row) -> {
                 long result = forward.row(rowFP, rowTxId, rowType, row);
                 if (result != -1) {
                     if (result < -1) {
@@ -137,6 +139,7 @@ public class BinaryRowReader implements WALReader {
             });
             if (truncateAfterRowAtFp[0] == Long.MIN_VALUE) {
                 if (truncateToEndOfMergeMarker) {
+                    LOG.warn("Truncating entire WAL due to lack of merge markers");
                     truncate(0);
                 }
             } else {
@@ -145,6 +148,7 @@ public class BinaryRowReader implements WALReader {
                 filer.seek(truncateAfterRowAtFp[0]);
                 long headLength = UIO.readInt(filer, "length", intLongBuffer);
                 long truncatedLength = truncateAfterRowAtFp[0] + 4 + headLength + 4;
+                LOG.warn("Truncating after row at fp {} for forward scan", truncateAfterRowAtFp[0]);
                 truncate(truncatedLength);
             }
         }
@@ -277,7 +281,7 @@ public class BinaryRowReader implements WALReader {
         return scan(offsetFp, allowRepairs, null, stream);
     }
 
-    private boolean scan(long offsetFp, boolean allowRepairs, ValidationNotifier validationNotifier, RowStream stream) throws Exception {
+    private boolean scan(long offsetFp, boolean allowRepairs, PreTruncationNotifier preTruncationNotifier, RowStream stream) throws Exception {
         long fileLength = 0;
         long read = 0;
         try {
@@ -305,10 +309,11 @@ public class BinaryRowReader implements WALReader {
                         }
                         int lengthOfTypeAndTxId = 1 + 8;
                         if (length < lengthOfTypeAndTxId || offsetFp + length + 8 > fileLength) {
-                            if (validationNotifier != null) {
-                                validationNotifier.corrupt(offsetFp, false);
+                            if (preTruncationNotifier != null) {
+                                preTruncationNotifier.corrupt(offsetFp, false);
                             }
                             if (allowRepairs) {
+                                LOG.warn("Truncating due to corruption while scanning");
                                 return truncate(offsetFp);
                             } else {
                                 String msg = "Scan terminated prematurely due to a corruption at fp:" + offsetFp + ". " + parent;
@@ -332,10 +337,11 @@ public class BinaryRowReader implements WALReader {
                             }
                         }
                         if (trailingLength < 0 || trailingLength != length) {
-                            if (validationNotifier != null) {
-                                validationNotifier.corrupt(offsetFp, false);
+                            if (preTruncationNotifier != null) {
+                                preTruncationNotifier.corrupt(offsetFp, false);
                             }
                             if (allowRepairs) {
+                                LOG.warn("Truncating due to head-tail length mismatch while scanning");
                                 return truncate(offsetFp);
                             } else {
                                 throw new IOException("The lead length of " + length + " didn't equal trailing length of " + trailingLength);
@@ -353,11 +359,11 @@ public class BinaryRowReader implements WALReader {
                                 return false;
                             }
                         } catch (IOException e) {
-                            if (validationNotifier != null) {
-                                validationNotifier.corrupt(rowFP, false);
+                            if (preTruncationNotifier != null) {
+                                preTruncationNotifier.corrupt(rowFP, false);
                             }
                             if (allowRepairs) {
-                                LOG.error("Encountered I/O exception while streaming rows, we need to truncate", e);
+                                LOG.warn("Encountered I/O exception while streaming rows, we need to truncate", e);
                                 return truncate(rowFP);
                             } else {
                                 throw e;

@@ -39,7 +39,7 @@ public class DeltaWALNGTest {
         OrderIdProviderImpl ids = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
         DeltaWALFactory deltaWALFactory = new DeltaWALFactory(ids, tmp, binaryRowIOProvider, primaryRowMarshaller, highwaterRowMarshaller, 1);
 
-        DeltaWAL deltaWAL = deltaWALFactory.create();
+        DeltaWAL deltaWAL = deltaWALFactory.create(-1);
 
         Map<WALKey, WALValue> apply1 = Maps.newLinkedHashMap();
         for (int i = 0; i < 10; i++) {

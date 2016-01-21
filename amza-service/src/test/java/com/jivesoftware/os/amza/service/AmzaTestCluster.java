@@ -249,7 +249,7 @@ public class AmzaTestCluster {
             (RowsChanged changes) -> {
             });
 
-        amzaService.start();
+        amzaService.start(localRingMember, localRingHost);
 
         try {
             //amzaService.getRingWriter().addRingMember(AmzaRingReader.SYSTEM_RING, localRingMember); // ?? Hacky

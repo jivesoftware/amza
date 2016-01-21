@@ -221,9 +221,7 @@ public class AmzaMain {
 
                 },
                 availableRowsTaker,
-                () -> {
-                    return new HttpRowsTaker(amzaStats);
-                },
+                () -> new HttpRowsTaker(amzaStats),
                 Optional.<TakeFailureListener>absent(),
                 (RowsChanged changes) -> {
                 });
@@ -291,7 +289,7 @@ public class AmzaMain {
                 .setContext("/static/amza");
             deployable.addResource(staticResource);
 
-            amzaService.start();
+            amzaService.start(ringMember, ringHost);
             deployable.buildServer().start();
             serviceStartupHealthCheck.success();
 

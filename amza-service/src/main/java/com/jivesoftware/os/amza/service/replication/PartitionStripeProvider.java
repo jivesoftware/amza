@@ -4,15 +4,21 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.Durability;
+import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
+import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.service.take.RowsTaker;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -23,6 +29,7 @@ public class PartitionStripeProvider {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
+    private final ExecutorService compactDeltasThreadPool;
     private final ExecutorService flusherExecutor;
     private final PartitionStripeFunction partitionStripeFunction;
     private final PartitionStripe[] deltaStripes;
@@ -30,19 +37,25 @@ public class PartitionStripeProvider {
     private final ExecutorService[] rowTakerThreadPools;
     private final RowsTaker[] rowsTakers;
     private final AsyncStripeFlusher[] flushers;
+    private final long deltaStripeCompactionIntervalInMillis;
 
     public PartitionStripeProvider(PartitionStripeFunction partitionStripeFunction,
         PartitionStripe[] deltaStripes,
         HighwaterStorage[] highwaterStorages,
         ExecutorService[] rowTakerThreadPools,
         RowsTaker[] rowsTakers,
-        long asyncFlushIntervalMillis) {
+        long asyncFlushIntervalMillis,
+        long deltaStripeCompactionIntervalInMillis) {
+
         this.partitionStripeFunction = partitionStripeFunction;
+        this.deltaStripeCompactionIntervalInMillis = deltaStripeCompactionIntervalInMillis;
         this.deltaStripes = Arrays.copyOf(deltaStripes, deltaStripes.length);
         this.highwaterStorages = Arrays.copyOf(highwaterStorages, highwaterStorages.length);
         this.rowTakerThreadPools = Arrays.copyOf(rowTakerThreadPools, rowTakerThreadPools.length);
         this.rowsTakers = Arrays.copyOf(rowsTakers, rowsTakers.length);
 
+        this.compactDeltasThreadPool = Executors.newFixedThreadPool(deltaStripes.length,
+            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
         this.flusherExecutor = Executors.newFixedThreadPool(deltaStripes.length,
             new ThreadFactoryBuilder().setNameFormat("stripe-flusher-%d").build());
 
@@ -79,7 +92,54 @@ public class PartitionStripeProvider {
         }
     }
 
+    public void load(HighestPartitionTx takeHighestPartitionTx) throws Exception {
+        ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(deltaStripes.length,
+            new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
+        List<Future> futures = new ArrayList<>();
+        for (PartitionStripe partitionStripe : deltaStripes) {
+            futures.add(stripeLoaderThreadPool.submit(() -> {
+                try {
+                    partitionStripe.load(takeHighestPartitionTx);
+                } catch (Exception x) {
+                    LOG.error("Failed while loading " + partitionStripe, x);
+                    throw new RuntimeException(x);
+                }
+            }));
+        }
+        int index = 0;
+        for (Future future : futures) {
+            LOG.info("Waiting for stripe:{} to load...", deltaStripes[index]);
+            try {
+                future.get();
+                index++;
+            } catch (InterruptedException | ExecutionException x) {
+                LOG.error("Failed to load stripe:{}.", deltaStripes[index], x);
+                throw x;
+            }
+        }
+        stripeLoaderThreadPool.shutdown();
+        LOG.info("All stripes {} have been loaded.", deltaStripes.length);
+    }
+
     public void start() {
+        for (PartitionStripe partitionStripe : deltaStripes) {
+            compactDeltasThreadPool.submit(() -> {
+                while (true) {
+                    try {
+                        if (partitionStripe.mergeable()) {
+                            partitionStripe.merge(false);
+                        }
+                        Object awakeCompactionLock = partitionStripe.getAwakeCompactionLock();
+                        synchronized (awakeCompactionLock) {
+                            awakeCompactionLock.wait(deltaStripeCompactionIntervalInMillis);
+                        }
+                    } catch (Throwable x) {
+                        LOG.error("Compactor failed.", x);
+                    }
+                }
+            });
+        }
+
         for (AsyncStripeFlusher flusher : flushers) {
             flusher.start(flusherExecutor);
         }

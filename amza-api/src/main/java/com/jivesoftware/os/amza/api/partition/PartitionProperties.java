@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.api.partition;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.google.common.base.Preconditions;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import java.util.Map;
 
@@ -63,9 +64,12 @@ public class PartitionProperties {
         this.ttlVersionAgeInMillis = ttlVersionAgeInMillis;
         this.ttlVersionIntervalMillis = ttlVersionIntervalMillis;
         this.forceCompactionOnStartup = forceCompactionOnStartup;
+
+        Preconditions.checkArgument(takeFromFactor > 0 || consistency == Consistency.none, "Consistency:%s requires a takeFromFactor > 0", consistency);
         this.consistency = consistency;
         this.requireConsistency = requireConsistency;
         this.takeFromFactor = takeFromFactor;
+
         this.disabled = disabled;
         this.rowType = rowType;
         this.indexClassName = indexClassName;

@@ -7,6 +7,7 @@ import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
+import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -43,6 +44,7 @@ public class PartitionStripe {
 
     private final String name;
     private final PartitionIndex partitionIndex;
+    private final StorageVersionProvider storageVersionProvider;
     private final DeltaStripeWALStorage storage;
     private final TxPartitionState txPartitionState;
     private final RowChanges allRowChanges;
@@ -52,6 +54,7 @@ public class PartitionStripe {
 
     public PartitionStripe(String name,
         PartitionIndex partitionIndex,
+        StorageVersionProvider storageVersionProvider,
         DeltaStripeWALStorage storage,
         TxPartitionState txPartitionState,
         RowChanges allRowChanges,
@@ -60,6 +63,7 @@ public class PartitionStripe {
         Predicate<VersionedPartitionName> stripingPredicate) {
         this.name = name;
         this.partitionIndex = partitionIndex;
+        this.storageVersionProvider = storageVersionProvider;
         this.storage = storage;
         this.txPartitionState = txPartitionState;
         this.allRowChanges = allRowChanges;
@@ -80,7 +84,7 @@ public class PartitionStripe {
         storage.delete(versionedPartitionName);
     }
 
-    public void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
+    private void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getMemberPartitions(), predicate)) {
             txPartitionState.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
                 VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
@@ -388,8 +392,9 @@ public class PartitionStripe {
         });
     }
 
-    public void load() throws Exception {
-        storage.load(txPartitionState, partitionIndex, primaryRowMarshaller);
+    public void load(HighestPartitionTx takeHighestPartitionTx) throws Exception {
+        storage.load(txPartitionState, partitionIndex, storageVersionProvider, primaryRowMarshaller);
+        highestPartitionTxIds(takeHighestPartitionTx);
     }
 
     public boolean mergeable() {
@@ -398,7 +403,7 @@ public class PartitionStripe {
 
     public void merge(boolean force) {
         try {
-            storage.merge(partitionIndex, force);
+            storage.merge(partitionIndex, storageVersionProvider, force);
         } catch (Throwable x) {
             LOG.error("Compactor failed.", x);
         }

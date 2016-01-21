@@ -299,7 +299,7 @@ public class RowChangeTaker implements RowChanges {
 
                             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
                             if (!amzaRingReader.isMemberOfRing(partitionName.getRingName())) {
-                                LOG.info("NOT A MEMBER: local:{} remote:{}  txId:{} partition:{}",
+                                LOG.info("NOT A MEMBER: local:{} remote:{} txId:{} partition:{}",
                                     ringHost, remoteRingHost, txId, remoteVersionedPartitionName);
                                 return;
                             }

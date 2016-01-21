@@ -47,11 +47,11 @@ public class BinaryWALTx implements WALTx {
     private RowIO io;
 
     public BinaryWALTx(File baseKey,
-        String prefix,
+        String name,
         RowIOProvider ioProvider,
         PrimaryRowMarshaller rowMarshaller) throws Exception {
         this.key = ioProvider.versionedKey(baseKey, AmzaVersionConstants.LATEST_VERSION);
-        this.name = prefix + SUFFIX;
+        this.name = name + SUFFIX;
         this.compactingKey = ioProvider.buildKey(key, "compacting");
         this.backupKey = ioProvider.buildKey(key, "backup");
         this.ioProvider = ioProvider;
@@ -189,6 +189,8 @@ public class BinaryWALTx implements WALTx {
         try {
             io.close();
             ioProvider.delete(key, name);
+            ioProvider.delete(backupKey, name);
+            ioProvider.delete(compactingKey, name);
         } finally {
             compactionLock.release(NUM_PERMITS);
         }

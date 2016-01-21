@@ -157,18 +157,12 @@ public class MultiAutoGrowingByteBufferBackedFiler implements IFiler {
     @Override
     public long length() throws IOException {
         return length;
-        /*
-        if (filers.length == 0) {
-            return 0;
-        }
-        return ((filers.length - 1) * maxBufferSegmentSize) + filers[filers.length - 1].length();
-         */
     }
 
     @Override
     public void setLength(long len) throws IOException {
         position(len);
-        length = Math.max(len, length);
+        length = len;
     }
 
     @Override

@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  *
  */
-public class StorageVersionProvider implements RowChanges {
+public class StorageVersionProvider implements CurrentVersionProvider, RowChanges {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
@@ -94,19 +94,7 @@ public class StorageVersionProvider implements RowChanges {
             return new StorageVersion(0, 0);
         }
         synchronized (versionStripingLocks.lock(partitionName, 0)) {
-            StorageVersion storageVersion = localVersionCache.computeIfAbsent(partitionName, key -> {
-                try {
-                    TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
-                        walKey(rootRingMember, partitionName));
-                    if (rawState != null) {
-                        return StorageVersion.fromBytes(rawState.getValue());
-                    } else {
-                        return null;
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to deserialize version", e);
-                }
-            });
+            StorageVersion storageVersion = lookupStorageVersion(partitionName);
             if (storageVersion == null || storageVersion.stripeVersion != stripeVersions[partitionStripeFunction.stripe(partitionName)]) {
                 if (versionedPartitionProvider.getProperties(partitionName) == null) {
                     throw new PropertiesNotPresentException("Properties missing for " + partitionName);
@@ -120,12 +108,41 @@ public class StorageVersionProvider implements RowChanges {
         }
     }
 
-    public long getPartitionVersion(PartitionName partitionName) {
+    @Override
+    public boolean isCurrentVersion(VersionedPartitionName versionedPartitionName) {
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
         if (partitionName.isSystemPartition()) {
-            return 0;
+            return true;
         }
-        StorageVersion storageVersion = localVersionCache.get(partitionName);
-        return storageVersion != null ? storageVersion.partitionVersion : -1;
+        StorageVersion storageVersion = lookupStorageVersion(partitionName);
+        return storageVersion != null && storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion();
+    }
+
+    private StorageVersion lookupStorageVersion(PartitionName partitionName) {
+        return localVersionCache.computeIfAbsent(partitionName, key -> {
+            try {
+                TimestampedValue rawState = systemWALStorage.getTimestampedValue(PartitionCreator.PARTITION_VERSION_INDEX, null,
+                    walKey(rootRingMember, partitionName));
+                if (rawState != null) {
+                    return StorageVersion.fromBytes(rawState.getValue());
+                } else {
+                    return null;
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to deserialize version", e);
+            }
+        });
+    }
+
+    @Override
+    public void abandonVersion(VersionedPartitionName versionedPartitionName) throws Exception {
+        PartitionName partitionName = versionedPartitionName.getPartitionName();
+        synchronized (versionStripingLocks.lock(partitionName, 0)) {
+            StorageVersion storageVersion = lookupStorageVersion(partitionName);
+            if (storageVersion != null && storageVersion.partitionVersion <= versionedPartitionName.getPartitionVersion()) {
+                storageVersion = set(partitionName, orderIdProvider.nextId());
+            }
+        }
     }
 
     public interface PartitionMemberStorageVersionStream {

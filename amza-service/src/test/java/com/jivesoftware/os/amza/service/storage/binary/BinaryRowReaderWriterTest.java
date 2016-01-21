@@ -71,16 +71,16 @@ public class BinaryRowReaderWriterTest {
         binaryRowWriter.write(2L, RowType.primary, 1, 4, stream -> stream.stream(new byte[] { 1, 2, 3, 6 }), indexableKeys, txKeyPointerFpStream, false);
         binaryRowWriter.write(-1L, RowType.end_of_merge, 1, 4, stream -> stream.stream(new byte[] { 1, 2, 3, 7 }), indexableKeys, txKeyPointerFpStream, false);
 
-        MutableInt corruptions = new MutableInt();
+        MutableInt truncations = new MutableInt();
         binaryRowReader.validate(true,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? rowFP : -1,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? -(rowFP + 1) : -1,
-            (corruptAtFP, reverse) -> corruptions.increment());
+            (truncatedAtFP) -> truncations.increment());
         binaryRowReader.validate(false,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? rowFP : -1,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? -(rowFP + 1) : -1,
-            (corruptAtFP, reverse) -> corruptions.increment());
-        Assert.assertEquals(corruptions.intValue(), 0);
+            (truncatedAtFP) -> truncations.increment());
+        Assert.assertEquals(truncations.intValue(), 0);
 
         //filer.seek(filer.length());
         long corruptionOffset = filer.length();
@@ -89,22 +89,22 @@ public class BinaryRowReaderWriterTest {
         binaryRowReader.validate(true,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? rowFP : -1,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? -(rowFP + 1) : -1,
-            (corruptAtFP, reverse) -> {
-                Assert.assertEquals(corruptAtFP, reverse ? corruptionOffset + 1 : corruptionOffset);
-                corruptions.increment();
+            (truncatedAtFP) -> {
+                Assert.assertEquals(truncatedAtFP, corruptionOffset);
+                truncations.increment();
             });
-        Assert.assertEquals(corruptions.intValue(), 2);
+        Assert.assertEquals(truncations.intValue(), 1);
 
         UIO.writeByte(filer.appender(), (byte) 56, "corrupt");
 
         binaryRowReader.validate(false,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? rowFP : -1,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? -(rowFP + 1) : -1,
-            (corruptAtFP, reverse) -> {
-                Assert.assertEquals(corruptAtFP, reverse ? corruptionOffset + 1 : corruptionOffset);
-                corruptions.increment();
+            (truncatedAtFP) -> {
+                Assert.assertEquals(truncatedAtFP, corruptionOffset);
+                truncations.increment();
             });
-        Assert.assertEquals(corruptions.intValue(), 3);
+        Assert.assertEquals(truncations.intValue(), 2);
     }
 
     @Test

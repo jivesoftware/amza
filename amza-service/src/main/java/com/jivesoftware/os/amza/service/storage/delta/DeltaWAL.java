@@ -26,6 +26,7 @@ import org.apache.commons.lang.mutable.MutableLong;
 public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
 
     private final long id;
+    private final long prevId;
     private final OrderIdProvider orderIdProvider;
     private final PrimaryRowMarshaller primaryRowMarshaller;
     private final HighwaterRowMarshaller<byte[]> highwaterRowMarshaller;
@@ -34,11 +35,13 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     private final Object oneTxAtATimeLock = new Object();
 
     public DeltaWAL(long id,
+        long prevId,
         OrderIdProvider orderIdProvider,
         PrimaryRowMarshaller primaryRowMarshaller,
         HighwaterRowMarshaller<byte[]> highwaterRowMarshaller,
         WALTx wal) {
         this.id = id;
+        this.prevId = prevId;
         this.orderIdProvider = orderIdProvider;
         this.primaryRowMarshaller = primaryRowMarshaller;
         this.highwaterRowMarshaller = highwaterRowMarshaller;
@@ -47,6 +50,10 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
 
     public long getId() {
         return id;
+    }
+
+    public long getPrevId() {
+        return prevId;
     }
 
     public void load(final RowStream rowStream) throws Exception {

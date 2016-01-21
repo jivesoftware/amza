@@ -18,10 +18,8 @@ package com.jivesoftware.os.amza.service;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
-import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -80,14 +78,10 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaServiceInitializer {
@@ -311,23 +305,6 @@ public class AmzaServiceInitializer {
         amzaPartitionWatcher.watch(PartitionCreator.PARTITION_VERSION_INDEX.getPartitionName(), storageVersionProvider);
         amzaPartitionWatcher.watch(PartitionCreator.AQUARIUM_STATE_INDEX.getPartitionName(), aquariumProvider);
 
-        partitionIndex.open();
-        // cold start
-        for (VersionedPartitionName versionedPartitionName : partitionIndex.getMemberPartitions()) {
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
-                long partitionVersion = versionedAquarium.getVersionedPartitionName().getPartitionVersion();
-                if (partitionVersion == versionedPartitionName.getPartitionVersion()) {
-                    takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
-                } else {
-                    LOG.warn("Version:{} wasn't aligned with versioned partition:{}", partitionVersion, versionedPartitionName);
-                }
-                return null;
-            });
-        }
-
-        takeCoordinator.start(ringStoreReader, aquariumProvider);
-
         long maxUpdatesBeforeCompaction = config.maxUpdatesBeforeDeltaStripeCompaction;
 
         ExecutorService[] rowTakerThreadPools = new ExecutorService[deltaStorageStripes];
@@ -357,8 +334,14 @@ public class AmzaServiceInitializer {
                 maxUpdatesBeforeCompaction);
 
             int stripeId = i;
-            partitionStripes[i] = new PartitionStripe("stripe-" + i, partitionIndex, deltaWALStorage, partitionStateStorage, amzaPartitionWatcher,
-                primaryRowMarshaller, highwaterRowMarshaller,
+            partitionStripes[i] = new PartitionStripe("stripe-" + i,
+                partitionIndex,
+                storageVersionProvider,
+                deltaWALStorage,
+                partitionStateStorage,
+                amzaPartitionWatcher,
+                primaryRowMarshaller,
+                highwaterRowMarshaller,
                 (versionedPartitionName) -> {
                     if (!versionedPartitionName.getPartitionName().isSystemPartition()) {
                         return partitionStripeFunction.stripe(versionedPartitionName.getPartitionName()) == stripeId;
@@ -374,63 +357,15 @@ public class AmzaServiceInitializer {
         }
 
         PartitionStripeProvider partitionStripeProvider = new PartitionStripeProvider(partitionStripeFunction,
-            partitionStripes, highwaterStorages, rowTakerThreadPools, rowsTakers, config.asyncFsyncIntervalMillis);
+            partitionStripes,
+            highwaterStorages,
+            rowTakerThreadPools,
+            rowsTakers,
+            config.asyncFsyncIntervalMillis,
+            config.deltaStripeCompactionIntervalInMillis);
 
-        HighestPartitionTx<Void> takeHighestPartitionTx = (versionedAquarium, highestTxId) -> {
-            takeCoordinator.update(ringStoreReader, versionedAquarium.getVersionedPartitionName(), highestTxId);
-            return null;
-        };
-
-        systemWALStorage.highestPartitionTxIds(takeHighestPartitionTx);
-
-        ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(partitionStripes.length,
-            new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
-        List<Future> futures = new ArrayList<>();
-        for (PartitionStripe partitionStripe : partitionStripes) {
-            futures.add(stripeLoaderThreadPool.submit(() -> {
-                try {
-                    partitionStripe.load();
-                    partitionStripe.highestPartitionTxIds(takeHighestPartitionTx);
-                } catch (Exception x) {
-                    LOG.error("Failed while loading " + partitionStripe, x);
-                    throw new RuntimeException(x);
-                }
-            }));
-        }
-        int index = 0;
-        for (Future future : futures) {
-            LOG.info("Waiting for stripe:{} to load...", partitionStripes[index]);
-            try {
-                future.get();
-                index++;
-            } catch (InterruptedException | ExecutionException x) {
-                LOG.error("Failed to load stripe:{}.", partitionStripes[index], x);
-                throw x;
-            }
-        }
-        stripeLoaderThreadPool.shutdown();
-        LOG.info("All stripes {} have been loaded.", partitionStripes.length);
-
-        ExecutorService compactDeltasThreadPool = Executors.newFixedThreadPool(config.workingDirectories.length,
-            new ThreadFactoryBuilder().setNameFormat("compact-deltas-%d").build());
-        for (PartitionStripe partitionStripe : partitionStripes) {
-            compactDeltasThreadPool.submit(() -> {
-                while (true) {
-                    try {
-                        if (partitionStripe.mergeable()) {
-                            partitionStripe.merge(false);
-                        }
-                        Object awakeCompactionLock = partitionStripe.getAwakeCompactionLock();
-                        synchronized (awakeCompactionLock) {
-                            awakeCompactionLock.wait(config.deltaStripeCompactionIntervalInMillis);
-                        }
-
-                    } catch (Throwable x) {
-                        LOG.error("Compactor failed.", x);
-                    }
-                }
-            });
-        }
+        PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionCreator, ringStoreReader, partitionStateStorage,
+            partitionStripeProvider, storageVersionProvider);
 
         AmzaRingStoreWriter amzaRingWriter = new AmzaRingStoreWriter(ringStoreReader,
             systemWALStorage,
@@ -441,7 +376,6 @@ public class AmzaServiceInitializer {
             nodeCacheId);
         amzaPartitionWatcher.watch(PartitionCreator.RING_INDEX.getPartitionName(), amzaRingWriter);
         amzaPartitionWatcher.watch(PartitionCreator.NODE_INDEX.getPartitionName(), amzaRingWriter);
-        amzaRingWriter.register(ringMember, ringHost, -1);
 
         AmzaSystemReady systemReady = new AmzaSystemReady(ringStoreReader, partitionIndex, sickPartitions);
         PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider,
@@ -472,9 +406,6 @@ public class AmzaServiceInitializer {
             partitionStripeFunction,
             config.checkIfCompactionIsNeededIntervalInMillis,
             config.numberOfCompactorThreads);
-
-        PartitionComposter partitionComposter = new PartitionComposter(amzaStats, partitionIndex, partitionCreator, ringStoreReader, partitionStateStorage,
-            partitionStripeProvider);
 
         AckWaters ackWaters = new AckWaters(config.ackWatersStripingLevel);
 

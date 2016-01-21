@@ -60,6 +60,10 @@ class PartitionDelta {
         return deltaWAL.getId();
     }
 
+    public long getPrevDeltaWALId() {
+        return deltaWAL.getPrevId();
+    }
+
     public long size() {
         return pointerIndex.size();
     }
@@ -188,7 +192,7 @@ class PartitionDelta {
                 return true;
             },
             (txId, fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion, entry)
-            -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
+                -> keyPointerStream.stream(prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
     }
 
     DeltaPeekableElmoIterator rangeScanIterator(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
@@ -283,7 +287,7 @@ class PartitionDelta {
 
     void onLoadAppendTxFp(byte[] prefix, long rowTxId, long rowFP) {
         if (txIdWAL.isEmpty() || txIdWAL.last().txId != rowTxId) {
-            txIdWAL.add(new TxFps(prefix, rowTxId, new long[]{rowFP}));
+            txIdWAL.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
         } else {
             txIdWAL.onLoadAddFpToTail(rowFP);
         }
@@ -291,7 +295,7 @@ class PartitionDelta {
             AppendOnlyConcurrentArrayList prefixTxFps = prefixTxFpIndex.computeIfAbsent(new WALPrefix(prefix),
                 walPrefix -> new AppendOnlyConcurrentArrayList(8));
             if (prefixTxFps.isEmpty() || prefixTxFps.last().txId != rowTxId) {
-                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[]{rowFP}));
+                prefixTxFps.add(new TxFps(prefix, rowTxId, new long[] { rowFP }));
             } else {
                 prefixTxFps.onLoadAddFpToTail(rowFP);
             }
@@ -356,7 +360,7 @@ class PartitionDelta {
         }
     }
 
-    MergeResult merge(PartitionIndex partitionIndex) throws Exception {
+    MergeResult merge(PartitionIndex partitionIndex, boolean validate) throws Exception {
         final PartitionDelta merge = merging.get();
         long merged = 0;
         long lastTxId = 0;
@@ -366,7 +370,9 @@ class PartitionDelta {
                 merged = merge.size();
                 lastTxId = merge.highestTxId();
 
-                PartitionStore partitionStore = partitionIndex.get(merge.versionedPartitionName);
+                PartitionStore partitionStore = validate
+                    ? partitionIndex.getAndValidate(merge.getDeltaWALId(), merge.getPrevDeltaWALId(), merge.versionedPartitionName)
+                    : partitionIndex.get(merge.versionedPartitionName);
                 PartitionProperties properties = partitionIndex.getProperties(merge.versionedPartitionName.getPartitionName());
                 long highestTxId = partitionStore.highestTxId();
                 LOG.info("Merging ({}) deltas for partition: {} from tx: {}", merge.pointerIndex.size(), merge.versionedPartitionName, highestTxId);

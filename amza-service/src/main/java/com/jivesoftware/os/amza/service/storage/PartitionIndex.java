@@ -126,11 +126,19 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         });
     }
 
-    public PartitionStore get(VersionedPartitionName versionedPartitionName) throws Exception {
-        return getAndValidate(-1, versionedPartitionName);
+    public PartitionStore getIfPresent(VersionedPartitionName versionedPartitionName) {
+        ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.get(versionedPartitionName.getPartitionName());
+        if (versionedStores != null) {
+            return versionedStores.get(versionedPartitionName.getPartitionVersion());
+        }
+        return null;
     }
 
-    public PartitionStore getAndValidate(long deltaWALId, VersionedPartitionName versionedPartitionName) throws Exception {
+    public PartitionStore get(VersionedPartitionName versionedPartitionName) throws Exception {
+        return getAndValidate(-1, -1, versionedPartitionName);
+    }
+
+    public PartitionStore getAndValidate(long deltaWALId, long prevDeltaWALId, VersionedPartitionName versionedPartitionName) throws Exception {
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         if (deltaWALId > -1 && partitionName.isSystemPartition()) {
             throw new IllegalStateException("Hooray you have a bug! Should never call get with something other than -1 for system parititions." + deltaWALId);
@@ -139,9 +147,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (versionedStores != null) {
             PartitionStore partitionStore = versionedStores.get(versionedPartitionName.getPartitionVersion());
             if (partitionStore != null) {
-                if (deltaWALId > -1) {
-                    partitionStore.load(deltaWALId);
-                }
+                partitionStore.load(deltaWALId, prevDeltaWALId);
                 return partitionStore;
             }
         }
@@ -155,7 +161,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         if (properties == null) {
             return null;
         }
-        return open(deltaWALId, versionedPartitionName, properties);
+        return open(deltaWALId, prevDeltaWALId, versionedPartitionName, properties);
 
     }
 
@@ -180,7 +186,10 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         }
     }
 
-    private PartitionStore open(long deltaWALId, VersionedPartitionName versionedPartitionName, PartitionProperties properties) throws Exception {
+    private PartitionStore open(long deltaWALId,
+        long prevDeltaWALId,
+        VersionedPartitionName versionedPartitionName,
+        PartitionProperties properties) throws Exception {
         synchronized (locksProvider.lock(versionedPartitionName, 1234)) {
             ConcurrentHashMap<Long, PartitionStore> versionedStores = partitionStores.computeIfAbsent(versionedPartitionName.getPartitionName(),
                 (key) -> new ConcurrentHashMap<>());
@@ -192,7 +201,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
 
             WALStorage<?> walStorage = walStorageProvider.create(versionedPartitionName, properties);
             partitionStore = new PartitionStore(amzaStats, orderIdProvider, versionedPartitionName, walStorage, properties);
-            partitionStore.load(deltaWALId);
+            partitionStore.load(deltaWALId, prevDeltaWALId);
 
             versionedStores.put(versionedPartitionName.getPartitionVersion(), partitionStore);
             LOG.info("Opened partition:" + versionedPartitionName);

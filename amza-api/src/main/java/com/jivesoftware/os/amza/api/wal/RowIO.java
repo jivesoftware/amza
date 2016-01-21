@@ -29,7 +29,7 @@ public interface RowIO extends WALReader, WALWriter {
     void validate(boolean truncateToEndOfMergeMarker,
         ValidationStream backward,
         ValidationStream forward,
-        ValidationNotifier validationNotifier) throws Exception;
+        PreTruncationNotifier preTruncationNotifier) throws Exception;
 
     void hackTruncation(int numBytes);
 
@@ -48,8 +48,8 @@ public interface RowIO extends WALReader, WALWriter {
 
     }
 
-    interface ValidationNotifier {
+    interface PreTruncationNotifier {
 
-        void corrupt(long corruptAtFP, boolean reverse);
+        void corrupt(long corruptAtFP, boolean reverse)  throws Exception;
     }
 }

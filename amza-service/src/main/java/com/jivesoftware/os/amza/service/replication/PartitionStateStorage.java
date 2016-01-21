@@ -62,18 +62,6 @@ public class PartitionStateStorage implements TxPartitionState {
         return transactor.doWithOne(versionedAquarium, tx);
     }
 
-    /*public void wipeTheGlass(VersionedPartitionName versionedPartitionName) throws Exception {
-        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return;
-        }
-
-        aquariumProvider.wipeTheGlass(versionedPartitionName, aquariumProvider.getLivelyEndState(versionedPartitionName));
-    }
-
-    public long getPartitionVersion(PartitionName partitionName) throws Exception {
-        return storageVersionProvider.getPartitionVersion(partitionName);
-    }*/
-
     public RemoteVersionedState getRemoteVersionedState(RingMember remoteRingMember, PartitionName partitionName) throws Exception {
         if (partitionName.isSystemPartition()) {
             return new RemoteVersionedState(Waterline.ALWAYS_ONLINE, 0);
@@ -87,30 +75,6 @@ public class PartitionStateStorage implements TxPartitionState {
         Waterline remoteState = aquariumProvider.getCurrentState(partitionName, remoteRingMember, remoteStorageVersion.partitionVersion);
         return new RemoteVersionedState(remoteState, remoteStorageVersion.partitionVersion);
     }
-
-    /*public VersionedAquarium markAsBootstrap(VersionedPartitionName versionedPartitionName, LivelyEndState livelyEndState) throws Exception {
-        PartitionName partitionName = versionedPartitionName.getPartitionName();
-        VersionedAquarium versionedAquarium = getVersionedAquarium(partitionName);
-        if (storageVersion.partitionVersion == versionedPartitionName.getPartitionVersion()) {
-            // let aquarium do its thing
-            aquariumProvider.wipeTheGlass(versionedPartitionName, livelyEndState);
-        }
-        return new VersionedAquarium(versionedPartitionName, livelyEndState, storageVersion);
-    }
-
-    public void tookFully(RingMember fromMember, long leadershipToken, VersionedPartitionName versionedPartitionName) throws Exception {
-        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return;
-        }
-        aquariumProvider.tookFully(fromMember, leadershipToken, versionedPartitionName);
-    }
-
-    public Waterline getLeader(VersionedPartitionName versionedPartitionName) throws Exception {
-        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return null;
-        }
-        return aquariumProvider.getAquarium(versionedPartitionName).getLeader();
-    }*/
 
     public Waterline awaitLeader(PartitionName partitionName, long timeoutMillis) throws Exception {
         if (partitionName.isSystemPartition()) {
@@ -130,41 +94,12 @@ public class PartitionStateStorage implements TxPartitionState {
         }
     }
 
-    public boolean isOnline(RingMember ringMember, PartitionName versionedPartitionName) {
-        return false;
-    }
-
-    /*@Override
-    public boolean isNominated(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception {
-        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return false;
-        }
-        return aquariumProvider.getAquarium(versionedPartitionName).isLivelyState(ringMember.asAquariumMember(), State.nominated);
-    }
-
-    @Override
-    public boolean isOnline(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception {
-        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return true;
-        }
-        return aquariumProvider.getAquarium(versionedPartitionName).isLivelyEndState(ringMember.asAquariumMember());
-    }
-
-    public void markForDisposal(VersionedPartitionName versionedPartitionName, VersionedAquarium versionedAquarium, RingMember ringMember) throws Exception {
-        if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-            return;
-        }
-
-        LOG.info("Expunging aquarium for partitionName:{} state:{} ringMember:{}", versionedPartitionName, versionedAquarium, ringMember);
-        aquariumProvider.getAquarium(versionedPartitionName).expunge(ringMember.asAquariumMember());
-    }*/
-
     public interface PartitionMemberStateStream {
 
         boolean stream(PartitionName partitionName, RingMember ringMember, VersionedAquarium versionedAquarium) throws Exception;
     }
 
-    public void streamLocalState(PartitionMemberStateStream stream) throws Exception {
+    public void streamLocalAquariums(PartitionMemberStateStream stream) throws Exception {
         storageVersionProvider.streamLocal((partitionName, ringMember, storageVersion) -> {
             VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
             VersionedAquarium versionedAquarium = new VersionedAquarium(versionedPartitionName, aquariumProvider, storageVersion.stripeVersion);

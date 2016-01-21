@@ -44,6 +44,10 @@ public class SystemWALStorage {
         this.hardFlush = hardFlush;
     }
 
+    public void load(HighestPartitionTx<Void> tx) throws Exception {
+        highestPartitionTxIds(tx);
+    }
+
     public RowsChanged update(VersionedPartitionName versionedPartitionName,
         byte[] prefix,
         Commitable updates,
@@ -173,7 +177,7 @@ public class SystemWALStorage {
         }
     }
 
-    public void highestPartitionTxIds(HighestPartitionTx<Void> tx) throws Exception {
+    private void highestPartitionTxIds(HighestPartitionTx<Void> tx) throws Exception {
         for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
             PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
             if (partitionStore != null) {

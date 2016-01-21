@@ -50,6 +50,6 @@ public interface RowIO extends WALReader, WALWriter {
 
     interface PreTruncationNotifier {
 
-        void corrupt(long corruptAtFP, boolean reverse)  throws Exception;
+        void truncated(long truncatedAtFP)  throws Exception;
     }
 }

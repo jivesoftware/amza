@@ -16,6 +16,7 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.api.TimestampedValue;
+import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
@@ -40,7 +41,7 @@ public class PartitionStore implements RangeScannable {
     private final TimestampedOrderIdProvider orderIdProvider;
     private final VersionedPartitionName versionedPartitionName;
     private final WALStorage walStorage;
-    private final AtomicLong loadedAtDeltaWALId = new AtomicLong(-1);
+    private final AtomicLong loadedAtDeltaWALId = new AtomicLong(Integer.MIN_VALUE);
 
     private PartitionProperties properties;
 
@@ -64,20 +65,33 @@ public class PartitionStore implements RangeScannable {
         return walStorage;
     }
 
-    public void load(long deltaWALId) throws Exception {
+    public void load(long deltaWALId, long prevDeltaWALId) throws Exception {
+        long loaded = loadedAtDeltaWALId.get();
         if (deltaWALId > -1) {
-            long loaded = loadedAtDeltaWALId.get();
-            if (deltaWALId < loaded) {
-                throw new IllegalStateException("DeltasWALId are being used out of order. attempted:" + deltaWALId + " loaded:" + loaded);
-            } else if (deltaWALId == loaded) {
+            if (loaded == -1) {
+                throw new IllegalStateException("Partition was loaded without a delta before validation. attempted:" + deltaWALId);
+            } else if (deltaWALId < loaded) {
+                throw new IllegalStateException("Partition was loaded out of order. attempted:" + deltaWALId + " loaded:" + loaded);
+            } else if (loaded != Integer.MIN_VALUE && deltaWALId >= loaded) {
                 return;
             }
+        } else {
+            if (loaded == -1) {
+                return;
+            } else if (loaded != Integer.MIN_VALUE) {
+                throw new IllegalStateException("Partition was already loaded with a delta");
+            }
         }
-        walStorage.load(deltaWALId, deltaWALId != -1);
+        boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.takeFromFactor > 0;
+        walStorage.load(deltaWALId, prevDeltaWALId, truncateToEndOfMergeMarker);
         if (properties.forceCompactionOnStartup) {
             compactTombstone(true);
         }
         loadedAtDeltaWALId.set(deltaWALId);
+    }
+
+    public boolean isSick() {
+        return walStorage.isSick();
     }
 
     public void flush(boolean fsync) throws Exception {

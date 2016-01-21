@@ -41,6 +41,7 @@ import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALIndexable;
 import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALTimestampId;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALValue;
@@ -132,6 +133,10 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         this.stripedKeyHighwaterTimestamps = new long[numKeyHighwaterStripes];
     }
 
+    public boolean isSick() {
+        return sick.get();
+    }
+
     private void acquireOne() {
         if (sick.get()) {
             throw new IllegalStateException("Partition is sick: " + versionedPartitionName);
@@ -178,6 +183,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             if (wali != null) {
                 wali.delete();
                 walIndex.set(null);
+                sickPartitions.recovered(versionedPartitionName);
             }
         } finally {
             releaseAll();
@@ -241,7 +247,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } catch (Exception e) {
                 LOG.inc(metricPrefix + "failedCompaction");
                 LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
-                loadInternal(-1, true, false);
+                loadInternal(-1, -1, true, false);
                 return -1;
             }
             walIndex.set(compacted.index);
@@ -261,19 +267,18 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         } finally {
             releaseAll();
         }
-
     }
 
-    public void load(long deltaWALId, boolean truncateToEndOfMergeMarker) throws Exception {
+    public void load(long deltaWALId, long prevDeltaWALId, boolean truncateToEndOfMergeMarker) throws Exception {
         acquireAll();
         try {
-            loadInternal(deltaWALId, false, truncateToEndOfMergeMarker);
+            loadInternal(deltaWALId, prevDeltaWALId, false, truncateToEndOfMergeMarker);
         } finally {
             releaseAll();
         }
     }
 
-    private void loadInternal(long deltaWALId, boolean recovery, boolean truncateToEndOfMergeMarker) throws Exception {
+    private void loadInternal(long deltaWALId, long prevDeltaWALId, boolean recovery, boolean truncateToEndOfMergeMarker) throws Exception {
         try {
 
             long initialHighestTxId = highestTxId.get();
@@ -287,6 +292,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 long[] updatesSinceLastMergeMarker = { 0 };
                 long[] updatesSinceLastLeap = { 0 };
 
+                long[] trailingDeltaWALId = { -1 };
                 long[] loadOldestTimestamp = { -1 };
                 long[] loadOldestVersion = { -1 };
                 long[] loadOldestTombstonedTimestamp = { -1 };
@@ -306,6 +312,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                                     return -1;
                                 }
 
+                                trailingDeltaWALId[0] = marker[EOM_DELTA_WAL_ID_INDEX];
                                 lastTxId[0] = Math.max(lastTxId[0], marker[EOM_HIGHEST_TX_ID_INDEX]);
                                 loadOldestTimestamp[0] = marker[EOM_OLDEST_TIMESTAMP_INDEX];
                                 loadOldestVersion[0] = marker[EOM_OLDEST_VERSION_INDEX];
@@ -344,6 +351,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
                                 updatesSinceLastMergeMarker[0] = 0;
 
+                                trailingDeltaWALId[0] = marker[EOM_DELTA_WAL_ID_INDEX];
                                 lastTxId[0] = Math.max(lastTxId[0], marker[EOM_HIGHEST_TX_ID_INDEX]);
                                 loadOldestTimestamp[0] = Math.min(loadOldestTimestamp[0], marker[EOM_OLDEST_TIMESTAMP_INDEX]);
                                 loadOldestVersion[0] = Math.min(loadOldestVersion[0], marker[EOM_OLDEST_VERSION_INDEX]);
@@ -371,11 +379,15 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             }
                             return -(truncate[0] + 1);
                         },
-                        (corruptAtFP, reverse) -> {
-                            LOG.warn("Encountered a corrupt WAL. Removing wal index for {} ...", versionedPartitionName);
-                            walIndexProvider.deleteIndex(versionedPartitionName);
-                            LOG.warn("Removed wal index for {}.", versionedPartitionName);
-                        });
+                        null);
+
+                    if (truncateToEndOfMergeMarker) {
+                        if (prevDeltaWALId > -1 && trailingDeltaWALId[0] != prevDeltaWALId) {
+                            LOG.error("Inconsistency detected while loading delta:{} prev:{}, encountered tail:{} for {}",
+                                deltaWALId, prevDeltaWALId, trailingDeltaWALId, versionedPartitionName);
+                            throw new IllegalStateException("Delta mismatch, intervention is required");
+                        }
+                    }
                     return true;
                 }, (fp, rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                     loadOldestTimestamp[0] = Math.min(loadOldestTimestamp[0], valueTimestamp);
@@ -411,7 +423,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             walIndex.compareAndSet(null, index);
 
         } catch (Exception e) {
-            LOG.error("Partition {} is irreparably sick, intervention is required, partition will be parked, recovery:{}",
+            LOG.error("Partition {} could not be opened, intervention is required, partition will be parked, recovery:{}",
                 new Object[] { versionedPartitionName, recovery }, e);
             sick.set(true);
             sickPartitions.sick(versionedPartitionName, e);
@@ -534,25 +546,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
     }
 
-    //    private void writeCompactionHintMarker(WALWriter rowWriter) throws Exception {
-//        synchronized (oneTransactionAtATimeLock) {
-//            long[] hints = new long[3 + numKeyHighwaterStripes];
-//            hints[0] = RowType.COMPACTION_HINTS_KEY;
-//            hints[1] = keyCount.get();
-//            hints[2] = clobberCount.get();
-//            System.arraycopy(stripedKeyHighwaterTimestamps, 0, hints, 3, numKeyHighwaterStripes);
-//
-//            rowWriter.writeSystem(UIO.longsBytes(hints));
-//            updateCount.set(0);
-//        }
-//    }
-//    private void writeIndexCommitMarker(WALWriter rowWriter, long indexCommitedUpToTxId) throws Exception {
-//        synchronized (oneTransactionAtATimeLock) {
-//            rowWriter.writeSystem(UIO.longsBytes(new long[]{
-//                RowType.COMMIT_KEY,
-//                indexCommitedUpToTxId}));
-//        }
-//    }
     public void writeHighwaterMarker(WALWriter rowWriter, WALHighwater highwater) throws Exception {
         synchronized (oneTransactionAtATimeLock) {
             rowWriter.writeHighwater(highwaterRowMarshaller.toBytes(highwater));
@@ -817,6 +810,26 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                 return true;
             });
             return values[0];
+        } finally {
+            releaseOne();
+        }
+    }
+
+    public WALPointer getPointer(byte[] prefix, byte[] key) throws Exception {
+        acquireOne();
+        try {
+            WALIndex wali = walIndex.get();
+            if (wali == null) {
+                return null;
+            }
+            WALPointer[] pointer = new WALPointer[1];
+            wali.getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
+                if (fp != -1 && !tombstoned) {
+                    pointer[0] = new WALPointer(fp, timestamp, tombstoned, version);
+                }
+                return true;
+            });
+            return pointer[0];
         } finally {
             releaseOne();
         }

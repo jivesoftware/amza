@@ -42,12 +42,12 @@ public class DeltaWALFactory {
         this.corruptionParanoiaFactor = corruptionParanoiaFactor;
     }
 
-    public DeltaWAL create() throws Exception {
-        return createOrOpen(idProvider.nextId());
+    public DeltaWAL create(long prevId) throws Exception {
+        return createOrOpen(idProvider.nextId(), prevId);
     }
 
-    private DeltaWAL createOrOpen(long id) throws Exception {
-        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(id), ioProvider, primaryRowMarshaller);
+    private DeltaWAL createOrOpen(long id, long prevId) throws Exception {
+        WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(prevId) + "_" + String.valueOf(id), ioProvider, primaryRowMarshaller);
         MutableLong rows = new MutableLong();
         deltaWALRowsTx.open(io -> {
             io.validate(false,
@@ -59,15 +59,17 @@ public class DeltaWALFactory {
                 null);
             return null;
         });
-        return new DeltaWAL(id, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
+        return new DeltaWAL(id, prevId, idProvider, primaryRowMarshaller, highwaterRowMarshaller, deltaWALRowsTx);
     }
 
     public List<DeltaWAL> list() throws Exception {
         List<DeltaWAL> deltaWALs = new ArrayList<>();
         for (String filename : BinaryWALTx.listExisting(walDir, ioProvider)) {
             try {
-                long id = Long.parseLong(filename);
-                deltaWALs.add(createOrOpen(id));
+                String[] parts = filename.split("_");
+                long prevId = Long.parseLong(parts[0]);
+                long id = Long.parseLong(parts[1]);
+                deltaWALs.add(createOrOpen(id, prevId));
             } catch (Exception x) {
                 LOG.warn("Encountered {} which doesn't conform to a WAL file naming conventions.", filename);
             }

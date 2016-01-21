@@ -17,9 +17,11 @@ package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
+import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
+import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
@@ -184,11 +186,41 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         return liveliness;
     }
 
-    public void start() throws Exception {
+    public void start(RingMember ringMember, RingHost ringHost) throws Exception {
+
+        partitionIndex.open();
+        takeCoordinator.start(ringStoreReader, aquariumProvider);
+
+        HighestPartitionTx<Void> takeHighestPartitionTx = (versionedAquarium, highestTxId) -> {
+            takeCoordinator.update(ringStoreReader, versionedAquarium.getVersionedPartitionName(), highestTxId);
+            return null;
+        };
+
+        systemWALStorage.load(takeHighestPartitionTx);
+
+        // start the composter before loading partition stripes in case we need to repair any partitions
+        partitionComposter.start();
+
+        partitionStripeProvider.load(takeHighestPartitionTx);
+
+        for (VersionedPartitionName versionedPartitionName : partitionIndex.getMemberPartitions()) {
+            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+            partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
+                long partitionVersion = versionedAquarium.getVersionedPartitionName().getPartitionVersion();
+                if (partitionVersion == versionedPartitionName.getPartitionVersion()) {
+                    takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
+                } else {
+                    LOG.warn("Version:{} wasn't aligned with versioned partition:{}", partitionVersion, versionedPartitionName);
+                }
+                return null;
+            });
+        }
+
+        ringStoreWriter.register(ringMember, ringHost, -1);
+
         partitionStripeProvider.start();
         changeTaker.start();
         partitionTombstoneCompactor.start();
-        partitionComposter.start();
 
         // last minute initialization
         aquariumProvider.start();

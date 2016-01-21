@@ -229,7 +229,7 @@ public class Main {
         System.out.println("|      Jetty Service Online");
         System.out.println("-----------------------------------------------------------------------");
 
-        amzaService.start();
+        amzaService.start(ringMember, ringHost);
 
         System.out.println("-----------------------------------------------------------------------");
         System.out.println("|      Amza Service Online");

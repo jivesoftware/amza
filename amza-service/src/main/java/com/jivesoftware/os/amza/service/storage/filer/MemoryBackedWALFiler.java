@@ -53,7 +53,7 @@ public class MemoryBackedWALFiler implements WALFiler {
 
     @Override
     public IReadable reader(IReadable current, long requiredLength, int bufferSize) throws IOException {
-        if (current != null && current.length() >= requiredLength) {
+        if (current != null && current.length() >= requiredLength && current.length() <= filer.length()) {
             return current;
         }
         return filer.duplicateAll();
@@ -71,6 +71,8 @@ public class MemoryBackedWALFiler implements WALFiler {
 
     @Override
     public void truncate(long size) throws IOException {
+        this.filer.setLength(size);
+        this.size.set(size);
     }
 
     @Override

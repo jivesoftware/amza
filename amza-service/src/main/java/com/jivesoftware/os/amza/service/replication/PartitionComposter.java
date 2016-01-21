@@ -4,7 +4,6 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
-import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
@@ -36,6 +35,7 @@ public class PartitionComposter {
     private final AmzaRingStoreReader amzaRingReader;
     private final PartitionStripeProvider partitionStripeProvider;
     private final PartitionStateStorage partitionStateStorage;
+    private final StorageVersionProvider storageVersionProvider;
     private final StripingLocksProvider<PartitionName> stripingLocksProvider;
 
     public PartitionComposter(AmzaStats amzaStats,
@@ -43,7 +43,8 @@ public class PartitionComposter {
         PartitionCreator partitionCreator,
         AmzaRingStoreReader amzaRingReader,
         PartitionStateStorage partitionStateStorage,
-        PartitionStripeProvider partitionStripeProvider) {
+        PartitionStripeProvider partitionStripeProvider,
+        StorageVersionProvider storageVersionProvider) {
 
         this.amzaStats = amzaStats;
         this.partitionIndex = partitionIndex;
@@ -51,6 +52,7 @@ public class PartitionComposter {
         this.amzaRingReader = amzaRingReader;
         this.partitionStateStorage = partitionStateStorage;
         this.partitionStripeProvider = partitionStripeProvider;
+        this.storageVersionProvider = storageVersionProvider;
         this.stripingLocksProvider = new StripingLocksProvider<>(64); //TODO config
     }
 
@@ -75,9 +77,10 @@ public class PartitionComposter {
 
     public void compostAll() throws Exception {
         List<VersionedPartitionName> composted = new ArrayList<>();
-        partitionStateStorage.streamLocalState((partitionName, ringMember, versionedAquarium) -> {
-            if (compostIfNecessary(ringMember, versionedAquarium)) {
-                composted.add(versionedAquarium.getVersionedPartitionName());
+        partitionStateStorage.streamLocalAquariums((partitionName, ringMember, versionedAquarium) -> {
+            VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+            if (compostIfNecessary(versionedAquarium)) {
+                composted.add(versionedPartitionName);
             }
             return true;
         });
@@ -88,7 +91,7 @@ public class PartitionComposter {
 
     public void compostPartitionIfNecessary(PartitionName partitionName) throws Exception {
         VersionedPartitionName compost = partitionStateStorage.tx(partitionName, versionedAquarium -> {
-            if (compostIfNecessary(amzaRingReader.getRingMember(), versionedAquarium)) {
+            if (compostIfNecessary(versionedAquarium)) {
                 return versionedAquarium.getVersionedPartitionName();
             } else {
                 return null;
@@ -99,13 +102,14 @@ public class PartitionComposter {
         }
     }
 
-    private boolean compostIfNecessary(RingMember ringMember, VersionedAquarium versionedAquarium) throws Exception {
+    private boolean compostIfNecessary(VersionedAquarium versionedAquarium) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
         PartitionName partitionName = versionedPartitionName.getPartitionName();
         synchronized (stripingLocksProvider.lock(partitionName, 0)) {
             State currentState = versionedAquarium.getLivelyEndState().getCurrentState();
-            //TODO or partitionName is marked for destruction
-            if (currentState == State.expunged || partitionCreator.isPartitionDisposed(partitionName)) {
+            if (currentState == State.expunged
+                || !storageVersionProvider.isCurrentVersion(versionedPartitionName)
+                || partitionCreator.isPartitionDisposed(partitionName)) {
                 deletePartition(versionedPartitionName);
                 return true;
             } else {

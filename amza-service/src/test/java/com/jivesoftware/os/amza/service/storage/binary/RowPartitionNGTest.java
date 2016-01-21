@@ -61,7 +61,7 @@ public class RowPartitionNGTest {
             false,
             2);
 
-        indexedWAL.load(1, false);
+        indexedWAL.load(-1, -1, false);
 
         final Random r = new Random();
 
@@ -176,7 +176,7 @@ public class RowPartitionNGTest {
             false,
             2);
 
-        indexedWAL.load(-1, false);
+        indexedWAL.load(-1, -1, false);
         WALKey walKey = k(1);
         TimestampedValue value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertNull(value);

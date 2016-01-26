@@ -28,6 +28,8 @@ public interface AmzaInstance {
 
     Iterable<PartitionName> getMemberPartitionNames() throws Exception;
 
+    Iterable<PartitionName> getSystemPartitionNames() throws Exception;
+
     void destroyPartition(PartitionName partitionName) throws Exception;
 
     long getTimestamp(long timestamp, long millisAgo) throws Exception;

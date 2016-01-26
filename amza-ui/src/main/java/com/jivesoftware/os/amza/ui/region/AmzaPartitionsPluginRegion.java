@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.ui.region;
 
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.primitives.UnsignedBytes;
@@ -129,7 +130,9 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                 }
             }
             List<Map<String, Object>> rows = new ArrayList<>();
-            List<PartitionName> partitionNames = Lists.newArrayList(amzaService.getMemberPartitionNames());
+            List<PartitionName> partitionNames = Lists.newArrayList();
+            Iterables.addAll(partitionNames, amzaService.getSystemPartitionNames());
+            Iterables.addAll(partitionNames, amzaService.getMemberPartitionNames());
             Collections.sort(partitionNames, (o1, o2) -> {
                 int i = -Boolean.compare(o1.isSystemPartition(), o2.isSystemPartition());
                 if (i != 0) {

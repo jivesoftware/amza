@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.FailedToAchieveQuorumException;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
@@ -10,9 +11,11 @@ import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -28,6 +31,7 @@ public class AmzaSystemReady {
 
     private final AtomicBoolean ready = new AtomicBoolean();
     private final Map<VersionedPartitionName, Set<RingMember>> systemTookFully = Maps.newConcurrentMap();
+    private final List<Callable<Void>> onReadyCallbacks = Collections.synchronizedList(Lists.newArrayList());
 
     public AmzaSystemReady(AmzaRingStoreReader ringStoreReader, PartitionIndex partitionIndex, SickPartitions sickPartitions) {
         this.ringStoreReader = ringStoreReader;
@@ -73,15 +77,28 @@ public class AmzaSystemReady {
         }
     }
 
-    private void ready() {
+    private void ready() throws Exception {
         synchronized (ready) {
-            LOG.info("System is ready!");
-            ready.set(true);
-            ready.notifyAll();
-            for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
-                sickPartitions.recovered(versionedPartitionName);
+            if (ready.compareAndSet(false, true)) {
+                LOG.info("System is ready!");
+                ready.set(true);
+
+                ready.notifyAll();
+                for (VersionedPartitionName versionedPartitionName : partitionIndex.getSystemPartitions()) {
+                    sickPartitions.recovered(versionedPartitionName);
+                }
+                systemTookFully.clear();
+
+                try {
+                    for (Callable<Void> callback : onReadyCallbacks) {
+                        callback.call();
+                    }
+                    onReadyCallbacks.clear();
+                } catch (Exception e) {
+                    LOG.error("Failed onReady callback", e);
+                    ready.set(false);
+                }
             }
-            systemTookFully.clear();
         }
     }
 
@@ -99,6 +116,16 @@ public class AmzaSystemReady {
                     ready.wait(timeoutInMillis);
                     timeoutInMillis = Math.max(timeoutInMillis - (start - System.currentTimeMillis()), 0);
                 }
+            }
+        }
+    }
+
+    public void onReady(Callable<Void> callable) throws Exception {
+        synchronized (ready) {
+            if (ready.get()) {
+                callable.call();
+            } else {
+                onReadyCallbacks.add(callable);
             }
         }
     }

@@ -92,14 +92,14 @@ public class PartitionStripeProvider {
         }
     }
 
-    public void load(HighestPartitionTx takeHighestPartitionTx) throws Exception {
+    public void load() throws Exception {
         ExecutorService stripeLoaderThreadPool = Executors.newFixedThreadPool(deltaStripes.length,
             new ThreadFactoryBuilder().setNameFormat("load-stripes-%d").build());
         List<Future> futures = new ArrayList<>();
         for (PartitionStripe partitionStripe : deltaStripes) {
             futures.add(stripeLoaderThreadPool.submit(() -> {
                 try {
-                    partitionStripe.load(takeHighestPartitionTx);
+                    partitionStripe.load();
                 } catch (Exception x) {
                     LOG.error("Failed while loading " + partitionStripe, x);
                     throw new RuntimeException(x);

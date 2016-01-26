@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.filer.UIO;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
@@ -227,7 +228,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
                 data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal(), false));
                 List<Map<String, Object>> regionTotals = new ArrayList<>();
-                ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getMemberPartitionNames());
+                List<PartitionName> partitionNames = Lists.newArrayList(amzaService.getMemberPartitionNames());
                 Collections.sort(partitionNames);
                 for (PartitionName partitionName : partitionNames) {
                     Totals totals = amzaStats.getPartitionTotals().get(partitionName);
@@ -251,7 +252,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         try {
             data.put("grandTotals", regionTotals(null, amzaStats.getGrandTotal(), true));
             List<Map<String, Object>> regionTotals = new ArrayList<>();
-            ArrayList<PartitionName> partitionNames = new ArrayList<>(amzaService.getMemberPartitionNames());
+            List<PartitionName> partitionNames = Lists.newArrayList(amzaService.getMemberPartitionNames());
             Collections.sort(partitionNames);
             for (PartitionName partitionName : partitionNames) {
                 if (new String(partitionName.getName()).contains(filter)) {

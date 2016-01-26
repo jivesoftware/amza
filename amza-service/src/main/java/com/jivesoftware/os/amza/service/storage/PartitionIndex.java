@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.RingMembership;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
@@ -17,6 +18,7 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
+import com.jivesoftware.os.amza.service.replication.StorageVersionProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -223,20 +225,22 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
     }
 
     @Override
-    public Iterable<PartitionName> getAllPartitions() throws Exception {
+    public Iterable<PartitionName> getMemberPartitions(RingMembership ringMembership) throws Exception {
         PartitionStore propertiesStore = get(PartitionCreator.REGION_PROPERTIES);
         List<PartitionName> partitionNames = Lists.newArrayList();
         propertiesStore.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
             if (!valueTombstoned && valueTimestamp != -1) {
-                partitionNames.add(PartitionName.fromBytes(key));
+                PartitionName partitionName = PartitionName.fromBytes(key);
+                if (ringMembership == null || ringMembership.isMemberOfRing(partitionName.getRingName())) {
+                    partitionNames.add(partitionName);
+                }
             }
             return true;
         });
         return partitionNames;
     }
 
-    @Override
-    public Iterable<VersionedPartitionName> getMemberPartitions() {
+    public Iterable<VersionedPartitionName> getActivePartitions() {
         return Iterables.concat(Iterables.transform(partitionStores.entrySet(),
             (partitionVersions) -> Iterables.transform(partitionVersions.getValue().keySet(),
                 (partitionVersion) -> new VersionedPartitionName(partitionVersions.getKey(), partitionVersion))));

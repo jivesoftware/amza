@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.partition;
 
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
+import com.jivesoftware.os.amza.api.partition.RingMembership;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 
 /**
@@ -11,7 +12,5 @@ public interface VersionedPartitionProvider {
 
     PartitionProperties getProperties(PartitionName partitionName) throws Exception;
 
-    Iterable<PartitionName> getAllPartitions() throws Exception;
-
-    Iterable<VersionedPartitionName> getMemberPartitions();
+    Iterable<PartitionName> getMemberPartitions(RingMembership ringMembership) throws Exception;
 }

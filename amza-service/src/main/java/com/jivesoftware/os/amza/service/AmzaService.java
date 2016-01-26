@@ -201,20 +201,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         // start the composter before loading partition stripes in case we need to repair any partitions
         partitionComposter.start();
 
-        partitionStripeProvider.load(takeHighestPartitionTx);
-
-        for (VersionedPartitionName versionedPartitionName : partitionIndex.getMemberPartitions()) {
-            PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-            partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
-                long partitionVersion = versionedAquarium.getVersionedPartitionName().getPartitionVersion();
-                if (partitionVersion == versionedPartitionName.getPartitionVersion()) {
-                    takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
-                } else {
-                    LOG.warn("Version:{} wasn't aligned with versioned partition:{}", partitionVersion, versionedPartitionName);
-                }
-                return null;
-            });
-        }
+        partitionStripeProvider.load();
 
         ringStoreWriter.register(ringMember, ringHost, -1);
 
@@ -406,13 +393,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     @Override
-    public Set<PartitionName> getAllPartitionNames() throws Exception {
-        return Sets.newHashSet(partitionIndex.getAllPartitions());
+    public Iterable<PartitionName> getAllPartitionNames() throws Exception {
+        return partitionIndex.getMemberPartitions(null);
     }
 
     @Override
-    public Set<PartitionName> getMemberPartitionNames() throws Exception {
-        return Sets.newHashSet(Iterables.transform(partitionIndex.getMemberPartitions(), VersionedPartitionName::getPartitionName));
+    public Iterable<PartitionName> getMemberPartitionNames() throws Exception {
+        return partitionIndex.getMemberPartitions(ringStoreReader);
     }
 
     public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {

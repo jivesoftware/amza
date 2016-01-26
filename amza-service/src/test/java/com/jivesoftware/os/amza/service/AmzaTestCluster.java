@@ -19,6 +19,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.Consistency;
@@ -481,8 +482,13 @@ public class AmzaTestCluster {
                 return true;
             }
 
-            Set<PartitionName> allAPartitions = Sets.newHashSet(amzaService.getAllPartitionNames());
+            Set<PartitionName> allAPartitions = Sets.newHashSet();
+            Iterables.addAll(allAPartitions, amzaService.getSystemPartitionNames());
+            Iterables.addAll(allAPartitions, amzaService.getMemberPartitionNames());
+
             Set<PartitionName> allBPartitions = Sets.newHashSet(service.amzaService.getAllPartitionNames());
+            Iterables.addAll(allBPartitions, service.amzaService.getSystemPartitionNames());
+            Iterables.addAll(allBPartitions, service.amzaService.getMemberPartitionNames());
 
             if (allAPartitions.size() != allBPartitions.size()) {
                 System.out.println(allAPartitions + " -vs- " + allBPartitions);

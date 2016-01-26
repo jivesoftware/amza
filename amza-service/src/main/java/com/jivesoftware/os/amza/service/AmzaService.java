@@ -402,6 +402,11 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         return partitionIndex.getMemberPartitions(ringStoreReader);
     }
 
+    @Override
+    public Iterable<PartitionName> getSystemPartitionNames() throws Exception {
+        return Iterables.transform(partitionIndex.getSystemPartitions(), VersionedPartitionName::getPartitionName);
+    }
+
     public PartitionProperties getPartitionProperties(PartitionName partitionName) throws Exception {
         return partitionIndex.getProperties(partitionName);
     }

@@ -24,9 +24,9 @@ import java.util.Set;
 
 public interface AmzaInstance {
 
-    Set<PartitionName> getAllPartitionNames() throws Exception;
+    Iterable<PartitionName> getAllPartitionNames() throws Exception;
 
-    Set<PartitionName> getMemberPartitionNames() throws Exception;
+    Iterable<PartitionName> getMemberPartitionNames() throws Exception;
 
     void destroyPartition(PartitionName partitionName) throws Exception;
 

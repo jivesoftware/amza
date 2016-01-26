@@ -67,7 +67,7 @@ public class PartitionTombstoneCompactor {
 
     public void compactTombstone(int stripe, boolean force) throws Exception {
 
-        for (VersionedPartitionName versionedPartitionName : partitionIndex.getMemberPartitions()) {
+        for (VersionedPartitionName versionedPartitionName : partitionIndex.getActivePartitions()) {
             if (stripe == -1 || partitionStripeFunction.stripe(versionedPartitionName.getPartitionName()) == stripe) {
                 partitionIndex.get(versionedPartitionName).compactTombstone(force);
             }

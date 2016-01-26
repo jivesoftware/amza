@@ -20,6 +20,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
+import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
@@ -378,6 +379,21 @@ public class AmzaServiceInitializer {
         amzaPartitionWatcher.watch(PartitionCreator.NODE_INDEX.getPartitionName(), amzaRingWriter);
 
         AmzaSystemReady systemReady = new AmzaSystemReady(ringStoreReader, partitionIndex, sickPartitions);
+        systemReady.onReady(() -> {
+            LOG.info("Loading highest txIds after system ready...");
+            int count = 0;
+            for (PartitionName partitionName : partitionIndex.getMemberPartitions(ringStoreReader)) {
+                count++;
+                partitionStateStorage.tx(partitionName, versionedAquarium -> {
+                    VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                    PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
+                    takeCoordinator.update(ringStoreReader, versionedPartitionName, partitionStore.highestTxId());
+                    return null;
+                });
+            }
+            LOG.info("Finished loading {} highest txIds after system ready!", count);
+            return null;
+        });
         PartitionBackedHighwaterStorage systemHighwaterStorage = new PartitionBackedHighwaterStorage(orderIdProvider,
             ringMember,
             partitionIndex,

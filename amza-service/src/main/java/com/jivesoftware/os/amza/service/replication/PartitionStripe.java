@@ -84,22 +84,6 @@ public class PartitionStripe {
         storage.delete(versionedPartitionName);
     }
 
-    private void highestPartitionTxIds(HighestPartitionTx tx) throws Exception {
-        for (VersionedPartitionName versionedPartitionName : Iterables.filter(partitionIndex.getMemberPartitions(), predicate)) {
-            txPartitionState.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
-                VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                    PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
-                    if (partitionStore != null) {
-                        long highestTxId = storage.getHighestTxId(versionedPartitionName, partitionStore.getWalStorage());
-                        tx.tx(versionedAquarium, highestTxId);
-                    }
-                }
-                return null;
-            });
-        }
-    }
-
     public <R> R highestPartitionTxId(PartitionName partitionName, HighestPartitionTx<R> tx) throws Exception {
         return txPartitionState.tx(partitionName, versionedAquarium -> highestAquariumTxId(versionedAquarium, tx));
     }
@@ -392,9 +376,8 @@ public class PartitionStripe {
         });
     }
 
-    public void load(HighestPartitionTx takeHighestPartitionTx) throws Exception {
+    public void load() throws Exception {
         storage.load(txPartitionState, partitionIndex, storageVersionProvider, primaryRowMarshaller);
-        highestPartitionTxIds(takeHighestPartitionTx);
     }
 
     public boolean mergeable() {

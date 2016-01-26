@@ -128,10 +128,8 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
                     amzaService.destroyPartition(partitionName);
                 }
             }
-            Liveliness liveliness = amzaService.getLiveliness();
             List<Map<String, Object>> rows = new ArrayList<>();
-            Set<PartitionName> allPartitionNames = amzaService.getMemberPartitionNames();
-            List<PartitionName> partitionNames = Lists.newArrayList(allPartitionNames);
+            List<PartitionName> partitionNames = Lists.newArrayList(amzaService.getMemberPartitionNames());
             Collections.sort(partitionNames, (o1, o2) -> {
                 int i = -Boolean.compare(o1.isSystemPartition(), o2.isSystemPartition());
                 if (i != 0) {

@@ -524,11 +524,11 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     }
 
     private AmzaStateStorage currentStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, CURRENT);
+        return new AmzaStateStorage(systemWALStorage, walUpdated, partitionName, CURRENT);
     }
 
     private AmzaStateStorage desiredStateStorage(PartitionName partitionName) {
-        return new AmzaStateStorage(systemWALStorage, walUpdated, rootAquariumMember, partitionName, DESIRED);
+        return new AmzaStateStorage(systemWALStorage, walUpdated, partitionName, DESIRED);
     }
 
     static byte[] stateKey(PartitionName partitionName,

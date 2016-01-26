@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.take;
 
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -15,6 +16,7 @@ import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,7 +78,7 @@ public class TakeVersionedPartitionCoordinator {
                 try {
                     return partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
                         VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                        boolean takerIsOnline = versionedAquarium.isLivelyEndState(ringMember);
+                        boolean takerIsOnline = takerIsOnline(ringMember, takeSessionId, versionedAquarium);
                         if (takerIsOnline && isSteadyState(ringMember, takeSessionId)) {
                             return Long.MAX_VALUE;
                         } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
@@ -110,6 +112,20 @@ public class TakeVersionedPartitionCoordinator {
         } else {
             return Long.MAX_VALUE;
         }
+    }
+
+    private final Map<RingMember, Long> onlineTakers = Maps.newHashMap(); // only used by single threaded availableRowsStream
+
+    private boolean takerIsOnline(RingMember ringMember, long takeSessionId, VersionedAquarium versionedAquarium) throws Exception {
+        Long onlineSessionId = onlineTakers.get(ringMember);
+        if (onlineSessionId != null && onlineSessionId == takeSessionId) {
+            return true;
+        }
+        boolean online = versionedAquarium.isLivelyEndState(ringMember);
+        if (online) {
+            onlineTakers.put(ringMember, takeSessionId);
+        }
+        return online;
     }
 
     private long streamHighestTxId(VersionedAquarium versionedAquarium,

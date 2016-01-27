@@ -39,8 +39,9 @@ public class TakeVersionedPartitionCoordinator {
     final AtomicInteger currentCategory;
     final AtomicBoolean expunged = new AtomicBoolean(false);
 
-    final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
-    final ConcurrentHashMap<RingMember, Long> steadyState = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, Long> steadyState = new ConcurrentHashMap<>();
+    private final Map<RingMember, Long> onlineTakers = new ConcurrentHashMap<>();
 
     public TakeVersionedPartitionCoordinator(RingMember rootMember,
         VersionedPartitionName versionedPartitionName,
@@ -113,8 +114,6 @@ public class TakeVersionedPartitionCoordinator {
             return Long.MAX_VALUE;
         }
     }
-
-    private final Map<RingMember, Long> onlineTakers = Maps.newHashMap(); // only used by single threaded availableRowsStream
 
     private boolean takerIsOnline(RingMember ringMember, long takeSessionId, VersionedAquarium versionedAquarium) throws Exception {
         Long onlineSessionId = onlineTakers.get(ringMember);

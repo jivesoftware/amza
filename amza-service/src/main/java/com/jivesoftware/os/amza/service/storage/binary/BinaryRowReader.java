@@ -41,7 +41,8 @@ public class BinaryRowReader implements WALReader {
         this.ioStats = ioStats;
     }
 
-    void validate(boolean truncateToEndOfMergeMarker,
+    void validate(boolean backwardScan,
+        boolean truncateToLastRowFp,
         ValidationStream backward,
         ValidationStream forward,
         PreTruncationNotifier preTruncationNotifier) throws Exception {
@@ -50,7 +51,7 @@ public class BinaryRowReader implements WALReader {
         synchronized (parent.lock()) {
             IReadable filer = parent.reader(null, parent.length(), 1024 * 1024);
             long filerLength = filer.length();
-            if (truncateToEndOfMergeMarker) {
+            if (backwardScan) {
                 long seekTo = filerLength;
                 while (seekTo > 0) {
                     if (seekTo < 4) {
@@ -91,12 +92,14 @@ public class BinaryRowReader implements WALReader {
                         }
 
                         if (truncateAfterRowAtFp > -1) {
-                            filer.seek(truncateAfterRowAtFp);
-                            headLength = UIO.readInt(filer, "length", intLongBuffer);
-                            long truncatedLength = truncateAfterRowAtFp + 4 + headLength + 4;
-                            if (truncatedLength != filerLength) {
-                                LOG.warn("Truncating after row at fp {} for reverse scan", truncateAfterRowAtFp);
-                                truncate(preTruncationNotifier, truncatedLength);
+                            if (truncateToLastRowFp) {
+                                filer.seek(truncateAfterRowAtFp);
+                                headLength = UIO.readInt(filer, "length", intLongBuffer);
+                                long truncatedLength = truncateAfterRowAtFp + 4 + headLength + 4;
+                                if (truncatedLength != filerLength) {
+                                    LOG.warn("Truncating after row at fp {} for reverse scan", truncateAfterRowAtFp);
+                                    truncate(preTruncationNotifier, truncatedLength);
+                                }
                             }
                             return;
                         }
@@ -123,8 +126,8 @@ public class BinaryRowReader implements WALReader {
                 return true;
             });
             if (truncateAfterRowAtFp[0] == Long.MIN_VALUE) {
-                if (truncateToEndOfMergeMarker) {
-                    LOG.warn("Truncating entire WAL due to lack of merge markers");
+                if (truncateToLastRowFp) {
+                    LOG.warn("Truncating entire WAL due to missing truncation feedback");
                     truncate(preTruncationNotifier, 0);
                 }
             } else {

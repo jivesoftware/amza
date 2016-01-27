@@ -50,7 +50,7 @@ public class DeltaWALFactory {
         WALTx deltaWALRowsTx = new BinaryWALTx(walDir, String.valueOf(prevId) + "_" + String.valueOf(id), ioProvider, primaryRowMarshaller);
         MutableLong rows = new MutableLong();
         deltaWALRowsTx.open(io -> {
-            io.validate(false,
+            io.validate(true, false,
                 (rowFP, rowTxId, rowType, row) -> {
                     rows.increment();
                     return (rows.longValue() < corruptionParanoiaFactor) ? -1 : rowFP;

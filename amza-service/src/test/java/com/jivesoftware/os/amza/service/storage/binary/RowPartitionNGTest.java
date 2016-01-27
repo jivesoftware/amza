@@ -61,7 +61,7 @@ public class RowPartitionNGTest {
             false,
             2);
 
-        indexedWAL.load(-1, -1, false);
+        indexedWAL.load(-1, -1, false, false);
 
         final Random r = new Random();
 
@@ -127,7 +127,6 @@ public class RowPartitionNGTest {
     public void diskBackedEventualConsistencyTest() throws Exception {
         File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
-        String[] workingDirs = new String[]{walDir.getAbsolutePath()};
 
         RowIOProvider binaryRowIOProvider = new BinaryRowIOProvider(ioStats, 4096, 64,
             false);
@@ -139,12 +138,11 @@ public class RowPartitionNGTest {
         BinaryWALTx binaryWALTx = new BinaryWALTx(walDir, "booya", binaryRowIOProvider, primaryRowMarshaller);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx, indexProvider);
+        testEventualConsistency(versionedPartitionName, idProvider, binaryWALTx, indexProvider);
     }
 
     @Test
     public void memoryBackedEventualConsistencyTest() throws Exception {
-        File walDir = Files.createTempDir();
         IoStats ioStats = new IoStats();
 
         RowIOProvider binaryRowIOProvider = new MemoryBackedRowIOProvider(ioStats, 4_096, 4_096, 4_096, 64,
@@ -157,10 +155,10 @@ public class RowPartitionNGTest {
         BinaryWALTx binaryWALTx = new BinaryWALTx(null, "booya", binaryRowIOProvider, primaryRowMarshaller);
 
         OrderIdProviderImpl idProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(1));
-        testEventualConsitency(versionedPartitionName, idProvider, binaryWALTx, indexProvider);
+        testEventualConsistency(versionedPartitionName, idProvider, binaryWALTx, indexProvider);
     }
 
-    private void testEventualConsitency(VersionedPartitionName versionedPartitionName,
+    private void testEventualConsistency(VersionedPartitionName versionedPartitionName,
         OrderIdProviderImpl idProvider,
         BinaryWALTx binaryWALTx,
         WALIndexProvider<MemoryWALIndex> walIndexProvider)
@@ -176,7 +174,7 @@ public class RowPartitionNGTest {
             false,
             2);
 
-        indexedWAL.load(-1, -1, false);
+        indexedWAL.load(-1, -1, false, false);
         WALKey walKey = k(1);
         TimestampedValue value = indexedWAL.getTimestampedValue(walKey.prefix, walKey.key);
         Assert.assertNull(value);

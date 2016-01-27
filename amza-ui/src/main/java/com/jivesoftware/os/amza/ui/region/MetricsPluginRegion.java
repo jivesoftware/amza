@@ -298,14 +298,22 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("count", "(requires watch)");
             }
 
+            Map<VersionedPartitionName, Integer> categories = Maps.newHashMap();
+            amzaService.getTakeCoordinator().streamCategories((versionedPartitionName, category) -> {
+                categories.put(versionedPartitionName, category);
+                return true;
+            });
+
             partition.highestTxId((versionedAquarium, highestTxId) -> {
                 VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                 LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
                 State currentState = livelyEndState.getCurrentState();
+                int category = categories.getOrDefault(versionedPartitionName, -1);
                 map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
                 map.put("state", currentState != null ? currentState.name() : "unknown");
                 map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
+                map.put("category", category != -1 ? String.valueOf(category) : "unknown");
 
                 if (includeCount) {
                     if (name.isSystemPartition()) {

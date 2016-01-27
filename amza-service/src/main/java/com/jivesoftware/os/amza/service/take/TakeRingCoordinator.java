@@ -72,12 +72,13 @@ public class TakeRingCoordinator {
 
     void update(RingTopology ring,
         VersionedPartitionName versionedPartitionName,
-        long txId) throws Exception {
+        long txId,
+        boolean invalidateOnline) throws Exception {
 
         VersionedRing versionedRing = ensureVersionedRing(ring);
         TakeVersionedPartitionCoordinator coordinator = ensureCoordinator(versionedPartitionName);
         PartitionProperties properties = versionedPartitionProvider.getProperties(versionedPartitionName.getPartitionName());
-        coordinator.updateTxId(versionedRing, properties.takeFromFactor, txId);
+        coordinator.updateTxId(versionedRing, properties.takeFromFactor, txId, invalidateOnline);
     }
 
     private TakeVersionedPartitionCoordinator ensureCoordinator(VersionedPartitionName versionedPartitionName) {

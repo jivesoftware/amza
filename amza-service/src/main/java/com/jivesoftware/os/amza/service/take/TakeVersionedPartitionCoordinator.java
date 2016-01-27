@@ -41,7 +41,7 @@ public class TakeVersionedPartitionCoordinator {
 
     private final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Long> steadyState = new ConcurrentHashMap<>();
-    private final Map<RingMember, Long> onlineTakers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, Long> onlineTakers = new ConcurrentHashMap<>();
 
     public TakeVersionedPartitionCoordinator(RingMember rootMember,
         VersionedPartitionName versionedPartitionName,
@@ -188,7 +188,7 @@ public class TakeVersionedPartitionCoordinator {
         return highestTxId > -1 && (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u.reofferAtTimeInMillis));
     }
 
-    void updateTxId(VersionedRing versionedRing, int takeFromFactor, long updateTxId) throws Exception {
+    void updateTxId(VersionedRing versionedRing, int takeFromFactor, long updateTxId, boolean invalidateOnline) throws Exception {
         if (expunged.get()) {
             return;
         }
@@ -197,6 +197,9 @@ public class TakeVersionedPartitionCoordinator {
 
         synchronized (steadyState) {
             steadyState.clear();
+            if (invalidateOnline) {
+                onlineTakers.clear();
+            }
         }
     }
 

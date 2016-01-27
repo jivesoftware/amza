@@ -82,8 +82,9 @@ public class PartitionStore implements RangeScannable {
                 throw new IllegalStateException("Partition was already loaded with a delta");
             }
         }
+        boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();
         boolean truncateToEndOfMergeMarker = deltaWALId != -1 && properties.takeFromFactor > 0;
-        walStorage.load(deltaWALId, prevDeltaWALId, truncateToEndOfMergeMarker);
+        walStorage.load(deltaWALId, prevDeltaWALId, backwardScan, truncateToEndOfMergeMarker);
         if (properties.forceCompactionOnStartup) {
             compactTombstone(true);
         }

@@ -72,11 +72,11 @@ public class BinaryRowReaderWriterTest {
         binaryRowWriter.write(-1L, RowType.end_of_merge, 1, 4, stream -> stream.stream(new byte[] { 1, 2, 3, 7 }), indexableKeys, txKeyPointerFpStream, false);
 
         MutableInt truncations = new MutableInt();
-        binaryRowReader.validate(true,
+        binaryRowReader.validate(true, true,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? rowFP : -1,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? -(rowFP + 1) : -1,
             (truncatedAtFP) -> truncations.increment());
-        binaryRowReader.validate(false,
+        binaryRowReader.validate(false, false,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? rowFP : -1,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? -(rowFP + 1) : -1,
             (truncatedAtFP) -> truncations.increment());
@@ -86,7 +86,7 @@ public class BinaryRowReaderWriterTest {
         long corruptionOffset = filer.length();
         UIO.writeByte(filer.appender(), (byte) 56, "corrupt");
 
-        binaryRowReader.validate(true,
+        binaryRowReader.validate(true, true,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? rowFP : -1,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? -(rowFP + 1) : -1,
             (truncatedAtFP) -> {
@@ -97,7 +97,7 @@ public class BinaryRowReaderWriterTest {
 
         UIO.writeByte(filer.appender(), (byte) 56, "corrupt");
 
-        binaryRowReader.validate(false,
+        binaryRowReader.validate(false, false,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? rowFP : -1,
             (long rowFP, long rowTxId, RowType rowType, byte[] row) -> rowType == RowType.end_of_merge ? -(rowFP + 1) : -1,
             (truncatedAtFP) -> {

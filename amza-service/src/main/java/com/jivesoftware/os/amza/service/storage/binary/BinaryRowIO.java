@@ -91,11 +91,12 @@ public class BinaryRowIO implements RowIO {
     }
 
     @Override
-    public void validate(boolean truncateToEndOfMergeMarker,
+    public void validate(boolean backwardScan,
+        boolean truncateToLastRowFp,
         ValidationStream backward,
         ValidationStream forward,
         PreTruncationNotifier preTruncationNotifier) throws Exception {
-        rowReader.validate(truncateToEndOfMergeMarker, backward, forward, preTruncationNotifier);
+        rowReader.validate(backwardScan, truncateToLastRowFp, backward, forward, preTruncationNotifier);
     }
 
     @Override

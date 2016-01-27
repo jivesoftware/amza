@@ -247,7 +247,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             } catch (Exception e) {
                 LOG.inc(metricPrefix + "failedCompaction");
                 LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
-                loadInternal(-1, -1, true, false);
+                loadInternal(-1, -1, true, false, false);
                 return -1;
             }
             walIndex.set(compacted.index);
@@ -269,16 +269,20 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         }
     }
 
-    public void load(long deltaWALId, long prevDeltaWALId, boolean truncateToEndOfMergeMarker) throws Exception {
+    public void load(long deltaWALId, long prevDeltaWALId, boolean backwardScan, boolean truncateToEndOfMergeMarker) throws Exception {
         acquireAll();
         try {
-            loadInternal(deltaWALId, prevDeltaWALId, false, truncateToEndOfMergeMarker);
+            loadInternal(deltaWALId, prevDeltaWALId, false, backwardScan, truncateToEndOfMergeMarker);
         } finally {
             releaseAll();
         }
     }
 
-    private void loadInternal(long deltaWALId, long prevDeltaWALId, boolean recovery, boolean truncateToEndOfMergeMarker) throws Exception {
+    private void loadInternal(long deltaWALId,
+        long prevDeltaWALId,
+        boolean recovery,
+        boolean backwardScan,
+        boolean truncateToEndOfMergeMarker) throws Exception {
         try {
 
             long initialHighestTxId = highestTxId.get();
@@ -303,7 +307,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
 
                 long[] truncate = { 0 };
                 primaryRowMarshaller.fromRows(fpRowStream -> {
-                    io.validate(truncateToEndOfMergeMarker,
+                    io.validate(backwardScan,
+                        truncateToEndOfMergeMarker,
                         (rowFP, rowTxId, rowType, row) -> {
                             // backward scan
                             if (rowType == RowType.end_of_merge) {

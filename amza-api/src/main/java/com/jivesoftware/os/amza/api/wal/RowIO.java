@@ -26,7 +26,8 @@ public interface RowIO extends WALReader, WALWriter {
 
     long getFpOfLastLeap();
 
-    void validate(boolean truncateToEndOfMergeMarker,
+    void validate(boolean backwardScan,
+        boolean truncateToLastRowFp,
         ValidationStream backward,
         ValidationStream forward,
         PreTruncationNotifier preTruncationNotifier) throws Exception;

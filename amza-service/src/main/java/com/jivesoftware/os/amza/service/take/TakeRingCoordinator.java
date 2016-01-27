@@ -46,6 +46,7 @@ public class TakeRingCoordinator {
         long slowTakeInMillis,
         long reofferDeltaMillis,
         RingTopology ring) {
+        
         this.rootMember = rootMember;
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
@@ -54,7 +55,6 @@ public class TakeRingCoordinator {
         this.slowTakeInMillis = slowTakeInMillis;
         this.systemReofferDeltaMillis = systemReofferDeltaMillis;
         this.reofferDeltaMillis = reofferDeltaMillis;
-        //LOG.info("INITIALIZED RING:" + ringName + " size:" + neighbors.size());
         this.versionedRing.compareAndSet(null, new VersionedRing(ring));
     }
 

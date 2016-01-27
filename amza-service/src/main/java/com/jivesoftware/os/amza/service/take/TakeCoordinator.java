@@ -180,8 +180,8 @@ public class TakeCoordinator {
                 timestampedOrderIdProvider,
                 idPacker,
                 versionedPartitionProvider,
-                slowTakeInMillis,
                 systemReofferDeltaMillis,
+                slowTakeInMillis,
                 reofferDeltaMillis,
                 ringSupplier.get()));
     }

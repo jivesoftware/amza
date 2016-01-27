@@ -27,7 +27,9 @@ import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
+import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampProvider;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -70,6 +72,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
     private final AmzaRingReader ringReader;
     private final AmzaService amzaService;
     private final AmzaStats amzaStats;
+    private final TimestampProvider timestampProvider;
+    private final IdPacker idPacker;
 
     private final List<GarbageCollectorMXBean> garbageCollectors;
     private final MemoryMXBean memoryBean;
@@ -82,7 +86,9 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         SoyRenderer renderer,
         AmzaRingReader ringReader,
         AmzaService amzaService,
-        AmzaStats amzaStats) {
+        AmzaStats amzaStats,
+        TimestampProvider timestampProvider,
+        IdPacker idPacker) {
         this.template = template;
         this.partitionMetricsTemplate = partitionMetricsTemplate;
         this.statsTemplate = statsTemplate;
@@ -91,6 +97,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         this.ringReader = ringReader;
         this.amzaService = amzaService;
         this.amzaStats = amzaStats;
+        this.timestampProvider = timestampProvider;
+        this.idPacker = idPacker;
 
         garbageCollectors = ManagementFactory.getGarbageCollectorMXBeans();
         memoryBean = ManagementFactory.getMemoryMXBean();
@@ -320,16 +328,20 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     StringBuilder buf = new StringBuilder();
                     buf.append(category != -1 ? String.valueOf(category) : "unknown");
 
-                    long currentTime = System.currentTimeMillis();
+
+                    long currentTime = timestampProvider.getApproximateTimestamp(System.currentTimeMillis());
 
                     amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName, (ringMember, lastOfferedTxId, category1, tooSlowTxId) -> {
 
-                        long lastOfferedTxIdJiveEpochTime = snowflakeIdPacker.unpack(lastOfferedTxId)[0];
-                        long tooSlowTxIdJiveEpochTime = snowflakeIdPacker.unpack(tooSlowTxId)[0];
+                        long lastOfferedTxIdJiveEpochTime = idPacker.unpack(lastOfferedTxId)[0];
+                        long tooSlowTxIdJiveEpochTime = idPacker.unpack(tooSlowTxId)[0];
+
+                        long latencyInMillis = currentTime - lastOfferedTxIdJiveEpochTime;
 
                         buf.append("<br>")
                             .append(ringMember.getMember()).append(' ')
-                            .append(getDurationBreakdown(currentTime - lastOfferedTxIdJiveEpochTime)).append(' ')
+                            .append((latencyInMillis < 0) ? '-' : ' ')
+                            .append(getDurationBreakdown(latencyInMillis)).append(' ')
                             .append(category1).append(' ')
                             .append(getDurationBreakdown(tooSlowTxIdJiveEpochTime));
                         return true;

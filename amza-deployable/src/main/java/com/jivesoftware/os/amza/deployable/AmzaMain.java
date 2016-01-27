@@ -194,9 +194,9 @@ public class AmzaMain {
 
             RingHost ringHost = new RingHost(instanceConfig.getDatacenter(), instanceConfig.getRack(), instanceConfig.getHost(), instanceConfig.getMainPort());
             SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
+            JiveEpochTimestampProvider timestampProvider = new JiveEpochTimestampProvider();
             TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(instanceConfig.getInstanceName()),
-                idPacker,
-                new JiveEpochTimestampProvider());
+                idPacker, timestampProvider);
 
             RingMember ringMember = new RingMember(
                 Strings.padStart(String.valueOf(instanceConfig.getInstanceName()), 5, '0') + "_" + instanceConfig.getInstanceKey());
@@ -263,7 +263,7 @@ public class AmzaMain {
             deployable.addInjectables(AmzaRestClient.class, new AmzaRestClientHealthCheckDelegate(
                 new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService)));
 
-            new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats,
+            new AmzaUIInitializer().initialize(instanceConfig.getClusterName(), ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,
                 new AmzaUIInitializer.InjectionCallback() {
 
                 @Override

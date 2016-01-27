@@ -9,6 +9,7 @@ import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
+import com.jivesoftware.os.amza.service.take.TakeCoordinator.CategoryStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -142,6 +143,15 @@ public class TakeRingCoordinator {
                 return new VersionedRing(ring);
             }
         });
+    }
+
+    boolean streamCategories(CategoryStream stream) throws Exception {
+        for (TakeVersionedPartitionCoordinator partitionCoordinator : partitionCoordinators.values()) {
+            if (!stream.stream(partitionCoordinator.versionedPartitionName, partitionCoordinator.currentCategory.get())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static public class VersionedRing {

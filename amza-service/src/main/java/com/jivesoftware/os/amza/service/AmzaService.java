@@ -186,6 +186,10 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         return liveliness;
     }
 
+    public TakeCoordinator getTakeCoordinator() {
+        return takeCoordinator;
+    }
+
     public void start(RingMember ringMember, RingHost ringHost) throws Exception {
 
         partitionIndex.open();

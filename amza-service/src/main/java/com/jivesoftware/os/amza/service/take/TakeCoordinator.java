@@ -146,6 +146,19 @@ public class TakeCoordinator {
         updateInternal(ringReader, versionedPartitionName, 0, true);
     }
 
+    public interface CategoryStream {
+        boolean stream(VersionedPartitionName versionedPartitionName, int category) throws Exception;
+    }
+
+    public boolean streamCategories(CategoryStream stream) throws Exception {
+        for (TakeRingCoordinator ringCoordinator : takeRingCoordinators.values()) {
+            if (!ringCoordinator.streamCategories(stream)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     interface RingSupplier {
         RingTopology get();
     }

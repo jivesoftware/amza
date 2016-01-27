@@ -328,22 +328,20 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     StringBuilder buf = new StringBuilder();
                     buf.append(category != -1 ? String.valueOf(category) : "unknown");
 
-
                     long currentTime = timestampProvider.getApproximateTimestamp(System.currentTimeMillis());
 
                     amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName, (ringMember, lastOfferedTxId, category1, tooSlowTxId) -> {
 
-                        long lastOfferedTxIdJiveEpochTime = idPacker.unpack(lastOfferedTxId)[0];
-                        long tooSlowTxIdJiveEpochTime = idPacker.unpack(tooSlowTxId)[0];
+                        long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
+                        long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
 
-                        long latencyInMillis = currentTime - lastOfferedTxIdJiveEpochTime;
+                        long latencyInMillis = currentTime - lastOfferedTimestamp;
 
                         buf.append("<br>")
                             .append(ringMember.getMember()).append(' ')
-                            .append((latencyInMillis < 0) ? '-' : ' ')
-                            .append(getDurationBreakdown(latencyInMillis)).append(' ')
+                            .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
                             .append(category1).append(' ')
-                            .append(getDurationBreakdown(tooSlowTxIdJiveEpochTime));
+                            .append(tooSlowTimestamp).append("millis");
                         return true;
                     });
                     map.put("category", buf.toString());

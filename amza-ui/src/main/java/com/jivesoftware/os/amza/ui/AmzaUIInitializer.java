@@ -34,6 +34,8 @@ import com.jivesoftware.os.amza.ui.region.OverviewRegion;
 import com.jivesoftware.os.amza.ui.soy.SoyDataUtils;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.soy.SoyService;
+import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
+import com.jivesoftware.os.jive.utils.ordered.id.TimestampProvider;
 import java.util.List;
 
 /**
@@ -53,6 +55,8 @@ public class AmzaUIInitializer {
         AmzaService amzaService,
         PartitionClientProvider clientProvider,
         AmzaStats amzaStats,
+        TimestampProvider timestampProvider,
+        IdPacker idPacker,
         InjectionCallback injectionCallback) {
 
         SoyFileSet.Builder soyFileSetBuilder = new SoyFileSet.Builder();
@@ -90,7 +94,8 @@ public class AmzaUIInitializer {
         ManagePlugin metricsPlugin = new ManagePlugin("dashboard", "Metrics", "/amza/ui/metrics",
             MetricsPluginEndpoints.class,
             new MetricsPluginRegion("soy.page.metricsPluginRegion", "soy.page.partitionMetricsPluginRegion",
-                "soy.page.amzaStats", "soy.page.visualizePartitionPluginRegion", renderer, amzaService.getRingReader(), amzaService, amzaStats));
+                "soy.page.amzaStats", "soy.page.visualizePartitionPluginRegion", renderer, amzaService.getRingReader(), amzaService, amzaStats,
+                timestampProvider, idPacker));
 
         ManagePlugin compactionsPlugin = new ManagePlugin("compressed", "Compactions", "/amza/ui/compactions",
             CompactionsPluginEndpoints.class,

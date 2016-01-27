@@ -102,9 +102,9 @@ public class Main {
         // todo need a better way to create writter id.
         int writerId = Integer.parseInt(System.getProperty("amza.id", String.valueOf(new Random().nextInt(512))));
         SnowflakeIdPacker idPacker = new SnowflakeIdPacker();
+        JiveEpochTimestampProvider timestampProvider = new JiveEpochTimestampProvider();
         final TimestampedOrderIdProvider orderIdProvider = new OrderIdProviderImpl(new ConstantWriterIdProvider(writerId),
-            idPacker,
-            new JiveEpochTimestampProvider());
+            idPacker, timestampProvider);
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -204,7 +204,8 @@ public class Main {
             .addEndpoint(AmzaClientRestEndpoints.class)
             .addInjectable(AmzaClientService.class, new AmzaClientService(amzaService.getRingReader(), amzaService.getRingWriter(), amzaService));
 
-        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, new AmzaUIInitializer.InjectionCallback() {
+        new AmzaUIInitializer().initialize(clusterName, ringHost, amzaService, clientProvider, amzaStats, timestampProvider, idPacker,
+            new AmzaUIInitializer.InjectionCallback() {
 
             @Override
             public void addEndpoint(Class clazz) {
@@ -217,7 +218,8 @@ public class Main {
                 System.out.println("Injecting " + clazz + " " + instance);
                 jerseyEndpoints.addInjectable(clazz, instance);
             }
-        });
+        }
+        );
 
         InitializeRestfulServer initializeRestfulServer = new InitializeRestfulServer(port, "AmzaNode", 128, 10000);
         initializeRestfulServer.addClasspathResource("/resources");

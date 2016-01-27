@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.mlogger.core.LoggerSummary;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -58,7 +59,7 @@ import javax.management.ReflectionException;
 // soy.page.healthPluginRegion
 public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.MetricsPluginRegionInput> {
 
-    private static final MetricLogger log = MetricLoggerFactory.getLogger();
+    private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
     private final NumberFormat numberFormat = NumberFormat.getInstance();
 
     private final String template;
@@ -244,7 +245,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
             return renderer.render(template, data);
         } catch (Exception e) {
-            log.error("Unable to retrieve data", e);
+            LOG.error("Unable to retrieve data", e);
             return "Error";
         }
 
@@ -270,12 +271,13 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
             data.put("regionTotals", regionTotals);
         } catch (Exception e) {
-            log.error("Unable to retrieve data", e);
+            LOG.error("Unable to retrieve data", e);
         }
         return renderer.render(statsTemplate, data);
     }
 
     public Map<String, Object> regionTotals(PartitionName name, AmzaStats.Totals totals, boolean includeCount) throws Exception {
+        SnowflakeIdPacker snowflakeIdPacker = new SnowflakeIdPacker();
         Map<String, Object> map = new HashMap<>();
         if (name != null) {
 
@@ -317,12 +319,19 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 if (includeCount) {
                     StringBuilder buf = new StringBuilder();
                     buf.append(category != -1 ? String.valueOf(category) : "unknown");
-                    amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName, (ringMember, latency, category1, tooSlowDelta) -> {
+
+                    long currentTime = System.currentTimeMillis();
+
+                    amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName, (ringMember, lastOfferedTxId, category1, tooSlowTxId) -> {
+
+                        long lastOfferedTxIdJiveEpochTime = snowflakeIdPacker.unpack(lastOfferedTxId)[0];
+                        long tooSlowTxIdJiveEpochTime = snowflakeIdPacker.unpack(tooSlowTxId)[0];
+
                         buf.append("<br>")
                             .append(ringMember.getMember()).append(' ')
-                            .append(latency).append(' ')
+                            .append(getDurationBreakdown(currentTime - lastOfferedTxIdJiveEpochTime)).append(' ')
                             .append(category1).append(' ')
-                            .append(tooSlowDelta);
+                            .append(getDurationBreakdown(tooSlowTxIdJiveEpochTime));
                         return true;
                     });
                     map.put("category", buf.toString());
@@ -424,7 +433,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -529,7 +538,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;

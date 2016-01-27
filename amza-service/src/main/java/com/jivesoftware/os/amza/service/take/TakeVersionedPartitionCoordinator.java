@@ -281,15 +281,13 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     boolean streamTookLatencies(VersionedRing versionedRing, TookLatencyStream stream) throws Exception {
-        long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
         for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
             RingMember ringMember = candidate.getKey();
             int category = candidate.getValue();
             SessionedTxId lastTxId = took.get(ringMember);
             if (lastTxId != null) {
-                long latency = currentTimeTxId - lastTxId.offeredTxId;
-                long tooSlowLatency = slowTakeId * category;
-                if (!stream.stream(ringMember, latency, category, tooSlowLatency - latency)) {
+                long tooSlowLatencyTxId = slowTakeId * category;
+                if (!stream.stream(ringMember, lastTxId.offeredTxId, category, tooSlowLatencyTxId)) {
                     return false;
                 }
             } else if (!stream.stream(ringMember, -1L, category, -1L)) {

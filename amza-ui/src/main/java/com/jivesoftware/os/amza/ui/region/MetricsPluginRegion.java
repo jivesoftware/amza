@@ -332,16 +332,24 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
                     amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName, (ringMember, lastOfferedTxId, category1, tooSlowTxId) -> {
 
-                        long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
-                        long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
+                        if (lastOfferedTxId == -1) {
+                            long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
+                            long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
 
-                        long latencyInMillis = currentTime - lastOfferedTimestamp;
+                            long latencyInMillis = currentTime - lastOfferedTimestamp;
 
-                        buf.append("<br>")
-                            .append(ringMember.getMember()).append(' ')
-                            .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
-                            .append(category1).append(' ')
-                            .append(tooSlowTimestamp).append("millis");
+                            buf.append("<br>")
+                                .append(ringMember.getMember()).append(' ')
+                                .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
+                                .append(category1).append(' ')
+                                .append(getDurationBreakdown(tooSlowTimestamp));
+                        } else {
+                            buf.append("<br>")
+                                .append(ringMember.getMember()).append(' ')
+                                .append("never").append(' ')
+                                .append(category1).append(' ')
+                                .append("never");
+                        }
                         return true;
                     });
                     map.put("category", buf.toString());

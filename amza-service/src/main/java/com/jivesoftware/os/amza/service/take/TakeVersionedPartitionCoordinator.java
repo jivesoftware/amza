@@ -254,6 +254,7 @@ public class TakeVersionedPartitionCoordinator {
             int worstCategory = 1;
             for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
                 if (fastEnough < Math.max(versionedRing.takeFromFactor, takeFromFactor)) {
+                    worstCategory = Math.max(worstCategory, candidate.getValue());
                     SessionedTxId lastTxId = took.get(candidate.getKey());
                     if (lastTxId != null) {
                         if (lastTxId.tookTxId == latestTxId) {
@@ -261,7 +262,6 @@ public class TakeVersionedPartitionCoordinator {
                         } else {
                             long latency = currentTimeTxId - lastTxId.offeredTxId;
                             if (latency < slowTakeId * candidate.getValue()) {
-                                worstCategory = Math.max(worstCategory, candidate.getValue());
                                 fastEnough++;
                             }
                         }
@@ -285,12 +285,12 @@ public class TakeVersionedPartitionCoordinator {
             RingMember ringMember = candidate.getKey();
             int category = candidate.getValue();
             SessionedTxId lastTxId = took.get(ringMember);
+            long tooSlowLatencyTxId = slowTakeId * category;
             if (lastTxId != null) {
-                long tooSlowLatencyTxId = slowTakeId * category;
                 if (!stream.stream(ringMember, lastTxId.offeredTxId, category, tooSlowLatencyTxId)) {
                     return false;
                 }
-            } else if (!stream.stream(ringMember, -1L, category, -1L)) {
+            } else if (!stream.stream(ringMember, -1L, category, tooSlowLatencyTxId)) {
                 return false;
             }
         }

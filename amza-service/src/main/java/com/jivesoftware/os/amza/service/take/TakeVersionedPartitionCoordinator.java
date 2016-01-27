@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.service.take;
 
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -10,13 +9,13 @@ import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
+import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
 import com.jivesoftware.os.amza.service.take.TakeRingCoordinator.VersionedRing;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -279,6 +278,25 @@ public class TakeVersionedPartitionCoordinator {
     public void expunged() {
         expunged.set(true);
         took.clear();
+    }
+
+    boolean streamTookLatencies(VersionedRing versionedRing, TookLatencyStream stream) throws Exception {
+        long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
+        for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
+            RingMember ringMember = candidate.getKey();
+            int category = candidate.getValue();
+            SessionedTxId lastTxId = took.get(ringMember);
+            if (lastTxId != null) {
+                long latency = currentTimeTxId - lastTxId.offeredTxId;
+                long tooSlowLatency = slowTakeId * category;
+                if (!stream.stream(ringMember, latency, category, tooSlowLatency - latency)) {
+                    return false;
+                }
+            } else if (!stream.stream(ringMember, -1L, category, -1L)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static class SessionedTxId {

@@ -313,7 +313,22 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("state", currentState != null ? currentState.name() : "unknown");
                 map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
-                map.put("category", category != -1 ? String.valueOf(category) : "unknown");
+
+                if (includeCount) {
+                    StringBuilder buf = new StringBuilder();
+                    buf.append(category != -1 ? String.valueOf(category) : "unknown");
+                    amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName, (ringMember, latency, category1, tooSlowDelta) -> {
+                        buf.append("<br>")
+                            .append(ringMember.getMember()).append(' ')
+                            .append(latency).append(' ')
+                            .append(category1).append(' ')
+                            .append(tooSlowDelta);
+                        return true;
+                    });
+                    map.put("category", buf.toString());
+                } else {
+                    map.put("category", category != -1 ? String.valueOf(category) : "unknown");
+                }
 
                 if (includeCount) {
                     if (name.isSystemPartition()) {

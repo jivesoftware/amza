@@ -146,6 +146,15 @@ public class TakeCoordinator {
         updateInternal(ringReader, versionedPartitionName, 0, true);
     }
 
+    public boolean streamTookLatencies(VersionedPartitionName versionedPartitionName, TookLatencyStream stream) throws Exception {
+        TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(new IBA(versionedPartitionName.getPartitionName().getRingName()));
+        return (takeRingCoordinator != null) && takeRingCoordinator.streamTookLatencies(versionedPartitionName, stream);
+    }
+
+    public interface TookLatencyStream {
+        boolean stream(RingMember ringMember, long latency, int category, long tooSlowDelta) throws Exception;
+    }
+
     public interface CategoryStream {
         boolean stream(VersionedPartitionName versionedPartitionName, int category) throws Exception;
     }

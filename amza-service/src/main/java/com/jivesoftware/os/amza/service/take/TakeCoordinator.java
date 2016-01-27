@@ -130,16 +130,20 @@ public class TakeCoordinator {
     }
 
     public void update(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, long txId) throws Exception {
+        updateInternal(ringReader, versionedPartitionName, txId, false);
+    }
+
+    private void updateInternal(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, long txId, boolean invalidateOnline) throws Exception {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         RingTopology ring = ringReader.getRing(ringName);
-        ensureRingCoordinator(ringName, () -> ring).update(ring, versionedPartitionName, txId);
+        ensureRingCoordinator(ringName, () -> ring).update(ring, versionedPartitionName, txId, invalidateOnline);
         amzaStats.updates(ringReader.getRingMember(), versionedPartitionName.getPartitionName(), 1, txId);
         awakeRemoteTakers(ring);
     }
 
     public void stateChanged(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName) throws Exception {
-        update(ringReader, versionedPartitionName, 0);
+        updateInternal(ringReader, versionedPartitionName, 0, true);
     }
 
     interface RingSupplier {

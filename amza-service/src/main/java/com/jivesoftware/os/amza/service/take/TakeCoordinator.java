@@ -152,7 +152,8 @@ public class TakeCoordinator {
     }
 
     public interface TookLatencyStream {
-        boolean stream(RingMember ringMember, long latency, int category, long tooSlowDelta) throws Exception;
+   
+        boolean stream(RingMember ringMember, long lastOfferedTxId, int category, long tooSlowTxId) throws Exception;
     }
 
     public interface CategoryStream {

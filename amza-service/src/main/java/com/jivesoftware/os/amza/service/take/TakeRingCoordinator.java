@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator.CategoryStream;
+import com.jivesoftware.os.amza.service.take.TakeCoordinator.TookLatencyStream;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -152,6 +153,11 @@ public class TakeRingCoordinator {
             }
         }
         return true;
+    }
+
+    boolean streamTookLatencies(VersionedPartitionName versionedPartitionName, TookLatencyStream stream) throws Exception {
+        TakeVersionedPartitionCoordinator partitionCoordinator = partitionCoordinators.get(versionedPartitionName);
+        return (partitionCoordinator != null) && partitionCoordinator.streamTookLatencies(versionedRing.get(), stream);
     }
 
     static public class VersionedRing {

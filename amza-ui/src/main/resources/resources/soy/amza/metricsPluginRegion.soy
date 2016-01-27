@@ -97,7 +97,7 @@
                             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
                             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
                             <td>{$r.version}</td>
-                            <td>{$r.category}</td>
+                            <td>{$r.category|noAutoescape}</td>
                             <td>{$r.highestTxId}</td>
                             <td>{$r.highwaters|noAutoescape}</td>
                         </tr>

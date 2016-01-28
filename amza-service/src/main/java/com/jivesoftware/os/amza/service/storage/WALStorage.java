@@ -51,6 +51,7 @@ import com.jivesoftware.os.amza.api.wal.WALWriter.RawRows;
 import com.jivesoftware.os.amza.api.wal.WALWriter.TxKeyPointerFpStream;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
+import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.mlogger.core.ValueType;
@@ -650,50 +651,46 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                             row.getKey().sizeOfComposed(),
                             (value != null ? value.length : 0));
                     }
-                    try {
-                        flush(rowType,
-                            forceTxId,
-                            size,
-                            estimatedSizeInBytes,
-                            rowStream -> {
-                                for (Entry<WALKey, WALValue> row : apply.entrySet()) {
-                                    WALValue value = row.getValue();
-                                    if (!rowStream.stream(primaryRowMarshaller.toRow(rowType,
-                                        row.getKey().compose(),
-                                        value.getValue(),
-                                        value.getTimestampId(),
-                                        value.getTombstoned(),
-                                        value.getVersion()))) {
-                                        return false;
-                                    }
+                    flush(rowType,
+                        forceTxId,
+                        size,
+                        estimatedSizeInBytes,
+                        rowStream -> {
+                            for (Entry<WALKey, WALValue> row : apply.entrySet()) {
+                                WALValue value = row.getValue();
+                                if (!rowStream.stream(primaryRowMarshaller.toRow(rowType,
+                                    row.getKey().compose(),
+                                    value.getValue(),
+                                    value.getTimestampId(),
+                                    value.getTombstoned(),
+                                    value.getVersion()))) {
+                                    return false;
                                 }
-                                return true;
-                            },
-                            indexableKeyStream -> {
-                                for (Entry<WALKey, WALValue> row : apply.entrySet()) {
-                                    WALValue value = row.getValue();
-                                    if (!indexableKeyStream.stream(row.getKey().prefix, row.getKey().key,
-                                        value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
-                                        return false;
-                                    }
+                            }
+                            return true;
+                        },
+                        indexableKeyStream -> {
+                            for (Entry<WALKey, WALValue> row : apply.entrySet()) {
+                                WALValue value = row.getValue();
+                                if (!indexableKeyStream.stream(row.getKey().prefix, row.getKey().key,
+                                    value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
+                                    return false;
                                 }
-                                return true;
-                            },
-                            indexCommittedFromTxId,
-                            indexCommittedUpToTxId,
-                            io,
-                            highwater[0],
-                            (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
-                                oldestTimestamp.set(Math.min(oldestTimestamp.get(), valueTimestamp));
-                                if (valueTombstoned) {
-                                    oldestTombstonedTimestamp.set(Math.min(oldestTombstonedTimestamp.get(), valueTimestamp));
-                                }
-                                indexables.add(new WALIndexable(rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
-                                return true;
-                            });
-                    } catch (NullPointerException e) {
-                        throw e;
-                    }
+                            }
+                            return true;
+                        },
+                        indexCommittedFromTxId,
+                        indexCommittedUpToTxId,
+                        io,
+                        highwater[0],
+                        (rowTxId, _prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp) -> {
+                            oldestTimestamp.set(Math.min(oldestTimestamp.get(), valueTimestamp));
+                            if (valueTombstoned) {
+                                oldestTombstonedTimestamp.set(Math.min(oldestTombstonedTimestamp.get(), valueTimestamp));
+                            }
+                            indexables.add(new WALIndexable(rowTxId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp));
+                            return true;
+                        });
 
                     return null;
                 });
@@ -739,8 +736,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         int estimatedSizeInBytes,
         RawRows rows,
         IndexableKeys indexableKeys,
-        MutableLong indexCommittedFromTxId,
-        MutableLong indexCommitedUpToTxId,
+        final MutableLong indexCommittedFromTxId,
+        final MutableLong indexCommitedUpToTxId,
         WALWriter rowWriter,
         WALHighwater highwater,
         TxKeyPointerFpStream stream) throws Exception {
@@ -752,7 +749,13 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             if (indexCommittedFromTxId.longValue() > txId) {
                 indexCommittedFromTxId.setValue(txId);
             }
-            indexCommitedUpToTxId.setValue(txId);
+            try {
+                if (indexCommitedUpToTxId.longValue() < txId) {
+                    indexCommitedUpToTxId.setValue(txId);
+                }
+            } catch (NullPointerException e) {
+                throw new IllegalStateException("Illogical NPE: " + (indexCommitedUpToTxId == null), e);
+            }
             rowWriter.write(txId, rowType, estimatedNumberOfRows, estimatedSizeInBytes, rows, indexableKeys, stream, hardFsyncBeforeLeapBoundary);
             if (highwater != null) {
                 writeHighwaterMarker(rowWriter, highwater);

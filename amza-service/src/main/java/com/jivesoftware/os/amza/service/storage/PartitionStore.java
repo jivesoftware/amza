@@ -16,7 +16,6 @@
 package com.jivesoftware.os.amza.service.storage;
 
 import com.jivesoftware.os.amza.api.TimestampedValue;
-import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.scan.RangeScannable;
@@ -76,10 +75,8 @@ public class PartitionStore implements RangeScannable {
                 return;
             }
         } else {
-            if (loaded == -1) {
+            if (loaded != Integer.MIN_VALUE) {
                 return;
-            } else if (loaded != Integer.MIN_VALUE) {
-                throw new IllegalStateException("Partition was already loaded with a delta");
             }
         }
         boolean backwardScan = !versionedPartitionName.getPartitionName().isSystemPartition();

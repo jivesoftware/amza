@@ -42,15 +42,15 @@ public class RingHost {
         i += 4;
         UIO.intBytes(hostBytes.length, bytes, i);
         i += 4;
-        UIO.bytes(hostBytes, bytes, i);
+        UIO.writeBytes(hostBytes, bytes, i);
         i += hostBytes.length;
         UIO.intBytes(rackBytes.length, bytes, i);
         i += 4;
-        UIO.bytes(rackBytes, bytes, i);
+        UIO.writeBytes(rackBytes, bytes, i);
         i += rackBytes.length;
         UIO.intBytes(datacenterBytes.length, bytes, i);
         i += 4;
-        UIO.bytes(datacenterBytes, bytes, i);
+        UIO.writeBytes(datacenterBytes, bytes, i);
         return bytes;
     }
 

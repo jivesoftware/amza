@@ -393,7 +393,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 }
                 map.put("neighborStates", neighborStates);
 
-                return null;
+                return -1;
             });
         }
         map.put("gets", numberFormat.format(totals.gets.get()));

@@ -165,7 +165,7 @@ public class PartitionBackedHighwaterStorage implements HighwaterStorage {
     }
 
     @Override
-    public Long get(RingMember member, VersionedPartitionName versionedPartitionName) throws Exception {
+    public long get(RingMember member, VersionedPartitionName versionedPartitionName) throws Exception {
         ConcurrentHashMap<VersionedPartitionName, HighwaterUpdates> partitionHighwaterUpdates = hostToPartitionToHighwaterUpdates.get(member);
         if (partitionHighwaterUpdates == null) {
             partitionHighwaterUpdates = new ConcurrentHashMap<>();

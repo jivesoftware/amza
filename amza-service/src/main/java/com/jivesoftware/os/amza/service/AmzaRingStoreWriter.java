@@ -28,6 +28,7 @@ import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.collections.ConcurrentBAHash;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.service.ring.CacheId;
@@ -35,7 +36,6 @@ import com.jivesoftware.os.amza.service.ring.RingSet;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
-import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -46,7 +46,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
@@ -56,16 +55,17 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     private final SystemWALStorage systemWALStorage;
     private final TimestampedOrderIdProvider orderIdProvider;
     private final WALUpdated walUpdated;
-    private final ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache;
-    private final ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache;
+    private final ConcurrentBAHash<CacheId<RingTopology>> ringsCache;
+    //private final ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache;
+    private final ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache;
     private final AtomicLong nodeCacheId;
 
     public AmzaRingStoreWriter(AmzaRingStoreReader ringStoreReader,
         SystemWALStorage systemWALStorage,
         TimestampedOrderIdProvider orderIdProvider,
         WALUpdated walUpdated,
-        ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache,
-        ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache,
+        ConcurrentBAHash<CacheId<RingTopology>> ringsCache,
+        ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache,
         AtomicLong nodeCacheId) {
         this.ringStoreReader = ringStoreReader;
         this.systemWALStorage = systemWALStorage;
@@ -81,7 +81,7 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
         if (PartitionCreator.RING_INDEX.equals(changes.getVersionedPartitionName())) {
             for (WALKey walKey : changes.getApply().keySet()) {
                 byte[] ringBytes = ringStoreReader.keyToRingName(walKey);
-                ringsCache.compute(new IBA(ringBytes), (iba, cacheIdRingTopology) -> {
+                ringsCache.compute(ringBytes, (key, cacheIdRingTopology) -> {
                     if (cacheIdRingTopology == null) {
                         cacheIdRingTopology = new CacheId<>(null);
                     }
@@ -89,13 +89,12 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
                     /*LOG.info("Rings advanced {} to {}", Arrays.toString(ringBytes), cacheIdRingTopology.currentCacheId);*/
                     return cacheIdRingTopology;
                 });
-                RingMember ringMember = ringStoreReader.keyToRingMember(walKey.key);
+                byte[] ringMember = ringStoreReader.keyToRawRingMember(walKey.key);
                 ringMemberRingNamesCache.compute(ringMember, (ringMember1, cacheIdRingSet) -> {
                     if (cacheIdRingSet == null) {
                         cacheIdRingSet = new CacheId<>(null);
                     }
                     cacheIdRingSet.currentCacheId++;
-                    /*LOG.info("Members advanced {} to {}", ringMember, cacheIdRingSet.currentCacheId);*/
                     return cacheIdRingSet;
                 });
             }
@@ -253,7 +252,8 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
                 }
                 return true;
             }, walUpdated);
-        ringsCache.remove(new IBA(ringName));
+        ringsCache.remove(ringName);
+        //ringsCache.remove(new IBA(ringName));
 
         if (LOG.isInfoEnabled()) {
             LOG.info("Ring update:{} -> {}", new String(ringName), members);

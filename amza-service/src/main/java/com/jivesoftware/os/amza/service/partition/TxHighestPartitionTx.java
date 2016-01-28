@@ -7,7 +7,7 @@ import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
  *
  * @author jonathan.colt
  */
-public interface TxHighestPartitionTx<R> {
+public interface TxHighestPartitionTx {
 
-    R tx(VersionedAquarium versionedAquarium, HighestPartitionTx<R> highestPartitionTx) throws Exception;
+    long tx(VersionedAquarium versionedAquarium, HighestPartitionTx highestPartitionTx) throws Exception;
 }

@@ -66,7 +66,7 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     Long availableRowsStream(PartitionStateStorage partitionStateStorage,
-        TxHighestPartitionTx<Long> txHighestPartitionTx,
+        TxHighestPartitionTx txHighestPartitionTx,
         long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
@@ -202,7 +202,7 @@ public class TakeVersionedPartitionCoordinator {
         }
     }
 
-    void rowsTaken(TxHighestPartitionTx<Long> txHighestPartitionTx,
+    void rowsTaken(TxHighestPartitionTx txHighestPartitionTx,
         long takeSessionId,
         VersionedAquarium versionedAquarium,
         VersionedRing versionedRing,
@@ -231,7 +231,7 @@ public class TakeVersionedPartitionCoordinator {
                 if (localTxId >= highestTxId) {
                     steadyState.put(remoteRingMember, takeSessionId);
                 }
-                return null;
+                return -1;
             });
         }
         updateCategory(versionedRing, takeFromFactor, localTxId);

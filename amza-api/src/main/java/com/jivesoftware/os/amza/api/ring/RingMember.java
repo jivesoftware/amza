@@ -24,13 +24,12 @@ import com.jivesoftware.os.aquarium.Member;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-
 public class RingMember implements Comparable<RingMember> {
 
     public byte[] toBytes() { // TODO convert to lex byte ordering?
         byte[] bytes = new byte[1 + memberAsBytes.length];
         bytes[0] = 0; // version;
-        UIO.bytes(memberAsBytes, bytes, 1);
+        UIO.writeBytes(memberAsBytes, bytes, 1);
         return bytes;
     }
 
@@ -66,6 +65,10 @@ public class RingMember implements Comparable<RingMember> {
 
     private RingMember(byte[] memberAsBytes) {
         this.memberAsBytes = memberAsBytes;
+    }
+
+    public byte[] leakBytes() {
+        return memberAsBytes;
     }
 
     public String getMember() {

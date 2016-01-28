@@ -10,22 +10,20 @@ import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
 import com.jivesoftware.os.amza.api.wal.WALKey;
+import com.jivesoftware.os.amza.service.collections.ConcurrentBAHash;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.CacheId;
 import com.jivesoftware.os.amza.service.ring.RingSet;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
-import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
@@ -35,15 +33,15 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
     private final RingMember rootRingMember;
     private final PartitionStore ringIndex;
     private final PartitionStore nodeIndex;
-    private final ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache;
-    private final ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache;
+    private final ConcurrentBAHash<CacheId<RingTopology>> ringsCache;
+    private final ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache;
     private final AtomicLong nodeCacheId;
 
     public AmzaRingStoreReader(RingMember rootRingMember,
         PartitionStore ringIndex,
         PartitionStore nodeIndex,
-        ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache,
-        ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache,
+        ConcurrentBAHash<CacheId<RingTopology>> ringsCache,
+        ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache,
         AtomicLong nodeCacheId) {
         this.rootRingMember = rootRingMember;
         this.ringIndex = ringIndex;
@@ -77,6 +75,13 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         return RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", new byte[4]));
     }
 
+    byte[] keyToRawRingMember(byte[] key) throws Exception {
+        HeapFiler filer = HeapFiler.fromBytes(key, key.length);
+        UIO.readByteArray(filer, "ringName", new byte[4]);
+        UIO.readByte(filer, "separator");
+        return UIO.readByteArray(filer, "ringMember", new byte[4]);
+    }
+
     @Override
     public RingMember getRingMember() {
         return rootRingMember;
@@ -98,16 +103,11 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     @Override
     public RingTopology getRing(byte[] ringName) throws Exception {
-        IBA ringIBA = new IBA(ringName);
-        CacheId<RingTopology> cacheIdRingTopology = ringsCache.computeIfAbsent(ringIBA, iba1 -> new CacheId<>(null));
+        CacheId<RingTopology> cacheIdRingTopology = ringsCache.computeIfAbsent(ringName, key -> new CacheId<>(null));
         RingTopology ring = cacheIdRingTopology.entry;
         long currentRingCacheId = cacheIdRingTopology.currentCacheId;
         long currentNodeCacheId = nodeCacheId.get();
         if (ring == null || ring.ringCacheId != currentRingCacheId || ring.nodeCacheId != currentNodeCacheId) {
-            /*LOG.info("Recovering ring {} with ringCacheId:{} nodeCacheId:{}",
-                Arrays.toString(ringName),
-                ring == null ? -1 : ring.ringCacheId,
-                ring == null ? -1 : ring.nodeCacheId);*/
             try {
                 List<RingMemberAndHost> orderedRing = Lists.newArrayList();
                 int[] rootMemberIndex = {-1};
@@ -119,8 +119,8 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                         WALKey.prefixUpperExclusive(from),
                         (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                             if (!valueTombstone) {
-                                RingMember ringMember = keyToRingMember(key);
-                                return stream.stream(ringMember.toBytes());
+                                byte[] ringMember = keyToRawRingMember(key);
+                                return stream.stream(ringMember);
                             } else {
                                 return true;
                             }
@@ -140,11 +140,6 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
                 ring = new RingTopology(currentRingCacheId, currentNodeCacheId, orderedRing, rootMemberIndex[0]);
                 cacheIdRingTopology.entry = ring;
-                /*LOG.info("Recovered ring {} using ringCacheId:{} nodeCacheId:{}",
-                    Arrays.toString(ringName),
-                    currentRingCacheId,
-                    currentNodeCacheId);*/
-
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -178,12 +173,12 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
 
     @Override
     public void getRingNames(RingMember desiredRingMember, RingNameStream ringNameStream) throws Exception {
-        CacheId<RingSet> cacheIdRingSet = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember, ringMember -> new CacheId<>(null));
+        CacheId<RingSet> cacheIdRingSet = ringMemberRingNamesCache.computeIfAbsent(desiredRingMember.leakBytes(), key -> new CacheId<>(null));
         RingSet ringSet = cacheIdRingSet.entry;
         long currentMemberCacheId = cacheIdRingSet.currentCacheId;
         if (ringSet == null || ringSet.memberCacheId != currentMemberCacheId) {
             try {
-                Set<IBA> ringNames = new HashSet<>();
+                ConcurrentBAHash<byte[]> ringNames = new ConcurrentBAHash<>(13, false, 1);
                 try {
                     byte[] intBuffer = new byte[4];
                     ringIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
@@ -193,7 +188,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                             UIO.readByte(filer, "separator");
                             RingMember ringMember = RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", intBuffer));
                             if (ringMember != null && ringMember.equals(desiredRingMember)) {
-                                ringNames.add(new IBA(ringName));
+                                ringNames.put(ringName, ringName);
                             }
                         }
                         return true;
@@ -208,9 +203,9 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                 throw new RuntimeException(e);
             }
         }
-        for (IBA ringName : ringSet.ringNames) {
-            ringNameStream.stream(ringName.getBytes());
-        }
+        ringSet.ringNames.stream((byte[] key, byte[] value) -> {
+            return ringNameStream.stream(key);
+        });
     }
 
     @Override

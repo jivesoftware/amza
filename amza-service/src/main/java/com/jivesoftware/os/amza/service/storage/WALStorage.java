@@ -41,7 +41,6 @@ import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.api.wal.WALIndexable;
 import com.jivesoftware.os.amza.api.wal.WALKey;
-import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALTimestampId;
 import com.jivesoftware.os.amza.api.wal.WALTx;
 import com.jivesoftware.os.amza.api.wal.WALValue;
@@ -51,7 +50,6 @@ import com.jivesoftware.os.amza.api.wal.WALWriter.RawRows;
 import com.jivesoftware.os.amza.api.wal.WALWriter.TxKeyPointerFpStream;
 import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
-import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.jivesoftware.os.mlogger.core.ValueType;
@@ -823,26 +821,26 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             releaseOne();
         }
     }
-
-    public WALPointer getPointer(byte[] prefix, byte[] key) throws Exception {
-        acquireOne();
-        try {
-            WALIndex wali = walIndex.get();
-            if (wali == null) {
-                return null;
-            }
-            WALPointer[] pointer = new WALPointer[1];
-            wali.getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
-                if (fp != -1 && !tombstoned) {
-                    pointer[0] = new WALPointer(fp, timestamp, tombstoned, version);
-                }
-                return true;
-            });
-            return pointer[0];
-        } finally {
-            releaseOne();
-        }
-    }
+//
+//    public WALPointer getPointer(byte[] prefix, byte[] key) throws Exception {
+//        acquireOne();
+//        try {
+//            WALIndex wali = walIndex.get();
+//            if (wali == null) {
+//                return null;
+//            }
+//            WALPointer[] pointer = new WALPointer[1];
+//            wali.getPointer(prefix, key, (_prefix, _key, timestamp, tombstoned, version, fp) -> {
+//                if (fp != -1 && !tombstoned) {
+//                    pointer[0] = new WALPointer(fp, timestamp, tombstoned, version);
+//                }
+//                return true;
+//            });
+//            return pointer[0];
+//        } finally {
+//            releaseOne();
+//        }
+//    }
 
     public boolean streamValues(byte[] prefix, UnprefixedWALKeys keys, KeyValueStream keyValueStream) throws Exception {
         acquireOne();

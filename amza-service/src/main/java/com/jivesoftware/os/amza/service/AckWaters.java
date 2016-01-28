@@ -23,7 +23,7 @@ public class AckWaters {
         this.awaitNotify = new AwaitNotify<>(stripingLevel);
     }
 
-    public void set(RingMember ringMember, VersionedPartitionName partitionName, Long txId, long leadershipToken) throws Exception {
+    public void set(RingMember ringMember, VersionedPartitionName partitionName, long txId, long leadershipToken) throws Exception {
         ConcurrentHashMap<VersionedPartitionName, LeadershipTokenAndTxId> partitionTxIds = ackWaters.computeIfAbsent(ringMember,
             (t) -> new ConcurrentHashMap<>());
 

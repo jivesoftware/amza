@@ -250,7 +250,7 @@ public class StripedPartition implements Partition {
     }
 
     @Override
-    public <R> R highestTxId(HighestPartitionTx<R> highestPartitionTx) throws Exception {
+    public long highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> stripe.highestPartitionTxId(partitionName, highestPartitionTx));
     }
 

@@ -1,7 +1,6 @@
 package com.jivesoftware.os.amza.service.ring;
 
-import com.jivesoftware.os.filer.io.IBA;
-import java.util.Set;
+import com.jivesoftware.os.amza.service.collections.ConcurrentBAHash;
 
 /**
  *
@@ -9,9 +8,9 @@ import java.util.Set;
 public class RingSet {
 
     public final long memberCacheId;
-    public final Set<IBA> ringNames;
+    public final ConcurrentBAHash<byte[]> ringNames;
 
-    public RingSet(long memberCacheId, Set<IBA> ringNames) {
+    public RingSet(long memberCacheId, ConcurrentBAHash<byte[]> ringNames) {
         this.memberCacheId = memberCacheId;
         this.ringNames = ringNames;
     }

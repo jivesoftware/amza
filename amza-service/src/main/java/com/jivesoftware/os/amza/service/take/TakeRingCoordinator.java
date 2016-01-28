@@ -95,7 +95,7 @@ public class TakeRingCoordinator {
     }
 
     long availableRowsStream(PartitionStateStorage partitionStateStorage,
-        TxHighestPartitionTx<Long> txHighestPartitionTx,
+        TxHighestPartitionTx txHighestPartitionTx,
         RingMember ringMember,
         long takeSessionId,
         AvailableStream availableStream) throws Exception {
@@ -104,7 +104,7 @@ public class TakeRingCoordinator {
         VersionedRing ring = versionedRing.get();
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-            Long timeout = coordinator.availableRowsStream(partitionStateStorage,
+            long timeout = coordinator.availableRowsStream(partitionStateStorage,
                 txHighestPartitionTx,
                 takeSessionId,
                 ring,
@@ -117,7 +117,7 @@ public class TakeRingCoordinator {
         return suggestedWaitInMillis;
     }
 
-    void rowsTaken(TxHighestPartitionTx<Long> txHighestPartitionTx,
+    void rowsTaken(TxHighestPartitionTx txHighestPartitionTx,
         RingMember remoteRingMember,
         long takeSessionId,
         VersionedAquarium versionedAquarium,

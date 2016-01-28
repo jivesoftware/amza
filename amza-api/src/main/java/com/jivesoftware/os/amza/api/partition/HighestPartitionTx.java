@@ -3,7 +3,7 @@ package com.jivesoftware.os.amza.api.partition;
 /**
  * @author jonathan.colt
  */
-public interface HighestPartitionTx<R> {
+public interface HighestPartitionTx {
 
-    R tx(VersionedAquarium versionedAquarium, long highestTxId) throws Exception;
+    long tx(VersionedAquarium versionedAquarium, long highestTxId) throws Exception;
 }

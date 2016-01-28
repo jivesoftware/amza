@@ -107,17 +107,17 @@ public class PartitionStateStorage implements TxPartitionState {
         });
     }
 
-    public void expunged(VersionedPartitionName compost) throws Exception {
-        LOG.info("Removing storage versions for composted partition: {}", compost);
-        transactor.doWithAll(new VersionedAquarium(compost, aquariumProvider, -1), versionedAquarium -> {
-            awaitNotify.notifyChange(compost.getPartitionName(), () -> {
+    public void expunged(VersionedPartitionName versionedPartitionName) throws Exception {
+        LOG.info("Removing storage versions for composted partition: {}", versionedPartitionName);
+        transactor.doWithAll(new VersionedAquarium(versionedPartitionName, aquariumProvider, -1), versionedAquarium -> {
+            awaitNotify.notifyChange(versionedPartitionName.getPartitionName(), () -> {
                 versionedAquarium.delete();
                 storageVersionProvider.remove(rootRingMember, versionedAquarium.getVersionedPartitionName());
                 return true;
             });
             return null;
         });
-        takeCoordinator.expunged(compost);
+        takeCoordinator.expunged(versionedPartitionName);
     }
 
 }

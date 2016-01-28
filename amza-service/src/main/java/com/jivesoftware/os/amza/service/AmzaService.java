@@ -16,7 +16,6 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
@@ -57,7 +56,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 import org.apache.commons.lang.mutable.MutableLong;
@@ -91,7 +89,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     private final AmzaAquariumProvider aquariumProvider;
     private final AmzaSystemReady systemReady;
     private final Liveliness liveliness;
-    private final TxHighestPartitionTx<Long> txHighestPartitionTx;
+    private final TxHighestPartitionTx txHighestPartitionTx;
 
     public AmzaService(TimestampedOrderIdProvider orderIdProvider,
         AmzaStats amzaStats,
@@ -195,9 +193,9 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         partitionIndex.open();
         takeCoordinator.start(ringStoreReader, aquariumProvider);
 
-        HighestPartitionTx<Void> takeHighestPartitionTx = (versionedAquarium, highestTxId) -> {
+        HighestPartitionTx takeHighestPartitionTx = (versionedAquarium, highestTxId) -> {
             takeCoordinator.update(ringStoreReader, versionedAquarium.getVersionedPartitionName(), highestTxId);
-            return null;
+            return -1;
         };
 
         systemWALStorage.load(takeHighestPartitionTx);
@@ -604,15 +602,13 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         for (int i = 0; i < ring.entries.size(); i++) {
             if (ring.rootMemberIndex != i) {
                 RingMemberAndHost entry = ring.entries.get(i);
-                Long highwatermark = highwaterStorage.get(entry.ringMember, versionedPartitionName);
-                if (highwatermark != null) {
-                    byte[] ringMemberBytes = entry.ringMember.toBytes();
-                    dos.writeByte(1);
-                    dos.writeInt(ringMemberBytes.length);
-                    dos.write(ringMemberBytes);
-                    dos.writeLong(highwatermark);
-                    bytes.add(1 + 4 + ringMemberBytes.length + 8);
-                }
+                long highwatermark = highwaterStorage.get(entry.ringMember, versionedPartitionName);
+                byte[] ringMemberBytes = entry.ringMember.toBytes();
+                dos.writeByte(1);
+                dos.writeInt(ringMemberBytes.length);
+                dos.write(ringMemberBytes);
+                dos.writeLong(highwatermark);
+                bytes.add(1 + 4 + ringMemberBytes.length + 8);
             }
         }
 

@@ -48,6 +48,6 @@ public interface Partition {
     // TODO fix or deprecate: Currently know to be broken. Only accurate if you never delete.
     long count() throws Exception;
 
-    <R> R highestTxId(HighestPartitionTx<R> highestPartitionTx) throws Exception;
+    long highestTxId(HighestPartitionTx highestPartitionTx) throws Exception;
 
 }

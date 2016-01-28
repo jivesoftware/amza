@@ -376,7 +376,7 @@ public class RowChangeTaker implements RowChanges {
             /*partitionStateStorage.remoteVersion(remoteRingMember,
              partitionName,
              remoteVersionedPartitionName.getPartitionVersion());*/
-            Long[] highwater = new Long[1];
+            long[] highwater = new long[1];
             VersionedPartitionName currentLocalVersionedPartitionName = partitionStateStorage.tx(partitionName, versionedAquarium -> {
                 VersionedPartitionName localVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
                 LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
@@ -393,7 +393,7 @@ public class RowChangeTaker implements RowChanges {
                     return null;
                 }
                 if (partitionName.isSystemPartition()) {
-                    if (highwater[0] != null && highwater[0] >= sessionedTxId.txId) {
+                    if (highwater[0] >= sessionedTxId.txId) {
                         //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
                         //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                         return null;
@@ -402,7 +402,7 @@ public class RowChangeTaker implements RowChanges {
                     }
                 } else {
                     return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-                        if (highwater[0] != null && highwater[0] >= sessionedTxId.txId && livelyEndState.isOnline()) {
+                        if (highwater[0] >= sessionedTxId.txId && livelyEndState.isOnline()) {
                             //LOG.info("NOTHING NEW: local:{} remote:{}  txId:{} partition:{} state:{}",
                             //    ringHost, remoteRingHost, txId, remoteVersionedPartitionName, remoteState);
                             return null;
@@ -433,7 +433,7 @@ public class RowChangeTaker implements RowChanges {
                     remoteRingHost,
                     sessionedTxId.sessionId,
                     remoteVersionedPartitionName,
-                    highwater[0] != null ? highwater[0] : -1,
+                    highwater[0],
                     -1);
                 return false;
             }
@@ -512,6 +512,7 @@ public class RowChangeTaker implements RowChanges {
         private final RowsTaker rowsTaker;
         private final OnCompletion onCompletion;
         private final OnError onError;
+        private final String metricName;
 
         private final AtomicLong version = new AtomicLong(0);
 
@@ -535,6 +536,8 @@ public class RowChangeTaker implements RowChanges {
             this.rowsTaker = rowsTaker;
             this.onCompletion = onCompletion;
             this.onError = onError;
+            PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
+            this.metricName = new String(partitionName.getName()) + "-" + new String(partitionName.getRingName());
         }
 
         private void moreRowsAvailable(long txId) {
@@ -550,7 +553,7 @@ public class RowChangeTaker implements RowChanges {
             }
             long currentVersion = version.get();
             PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
-            String metricName = new String(partitionName.getName()) + "-" + new String(partitionName.getRingName());
+            
             try {
                 //if (!remoteVersionedPartitionName.getPartitionName().isSystemPartition())
                 //LOG.info("TAKE: local:{} remote:{} partition:{}.", ringHost, remoteRingHost, remoteVersionedPartitionName);
@@ -564,12 +567,12 @@ public class RowChangeTaker implements RowChanges {
                         LOG.inc("take>all");
                         LOG.inc("take>" + metricName);
                         try {
-                            Long highwaterMark = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
-                            if (highwaterMark == null) {
-                                // TODO it would be nice to ask this node to recommend an initial highwater based on
-                                // TODO all of our highwaters vs. its highwater history and its start of ingress.
-                                highwaterMark = -1L;
-                            }
+                            long highwaterMark = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
+//                            if (highwaterMark == null) {
+//                                // TODO it would be nice to ask this node to recommend an initial highwater based on
+//                                // TODO all of our highwaters vs. its highwater history and its start of ingress.
+//                                highwaterMark = -1L;
+//                            }
 
                             // TODO could avoid leadership lookup for partitions that have been configs to not care about leadership.
                             Waterline leader = partitionStateStorage.tx(partitionName, VersionedAquarium::getLeader);

@@ -190,7 +190,7 @@ public class SystemPartition implements Partition {
     }
 
     @Override
-    public <R> R highestTxId(HighestPartitionTx<R> highestPartitionTx) throws Exception {
+    public long highestTxId(HighestPartitionTx highestPartitionTx) throws Exception {
         return systemWALStorage.highestPartitionTxId(versionedPartitionName, highestPartitionTx);
     }
 

@@ -28,6 +28,10 @@ public class BinaryHighwaterRowMarshaller implements HighwaterRowMarshaller<byte
 
     @Override
     public byte[] toBytes(WALHighwater highwater) throws Exception {
+        if (highwater == null) {
+            return null;
+        }
+        // TODO fix me
         byte[] lengthBuffer = new byte[4];
         HeapFiler filer = new HeapFiler(sizeInBytes(highwater));
         for (RingMemberHighwater rmh : highwater.ringMemberHighwater) {

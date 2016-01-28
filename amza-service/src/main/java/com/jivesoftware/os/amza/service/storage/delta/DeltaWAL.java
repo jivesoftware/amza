@@ -68,20 +68,25 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
     }
 
     // TODO IOC shift to using callback
-    private byte[] appendHighwaterHints(byte[] value, WALHighwater hints) throws Exception {
-        byte[] lengthBuffer = new byte[4];
-        if (hints != null) {
-            byte[] hintsBytes = highwaterRowMarshaller.toBytes(hints);
-            HeapFiler filer = new HeapFiler(4 + (value != null ? value.length : 0) + 1 + 4 + hintsBytes.length);
-            UIO.writeByteArray(filer, value, "value", lengthBuffer);
-            UIO.write(filer, new byte[]{1}, "hasHighwaterHints");
-            UIO.writeByteArray(filer, hintsBytes, "highwaterHints", lengthBuffer);
-            return filer.getBytes();
+    private byte[] appendHighwaterHints(byte[] value, byte[] hintsBytes) throws Exception {
+        if (hintsBytes != null) {
+
+            byte[] bytes = new byte[4 + (value != null ? value.length : 0) + 1 + 4 + hintsBytes.length];
+            int offset = 0;
+            offset += UIO.writeInt(value != null ? value.length : -1, bytes, offset);
+            offset += UIO.writeBytes(value, bytes, offset);
+            bytes[offset] = 1; //hasHighwaterHints
+            offset++;
+            offset += UIO.writeInt(hintsBytes.length, bytes, offset);
+            offset += UIO.writeBytes(hintsBytes, bytes, offset);
+            return bytes;
         } else {
-            HeapFiler filer = new HeapFiler(4 + (value != null ? value.length : 0) + 1);
-            UIO.writeByteArray(filer, value, "value", lengthBuffer);
-            UIO.write(filer, new byte[]{0}, "hasHighwaterHints");
-            return filer.getBytes();
+            byte[] bytes = new byte[4 + (value != null ? value.length : 0) + 1];
+            int offset = 0;
+            offset += UIO.writeInt(value != null ? value.length : -1, bytes, offset);
+            offset += UIO.writeBytes(value, bytes, offset);
+            bytes[offset] = 0; // doesn't have hasHighwaterHints
+            return bytes;
         }
     }
 
@@ -131,7 +136,7 @@ public class DeltaWAL implements WALRowHydrator, Comparable<DeltaWAL> {
                     rowStream -> {
                         for (KeyValueHighwater kvh : keyValueHighwaters) {
                             byte[] pk = WALKey.compose(versionedPartitionName.toBytes(), WALKey.compose(kvh.prefix, kvh.key));
-                            byte[] value = appendHighwaterHints(kvh.value, kvh.highwater);
+                            byte[] value = appendHighwaterHints(kvh.value, highwaterRowMarshaller.toBytes(kvh.highwater));
                             byte[] row = primaryRowMarshaller.toRow(rowType, pk, value, kvh.valueTimestamp, kvh.valueTombstone, kvh.valueVersion);
                             if (!rowStream.stream(row)) {
                                 return false;

@@ -28,7 +28,7 @@ public interface HighwaterStorage {
 
     void clear(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
 
-    Long get(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
+    long get(RingMember ringMember, VersionedPartitionName versionedPartitionName) throws Exception;
 
     WALHighwater getPartitionHighwater(VersionedPartitionName versionedPartitionName) throws Exception;
 

@@ -25,6 +25,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowChanges;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.collections.ConcurrentBAHash;
 import com.jivesoftware.os.amza.service.filer.DirectByteBufferFactory;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider;
 import com.jivesoftware.os.amza.service.replication.AmzaAquariumProvider.AmzaLivelinessStorage;
@@ -64,7 +65,6 @@ import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.AtQuorum;
 import com.jivesoftware.os.aquarium.Liveliness;
 import com.jivesoftware.os.aquarium.Member;
-import com.jivesoftware.os.filer.io.IBA;
 import com.jivesoftware.os.jive.utils.ordered.id.ConstantWriterIdProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProviderImpl;
@@ -79,8 +79,6 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
@@ -92,7 +90,6 @@ public class AmzaServiceInitializer {
     public static class AmzaServiceConfig {
 
         public String[] workingDirectories = null;
-
 
         public long asyncFsyncIntervalMillis = 1_000;
         public long checkIfCompactionIsNeededIntervalInMillis = 60_000;
@@ -210,8 +207,9 @@ public class AmzaServiceInitializer {
 
         PartitionStore ringIndex = partitionIndex.get(PartitionCreator.RING_INDEX);
         PartitionStore nodeIndex = partitionIndex.get(PartitionCreator.NODE_INDEX);
-        ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache = new ConcurrentHashMap<>();
-        ConcurrentMap<RingMember, CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentHashMap<>();
+        ConcurrentBAHash<CacheId<RingTopology>> ringsCache = new ConcurrentBAHash<>(13, true, 128);
+        ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentBAHash<>(13, true, 128);
+
         AtomicLong nodeCacheId = new AtomicLong(0);
         AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringsCache, ringMemberRingNamesCache, nodeCacheId);
 

@@ -3,11 +3,9 @@ package com.jivesoftware.os.amza.service.replication;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.common.collect.Iterables;
 import com.jivesoftware.os.amza.api.partition.HighestPartitionTx;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionTx;
-import com.jivesoftware.os.amza.api.partition.StorageVersion;
 import com.jivesoftware.os.amza.api.partition.TxPartitionState;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -84,11 +82,11 @@ public class PartitionStripe {
         storage.delete(versionedPartitionName);
     }
 
-    public <R> R highestPartitionTxId(PartitionName partitionName, HighestPartitionTx<R> tx) throws Exception {
+    public long highestPartitionTxId(PartitionName partitionName, HighestPartitionTx tx) throws Exception {
         return txPartitionState.tx(partitionName, versionedAquarium -> highestAquariumTxId(versionedAquarium, tx));
     }
 
-    public <R> R highestAquariumTxId(VersionedAquarium versionedAquarium, HighestPartitionTx<R> tx) throws Exception {
+    public long highestAquariumTxId(VersionedAquarium versionedAquarium, HighestPartitionTx tx) throws Exception {
         VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
         PartitionStore partitionStore = partitionIndex.get(versionedPartitionName);
         if (partitionStore != null) {

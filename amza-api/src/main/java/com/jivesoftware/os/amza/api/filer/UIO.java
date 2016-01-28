@@ -568,8 +568,24 @@ public class UIO {
         return 1L << _chunkPower;
     }
 
-    public static void bytes(byte[] value, byte[] destination, int offset) {
-        System.arraycopy(value, 0, destination, offset, value.length);
+    public static int writeInt(int v, byte[] destination, int offset) {
+        destination[offset + 0] = (byte) (v >>> 24);
+        destination[offset + 1] = (byte) (v >>> 16);
+        destination[offset + 2] = (byte) (v >>> 8);
+        destination[offset + 3] = (byte) v;
+        return 4;
+    }
+
+    public static int writeBytes(byte[] value, byte[] destination, int offset) {
+        if (value != null) {
+            System.arraycopy(value, 0, destination, offset, value.length);
+            return value.length;
+        }
+        return 0;
+    }
+
+    public static void readBytes(byte[] source, int offset, byte[] value) {
+        System.arraycopy(source, offset, value, 0, value.length);
     }
 
     private static void readFully(IReadable readable, byte[] into, int length) throws IOException {

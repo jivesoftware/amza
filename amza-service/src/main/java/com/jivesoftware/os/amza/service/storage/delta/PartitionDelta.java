@@ -15,6 +15,7 @@ import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALPrefix;
+import com.jivesoftware.os.amza.service.collections.ConcurrentBAHash;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -42,7 +43,8 @@ class PartitionDelta {
     private final DeltaWAL deltaWAL;
     final AtomicReference<PartitionDelta> merging;
 
-    private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>(); //TODO replace with concurrent byte[] map
+    //private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>(); //TODO replace with concurrent byte[] map
+    private final ConcurrentBAHash<WALPointer> pointerIndex = new ConcurrentBAHash<>(13, true, 1024);
     private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(KeyUtil::compare);
     private final ConcurrentHashMap<WALPrefix, AppendOnlyConcurrentArrayList> prefixTxFpIndex = new ConcurrentHashMap<>();
     private final AppendOnlyConcurrentArrayList txIdWAL = new AppendOnlyConcurrentArrayList(1024); //TODO expose to config
@@ -74,7 +76,7 @@ class PartitionDelta {
             if (mergingPartitionDelta != null) {
                 return mergingPartitionDelta.streamRawValues(prefix,
                     mergingKeyStream -> keys.consume((key) -> {
-                        WALPointer got = pointerIndex.get(new WALKey(prefix, key));
+                        WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
                         if (got == null) {
                             return mergingKeyStream.stream(key);
                         } else {
@@ -84,7 +86,7 @@ class PartitionDelta {
                     fpKeyValueStream);
             } else {
                 return keys.consume((key) -> {
-                    WALPointer got = pointerIndex.get(new WALKey(prefix, key));
+                    WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
                     if (got == null) {
                         return fpKeyValueStream.stream(-1, null, prefix, key, null, -1, false, -1);
                     } else {
@@ -100,7 +102,7 @@ class PartitionDelta {
     }
 
     WALPointer getPointer(byte[] prefix, byte[] key) throws Exception {
-        WALPointer got = pointerIndex.get(new WALKey(prefix, key));
+        WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
         if (got != null) {
             return got;
         }
@@ -124,7 +126,7 @@ class PartitionDelta {
     }
 
     Boolean containsKey(byte[] prefix, byte[] key) {
-        WALPointer got = pointerIndex.get(new WALKey(prefix, key));
+        WALPointer got = pointerIndex.get(WALKey.compose(prefix, key));
         if (got != null) {
             return !got.getTombstoned();
         }
@@ -155,9 +157,9 @@ class PartitionDelta {
         long valueVersion) {
 
         WALPointer pointer = new WALPointer(fp, valueTimestamp, valueTombstone, valueVersion);
-        WALKey walKey = new WALKey(prefix, key);
+        byte[] walKey = WALKey.compose(prefix, key);
         pointerIndex.put(walKey, pointer);
-        orderedIndex.put(walKey.compose(), pointer);
+        orderedIndex.put(walKey, pointer);
     }
 
     private final AtomicBoolean firstAndOnlyOnce = new AtomicBoolean(true);

@@ -386,8 +386,9 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         },
                         null);
 
+                    // TODO!!!! handle the discontinguity of endOfMerge delta ids which prevents us from doing trailingDeltaWALId[0] != prevDeltaWALId
                     if (truncateToEndOfMergeMarker) {
-                        if (prevDeltaWALId > -1 && trailingDeltaWALId[0] != prevDeltaWALId) {
+                        if (prevDeltaWALId > -1 && trailingDeltaWALId[0] > prevDeltaWALId) {
                             LOG.error("Inconsistency detected while loading delta:{} prev:{}, encountered tail:{} for {}",
                                 deltaWALId, prevDeltaWALId, trailingDeltaWALId, versionedPartitionName);
                             throw new IllegalStateException("Delta mismatch, intervention is required");

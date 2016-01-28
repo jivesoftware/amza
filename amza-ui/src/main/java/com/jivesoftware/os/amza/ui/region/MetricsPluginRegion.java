@@ -332,7 +332,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
                     amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName, (ringMember, lastOfferedTxId, category1, tooSlowTxId) -> {
 
-                        if (lastOfferedTxId == -1) {
+                        if (lastOfferedTxId != -1) {
                             long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
                             long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
 

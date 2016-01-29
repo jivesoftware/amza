@@ -5,7 +5,7 @@ import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
-import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -46,12 +46,12 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
 
         public void commit(Consistency consistency,
             byte[] prefix,
-            Commitable commitable,
+            ClientUpdates clientUpdates,
             long timeout,
             TimeUnit timeUnit) throws Exception {
 
             Partition partition = partitionProvider.getPartition(partitionName);
-            partition.commit(consistency, prefix, commitable, timeUnit.toMillis(timeout));
+            partition.commit(consistency, prefix, clientUpdates, timeUnit.toMillis(timeout));
         }
 
         public void get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueTimestampStream valuesStream) throws Exception {

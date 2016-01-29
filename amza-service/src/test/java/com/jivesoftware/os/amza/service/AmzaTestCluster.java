@@ -351,14 +351,14 @@ public class AmzaTestCluster {
                 throw new RuntimeException("Service is off:" + ringMember);
             }
 
-            AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-            long timestamp = orderIdProvider.nextId();
-            if (tombstone) {
-                updates.remove(k, timestamp);
-            } else {
-                updates.set(k, v, timestamp);
-            }
-            clientProvider.getClient(partitionName).commit(consistency, p, updates, 10, TimeUnit.SECONDS);
+            clientProvider.getClient(partitionName).commit(consistency, p, commitKeyValueStream -> {
+                long timestamp = orderIdProvider.nextId();
+                if (tombstone) {
+                    return commitKeyValueStream.commit(k, null, timestamp, true);
+                } else {
+                    return commitKeyValueStream.commit(k, v, timestamp, false);
+                }
+            }, 10, TimeUnit.SECONDS);
 
         }
 

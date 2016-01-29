@@ -24,7 +24,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.PartitionProperties;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
@@ -88,7 +88,7 @@ public class StripedPartition implements Partition {
     @Override
     public void commit(Consistency consistency,
         byte[] prefix,
-        Commitable updates,
+        ClientUpdates updates,
         long timeoutInMillis) throws Exception {
 
         long end = System.currentTimeMillis() + timeoutInMillis;
@@ -120,11 +120,10 @@ public class StripedPartition implements Partition {
                     }
                     return -1;
                 },
-                (highwaters, stream) -> updates.commitable(highwaters,
-                    (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                        long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
-                        return stream.row(rowTxId, key, value, timestamp, valueTombstone, version);
-                    }),
+                (highwaters, stream) -> updates.updates((key, value, valueTimestamp, valueTombstone) -> {
+                    long timestamp = valueTimestamp > 0 ? valueTimestamp : currentTime;
+                    return stream.row(-1L, key, value, timestamp, valueTombstone, version);
+                }),
                 (versionedPartitionName, leadershipToken, largestCommittedTxId) -> {
                     if (takeQuorum > 0) {
                         LOG.debug("Awaiting quorum for {} ms", remainingTimeInMillis);
@@ -187,7 +186,7 @@ public class StripedPartition implements Partition {
                     toPrefix,
                     toKey,
                     (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                        -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
             }
             return true;
         });
@@ -220,8 +219,8 @@ public class StripedPartition implements Partition {
         TxKeyValueStream stream) throws Exception {
 
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            long[] lastTxId = {-1};
-            boolean[] done = {false};
+            long[] lastTxId = { -1 };
+            boolean[] done = { false };
             TxKeyValueStream txKeyValueStream = (rowTxId, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                 if (done[0] && rowTxId > lastTxId[0]) {
                     return false;

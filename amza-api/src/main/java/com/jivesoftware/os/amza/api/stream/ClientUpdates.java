@@ -5,5 +5,5 @@ package com.jivesoftware.os.amza.api.stream;
  */
 public interface ClientUpdates {
 
-    boolean updates(UnprefixedTxKeyValueStream txKeyValueStream) throws Exception;
+    boolean updates(CommitKeyValueStream commitKeyValueStream) throws Exception;
 }

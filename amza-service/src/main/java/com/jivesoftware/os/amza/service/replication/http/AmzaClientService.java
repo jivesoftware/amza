@@ -107,14 +107,14 @@ public class AmzaClientService implements AmzaRestClient {
         byte[] prefix = UIO.readByteArray(read, "prefix", intLongBuffer);
         long timeoutInMillis = UIO.readLong(read, "timeoutInMillis", intLongBuffer);
 
-        partition.commit(consistency, prefix, (highwaters, txKeyValueStream) -> {
+        partition.commit(consistency, prefix, commitKeyValueStream -> {
             while (!UIO.readBoolean(read, "eos")) {
-                if (!txKeyValueStream.row(UIO.readLong(read, "rowTxId", intLongBuffer),
+                boolean result = commitKeyValueStream.commit(
                     UIO.readByteArray(read, "key", intLongBuffer),
                     UIO.readByteArray(read, "value", intLongBuffer),
                     UIO.readLong(read, "valueTimestamp", intLongBuffer),
-                    UIO.readBoolean(read, "valueTombstoned"),
-                    -1)) {
+                    UIO.readBoolean(read, "valueTombstoned"));
+                if (!result) {
                     return false;
                 }
             }

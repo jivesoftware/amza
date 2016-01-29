@@ -59,14 +59,12 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
                     UIO.writeByteArray(fos, prefix, "prefix", lengthBuffer);
                     UIO.writeLong(fos, abandonSolutionAfterNMillis, "timeoutInMillis");
 
-                    updates.updates((rowTxId, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+                    updates.updates((key, value, valueTimestamp, valueTombstoned) -> {
                         UIO.write(fos, new byte[]{0}, "eos");
-                        UIO.writeLong(fos, rowTxId, "rowTxId");
                         UIO.writeByteArray(fos, key, "key", lengthBuffer);
                         UIO.writeByteArray(fos, value, "value", lengthBuffer);
                         UIO.writeLong(fos, valueTimestamp, "valueTimestamp");
                         UIO.write(fos, new byte[]{valueTombstoned ? (byte) 1 : (byte) 0}, "valueTombstoned");
-                        // valueVersion is only ever generated on the servers.
                         return true;
                     });
                     UIO.write(fos, new byte[]{1}, "eos");

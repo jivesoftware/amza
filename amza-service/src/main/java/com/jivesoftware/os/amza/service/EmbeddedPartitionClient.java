@@ -37,7 +37,7 @@ public class EmbeddedPartitionClient implements PartitionClient {
         long additionalSolverAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        partition.commit(consistency, prefix, (highwaters, txKeyValueStream) -> updates.updates(txKeyValueStream), abandonSolutionAfterNMillis);
+        partition.commit(consistency, prefix, updates, abandonSolutionAfterNMillis);
     }
 
     @Override

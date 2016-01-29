@@ -19,6 +19,7 @@ import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
 import com.jivesoftware.os.amza.api.wal.WALValue;
+import com.jivesoftware.os.amza.service.AmzaPartitionCommitable;
 import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.service.AmzaRingStoreReader;
 import com.jivesoftware.os.amza.service.AwaitNotify;
@@ -520,7 +521,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             amzaPartitionUpdates.remove(keyBytes, timestamp);
             return true;
         });
-        systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, amzaPartitionUpdates, walUpdated);
+        systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, new AmzaPartitionCommitable(amzaPartitionUpdates), walUpdated);
     }
 
     private AmzaStateStorage currentStateStorage(PartitionName partitionName) {
@@ -675,7 +676,10 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                 return true;
             });
             if (result && amzaPartitionUpdates.size() > 0) {
-                RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_LIVELINESS_INDEX, null, amzaPartitionUpdates, walUpdated);
+                RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_LIVELINESS_INDEX,
+                    null,
+                    new AmzaPartitionCommitable(amzaPartitionUpdates),
+                    walUpdated);
                 return !rowsChanged.isEmpty();
             } else {
                 return false;

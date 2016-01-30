@@ -24,7 +24,6 @@ import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.Totals;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
-import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
 import com.jivesoftware.os.aquarium.Waterline;
@@ -132,19 +131,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             String subType = null;
             if (rowType == RowType.system) {
                 long[] parts = UIO.bytesLongs(row);
-                if (parts[0] == 0) {
-                    MinMaxLong minMaxLong = new MinMaxLong();
-                    for (int i = 3; i < parts.length; i++) {
-                        minMaxLong.value(parts[i]);
-                    }
-                    subType = "compactionHint:  newCount=" + parts[1]
-                        + " clobberCount=" + parts[2]
-                        + " min:" + Long.toHexString(minMaxLong.min())
-                        + " max:" + Long.toHexString(minMaxLong.max());
-                }
-                if (parts[0] == 1) {
-                    subType = "indexCommit: txId=" + Long.toHexString(parts[1]);
-                }
                 if (parts[0] == 2) {
                     subType = "leaps: lastTx:" + Long.toHexString(parts[1]);
                 }

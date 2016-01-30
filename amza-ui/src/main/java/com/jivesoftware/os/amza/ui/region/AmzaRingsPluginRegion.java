@@ -75,7 +75,6 @@ public class AmzaRingsPluginRegion implements PageRegion<Optional<AmzaRingsPlugi
 
                         Map<String, String> row = new HashMap<>();
                         row.put("ringName", new String(ringName));
-                        row.put("status", "online");
                         row.put("member", ringMember.getMember());
                         row.put("host", ringHost.getHost());
                         row.put("port", String.valueOf(ringHost.getPort()));

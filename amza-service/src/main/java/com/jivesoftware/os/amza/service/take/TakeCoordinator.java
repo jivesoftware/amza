@@ -127,7 +127,10 @@ public class TakeCoordinator {
         updateInternal(ringReader, versionedPartitionName, txId, false);
     }
 
-    private void updateInternal(AmzaRingReader ringReader, VersionedPartitionName versionedPartitionName, long txId, boolean invalidateOnline) throws Exception {
+    private void updateInternal(AmzaRingReader ringReader,
+        VersionedPartitionName versionedPartitionName,
+        long txId,
+        boolean invalidateOnline) throws Exception {
         updates.incrementAndGet();
         byte[] ringName = versionedPartitionName.getPartitionName().getRingName();
         RingTopology ring = ringReader.getRing(ringName);
@@ -147,7 +150,13 @@ public class TakeCoordinator {
 
     public interface TookLatencyStream {
 
-        boolean stream(RingMember ringMember, long lastOfferedTxId, int category, long tooSlowTxId) throws Exception;
+        boolean stream(RingMember ringMember,
+            long lastOfferedTxId,
+            int category,
+            long tooSlowTxId,
+            long takeSessionId,
+            boolean online,
+            boolean steadyState) throws Exception;
     }
 
     public interface CategoryStream {
@@ -214,8 +223,8 @@ public class TakeCoordinator {
 
         while (true) {
             long start = updates.get();
-          
-            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
+
+            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> {
                     try {

@@ -330,28 +330,34 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
                     long currentTime = timestampProvider.getApproximateTimestamp(System.currentTimeMillis());
 
-                    amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName, (ringMember, lastOfferedTxId, category1, tooSlowTxId) -> {
+                    amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName,
+                        (ringMember, lastOfferedTxId, category1, tooSlowTxId, takeSessionId, online, steadyState) -> {
+                            if (lastOfferedTxId != -1) {
+                                long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
+                                long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
 
-                        if (lastOfferedTxId != -1) {
-                            long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
-                            long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
+                                long latencyInMillis = currentTime - lastOfferedTimestamp;
 
-                            long latencyInMillis = currentTime - lastOfferedTimestamp;
-
-                            buf.append("<br>")
-                                .append(ringMember.getMember()).append(' ')
-                                .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
-                                .append(category1).append(' ')
-                                .append(getDurationBreakdown(tooSlowTimestamp));
-                        } else {
-                            buf.append("<br>")
-                                .append(ringMember.getMember()).append(' ')
-                                .append("never").append(' ')
-                                .append(category1).append(' ')
-                                .append("never");
-                        }
-                        return true;
-                    });
+                                buf.append("<br>")
+                                    .append(ringMember.getMember()).append(' ')
+                                    .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
+                                    .append(category1).append(' ')
+                                    .append(getDurationBreakdown(tooSlowTimestamp)).append(' ')
+                                    .append(takeSessionId).append(' ')
+                                    .append(online).append(' ')
+                                    .append(steadyState);
+                            } else {
+                                buf.append("<br>")
+                                    .append(ringMember.getMember()).append(' ')
+                                    .append("never").append(' ')
+                                    .append(category1).append(' ')
+                                    .append("never")
+                                    .append(takeSessionId).append(' ')
+                                    .append(online).append(' ')
+                                    .append(steadyState);
+                            }
+                            return true;
+                        });
                     map.put("category", buf.toString());
                 } else {
                     map.put("category", category != -1 ? String.valueOf(category) : "unknown");
@@ -451,7 +457,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -556,7 +562,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

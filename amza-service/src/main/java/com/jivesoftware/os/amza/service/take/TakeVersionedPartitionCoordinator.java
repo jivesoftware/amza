@@ -41,6 +41,7 @@ public class TakeVersionedPartitionCoordinator {
     private final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Long> steadyState = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Long> onlineTakers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, Long> latestTakeSessionId = new ConcurrentHashMap<>();
 
     public TakeVersionedPartitionCoordinator(RingMember rootMember,
         VersionedPartitionName versionedPartitionName,
@@ -73,6 +74,7 @@ public class TakeVersionedPartitionCoordinator {
         int takeFromFactor,
         AvailableStream availableStream) throws Exception {
 
+        latestTakeSessionId.put(ringMember, takeSessionId);
         if (!expunged.get() && takeFromFactor > 0) {
             synchronized (steadyState) {
                 try {
@@ -286,11 +288,17 @@ public class TakeVersionedPartitionCoordinator {
             int category = candidate.getValue();
             SessionedTxId lastTxId = took.get(ringMember);
             long tooSlowLatencyTxId = slowTakeId * category;
+
+            long takeSessionId = latestTakeSessionId.getOrDefault(ringMember, -1L);
+            Long onlineTakeSessionId = onlineTakers.get(ringMember);
+            boolean online = (onlineTakeSessionId != null && onlineTakeSessionId == takeSessionId);
+            Long steadyStateTakeSessionId = steadyState.get(ringMember);
+            boolean steadyState = (steadyStateTakeSessionId != null && steadyStateTakeSessionId == takeSessionId);
             if (lastTxId != null) {
-                if (!stream.stream(ringMember, lastTxId.offeredTxId, category, tooSlowLatencyTxId)) {
+                if (!stream.stream(ringMember, lastTxId.offeredTxId, category, tooSlowLatencyTxId, takeSessionId, online, steadyState)) {
                     return false;
                 }
-            } else if (!stream.stream(ringMember, -1L, category, tooSlowLatencyTxId)) {
+            } else if (!stream.stream(ringMember, -1L, category, tooSlowLatencyTxId, takeSessionId, online, steadyState)) {
                 return false;
             }
         }

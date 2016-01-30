@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.collections;
+package com.jivesoftware.os.amza.api.value;
 
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -9,6 +9,7 @@ import java.util.function.Function;
  */
 public class ConcurrentBAHash<V> {
 
+
     private final Hasher<byte[]> hasher;
     private final BAHash<V>[] hmaps;
 
@@ -17,7 +18,7 @@ public class ConcurrentBAHash<V> {
         this.hasher = BAHasher.SINGLETON;
         this.hmaps = new BAHash[concurrency];
         for (int i = 0; i < concurrency; i++) {
-            this.hmaps[i] = new BAHash<>(capacity / concurrency, hasher, BAEqualer.SINGLETON, hasValues);
+            this.hmaps[i] = new BAHash<>(new BAHMapState<>(capacity, hasValues, BAHMapState.NIL), hasher, BAEqualer.SINGLETON);
         }
     }
 
@@ -77,7 +78,7 @@ public class ConcurrentBAHash<V> {
     }
 
     public void remove(byte[] key) {
-
+        remove(key, 0, key.length);
     }
 
     public void remove(byte[] key, int keyOffset, int keyLength) {
@@ -111,5 +112,12 @@ public class ConcurrentBAHash<V> {
             }
         }
         return true;
+    }
+
+    public void dump() {
+        for (BAHash<V> hmap : hmaps) {
+            System.out.println("----");
+            hmap.dump();
+        }
     }
 }

@@ -1,4 +1,4 @@
-package com.jivesoftware.os.amza.service.collections;
+package com.jivesoftware.os.amza.api.value;
 
 /**
  *

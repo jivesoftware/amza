@@ -37,7 +37,6 @@
                 <table class="table table-condensed">
                     <thead>
                         <tr class="active">
-                            <th>Action</th>
                             <th>Current</th>
                             <th></th>
                             <th></th>
@@ -53,14 +52,14 @@
                             <th>Name</th>
                             <th>Ring</th>
                             <th>Version</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         <form id="add-ring-host" class="j-form" data-active-class="btn-default" data-input-el="#requestPicker" data-form-el="#requestPickerForm"
-                            method="post" name="addRingHost">
+                            method="get" name="addRingHost">
                             <tr style="background-color:#ddd;">
-                                <td><button title="Add" type="submit" name="action" value="find" class="btn btn-default"><span class="glyphicon glyphicon-search"></span></button></td>
-                                <td>Member</td>
+                                   <td>Member</td>
                                 <td>Current</td>
                                 <td>Alive</td>
                                 <td>Quorum</td>
@@ -88,6 +87,7 @@
                                     class="form-control" placeholder="Partition Version" value="{$partitionVersion}"
                                     name="partitionVersion" title="">
                                 </td>
+                                <td><button title="Add" type="submit" name="action" value="find" class="btn btn-default"><span class="glyphicon glyphicon-search"></span></button></td>
                                 <input type="hidden" name="action" value="search">
                             </tr>
                         </form>
@@ -95,7 +95,6 @@
                         {if $aquarium}
                             {foreach $a in $aquarium}
                                 <tr>
-                                    <td></td>
                                     {if $a.current}
                                         <td>{$a.current.member}</td>
                                         <td>{$a.current.state}</td>
@@ -119,6 +118,7 @@
                                     <td>{$a.partitionName}</td>
                                     <td>{$a.ringName}</td>
                                     <td>{$a.partitionVersion}</td>
+                                    <td></td>
                                 </tr>
                             {/foreach}
                         {/if}

@@ -16,15 +16,14 @@
 package com.jivesoftware.os.amza.service;
 
 import com.google.common.primitives.UnsignedBytes;
-import com.jivesoftware.os.amza.api.stream.Commitable;
-import com.jivesoftware.os.amza.api.stream.UnprefixedTxKeyValueStream;
-import com.jivesoftware.os.amza.api.take.Highwaters;
+import com.jivesoftware.os.amza.api.stream.ClientUpdates;
+import com.jivesoftware.os.amza.api.stream.CommitKeyValueStream;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class AmzaPartitionUpdates implements Commitable {
+public class AmzaPartitionUpdates implements ClientUpdates {
 
     private final ConcurrentSkipListMap<byte[], WALValue> changes = new ConcurrentSkipListMap<>(UnsignedBytes.lexicographicalComparator());
     private final AtomicInteger approximateSize = new AtomicInteger(); // Because changes.size() walks the entire collection to compute size :(
@@ -68,10 +67,10 @@ public class AmzaPartitionUpdates implements Commitable {
     }
 
     @Override
-    public boolean commitable(Highwaters highwaters, UnprefixedTxKeyValueStream txKeyValueStream) throws Exception {
+    public boolean updates(CommitKeyValueStream commitKeyValueStream) throws Exception {
         for (Entry<byte[], WALValue> e : changes.entrySet()) {
             WALValue value = e.getValue();
-            if (!txKeyValueStream.row(-1, e.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned(), value.getVersion())) {
+            if (!commitKeyValueStream.commit(e.getKey(), value.getValue(), value.getTimestampId(), value.getTombstoned())) {
                 return false;
             }
         }

@@ -4,6 +4,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALUpdated;
+import com.jivesoftware.os.amza.service.AmzaPartitionCommitable;
 import com.jivesoftware.os.amza.service.AmzaPartitionUpdates;
 import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
@@ -62,7 +63,10 @@ class AmzaStateStorage implements StateStorage<Long> {
                 return true;
             });
         if (result && amzaPartitionUpdates.size() > 0) {
-            RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX, null, amzaPartitionUpdates, walUpdated);
+            RowsChanged rowsChanged = systemWALStorage.update(PartitionCreator.AQUARIUM_STATE_INDEX,
+                null,
+                new AmzaPartitionCommitable(amzaPartitionUpdates),
+                walUpdated);
             return !rowsChanged.isEmpty();
         } else {
             return false;

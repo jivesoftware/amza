@@ -15,7 +15,7 @@ import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALPointer;
 import com.jivesoftware.os.amza.api.wal.WALPrefix;
-import com.jivesoftware.os.amza.service.collections.ConcurrentBAHash;
+import com.jivesoftware.os.amza.api.value.ConcurrentBAHash;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
 import com.jivesoftware.os.amza.service.storage.PartitionStore;
 import com.jivesoftware.os.mlogger.core.MetricLogger;

@@ -23,7 +23,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.scan.RowsChanged;
-import com.jivesoftware.os.amza.api.stream.Commitable;
+import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueStream;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
@@ -83,7 +83,7 @@ public class SystemPartition implements Partition {
     @Override
     public void commit(Consistency consistency,
         byte[] prefix,
-        Commitable updates,
+        ClientUpdates updates,
         long timeoutInMillis) throws Exception {
 
         Set<RingMember> neighbors = ringReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
@@ -96,11 +96,10 @@ public class SystemPartition implements Partition {
         long timestampAndVersion = orderIdProvider.nextId();
         RowsChanged commit = systemWALStorage.update(versionedPartitionName,
             prefix,
-            (highwaters, scan) -> updates.commitable(highwaters,
-                (rowTxId, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
-                    long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampAndVersion;
-                    return scan.row(rowTxId, key, value, timestamp, valueTombstone, timestampAndVersion);
-                }),
+            (highwaters, scan) -> updates.updates((key, value, valueTimestamp, valueTombstone) -> {
+                long timestamp = valueTimestamp > 0 ? valueTimestamp : timestampAndVersion;
+                return scan.row(-1L, key, value, timestamp, valueTombstone, timestampAndVersion);
+            }),
             walUpdated);
         amzaStats.direct(versionedPartitionName.getPartitionName(), commit.getApply().size(), commit.getSmallestCommittedTxId());
 

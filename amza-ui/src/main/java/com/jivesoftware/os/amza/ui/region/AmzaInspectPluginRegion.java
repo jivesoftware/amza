@@ -228,7 +228,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     }
                     partition.commit(input.consistency,
                         getPrefix(input.prefix),
-                        new AmzaClientUpdates(updates),
+                        updates,
                         30_000,
                         30_000,
                         Optional.of(msg));
@@ -268,7 +268,6 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         + " toKey='" + input.toKey + "'");
                 } else if (!fromRawKeys.isEmpty() && !toRawKeys.isEmpty()) {
                     AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-                    AmzaClientUpdates clientUpdates = new AmzaClientUpdates(updates);
                     byte[][] lastPrefix = new byte[1][];
                     partition.scan(input.consistency,
                         getPrefix(input.prefix),
@@ -277,7 +276,7 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         toRawKeys.get(0),
                         (prefix, key, value, timestamp, version) -> {
                             if (updates.size() >= input.batchSize || !Arrays.equals(lastPrefix[0], prefix)) {
-                                partition.commit(Consistency.none, lastPrefix[0], clientUpdates, 30_000, 30_000, Optional.of(msg));
+                                partition.commit(Consistency.none, lastPrefix[0], updates, 30_000, 30_000, Optional.of(msg));
                                 updates.reset();
                             }
                             lastPrefix[0] = prefix;
@@ -289,16 +288,15 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                         30_000L,
                         Optional.of(msg));
                     if (updates.size() > 0) {
-                        partition.commit(Consistency.none, lastPrefix[0], clientUpdates, 30_000, 30_000, Optional.of(msg));
+                        partition.commit(Consistency.none, lastPrefix[0], updates, 30_000, 30_000, Optional.of(msg));
                     }
                 } else {
                     long start = System.currentTimeMillis();
                     AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
-                    AmzaClientUpdates clientUpdates = new AmzaClientUpdates(updates);
                     for (byte[] rawKey : fromRawKeys) {
                         updates.remove(rawKey, -1);
                     }
-                    partition.commit(input.consistency, getPrefix(input.prefix), clientUpdates, 30_000, 30_000, Optional.of(msg));
+                    partition.commit(input.consistency, getPrefix(input.prefix), updates, 30_000, 30_000, Optional.of(msg));
                     partition.get(input.consistency, getPrefix(input.prefix), walKeysFromList(fromRawKeys),
                         (prefix, key, value, timestamp, version) -> {
                             Map<String, String> row = new HashMap<>();

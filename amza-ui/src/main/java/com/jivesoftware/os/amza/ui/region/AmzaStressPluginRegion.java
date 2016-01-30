@@ -303,20 +303,20 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                 try {
                     byte[] prefix = input.numKeyPrefixes > 0 ? UIO.intBytes(batch % input.numKeyPrefixes) : null;
                     partition.commit(consistency, prefix,
-                        (txKeyValueStream) -> {
+                        (commitKeyValueStream) -> {
                             if (input.orderedInsertion) {
                                 String max = String.valueOf(input.numBatches * input.batchSize);
                                 int bStart = batch * input.batchSize;
                                 for (int b = bStart, c = 0; c < input.batchSize; b++, c++) {
                                     String k = Strings.padEnd(String.valueOf(b), max.length(), '0');
-                                    txKeyValueStream.row(-1, k.getBytes(), ("v" + batch).getBytes(), -1, false, -1);
+                                    commitKeyValueStream.commit(k.getBytes(), ("v" + batch).getBytes(), -1, false);
                                 }
                             } else {
                                 int bStart = threadIndex * input.batchSize;
                                 int bEnd = bStart + input.batchSize;
                                 for (int b = bStart; b < bEnd; b++) {
                                     String k = String.valueOf(batch);
-                                    txKeyValueStream.row(-1, (b + "k" + k).getBytes(), (b + "v" + batch).getBytes(), -1, false, -1);
+                                    commitKeyValueStream.commit((b + "k" + k).getBytes(), (b + "v" + batch).getBytes(), -1, false);
                                 }
                             }
                             return true;

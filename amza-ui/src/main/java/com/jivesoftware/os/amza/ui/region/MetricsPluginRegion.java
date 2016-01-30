@@ -27,6 +27,7 @@ import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.amza.ui.utils.MinMaxLong;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.State;
+import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.SnowflakeIdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampProvider;
@@ -317,10 +318,16 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             partition.highestTxId((versionedAquarium, highestTxId) -> {
                 VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
                 LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
+
+                map.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
+                map.put("quorum", currentWaterline == null ? "unknown" : currentWaterline.isAtQuorum());
+                //map.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
+                //map.put("version", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getVersion()));
+
+                map.put("partitionVersion", Long.toHexString(versionedPartitionName.getPartitionVersion()));
                 State currentState = livelyEndState.getCurrentState();
                 int category = categories.getOrDefault(versionedPartitionName, -1);
-                map.put("version", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                map.put("state", currentState != null ? currentState.name() : "unknown");
                 map.put("isOnline", livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
 

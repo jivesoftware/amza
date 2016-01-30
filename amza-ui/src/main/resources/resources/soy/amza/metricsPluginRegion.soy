@@ -41,6 +41,8 @@
                         <th>Action</th>
                         <th><span class="glyphicon glyphicon-flag"></span>{sp}State</th>
                         <th><span class="glyphicon glyphicon-off"></span>{sp}Online</th>
+                        <th><span class="glyphicon glyphicon-retweet"></span>{sp}Quorum</th>
+                        <th><span class="glyphicon glyphicon-time"></span>{sp}Storage Version</th>
                         <th>Ring</th>
                         <th>Name</th>
                         <th>Count</th>
@@ -51,7 +53,6 @@
                         <th><span class="glyphicon glyphicon-share"></span>{sp}Offered</th>
                         <th><span class="glyphicon glyphicon-upload"></span>{sp}Took</th>
                         <th><span class="glyphicon glyphicon-import"></span>{sp}Took Applied</th>
-                        <th><span class="glyphicon glyphicon-time"></span>{sp}Version</th>
                         <th><span class="glyphicon glyphicon-calendar"></span>{sp}Category</th>
                         <th><span class="glyphicon glyphicon-plane"></span>{sp}Highest TxId</th>
                         <th><span class="glyphicon glyphicon-tint"></span>{sp}Highwaters</th>
@@ -59,6 +60,8 @@
                 </thead>
                 <tbody>
                     <tr>
+                        <td></td>
+                        <td></td>
                         <td></td>
                         <td></td>
                         <td></td>
@@ -75,7 +78,6 @@
                         <td></td>
                         <td></td>
                         <td></td>
-                        <td></td>
                     </tr>
                     {foreach $r in $regionTotals}
                         <tr>
@@ -83,9 +85,12 @@
                                 <a href="/amza/ui/inspect?regionType={$r.type}&ringName={$r.ringName}&regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search"></span>Inspect</a>
                                 <a href="/amza/ui/metrics?partitionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-sunglasses"></span>Watch</a>
                                 <a href="/amza/ui/metrics?ringName={$r.ringName}&partitionName={$r.name}&visualize=true" class="btn btn-default"><span class="glyphicon glyphicon-hdd"></span>Visualize</a>
+                                <a href="/amza/ui/aquarium?ringName={$r.ringName}&partitionName={$r.name}&partitionVersion={$r.partitionVersion}" class="btn btn-default"><span class="glyphicon glyphicon-transfer"></span>Aquarium</a>
                             </td>
                             <td>{$r.state}</td>
                             <td>{$r.isOnline}</td>
+                            <td>{$r.quorum}</td>
+                            <td>{$r.partitionVersion}</td>
                             <td>{$r.ringName}</td>
                             <td>{$r.name}</td>
                             <td><b>{$r.count}</b></td>
@@ -96,8 +101,7 @@
                             <td><b>{$r.offers}</b>{sp}<i>{$r.offersLag}millis lag</i></td>
                             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
                             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
-                            <td>{$r.version}</td>
-                            <td>{$r.category|noAutoescape}</td>
+                               <td>{$r.category|noAutoescape}</td>
                             <td>{$r.highestTxId}</td>
                             <td>{$r.highwaters|noAutoescape}</td>
                         </tr>

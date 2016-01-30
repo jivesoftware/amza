@@ -21,9 +21,6 @@ import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.take.HighwaterStorage;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion.AmzaPartitionsPluginRegionInput;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
-import com.jivesoftware.os.aquarium.Liveliness;
-import com.jivesoftware.os.aquarium.LivelyEndState;
-import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.text.NumberFormat;
@@ -32,7 +29,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -153,16 +149,9 @@ public class AmzaPartitionsPluginRegion implements PageRegion<AmzaPartitionsPlug
 
                 Map<String, Object> row = new HashMap<>();
                 partitionStateStorage.tx(partitionName, versionedAquarium -> {
+
                     VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                    LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
-                    Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
-
-                    row.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
-                    row.put("quorum", currentWaterline == null ? "unknown" : currentWaterline.isAtQuorum());
-                    row.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
-                    row.put("version", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getVersion()));
-
-                    row.put("storageVersion", Long.toHexString(versionedPartitionName.getPartitionVersion()));
+                   
                     row.put("type", partitionName.isSystemPartition() ? "SYSTEM" : "USER");
                     row.put("name", new String(partitionName.getName()));
                     row.put("ringName", new String(partitionName.getRingName()));

@@ -13,12 +13,6 @@
                         <thead>
                             <tr class="active">
                                 <th>Action</th>
-                                <th>State</th>
-                                <th>Quorum</th>
-                                <th>Timestamp</th>
-                                <th>Version</th>
-                                
-                                <th>Storage Version</th>
                                 <th>Type</th>
                                 <th>Name</th>
                                 <th>RingName</th>
@@ -36,11 +30,6 @@
                                     <td>
                                         <button title="Add" type="submit" name="action" value="add" class="btn btn-default"><span class="glyphicon glyphicon-plus"></span></button>
                                     </td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
                                     <td></td>
                                     <td>
                                         <input type="text" autocomplete="off" role="combobox" style="width:200px; padding-left:10px;"
@@ -99,11 +88,6 @@
                                                 </div>
                                             {/if}
                                         </td>
-                                        <td>{$r.state}</td>
-                                        <td>{$r.quorum}</td>
-                                        <td>{$r.timestamp}</td>
-                                        <td>{$r.version}</td>
-                                        <td>{$r.storageVersion}</td>
                                         <td>{$r.type}</td>
                                         <td>
                                             {if $r.type == 'SYSTEM'}

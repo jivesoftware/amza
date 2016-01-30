@@ -169,14 +169,16 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
             List<Map<String, String>> runMaps = new ArrayList<>();
             for (Run r : runs) {
-                Map<String, String> run = new HashMap<>();
-                run.put("rowType", r.rowType.name());
-                run.put("subType", r.subType);
-                run.put("startFp", String.valueOf(r.startFp));
-                run.put("rowTxId", Long.toHexString(r.rowTxId));
-                run.put("bytes", numberFormat.format(r.bytes));
-                run.put("count", numberFormat.format(r.count));
-                runMaps.add(run);
+                if (r != null) {
+                    Map<String, String> run = new HashMap<>();
+                    run.put("rowType", r.rowType.name());
+                    run.put("subType", r.subType);
+                    run.put("startFp", String.valueOf(r.startFp));
+                    run.put("rowTxId", Long.toHexString(r.rowTxId));
+                    run.put("bytes", numberFormat.format(r.bytes));
+                    run.put("count", numberFormat.format(r.count));
+                    runMaps.add(run);
+                }
             }
             data.put("runs", runMaps);
             data.put("rowCount", numberFormat.format(rowCount));
@@ -346,22 +348,22 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                                 long latencyInMillis = currentTime - lastOfferedTimestamp;
 
                                 buf.append("<br>")
-                                    .append(ringMember.getMember()).append(' ')
-                                    .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
-                                    .append(category1).append(' ')
-                                    .append(getDurationBreakdown(tooSlowTimestamp)).append(' ')
-                                    .append(takeSessionId).append(' ')
-                                    .append(online).append(' ')
-                                    .append(steadyState);
+                                .append(ringMember.getMember()).append(' ')
+                                .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
+                                .append(category1).append(' ')
+                                .append(getDurationBreakdown(tooSlowTimestamp)).append(' ')
+                                .append(takeSessionId).append(' ')
+                                .append(online).append(' ')
+                                .append(steadyState);
                             } else {
                                 buf.append("<br>")
-                                    .append(ringMember.getMember()).append(' ')
-                                    .append("never").append(' ')
-                                    .append(category1).append(' ')
-                                    .append("never")
-                                    .append(takeSessionId).append(' ')
-                                    .append(online).append(' ')
-                                    .append(steadyState);
+                                .append(ringMember.getMember()).append(' ')
+                                .append("never").append(' ')
+                                .append(category1).append(' ')
+                                .append("never")
+                                .append(takeSessionId).append(' ')
+                                .append(online).append(' ')
+                                .append(steadyState);
                             }
                             return true;
                         });
@@ -464,7 +466,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -569,7 +571,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
+        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
 
         if (list.isEmpty()) {
             return Double.NaN;

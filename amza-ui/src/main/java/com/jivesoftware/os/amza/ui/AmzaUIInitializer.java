@@ -125,9 +125,9 @@ public class AmzaUIInitializer {
             AmzaStressPluginEndpoints.class,
             new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService, clientProvider));
 
-         ManagePlugin chatterPlugin = new ManagePlugin("transfer", "Chatter", "/amza/ui/chatter",
+        ManagePlugin chatterPlugin = new ManagePlugin("transfer", "Chatter", "/amza/ui/chatter",
             AmzaChatterPluginEndpoints.class,
-            new AmzaChatterPluginRegion("soy.page.amzaChatterPluginRegion", renderer, amzaService, timestampProvider, idPacker));
+            new AmzaChatterPluginRegion("soy.page.amzaChatterPluginRegion", renderer, amzaService, amzaStats, timestampProvider, idPacker));
 
         List<ManagePlugin> plugins = Lists.newArrayList(overviewPlugin,
             aquariumPlugin,

@@ -86,6 +86,8 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             List<Object> header = new ArrayList<>();
             header.add(Collections.emptyList());
             header.add(Collections.emptyList());
+            header.add(Collections.emptyList());
+            header.add(Collections.emptyList());
 
             int partitionNameIndex = 0;
             int partitionInteractionIndex = 1;
@@ -212,7 +214,8 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                                     new Element("latency", "latency", "latency", ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(
                                         latencyInMillis)), null),
                                     new Element("slow", "latency", "slow", getDurationBreakdown(tooSlowTimestamp), null),
-                                    new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState), null),
+                                    new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState),
+                                        steadyState ? "default" : "success"),
                                     new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
                                         lastOfferedMillis == -1 ? "danger " : null
                                     ),
@@ -235,8 +238,8 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                                     new Element("category", "category", "category", String.valueOf(category1),
                                         category1 == 1 ? "success" : "warning"),
                                     new Element("latency", "latency", "latency", "never", "warning"),
-                                    new Element("slow", "slow", "slow", "never", "warning"),
-                                    new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState), null),
+                                    new Element("slow", "latency", "slow", "never", "warning"),
+                                    new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState), steadyState ? "default" : "success"),
                                     new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
                                         lastOfferedMillis == -1 ? "danger " : null
                                     ),

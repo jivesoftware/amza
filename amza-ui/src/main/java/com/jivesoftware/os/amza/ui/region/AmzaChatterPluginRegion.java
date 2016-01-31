@@ -6,6 +6,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.Partition;
+import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.amza.ui.soy.SoyRenderer;
 import com.jivesoftware.os.aquarium.LivelyEndState;
@@ -16,6 +17,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.TimestampProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.nio.charset.StandardCharsets;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,21 +35,25 @@ import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDuration
 public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegion.ChatterPluginRegionInput> {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
+    private final NumberFormat numberFormat = NumberFormat.getInstance();
 
     private final String template;
     private final SoyRenderer renderer;
     private final AmzaService amzaService;
+    private final AmzaStats amzaStats;
     private final TimestampProvider timestampProvider;
     private final IdPacker idPacker;
 
     public AmzaChatterPluginRegion(String template,
         SoyRenderer renderer,
         AmzaService amzaService,
+        AmzaStats amzaStats,
         TimestampProvider timestampProvider,
         IdPacker idPacker) {
         this.template = template;
         this.renderer = renderer;
         this.amzaService = amzaService;
+        this.amzaStats = amzaStats;
         this.timestampProvider = timestampProvider;
         this.idPacker = idPacker;
 
@@ -82,9 +88,11 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             header.add(Collections.emptyList());
 
             int partitionNameIndex = 0;
-            int electionIndex = 1;
+            int partitionInteractionIndex = 1;
+            int partitionStatsIndex = 2;
+            int electionIndex = 3;
 
-            int columnIndex = 2;
+            int columnIndex = 4;
             Map<RingMember, Integer> ringMemeberToColumIndex = new HashMap<>();
             for (RingMember ringMember : nodes.keySet()) {
 
@@ -97,7 +105,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 ringMemeberToColumIndex.put(ringMember, columnIndex);
                 columnIndex++;
             }
-            
+
             data.put("header", header);
             List<Object> rows = new ArrayList<>();
 
@@ -123,6 +131,29 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     "info"),
                     new Element("category", "category", null, String.valueOf(category), "info")
                 };
+
+                AmzaStats.Totals totals = amzaStats.getPartitionTotals().get(versionedPartitionName.getPartitionName());
+                if (totals != null) {
+                    cells[partitionInteractionIndex] = new Element[]{
+                        new Element("interactions", null, "gets", numberFormat.format(totals.gets.get()), null),
+                        new Element("interactions", null, "getsLag", getDurationBreakdown(totals.getsLag.get()), null),
+                        new Element("interactions", null, "scans", numberFormat.format(totals.scans.get()), null),
+                        new Element("interactions", null, "scansLag", getDurationBreakdown(totals.scansLag.get()), null),
+                        new Element("interactions", null, "directApplies", numberFormat.format(totals.directApplies.get()), null),
+                        new Element("interactions", null, "directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()), null),
+                        new Element("interactions", null, "updates", numberFormat.format(totals.updates.get()), null),
+                        new Element("interactions", null, "updatesLag", getDurationBreakdown(totals.updatesLag.get()), null),
+                    };
+
+                    cells[partitionStatsIndex] = new Element[]{
+                        new Element("stat", null, "offers", numberFormat.format(totals.offers.get()), null),
+                        new Element("stat", null, "offersLag", getDurationBreakdown(totals.offersLag.get()), null),
+                        new Element("stat", null, "takes", numberFormat.format(totals.takes.get()), null),
+                        new Element("stat", null, "takesLag", getDurationBreakdown(totals.takesLag.get()), null),
+                        new Element("stat", null, "takeApplies", numberFormat.format(totals.takeApplies.get()), null),
+                        new Element("stat", null, "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()), null)
+                    };
+                }
 
                 Waterline currentWaterline = livelyEndState[0] != null ? livelyEndState[0].getCurrentWaterline() : null;
                 if (currentWaterline != null) {

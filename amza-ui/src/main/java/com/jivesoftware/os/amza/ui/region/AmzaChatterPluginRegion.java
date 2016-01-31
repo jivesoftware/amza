@@ -77,12 +77,9 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 return true;
             });
 
-            // PartitionName, RingHostStats
-            List<Object> rows = new ArrayList<>();
-
-            List<Object> initialRow = new ArrayList<>();
-            initialRow.add(Collections.emptyList());
-            initialRow.add(Collections.emptyList());
+            List<Object> header = new ArrayList<>();
+            header.add(Collections.emptyList());
+            header.add(Collections.emptyList());
 
             int partitionNameIndex = 0;
             int electionIndex = 1;
@@ -92,7 +89,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             for (RingMember ringMember : nodes.keySet()) {
 
                 RingHost host = nodes.get(ringMember);
-                initialRow.add(Arrays.asList(
+                header.add(Arrays.asList(
                     new Element("id", "id", null, ringMember.getMember(), "primary"),
                     new Element("host", "host", null, host.getHost(), "primary")
                 ));
@@ -100,7 +97,9 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 ringMemeberToColumIndex.put(ringMember, columnIndex);
                 columnIndex++;
             }
-            rows.add(initialRow);
+            
+            data.put("header", header);
+            List<Object> rows = new ArrayList<>();
 
             int totalColumns = columnIndex;
 
@@ -234,13 +233,13 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                         row.add(Arrays.asList(elements));
                     }
                 }
-                rows.add(row);
+                header.add(row);
 
                 return true;
 
             });
 
-            data.put("rows", rows);
+            data.put("rows", header);
 
             return renderer.render(template, data);
         } catch (Exception e) {

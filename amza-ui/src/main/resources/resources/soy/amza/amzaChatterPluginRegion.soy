@@ -3,6 +3,7 @@
 /**
  * Amza Chatter plugin page
  * 
+ * @param? header
  * @param? rows
  */
 {template .amzaChatterPluginRegion}
@@ -11,20 +12,19 @@
             <div class="panel-heading"><span class="glyphicon glyphicon-transfer"></span>{sp}Chatter</div>
                 <div class="panel-body">
                     
-                    <table class="table table-condensed table-striped">
-                        <tbody>
-                            {foreach $r in $rows}
-                                <tr>
-                                    {foreach $cell in $r}
-                                        <td>
-                                            <ul style="list-style-type:none">
+                    <table class="table table-condensed table-striped float-table-head">
+                        <thead>
+                            <tr class="active">
+                                {foreach $cell in $r}
+                                    <th>
+                                        <ul style="list-style-type:none">
                                             {foreach $e in $cell}
-                                                <li class="{$e.type}">
-                                                    {if $e.icon}
-                                                        <img  style="float:left" src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
-                                                    {/if}
+                                                <li>
                                                     {if $e.mode}
                                                         <span class="label label-{$e.mode}">
+                                                            {if $e.icon}
+                                                                <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                            {/if}
                                                             {if $e.name}
                                                                 {$e.name}:
                                                             {/if}
@@ -34,6 +34,9 @@
                                                         </span>
                                                     {else}
                                                         <span>
+                                                            {if $e.icon}
+                                                                <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                            {/if}
                                                             {if $e.name}
                                                                 {$e.name}:
                                                             {/if}
@@ -44,6 +47,46 @@
                                                     {/if}
                                                 </li>
                                             {/foreach}
+                                        </ul>
+                                    </th>
+                                {/foreach}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {foreach $r in $rows}
+                                <tr>
+                                    {foreach $cell in $r}
+                                        <td>
+                                            <ul style="list-style-type:none">
+                                                {foreach $e in $cell}
+                                                    <li>
+                                                        {if $e.mode}
+                                                            <span class="label label-{$e.mode}">
+                                                                {if $e.icon}
+                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                                {/if}
+                                                                {if $e.name}
+                                                                    {$e.name}:
+                                                                {/if}
+                                                                {if $e.value}
+                                                                    {$e.value}
+                                                                {/if}
+                                                            </span>
+                                                        {else}
+                                                            <span>
+                                                                {if $e.icon}
+                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                                {/if}
+                                                                {if $e.name}
+                                                                    {$e.name}:
+                                                                {/if}
+                                                                {if $e.value}
+                                                                    {$e.value}
+                                                                {/if}
+                                                            </span>
+                                                        {/if}
+                                                    </li>
+                                                {/foreach}
                                             </ul>
                                         </td>
                                     {/foreach}

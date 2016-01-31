@@ -264,13 +264,13 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                         row.add(Arrays.asList(elements));
                     }
                 }
-                header.add(row);
+                rows.add(row);
 
                 return true;
 
             });
 
-            data.put("rows", header);
+            data.put("rows", rows);
 
             return renderer.render(template, data);
         } catch (Exception e) {

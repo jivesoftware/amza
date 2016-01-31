@@ -1,0 +1,58 @@
+{namespace soy.page}
+
+/**
+ * Amza Chatter plugin page
+ * 
+ * @param? rows
+ */
+{template .amzaChatterPluginRegion}
+    {if $rows}
+        <div class="panel panel-default">
+            <div class="panel-heading"><span class="glyphicon glyphicon-transfer"></span>{sp}Chatter</div>
+                <div class="panel-body">
+                    
+                    <table class="table table-condensed table-striped">
+                        <tbody>
+                            {foreach $r in $rows}
+                                <tr>
+                                    {foreach $cell in $r}
+                                        <td>
+                                            <ul style="list-style-type:none">
+                                            {foreach $e in $cell}
+                                                <li class="{$e.type}">
+                                                    {if $e.icon}
+                                                        <span><img  style="float:left" src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                    {/if}
+                                                    {if $e.mode}
+                                                        <span class="label label-{$e.mode}">
+                                                            {if $e.name}
+                                                                {$e.name}:
+                                                            {/if}
+                                                            {if $e.value}
+                                                                {$e.value}
+                                                            {/if}
+                                                        </span>
+                                                    {else}
+                                                        <span>
+                                                            {if $e.name}
+                                                                {$e.name}:
+                                                            {/if}
+                                                            {if $e.value}
+                                                                {$e.value}
+                                                            {/if}
+                                                        </span>
+                                                    {/if}
+                                                </li>
+                                            {/foreach}
+                                            </ul>
+                                        </td>
+                                    {/foreach}
+                                </tr>
+                            {/foreach}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {/if}
+{/template}

@@ -43,6 +43,10 @@ public class TakeVersionedPartitionCoordinator {
     private final ConcurrentHashMap<RingMember, Long> onlineTakers = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Long> latestTakeSessionId = new ConcurrentHashMap<>();
 
+    private long lastOfferedMillis = -1; // approximate is good enough
+    private long lastTakenMillis = -1; // approximate is good enough
+    private long lastCategoryCheckMillis = -1; // approximate is good enough
+
     public TakeVersionedPartitionCoordinator(RingMember rootMember,
         VersionedPartitionName versionedPartitionName,
         TimestampedOrderIdProvider timestampedOrderIdProvider,
@@ -73,6 +77,8 @@ public class TakeVersionedPartitionCoordinator {
         RingMember ringMember,
         int takeFromFactor,
         AvailableStream availableStream) throws Exception {
+
+        lastOfferedMillis = System.currentTimeMillis();
 
         latestTakeSessionId.put(ringMember, takeSessionId);
         if (!expunged.get() && takeFromFactor > 0) {
@@ -212,6 +218,8 @@ public class TakeVersionedPartitionCoordinator {
         long localTxId,
         int takeFromFactor) throws Exception {
 
+        lastTakenMillis = System.currentTimeMillis();
+
         if (expunged.get()) {
             return;
         }
@@ -250,6 +258,7 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     private void updateCategory(VersionedRing versionedRing, int takeFromFactor, long latestTxId) throws Exception {
+        lastCategoryCheckMillis = System.currentTimeMillis();
         if (takeFromFactor > 0) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
             int fastEnough = 0;
@@ -295,10 +304,12 @@ public class TakeVersionedPartitionCoordinator {
             Long steadyStateTakeSessionId = steadyState.get(ringMember);
             boolean steadyState = (steadyStateTakeSessionId != null && steadyStateTakeSessionId == takeSessionId);
             if (lastTxId != null) {
-                if (!stream.stream(ringMember, lastTxId.offeredTxId, category, tooSlowLatencyTxId, takeSessionId, online, steadyState)) {
+                if (!stream.stream(ringMember, lastTxId.offeredTxId, category, tooSlowLatencyTxId, takeSessionId, online, steadyState, lastOfferedMillis,
+                    lastTakenMillis, lastCategoryCheckMillis)) {
                     return false;
                 }
-            } else if (!stream.stream(ringMember, -1L, category, tooSlowLatencyTxId, takeSessionId, online, steadyState)) {
+            } else if (!stream.stream(ringMember, -1L, category, tooSlowLatencyTxId, takeSessionId, online, steadyState, lastOfferedMillis,
+                lastTakenMillis, lastCategoryCheckMillis)) {
                 return false;
             }
         }

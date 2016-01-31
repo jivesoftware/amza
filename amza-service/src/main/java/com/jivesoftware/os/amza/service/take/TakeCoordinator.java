@@ -156,7 +156,10 @@ public class TakeCoordinator {
             long tooSlowTxId,
             long takeSessionId,
             boolean online,
-            boolean steadyState) throws Exception;
+            boolean steadyState,
+            long lastOfferedMillis,
+            long lastTakenMillis,
+            long lastCategoryCheckMillis) throws Exception;
     }
 
     public interface CategoryStream {
@@ -224,7 +227,7 @@ public class TakeCoordinator {
         while (true) {
             long start = updates.get();
 
-            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
+            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> {
                     try {

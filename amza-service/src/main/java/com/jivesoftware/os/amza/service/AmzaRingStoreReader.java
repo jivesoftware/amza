@@ -9,8 +9,8 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.RingMemberAndHost;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
-import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.value.ConcurrentBAHash;
+import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.service.filer.HeapFiler;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.CacheId;
@@ -145,6 +145,26 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
             }
         }
         return ring;
+    }
+
+    public void streamRingMembersAndHosts(RingMemberAndHostStream stream) throws Exception {
+        nodeIndex.rowScan((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
+            RingMember ringMember = RingMember.fromBytes(key);
+            if (value != null && !valueTombstoned) {
+                if (!stream.stream(new RingMemberAndHost(ringMember, RingHost.fromBytes(value)))) {
+                    return false;
+                }
+            } else if (!stream.stream(new RingMemberAndHost(ringMember, RingHost.UNKNOWN_RING_HOST))) {
+                return false;
+            }
+            return true;
+        });
+
+    }
+
+    public static interface RingMemberAndHostStream {
+
+        boolean stream(RingMemberAndHost ringMemberAndHost) throws Exception;
     }
 
     public RingHost getRingHost(RingMember ringMember) throws Exception {

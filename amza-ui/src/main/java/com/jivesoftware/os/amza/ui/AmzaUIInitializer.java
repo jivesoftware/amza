@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.ring.AmzaRingWriter;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
+import com.jivesoftware.os.amza.ui.endpoints.AmzaChatterPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaClusterPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaInspectPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.AmzaPartitionsPluginEndpoints;
@@ -19,6 +20,7 @@ import com.jivesoftware.os.amza.ui.endpoints.AquariumPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.CompactionsPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.MetricsPluginEndpoints;
 import com.jivesoftware.os.amza.ui.endpoints.OverviewPluginEndpoints;
+import com.jivesoftware.os.amza.ui.region.AmzaChatterPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaClusterPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaInspectPluginRegion;
 import com.jivesoftware.os.amza.ui.region.AmzaPartitionsPluginRegion;
@@ -122,10 +124,15 @@ public class AmzaUIInitializer {
             AmzaStressPluginEndpoints.class,
             new AmzaStressPluginRegion("soy.page.amzaStressPluginRegion", renderer, amzaService, clientProvider));
 
+         ManagePlugin chatterPlugin = new ManagePlugin("transfer", "Chatter", "/amza/ui/chatter",
+            AmzaChatterPluginEndpoints.class,
+            new AmzaChatterPluginRegion("soy.page.amzaChatterPluginRegion", renderer, amzaService, timestampProvider, idPacker));
+
         List<ManagePlugin> plugins = Lists.newArrayList(overviewPlugin,
             aquariumPlugin,
             ringsPlugin,
             partitionsPlugin,
+            chatterPlugin,
             metricsPlugin,
             inspectPlugin,
             compactionsPlugin,

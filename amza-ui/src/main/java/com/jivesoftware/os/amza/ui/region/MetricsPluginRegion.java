@@ -326,7 +326,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     long currentTime = timestampProvider.getApproximateTimestamp(System.currentTimeMillis());
 
                     amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName,
-                        (ringMember, lastOfferedTxId, category1, tooSlowTxId, takeSessionId, online, steadyState) -> {
+                        (ringMember, lastOfferedTxId, category1, tooSlowTxId, takeSessionId, online, steadyState, lastOfferedMillis,
+                            lastTakenMillis, lastCategoryCheckMillis) -> {
                             if (lastOfferedTxId != -1) {
                                 long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
                                 long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];

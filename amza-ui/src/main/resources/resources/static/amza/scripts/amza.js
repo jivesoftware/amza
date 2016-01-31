@@ -295,6 +295,12 @@ $(document).ready(function () {
     if ($('#overview').length) {
         amza.overview.init();
     }
+
+    $('.float-table-head').each(function (j, table) {
+        $(table).floatThead({
+            scrollingTop: 50
+        });
+    });
 });
 
 $(window).focus(function () {

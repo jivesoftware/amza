@@ -78,6 +78,7 @@ public class AmzaUIInitializer {
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaInspectPluginRegion.soy"), "amzaInspect.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/aquariumPluginRegion.soy"), "aquarium.soy");
         soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/overviewRegion.soy"), "overview.soy");
+        soyFileSetBuilder.add(this.getClass().getResource("/resources/soy/amza/amzaChatterPluginRegion.soy"), "chatter.soy");
 
         SoyFileSet sfs = soyFileSetBuilder.build();
         SoyTofu tofu = sfs.compileToTofu();

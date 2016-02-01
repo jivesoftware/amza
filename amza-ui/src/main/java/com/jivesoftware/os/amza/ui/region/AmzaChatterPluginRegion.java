@@ -87,7 +87,6 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             header.add(Collections.emptyList());
             header.add(Collections.emptyList());
             header.add(Collections.emptyList());
-            header.add(Collections.emptyList());
 
             int partitionNameIndex = 0;
             int partitionInteractionIndex = 1;
@@ -129,7 +128,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                 cells[partitionNameIndex] = new Element[]{
                     new Element("ring", "ring", new String(versionedPartitionName.getPartitionName().getRingName(), StandardCharsets.UTF_8), null, "info"),
-                    new Element("paritition", "paritition", new String(versionedPartitionName.getPartitionName().getName(), StandardCharsets.UTF_8), null,
+                    new Element("partition", "partition", new String(versionedPartitionName.getPartitionName().getName(), StandardCharsets.UTF_8), null,
                     "info"),
                     new Element("category", "category", null, String.valueOf(category), "info")
                 };
@@ -162,7 +161,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                     State state = currentWaterline.getState();
                     cells[electionIndex] = new Element[]{
-                        new Element("election", state.name(), null, state.name(),
+                        new Element("election", "election", state.name(), null,
                         (state == State.leader || state == State.follower) ? "success" : "warning"),
                         new Element("online", "online", "online", String.valueOf(livelyEndState[0].isOnline()),
                         livelyEndState[0].isOnline() ? "success" : "warning"),

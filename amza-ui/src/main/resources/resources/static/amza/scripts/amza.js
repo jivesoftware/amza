@@ -286,6 +286,13 @@ amza.overview = {
 };
 
 $(document).ready(function () {
+
+    $('.float-table-head').each(function (j, table) {
+        $(table).floatThead({
+            scrollingTop: 50
+        });
+    });
+
     if ($('#chord').length) {
         amza.chord.init();
     }
@@ -296,11 +303,6 @@ $(document).ready(function () {
         amza.overview.init();
     }
 
-    $('.float-table-head').each(function (j, table) {
-        $(table).floatThead({
-            scrollingTop: 50
-        });
-    });
 });
 
 $(window).focus(function () {

@@ -198,10 +198,16 @@ public class BAHash<V> implements BAH<V> {
         long i = s.first();
         while (i != -1) {
 
-            byte[] k = s.key(i);
-            if (k != null && k != skipped) {
-                V value = s.value(i);
-                if (!stream.keyValue(k, value)) {
+            byte[] key;
+            V value = null;
+            synchronized (this) {
+                key = s.key(i);
+                if (key != null && key != skipped) {
+                    value = s.value(i);
+                }
+            }
+            if (key != null && key != skipped) {
+                if (!stream.keyValue(key, value)) {
                     return false;
                 }
             }

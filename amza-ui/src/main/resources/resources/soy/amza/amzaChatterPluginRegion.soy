@@ -4,7 +4,9 @@
  * Amza Chatter plugin page
  * 
  * @param? header
- * @param? rows
+ * @param? unhealthyRows
+ * @param? activeRows
+ * @param? systemRows
  */
 {template .amzaChatterPluginRegion}
     {if $rows}
@@ -53,7 +55,91 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {foreach $r in $rows}
+
+                            <tr><td><h4>Unhealthy</h4></td></tr>
+                            {foreach $r in $unhealthyRows}
+                                <tr>
+                                    {foreach $cell in $r}
+                                        <td>
+                                            <ul style="list-style-type:none">
+                                                {foreach $e in $cell}
+                                                    <li>
+                                                        {if $e.mode}
+                                                            <span class="label label-{$e.mode}">
+                                                                {if $e.icon}
+                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                                {/if}
+                                                                {if $e.name}
+                                                                    {$e.name}:
+                                                                {/if}
+                                                                {if $e.value}
+                                                                    &nbsp;&nbsp;{$e.value}&nbsp;
+                                                                {/if}
+                                                            </span>
+                                                        {else}
+                                                            <span>
+                                                                {if $e.icon}
+                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                                {/if}
+                                                                {if $e.name}
+                                                                    {$e.name}:
+                                                                {/if}
+                                                                {if $e.value}
+                                                                  &nbsp;&nbsp;{$e.value}&nbsp;
+                                                                {/if}
+                                                            </span>
+                                                        {/if}
+                                                    </li>
+                                                {/foreach}
+                                            </ul>
+                                        </td>
+                                    {/foreach}
+                                </tr>
+                            {/foreach}
+
+                            <tr><td><h4>Active</h4></td></tr>
+                            {foreach $r in $activeRows}
+                                <tr>
+                                    {foreach $cell in $r}
+                                        <td>
+                                            <ul style="list-style-type:none">
+                                                {foreach $e in $cell}
+                                                    <li>
+                                                        {if $e.mode}
+                                                            <span class="label label-{$e.mode}">
+                                                                {if $e.icon}
+                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                                {/if}
+                                                                {if $e.name}
+                                                                    {$e.name}:
+                                                                {/if}
+                                                                {if $e.value}
+                                                                    &nbsp;&nbsp;{$e.value}&nbsp;
+                                                                {/if}
+                                                            </span>
+                                                        {else}
+                                                            <span>
+                                                                {if $e.icon}
+                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                                {/if}
+                                                                {if $e.name}
+                                                                    {$e.name}:
+                                                                {/if}
+                                                                {if $e.value}
+                                                                  &nbsp;&nbsp;{$e.value}&nbsp;
+                                                                {/if}
+                                                            </span>
+                                                        {/if}
+                                                    </li>
+                                                {/foreach}
+                                            </ul>
+                                        </td>
+                                    {/foreach}
+                                </tr>
+                            {/foreach}
+
+                            <tr><td><h4>System</h4></td></tr>
+                            {foreach $r in $systemRows}
                                 <tr>
                                     {foreach $cell in $r}
                                         <td>

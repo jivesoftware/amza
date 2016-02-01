@@ -1,6 +1,8 @@
 package com.jivesoftware.os.amza.ui.region;
 
+import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multiset;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
@@ -25,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDurationBreakdown;
 
@@ -83,10 +86,12 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 return true;
             });
 
-            List<Object> header = new ArrayList<>();
-            header.add(Collections.emptyList());
-            header.add(Collections.emptyList());
-            header.add(Collections.emptyList());
+            Multiset<State> stateCounts = HashMultiset.<State>create();
+
+            List<List> header = new ArrayList<>();
+            header.add(new ArrayList<>());
+            header.add(new ArrayList<>());
+            header.add(new ArrayList<>());
 
             int partitionNameIndex = 0;
             int partitionInteractionIndex = 1;
@@ -117,6 +122,13 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
             TakeCoordinator takeCoordinator = amzaService.getTakeCoordinator();
             takeCoordinator.streamCategories((versionedPartitionName, category) -> {
+
+                if (versionedPartitionName.getPartitionName().isSystemPartition()) {
+                    return true;
+                }
+
+                AtomicBoolean healthy = new AtomicBoolean(true);
+
                 Element[][] cells = new Element[totalColumns][];
 
                 Partition partition = amzaService.getPartition(versionedPartitionName.getPartitionName());
@@ -143,8 +155,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                         new Element("interactions", null, "directApplies", numberFormat.format(totals.directApplies.get()), null),
                         new Element("interactions", null, "directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()), null),
                         new Element("interactions", null, "updates", numberFormat.format(totals.updates.get()), null),
-                        new Element("interactions", null, "updatesLag", getDurationBreakdown(totals.updatesLag.get()), null),
-                    };
+                        new Element("interactions", null, "updatesLag", getDurationBreakdown(totals.updatesLag.get()), null),};
 
                     cells[partitionStatsIndex] = new Element[]{
                         new Element("stat", null, "offers", numberFormat.format(totals.offers.get()), null),
@@ -158,8 +169,14 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                 Waterline currentWaterline = livelyEndState[0] != null ? livelyEndState[0].getCurrentWaterline() : null;
                 if (currentWaterline != null) {
-
                     State state = currentWaterline.getState();
+                    healthy.compareAndSet(true, !(state == State.leader || state == State.follower));
+                    healthy.compareAndSet(true, !livelyEndState[0].isOnline());
+                    healthy.compareAndSet(true, !currentWaterline.isAtQuorum());
+
+
+                    stateCounts.add(state);
+
                     cells[electionIndex] = new Element[]{
                         new Element("election", "election", state.name(), null,
                         (state == State.leader || state == State.follower) ? "success" : "warning"),
@@ -173,6 +190,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     cells[electionIndex] = new Element[]{
                         new Element("election", "election", null, "unknown", "danger")
                     };
+                    healthy.compareAndSet(true, false);
                 }
 
                 takeCoordinator.streamTookLatencies(versionedPartitionName,
@@ -197,10 +215,19 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                                 categoryLatency = 0;
                             }
 
+                            healthy.compareAndSet(true, !online);
+                            healthy.compareAndSet(true, !(currentWaterline == null || currentWaterline.isAtQuorum()));
+                            healthy.compareAndSet(true, !steadyState);
+                            healthy.compareAndSet(true, !(lastOfferedMillis == -1));
+                            healthy.compareAndSet(true, !(lastTakenMillis == -1));
+                            healthy.compareAndSet(true, !(lastCategoryCheckMillis == -1));
+
                             if (lastOfferedTxId != -1) {
                                 long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
                                 long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
                                 long latencyInMillis = currentTime - lastOfferedTimestamp;
+
+                                
 
                                 cells[index] = new Element[]{
                                     new Element("session", "session", "session", String.valueOf(takeSessionId), null),
@@ -252,21 +279,25 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                                 };
                             }
                         } else {
+
+                            healthy.compareAndSet(true, false);
                             cells[index] = new Element[]{
                                 new Element("id", "id", null, ringMember.getMember(), "danger"),};
                         }
                         return true;
                     });
 
-                List<Object> row = new ArrayList<>();
-                for (Element[] elements : cells) {
-                    if (elements == null) {
-                        row.add(Collections.emptyList());
-                    } else {
-                        row.add(Arrays.asList(elements));
+                if (healthy.get() == false) {
+                    List<Object> row = new ArrayList<>();
+                    for (Element[] elements : cells) {
+                        if (elements == null) {
+                            row.add(Collections.emptyList());
+                        } else {
+                            row.add(Arrays.asList(elements));
+                        }
                     }
+                    rows.add(row);
                 }
-                rows.add(row);
 
                 return true;
 

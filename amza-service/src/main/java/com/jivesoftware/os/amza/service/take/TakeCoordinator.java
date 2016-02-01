@@ -281,7 +281,6 @@ public class TakeCoordinator {
 
         byte[] ringName = versionedAquarium.getVersionedPartitionName().getPartitionName().getRingName();
         TakeRingCoordinator ring = takeRingCoordinators.get(ringName);
-//        TakeRingCoordinator ring = takeRingCoordinators.get(new IBA(ringName));
         ring.rowsTaken(txHighestPartitionTx, remoteRingMember, takeSessionId, versionedAquarium, localTxId);
     }
 

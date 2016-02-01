@@ -593,8 +593,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             return String.valueOf(millis);
         }
 
-        long days = TimeUnit.MILLISECONDS.toDays(millis);
-        millis -= TimeUnit.DAYS.toMillis(days);
         long hours = TimeUnit.MILLISECONDS.toHours(millis);
         millis -= TimeUnit.HOURS.toMillis(hours);
         long minutes = TimeUnit.MILLISECONDS.toMinutes(millis);
@@ -604,11 +602,6 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         StringBuilder sb = new StringBuilder(64);
         boolean showRemaining = true;
-        if (showRemaining || days > 0) {
-            sb.append(days);
-            sb.append(" Days ");
-            showRemaining = true;
-        }
         if (showRemaining || hours > 0) {
             if (hours < 10) {
                 sb.append('0');

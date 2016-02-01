@@ -124,7 +124,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             TakeCoordinator takeCoordinator = amzaService.getTakeCoordinator();
             takeCoordinator.streamCategories((versionedPartitionName, category) -> {
 
-                AtomicBoolean healthy = new AtomicBoolean(true);
+                AtomicBoolean unhealthy = new AtomicBoolean(false);
 
                 Element[][] cells = new Element[totalColumns][];
 
@@ -176,9 +176,9 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 Waterline currentWaterline = livelyEndState[0] != null ? livelyEndState[0].getCurrentWaterline() : null;
                 if (currentWaterline != null) {
                     State state = currentWaterline.getState();
-                    healthy.compareAndSet(true, !(state == State.leader || state == State.follower));
-                    healthy.compareAndSet(true, !livelyEndState[0].isOnline());
-                    healthy.compareAndSet(true, !currentWaterline.isAtQuorum());
+                    unhealthy.compareAndSet(false, !(state == State.leader || state == State.follower));
+                    unhealthy.compareAndSet(false, !livelyEndState[0].isOnline());
+                    unhealthy.compareAndSet(false, !currentWaterline.isAtQuorum());
 
                     stateCounts.add(state);
 
@@ -195,7 +195,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     cells[electionIndex] = new Element[]{
                         new Element("election", "election", null, "unknown", "danger")
                     };
-                    healthy.compareAndSet(true, false);
+                    unhealthy.compareAndSet(false, true);
                 }
 
                 takeCoordinator.streamTookLatencies(versionedPartitionName,
@@ -220,12 +220,12 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                                 categoryLatency = 0;
                             }
 
-                            healthy.compareAndSet(true, !online);
-                            healthy.compareAndSet(true, !(currentWaterline == null || currentWaterline.isAtQuorum()));
-                            healthy.compareAndSet(true, !steadyState);
-                            healthy.compareAndSet(true, !(lastOfferedMillis == -1));
-                            healthy.compareAndSet(true, !(lastTakenMillis == -1));
-                            healthy.compareAndSet(true, !(lastCategoryCheckMillis == -1));
+                            unhealthy.compareAndSet(false, !online);
+                            unhealthy.compareAndSet(false, currentWaterline == null || !currentWaterline.isAtQuorum());
+                            unhealthy.compareAndSet(false, !steadyState);
+                            unhealthy.compareAndSet(false, lastOfferedMillis == -1);
+                            unhealthy.compareAndSet(false, lastTakenMillis == -1);
+                            unhealthy.compareAndSet(false, lastCategoryCheckMillis == -1);
 
                             if (lastOfferedTxId != -1) {
                                 long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
@@ -283,14 +283,14 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                             }
                         } else {
 
-                            healthy.compareAndSet(true, false);
+                            unhealthy.compareAndSet(false, true);
                             cells[index] = new Element[]{
                                 new Element("id", "id", null, ringMember.getMember(), "danger"),};
                         }
                         return true;
                     });
 
-                if (healthy.get() == false) {
+                if (unhealthy.get()) {
                     List<Object> row = new ArrayList<>();
                     for (Element[] elements : cells) {
                         if (elements == null) {

@@ -9,18 +9,59 @@
  * @param? systemRows
  */
 {template .amzaChatterPluginRegion}
-    {if $rows}
-        <div class="panel panel-default">
-            <div class="panel-heading"><span class="glyphicon glyphicon-transfer"></span>{sp}Chatter</div>
-                <div class="panel-body">
-                    
-                    <table class="table table-hover table-condensed table-striped float-table-head">
-                        <thead>
-                            <tr class="active">
-                                {foreach $headerCell in $header}
-                                    <th>
+    <div class="panel panel-default">
+        <div class="panel-heading"><span class="glyphicon glyphicon-transfer"></span>{sp}Chatter</div>
+            <div class="panel-body">
+
+                <table class="table table-hover table-condensed table-striped float-table-head">
+                    <thead>
+                        <tr class="active">
+                            {foreach $headerCell in $header}
+                                <th>
+                                    <ul style="list-style-type:none">
+                                        {foreach $e in $headerCell}
+                                            <li>
+                                                {if $e.mode}
+                                                    <span class="label label-{$e.mode}">
+                                                        {if $e.icon}
+                                                            <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                        {/if}
+                                                        {if $e.name}
+                                                           {$e.name}
+                                                        {/if}
+                                                        {if $e.value}
+                                                            &nbsp;&nbsp;{$e.value}&nbsp;
+                                                        {/if}
+                                                    </span>
+                                                {else}
+                                                    <span>
+                                                        {if $e.icon}
+                                                            <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                        {/if}
+                                                        {if $e.name}
+                                                           {$e.name}
+                                                        {/if}
+                                                        {if $e.value}
+                                                            &nbsp;&nbsp;{$e.value}&nbsp;
+                                                        {/if}
+                                                    </span>
+                                                {/if}
+                                            </li>
+                                        {/foreach}
+                                    </ul>
+                                </th>
+                            {/foreach}
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr><td><h4>Unhealthy</h4></td></tr>
+                        {foreach $r in $unhealthyRows}
+                            <tr>
+                                {foreach $cell in $r}
+                                    <td>
                                         <ul style="list-style-type:none">
-                                            {foreach $e in $headerCell}
+                                            {foreach $e in $cell}
                                                 <li>
                                                     {if $e.mode}
                                                         <span class="label label-{$e.mode}">
@@ -28,7 +69,7 @@
                                                                 <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
                                                             {/if}
                                                             {if $e.name}
-                                                               {$e.name}
+                                                                {$e.name}:
                                                             {/if}
                                                             {if $e.value}
                                                                 &nbsp;&nbsp;{$e.value}&nbsp;
@@ -40,148 +81,105 @@
                                                                 <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
                                                             {/if}
                                                             {if $e.name}
-                                                               {$e.name}
+                                                                {$e.name}:
                                                             {/if}
                                                             {if $e.value}
-                                                                &nbsp;&nbsp;{$e.value}&nbsp;
+                                                              &nbsp;&nbsp;{$e.value}&nbsp;
                                                             {/if}
                                                         </span>
                                                     {/if}
                                                 </li>
                                             {/foreach}
                                         </ul>
-                                    </th>
+                                    </td>
                                 {/foreach}
                             </tr>
-                        </thead>
-                        <tbody>
+                        {/foreach}
 
-                            <tr><td><h4>Unhealthy</h4></td></tr>
-                            {foreach $r in $unhealthyRows}
-                                <tr>
-                                    {foreach $cell in $r}
-                                        <td>
-                                            <ul style="list-style-type:none">
-                                                {foreach $e in $cell}
-                                                    <li>
-                                                        {if $e.mode}
-                                                            <span class="label label-{$e.mode}">
-                                                                {if $e.icon}
-                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
-                                                                {/if}
-                                                                {if $e.name}
-                                                                    {$e.name}:
-                                                                {/if}
-                                                                {if $e.value}
-                                                                    &nbsp;&nbsp;{$e.value}&nbsp;
-                                                                {/if}
-                                                            </span>
-                                                        {else}
-                                                            <span>
-                                                                {if $e.icon}
-                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
-                                                                {/if}
-                                                                {if $e.name}
-                                                                    {$e.name}:
-                                                                {/if}
-                                                                {if $e.value}
-                                                                  &nbsp;&nbsp;{$e.value}&nbsp;
-                                                                {/if}
-                                                            </span>
-                                                        {/if}
-                                                    </li>
-                                                {/foreach}
-                                            </ul>
-                                        </td>
-                                    {/foreach}
-                                </tr>
-                            {/foreach}
+                        <tr><td><h4>Active</h4></td></tr>
+                        {foreach $r in $activeRows}
+                            <tr>
+                                {foreach $cell in $r}
+                                    <td>
+                                        <ul style="list-style-type:none">
+                                            {foreach $e in $cell}
+                                                <li>
+                                                    {if $e.mode}
+                                                        <span class="label label-{$e.mode}">
+                                                            {if $e.icon}
+                                                                <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                            {/if}
+                                                            {if $e.name}
+                                                                {$e.name}:
+                                                            {/if}
+                                                            {if $e.value}
+                                                                &nbsp;&nbsp;{$e.value}&nbsp;
+                                                            {/if}
+                                                        </span>
+                                                    {else}
+                                                        <span>
+                                                            {if $e.icon}
+                                                                <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                            {/if}
+                                                            {if $e.name}
+                                                                {$e.name}:
+                                                            {/if}
+                                                            {if $e.value}
+                                                              &nbsp;&nbsp;{$e.value}&nbsp;
+                                                            {/if}
+                                                        </span>
+                                                    {/if}
+                                                </li>
+                                            {/foreach}
+                                        </ul>
+                                    </td>
+                                {/foreach}
+                            </tr>
+                        {/foreach}
 
-                            <tr><td><h4>Active</h4></td></tr>
-                            {foreach $r in $activeRows}
-                                <tr>
-                                    {foreach $cell in $r}
-                                        <td>
-                                            <ul style="list-style-type:none">
-                                                {foreach $e in $cell}
-                                                    <li>
-                                                        {if $e.mode}
-                                                            <span class="label label-{$e.mode}">
-                                                                {if $e.icon}
-                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
-                                                                {/if}
-                                                                {if $e.name}
-                                                                    {$e.name}:
-                                                                {/if}
-                                                                {if $e.value}
-                                                                    &nbsp;&nbsp;{$e.value}&nbsp;
-                                                                {/if}
-                                                            </span>
-                                                        {else}
-                                                            <span>
-                                                                {if $e.icon}
-                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
-                                                                {/if}
-                                                                {if $e.name}
-                                                                    {$e.name}:
-                                                                {/if}
-                                                                {if $e.value}
-                                                                  &nbsp;&nbsp;{$e.value}&nbsp;
-                                                                {/if}
-                                                            </span>
-                                                        {/if}
-                                                    </li>
-                                                {/foreach}
-                                            </ul>
-                                        </td>
-                                    {/foreach}
-                                </tr>
-                            {/foreach}
-
-                            <tr><td><h4>System</h4></td></tr>
-                            {foreach $r in $systemRows}
-                                <tr>
-                                    {foreach $cell in $r}
-                                        <td>
-                                            <ul style="list-style-type:none">
-                                                {foreach $e in $cell}
-                                                    <li>
-                                                        {if $e.mode}
-                                                            <span class="label label-{$e.mode}">
-                                                                {if $e.icon}
-                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
-                                                                {/if}
-                                                                {if $e.name}
-                                                                    {$e.name}:
-                                                                {/if}
-                                                                {if $e.value}
-                                                                    &nbsp;&nbsp;{$e.value}&nbsp;
-                                                                {/if}
-                                                            </span>
-                                                        {else}
-                                                            <span>
-                                                                {if $e.icon}
-                                                                    <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
-                                                                {/if}
-                                                                {if $e.name}
-                                                                    {$e.name}:
-                                                                {/if}
-                                                                {if $e.value}
-                                                                  &nbsp;&nbsp;{$e.value}&nbsp;
-                                                                {/if}
-                                                            </span>
-                                                        {/if}
-                                                    </li>
-                                                {/foreach}
-                                            </ul>
-                                        </td>
-                                    {/foreach}
-                                </tr>
-                            {/foreach}
-                        </tbody>
-                    </table>
-                </div>
+                        <tr><td><h4>System</h4></td></tr>
+                        {foreach $r in $systemRows}
+                            <tr>
+                                {foreach $cell in $r}
+                                    <td>
+                                        <ul style="list-style-type:none">
+                                            {foreach $e in $cell}
+                                                <li>
+                                                    {if $e.mode}
+                                                        <span class="label label-{$e.mode}">
+                                                            {if $e.icon}
+                                                                <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                            {/if}
+                                                            {if $e.name}
+                                                                {$e.name}:
+                                                            {/if}
+                                                            {if $e.value}
+                                                                &nbsp;&nbsp;{$e.value}&nbsp;
+                                                            {/if}
+                                                        </span>
+                                                    {else}
+                                                        <span>
+                                                            {if $e.icon}
+                                                                <img src="/static/amza/img/icon/{$e.icon}.png" height="24"><img>
+                                                            {/if}
+                                                            {if $e.name}
+                                                                {$e.name}:
+                                                            {/if}
+                                                            {if $e.value}
+                                                              &nbsp;&nbsp;{$e.value}&nbsp;
+                                                            {/if}
+                                                        </span>
+                                                    {/if}
+                                                </li>
+                                            {/foreach}
+                                        </ul>
+                                    </td>
+                                {/foreach}
+                            </tr>
+                        {/foreach}
+                    </tbody>
+                </table>
             </div>
         </div>
-    {/if}
+    </div>
 {/template}

@@ -104,8 +104,8 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                 RingHost host = nodes.get(ringMember);
                 header.add(Arrays.asList(
-                    new Element("id", "id", null, ringMember.getMember(), "primary"),
-                    new Element("host", "host", null, host.getHost(), "primary")
+                    new Element("id", "id", null, ringMember.getMember(), null),
+                    new Element("host", "host", null, host.getHost(), null)
                 ));
 
                 ringMemberToColumnIndex.put(ringMember, columnIndex);
@@ -134,14 +134,13 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     return highestTxId;
                 });
 
-                String partitionMode = versionedPartitionName.getPartitionName().isSystemPartition() ? "default" : "info";
-
                 cells[partitionNameIndex] = new Element[] {
                     new Element("ring", "ring", new String(versionedPartitionName.getPartitionName().getRingName(), StandardCharsets.UTF_8), null,
-                        partitionMode),
+                        null),
                     new Element("partition", "partition", new String(versionedPartitionName.getPartitionName().getName(), StandardCharsets.UTF_8), null,
-                        partitionMode),
-                    new Element("category", "category", null, String.valueOf(category), partitionMode)
+                        null),
+                    new Element("category", "category", null, String.valueOf(category),
+                        null)
                 };
 
                 AmzaStats.Totals totals = amzaStats.getPartitionTotals().get(versionedPartitionName.getPartitionName());
@@ -188,15 +187,15 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                     cells[electionIndex] = new Element[] {
                         new Element("election", "election", state.name(), null,
-                            (state == State.leader || state == State.follower) ? "success" : "warning"),
+                            (state == State.leader || state == State.follower) ? null : "warning"),
                         new Element("online", "online", "online", String.valueOf(livelyOnline),
-                            livelyOnline ? "success" : "warning"),
+                            livelyOnline ? null : "warning"),
                         new Element("quorum", "quorum", "quorum", String.valueOf(atQuorum),
-                            atQuorum ? "success" : "warning"),
+                            atQuorum ? null : "warning"),
                         new Element("ring", "ring", "ring", String.valueOf(ringCallCount),
-                            ringCallCount > 0 ? "success" : "warning"),
+                            ringCallCount > 0 ? null : "warning"),
                         new Element("partition", "partition", "partition", String.valueOf(partitionCallCount),
-                            partitionCallCount > 0 ? "success" : "warning")
+                            partitionCallCount > 0 ? null : "warning")
                     };
 
                 } else {
@@ -254,13 +253,13 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                                     null),
                                 new Element("online", "online", "online",
                                     String.valueOf(online),
-                                    online ? "success" : "warning"),
+                                    online ? null : "warning"),
                                 new Element("quorum", "quorum", "quorum",
                                     String.valueOf(currentlyAtQuorum),
-                                    currentlyAtQuorum ? "success" : "warning"),
+                                    currentlyAtQuorum ? null : "warning"),
                                 new Element("category", "category", "category",
                                     String.valueOf(category1),
-                                    category1 == 1 ? "success" : "warning"),
+                                    category1 == 1 ? null : "warning"),
                                 new Element("latency", "latency", "latency",
                                     lastOfferedTxId == -1 ? "never" : latency,
                                     null),
@@ -269,7 +268,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                                     null),
                                 new Element("steadyState", "steadyState", "steadyState",
                                     String.valueOf(steadyState),
-                                    steadyState ? "default" : "success"),
+                                    steadyState ? "danger" : null),
                                 new Element("offered", "offered", "offered",
                                     lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
                                     lastOfferedMillis == -1 ? "danger " : null),
@@ -369,7 +368,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     State s = State.valueOf(state);
                     ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count),
                         (s == State.leader || s == State.follower)
-                            ? "success" : ((s == State.demoted || s == State.nominated || s == State.inactive) ? "warning" : "error")
+                            ? null : ((s == State.demoted || s == State.nominated || s == State.inactive) ? "warning" : "error")
                     ));
                 } catch (IllegalArgumentException x) {
                     ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count), "error"));

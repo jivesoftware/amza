@@ -134,13 +134,13 @@
                                         <tbody>
                                             {foreach $l in $longPolled}
                                                 <tr>
-                                                    <td>{$l.member}</td>
-                                                    <td>{$l.latency}</td>
-                                                    <td>{$l.category}</td>
-                                                    <td>{$l.tooSlow}</td>
-                                                    <td>{$l.takeSessionId}</td>
-                                                    <td>{$l.online}</td>
-                                                    <td>{$l.steadyState}</td>
+                                                    <td>{$l.member?:''}</td>
+                                                    <td>{$l.latency?:''}</td>
+                                                    <td>{$l.category?:''}</td>
+                                                    <td>{$l.tooSlow?:''}</td>
+                                                    <td>{$l.takeSessionId?:''}</td>
+                                                    <td>{$l.online?:''}</td>
+                                                    <td>{$l.steadyState?:''}</td>
                                                 </tr>
                                             {/foreach}
                                         </tbody>

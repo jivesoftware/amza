@@ -299,8 +299,12 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
 
             Map<VersionedPartitionName, Integer> categories = Maps.newHashMap();
+            Map<VersionedPartitionName, Long> ringCallCounts = Maps.newHashMap();
+            Map<VersionedPartitionName, Long> partitionCallCounts = Maps.newHashMap();
             amzaService.getTakeCoordinator().streamCategories((versionedPartitionName, category, ringCallCount, partitionCallCount) -> {
                 categories.put(versionedPartitionName, category);
+                ringCallCounts.put(versionedPartitionName, ringCallCount);
+                partitionCallCounts.put(versionedPartitionName, partitionCallCount);
                 return true;
             });
 
@@ -316,24 +320,19 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
                 map.put("partitionVersion", versionedPartitionName == null ? "none" : Long.toHexString(versionedPartitionName.getPartitionVersion()));
                 State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
-                int category = categories.getOrDefault(versionedPartitionName, -1);
                 map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
 
+                int category = categories.getOrDefault(versionedPartitionName, -1);
+                long ringCallCount = ringCallCounts.getOrDefault(versionedPartitionName, -1L);
+                long partitionCallCount = partitionCallCounts.getOrDefault(versionedPartitionName, -1L);
                 map.put("category", category != -1 ? String.valueOf(category) : "unknown");
+                map.put("ringCallCount", String.valueOf(ringCallCount));
+                map.put("partitionCallCount", String.valueOf(partitionCallCount));
+
+                List<Map<String, Object>> tookLatencies = Lists.newArrayList();
                 if (includeCount) {
                     long currentTime = timestampProvider.getApproximateTimestamp(System.currentTimeMillis());
-
-                    long ringCallCount = -1;
-                    long partitionCallCount = -1;
-                    if (versionedPartitionName != null) {
-                        ringCallCount = amzaService.getTakeCoordinator().getRingCallCount(versionedPartitionName.getPartitionName().getRingName());
-                        partitionCallCount = amzaService.getTakeCoordinator().getPartitionCallCount(versionedPartitionName);
-                    }
-                    map.put("ringCallCount", String.valueOf(ringCallCount));
-                    map.put("partitionCallCount", String.valueOf(partitionCallCount));
-
-                    List<Map<String, Object>> tookLatencies = Lists.newArrayList();
                     amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName,
                         (ringMember, lastOfferedTxId, category1, tooSlowTxId, takeSessionId, online, steadyState, lastOfferedMillis,
                             lastTakenMillis, lastCategoryCheckMillis) -> {
@@ -358,10 +357,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                             tookLatencies.add(builder.build());
                             return true;
                         });
-                    map.put("tookLatencies", tookLatencies);
-                } else {
-                    map.put("category", category != -1 ? String.valueOf(category) : "unknown");
                 }
+                map.put("tookLatencies", tookLatencies);
 
                 if (includeCount) {
                     if (versionedPartitionName == null) {

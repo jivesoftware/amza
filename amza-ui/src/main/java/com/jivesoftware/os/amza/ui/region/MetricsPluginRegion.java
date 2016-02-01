@@ -304,8 +304,8 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             });
 
             partition.highestTxId((versionedAquarium, highestTxId) -> {
-                VersionedPartitionName versionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                LivelyEndState livelyEndState = versionedAquarium.getLivelyEndState();
+                VersionedPartitionName versionedPartitionName = versionedAquarium == null ? null : versionedAquarium.getVersionedPartitionName();
+                LivelyEndState livelyEndState = versionedAquarium == null ? null : versionedAquarium.getLivelyEndState();
                 Waterline currentWaterline = livelyEndState != null ? livelyEndState.getCurrentWaterline() : null;
 
                 map.put("state", currentWaterline == null ? "unknown" : currentWaterline.getState());
@@ -313,10 +313,10 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 //map.put("timestamp", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getTimestamp()));
                 //map.put("version", currentWaterline == null ? "unknown" : String.valueOf(currentWaterline.getVersion()));
 
-                map.put("partitionVersion", Long.toHexString(versionedPartitionName.getPartitionVersion()));
-                State currentState = livelyEndState.getCurrentState();
+                map.put("partitionVersion", versionedPartitionName == null ? "none" : Long.toHexString(versionedPartitionName.getPartitionVersion()));
+                State currentState = livelyEndState == null ? State.bootstrap : livelyEndState.getCurrentState();
                 int category = categories.getOrDefault(versionedPartitionName, -1);
-                map.put("isOnline", livelyEndState.isOnline());
+                map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
 
                 if (includeCount) {
@@ -335,22 +335,22 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                                 long latencyInMillis = currentTime - lastOfferedTimestamp;
 
                                 buf.append("<br>")
-                                .append(ringMember.getMember()).append(' ')
-                                .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
-                                .append(category1).append(' ')
-                                .append(getDurationBreakdown(tooSlowTimestamp)).append(' ')
-                                .append(takeSessionId).append(' ')
-                                .append(online).append(' ')
-                                .append(steadyState);
+                                    .append(ringMember.getMember()).append(' ')
+                                    .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
+                                    .append(category1).append(' ')
+                                    .append(getDurationBreakdown(tooSlowTimestamp)).append(' ')
+                                    .append(takeSessionId).append(' ')
+                                    .append(online).append(' ')
+                                    .append(steadyState);
                             } else {
                                 buf.append("<br>")
-                                .append(ringMember.getMember()).append(' ')
-                                .append("never").append(' ')
-                                .append(category1).append(' ')
-                                .append("never")
-                                .append(takeSessionId).append(' ')
-                                .append(online).append(' ')
-                                .append(steadyState);
+                                    .append(ringMember.getMember()).append(' ')
+                                    .append("never").append(' ')
+                                    .append(category1).append(' ')
+                                    .append("never").append(' ')
+                                    .append(takeSessionId).append(' ')
+                                    .append(online).append(' ')
+                                    .append(steadyState);
                             }
                             return true;
                         });
@@ -360,16 +360,16 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 }
 
                 if (includeCount) {
-                    if (name.isSystemPartition()) {
+                    if (versionedPartitionName == null) {
+                        map.put("highwaters", "none");
+                    } else if (name.isSystemPartition()) {
                         HighwaterStorage systemHighwaterStorage = amzaService.getSystemHighwaterStorage();
-                        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(
-                            new VersionedPartitionName(name, versionedPartitionName.getPartitionVersion()));
+                        WALHighwater partitionHighwater = systemHighwaterStorage.getPartitionHighwater(versionedPartitionName);
                         map.put("highwaters", renderHighwaters(partitionHighwater));
                     } else {
                         PartitionStripeProvider partitionStripeProvider = amzaService.getPartitionStripeProvider();
                         partitionStripeProvider.txPartition(name, (PartitionStripe stripe, HighwaterStorage highwaterStorage) -> {
-                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(
-                                new VersionedPartitionName(name, versionedPartitionName.getPartitionVersion()));
+                            WALHighwater partitionHighwater = highwaterStorage.getPartitionHighwater(versionedPartitionName);
                             map.put("highwaters", renderHighwaters(partitionHighwater));
                             return null;
                         });
@@ -378,11 +378,11 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                     map.put("highwaters", "(requires watch)");
                 }
 
-                map.put("localState", ImmutableMap.of("online", livelyEndState.isOnline(),
+                map.put("localState", ImmutableMap.of("online", livelyEndState != null && livelyEndState.isOnline(),
                     "state", currentState != null ? currentState.name() : "unknown",
                     "name", new String(amzaService.getRingReader().getRingMember().asAquariumMember().getMember()),
-                    "partitionVersion", String.valueOf(versionedPartitionName.getPartitionVersion()),
-                    "stripeVersion", String.valueOf(versionedAquarium.getStripeVersion())));
+                    "partitionVersion", versionedPartitionName == null ? "none" : String.valueOf(versionedPartitionName.getPartitionVersion()),
+                    "stripeVersion", versionedAquarium == null ? "none" : String.valueOf(versionedAquarium.getStripeVersion())));
 
                 List<Map<String, Object>> neighborStates = new ArrayList<>();
                 Set<RingMember> neighboringRingMembers = amzaService.getRingReader().getNeighboringRingMembers(name.getRingName());
@@ -453,7 +453,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         sb.append(progress("Heap",
             (int) (memoryLoad * 100),
             humanReadableByteCount(memoryBean.getHeapMemoryUsage().getUsed(), false)
-            + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
+                + " used out of " + humanReadableByteCount(memoryBean.getHeapMemoryUsage().getMax(), false)));
 
         long s = 0;
         for (GarbageCollectorMXBean gc : garbageCollectors) {
@@ -558,7 +558,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
 
         MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
         ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-        AttributeList list = mbs.getAttributes(name, new String[]{"ProcessCpuLoad"});
+        AttributeList list = mbs.getAttributes(name, new String[] { "ProcessCpuLoad" });
 
         if (list.isEmpty()) {
             return Double.NaN;

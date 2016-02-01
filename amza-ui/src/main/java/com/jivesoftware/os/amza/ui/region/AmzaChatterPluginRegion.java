@@ -92,6 +92,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             header.add(new ArrayList<>());
             header.add(new ArrayList<>());
             header.add(new ArrayList<>());
+            header.add(new ArrayList<>());
 
             int partitionNameIndex = 0;
             int partitionInteractionIndex = 1;
@@ -123,10 +124,6 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             TakeCoordinator takeCoordinator = amzaService.getTakeCoordinator();
             takeCoordinator.streamCategories((versionedPartitionName, category) -> {
 
-                if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-                    return true;
-                }
-
                 AtomicBoolean healthy = new AtomicBoolean(true);
 
                 Element[][] cells = new Element[totalColumns][];
@@ -138,32 +135,35 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     return highestTxId;
                 });
 
+                String partitionMode = versionedPartitionName.getPartitionName().isSystemPartition() ? "default" : "info";
+
                 cells[partitionNameIndex] = new Element[]{
-                    new Element("ring", "ring", new String(versionedPartitionName.getPartitionName().getRingName(), StandardCharsets.UTF_8), null, "info"),
+                    new Element("ring", "ring", new String(versionedPartitionName.getPartitionName().getRingName(), StandardCharsets.UTF_8), null,
+                    partitionMode),
                     new Element("partition", "partition", new String(versionedPartitionName.getPartitionName().getName(), StandardCharsets.UTF_8), null,
-                    "info"),
-                    new Element("category", "category", null, String.valueOf(category), "info")
+                    partitionMode),
+                    new Element("category", "category", null, String.valueOf(category), partitionMode)
                 };
 
                 AmzaStats.Totals totals = amzaStats.getPartitionTotals().get(versionedPartitionName.getPartitionName());
                 if (totals != null) {
                     cells[partitionInteractionIndex] = new Element[]{
-                        new Element("interactions", null, "gets", numberFormat.format(totals.gets.get()), null),
-                        new Element("interactions", null, "getsLag", getDurationBreakdown(totals.getsLag.get()), null),
-                        new Element("interactions", null, "scans", numberFormat.format(totals.scans.get()), null),
-                        new Element("interactions", null, "scansLag", getDurationBreakdown(totals.scansLag.get()), null),
-                        new Element("interactions", null, "directApplies", numberFormat.format(totals.directApplies.get()), null),
-                        new Element("interactions", null, "directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()), null),
-                        new Element("interactions", null, "updates", numberFormat.format(totals.updates.get()), null),
-                        new Element("interactions", null, "updatesLag", getDurationBreakdown(totals.updatesLag.get()), null),};
+                        new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.get()), null),
+                        new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLag.get()), null),
+                        new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.get()), null),
+                        new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLag.get()), null),
+                        new Element("interactions", "interactions", "directApplies", numberFormat.format(totals.directApplies.get()), null),
+                        new Element("interactions", "interactions", "directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()), null),
+                        new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.get()), null),
+                        new Element("interactions", "interactions", "updatesLag", getDurationBreakdown(totals.updatesLag.get()), null),};
 
                     cells[partitionStatsIndex] = new Element[]{
-                        new Element("stat", null, "offers", numberFormat.format(totals.offers.get()), null),
-                        new Element("stat", null, "offersLag", getDurationBreakdown(totals.offersLag.get()), null),
-                        new Element("stat", null, "takes", numberFormat.format(totals.takes.get()), null),
-                        new Element("stat", null, "takesLag", getDurationBreakdown(totals.takesLag.get()), null),
-                        new Element("stat", null, "takeApplies", numberFormat.format(totals.takeApplies.get()), null),
-                        new Element("stat", null, "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()), null)
+                        new Element("stat", "stat", "offers", numberFormat.format(totals.offers.get()), null),
+                        new Element("stat", "stat", "offersLag", getDurationBreakdown(totals.offersLag.get()), null),
+                        new Element("stat", "stat", "takes", numberFormat.format(totals.takes.get()), null),
+                        new Element("stat", "stat", "takesLag", getDurationBreakdown(totals.takesLag.get()), null),
+                        new Element("stat", "stat", "takeApplies", numberFormat.format(totals.takeApplies.get()), null),
+                        new Element("stat", "stat", "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()), null)
                     };
                 }
 
@@ -309,23 +309,23 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             AmzaStats.Totals totals = amzaStats.getGrandTotal();
             if (totals != null) {
                 ((List) rows.get(partitionInteractionIndex)).addAll(Arrays.asList(new Element[]{
-                    new Element("interactions", null, "gets", numberFormat.format(totals.gets.get()), null),
-                    new Element("interactions", null, "getsLag", getDurationBreakdown(totals.getsLag.get()), null),
-                    new Element("interactions", null, "scans", numberFormat.format(totals.scans.get()), null),
-                    new Element("interactions", null, "scansLag", getDurationBreakdown(totals.scansLag.get()), null),
-                    new Element("interactions", null, "directApplies", numberFormat.format(totals.directApplies.get()), null),
-                    new Element("interactions", null, "directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()), null),
-                    new Element("interactions", null, "updates", numberFormat.format(totals.updates.get()), null),
-                    new Element("interactions", null, "updatesLag", getDurationBreakdown(totals.updatesLag.get()), null)
+                    new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.get()), null),
+                    new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLag.get()), null),
+                    new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.get()), null),
+                    new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLag.get()), null),
+                    new Element("interactions", "interactions", "directApplies", numberFormat.format(totals.directApplies.get()), null),
+                    new Element("interactions", "interactions", "directAppliesLag", getDurationBreakdown(totals.directAppliesLag.get()), null),
+                    new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.get()), null),
+                    new Element("interactions", "interactions", "updatesLag", getDurationBreakdown(totals.updatesLag.get()), null)
                 }));
 
                 ((List) rows.get(partitionStatsIndex)).addAll(Arrays.asList(new Element[]{
-                    new Element("stat", null, "offers", numberFormat.format(totals.offers.get()), null),
-                    new Element("stat", null, "offersLag", getDurationBreakdown(totals.offersLag.get()), null),
-                    new Element("stat", null, "takes", numberFormat.format(totals.takes.get()), null),
-                    new Element("stat", null, "takesLag", getDurationBreakdown(totals.takesLag.get()), null),
-                    new Element("stat", null, "takeApplies", numberFormat.format(totals.takeApplies.get()), null),
-                    new Element("stat", null, "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()), null)
+                    new Element("stat", "stat", "offers", numberFormat.format(totals.offers.get()), null),
+                    new Element("stat", "stat", "offersLag", getDurationBreakdown(totals.offersLag.get()), null),
+                    new Element("stat", "stat", "takes", numberFormat.format(totals.takes.get()), null),
+                    new Element("stat", "stat", "takesLag", getDurationBreakdown(totals.takesLag.get()), null),
+                    new Element("stat", "stat", "takeApplies", numberFormat.format(totals.takeApplies.get()), null),
+                    new Element("stat", "stat", "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag.get()), null)
                 }));
             }
 

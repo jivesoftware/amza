@@ -603,7 +603,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
         millis -= TimeUnit.SECONDS.toMillis(seconds);
 
         StringBuilder sb = new StringBuilder(64);
-        boolean showRemaining = false;
+        boolean showRemaining = true;
         if (showRemaining || days > 0) {
             sb.append(days);
             sb.append(" Days ");

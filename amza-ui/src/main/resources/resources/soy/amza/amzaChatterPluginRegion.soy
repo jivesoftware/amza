@@ -15,10 +15,10 @@
                     <table class="table table-hover table-condensed table-striped float-table-head">
                         <thead>
                             <tr class="active">
-                                {foreach $cell in $header}
+                                {foreach $headerCell in $header}
                                     <th>
                                         <ul style="list-style-type:none">
-                                            {foreach $e in $cell}
+                                            {foreach $e in $headerCell}
                                                 <li>
                                                     {if $e.mode}
                                                         <span class="label label-{$e.mode}">
@@ -29,7 +29,7 @@
                                                                {$e.name}
                                                             {/if}
                                                             {if $e.value}
-                                                                &nbsp;(&nbsp;{$e.value}&nbsp;)
+                                                                &nbsp;&nbsp;{$e.value}&nbsp;
                                                             {/if}
                                                         </span>
                                                     {else}
@@ -41,7 +41,7 @@
                                                                {$e.name}
                                                             {/if}
                                                             {if $e.value}
-                                                                &nbsp;(&nbsp;{$e.value}&nbsp;)
+                                                                &nbsp;&nbsp;{$e.value}&nbsp;
                                                             {/if}
                                                         </span>
                                                     {/if}
@@ -69,7 +69,7 @@
                                                                     {$e.name}:
                                                                 {/if}
                                                                 {if $e.value}
-                                                                    {$e.value}
+                                                                    &nbsp;&nbsp;{$e.value}&nbsp;
                                                                 {/if}
                                                             </span>
                                                         {else}
@@ -81,7 +81,7 @@
                                                                     {$e.name}:
                                                                 {/if}
                                                                 {if $e.value}
-                                                                    {$e.value}
+                                                                  &nbsp;&nbsp;{$e.value}&nbsp;
                                                                 {/if}
                                                             </span>
                                                         {/if}

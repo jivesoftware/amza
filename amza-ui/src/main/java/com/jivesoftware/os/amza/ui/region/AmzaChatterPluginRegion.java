@@ -86,7 +86,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 return true;
             });
 
-            Multiset<State> stateCounts = HashMultiset.<State>create();
+            Multiset<String> stateCounts = HashMultiset.<String>create();
 
             List<List> header = new ArrayList<>();
             header.add(new ArrayList<>());
@@ -183,20 +183,21 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     unhealthy.compareAndSet(false, !livelyOnline);
                     unhealthy.compareAndSet(false, !atQuorum);
 
-                    stateCounts.add(state);
+                    stateCounts.add(state.name());
 
-                    if (!unhealthy.get()) {
-                        cells[electionIndex] = new Element[]{
-                            new Element("election", "election", state.name(), null,
-                            (state == State.leader || state == State.follower) ? "success" : "warning"),
-                            new Element("online", "online", "online", String.valueOf(livelyOnline),
-                            livelyOnline ? "success" : "warning"),
-                            new Element("quorum", "quorum", "quorum", String.valueOf(atQuorum),
-                            atQuorum ? "success" : "warning"
-                            )
-                        };
-                    }
+                    cells[electionIndex] = new Element[]{
+                        new Element("election", "election", state.name(), null,
+                        (state == State.leader || state == State.follower) ? "success" : "warning"),
+                        new Element("online", "online", "online", String.valueOf(livelyOnline),
+                        livelyOnline ? "success" : "warning"),
+                        new Element("quorum", "quorum", "quorum", String.valueOf(atQuorum),
+                        atQuorum ? "success" : "warning"
+                        )
+                    };
+
                 } else {
+                    stateCounts.add("unknown");
+
                     cells[electionIndex] = new Element[]{
                         new Element("election", "election", null, "unknown", "danger")
                     };
@@ -234,63 +235,62 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                             unhealthy.compareAndSet(false, lastTakenMillis == -1);
                             unhealthy.compareAndSet(false, lastCategoryCheckMillis == -1);
 
-                            if (!unhealthy.get()) {
-                                if (lastOfferedTxId != -1) {
-                                    long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
-                                    long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
-                                    long latencyInMillis = currentTime - lastOfferedTimestamp;
+                            if (lastOfferedTxId != -1) {
+                                long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
+                                long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
+                                long latencyInMillis = currentTime - lastOfferedTimestamp;
 
-                                    cells[index] = new Element[]{
-                                        new Element("session", "session", "session", String.valueOf(takeSessionId), null),
-                                        new Element("online", "online", "online", String.valueOf(online),
-                                            online ? "success" : "warning"),
-                                        new Element("quorum", "quorum", "quorum", String.valueOf(currentlyAtQuorum),
-                                            currentlyAtQuorum ? "success" : "warning"),
-                                        new Element("category", "category", "category", String.valueOf(category1),
-                                            category1 == 1 ? "success" : "warning"),
-                                        new Element("latency", "latency", "latency", ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(
-                                            latencyInMillis)), null),
-                                        new Element("slow", "latency", "slow", getDurationBreakdown(tooSlowTimestamp), null),
-                                        new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState),
-                                            steadyState ? "default" : "success"),
-                                        new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
-                                            lastOfferedMillis == -1 ? "danger " : null
-                                        ),
-                                        new Element("taken", "taken", "taken", lastTakenMillis == -1 ? "unknown" : getDurationBreakdown(takenLatency),
-                                            lastTakenMillis == -1 ? "danger " : null
-                                        ),
-                                        new Element("category", "category", "category", lastCategoryCheckMillis == -1 ? "unknown" : getDurationBreakdown(
-                                            categoryLatency),
-                                            lastCategoryCheckMillis == -1 ? "danger " : null
-                                        )
-                                    };
-                                } else {
+                                cells[index] = new Element[]{
+                                    new Element("session", "session", "session", String.valueOf(takeSessionId), null),
+                                    new Element("online", "online", "online", String.valueOf(online),
+                                        online ? "success" : "warning"),
+                                    new Element("quorum", "quorum", "quorum", String.valueOf(currentlyAtQuorum),
+                                        currentlyAtQuorum ? "success" : "warning"),
+                                    new Element("category", "category", "category", String.valueOf(category1),
+                                        category1 == 1 ? "success" : "warning"),
+                                    new Element("latency", "latency", "latency", ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(
+                                        latencyInMillis)), null),
+                                    new Element("slow", "latency", "slow", getDurationBreakdown(tooSlowTimestamp), null),
+                                    new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState),
+                                        steadyState ? "default" : "success"),
+                                    new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
+                                        lastOfferedMillis == -1 ? "danger " : null
+                                    ),
+                                    new Element("taken", "taken", "taken", lastTakenMillis == -1 ? "unknown" : getDurationBreakdown(takenLatency),
+                                        lastTakenMillis == -1 ? "danger " : null
+                                    ),
+                                    new Element("category", "category", "category", lastCategoryCheckMillis == -1 ? "unknown" : getDurationBreakdown(
+                                        categoryLatency),
+                                        lastCategoryCheckMillis == -1 ? "danger " : null
+                                    )
+                                };
+                            } else {
 
-                                    cells[electionIndex] = new Element[]{
-                                        new Element("session", "session", "session", String.valueOf(takeSessionId), null),
-                                        new Element("online", "online", "online", String.valueOf(online),
-                                            online ? "success" : "warning"),
-                                        new Element("quorum", "quorum", "quorum", String.valueOf(currentlyAtQuorum),
-                                            currentlyAtQuorum ? "success" : "warning"),
-                                        new Element("category", "category", "category", String.valueOf(category1),
-                                            category1 == 1 ? "success" : "warning"),
-                                        new Element("latency", "latency", "latency", "never", "warning"),
-                                        new Element("slow", "latency", "slow", "never", "warning"),
-                                        new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState),
-                                            steadyState ? "default" : "success"),
-                                        new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
-                                            lastOfferedMillis == -1 ? "danger " : null
-                                        ),
-                                        new Element("taken", "taken", "taken", lastTakenMillis == -1 ? "unknown" : getDurationBreakdown(takenLatency),
-                                            lastTakenMillis == -1 ? "danger " : null
-                                        ),
-                                        new Element("category", "category", "category", lastCategoryCheckMillis == -1 ? "unknown" : getDurationBreakdown(
-                                            categoryLatency),
-                                            lastCategoryCheckMillis == -1 ? "danger " : null
-                                        )
-                                    };
-                                }
+                                cells[electionIndex] = new Element[]{
+                                    new Element("session", "session", "session", String.valueOf(takeSessionId), null),
+                                    new Element("online", "online", "online", String.valueOf(online),
+                                        online ? "success" : "warning"),
+                                    new Element("quorum", "quorum", "quorum", String.valueOf(currentlyAtQuorum),
+                                        currentlyAtQuorum ? "success" : "warning"),
+                                    new Element("category", "category", "category", String.valueOf(category1),
+                                        category1 == 1 ? "success" : "warning"),
+                                    new Element("latency", "latency", "latency", "never", "warning"),
+                                    new Element("slow", "latency", "slow", "never", "warning"),
+                                    new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState),
+                                        steadyState ? "default" : "success"),
+                                    new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
+                                        lastOfferedMillis == -1 ? "danger " : null
+                                    ),
+                                    new Element("taken", "taken", "taken", lastTakenMillis == -1 ? "unknown" : getDurationBreakdown(takenLatency),
+                                        lastTakenMillis == -1 ? "danger " : null
+                                    ),
+                                    new Element("category", "category", "category", lastCategoryCheckMillis == -1 ? "unknown" : getDurationBreakdown(
+                                        categoryLatency),
+                                        lastCategoryCheckMillis == -1 ? "danger " : null
+                                    )
+                                };
                             }
+
                         } else {
 
                             unhealthy.compareAndSet(false, true);
@@ -373,11 +373,12 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
             }
 
-            for (State state : stateCounts.elementSet()) {
+            for (String state : stateCounts.elementSet()) {
                 int count = stateCounts.count(state);
-                ((List) header.get(electionIndex)).add(new Element("election", "election", state.name(), String.valueOf(count),
-                    (state == State.leader || state == State.follower)
-                        ? "success" : ((state == State.demoted || state == State.nominated || state == State.inactive) ? "warning" : "error")
+                State s = State.valueOf(state);
+                ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count),
+                    (s == State.leader || s == State.follower)
+                        ? "success" : ((s == State.demoted || s == State.nominated || s == State.inactive) ? "warning" : "error")
                 ));
             }
 

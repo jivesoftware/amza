@@ -1,6 +1,7 @@
 package com.jivesoftware.os.amza.ui.region;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -298,7 +299,7 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
             }
 
             Map<VersionedPartitionName, Integer> categories = Maps.newHashMap();
-            amzaService.getTakeCoordinator().streamCategories((versionedPartitionName, category) -> {
+            amzaService.getTakeCoordinator().streamCategories((versionedPartitionName, category, ringCallCount, partitionCallCount) -> {
                 categories.put(versionedPartitionName, category);
                 return true;
             });
@@ -319,42 +320,45 @@ public class MetricsPluginRegion implements PageRegion<MetricsPluginRegion.Metri
                 map.put("isOnline", livelyEndState != null && livelyEndState.isOnline());
                 map.put("highestTxId", Long.toHexString(highestTxId));
 
+                map.put("category", category != -1 ? String.valueOf(category) : "unknown");
                 if (includeCount) {
-                    StringBuilder buf = new StringBuilder();
-                    buf.append(category != -1 ? String.valueOf(category) : "unknown");
-
                     long currentTime = timestampProvider.getApproximateTimestamp(System.currentTimeMillis());
 
+                    long ringCallCount = -1;
+                    long partitionCallCount = -1;
+                    if (versionedPartitionName != null) {
+                        ringCallCount = amzaService.getTakeCoordinator().getRingCallCount(versionedPartitionName.getPartitionName().getRingName());
+                        partitionCallCount = amzaService.getTakeCoordinator().getPartitionCallCount(versionedPartitionName);
+                    }
+                    map.put("ringCallCount", String.valueOf(ringCallCount));
+                    map.put("partitionCallCount", String.valueOf(partitionCallCount));
+
+                    List<Map<String, Object>> tookLatencies = Lists.newArrayList();
                     amzaService.getTakeCoordinator().streamTookLatencies(versionedPartitionName,
                         (ringMember, lastOfferedTxId, category1, tooSlowTxId, takeSessionId, online, steadyState, lastOfferedMillis,
                             lastTakenMillis, lastCategoryCheckMillis) -> {
+                            Builder<String, Object> builder = ImmutableMap.<String, Object>builder();
+                            builder.put("member", ringMember.getMember());
+
+                            long tooSlowTimestamp = -1;
+                            long latencyInMillis = -1;
                             if (lastOfferedTxId != -1) {
                                 long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
-                                long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
-
-                                long latencyInMillis = currentTime - lastOfferedTimestamp;
-
-                                buf.append("<br>")
-                                    .append(ringMember.getMember()).append(' ')
-                                    .append((latencyInMillis < 0) ? '-' : ' ').append(getDurationBreakdown(Math.abs(latencyInMillis))).append(' ')
-                                    .append(category1).append(' ')
-                                    .append(getDurationBreakdown(tooSlowTimestamp)).append(' ')
-                                    .append(takeSessionId).append(' ')
-                                    .append(online).append(' ')
-                                    .append(steadyState);
-                            } else {
-                                buf.append("<br>")
-                                    .append(ringMember.getMember()).append(' ')
-                                    .append("never").append(' ')
-                                    .append(category1).append(' ')
-                                    .append("never").append(' ')
-                                    .append(takeSessionId).append(' ')
-                                    .append(online).append(' ')
-                                    .append(steadyState);
+                                tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
+                                latencyInMillis = currentTime - lastOfferedTimestamp;
                             }
+                            String latency = ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(latencyInMillis));
+                            builder
+                                .put("latency", (lastOfferedTxId == -1) ? "never" : latency)
+                                .put("category", String.valueOf(category1))
+                                .put("tooSlow", (lastOfferedTxId == -1) ? "never" : getDurationBreakdown(tooSlowTimestamp))
+                                .put("takeSessionId", String.valueOf(takeSessionId))
+                                .put("online", online)
+                                .put("steadyState", steadyState);
+                            tookLatencies.add(builder.build());
                             return true;
                         });
-                    map.put("category", buf.toString());
+                    map.put("tookLatencies", tookLatencies);
                 } else {
                     map.put("category", category != -1 ? String.valueOf(category) : "unknown");
                 }

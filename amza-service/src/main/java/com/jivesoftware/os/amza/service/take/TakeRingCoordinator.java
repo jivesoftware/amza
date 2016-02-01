@@ -17,6 +17,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -34,6 +35,8 @@ public class TakeRingCoordinator {
     private final long slowTakeInMillis;
     private final long systemReofferDeltaMillis;
     private final long reofferDeltaMillis;
+
+    private final AtomicLong callCount = new AtomicLong();
     private final AtomicReference<VersionedRing> versionedRing = new AtomicReference<>();
     private final ConcurrentHashMap<VersionedPartitionName, TakeVersionedPartitionCoordinator> partitionCoordinators = new ConcurrentHashMap<>();
 
@@ -100,6 +103,7 @@ public class TakeRingCoordinator {
         long takeSessionId,
         AvailableStream availableStream) throws Exception {
 
+        callCount.incrementAndGet();
         long suggestedWaitInMillis = Long.MAX_VALUE;
         VersionedRing ring = versionedRing.get();
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
@@ -146,9 +150,15 @@ public class TakeRingCoordinator {
         });
     }
 
+    public long getCallCount() {
+        return callCount.get();
+    }
+
     boolean streamCategories(CategoryStream stream) throws Exception {
         for (TakeVersionedPartitionCoordinator partitionCoordinator : partitionCoordinators.values()) {
-            if (!stream.stream(partitionCoordinator.versionedPartitionName, partitionCoordinator.currentCategory.get())) {
+            long ringCallCount = getCallCount();
+            long partitionCallCount = partitionCoordinator.getCallCount();
+            if (!stream.stream(partitionCoordinator.versionedPartitionName, partitionCoordinator.currentCategory.get(), ringCallCount, partitionCallCount)) {
                 return false;
             }
         }
@@ -158,6 +168,15 @@ public class TakeRingCoordinator {
     boolean streamTookLatencies(VersionedPartitionName versionedPartitionName, TookLatencyStream stream) throws Exception {
         TakeVersionedPartitionCoordinator partitionCoordinator = partitionCoordinators.get(versionedPartitionName);
         return (partitionCoordinator != null) && partitionCoordinator.streamTookLatencies(versionedRing.get(), stream);
+    }
+
+    public long getPartitionCallCount(VersionedPartitionName versionedPartitionName) {
+        TakeVersionedPartitionCoordinator partitionCoordinator = partitionCoordinators.get(versionedPartitionName);
+        if (partitionCoordinator != null) {
+            return partitionCoordinator.getCallCount();
+        } else {
+            return -1;
+        }
     }
 
     static public class VersionedRing {

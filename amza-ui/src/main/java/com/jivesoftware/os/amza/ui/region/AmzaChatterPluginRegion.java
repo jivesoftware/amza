@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static com.jivesoftware.os.amza.ui.region.MetricsPluginRegion.getDurationBreakdown;
 
 /**
- *
  * @author jonathan.colt
  */
 public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegion.ChatterPluginRegionInput> {
@@ -100,7 +99,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             int electionIndex = 3;
 
             int columnIndex = 4;
-            Map<RingMember, Integer> ringMemeberToColumIndex = new HashMap<>();
+            Map<RingMember, Integer> ringMemberToColumnIndex = new HashMap<>();
             for (RingMember ringMember : nodes.keySet()) {
 
                 RingHost host = nodes.get(ringMember);
@@ -109,7 +108,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     new Element("host", "host", null, host.getHost(), "primary")
                 ));
 
-                ringMemeberToColumIndex.put(ringMember, columnIndex);
+                ringMemberToColumnIndex.put(ringMember, columnIndex);
                 columnIndex++;
             }
 
@@ -122,7 +121,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
             long currentTime = timestampProvider.getApproximateTimestamp(wallTimeMillis);
 
             TakeCoordinator takeCoordinator = amzaService.getTakeCoordinator();
-            takeCoordinator.streamCategories((versionedPartitionName, category) -> {
+            takeCoordinator.streamCategories((versionedPartitionName, category, ringCallCount, partitionCallCount) -> {
 
                 AtomicBoolean unhealthy = new AtomicBoolean(false);
 
@@ -137,39 +136,40 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
                 String partitionMode = versionedPartitionName.getPartitionName().isSystemPartition() ? "default" : "info";
 
-                cells[partitionNameIndex] = new Element[]{
+                cells[partitionNameIndex] = new Element[] {
                     new Element("ring", "ring", new String(versionedPartitionName.getPartitionName().getRingName(), StandardCharsets.UTF_8), null,
-                    partitionMode),
+                        partitionMode),
                     new Element("partition", "partition", new String(versionedPartitionName.getPartitionName().getName(), StandardCharsets.UTF_8), null,
-                    partitionMode),
+                        partitionMode),
                     new Element("category", "category", null, String.valueOf(category), partitionMode)
                 };
 
                 AmzaStats.Totals totals = amzaStats.getPartitionTotals().get(versionedPartitionName.getPartitionName());
                 if (totals != null) {
-                    cells[partitionInteractionIndex] = new Element[]{
+                    cells[partitionInteractionIndex] = new Element[] {
                         totals.gets.get() < 1 ? null : new Element("interactions", "interactions", "gets", numberFormat.format(totals.gets.get()), null),
                         totals.getsLag.get() < 1 ? null : new Element("interactions", "interactions", "getsLag", getDurationBreakdown(totals.getsLag.get()),
-                        null),
+                            null),
                         totals.scans.get() < 1 ? null : new Element("interactions", "interactions", "scans", numberFormat.format(totals.scans.get()), null),
                         totals.scansLag.get() < 1 ? null : new Element("interactions", "interactions", "scansLag", getDurationBreakdown(totals.scansLag.get()),
-                        null),
+                            null),
                         totals.directApplies.get() < 1 ? null : new Element("interactions", "interactions", "directApplies", numberFormat.format(
-                        totals.directApplies.get()), null),
+                            totals.directApplies.get()), null),
                         totals.directAppliesLag.get() < 1 ? null : new Element("interactions", "interactions", "directAppliesLag", getDurationBreakdown(
-                        totals.directAppliesLag.get()), null),
-                        totals.updates.get() < 1 ? null : new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.get()), null),
+                            totals.directAppliesLag.get()), null),
+                        totals.updates.get() < 1 ? null : new Element("interactions", "interactions", "updates", numberFormat.format(totals.updates.get()),
+                            null),
                         totals.updatesLag.get() < 1 ? null : new Element("interactions", "interactions", "updatesLag", getDurationBreakdown(totals.updatesLag
-                        .get()), null),};
+                            .get()), null), };
 
-                    cells[partitionStatsIndex] = new Element[]{
+                    cells[partitionStatsIndex] = new Element[] {
                         totals.offers.get() < 1 ? null : new Element("stats", "stats", "offers", numberFormat.format(totals.offers.get()), null),
                         totals.offersLag.get() < 1 ? null : new Element("stats", "stats", "offersLag", getDurationBreakdown(totals.offersLag.get()), null),
                         totals.takes.get() < 1 ? null : new Element("stats", "stats", "takes", numberFormat.format(totals.takes.get()), null),
                         totals.takesLag.get() < 1 ? null : new Element("stats", "stats", "takesLag", getDurationBreakdown(totals.takesLag.get()), null),
                         totals.takeApplies.get() < 1 ? null : new Element("stats", "stats", "takeApplies", numberFormat.format(totals.takeApplies.get()), null),
                         totals.takeAppliesLag.get() < 1 ? null : new Element("stats", "stats", "takeAppliesLag", getDurationBreakdown(totals.takeAppliesLag
-                        .get()), null)
+                            .get()), null)
                     };
                 }
 
@@ -181,24 +181,28 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     State state = currentWaterline.getState();
                     unhealthy.compareAndSet(false, !(state == State.leader || state == State.follower));
                     unhealthy.compareAndSet(false, !livelyOnline);
-                    unhealthy.compareAndSet(false, !atQuorum);
+                    unhealthy.compareAndSet(false, ringCallCount <= 0);
+                    unhealthy.compareAndSet(false, partitionCallCount <= 0);
 
                     stateCounts.add(state.name());
 
-                    cells[electionIndex] = new Element[]{
+                    cells[electionIndex] = new Element[] {
                         new Element("election", "election", state.name(), null,
-                        (state == State.leader || state == State.follower) ? "success" : "warning"),
+                            (state == State.leader || state == State.follower) ? "success" : "warning"),
                         new Element("online", "online", "online", String.valueOf(livelyOnline),
-                        livelyOnline ? "success" : "warning"),
+                            livelyOnline ? "success" : "warning"),
                         new Element("quorum", "quorum", "quorum", String.valueOf(atQuorum),
-                        atQuorum ? "success" : "warning"
-                        )
+                            atQuorum ? "success" : "warning"),
+                        new Element("ring", "ring", "ring", String.valueOf(ringCallCount),
+                            ringCallCount > 0 ? "success" : "warning"),
+                        new Element("partition", "partition", "partition", String.valueOf(partitionCallCount),
+                            partitionCallCount > 0 ? "success" : "warning")
                     };
 
                 } else {
                     stateCounts.add("unknown");
 
-                    cells[electionIndex] = new Element[]{
+                    cells[electionIndex] = new Element[] {
                         new Element("election", "election", null, "unknown", "danger")
                     };
                     unhealthy.compareAndSet(false, true);
@@ -208,7 +212,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     (ringMember, lastOfferedTxId, category1, tooSlowTxId, takeSessionId, online, steadyState, lastOfferedMillis,
                         lastTakenMillis, lastCategoryCheckMillis) -> {
 
-                        Integer index = ringMemeberToColumIndex.get(ringMember);
+                        Integer index = ringMemberToColumnIndex.get(ringMember);
                         if (index != null) {
 
                             long offeredLatency = wallTimeMillis - lastOfferedMillis;
@@ -235,67 +239,53 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                             unhealthy.compareAndSet(false, lastTakenMillis == -1);
                             unhealthy.compareAndSet(false, lastCategoryCheckMillis == -1);
 
+                            long tooSlowTimestamp = -1;
+                            long latencyInMillis = -1;
                             if (lastOfferedTxId != -1) {
                                 long lastOfferedTimestamp = idPacker.unpack(lastOfferedTxId)[0];
-                                long tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
-                                long latencyInMillis = currentTime - lastOfferedTimestamp;
-
-                                cells[index] = new Element[]{
-                                    new Element("session", "session", "session", String.valueOf(takeSessionId), null),
-                                    new Element("online", "online", "online", String.valueOf(online),
-                                        online ? "success" : "warning"),
-                                    new Element("quorum", "quorum", "quorum", String.valueOf(currentlyAtQuorum),
-                                        currentlyAtQuorum ? "success" : "warning"),
-                                    new Element("category", "category", "category", String.valueOf(category1),
-                                        category1 == 1 ? "success" : "warning"),
-                                    new Element("latency", "latency", "latency", ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(
-                                        latencyInMillis)), null),
-                                    new Element("slow", "latency", "slow", getDurationBreakdown(tooSlowTimestamp), null),
-                                    new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState),
-                                        steadyState ? "default" : "success"),
-                                    new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
-                                        lastOfferedMillis == -1 ? "danger " : null
-                                    ),
-                                    new Element("taken", "taken", "taken", lastTakenMillis == -1 ? "unknown" : getDurationBreakdown(takenLatency),
-                                        lastTakenMillis == -1 ? "danger " : null
-                                    ),
-                                    new Element("category", "category", "category", lastCategoryCheckMillis == -1 ? "unknown" : getDurationBreakdown(
-                                        categoryLatency),
-                                        lastCategoryCheckMillis == -1 ? "danger " : null
-                                    )
-                                };
-                            } else {
-
-                                cells[electionIndex] = new Element[]{
-                                    new Element("session", "session", "session", String.valueOf(takeSessionId), null),
-                                    new Element("online", "online", "online", String.valueOf(online),
-                                        online ? "success" : "warning"),
-                                    new Element("quorum", "quorum", "quorum", String.valueOf(currentlyAtQuorum),
-                                        currentlyAtQuorum ? "success" : "warning"),
-                                    new Element("category", "category", "category", String.valueOf(category1),
-                                        category1 == 1 ? "success" : "warning"),
-                                    new Element("latency", "latency", "latency", "never", "warning"),
-                                    new Element("slow", "latency", "slow", "never", "warning"),
-                                    new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState),
-                                        steadyState ? "success" : "warning"),
-                                    new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
-                                        lastOfferedMillis == -1 ? "danger " : null
-                                    ),
-                                    new Element("taken", "taken", "taken", lastTakenMillis == -1 ? "unknown" : getDurationBreakdown(takenLatency),
-                                        lastTakenMillis == -1 ? "danger " : null
-                                    ),
-                                    new Element("category", "category", "category", lastCategoryCheckMillis == -1 ? "unknown" : getDurationBreakdown(
-                                        categoryLatency),
-                                        lastCategoryCheckMillis == -1 ? "danger " : null
-                                    )
-                                };
+                                tooSlowTimestamp = idPacker.unpack(tooSlowTxId)[0];
+                                latencyInMillis = currentTime - lastOfferedTimestamp;
                             }
+                            String latency = ((latencyInMillis < 0) ? '-' : ' ') + getDurationBreakdown(Math.abs(latencyInMillis));
+                            String tooSlow = getDurationBreakdown(tooSlowTimestamp);
+                            cells[index] = new Element[] {
+                                new Element("session", "session", "session",
+                                    String.valueOf(takeSessionId),
+                                    null),
+                                new Element("online", "online", "online",
+                                    String.valueOf(online),
+                                    online ? "success" : "warning"),
+                                new Element("quorum", "quorum", "quorum",
+                                    String.valueOf(currentlyAtQuorum),
+                                    currentlyAtQuorum ? "success" : "warning"),
+                                new Element("category", "category", "category",
+                                    String.valueOf(category1),
+                                    category1 == 1 ? "success" : "warning"),
+                                new Element("latency", "latency", "latency",
+                                    lastOfferedTxId == -1 ? "never" : latency,
+                                    null),
+                                new Element("slow", "latency", "slow",
+                                    lastOfferedTxId == -1 ? "never" : tooSlow,
+                                    null),
+                                new Element("steadyState", "steadyState", "steadyState",
+                                    String.valueOf(steadyState),
+                                    steadyState ? "default" : "success"),
+                                new Element("offered", "offered", "offered",
+                                    lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
+                                    lastOfferedMillis == -1 ? "danger " : null),
+                                new Element("taken", "taken", "taken",
+                                    lastTakenMillis == -1 ? "unknown" : getDurationBreakdown(takenLatency),
+                                    lastTakenMillis == -1 ? "danger " : null),
+                                new Element("category", "category", "category",
+                                    lastCategoryCheckMillis == -1 ? "unknown" : getDurationBreakdown(categoryLatency),
+                                    lastCategoryCheckMillis == -1 ? "danger " : null)
+                            };
 
                         } else {
 
                             unhealthy.compareAndSet(false, true);
-                            cells[index] = new Element[]{
-                                new Element("id", "id", null, ringMember.getMember(), "danger"),};
+                            cells[index] = new Element[] {
+                                new Element("id", "id", null, ringMember.getMember(), "danger"), };
                         }
                         return true;
                     });
@@ -381,7 +371,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                         (s == State.leader || s == State.follower)
                             ? "success" : ((s == State.demoted || s == State.nominated || s == State.inactive) ? "warning" : "error")
                     ));
-                } catch(IllegalArgumentException x) {
+                } catch (IllegalArgumentException x) {
                     ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count), "error"));
                 }
             }

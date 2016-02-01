@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author jonathan.colt
@@ -38,6 +39,7 @@ public class TakeVersionedPartitionCoordinator {
     final AtomicInteger currentCategory;
     final AtomicBoolean expunged = new AtomicBoolean(false);
 
+    private final AtomicLong callCount = new AtomicLong();
     private final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Long> steadyState = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<RingMember, Long> onlineTakers = new ConcurrentHashMap<>();
@@ -79,6 +81,7 @@ public class TakeVersionedPartitionCoordinator {
         AvailableStream availableStream) throws Exception {
 
         lastOfferedMillis = System.currentTimeMillis();
+        callCount.incrementAndGet();
 
         latestTakeSessionId.put(ringMember, takeSessionId);
         if (!expunged.get() && takeFromFactor > 0) {
@@ -314,6 +317,10 @@ public class TakeVersionedPartitionCoordinator {
             }
         }
         return true;
+    }
+
+    public long getCallCount() {
+        return callCount.get();
     }
 
     static class SessionedTxId {

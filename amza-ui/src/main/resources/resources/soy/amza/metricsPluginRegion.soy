@@ -82,10 +82,10 @@
                     {foreach $r in $regionTotals}
                         <tr>
                             <td>
-                                <a href="/amza/ui/inspect?regionType={$r.type}&ringName={$r.ringName}&regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search"></span>Inspect</a>
+                                <a href="/amza/ui/inspect?regionType={$r.type}&amp;ringName={$r.ringName}&amp;regionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-search"></span>Inspect</a>
                                 <a href="/amza/ui/metrics?partitionName={$r.name}" class="btn btn-default"><span class="glyphicon glyphicon-sunglasses"></span>Watch</a>
-                                <a href="/amza/ui/metrics?ringName={$r.ringName}&partitionName={$r.name}&visualize=true" class="btn btn-default"><span class="glyphicon glyphicon-hdd"></span>Visualize</a>
-                                <a href="/amza/ui/aquarium?ringName={$r.ringName}&partitionName={$r.name}&partitionVersion={$r.partitionVersion}" class="btn btn-default"><span class="glyphicon glyphicon-transfer"></span>Aquarium</a>
+                                <a href="/amza/ui/metrics?ringName={$r.ringName}&amp;partitionName={$r.name}&amp;visualize=true" class="btn btn-default"><span class="glyphicon glyphicon-hdd"></span>Visualize</a>
+                                <a href="/amza/ui/aquarium?ringName={$r.ringName}&amp;partitionName={$r.name}&amp;partitionVersion={$r.partitionVersion}" class="btn btn-default"><span class="glyphicon glyphicon-transfer"></span>Aquarium</a>
                             </td>
                             <td>{$r.state}</td>
                             <td>{$r.isOnline}</td>
@@ -101,7 +101,52 @@
                             <td><b>{$r.offers}</b>{sp}<i>{$r.offersLag}millis lag</i></td>
                             <td><b>{$r.takes}</b>{sp}<i>{$r.takesLag}millis lag</i></td>
                             <td><b>{$r.takeApplies}</b><i>{sp}{$r.takeAppliesLag}millis lag</i></td>
-                               <td>{$r.category|noAutoescape}</td>
+                            <td>
+                                <table class="table table-condensed">
+                                    <thead>
+                                        <tr class="active">
+                                            <th>Category</th>
+                                            <th>Ring Calls</th>
+                                            <th>Partition Calls</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>{$r.category}</td>
+                                            <td>{$r.ringCallCount}</td>
+                                            <td>{$r.partitionCallCount}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                {foreach $l in $r.tookLatencies}
+                                    <table class="table table-condensed">
+                                        <thead>
+                                            <tr class="active">
+                                                <th>Member</th>
+                                                <th>Latency</th>
+                                                <th>Category</th>
+                                                <th>Too Slow</th>
+                                                <th>Take Session</th>
+                                                <th>Online</th>
+                                                <th>Steady</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {foreach $l in $longPolled}
+                                                <tr>
+                                                    <td>{$l.member}</td>
+                                                    <td>{$l.latency}</td>
+                                                    <td>{$l.category}</td>
+                                                    <td>{$l.tooSlow}</td>
+                                                    <td>{$l.takeSessionId}</td>
+                                                    <td>{$l.online}</td>
+                                                    <td>{$l.steadyState}</td>
+                                                </tr>
+                                            {/foreach}
+                                        </tbody>
+                                    </table>
+                                {/foreach}
+                            </td>
                             <td>{$r.highestTxId}</td>
                             <td>{$r.highwaters|noAutoescape}</td>
                         </tr>

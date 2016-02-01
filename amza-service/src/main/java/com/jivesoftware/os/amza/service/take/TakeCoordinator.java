@@ -143,9 +143,22 @@ public class TakeCoordinator {
         updateInternal(ringReader, versionedPartitionName, 0, true);
     }
 
-    public boolean streamTookLatencies(VersionedPartitionName versionedPartitionName, TookLatencyStream stream) throws Exception {
-        TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(versionedPartitionName.getPartitionName().getRingName());
-        return (takeRingCoordinator != null) && takeRingCoordinator.streamTookLatencies(versionedPartitionName, stream);
+    public long getRingCallCount(byte[] ringName) {
+        TakeRingCoordinator ringCoordinator = takeRingCoordinators.get(ringName);
+        if (ringCoordinator != null) {
+            return ringCoordinator.getCallCount();
+        } else {
+            return -1;
+        }
+    }
+
+    public long getPartitionCallCount(VersionedPartitionName versionedPartitionName) {
+        TakeRingCoordinator ringCoordinator = takeRingCoordinators.get(versionedPartitionName.getPartitionName().getRingName());
+        if (ringCoordinator != null) {
+            return ringCoordinator.getPartitionCallCount(versionedPartitionName);
+        } else {
+            return -1;
+        }
     }
 
     public interface TookLatencyStream {
@@ -162,9 +175,14 @@ public class TakeCoordinator {
             long lastCategoryCheckMillis) throws Exception;
     }
 
+    public boolean streamTookLatencies(VersionedPartitionName versionedPartitionName, TookLatencyStream stream) throws Exception {
+        TakeRingCoordinator takeRingCoordinator = takeRingCoordinators.get(versionedPartitionName.getPartitionName().getRingName());
+        return (takeRingCoordinator != null) && takeRingCoordinator.streamTookLatencies(versionedPartitionName, stream);
+    }
+
     public interface CategoryStream {
 
-        boolean stream(VersionedPartitionName versionedPartitionName, int category) throws Exception;
+        boolean stream(VersionedPartitionName versionedPartitionName, int category, long ringCallCount, long partitionCallCount) throws Exception;
     }
 
     public boolean streamCategories(CategoryStream stream) throws Exception {

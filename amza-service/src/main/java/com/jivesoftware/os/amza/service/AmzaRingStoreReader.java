@@ -60,7 +60,7 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         HeapFiler filer = new HeapFiler();
         byte[] lengthBuffer = new byte[4];
         UIO.writeByteArray(filer, ringName, "ringName", lengthBuffer);
-        UIO.write(filer, new byte[]{(byte) 0}, "separator");
+        UIO.write(filer, new byte[] { (byte) 0 }, "separator");
         if (ringMember != null) {
             byte[] ringMemberBytes = ringMember.toBytes();
             UIO.writeByteArray(filer, ringMemberBytes, "ringMember", lengthBuffer);
@@ -73,13 +73,6 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
         UIO.readByteArray(filer, "ringName", new byte[4]);
         UIO.readByte(filer, "separator");
         return RingMember.fromBytes(UIO.readByteArray(filer, "ringMember", new byte[4]));
-    }
-
-    byte[] keyToRawRingMember(byte[] key) throws Exception {
-        HeapFiler filer = HeapFiler.fromBytes(key, key.length);
-        UIO.readByteArray(filer, "ringName", new byte[4]);
-        UIO.readByte(filer, "separator");
-        return UIO.readByteArray(filer, "ringMember", new byte[4]);
     }
 
     @Override
@@ -119,8 +112,8 @@ public class AmzaRingStoreReader implements AmzaRingReader, RingMembership {
                         WALKey.prefixUpperExclusive(from),
                         (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion) -> {
                             if (!valueTombstone) {
-                                byte[] ringMember = keyToRawRingMember(key);
-                                return stream.stream(ringMember);
+                                RingMember ringMember = keyToRingMember(key);
+                                return stream.stream(ringMember.toBytes());
                             } else {
                                 return true;
                             }

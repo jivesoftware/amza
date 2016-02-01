@@ -277,7 +277,7 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                                     new Element("latency", "latency", "latency", "never", "warning"),
                                     new Element("slow", "latency", "slow", "never", "warning"),
                                     new Element("steadyState", "steadyState", "steadyState", String.valueOf(steadyState),
-                                        steadyState ? "default" : "success"),
+                                        steadyState ? "success" : "warning"),
                                     new Element("offered", "offered", "offered", lastOfferedMillis == -1 ? "unknown" : getDurationBreakdown(offeredLatency),
                                         lastOfferedMillis == -1 ? "danger " : null
                                     ),
@@ -375,11 +375,15 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
             for (String state : stateCounts.elementSet()) {
                 int count = stateCounts.count(state);
-                State s = State.valueOf(state);
-                ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count),
-                    (s == State.leader || s == State.follower)
-                        ? "success" : ((s == State.demoted || s == State.nominated || s == State.inactive) ? "warning" : "error")
-                ));
+                try {
+                    State s = State.valueOf(state);
+                    ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count),
+                        (s == State.leader || s == State.follower)
+                            ? "success" : ((s == State.demoted || s == State.nominated || s == State.inactive) ? "warning" : "error")
+                    ));
+                } catch(IllegalArgumentException x) {
+                    ((List) header.get(electionIndex)).add(new Element("election", "election", state, String.valueOf(count), "error"));
+                }
             }
 
             data.put("rows", rows);

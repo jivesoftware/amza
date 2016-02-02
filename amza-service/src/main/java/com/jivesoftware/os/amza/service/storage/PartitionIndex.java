@@ -18,7 +18,6 @@ import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.api.wal.WALValue;
 import com.jivesoftware.os.amza.service.IndexedWALStorageProvider;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
-import com.jivesoftware.os.amza.service.replication.StorageVersionProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.filer.io.StripingLocksProvider;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
@@ -70,6 +69,7 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         "memory_ephemeral",
         null);
 
+    // TODO consider replacing ConcurrentHashMap<Long, PartitionStore> LHash
     private final ConcurrentHashMap<PartitionName, ConcurrentHashMap<Long, PartitionStore>> partitionStores = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<PartitionName, PartitionProperties> partitionProperties = new ConcurrentHashMap<>();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config

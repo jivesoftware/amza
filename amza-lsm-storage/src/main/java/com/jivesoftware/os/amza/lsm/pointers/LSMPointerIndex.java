@@ -199,9 +199,7 @@ public class LSMPointerIndex implements PointerIndex {
     private volatile boolean merging = false;
 
     public void merge(boolean async) throws Exception {
-        //int maxMergeDebt = 2; // TODO expose config
-        //LOG.info(mergeablePointerIndexs.hasMergeDebt() + " " + merging + " " + mergeablePointerIndexs.mergeDebt());
-
+        
         if (!mergeablePointerIndexs.hasMergeDebt() || merging) {
             return;
         }

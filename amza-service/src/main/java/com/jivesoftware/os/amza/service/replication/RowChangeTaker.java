@@ -821,7 +821,7 @@ public class RowChangeTaker implements RowChanges {
                             flushed.set(streamed.get());
                             int numFlushed = changes.getApply().size();
                             if (numFlushed > 0) {
-                                amzaStats.tookApplied(ringMember, versionedPartitionName.getPartitionName(), numFlushed, changes.getSmallestCommittedTxId());
+                                amzaStats.tookApplied(ringMember, versionedPartitionName.getPartitionName(), numFlushed, oldestTxId.longValue());
                             }
                         }
                         amzaStats.backPressure.set(0);

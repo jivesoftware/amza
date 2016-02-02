@@ -20,7 +20,7 @@ public class LSMPointerUtils {
             }
             int keyLength = UIO.bytesInt(rawEntry, offset);
             byte[] k = new byte[keyLength];
-            System.arraycopy(rawEntry, 4, k, 0, keyLength);
+            System.arraycopy(rawEntry, offset + 4, k, 0, keyLength);
             long timestamp = UIO.bytesLong(rawEntry, offset + 4 + keyLength);
             boolean tombstone = rawEntry[offset + 4 + keyLength + 8] != 0;
             long version = UIO.bytesLong(rawEntry, offset + 4 + keyLength + 8 + 1);
@@ -39,7 +39,7 @@ public class LSMPointerUtils {
             }
             int keyLength = UIO.bytesInt(rawEntry, offset);
             byte[] key = new byte[keyLength];
-            System.arraycopy(rawEntry, 4, key, 0, keyLength);
+            System.arraycopy(rawEntry, offset + 4, key, 0, keyLength);
             long timestamp = UIO.bytesLong(rawEntry, offset + 4 + keyLength);
             boolean tombstone = rawEntry[offset + 4 + keyLength + 8] != 0;
             long version = UIO.bytesLong(rawEntry, offset + 4 + keyLength + 8 + 1);

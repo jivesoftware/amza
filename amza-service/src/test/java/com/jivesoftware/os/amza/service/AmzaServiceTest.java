@@ -52,6 +52,11 @@ public class AmzaServiceTest {
     public void testAddToReplicatedWAL() throws Exception {
         final int maxNumberOfServices = 5;
 
+        // TODO test this using all version
+        //String indexClassType = BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME;
+        //String indexClassType = LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME;
+        String indexClassType = "memory_persistent";
+
         File createTempDir = Files.createTempDir();
         AmzaTestCluster cluster = new AmzaTestCluster(createTempDir, 0, 0);
         for (int i = 0; i < maxNumberOfServices; i++) {
@@ -59,9 +64,19 @@ public class AmzaServiceTest {
         }
         Collection<AmzaNode> clusterNodes = cluster.getAllNodes();
 
-        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition1".getBytes()), RowType.primary, Consistency.quorum,
+        testRowType(cluster,
+            maxNumberOfServices,
+            new PartitionName(false, "test".getBytes(), "partition1".getBytes()),
+            indexClassType,
+            RowType.primary,
+            Consistency.quorum,
             Consistency.quorum);
-        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition2".getBytes()), RowType.snappy_primary,
+
+        testRowType(cluster,
+            maxNumberOfServices,
+            new PartitionName(false, "test".getBytes(), "partition2".getBytes()),
+            indexClassType,
+            RowType.snappy_primary,
             Consistency.quorum, Consistency.quorum);
 
         System.out.println("\n------ensuring non empty---------");
@@ -94,16 +109,33 @@ public class AmzaServiceTest {
             a.stop();
         }
 
-        System.out.println("\n------restarting---------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("---- Restarting :) ------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+        System.out.println("-------------------------");
+
         cluster = new AmzaTestCluster(createTempDir, 0, 0);
         for (AmzaNode a : clusterNodes) {
             cluster.newNode(a.ringMember, a.ringHost);
         }
 
-        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition1".getBytes()), RowType.primary, Consistency.quorum,
+        testRowType(cluster,
+            maxNumberOfServices,
+            new PartitionName(false, "test".getBytes(), "partition1".getBytes()),
+            indexClassType,
+            RowType.primary,
+            Consistency.quorum,
             Consistency.quorum);
-        testRowType(cluster, maxNumberOfServices, new PartitionName(false, "test".getBytes(), "partition2".getBytes()), RowType.snappy_primary,
-            Consistency.quorum, Consistency.quorum);
+
+        testRowType(cluster, maxNumberOfServices,
+            new PartitionName(false, "test".getBytes(), "partition2".getBytes()),
+            indexClassType,
+            RowType.snappy_primary,
+            Consistency.quorum,
+            Consistency.quorum);
 
         clusterNodes = cluster.getAllNodes();
         for (AmzaNode a : clusterNodes) {
@@ -201,7 +233,11 @@ public class AmzaServiceTest {
 
     }
 
-    private void testRowType(AmzaTestCluster cluster, int maxNumberOfServices, PartitionName partitionName, RowType rowType,
+    private void testRowType(AmzaTestCluster cluster,
+        int maxNumberOfServices,
+        PartitionName partitionName,
+        String indexClassType,
+        RowType rowType,
         Consistency readConsistency,
         Consistency writeConsistency
     ) throws Exception {
@@ -262,7 +298,7 @@ public class AmzaServiceTest {
                 public Void call() throws Exception {
                     AmzaNode node = cluster.get(new RingMember("localhost-" + random.nextInt(maxNumberOfServices)));
                     if (node != null) {
-                        node.create(writeConsistency, partitionName, rowType);
+                        node.create(writeConsistency, partitionName, indexClassType, rowType);
                         boolean tombstone = random.nextBoolean();
                         String prefix = "a";
                         String key = String.valueOf(random.nextInt(maxFields));

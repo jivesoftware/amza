@@ -326,6 +326,8 @@ public class AmzaStressPluginRegion implements PageRegion<AmzaStressPluginRegion
                         Optional.<List<String>>empty());
                     break;
 
+                } catch (InterruptedException x) {
+                    throw x;
                 } catch (DeltaOverCapacityException de) {
                     Thread.sleep(100);
                     LOG.warn("Delta over capacity for region:{} batch:{} thread:{}", new Object[] { regionName, batch, threadIndex });

@@ -1,14 +1,17 @@
 package com.jivesoftware.os.amza.service;
 
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.PartitionClient;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
 import com.jivesoftware.os.amza.api.take.TakeResult;
+import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.List;
@@ -60,16 +63,19 @@ public class EmbeddedPartitionClient implements PartitionClient {
 
     @Override
     public boolean scan(Consistency consistency,
-        byte[] fromPrefix,
-        byte[] fromKey,
-        byte[] toPrefix,
-        byte[] toKey,
+        PrefixedKeyRanges ranges,
         KeyValueTimestampStream scan,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
         long abandonSolutionAfterNMillis,
         Optional<List<String>> solutionLog) throws Exception {
-        return partition.scan(fromPrefix, fromKey, toPrefix, toKey, scan);
+
+        List<ScanRange> scanRanges = Lists.newArrayList();
+        ranges.consume((fromPrefix, fromKey, toPrefix, toKey) -> {
+            scanRanges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
+            return true;
+        });
+        return partition.scan(scanRanges, scan);
     }
 
     @Override

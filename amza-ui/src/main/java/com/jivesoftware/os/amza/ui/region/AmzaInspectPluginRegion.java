@@ -116,10 +116,10 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                 final AtomicLong batch = new AtomicLong(input.batchSize);
                 long start = System.currentTimeMillis();
                 partition.scan(input.consistency,
-                    getPrefix(input.prefix),
-                    input.key.isEmpty() ? null : hexStringToByteArray(input.key),
-                    getPrefix(input.toPrefix),
-                    input.toKey.isEmpty() ? null : hexStringToByteArray(input.toKey),
+                    stream -> stream.stream(getPrefix(input.prefix),
+                        input.key.isEmpty() ? null : hexStringToByteArray(input.key),
+                        getPrefix(input.toPrefix),
+                        input.toKey.isEmpty() ? null : hexStringToByteArray(input.toKey)),
                     (prefix, key, value, timestamp, version) -> {
                         if (offset.decrementAndGet() >= 0) {
                             return true;
@@ -158,10 +158,10 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
 
                 long start = System.currentTimeMillis();
                 partition.scan(input.consistency,
-                    getPrefix(input.prefix),
-                    input.key.isEmpty() ? null : hexStringToByteArray(input.key),
-                    getPrefix(input.toPrefix),
-                    input.toKey.isEmpty() ? null : hexStringToByteArray(input.toKey),
+                    stream -> stream.stream(getPrefix(input.prefix),
+                        input.key.isEmpty() ? null : hexStringToByteArray(input.key),
+                        getPrefix(input.toPrefix),
+                        input.toKey.isEmpty() ? null : hexStringToByteArray(input.toKey)),
                     (prefix, key, value, timestamp, version) -> {
                         count.incrementAndGet();
                         if (timestamp < min.get()) {
@@ -270,10 +270,10 @@ public class AmzaInspectPluginRegion implements PageRegion<AmzaInspectPluginRegi
                     AmzaPartitionUpdates updates = new AmzaPartitionUpdates();
                     byte[][] lastPrefix = new byte[1][];
                     partition.scan(input.consistency,
-                        getPrefix(input.prefix),
-                        fromRawKeys.get(0),
-                        getPrefix(input.toPrefix),
-                        toRawKeys.get(0),
+                        stream -> stream.stream(getPrefix(input.prefix),
+                            fromRawKeys.get(0),
+                            getPrefix(input.toPrefix),
+                            toRawKeys.get(0)),
                         (prefix, key, value, timestamp, version) -> {
                             if (updates.size() >= input.batchSize || !Arrays.equals(lastPrefix[0], prefix)) {
                                 partition.commit(Consistency.none, lastPrefix[0], updates, 30_000, 30_000, Optional.of(msg));

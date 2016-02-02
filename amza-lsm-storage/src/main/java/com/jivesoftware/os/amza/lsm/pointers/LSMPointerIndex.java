@@ -97,7 +97,7 @@ public class LSMPointerIndex implements PointerIndex {
         for (IndexRangeId range : ranges) {
             File indexDir = range.toFile(indexRoot);
             LeapsAndBoundsIndex pointerIndex = new LeapsAndBoundsIndex(destroy,
-                range, new IndexFile(new File(indexDir, "index").getAbsolutePath(), "rw", false, 1024 * 1024));
+                range, new IndexFile(new File(indexDir, "index").getAbsolutePath(), "rw", false, 0));
             mergeablePointerIndexs.append(pointerIndex);
         }
     } // descending
@@ -226,7 +226,7 @@ public class LSMPointerIndex implements PointerIndex {
                 int maxLeaps = IndexUtil.calculateIdealMaxLeaps(count, entriesBetweenLeaps);
 
                 WriteLeapsAndBoundsIndex writeLeapsAndBoundsIndex = new WriteLeapsAndBoundsIndex(id,
-                    new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false, 1024 * 1024),
+                    new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false, 0),
                     maxLeaps,
                     4096);
                 return writeLeapsAndBoundsIndex;
@@ -236,7 +236,7 @@ public class LSMPointerIndex implements PointerIndex {
                 FileUtils.moveDirectory(tmpRoot[0], mergedIndexRoot);
                 File indexFile = new File(mergedIndexRoot, "index");
                 LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(destroy,
-                    id, new IndexFile(indexFile.getAbsolutePath(), "r", false, 1024 * 1024));
+                    id, new IndexFile(indexFile.getAbsolutePath(), "r", false, 0));
                 System.out.println("Commited " + reopenedIndex.count() + " index:" + indexFile.length() + "bytes");
                 reopenedIndex.flush(true); // Sorry
                 // TODO Files.fsync mergedIndexRoot when java 9 supports it.
@@ -288,14 +288,14 @@ public class LSMPointerIndex implements PointerIndex {
 
         IndexRangeId indexRangeId = new IndexRangeId(nextIndexId, nextIndexId);
         WriteLeapsAndBoundsIndex write = new WriteLeapsAndBoundsIndex(indexRangeId,
-            new IndexFile(new File(tmpRoot, "index").getAbsolutePath(), "rw", false, 1024 * 1024), maxLeaps, entriesBetweenLeaps);
+            new IndexFile(new File(tmpRoot, "index").getAbsolutePath(), "rw", false, 0), maxLeaps, entriesBetweenLeaps);
         write.append(flushingMemoryPointerIndex);
         write.close();
 
         File index = indexRangeId.toFile(indexRoot);
         FileUtils.moveDirectory(tmpRoot, index);
         LeapsAndBoundsIndex reopenedIndex = new LeapsAndBoundsIndex(destroy,
-            indexRangeId, new IndexFile(new File(index, "index").getAbsolutePath(), "r", false, 1024 * 1024));
+            indexRangeId, new IndexFile(new File(index, "index").getAbsolutePath(), "r", false, 0));
 
         reopenedIndex.flush(true);  // Sorry
         // TODO Files.fsync index when java 9 supports it.

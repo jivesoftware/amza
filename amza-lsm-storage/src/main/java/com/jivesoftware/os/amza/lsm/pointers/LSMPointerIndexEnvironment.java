@@ -16,15 +16,17 @@ public class LSMPointerIndexEnvironment {
     private final File rootFile;
     private final ExecutorService merge = Executors.newCachedThreadPool(); // TODO config 'maybe'
     private final ExecutorService destroy = Executors.newSingleThreadExecutor(); // TODO config 'maybe'
+    private final int maxMergeDebt;
 
-    public LSMPointerIndexEnvironment(File rootFile) {
+    public LSMPointerIndexEnvironment(File rootFile, int maxMergeDebt) {
         this.rootFile = rootFile;
+        this.maxMergeDebt = maxMergeDebt;
     }
 
     PointerIndex open(String primaryName, int maxUpdatesBetweenCompactionHintMarker) throws Exception {
         File indexRoot = new File(rootFile, primaryName + File.separator);
         ensure(indexRoot);
-        return new LSMPointerIndex(merge, destroy, indexRoot, maxUpdatesBetweenCompactionHintMarker);
+        return new LSMPointerIndex(merge, destroy, indexRoot, maxUpdatesBetweenCompactionHintMarker, maxMergeDebt);
     }
 
     boolean ensure(File key) {

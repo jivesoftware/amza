@@ -374,7 +374,7 @@ public class LSMPointerIndexWALIndexTest {
     }
 
     private LSMPointerIndexWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
-        return new LSMPointerIndexWALIndexProvider("lsm", new PartitionStripeFunction(1), new File[] { dir }).createIndex(partitionName);
+        return new LSMPointerIndexWALIndexProvider("lsm", new PartitionStripeFunction(1), new File[] { dir },2).createIndex(partitionName);
     }
 
 }

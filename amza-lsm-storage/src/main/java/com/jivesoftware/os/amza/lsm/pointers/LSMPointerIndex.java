@@ -226,7 +226,9 @@ public class LSMPointerIndex implements PointerIndex {
                 int maxLeaps = IndexUtil.calculateIdealMaxLeaps(count, entriesBetweenLeaps);
 
                 WriteLeapsAndBoundsIndex writeLeapsAndBoundsIndex = new WriteLeapsAndBoundsIndex(id,
-                    new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false, 1024 * 1024), maxLeaps, 4096);
+                    new IndexFile(new File(tmpRoot[0], "index").getAbsolutePath(), "rw", false, 1024 * 1024),
+                    maxLeaps,
+                    4096);
                 return writeLeapsAndBoundsIndex;
             },
             (id, index) -> {

@@ -45,10 +45,10 @@ public class LSMPointerIndexEnvironmentConcurrenyNGTest {
         Random rand = new Random(12345);
         PointerIndex index = env.open("foo", 1000);
         AtomicLong running = new AtomicLong();
-        List<Future> futures = new ArrayList<>();
+        List<Future> writerFutures = new ArrayList<>();
         for (int i = 0; i < writerCount; i++) {
             running.incrementAndGet();
-            futures.add(writers.submit(() -> {
+            writerFutures.add(writers.submit(() -> {
                 try {
                     for (int c = 0; c < commitCount; c++) {
                         index.append((PointerStream stream) -> {
@@ -62,9 +62,9 @@ public class LSMPointerIndexEnvironmentConcurrenyNGTest {
                             }
                             return true;
                         });
+                        index.commit();
+                        System.out.println(" gets:" + hits.get());
                     }
-                    index.commit();
-                    System.out.println(" gets:" + hits.get());
                     return null;
                 } catch (Exception x) {
                     x.printStackTrace();
@@ -75,8 +75,10 @@ public class LSMPointerIndexEnvironmentConcurrenyNGTest {
             }));
         }
 
+        List<Future> readerFutures = new ArrayList<>();
         for (int r = 0; r < readerCount; r++) {
-            readers.submit(() -> {
+            int readerId = r;
+            readerFutures.add(readers.submit(() -> {
                 try {
                     while (running.get() > 0) {
                         index.getPointer(UIO.longBytes(rand.nextInt(1_000_000)), (NextPointer nextPointer) -> {
@@ -87,20 +89,34 @@ public class LSMPointerIndexEnvironmentConcurrenyNGTest {
                             return null;
                         });
                     }
+                    System.out.println("Reader (" + readerId + ") finished.");
                     return null;
                 } catch (Exception x) {
                     x.printStackTrace();
                     throw x;
                 }
-            });
+            }));
         }
 
-        for (Future f : futures) {
+        for (Future f : writerFutures) {
             f.get();
         }
 
+        for (Future f : readerFutures) {
+            f.get();
+        }
+
+        System.out.println("ALL DONE");
+        System.out.println("ALL DONE");
+        System.out.println("ALL DONE");
+        System.out.println("ALL DONE");
+        System.out.println("ALL DONE");
+        System.out.println("ALL DONE");
+
         writers.shutdownNow();
         readers.shutdownNow();
+
+        //Thread.sleep(Integer.MAX_VALUE);
 
     }
 

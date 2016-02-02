@@ -288,26 +288,6 @@ public class LSMPointerIndexWALIndex implements WALIndex {
         }
     }
 
-    //    @Override
-//    public long size() throws Exception {
-//        lock.acquire();
-//        try {
-//            long size = count.get();
-//            if (size >= 0) {
-//                return size;
-//            }
-//            int numCommits = commits.get();
-//            size = primaryDb.count();
-//            synchronized (commits) {
-//                if (numCommits == commits.get()) {
-//                    count.set(size);
-//                }
-//            }
-//            return size;
-//        } finally {
-//            lock.release();
-//        }
-//    }
     @Override
     public void commit() throws Exception {
         lock.acquire();
@@ -480,6 +460,11 @@ public class LSMPointerIndexWALIndex implements WALIndex {
             + ", commits=" + commits
             + ", compactingTo=" + compactingTo
             + '}';
+    }
+
+    public void flush(boolean fsync) throws Exception {
+        primaryDb.commit();
+        prefixDb.commit();
     }
 
 }

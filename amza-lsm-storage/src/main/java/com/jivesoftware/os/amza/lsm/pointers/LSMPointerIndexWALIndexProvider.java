@@ -1,6 +1,5 @@
 package com.jivesoftware.os.amza.lsm.pointers;
 
-import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.AmzaVersionConstants;
 import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -10,7 +9,6 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;
 import java.io.File;
-import java.util.Set;
 
 /**
  *
@@ -83,12 +81,8 @@ public class LSMPointerIndexWALIndexProvider implements WALIndexProvider<LSMPoin
 
     @Override
     public void flush(Iterable<LSMPointerIndexWALIndex> indexes, boolean fsync) throws Exception {
-        Set<Integer> stripes = Sets.newHashSet();
         for (LSMPointerIndexWALIndex index : indexes) {
-            stripes.add(partitionStripeFunction.stripe(index.getVersionedPartitionName().getPartitionName()));
-        }
-        for (int stripe : stripes) {
-            environments[stripe].flush(fsync);
+            index.flush(fsync); // So call me maybe?
         }
     }
 

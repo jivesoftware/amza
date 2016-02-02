@@ -35,6 +35,8 @@ import com.jivesoftware.os.amza.api.scan.RowsChanged;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.TakeCursors;
+import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
+import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
@@ -244,6 +246,15 @@ public class AmzaTestCluster {
             idPacker,
             partitionPropertyMarshaller,
             (workingIndexDirectories, indexProviderRegistry, ephemeralRowIOProvider, persistentRowIOProvider, partitionStripeFunction) -> {
+
+                indexProviderRegistry.register(
+                    new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
+                    persistentRowIOProvider);
+
+                indexProviderRegistry.register(
+                    new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
+                    persistentRowIOProvider);
+
             },
             availableRowsTaker,
             () -> updateTaker,
@@ -331,7 +342,7 @@ public class AmzaTestCluster {
             asIfOverTheWire.shutdownNow();
         }
 
-        public void create(Consistency consistency, PartitionName partitionName, RowType rowType) throws Exception {
+        public void create(Consistency consistency, PartitionName partitionName, String indexClassName, RowType rowType) throws Exception {
             // TODO test other consistencies and durabilities and .... Hehe
             amzaService.setPropertiesIfAbsent(partitionName, new PartitionProperties(Durability.fsync_never,
                 0, 0, 0, 0, 0, 0, 0, 0,
@@ -341,7 +352,7 @@ public class AmzaTestCluster {
                 2,
                 false,
                 rowType,
-                "memory_persistent",
+                indexClassName,
                 null));
             amzaService.awaitOnline(partitionName, Integer.MAX_VALUE); //TODO lololol
         }

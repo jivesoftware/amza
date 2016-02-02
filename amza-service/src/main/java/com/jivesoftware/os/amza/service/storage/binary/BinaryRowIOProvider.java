@@ -57,9 +57,7 @@ public class BinaryRowIOProvider implements RowIOProvider {
     @Override
     public File versionedKey(File baseKey, String latestVersion) throws Exception {
         File directory = new File(baseKey, latestVersion);
-        if (!directory.exists() && !directory.mkdirs()) {
-            throw new IOException("Failed trying to mkdirs for " + directory);
-        }
+        FileUtils.forceMkdir(directory);
         return directory;
     }
 

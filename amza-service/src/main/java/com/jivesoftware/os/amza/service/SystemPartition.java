@@ -118,23 +118,29 @@ public class SystemPartition implements Partition {
     }
 
     @Override
-    public boolean scan(byte[] fromPrefix,
-        byte[] fromKey,
-        byte[] toPrefix,
-        byte[] toKey,
-        KeyValueTimestampStream scan) throws Exception {
-        if (fromKey == null && toKey == null) {
-            return systemWALStorage.rowScan(versionedPartitionName, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
-        } else {
-            return systemWALStorage.rangeScan(versionedPartitionName,
-                fromPrefix,
-                fromKey,
-                toPrefix,
-                toKey,
-                (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
-                    -> valueTombstoned || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+    public boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan) throws Exception {
+        for (ScanRange range : ranges) {
+            if (range.fromKey == null && range.toKey == null) {
+                boolean result = systemWALStorage.rowScan(versionedPartitionName,
+                    (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                        -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                if (!result) {
+                    return false;
+                }
+            } else {
+                boolean result = systemWALStorage.rangeScan(versionedPartitionName,
+                    range.fromPrefix,
+                    range.fromKey,
+                    range.toPrefix,
+                    range.toKey,
+                    (rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion)
+                        -> valueTombstoned || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                if (!result) {
+                    return false;
+                }
+            }
         }
+        return true;
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.replication.http;
 
+import com.google.common.collect.Lists;
 import com.jivesoftware.os.amza.api.filer.IReadable;
 import com.jivesoftware.os.amza.api.filer.IWriteable;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -15,6 +16,7 @@ import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
 import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.Partition;
+import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.PartitionProvider;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
@@ -24,6 +26,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * @author jonathan.colt
@@ -169,12 +172,17 @@ public class AmzaClientService implements AmzaRestClient {
     public void scan(PartitionName partitionName, IReadable in, IWriteable out) throws Exception {
         byte[] intLongBuffer = new byte[8];
         Partition partition = partitionProvider.getPartition(partitionName);
-        byte[] fromPrefix = UIO.readByteArray(in, "fromPrefix", intLongBuffer);
-        byte[] fromKey = UIO.readByteArray(in, "fromKey", intLongBuffer);
-        byte[] toPrefix = UIO.readByteArray(in, "toPrefix", intLongBuffer);
-        byte[] toKey = UIO.readByteArray(in, "toKey", intLongBuffer);
 
-        partition.scan(fromPrefix, fromKey, toPrefix, toKey,
+        List<ScanRange> ranges = Lists.newArrayList();
+        while (UIO.readByte(in, "eos") == (byte) 1) {
+            byte[] fromPrefix = UIO.readByteArray(in, "fromPrefix", intLongBuffer);
+            byte[] fromKey = UIO.readByteArray(in, "fromKey", intLongBuffer);
+            byte[] toPrefix = UIO.readByteArray(in, "toPrefix", intLongBuffer);
+            byte[] toKey = UIO.readByteArray(in, "toKey", intLongBuffer);
+            ranges.add(new ScanRange(fromPrefix, fromKey, toPrefix, toKey));
+        }
+
+        partition.scan(ranges,
             (prefix, key, value, timestamp, version) -> {
                 UIO.writeByte(out, (byte) 0, "eos");
                 UIO.writeByteArray(out, prefix, "prefix", intLongBuffer);

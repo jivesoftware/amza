@@ -7,6 +7,7 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
+import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.client.http.exceptions.LeaderElectionInProgressException;
@@ -120,10 +121,7 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
         RingMember ringMember,
         HttpClient client,
         Consistency consistency,
-        byte[] fromPrefix,
-        byte[] fromKey,
-        byte[] toPrefix,
-        byte[] toKey) throws HttpClientException {
+        PrefixedKeyRanges ranges) throws HttpClientException {
 
         byte[] intLongBuffer = new byte[8];
 
@@ -132,10 +130,17 @@ public class HttpRemotePartitionCaller implements RemotePartitionCaller<HttpClie
             (out) -> {
                 try {
                     FilerOutputStream fos = new FilerOutputStream(out);
-                    UIO.writeByteArray(fos, fromPrefix, "fromPrefix", intLongBuffer);
-                    UIO.writeByteArray(fos, fromKey, "fromKey", intLongBuffer);
-                    UIO.writeByteArray(fos, toPrefix, "toPrefix", intLongBuffer);
-                    UIO.writeByteArray(fos, toKey, "toKey", intLongBuffer);
+                    ranges.consume((fromPrefix, fromKey, toPrefix, toKey) -> {
+                        UIO.writeByte(fos, (byte) 1, "eos");
+                        UIO.writeByteArray(fos, fromPrefix, "fromPrefix", intLongBuffer);
+                        UIO.writeByteArray(fos, fromKey, "fromKey", intLongBuffer);
+                        UIO.writeByteArray(fos, toPrefix, "toPrefix", intLongBuffer);
+                        UIO.writeByteArray(fos, toKey, "toKey", intLongBuffer);
+                        return true;
+                    });
+                    UIO.writeByte(fos, (byte) 0, "eos");
+                } catch (Exception x) {
+                    throw new RuntimeException("Failed while scanning ranges.", x);
                 } finally {
                     out.close();
                 }

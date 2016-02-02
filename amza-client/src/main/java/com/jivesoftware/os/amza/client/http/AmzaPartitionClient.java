@@ -10,6 +10,7 @@ import com.jivesoftware.os.amza.api.partition.PartitionName;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
@@ -129,10 +130,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
 
     @Override
     public boolean scan(Consistency consistency,
-        byte[] fromPrefix,
-        byte[] fromKey,
-        byte[] toPrefix,
-        byte[] toKey,
+        PrefixedKeyRanges ranges,
         KeyValueTimestampStream stream,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,
@@ -150,7 +148,7 @@ public class AmzaPartitionClient<C, E extends Throwable> implements PartitionCli
         byte[] intLongBuffer = new byte[8];
         return partitionCallRouter.read(solutionLog.orElse(null), partitionName, consistency, "scan",
             (leader, ringMember, client) -> {
-                return remotePartitionCaller.scan(leader, ringMember, client, consistency, fromPrefix, fromKey, toPrefix, toKey);
+                return remotePartitionCaller.scan(leader, ringMember, client, consistency, ranges);
             },
             (answers) -> {
                 List<FilerInputStream> streams = Lists.transform(answers, input -> new FilerInputStream(input.getAnswer().getInputStream()));

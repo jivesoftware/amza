@@ -38,6 +38,7 @@ import com.jivesoftware.os.amza.api.take.TakeCursors;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
 import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
+import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
@@ -65,6 +66,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -473,7 +475,7 @@ public class AmzaTestCluster {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
                     int[] count = { 0 };
-                    partition.scan(null, null, null, null, (prefix, key, value, timestamp, version) -> {
+                    partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
                     });
@@ -570,7 +572,7 @@ public class AmzaTestCluster {
             final MutableInt compared = new MutableInt(0);
             final MutableBoolean passed = new MutableBoolean(true);
             try {
-                a.scan(null, null, null, null,
+                a.scan(Collections.singletonList(ScanRange.ROW_SCAN),
                     (prefix, key, aValue, aTimestamp, aVersion) -> {
                         try {
                             compared.increment();

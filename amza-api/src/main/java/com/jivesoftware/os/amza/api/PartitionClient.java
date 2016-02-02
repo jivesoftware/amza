@@ -4,6 +4,7 @@ import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.stream.ClientUpdates;
 import com.jivesoftware.os.amza.api.stream.KeyValueTimestampStream;
+import com.jivesoftware.os.amza.api.stream.PrefixedKeyRanges;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.Highwaters;
@@ -45,18 +46,10 @@ public interface PartitionClient {
         Optional<List<String>> solutionLog) throws Exception;
 
     /**
-     * @param fromPrefix   nullable (inclusive)
-     * @param fromKey      nullable (inclusive)
-     * @param toPrefix     nullable (exclusive)
-     * @param toKey        nullable (exclusive)
-     * @param scan
-     * @throws Exception
+     * @param ranges the ranges (from key/prefix is nullable and inclusive, to key/prefix is nullable and exclusive)
      */
     boolean scan(Consistency consistency,
-        byte[] fromPrefix,
-        byte[] fromKey,
-        byte[] toPrefix,
-        byte[] toKey,
+        PrefixedKeyRanges ranges,
         KeyValueTimestampStream scan,
         long additionalSolverAfterNMillis,
         long abandonLeaderSolutionAfterNMillis,

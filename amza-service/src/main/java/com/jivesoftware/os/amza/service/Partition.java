@@ -21,19 +21,7 @@ public interface Partition {
 
     boolean get(Consistency consistency, byte[] prefix, UnprefixedWALKeys keys, KeyValueStream stream) throws Exception;
 
-    /**
-     * @param fromPrefix nullable (inclusive)
-     * @param fromKey    nullable (inclusive)
-     * @param toPrefix   nullable (exclusive)
-     * @param toKey      nullable (exclusive)
-     * @param scan
-     * @throws Exception
-     */
-    boolean scan(byte[] fromPrefix,
-        byte[] fromKey,
-        byte[] toPrefix,
-        byte[] toKey,
-        KeyValueTimestampStream scan) throws Exception;
+    boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan) throws Exception;
 
     TakeResult takeFromTransactionId(long txId,
         Highwaters highwaters,
@@ -49,5 +37,27 @@ public interface Partition {
     long count() throws Exception;
 
     long highestTxId(HighestPartitionTx highestPartitionTx) throws Exception;
+
+    class ScanRange {
+        public static final ScanRange ROW_SCAN = new ScanRange(null, null, null, null);
+
+        public final byte[] fromPrefix;
+        public final byte[] fromKey;
+        public final byte[] toPrefix;
+        public final byte[] toKey;
+
+        /**
+         * @param fromPrefix nullable (inclusive)
+         * @param fromKey    nullable (inclusive)
+         * @param toPrefix   nullable (exclusive)
+         * @param toKey      nullable (exclusive)
+         */
+        public ScanRange(byte[] fromPrefix, byte[] fromKey, byte[] toPrefix, byte[] toKey) {
+            this.fromPrefix = fromPrefix;
+            this.fromKey = fromKey;
+            this.toPrefix = toPrefix;
+            this.toKey = toKey;
+        }
+    }
 
 }

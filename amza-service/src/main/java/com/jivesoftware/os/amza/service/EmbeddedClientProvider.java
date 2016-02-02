@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeys;
 import com.jivesoftware.os.amza.api.take.TakeCursors;
 import com.jivesoftware.os.amza.api.take.TakeResult;
 import com.jivesoftware.os.amza.api.wal.WALHighwater;
+import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.ArrayList;
@@ -81,12 +82,9 @@ public class EmbeddedClientProvider { // Aka Partition Client Provider
             return r[0];
         }
 
-        public void scan(byte[] fromPrefix,
-            byte[] fromKey,
-            byte[] toPrefix,
-            byte[] toKey,
+        public void scan(Iterable<ScanRange> ranges,
             KeyValueTimestampStream stream) throws Exception {
-            partitionProvider.getPartition(partitionName).scan(fromPrefix, fromKey, toPrefix, toKey, stream);
+            partitionProvider.getPartition(partitionName).scan(ranges, stream);
         }
 
         public TakeCursors takeFromTransactionId(long transactionId, TxKeyValueStream stream) throws Exception {

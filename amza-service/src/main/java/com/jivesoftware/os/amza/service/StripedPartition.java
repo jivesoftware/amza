@@ -168,26 +168,25 @@ public class StripedPartition implements Partition {
     }
 
     @Override
-    public boolean scan(byte[] fromPrefix,
-        byte[] fromKey,
-        byte[] toPrefix,
-        byte[] toKey,
-        KeyValueTimestampStream scan) throws Exception {
+    public boolean scan(Iterable<ScanRange> ranges, KeyValueTimestampStream scan) throws Exception {
 
         systemReady.await(0);
         return partitionStripeProvider.txPartition(partitionName, (stripe, highwaterStorage) -> {
-            if (fromKey == null && toKey == null) {
-                stripe.rowScan(partitionName, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
-                    -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
-            } else {
-                stripe.rangeScan(partitionName,
-                    fromPrefix,
-                    fromKey,
-                    toPrefix,
-                    toKey,
-                    (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+            for (ScanRange range : ranges) {
+                if (range.fromKey == null && range.toKey == null) {
+                    stripe.rowScan(partitionName, (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
                         -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                } else {
+                    stripe.rangeScan(partitionName,
+                        range.fromPrefix,
+                        range.fromKey,
+                        range.toPrefix,
+                        range.toKey,
+                        (rowType, prefix, key, value, valueTimestamp, valueTombstone, valueVersion)
+                            -> valueTombstone || scan.stream(prefix, key, value, valueTimestamp, valueVersion));
+                }
             }
+
             return true;
         });
     }

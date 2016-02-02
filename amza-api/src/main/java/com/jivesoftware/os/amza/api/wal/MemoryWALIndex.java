@@ -278,10 +278,12 @@ public class MemoryWALIndex implements WALIndex {
             @Override
             public void commit(Callable<Void> commit) throws Exception {
                 index.clear();
+                prefixFpIndex.clear();
                 if (commit != null) {
                     commit.call();
                 }
                 index.putAll(rowsIndex.index);
+                prefixFpIndex.putAll(rowsIndex.prefixFpIndex);
             }
         };
 

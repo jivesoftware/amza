@@ -36,7 +36,6 @@ import com.jivesoftware.os.amza.service.NotARingMemberException;
 import com.jivesoftware.os.amza.service.PropertiesNotPresentException;
 import com.jivesoftware.os.amza.service.WALIndexProviderRegistry;
 import com.jivesoftware.os.amza.service.replication.CurrentVersionProvider;
-import com.jivesoftware.os.amza.service.replication.StorageVersionProvider;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.stats.AmzaStats.CompactionFamily;
 import com.jivesoftware.os.amza.service.storage.PartitionIndex;
@@ -326,7 +325,8 @@ public class DeltaStripeWALStorage {
             DeltaWAL newDeltaWAL = newWAL.call();
             deltaWAL.set(newDeltaWAL);
             updateSinceLastMerge.set(0);
-
+            amzaStats.deltaStripeLoad(index, 0, 0);
+            
             AtomicLong mergeable = new AtomicLong();
             AtomicLong merged = new AtomicLong();
             AtomicLong unmerged = new AtomicLong();

@@ -215,8 +215,12 @@ public class AmzaMain {
                         new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                         persistentRowIOProvider);
 
+                    int maxMergeDebt = 4; // TODO config
                     indexProviderRegistry.register(
-                        new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
+                        new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                            partitionStripeFunction,
+                            workingIndexDirectories,
+                            maxMergeDebt),
                         persistentRowIOProvider);
 
                 },

@@ -254,7 +254,7 @@ public class AmzaTestCluster {
                     persistentRowIOProvider);
 
                 indexProviderRegistry.register(
-                    new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
+                    new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories, 3),
                     persistentRowIOProvider);
 
             },

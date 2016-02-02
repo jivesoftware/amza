@@ -34,6 +34,7 @@ public class LSMPointerIndex implements PointerIndex {
     private final File commitingRoot;
     private final File indexRoot;
     private final int maxUpdatesBeforeFlush;
+    private final int maxMergeDebt;
     private RawMemoryIndex memoryPointerIndex;
     private RawMemoryIndex flushingMemoryPointerIndex;
     private final AtomicLong largestIndexId = new AtomicLong();
@@ -44,7 +45,8 @@ public class LSMPointerIndex implements PointerIndex {
     public LSMPointerIndex(ExecutorService merge,
         ExecutorService destroy,
         File root,
-        int maxUpdatesBeforeFlush) throws Exception {
+        int maxUpdatesBeforeFlush,
+        int maxMergeDebt) throws Exception {
 
         this.merge = merge;
         this.destroy = destroy;
@@ -54,6 +56,7 @@ public class LSMPointerIndex implements PointerIndex {
         this.maxUpdatesBeforeFlush = maxUpdatesBeforeFlush;
         this.memoryPointerIndex = new RawMemoryIndex(marshaller);
         this.mergeablePointerIndexs = new MergeableIndexes();
+        this.maxMergeDebt = maxMergeDebt;
 
         FileUtils.deleteDirectory(mergingRoot);
         FileUtils.deleteDirectory(commitingRoot);
@@ -202,6 +205,10 @@ public class LSMPointerIndex implements PointerIndex {
         if (!mergeablePointerIndexs.hasMergeDebt() || merging) {
             return;
         }
+
+        if (mergeablePointerIndexs.mergeDebt() <= maxMergeDebt) {
+            return;
+        }
         synchronized (this) {
             // TODO use semaphores instead of a hard lock
             if (merging) {
@@ -270,7 +277,7 @@ public class LSMPointerIndex implements PointerIndex {
             flushingMemoryPointerIndex = memoryPointerIndex;
             memoryPointerIndex = new RawMemoryIndex(marshaller);
         }
-        LOG.info("Commiting memory index (" + flushingMemoryPointerIndex.count() + ") to on disk index." + indexRoot);
+        LOG.debug("Commiting memory index (" + flushingMemoryPointerIndex.count() + ") to on disk index." + indexRoot);
         File tmpRoot = new File(commitingRoot, String.valueOf(System.currentTimeMillis()));
         FileUtils.forceMkdir(tmpRoot);
 

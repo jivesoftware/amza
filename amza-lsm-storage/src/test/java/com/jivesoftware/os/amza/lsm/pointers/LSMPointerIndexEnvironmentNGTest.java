@@ -20,7 +20,7 @@ public class LSMPointerIndexEnvironmentNGTest {
     public void testSomeMethod() throws Exception {
 
         File root = Files.createTempDir();
-        LSMPointerIndexEnvironment env = new LSMPointerIndexEnvironment(root);
+        LSMPointerIndexEnvironment env = new LSMPointerIndexEnvironment(root, 2);
 
         PointerIndex index = env.open("foo", 1000);
 
@@ -28,12 +28,12 @@ public class LSMPointerIndexEnvironmentNGTest {
         AtomicLong pointer = new AtomicLong();
         AtomicLong count = new AtomicLong();
 
-
         int totalCardinality = 100_000_000;
-        int commitCount = 10;
-        int batchCount = 100_000;
-        int getCount = 10_000;
+        int commitCount = 34;
+        int batchCount = 3_000;
+        int getCount = 0;
 
+        long mainStart = System.currentTimeMillis();
         Random rand = new Random(12345);
         for (int c = 0; c < commitCount; c++) {
             long start = System.currentTimeMillis();
@@ -67,10 +67,14 @@ public class LSMPointerIndexEnvironmentNGTest {
             }
             System.out.println("Get (" + hits.get() + ") Elapse:" + (System.currentTimeMillis() - start));
 
-            System.out.println("Count:" + count.get());
+            double rate = (double) count.get() * 1000 / ((System.currentTimeMillis() - mainStart));
+
+            System.out.println("Count:" + count.get() + " " + rate);
             System.out.println("-----------------------------------");
 
         }
+
+        System.out.println("Total Time:" + (System.currentTimeMillis() - mainStart));
     }
 
 }

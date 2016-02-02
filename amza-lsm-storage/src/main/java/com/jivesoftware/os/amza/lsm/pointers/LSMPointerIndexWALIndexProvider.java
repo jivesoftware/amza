@@ -22,7 +22,7 @@ public class LSMPointerIndexWALIndexProvider implements WALIndexProvider<LSMPoin
     private final PartitionStripeFunction partitionStripeFunction;
     private final LSMPointerIndexEnvironment[] environments;
 
-    public LSMPointerIndexWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, File[] baseDirs) {
+    public LSMPointerIndexWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, File[] baseDirs, int maxMergeDebt) {
         this.name = name;
         this.partitionStripeFunction = partitionStripeFunction;
         this.environments = new LSMPointerIndexEnvironment[partitionStripeFunction.getNumberOfStripes()];
@@ -35,7 +35,7 @@ public class LSMPointerIndexWALIndexProvider implements WALIndexProvider<LSMPoin
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
             }
-            this.environments[i] = new LSMPointerIndexEnvironment(active);
+            this.environments[i] = new LSMPointerIndexEnvironment(active, maxMergeDebt);
         }
     }
 

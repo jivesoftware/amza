@@ -226,13 +226,6 @@ public class AmzaMain {
                 (RowsChanged changes) -> {
                 });
 
-            RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
-                instanceConfig.getServiceName(),
-                amzaService,
-                amzaConfig.getDiscoveryIntervalMillis());
-            // run once to populate system ring
-            routingBirdAmzaDiscovery.run();
-
             HttpDeliveryClientHealthProvider clientHealthProvider = new HttpDeliveryClientHealthProvider(instanceConfig.getInstanceKey(),
                 HttpRequestHelperUtils.buildRequestHelper(instanceConfig.getRoutesHost(), instanceConfig.getRoutesPort()),
                 instanceConfig.getConnectionsHealth(), 5_000, 100);
@@ -289,11 +282,23 @@ public class AmzaMain {
                 .setContext("/static/amza");
             deployable.addResource(staticResource);
 
+            RoutingBirdAmzaDiscovery routingBirdAmzaDiscovery = new RoutingBirdAmzaDiscovery(deployable,
+                instanceConfig.getServiceName(),
+                amzaService,
+                amzaConfig.getDiscoveryIntervalMillis());
+            // run once to populate system ring
+            routingBirdAmzaDiscovery.run();
+
             amzaService.start(ringMember, ringHost);
-            deployable.buildServer().start();
-            serviceStartupHealthCheck.success();
 
             routingBirdAmzaDiscovery.start();
+
+            System.out.println("-----------------------------------------------------------------------");
+            System.out.println("|     Amza Service is in Routing Bird Discovery mode");
+            System.out.println("-----------------------------------------------------------------------");
+
+            deployable.buildServer().start();
+            serviceStartupHealthCheck.success();
 
         } catch (Throwable t) {
             serviceStartupHealthCheck.info("Encountered the following failure during startup.", t);

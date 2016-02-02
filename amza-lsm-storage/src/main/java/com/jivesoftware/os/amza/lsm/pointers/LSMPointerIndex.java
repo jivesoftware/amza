@@ -189,15 +189,17 @@ public class LSMPointerIndex implements PointerIndex {
                 return stream.stream(rawEntry, 0, rawEntry.length);
             });
         });
-        merge();
+        merge(true);
         return appended;
     }
 
     private volatile boolean merging = false;
 
-    public void merge() throws Exception {
+    public void merge(boolean async) throws Exception {
         //int maxMergeDebt = 2; // TODO expose config
-        if (mergeablePointerIndexs.hasMergeDebt() || merging) {
+        //LOG.info(mergeablePointerIndexs.hasMergeDebt() + " " + merging + " " + mergeablePointerIndexs.mergeDebt());
+
+        if (!mergeablePointerIndexs.hasMergeDebt() || merging) {
             return;
         }
         synchronized (this) {
@@ -232,10 +234,20 @@ public class LSMPointerIndex implements PointerIndex {
                 return reopenedIndex;
             });
         if (merger != null) {
-            Future<Void> merging = merge.submit(merger);
-            merging.get(); // TODO figure out it we really need to wait here.
+            Future<Void> future = merge.submit(() -> {
+                try {
+                    //LOG.info("Merging " + indexRoot + " Outstanding debt:" + mergeablePointerIndexs.mergeDebt());
+                    merger.call();
+                    merging = false;
+                } catch (Exception x) {
+                    LOG.error("Failed to merge " + indexRoot, x);
+                }
+                return null;
+            });
+            //if (!async) {
+                future.get(); // TODO figure out it we really need to wait here.
+            //}
         }
-        merging = false;
     }
 
     private volatile boolean commiting = false;
@@ -284,6 +296,8 @@ public class LSMPointerIndex implements PointerIndex {
             flushingMemoryPointerIndex = null;
             commiting = false;
         }
+
+        merge(true);
     }
 
     @Override

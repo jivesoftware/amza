@@ -94,7 +94,7 @@
         </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
-            <artifactId>amza-lsm-storage</artifactId>
+            <artifactId>amza-lab-storage</artifactId>
             <version>0.249-SNAPSHOT</version>
         </dependency>
         <dependency>

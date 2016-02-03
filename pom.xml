@@ -18,9 +18,9 @@
         <module>amza-api</module>
         <module>amza-client</module>
         <module>amza-berkeleydb-storage</module>
-        <module>amza-lsm-storage</module>
         <module>amza-ui</module>
         <module>amza-fat-jar-deployable</module>
         <module>amza-deployable</module>
+        <module>amza-lab-storage</module>
     </modules>
 </project>

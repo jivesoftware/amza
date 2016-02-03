@@ -31,7 +31,7 @@ import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
-import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexProvider;
+import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaInstance;
 import com.jivesoftware.os.amza.service.AmzaService;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer;
@@ -216,8 +216,7 @@ public class AmzaMain {
                         persistentRowIOProvider);
 
                     int maxMergeDebt = 4; // TODO config
-                    indexProviderRegistry.register(
-                        new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                    indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                             partitionStripeFunction,
                             workingIndexDirectories,
                             maxMergeDebt),

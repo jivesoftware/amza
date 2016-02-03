@@ -1,17 +1,11 @@
 package com.jivesoftware.os.amza.api.value;
 
-import com.jivesoftware.os.amza.api.filer.UIO;
-import com.jivesoftware.os.amza.api.partition.PartitionName;
-import com.jivesoftware.os.amza.api.partition.PartitionProperties;
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  *
  * @author jonathan.colt
  */
 public class IndexableValue {
-
+    /*
     public static class PathToKeyPart {
 
         public final List<byte[]> pathToValue;
@@ -122,5 +116,5 @@ public class IndexableValue {
             return this;
         }
 
-    }
+    }*/
 }

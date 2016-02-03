@@ -1,6 +1,6 @@
 package com.jivesoftware.os.amza.service.ring;
 
-import com.jivesoftware.os.amza.api.value.ConcurrentBAHash;
+import com.jivesoftware.os.jive.utils.collections.bah.ConcurrentBAHash;
 
 /**
  *

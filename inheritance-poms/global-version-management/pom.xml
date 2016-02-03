@@ -11,8 +11,8 @@
     <artifactId>global-version-management</artifactId>
     <packaging>pom</packaging>
     <properties>
-        <leaps-n-bounds.version>0.11</leaps-n-bounds.version>
-        <jive.utils.version>0.93</jive.utils.version>
+        <leaps-n-bounds.version>0.12-SNAPSHOT</leaps-n-bounds.version>
+        <jive.utils.version>0.94</jive.utils.version>
         <glassfish.version>2.22</glassfish.version>
         <mlogger.version>0.15</mlogger.version>
         <filer.version>0.93</filer.version>
@@ -22,6 +22,11 @@
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.jivesoftware.os.jive.utils</groupId>
+                <artifactId>collections</artifactId>
+                <version>${jive.utils.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.jivesoftware.os.leaps-n-bounds</groupId>
                 <artifactId>leaps-n-bounds</artifactId>

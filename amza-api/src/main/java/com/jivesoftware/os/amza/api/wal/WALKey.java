@@ -44,7 +44,7 @@ public class WALKey {
         Preconditions.checkNotNull(key, "Key cannot be null");
 
         int prefixLength = prefix != null ? prefix.length : 0;
-        Preconditions.checkArgument(prefixLength <= Short.MAX_VALUE, "Max prefix length is %s", Short.MAX_VALUE);
+        Preconditions.checkArgument(prefixLength <= Short.MAX_VALUE, "Max prefix length is 32767");
 
         byte[] pk = new byte[2 + prefixLength + key.length];
         UIO.shortBytes((short) prefixLength, pk, 0);

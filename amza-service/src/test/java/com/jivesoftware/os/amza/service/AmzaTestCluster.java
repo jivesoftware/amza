@@ -36,7 +36,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.TakeCursors;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
-import com.jivesoftware.os.amza.lsm.pointers.LSMPointerIndexWALIndexProvider;
+import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.Partition.ScanRange;
 import com.jivesoftware.os.amza.service.replication.TakeFailureListener;
@@ -253,8 +253,7 @@ public class AmzaTestCluster {
                     new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                     persistentRowIOProvider);
 
-                indexProviderRegistry.register(
-                    new LSMPointerIndexWALIndexProvider(LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories, 3),
+                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories, 3),
                     persistentRowIOProvider);
 
             },

@@ -9,11 +9,15 @@
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
-    <artifactId>amza-berkeleydb-storage</artifactId>
+    <artifactId>amza-lab-storage</artifactId>
     <properties>
         <module.type>shared_lib</module.type>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>com.jivesoftware.os.leaps-n-bounds</groupId>
+            <artifactId>leaps-n-bounds</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.jivesoftware.os.mlogger</groupId>
             <artifactId>core</artifactId>
@@ -35,8 +39,12 @@
         <dependency>
             <groupId>com.sleepycat</groupId>
             <artifactId>je</artifactId>
-            <version>6.3.8</version>
+            <version>6.2.31</version>
+        </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
         </dependency>
     </dependencies>
-    <name>amza-berkeleydb-storage</name>
+    <name>amza-lab-storage</name>
 </project>

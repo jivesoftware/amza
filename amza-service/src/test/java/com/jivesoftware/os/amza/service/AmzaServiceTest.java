@@ -54,7 +54,7 @@ public class AmzaServiceTest {
 
         // TODO test this using all version
         //String indexClassType = BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME;
-        //String indexClassType = LSMPointerIndexWALIndexProvider.INDEX_CLASS_NAME;
+        //String indexClassType = LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME;
         String indexClassType = "memory_persistent";
 
         File createTempDir = Files.createTempDir();

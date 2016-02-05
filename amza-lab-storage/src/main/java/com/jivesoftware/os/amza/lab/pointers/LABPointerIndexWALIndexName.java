@@ -47,6 +47,6 @@ public class LABPointerIndexWALIndexName {
 
     @Override
     public String toString() {
-        return "LSMPointerIndexWALIndexName{" + "type=" + type + ", name=" + name + '}';
+        return "LABPointerIndexWALIndexName{" + "type=" + type + ", name=" + name + '}';
     }
 }

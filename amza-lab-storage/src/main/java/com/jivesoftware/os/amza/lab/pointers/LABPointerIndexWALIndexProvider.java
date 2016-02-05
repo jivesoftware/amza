@@ -18,7 +18,7 @@ import java.io.File;
 public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPointerIndexWALIndex> {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
-    public static final String INDEX_CLASS_NAME = "labpointerindex";
+    public static final String INDEX_CLASS_NAME = "lab";
 
     private final String name;
     private final PartitionStripeFunction partitionStripeFunction;

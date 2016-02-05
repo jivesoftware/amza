@@ -291,12 +291,12 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     @Override
-    public void commit() throws Exception {
+    public void commit(boolean fsync) throws Exception {
         lock.acquire();
         try {
             // TODO is this the right thing to do?
-            primaryDb.commit();
-            prefixDb.commit();
+            primaryDb.commit(fsync);
+            prefixDb.commit(fsync);
 
             synchronized (commits) {
                 count.set(-1);
@@ -388,7 +388,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                 }
 
                 @Override
-                public void commit(Callable<Void> commit) throws Exception {
+                public void commit(boolean fsync, Callable<Void> commit) throws Exception {
                     lock.acquire(numPermits);
                     try {
                         compactingTo.set(null);
@@ -397,7 +397,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                         } else {
                             LOG.info("Committing before swap: {}", name.getPrimaryName());
 
-                            compactingWALIndex.commit();
+                            compactingWALIndex.commit(fsync);
                             compactingWALIndex.close();
                             rename(Type.compacting, Type.compacted);
 
@@ -465,8 +465,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
     }
 
     public void flush(boolean fsync) throws Exception {
-        primaryDb.commit();
-        prefixDb.commit();
+        primaryDb.commit(fsync);
+        prefixDb.commit(fsync);
     }
 
 }

@@ -89,7 +89,7 @@ public class NoOpWALIndex implements WALIndex {
 //    }
 
     @Override
-    public void commit() throws Exception {
+    public void commit(boolean fsync) throws Exception {
     }
 
     @Override
@@ -110,7 +110,7 @@ public class NoOpWALIndex implements WALIndex {
         }
 
         @Override
-        public void commit(Callable<Void> commit) throws Exception {
+        public void commit(boolean fsync, Callable<Void> commit) throws Exception {
         }
     }
 

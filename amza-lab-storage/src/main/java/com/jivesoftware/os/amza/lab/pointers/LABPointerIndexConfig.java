@@ -1,31 +1,21 @@
-package com.jivesoftware.os.amza.deployable;
+package com.jivesoftware.os.amza.lab.pointers;
 
 import org.merlin.config.Config;
+import org.merlin.config.defaults.BooleanDefault;
 import org.merlin.config.defaults.IntDefault;
-import org.merlin.config.defaults.LongDefault;
-import org.merlin.config.defaults.StringDefault;
 
-public interface AmzaConfig extends Config {
-
-    @StringDefault("./var/data")
-    String getWorkingDirs();
-
-    @IntDefault(1000)
-    int getTakeFromNeighborsIntervalInMillis();
-
-    @LongDefault(60_000)
-    long getCheckIfCompactionIsNeededIntervalInMillis();
+public interface LABPointerIndexConfig extends Config {
 
     @IntDefault(8)
-    int getNumberOfCompactorThreads();
+    int getMinMergeDebt();
 
-    @IntDefault(8)
-    int getNumberOfTakerThreads();
+    @IntDefault(16)
+    int getMaxMergeDebt();
 
-    @LongDefault(30_000L)
-    long getDiscoveryIntervalMillis();
+    @BooleanDefault(false)
+    boolean getUseMemMap();
 
-    @LongDefault(1_000L)
-    long getAsyncFsyncIntervalMillis();
+    @IntDefault(1000000)
+    int getMaxUpdatesBeforeFlush();
 
 }

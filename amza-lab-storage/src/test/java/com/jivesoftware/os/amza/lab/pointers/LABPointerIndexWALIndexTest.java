@@ -39,7 +39,7 @@ public class LABPointerIndexWALIndexTest {
         });
 
         Assert.assertFalse(index.isEmpty());
-        index.commit();
+        index.commit(true);
         index.close();
 
         // reopen
@@ -53,7 +53,7 @@ public class LABPointerIndexWALIndexTest {
             return true;
         });
 
-        index.commit();
+        index.commit(true);
         index.close();
 
         // reopen
@@ -71,7 +71,7 @@ public class LABPointerIndexWALIndexTest {
 
         testPutAsserts(index);
 
-        index.commit();
+        index.commit(true);
 
         testPutAsserts(index);
 
@@ -188,7 +188,7 @@ public class LABPointerIndexWALIndexTest {
 
         testRangeAsserts(index);
 
-        index.commit();
+        index.commit(true);
 
         testRangeAsserts(index);
     }
@@ -268,7 +268,7 @@ public class LABPointerIndexWALIndexTest {
 
         testRangesPrefixedAsserts(index);
 
-        index.commit();
+        index.commit(true);
 
         testRangesPrefixedAsserts(index);
 
@@ -308,7 +308,7 @@ public class LABPointerIndexWALIndexTest {
         }, null);
 
         testTakePrefixedAsserts(index);
-        index.commit();
+        index.commit(true);
         testTakePrefixedAsserts(index);
 
     }
@@ -358,7 +358,7 @@ public class LABPointerIndexWALIndexTest {
             }
             return true;
         });
-        compactionWALIndex.commit(null);
+        compactionWALIndex.commit(true, null);
 
         for (long i = 100; i < 200; i++) {
             long expected = i;

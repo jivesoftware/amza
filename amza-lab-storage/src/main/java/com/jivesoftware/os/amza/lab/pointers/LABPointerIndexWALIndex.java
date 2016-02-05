@@ -453,7 +453,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
     @Override
     public String toString() {
-        return "LSMPointerIndexWALIndex{" + "name=" + name
+        return "LABPointerIndexWALIndex{" + "name=" + name
             + ", environment=" + environment
             + ", primaryDb=" + primaryDb
             + ", prefixDb=" + prefixDb

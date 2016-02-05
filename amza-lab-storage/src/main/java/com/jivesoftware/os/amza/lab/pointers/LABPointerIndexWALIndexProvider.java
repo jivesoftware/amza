@@ -5,6 +5,8 @@ import com.jivesoftware.os.amza.api.partition.PartitionStripeFunction;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
 import com.jivesoftware.os.amza.api.wal.WALIndexProvider;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
+import com.jivesoftware.os.lab.LABEnvironment;
+import com.jivesoftware.os.lab.LABValueMerger;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;
@@ -20,12 +22,19 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
 
     private final String name;
     private final PartitionStripeFunction partitionStripeFunction;
-    private final LABPointerIndexEnvironment[] environments;
+    private final LABEnvironment[] environments;
 
-    public LABPointerIndexWALIndexProvider(String name, PartitionStripeFunction partitionStripeFunction, File[] baseDirs, int maxMergeDebt) {
+    public LABPointerIndexWALIndexProvider(String name,
+        PartitionStripeFunction partitionStripeFunction,
+        File[] baseDirs,
+        boolean useMemMap,
+        int minMergeDebt,
+        int maxMergeDebt,
+        int maxUpdatesBeforeFlush) {
+
         this.name = name;
         this.partitionStripeFunction = partitionStripeFunction;
-        this.environments = new LABPointerIndexEnvironment[partitionStripeFunction.getNumberOfStripes()];
+        this.environments = new LABEnvironment[partitionStripeFunction.getNumberOfStripes()];
         for (int i = 0; i < environments.length; i++) {
             File active = new File(
                 new File(
@@ -35,11 +44,11 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
             }
-            this.environments[i] = new LABPointerIndexEnvironment(active, maxMergeDebt);
+            this.environments[i] = new LABEnvironment(active, new LABValueMerger(), useMemMap, minMergeDebt, maxMergeDebt);
         }
     }
 
-    private LABPointerIndexEnvironment getEnvironment(VersionedPartitionName versionedPartitionName) {
+    private LABEnvironment getEnvironment(VersionedPartitionName versionedPartitionName) {
         return environments[partitionStripeFunction.stripe(versionedPartitionName.getPartitionName())];
     }
 
@@ -56,13 +65,13 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             versionedPartitionName,
             getEnvironment(versionedPartitionName),
             indexName,
-            100_000);
+            1_000_000);
     }
 
     @Override
     public void deleteIndex(VersionedPartitionName versionedPartitionName) throws Exception {
         LABPointerIndexWALIndexName name = new LABPointerIndexWALIndexName(LABPointerIndexWALIndexName.Type.active, versionedPartitionName.toBase64());
-        LABPointerIndexEnvironment env = getEnvironment(versionedPartitionName);
+        LABEnvironment env = getEnvironment(versionedPartitionName);
         for (LABPointerIndexWALIndexName n : name.all()) {
             try {
                 env.remove(n.getPrimaryName());

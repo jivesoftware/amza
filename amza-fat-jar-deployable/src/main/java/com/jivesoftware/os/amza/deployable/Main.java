@@ -156,11 +156,17 @@ public class Main {
                     new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                     persistentRowIOProvider);
 
-                int maxMergeDebt = 4; // TODO config
+                int minMergeDebt = 4; // TODO config
+                int maxMergeDebt = 8; // TODO config
+                boolean useMemMap = false; // TODO config
+                int maxUpdatesBeforeFlush = 1_000_000; // TODO config
                 indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
-                        partitionStripeFunction,
-                        workingIndexDirectories,
-                        maxMergeDebt),
+                    partitionStripeFunction,
+                    workingIndexDirectories,
+                    useMemMap,
+                    minMergeDebt,
+                    maxMergeDebt,
+                    maxUpdatesBeforeFlush),
                     persistentRowIOProvider);
             },
             availableRowsTaker,

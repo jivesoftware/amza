@@ -121,7 +121,7 @@ public class AmzaTestCluster {
         }
 
         AmzaServiceConfig config = new AmzaServiceConfig();
-        config.workingDirectories = new String[] { workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort() };
+        config.workingDirectories = new String[]{workingDirctory.getAbsolutePath() + "/" + localRingHost.getHost() + "-" + localRingHost.getPort()};
         config.aquariumLivelinessFeedEveryMillis = 500;
         config.maxUpdatesBeforeDeltaStripeCompaction = 10;
         config.deltaStripeCompactionIntervalInMillis = 1000;
@@ -253,7 +253,8 @@ public class AmzaTestCluster {
                     new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                     persistentRowIOProvider);
 
-                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories, 3),
+                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction,
+                    workingIndexDirectories, false, 3, 6, 100_000),
                     persistentRowIOProvider);
 
             },
@@ -473,7 +474,7 @@ public class AmzaTestCluster {
             for (PartitionName partitionName : allAPartitions) {
                 if (!partitionName.isSystemPartition()) {
                     Partition partition = amzaService.getPartition(partitionName);
-                    int[] count = { 0 };
+                    int[] count = {0};
                     partition.scan(Collections.singletonList(ScanRange.ROW_SCAN), (prefix, key, value, timestamp, version) -> {
                         count[0]++;
                         return true;
@@ -592,7 +593,7 @@ public class AmzaTestCluster {
                             byte[] bValue = bvalue[0];
                             long bVersion = bversion[0];
                             String comparing = new String(partitionName.getRingName()) + ":" + new String(partitionName.getName())
-                                + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
+                            + " to " + new String(partitionName.getRingName()) + ":" + new String(partitionName.getName()) + "\n";
 
                             if (bValue == null) {
                                 System.out.println("INCONSISTENCY: " + comparing + " " + Arrays.toString(aValue)

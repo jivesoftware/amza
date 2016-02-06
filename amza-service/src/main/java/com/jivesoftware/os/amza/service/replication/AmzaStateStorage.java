@@ -10,7 +10,9 @@ import com.jivesoftware.os.amza.service.storage.PartitionCreator;
 import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.aquarium.Member;
 import com.jivesoftware.os.aquarium.State;
-import com.jivesoftware.os.aquarium.StateStorage;
+import com.jivesoftware.os.aquarium.interfaces.StateStorage;
+import com.jivesoftware.os.aquarium.interfaces.StateStorage.StateStream;
+import com.jivesoftware.os.aquarium.interfaces.StateStorage.StateUpdates;
 
 /**
  * @author jonathan.colt

@@ -54,7 +54,7 @@ public class MemoryWALIndex implements WALIndex {
     }
 
     @Override
-    public void commit() {
+    public void commit(boolean fsync) {
 
     }
 
@@ -276,7 +276,7 @@ public class MemoryWALIndex implements WALIndex {
             }
 
             @Override
-            public void commit(Callable<Void> commit) throws Exception {
+            public void commit(boolean fsync, Callable<Void> commit) throws Exception {
                 index.clear();
                 prefixFpIndex.clear();
                 if (commit != null) {

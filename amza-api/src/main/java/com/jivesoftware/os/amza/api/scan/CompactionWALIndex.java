@@ -10,6 +10,6 @@ public interface CompactionWALIndex {
 
     boolean merge(TxKeyPointers pointers) throws Exception;
 
-    void commit(Callable<Void> commit) throws Exception;
+    void commit(boolean fsync, Callable<Void> commit) throws Exception;
 
 }

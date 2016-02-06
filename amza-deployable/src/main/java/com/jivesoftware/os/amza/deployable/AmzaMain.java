@@ -31,6 +31,7 @@ import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexConfig;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaInstance;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -201,6 +202,8 @@ public class AmzaMain {
             RingMember ringMember = new RingMember(
                 Strings.padStart(String.valueOf(instanceConfig.getInstanceName()), 5, '0') + "_" + instanceConfig.getInstanceKey());
 
+            LABPointerIndexConfig labConfig = deployable.config(LABPointerIndexConfig.class);
+
             AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
                 amzaStats,
                 sickThreads,
@@ -215,17 +218,13 @@ public class AmzaMain {
                         new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                         persistentRowIOProvider);
 
-                    int minMergeDebt = 4; // TODO config
-                    int maxMergeDebt = 8; // TODO config
-                    boolean useMemMap = false; // TODO config
-                    int maxUpdatesBeforeFlush = 1_000_000;
                     indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                         partitionStripeFunction,
                         workingIndexDirectories,
-                        useMemMap,
-                        minMergeDebt,
-                        maxMergeDebt,
-                        maxUpdatesBeforeFlush),
+                        labConfig.getUseMemMap(),
+                        labConfig.getMinMergeDebt(),
+                        labConfig.getMaxMergeDebt(),
+                        labConfig.getMaxUpdatesBeforeFlush()),
                         persistentRowIOProvider);
 
                 },

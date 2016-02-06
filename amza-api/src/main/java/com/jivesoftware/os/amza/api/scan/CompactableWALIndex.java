@@ -22,5 +22,5 @@ public interface CompactableWALIndex {
      * Force persistence of all changes
      * @throws java.lang.Exception
      */
-    void commit() throws Exception;
+    void commit(boolean fsync) throws Exception;
 }

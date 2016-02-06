@@ -34,17 +34,19 @@ import com.jivesoftware.os.amza.service.storage.SystemWALStorage;
 import com.jivesoftware.os.amza.service.take.TakeCoordinator;
 import com.jivesoftware.os.aquarium.Aquarium;
 import com.jivesoftware.os.aquarium.Aquarium.Tx;
-import com.jivesoftware.os.aquarium.AtQuorum;
-import com.jivesoftware.os.aquarium.AwaitLivelyEndState;
 import com.jivesoftware.os.aquarium.Liveliness;
-import com.jivesoftware.os.aquarium.LivelinessStorage;
 import com.jivesoftware.os.aquarium.LivelyEndState;
 import com.jivesoftware.os.aquarium.Member;
-import com.jivesoftware.os.aquarium.MemberLifecycle;
 import com.jivesoftware.os.aquarium.ReadWaterline;
 import com.jivesoftware.os.aquarium.State;
-import com.jivesoftware.os.aquarium.TransitionQuorum;
 import com.jivesoftware.os.aquarium.Waterline;
+import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
+import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
+import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage;
+import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage.LivelinessStream;
+import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage.LivelinessUpdates;
+import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
+import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
@@ -484,7 +486,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                 if (state == State.leader) {
                     if (rootMember.equals(ackMember)) {
                         Waterline member = new Waterline(rootMember, state, timestamp, version, false);
-                        if (leader[0] == null || State.compare(leader[0], member) < 0) {
+                        if (leader[0] == null || Waterline.compare(leader[0], member) < 0) {
                             leader[0] = member;
                         }
                     }

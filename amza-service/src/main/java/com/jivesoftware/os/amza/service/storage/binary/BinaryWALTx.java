@@ -130,7 +130,7 @@ public class BinaryWALTx implements WALTx {
 
             I walIndex = walIndexProvider.createIndex(versionedPartitionName);
             if (walIndex.isEmpty()) {
-                rebuildIndex(versionedPartitionName, walIndex);
+                rebuildIndex(versionedPartitionName, walIndex, true);
             }
 
             return walIndex;
@@ -139,7 +139,7 @@ public class BinaryWALTx implements WALTx {
         }
     }
 
-    private <I extends CompactableWALIndex> void rebuildIndex(VersionedPartitionName versionedPartitionName, I walIndex) throws Exception {
+    private <I extends CompactableWALIndex> void rebuildIndex(VersionedPartitionName versionedPartitionName, I walIndex, boolean fsync) throws Exception {
         LOG.info("Rebuilding {} for {}", walIndex.getClass().getSimpleName(), versionedPartitionName);
 
         MutableLong rebuilt = new MutableLong();
@@ -159,10 +159,10 @@ public class BinaryWALTx implements WALTx {
                     rebuilt.increment();
                     return stream.stream(txId, prefix, key, valueTimestamp, valueTombstoned, valueVersion, fp);
                 }));
-        compactionWALIndex.commit(null);
+        compactionWALIndex.commit(fsync, null);
 
         LOG.info("Rebuilt ({}) {} for {}.", rebuilt.longValue(), walIndex.getClass().getSimpleName(), versionedPartitionName);
-        walIndex.commit();
+        walIndex.commit(fsync);
     }
 
     private void initIO() throws Exception {
@@ -313,7 +313,7 @@ public class BinaryWALTx implements WALTx {
                 };
 
                 if (compactionRowIndex != null) {
-                    compactionRowIndex.commit(commit);
+                    compactionRowIndex.commit(true, commit);
                 } else {
                     commit.call();
                 }

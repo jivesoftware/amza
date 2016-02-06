@@ -190,7 +190,7 @@ public class BerkeleyDBWALIndexTest {
             }
             return true;
         });
-        compactionWALIndex.commit(null);
+        compactionWALIndex.commit(true, null);
 
         for (long i = 100; i < 200; i++) {
             long expected = i;

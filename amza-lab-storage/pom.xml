@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.jivesoftware.os.amza.inheritance.poms</groupId>
         <artifactId>global-version-management</artifactId>
-        <version>0.251</version>
+        <version>0.252</version>
         <relativePath>../inheritance-poms/global-version-management/pom.xml</relativePath>
     </parent>
     <groupId>com.jivesoftware.os.amza</groupId>
@@ -25,7 +25,7 @@
         <dependency>
             <groupId>com.jivesoftware.os.amza</groupId>
             <artifactId>amza-api</artifactId>
-            <version>0.251</version>
+            <version>0.252</version>
         </dependency>
         <dependency>
             <groupId>org.testng</groupId>
@@ -44,6 +44,10 @@
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jivesoftware.os.routing.bird</groupId>
+            <artifactId>merlin-config</artifactId>
         </dependency>
     </dependencies>
     <name>amza-lab-storage</name>

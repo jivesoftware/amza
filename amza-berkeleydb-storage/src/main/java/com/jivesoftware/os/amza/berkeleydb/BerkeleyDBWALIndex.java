@@ -380,10 +380,10 @@ public class BerkeleyDBWALIndex implements WALIndex {
 //    }
 
     @Override
-    public void commit() throws Exception {
+    public void commit(boolean fsync) throws Exception {
         lock.acquire();
         try {
-            environment.flushLog(false);
+            environment.flushLog(false); // Hmm
             synchronized (commits) {
                 count.set(-1);
                 commits.incrementAndGet();
@@ -517,10 +517,10 @@ public class BerkeleyDBWALIndex implements WALIndex {
                 }
 
                 @Override
-                public void commit(Callable<Void> commit) throws Exception {
+                public void commit(boolean fsync, Callable<Void> commit) throws Exception {
                     lock.acquire(numPermits);
                     try {
-                        environment.flushLog(true);
+                        environment.flushLog(fsync);
                         compactingTo.set(null);
                         if (primaryDb == null || prefixDb == null) {
                             LOG.warn("Was not commited because index has been closed.");

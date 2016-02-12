@@ -46,8 +46,18 @@ public class LABPointerIndexWALIndexTest {
         index = getIndex(dir0, partitionName);
         Assert.assertFalse(index.isEmpty());
 
-        index.merge(stream -> stream.stream(2L, UIO.longBytes(2), UIO.longBytes(2), System.currentTimeMillis(), false, Long.MAX_VALUE, 2L),
-            null);
+        index.rowScan((prefix, key, timestamp, tombstoned, version, fp) -> {
+            System.out.println("1.---" + Arrays.toString(prefix) + " " + Arrays.toString(key) + " " + timestamp + " " + tombstoned + " " + version + " " + fp);
+            return true;
+        });
+
+        index.merge(stream -> stream.stream(2L, UIO.longBytes(2), UIO.longBytes(2), System.currentTimeMillis(), false, Long.MAX_VALUE, 2L), null);
+
+        index.rowScan((prefix, key, timestamp, tombstoned, version, fp) -> {
+            System.out.println("2.---" + Arrays.toString(prefix) + " " + Arrays.toString(key) + " " + timestamp + " " + tombstoned + " " + version + " " + fp);
+            return true;
+        });
+
         index.getPointer(UIO.longBytes(2), UIO.longBytes(2), (prefix, key, timestamp, tombstoned, version, fp) -> {
             assertEquals(fp, 2);
             return true;

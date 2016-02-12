@@ -20,9 +20,7 @@ import com.jivesoftware.os.amza.api.wal.WALIndex;
 import com.jivesoftware.os.amza.api.wal.WALKey;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexName.Type;
 import com.jivesoftware.os.lab.LABEnvironment;
-import com.jivesoftware.os.lab.api.NextValue;
 import com.jivesoftware.os.lab.api.ValueIndex;
-import com.jivesoftware.os.lab.api.ValueStream;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import com.sleepycat.je.DatabaseNotFoundException;
@@ -68,8 +66,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
         this.name = name;
         this.maxUpdatesBeforeFlush = maxUpdatesBeforeFlush;
         this.environment = environment;
-        this.primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBeforeFlush);
-        this.prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush);
+        this.primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBeforeFlush, 10 * 1024 * 1024, -1, -1); // TODO config
+        this.prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush, 10 * 1024 * 1024, -1, -1); // TODO config
     }
 
     private boolean entryToWALPointer(RowType rowType, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
@@ -118,37 +116,34 @@ public class LABPointerIndexWALIndex implements WALIndex {
             byte[] txFpBytes = new byte[16];
             return pointers.consume((txId, prefix, key, timestamp, tombstoned, version, fp) -> {
                 byte[] pk = WALKey.compose(prefix, key);
-                return primaryDb.get(key, (got) -> {
-                    got.next((key1, timestamp1, tombstoned1, version1, payload) -> {
-                        long pointer = payload == null ? -1 : UIO.bytesLong(payload);
-                        if (pointer != -1) {
-                            int c = CompareTimestampVersions.compare(timestamp1, version1, timestamp, version);
-                            mode[0] = (c < 0) ? WALMergeKeyPointerStream.clobbered : WALMergeKeyPointerStream.ignored;
-                        } else {
-                            mode[0] = WALMergeKeyPointerStream.added;
-                        }
+                return primaryDb.get(key, (key1, timestamp1, tombstoned1, version1, payload) -> {
+                    long pointer = (payload == null) ? -1 : UIO.bytesLong(payload);
+                    if (pointer != -1) {
+                        int c = CompareTimestampVersions.compare(timestamp1, version1, timestamp, version);
+                        mode[0] = (c < 0) ? WALMergeKeyPointerStream.clobbered : WALMergeKeyPointerStream.ignored;
+                    } else {
+                        mode[0] = WALMergeKeyPointerStream.added;
+                    }
 
-                        if (mode[0] != WALMergeKeyPointerStream.ignored) {
-                            primaryDb.append((pointerStream) -> {
-                                return pointerStream.stream(pk, timestamp, tombstoned, version, UIO.longBytes(fp));
+                    if (mode[0] != WALMergeKeyPointerStream.ignored) {
+                        primaryDb.append((pointerStream) -> {
+                            return pointerStream.stream(pk, timestamp, tombstoned, version, UIO.longBytes(fp));
+                        });
+
+                        if (prefix != null) {
+                            UIO.longBytes(txId, txFpBytes, 0);
+                            UIO.longBytes(fp, txFpBytes, 8);
+                            byte[] prefixTxFp = WALKey.compose(prefix, txFpBytes);
+                            prefixDb.append((pointerStream) -> {
+                                return pointerStream.stream(prefixTxFp, timestamp, tombstoned, version, UIO.longBytes(fp));
                             });
-
-                            if (prefix != null) {
-                                UIO.longBytes(txId, txFpBytes, 0);
-                                UIO.longBytes(fp, txFpBytes, 8);
-                                byte[] prefixTxFp = WALKey.compose(prefix, txFpBytes);
-                                prefixDb.append((pointerStream) -> {
-                                    return pointerStream.stream(prefixTxFp, timestamp, tombstoned, version, UIO.longBytes(fp));
-                                });
-                            }
                         }
-                        if (stream != null) {
-                            return stream.stream(mode[0], txId, prefix, key, timestamp, tombstoned, version, fp);
-                        } else {
-                            return true;
-                        }
-                    });
-                    return true;
+                    }
+                    if (stream != null) {
+                        return stream.stream(mode[0], txId, prefix, key, timestamp, tombstoned, version, fp);
+                    } else {
+                        return true;
+                    }
                 });
 
             });
@@ -163,19 +158,14 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             byte[] fromFpPk = WALKey.compose(prefix, new byte[0]);
             byte[] toFpPk = WALKey.prefixUpperExclusive(fromFpPk);
-            return prefixDb.rangeScan(fromFpPk, toFpPk, (rangeScan) -> {
-                ValueStream stream = (rawKey, timestamp, tombstoned, version, pointer) -> {
-                    if (KeyUtil.compare(rawKey, toFpPk) >= 0) {
-                        return false;
-                    }
-                    byte[] key = WALKey.rawKeyKey(rawKey);
-                    long takeTxId = UIO.bytesLong(key, 0);
-                    long takeFp = UIO.bytesLong(key, 8);
-                    return txFpStream.stream(takeTxId, takeFp);
-                };
-                while (rangeScan.next(stream)) {
+            return prefixDb.rangeScan(fromFpPk, toFpPk, (rawKey, timestamp, tombstoned, version, pointer) -> {
+                if (KeyUtil.compare(rawKey, toFpPk) >= 0) {
+                    return false;
                 }
-                return false;
+                byte[] key = WALKey.rawKeyKey(rawKey);
+                long takeTxId = UIO.bytesLong(key, 0);
+                long takeFp = UIO.bytesLong(key, 8);
+                return txFpStream.stream(takeTxId, takeFp);
             });
         } finally {
             lock.release();
@@ -191,10 +181,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
         }
         try {
             byte[] pk = WALKey.compose(prefix, key);
-            return primaryDb.get(pk, (pointer) -> {
-                return pointer.next((rawKey, timestamp, tombstoned, version, pointer1) -> {
-                    return stream.stream(prefix, key, timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1));
-                });
+            return primaryDb.get(pk, (rawKey, timestamp, tombstoned, version, pointer1) -> {
+                return stream.stream(prefix, key, timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1));
             });
         } finally {
             lock.release();
@@ -207,10 +195,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             return keys.consume((key) -> {
                 byte[] pk = WALKey.compose(prefix, key);
-                return primaryDb.get(pk, (pointer) -> {
-                    return pointer.next((rawKey, timestamp, tombstoned, version, pointer1) -> {
-                        return stream.stream(prefix, key, timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1));
-                    });
+                return primaryDb.get(pk, (rawKey, timestamp, tombstoned, version, pointer1) -> {
+                    return stream.stream(prefix, key, timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1));
                 });
             });
         } finally {
@@ -224,11 +210,9 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             return keyValues.consume((rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion) -> {
                 byte[] pk = WALKey.compose(prefix, key);
-                return primaryDb.get(pk, (pointer) -> {
-                    return pointer.next((rawKey, timestamp, tombstoned, version, pointer1) -> {
-                        return entryToWALPointer(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
-                            timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1), stream);
-                    });
+                return primaryDb.get(pk, (rawKey, timestamp, tombstoned, version, pointer1) -> {
+                    return entryToWALPointer(rowType, prefix, key, value, valueTimestamp, valueTombstoned, valueVersion,
+                        timestamp, tombstoned, version, pointer1 == null ? -1 : UIO.bytesLong(pointer1), stream);
                 });
             });
         } finally {
@@ -324,9 +308,9 @@ public class LABPointerIndexWALIndex implements WALIndex {
     public boolean rowScan(final WALKeyPointerStream stream) throws Exception {
         lock.acquire();
         try {
-            return primaryDb.rowScan((nextPointer) -> {
-                return stream(stream, nextPointer);
-            });
+            return primaryDb.rowScan(
+                (rawKey, timestamp, tombstoned, version, pointer) -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned, version,
+                    pointer == null ? -1 : UIO.bytesLong(pointer)));
         } finally {
             lock.release();
         }
@@ -339,21 +323,13 @@ public class LABPointerIndexWALIndex implements WALIndex {
         try {
             byte[] fromPk = fromKey != null ? WALKey.compose(fromPrefix, fromKey) : null;
             byte[] toPk = toKey != null ? WALKey.compose(toPrefix, toKey) : null;
-            return primaryDb.rangeScan(fromPk, toPk, (nextPointer) -> {
-                return stream(stream, nextPointer);
-            });
+            return primaryDb.rangeScan(fromPk, toPk,
+                (rawKey, timestamp, tombstoned, version, pointer) -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned, version,
+                    pointer == null ? -1 : UIO.bytesLong(pointer)));
 
         } finally {
             lock.release();
         }
-    }
-
-    private boolean stream(WALKeyPointerStream stream, NextValue nextPointer) throws Exception {
-        ValueStream pointerStream = (rawKey, timestamp, tombstoned, version, pointer)
-            -> stream.stream(rawKeyPrefix(rawKey), rawKeyKey(rawKey), timestamp, tombstoned, version, pointer == null ? -1 : UIO.bytesLong(pointer));
-        while (nextPointer.next(pointerStream)) {
-        }
-        return false;
     }
 
     @Override
@@ -416,8 +392,8 @@ public class LABPointerIndexWALIndex implements WALIndex {
                             rename(Type.compacted, Type.active);
                             removeDatabase(Type.backup);
 
-                            primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBeforeFlush);
-                            prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush);
+                            primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBeforeFlush, 10 * 1024 * 1024, -1, -1);
+                            prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush, 10 * 1024 * 1024, -1, -1);
 
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }

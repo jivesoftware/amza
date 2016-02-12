@@ -2,6 +2,7 @@ package com.jivesoftware.os.amza.service.replication;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.filer.UIO;
@@ -43,23 +44,23 @@ import com.jivesoftware.os.aquarium.Waterline;
 import com.jivesoftware.os.aquarium.interfaces.AtQuorum;
 import com.jivesoftware.os.aquarium.interfaces.AwaitLivelyEndState;
 import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage;
-import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage.LivelinessStream;
-import com.jivesoftware.os.aquarium.interfaces.LivelinessStorage.LivelinessUpdates;
 import com.jivesoftware.os.aquarium.interfaces.MemberLifecycle;
 import com.jivesoftware.os.aquarium.interfaces.TransitionQuorum;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import com.jivesoftware.os.routing.bird.health.checkers.SickThreads;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
@@ -83,15 +84,18 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
     private final Liveliness liveliness;
     private final long feedEveryMillis;
     private final AwaitNotify<PartitionName> awaitLivelyEndState;
+    private final SickThreads sickThreads;
 
-    private final ConcurrentHashMap<VersionedPartitionName, Aquarium> aquariums = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(
+    private final ConcurrentMap<VersionedPartitionName, Aquarium> aquariums = Maps.newConcurrentMap();
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor(
         new ThreadFactoryBuilder().setNameFormat("aquarium-scheduled-%d").build());
-    private final Set<PartitionName> smellsFishy = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private final Set<PartitionName> smellsFishy = Collections.newSetFromMap(Maps.newConcurrentMap());
+    private final AtomicLong smellOVersion = new AtomicLong();
+    private final AtomicBoolean running = new AtomicBoolean();
 
-    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileNominated = new ConcurrentHashMap<>();
-    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileInactive = new ConcurrentHashMap<>();
-    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileBootstrap = new ConcurrentHashMap<>();
+    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileNominated = Maps.newConcurrentMap();
+    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileInactive = Maps.newConcurrentMap();
+    private final Map<VersionedPartitionName, LeadershipTokenAndTookFully> tookFullyWhileBootstrap = Maps.newConcurrentMap();
 
     public AmzaAquariumProvider(RingMember rootRingMember,
         OrderIdProvider orderIdProvider,
@@ -103,7 +107,8 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         WALUpdated walUpdated,
         Liveliness liveliness,
         long feedEveryMillis,
-        AwaitNotify<PartitionName> awaitLivelyEndState) {
+        AwaitNotify<PartitionName> awaitLivelyEndState,
+        SickThreads sickThreads) {
         this.rootRingMember = rootRingMember;
         this.rootAquariumMember = rootRingMember.asAquariumMember();
         this.orderIdProvider = orderIdProvider;
@@ -116,43 +121,60 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
         this.liveliness = liveliness;
         this.feedEveryMillis = feedEveryMillis;
         this.awaitLivelyEndState = awaitLivelyEndState;
+        this.sickThreads = sickThreads;
     }
 
     public void start() {
-        scheduledExecutorService.scheduleWithFixedDelay(() -> {
-            try {
-                /*LOG.info("Feeding the fish...");
-                long start = System.currentTimeMillis();*/
-                liveliness.feedTheFish();
-                /*LOG.info("Fed the fish in {}", (System.currentTimeMillis() - start));
-                LOG.info("Smelling the fish...");
-                start = System.currentTimeMillis();
-                int count = 0;*/
-                Iterator<PartitionName> iter = smellsFishy.iterator();
-                while (iter.hasNext()) {
-                    PartitionName partitionName = iter.next();
-                    iter.remove();
-                    if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
-                        StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-                        VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-                        Aquarium aquarium = getAquarium(versionedPartitionName);
-                        aquarium.acknowledgeOther();
-                        aquarium.tapTheGlass();
-                        takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName);
-                    } else {
-                        // could expunge here, but composter does that
+        running.set(true);
+        executorService.submit(() -> {
+            while (running.get()) {
+                try {
+                    long startVersion = smellOVersion.get();
+                    /*LOG.info("Feeding the fish...");
+                    long start = System.currentTimeMillis();*/
+                    liveliness.feedTheFish();
+                    /*LOG.info("Fed the fish in {}", (System.currentTimeMillis() - start));
+                    LOG.info("Smelling the fish...");
+                    start = System.currentTimeMillis();
+                    int count = 0;*/
+                    Iterator<PartitionName> iter = smellsFishy.iterator();
+                    while (iter.hasNext()) {
+                        PartitionName partitionName = iter.next();
+                        iter.remove();
+                        if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
+                            StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+                            VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+                            Aquarium aquarium = getAquarium(versionedPartitionName);
+                            aquarium.acknowledgeOther();
+                            aquarium.tapTheGlass();
+                            takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName);
+                        } else {
+                            // could expunge here, but composter does that
+                        }
+                        /*count++;*/
                     }
-                    /*count++;*/
+                    synchronized (smellsFishy) {
+                        if (startVersion == smellOVersion.get()) {
+                            smellsFishy.wait(feedEveryMillis);
+                        }
+                    }
+                    sickThreads.recovered();
+                    /*LOG.info("Smelled {} fish in {}", count, (System.currentTimeMillis() - start));*/
+                } catch (InterruptedException e) {
+                    break;
+                } catch (Throwable t) {
+                    sickThreads.sick(t);
+                    LOG.error("Failed to feed the fish", t);
+                    Thread.sleep(1000L);
                 }
-                /*LOG.info("Smelled {} fish in {}", count, (System.currentTimeMillis() - start));*/
-            } catch (Exception e) {
-                LOG.error("Failed to feed the fish", e);
             }
-        }, 0, feedEveryMillis, TimeUnit.MILLISECONDS);
+            return null;
+        });
     }
 
     public void stop() {
-        scheduledExecutorService.shutdownNow();
+        running.set(false);
+        executorService.shutdownNow();
     }
 
     public <R> R tx(VersionedPartitionName versionedPartitionName, Tx<R> tx) throws Exception {
@@ -704,6 +726,10 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                     smellsFishy.add(partitionName);
                     return true;
                 });
+            }
+            synchronized (smellsFishy) {
+                smellOVersion.incrementAndGet();
+                smellsFishy.notifyAll();
             }
         }
     }

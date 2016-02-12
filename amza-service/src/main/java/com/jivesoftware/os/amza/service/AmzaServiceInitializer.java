@@ -292,7 +292,7 @@ public class AmzaServiceInitializer {
             walUpdated,
             liveliness,
             config.aquariumLivelinessFeedEveryMillis,
-            awaitOnline);
+            awaitOnline, sickThreads);
 
         PartitionStateStorage partitionStateStorage = new PartitionStateStorage(ringMember,
             ringStoreReader,

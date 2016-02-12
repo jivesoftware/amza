@@ -23,14 +23,13 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
     private final String name;
     private final PartitionStripeFunction partitionStripeFunction;
     private final LABEnvironment[] environments;
+    private final LABPointerIndexConfig config;
 
-    public LABPointerIndexWALIndexProvider(String name,
+    public LABPointerIndexWALIndexProvider(LABPointerIndexConfig config,
+        String name,
         PartitionStripeFunction partitionStripeFunction,
-        File[] baseDirs,
-        boolean useMemMap,
-        int minMergeDebt,
-        int maxMergeDebt,
-        int maxUpdatesBeforeFlush) {
+        File[] baseDirs) {
+        this.config = config;
 
         this.name = name;
         this.partitionStripeFunction = partitionStripeFunction;
@@ -44,7 +43,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
             }
-            this.environments[i] = new LABEnvironment(active, new LABValueMerger(), useMemMap, minMergeDebt, maxMergeDebt);
+            this.environments[i] = new LABEnvironment(active, new LABValueMerger(), config.getUseMemMap(), config.getMinMergeDebt(), config.getMaxMergeDebt());
         }
     }
 
@@ -65,7 +64,7 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             versionedPartitionName,
             getEnvironment(versionedPartitionName),
             indexName,
-            1_000_000);
+            config);
     }
 
     @Override

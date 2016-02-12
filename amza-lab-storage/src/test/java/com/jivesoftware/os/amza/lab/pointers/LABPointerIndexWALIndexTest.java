@@ -12,6 +12,7 @@ import com.jivesoftware.os.amza.api.stream.TxKeyPointerStream;
 import com.jivesoftware.os.amza.api.stream.UnprefixedWALKeyStream;
 import java.io.File;
 import java.util.Arrays;
+import org.merlin.config.BindInterfaceToConfiguration;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -382,7 +383,8 @@ public class LABPointerIndexWALIndexTest {
     }
 
     private LABPointerIndexWALIndex getIndex(File dir, VersionedPartitionName partitionName) throws Exception {
-        return new LABPointerIndexWALIndexProvider("lab", new PartitionStripeFunction(1), new File[]{dir}, false, 4, 8, 100_000).createIndex(partitionName);
+        LABPointerIndexConfig config = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
+        return new LABPointerIndexWALIndexProvider(config, "lab", new PartitionStripeFunction(1), new File[]{dir}).createIndex(partitionName);
     }
 
 }

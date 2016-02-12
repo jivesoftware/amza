@@ -43,11 +43,10 @@ class PartitionDelta {
     private final DeltaWAL deltaWAL;
     final AtomicReference<PartitionDelta> merging;
 
-    //private final Map<WALKey, WALPointer> pointerIndex = new ConcurrentHashMap<>(); //TODO replace with concurrent byte[] map
-    private final ConcurrentBAHash<WALPointer> pointerIndex = new ConcurrentBAHash<>(13, true, 1024);
+    private final ConcurrentBAHash<WALPointer> pointerIndex = new ConcurrentBAHash<>(3, true, 4);
     private final ConcurrentSkipListMap<byte[], WALPointer> orderedIndex = new ConcurrentSkipListMap<>(KeyUtil::compare);
     private final ConcurrentHashMap<WALPrefix, AppendOnlyConcurrentArrayList> prefixTxFpIndex = new ConcurrentHashMap<>();
-    private final AppendOnlyConcurrentArrayList txIdWAL = new AppendOnlyConcurrentArrayList(1024); //TODO expose to config
+    private final AppendOnlyConcurrentArrayList txIdWAL = new AppendOnlyConcurrentArrayList(11); //TODO expose to config
     private final AtomicLong updatesSinceLastHighwaterFlush = new AtomicLong();
 
     PartitionDelta(VersionedPartitionName versionedPartitionName,

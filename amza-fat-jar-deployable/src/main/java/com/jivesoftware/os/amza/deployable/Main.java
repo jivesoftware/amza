@@ -32,6 +32,7 @@ import com.jivesoftware.os.amza.client.http.AmzaClientProvider;
 import com.jivesoftware.os.amza.client.http.HttpPartitionClientFactory;
 import com.jivesoftware.os.amza.client.http.HttpPartitionHostsProvider;
 import com.jivesoftware.os.amza.client.http.RingHostHttpClientProvider;
+import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexConfig;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaInstance;
 import com.jivesoftware.os.amza.service.AmzaService;
@@ -76,6 +77,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Executors;
+import org.merlin.config.BindInterfaceToConfiguration;
 
 public class Main {
 
@@ -142,6 +144,9 @@ public class Main {
             }
         };
 
+        //  hmmm
+        LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
+
         AmzaService amzaService = new EmbeddedAmzaServiceInitializer().initialize(amzaServiceConfig,
             amzaStats,
             sickThreads,
@@ -156,17 +161,10 @@ public class Main {
                     new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                     persistentRowIOProvider);
 
-                int minMergeDebt = 4; // TODO config
-                int maxMergeDebt = 8; // TODO config
-                boolean useMemMap = false; // TODO config
-                int maxUpdatesBeforeFlush = 1_000_000; // TODO config
-                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
+                    LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                     partitionStripeFunction,
-                    workingIndexDirectories,
-                    useMemMap,
-                    minMergeDebt,
-                    maxMergeDebt,
-                    maxUpdatesBeforeFlush),
+                    workingIndexDirectories),
                     persistentRowIOProvider);
             },
             availableRowsTaker,

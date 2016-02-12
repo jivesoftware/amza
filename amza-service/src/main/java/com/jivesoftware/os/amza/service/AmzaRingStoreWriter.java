@@ -55,7 +55,6 @@ public class AmzaRingStoreWriter implements AmzaRingWriter, RowChanges {
     private final TimestampedOrderIdProvider orderIdProvider;
     private final WALUpdated walUpdated;
     private final ConcurrentBAHash<CacheId<RingTopology>> ringsCache;
-    //private final ConcurrentMap<IBA, CacheId<RingTopology>> ringsCache;
     private final ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache;
     private final AtomicLong nodeCacheId;
 

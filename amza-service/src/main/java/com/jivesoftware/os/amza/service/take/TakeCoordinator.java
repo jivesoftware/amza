@@ -37,7 +37,6 @@ public class TakeCoordinator {
     private final IdPacker idPacker;
     private final VersionedPartitionProvider versionedPartitionProvider;
 
-    //private final ConcurrentHashMap<IBA, TakeRingCoordinator> takeRingCoordinators = new ConcurrentHashMap<>();
     private final ConcurrentBAHash<TakeRingCoordinator> takeRingCoordinators = new ConcurrentBAHash<>(13, true, 128);
     private final ConcurrentHashMap<RingMember, Object> ringMembersLocks = new ConcurrentHashMap<>();
     private final AtomicLong updates = new AtomicLong();

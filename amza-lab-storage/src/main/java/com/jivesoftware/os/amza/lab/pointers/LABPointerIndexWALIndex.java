@@ -46,7 +46,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
     private final String providerName;
     private final VersionedPartitionName versionedPartitionName;
     private final LABPointerIndexWALIndexName name;
-    private final int maxUpdatesBeforeFlush;
+    private final LABPointerIndexConfig config;
     private final LABEnvironment environment;
     private ValueIndex primaryDb;
     private ValueIndex prefixDb;
@@ -60,14 +60,24 @@ public class LABPointerIndexWALIndex implements WALIndex {
         VersionedPartitionName versionedPartitionName,
         LABEnvironment environment,
         LABPointerIndexWALIndexName name,
-        int maxUpdatesBeforeFlush) throws Exception {
+        LABPointerIndexConfig config) throws Exception {
         this.providerName = providerName;
         this.versionedPartitionName = versionedPartitionName;
         this.name = name;
-        this.maxUpdatesBeforeFlush = maxUpdatesBeforeFlush;
+        this.config = config;
         this.environment = environment;
-        this.primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBeforeFlush, 10 * 1024 * 1024, -1, -1); // TODO config
-        this.prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush, 10 * 1024 * 1024, -1, -1); // TODO config
+        this.primaryDb = environment.open(name.getPrimaryName(),
+            config.getEntriesBetweenLeaps(),
+            config.getMaxUpdatesBeforeFlush(),
+            config.getSplitWhenKeysTotalExceedsNBytes(),
+            config.getSplitWhenValuesTotalExceedsNBytes(),
+            config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
+        this.prefixDb = environment.open(name.getPrefixName(),
+            config.getEntriesBetweenLeaps(),
+            config.getMaxUpdatesBeforeFlush(),
+            config.getSplitWhenKeysTotalExceedsNBytes(),
+            config.getSplitWhenValuesTotalExceedsNBytes(),
+            config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
     }
 
     private boolean entryToWALPointer(RowType rowType, byte[] prefix, byte[] key, byte[] value, long valueTimestamp, boolean valueTombstoned, long valueVersion,
@@ -353,7 +363,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
             removeDatabase(Type.backup);
 
             final LABPointerIndexWALIndex compactingWALIndex = new LABPointerIndexWALIndex(providerName, versionedPartitionName, environment,
-                name.typeName(Type.compacting), maxUpdatesBeforeFlush);
+                name.typeName(Type.compacting), config);
             compactingTo.set(compactingWALIndex);
 
             return new CompactionWALIndex() {
@@ -392,8 +402,19 @@ public class LABPointerIndexWALIndex implements WALIndex {
                             rename(Type.compacted, Type.active);
                             removeDatabase(Type.backup);
 
-                            primaryDb = environment.open(name.getPrimaryName(), maxUpdatesBeforeFlush, 10 * 1024 * 1024, -1, -1);
-                            prefixDb = environment.open(name.getPrefixName(), maxUpdatesBeforeFlush, 10 * 1024 * 1024, -1, -1);
+                            primaryDb = environment.open(name.getPrimaryName(),
+                                config.getEntriesBetweenLeaps(),
+                                config.getMaxUpdatesBeforeFlush(),
+                                config.getSplitWhenKeysTotalExceedsNBytes(),
+                                config.getSplitWhenValuesTotalExceedsNBytes(),
+                                config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
+                            
+                            prefixDb = environment.open(name.getPrefixName(),
+                                config.getEntriesBetweenLeaps(),
+                                config.getMaxUpdatesBeforeFlush(),
+                                config.getSplitWhenKeysTotalExceedsNBytes(),
+                                config.getSplitWhenValuesTotalExceedsNBytes(),
+                                config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
 
                             LOG.info("Committing after swap: {}", name.getPrimaryName());
                         }

@@ -36,6 +36,7 @@ import com.jivesoftware.os.amza.api.stream.RowType;
 import com.jivesoftware.os.amza.api.stream.TxKeyValueStream;
 import com.jivesoftware.os.amza.api.take.TakeCursors;
 import com.jivesoftware.os.amza.berkeleydb.BerkeleyDBWALIndexProvider;
+import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexConfig;
 import com.jivesoftware.os.amza.lab.pointers.LABPointerIndexWALIndexProvider;
 import com.jivesoftware.os.amza.service.AmzaServiceInitializer.AmzaServiceConfig;
 import com.jivesoftware.os.amza.service.Partition.ScanRange;
@@ -80,6 +81,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.lang.mutable.MutableInt;
+import org.merlin.config.BindInterfaceToConfiguration;
 import org.xerial.snappy.SnappyInputStream;
 import org.xerial.snappy.SnappyOutputStream;
 
@@ -253,8 +255,12 @@ public class AmzaTestCluster {
                     new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                     persistentRowIOProvider);
 
-                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction,
-                    workingIndexDirectories, false, 3, 6, 100_000),
+                LABPointerIndexConfig labConfig = BindInterfaceToConfiguration.bindDefault(LABPointerIndexConfig.class);
+
+                indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
+                    LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                    partitionStripeFunction,
+                    workingIndexDirectories),
                     persistentRowIOProvider);
 
             },

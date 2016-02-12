@@ -207,8 +207,8 @@ public class AmzaServiceInitializer {
 
         PartitionStore ringIndex = partitionIndex.get(PartitionCreator.RING_INDEX);
         PartitionStore nodeIndex = partitionIndex.get(PartitionCreator.NODE_INDEX);
-        ConcurrentBAHash<CacheId<RingTopology>> ringsCache = new ConcurrentBAHash<>(13, true, 128);
-        ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentBAHash<>(13, true, 128);
+        ConcurrentBAHash<CacheId<RingTopology>> ringsCache = new ConcurrentBAHash<>(13, true, Runtime.getRuntime().availableProcessors());
+        ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentBAHash<>(13, true, Runtime.getRuntime().availableProcessors());
 
         AtomicLong nodeCacheId = new AtomicLong(0);
         AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringsCache, ringMemberRingNamesCache, nodeCacheId);

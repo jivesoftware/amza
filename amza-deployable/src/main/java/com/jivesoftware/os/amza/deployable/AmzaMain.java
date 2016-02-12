@@ -219,13 +219,10 @@ public class AmzaMain {
                         new BerkeleyDBWALIndexProvider(BerkeleyDBWALIndexProvider.INDEX_CLASS_NAME, partitionStripeFunction, workingIndexDirectories),
                         persistentRowIOProvider);
 
-                    indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
+                    indexProviderRegistry.register(new LABPointerIndexWALIndexProvider(labConfig,
+                        LABPointerIndexWALIndexProvider.INDEX_CLASS_NAME,
                         partitionStripeFunction,
-                        workingIndexDirectories,
-                        labConfig.getUseMemMap(),
-                        labConfig.getMinMergeDebt(),
-                        labConfig.getMaxMergeDebt(),
-                        labConfig.getMaxUpdatesBeforeFlush()),
+                        workingIndexDirectories),
                         persistentRowIOProvider);
 
                 },

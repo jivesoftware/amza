@@ -130,28 +130,27 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
             while (running.get()) {
                 try {
                     long startVersion = smellOVersion.get();
-                    /*LOG.info("Feeding the fish...");
-                    long start = System.currentTimeMillis();*/
                     liveliness.feedTheFish();
-                    /*LOG.info("Fed the fish in {}", (System.currentTimeMillis() - start));
-                    LOG.info("Smelling the fish...");
-                    start = System.currentTimeMillis();
-                    int count = 0;*/
                     Iterator<PartitionName> iter = smellsFishy.iterator();
                     while (iter.hasNext()) {
                         PartitionName partitionName = iter.next();
                         iter.remove();
-                        if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
-                            StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
-                            VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
-                            Aquarium aquarium = getAquarium(versionedPartitionName);
-                            aquarium.acknowledgeOther();
-                            aquarium.tapTheGlass();
-                            takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName);
-                        } else {
-                            // could expunge here, but composter does that
+                        try {
+                            if (ringStoreReader.isMemberOfRing(partitionName.getRingName())) {
+                                StorageVersion storageVersion = storageVersionProvider.createIfAbsent(partitionName);
+                                VersionedPartitionName versionedPartitionName = new VersionedPartitionName(partitionName, storageVersion.partitionVersion);
+                                Aquarium aquarium = getAquarium(versionedPartitionName);
+                                aquarium.acknowledgeOther();
+                                aquarium.tapTheGlass();
+                                takeCoordinator.stateChanged(ringStoreReader, versionedPartitionName);
+                            }
+                        } catch (PropertiesNotPresentException e) {
+                            // somewhat expected
+                            smellsFishy.add(partitionName);
+                        } catch (Exception e) {
+                            smellsFishy.add(partitionName);
+                            throw e;
                         }
-                        /*count++;*/
                     }
                     synchronized (smellsFishy) {
                         if (startVersion == smellOVersion.get()) {

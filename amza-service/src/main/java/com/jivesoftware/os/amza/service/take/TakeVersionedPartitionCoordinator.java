@@ -1,5 +1,6 @@
 package com.jivesoftware.os.amza.service.take;
 
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.jivesoftware.os.amza.api.partition.VersionedAquarium;
 import com.jivesoftware.os.amza.api.partition.VersionedPartitionName;
@@ -18,8 +19,7 @@ import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -37,13 +37,10 @@ public class TakeVersionedPartitionCoordinator {
     final long systemReofferDeltaMillis;
     final long reofferDeltaMillis;
     final AtomicInteger currentCategory;
-    final AtomicBoolean expunged = new AtomicBoolean(false);
+    volatile boolean expunged = false;
 
     private final AtomicLong callCount = new AtomicLong();
-    private final ConcurrentHashMap<RingMember, SessionedTxId> took = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<RingMember, Long> steadyState = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<RingMember, Long> onlineTakers = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<RingMember, Long> latestTakeSessionId = new ConcurrentHashMap<>();
+    private final ConcurrentMap<RingMember, Session> sessions = Maps.newConcurrentMap();
 
     private long lastOfferedMillis = -1; // approximate is good enough
     private long lastTakenMillis = -1; // approximate is good enough
@@ -67,74 +64,92 @@ public class TakeVersionedPartitionCoordinator {
         this.currentCategory = new AtomicInteger(1);
     }
 
-    private boolean isSteadyState(RingMember ringMember, long takeSessionId) throws Exception {
-        Long steadySessionId = steadyState.get(ringMember);
-        return steadySessionId != null && steadySessionId == takeSessionId;
-    }
-
     Long availableRowsStream(PartitionStateStorage partitionStateStorage,
         TxHighestPartitionTx txHighestPartitionTx,
         long takeSessionId,
         VersionedRing versionedRing,
         RingMember ringMember,
-        int takeFromFactor,
         AvailableStream availableStream) throws Exception {
+
+        if (expunged || stableTaker(ringMember, takeSessionId, null).isDormant()) {
+            return Long.MAX_VALUE;
+        }
 
         lastOfferedMillis = System.currentTimeMillis();
         callCount.incrementAndGet();
 
-        latestTakeSessionId.put(ringMember, takeSessionId);
-        if (!expunged.get() && takeFromFactor > 0) {
-            synchronized (steadyState) {
-                try {
-                    return partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
-                        VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
-                        boolean takerIsOnline = takerIsOnline(ringMember, takeSessionId, versionedAquarium);
-                        if (takerIsOnline && isSteadyState(ringMember, takeSessionId)) {
-                            return Long.MAX_VALUE;
-                        } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
-                            return txHighestPartitionTx.tx(versionedAquarium, (versionedAquarium1, highestTxId) -> {
-                                if (versionedAquarium1 != null) {
-                                    return streamHighestTxId(versionedAquarium1,
-                                        highestTxId,
-                                        takeSessionId,
-                                        versionedRing,
-                                        ringMember,
-                                        takerIsOnline,
-                                        availableStream);
-                                } else {
-                                    LOG.warn("Highest txId unavailable for {}", versionedPartitionName);
-                                    return Long.MAX_VALUE;
-                                }
-                            });
+        try {
+            return partitionStateStorage.tx(versionedPartitionName.getPartitionName(), versionedAquarium -> {
+                VersionedPartitionName currentVersionedPartitionName = versionedAquarium.getVersionedPartitionName();
+                Stable stable = stableTaker(ringMember, takeSessionId, versionedAquarium);
+                if (stable.isDormant()) {
+                    return Long.MAX_VALUE;
+                } else if (currentVersionedPartitionName.getPartitionVersion() == versionedPartitionName.getPartitionVersion()) {
+                    return txHighestPartitionTx.tx(versionedAquarium, (versionedAquarium1, highestTxId) -> {
+                        if (versionedAquarium1 != null) {
+                            return streamHighestTxId(versionedAquarium1,
+                                highestTxId,
+                                takeSessionId,
+                                versionedRing,
+                                ringMember,
+                                stable.isOnline(),
+                                availableStream);
                         } else {
-                            LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
+                            LOG.warn("Highest txId unavailable for {}", versionedPartitionName);
                             return Long.MAX_VALUE;
                         }
                     });
-                } catch (PropertiesNotPresentException e) {
-                    LOG.warn("Properties not present for {} when streaming available rows", versionedPartitionName);
-                    return Long.MAX_VALUE;
-                } catch (NotARingMemberException e) {
-                    LOG.warn("Not a ring member for {} when streaming available rows", versionedPartitionName);
+                } else {
+                    LOG.warn("Ignored available rows stream for invalid version {}", versionedPartitionName);
                     return Long.MAX_VALUE;
                 }
-            }
-        } else {
+            });
+        } catch (PropertiesNotPresentException e) {
+            LOG.warn("Properties not present for {} when streaming available rows", versionedPartitionName);
+            return Long.MAX_VALUE;
+        } catch (NotARingMemberException e) {
+            LOG.warn("Not a ring member for {} when streaming available rows", versionedPartitionName);
             return Long.MAX_VALUE;
         }
     }
 
-    private boolean takerIsOnline(RingMember ringMember, long takeSessionId, VersionedAquarium versionedAquarium) throws Exception {
-        Long onlineSessionId = onlineTakers.get(ringMember);
-        if (onlineSessionId != null && onlineSessionId == takeSessionId) {
-            return true;
+    private enum Stable {
+        dormant_online(true, true),
+        active_online(false, true),
+        active_offline(false, false);
+
+        private final boolean dormant;
+        private final boolean online;
+
+        Stable(boolean dormant, boolean online) {
+            this.dormant = dormant;
+            this.online = online;
         }
-        boolean online = versionedAquarium.isLivelyEndState(ringMember);
-        if (online) {
-            onlineTakers.put(ringMember, takeSessionId);
+
+        public boolean isDormant() {
+            return dormant;
         }
-        return online;
+
+        public boolean isOnline() {
+            return online;
+        }
+    }
+
+    private Stable stableTaker(RingMember ringMember, long takeSessionId, VersionedAquarium versionedAquarium) throws Exception {
+        Session session = sessions.get(ringMember);
+        if (session == null) {
+            return Stable.active_offline;
+        }
+        synchronized (session) {
+            if (session.sessionId != takeSessionId) {
+                return Stable.active_offline;
+            }
+
+            if (!session.online && versionedAquarium != null) {
+                session.online = versionedAquarium.isLivelyEndState(ringMember);
+            }
+            return (session.online && session.steadyState) ? Stable.dormant_online : (session.online) ? Stable.active_online : Stable.active_offline;
+        }
     }
 
     private long streamHighestTxId(VersionedAquarium versionedAquarium,
@@ -155,36 +170,42 @@ public class TakeVersionedPartitionCoordinator {
             || isSystemPartition
             || isSufficientCategory) {
 
-            AtomicBoolean available = new AtomicBoolean(false);
+            boolean available = false;
             long reofferDelta = (isSystemPartition ? systemReofferDeltaMillis : reofferDeltaMillis);
             long reofferAfterTimeInMillis = System.currentTimeMillis() + reofferDelta;
 
-            took.compute(ringMember, (RingMember t, SessionedTxId u) -> {
-                try {
-                    if (u == null) {
-                        available.set(true);
-                        u = new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, -1, false);
-                    } else if (u.sessionId != takeSessionId) {
-                        available.set(true);
-                        u = new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, -1, false);
-                    } else if (isSystemPartition && !u.tookFully) {
-                        available.set(true);
-                        u = new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, u.tookTxId, false);
-                    } else if (isSufficientCategory && (!takerIsOnline || shouldOffer(u, highestTxId))) {
-                        available.set(true);
-                        u = new SessionedTxId(takeSessionId, highestTxId, reofferAfterTimeInMillis, u.tookTxId, u.tookFully);
-                    }
-                    return u;
-                } catch (Exception x) {
-                    throw new RuntimeException(x);
+            Session session = sessions.computeIfAbsent(ringMember, key -> new Session());
+            synchronized (session) {
+                if (session.sessionId != takeSessionId) {
+                    available = true;
+                    session.sessionId = takeSessionId;
+                    session.offeredTxId = highestTxId;
+                    session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
+                    session.tookTxId = -1;
+                    session.tookFully = false;
+                    session.steadyState = false;
+                    session.online = false;
+                } else if (isSystemPartition && !session.tookFully) {
+                    available = true;
+                    session.sessionId = takeSessionId;
+                    session.offeredTxId = highestTxId;
+                    session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
+                    session.tookFully = false;
+                    session.steadyState = false;
+                } else if (isSufficientCategory && (!takerIsOnline || shouldOffer(session, highestTxId))) {
+                    available = true;
+                    session.sessionId = takeSessionId;
+                    session.offeredTxId = highestTxId;
+                    session.reofferAtTimeInMillis = reofferAfterTimeInMillis;
+                    session.steadyState = false;
+                } else {
+                    session.steadyState = true;
                 }
-            });
-            if (available.get()) {
-                steadyState.remove(ringMember);
+            }
+            if (available) {
                 availableStream.available(versionedPartitionName, highestTxId);
                 return reofferDelta;
             } else {
-                steadyState.put(ringMember, takeSessionId);
                 return Long.MAX_VALUE;
             }
         }
@@ -194,21 +215,24 @@ public class TakeVersionedPartitionCoordinator {
         return category * slowTakeMillis;
     }
 
-    private boolean shouldOffer(SessionedTxId u, long highestTxId) {
-        return highestTxId > -1 && (highestTxId > u.offeredTxId || (highestTxId > u.tookTxId && System.currentTimeMillis() > u.reofferAtTimeInMillis));
+    private boolean shouldOffer(Session session, long highestTxId) {
+        return highestTxId > -1 && (highestTxId > session.offeredTxId || (highestTxId > session.tookTxId && System.currentTimeMillis() > session
+            .reofferAtTimeInMillis));
     }
 
     void updateTxId(VersionedRing versionedRing, int takeFromFactor, long updateTxId, boolean invalidateOnline) throws Exception {
-        if (expunged.get()) {
+        if (expunged) {
             return;
         }
 
         updateCategory(versionedRing, takeFromFactor, updateTxId);
 
-        synchronized (steadyState) {
-            steadyState.clear();
-            if (invalidateOnline) {
-                onlineTakers.clear();
+        for (Session session : sessions.values()) {
+            synchronized (session) {
+                session.steadyState = false;
+                if (invalidateOnline) {
+                    session.online = false;
+                }
             }
         }
     }
@@ -223,40 +247,32 @@ public class TakeVersionedPartitionCoordinator {
 
         lastTakenMillis = System.currentTimeMillis();
 
-        if (expunged.get()) {
+        if (expunged) {
             return;
         }
 
-        took.compute(remoteRingMember, (key, existingSessionedTxId) -> {
-            if (existingSessionedTxId != null) {
-                long tookTxId = Math.max(localTxId, existingSessionedTxId.tookTxId);
-                boolean tookFully = (tookTxId >= existingSessionedTxId.offeredTxId);
-                return new SessionedTxId(existingSessionedTxId.sessionId,
-                    existingSessionedTxId.offeredTxId,
-                    existingSessionedTxId.reofferAtTimeInMillis,
-                    tookTxId,
-                    tookFully);
-            }
-            return null;
-        });
-        synchronized (steadyState) {
-            txHighestPartitionTx.tx(versionedAquarium, (versionedAquarium1, highestTxId) -> {
-                if (localTxId >= highestTxId) {
-                    steadyState.put(remoteRingMember, takeSessionId);
+        long highestTxId = txHighestPartitionTx.tx(versionedAquarium, (versionedAquarium1, _highestTxId) -> _highestTxId);
+        Session session = sessions.get(remoteRingMember);
+        if (session != null) {
+            synchronized (session) {
+                if (session.sessionId == takeSessionId) {
+                    long tookTxId = Math.max(localTxId, session.tookTxId);
+                    session.tookTxId = tookTxId;
+                    session.tookFully = (tookTxId >= session.offeredTxId);
+                    session.steadyState = (localTxId >= highestTxId);
                 }
-                return -1;
-            });
+            }
         }
         updateCategory(versionedRing, takeFromFactor, localTxId);
     }
 
     //TODO call this?
     void cleanup(Set<RingMember> retain) {
-        if (expunged.get()) {
+        if (expunged) {
             return;
         }
 
-        ConcurrentHashMap.KeySetView<RingMember, SessionedTxId> keySet = took.keySet();
+        Set<RingMember> keySet = sessions.keySet();
         keySet.removeAll(Sets.difference(keySet, retain));
     }
 
@@ -264,24 +280,26 @@ public class TakeVersionedPartitionCoordinator {
         lastCategoryCheckMillis = System.currentTimeMillis();
         if (takeFromFactor > 0) {
             long currentTimeTxId = timestampedOrderIdProvider.getApproximateId(System.currentTimeMillis());
-            int fastEnough = 0;
+            int[] fastEnough = { 0 };
             int worstCategory = 1;
             for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
-                if (fastEnough < Math.max(versionedRing.takeFromFactor, takeFromFactor)) {
+                if (fastEnough[0] < Math.max(versionedRing.takeFromFactor, takeFromFactor)) {
                     worstCategory = Math.max(worstCategory, candidate.getValue());
-                    SessionedTxId lastTxId = took.get(candidate.getKey());
-                    if (lastTxId != null) {
-                        if (lastTxId.tookTxId == latestTxId) {
-                            fastEnough++;
-                        } else {
-                            long latency = currentTimeTxId - lastTxId.offeredTxId;
-                            if (latency < slowTakeId * candidate.getValue()) {
-                                fastEnough++;
+                    Session session = sessions.get(candidate.getKey());
+                    if (session != null) {
+                        synchronized (session) {
+                            if (session.tookTxId == latestTxId) {
+                                fastEnough[0]++;
+                            } else {
+                                long latency = currentTimeTxId - session.offeredTxId;
+                                if (latency < slowTakeId * candidate.getValue()) {
+                                    fastEnough[0]++;
+                                }
                             }
                         }
                     }
                 } else if (candidate.getValue() > worstCategory) {
-                    took.remove(candidate.getKey());
+                    sessions.remove(candidate.getKey());
                 }
             }
             currentCategory.set(worstCategory);
@@ -290,29 +308,40 @@ public class TakeVersionedPartitionCoordinator {
     }
 
     public void expunged() {
-        expunged.set(true);
-        took.clear();
+        expunged = true;
+        sessions.clear();
     }
 
     boolean streamTookLatencies(VersionedRing versionedRing, TookLatencyStream stream) throws Exception {
         for (Entry<RingMember, Integer> candidate : versionedRing.members.entrySet()) {
             RingMember ringMember = candidate.getKey();
             int category = candidate.getValue();
-            SessionedTxId lastTxId = took.get(ringMember);
+            Session session = sessions.get(ringMember);
             long tooSlowLatencyTxId = slowTakeId * category;
 
-            long takeSessionId = latestTakeSessionId.getOrDefault(ringMember, -1L);
-            Long onlineTakeSessionId = onlineTakers.get(ringMember);
-            boolean online = (onlineTakeSessionId != null && onlineTakeSessionId == takeSessionId);
-            Long steadyStateTakeSessionId = steadyState.get(ringMember);
-            boolean steadyState = (steadyStateTakeSessionId != null && steadyStateTakeSessionId == takeSessionId);
-            if (lastTxId != null) {
-                if (!stream.stream(ringMember, lastTxId.offeredTxId, category, tooSlowLatencyTxId, takeSessionId, online, steadyState, lastOfferedMillis,
-                    lastTakenMillis, lastCategoryCheckMillis)) {
+            if (session != null) {
+                if (!stream.stream(ringMember,
+                    session.offeredTxId,
+                    category,
+                    tooSlowLatencyTxId,
+                    session.sessionId,
+                    session.online,
+                    session.steadyState,
+                    lastOfferedMillis,
+                    lastTakenMillis,
+                    lastCategoryCheckMillis)) {
                     return false;
                 }
-            } else if (!stream.stream(ringMember, -1L, category, tooSlowLatencyTxId, takeSessionId, online, steadyState, lastOfferedMillis,
-                lastTakenMillis, lastCategoryCheckMillis)) {
+            } else if (!stream.stream(ringMember,
+                -1L,
+                category,
+                tooSlowLatencyTxId,
+                -1,
+                false,
+                false,
+                lastOfferedMillis,
+                lastTakenMillis,
+                lastCategoryCheckMillis)) {
                 return false;
             }
         }
@@ -323,20 +352,30 @@ public class TakeVersionedPartitionCoordinator {
         return callCount.get();
     }
 
-    static class SessionedTxId {
+    static class Session {
 
-        final long sessionId;
-        final long offeredTxId;
-        final long reofferAtTimeInMillis;
-        final long tookTxId;
-        final boolean tookFully;
+        long sessionId = -1;
+        long offeredTxId = -1;
+        long reofferAtTimeInMillis = -1;
+        long tookTxId = -1;
+        boolean tookFully = false;
+        boolean steadyState = false;
+        boolean online = false;
 
-        public SessionedTxId(long sessionId, long offeredTxId, long reofferAtTimeInMillis, long tookTxId, boolean tookFully) {
+        /*public Session(long sessionId,
+            long offeredTxId,
+            long reofferAtTimeInMillis,
+            long tookTxId,
+            boolean tookFully,
+            boolean steadyState,
+            boolean online) {
             this.sessionId = sessionId;
             this.offeredTxId = offeredTxId;
             this.reofferAtTimeInMillis = reofferAtTimeInMillis;
             this.tookTxId = tookTxId;
             this.tookFully = tookFully;
-        }
+            this.steadyState = steadyState;
+            this.online = online;
+        }*/
     }
 }

@@ -381,7 +381,7 @@ public class AmzaServiceTest {
             assertEquals(route.orderedMembers.size(), clusterNodes.size());
             assertNotNull(route.leader);
             assertTrue(node.sickThreads.getSickThread().isEmpty());
-            assertTrue(node.sickPartitions.getSickPartitions().isEmpty());
+            assertTrue(node.sickPartitions.getSickPartitions().isEmpty(), "Partitions were sick: " + node.sickPartitions.getSickPartitions());
         }
 
         takerThreadPool.shutdownNow();

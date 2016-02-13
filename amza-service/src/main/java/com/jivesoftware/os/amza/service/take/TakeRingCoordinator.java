@@ -49,7 +49,7 @@ public class TakeRingCoordinator {
         long slowTakeInMillis,
         long reofferDeltaMillis,
         RingTopology ring) {
-        
+
         this.rootMember = rootMember;
         this.ringName = ringName;
         this.timestampedOrderIdProvider = timestampedOrderIdProvider;
@@ -108,15 +108,15 @@ public class TakeRingCoordinator {
         VersionedRing ring = versionedRing.get();
         for (TakeVersionedPartitionCoordinator coordinator : partitionCoordinators.values()) {
             PartitionProperties properties = versionedPartitionProvider.getProperties(coordinator.versionedPartitionName.getPartitionName());
-            long timeout = coordinator.availableRowsStream(partitionStateStorage,
-                txHighestPartitionTx,
-                takeSessionId,
-                ring,
-                ringMember,
-                properties.takeFromFactor,
-                availableStream);
-            suggestedWaitInMillis = Math.min(suggestedWaitInMillis,
-                timeout);
+            if (properties.takeFromFactor > 0) {
+                long timeout = coordinator.availableRowsStream(partitionStateStorage,
+                    txHighestPartitionTx,
+                    takeSessionId,
+                    ring,
+                    ringMember,
+                    availableStream);
+                suggestedWaitInMillis = Math.min(suggestedWaitInMillis, timeout);
+            }
         }
         return suggestedWaitInMillis;
     }

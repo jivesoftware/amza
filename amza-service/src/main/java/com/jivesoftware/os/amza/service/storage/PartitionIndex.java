@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.jivesoftware.os.amza.api.TimestampedValue;
 import com.jivesoftware.os.amza.api.partition.Consistency;
 import com.jivesoftware.os.amza.api.partition.Durability;
@@ -26,6 +27,7 @@ import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static com.jivesoftware.os.amza.service.storage.PartitionCreator.REGION_PROPERTIES;
 
@@ -70,8 +72,8 @@ public class PartitionIndex implements RowChanges, VersionedPartitionProvider {
         null);
 
     // TODO consider replacing ConcurrentHashMap<Long, PartitionStore> LHash
-    private final ConcurrentHashMap<PartitionName, ConcurrentHashMap<Long, PartitionStore>> partitionStores = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<PartitionName, PartitionProperties> partitionProperties = new ConcurrentHashMap<>();
+    private final ConcurrentMap<PartitionName, ConcurrentHashMap<Long, PartitionStore>> partitionStores = Maps.newConcurrentMap();
+    private final ConcurrentMap<PartitionName, PartitionProperties> partitionProperties = Maps.newConcurrentMap();
     private final StripingLocksProvider<VersionedPartitionName> locksProvider = new StripingLocksProvider<>(1024); // TODO expose to config
 
     private final AmzaStats amzaStats;

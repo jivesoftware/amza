@@ -244,7 +244,7 @@ public class TakeCoordinator {
         while (true) {
             long start = updates.get();
 
-            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
+            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
             ringReader.getRingNames(remoteRingMember, (ringName) -> {
                 TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> {
                     try {
@@ -263,6 +263,14 @@ public class TakeCoordinator {
                 }
                 return true;
             });
+
+            if (offered.get() == 0) {
+                pingCallback.call(); // Ping aka keep the socket alive
+            } else {
+                offered.set(0);
+                deliverCallback.call();
+            }
+
             if (suggestedWaitInMillis[0] == Long.MAX_VALUE) {
                 suggestedWaitInMillis[0] = heartbeatIntervalMillis; // Hmmm
             }
@@ -278,6 +286,7 @@ public class TakeCoordinator {
                     if (offered.get() == 0) {
                         pingCallback.call(); // Ping aka keep the socket alive
                     } else {
+                        offered.set(0);
                         deliverCallback.call();
                     }
                     lock.wait(timeToWait);

@@ -83,5 +83,18 @@ public interface WALTx {
             this.duration = duration;
         }
 
+        @Override
+        public String toString() {
+            return "CommittedCompacted{" +
+                "index=" + index +
+                ", sizeBeforeCompaction=" + sizeBeforeCompaction +
+                ", sizeAfterCompaction=" + sizeAfterCompaction +
+                ", keyCount=" + keyCount +
+                ", clobberCount=" + clobberCount +
+                ", tombstoneCount=" + tombstoneCount +
+                ", ttlCount=" + ttlCount +
+                ", duration=" + duration +
+                '}';
+        }
     }
 }

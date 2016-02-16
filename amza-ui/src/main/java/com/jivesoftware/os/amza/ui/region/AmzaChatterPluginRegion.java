@@ -68,9 +68,16 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
 
     public static class ChatterPluginRegionInput {
 
-        public ChatterPluginRegionInput() {
+        public final boolean unhealthy;
+        public final boolean active;
+        public final boolean system;
 
+        public ChatterPluginRegionInput(boolean unhealthy, boolean active, boolean system) {
+            this.unhealthy = unhealthy;
+            this.active = active;
+            this.system = system;
         }
+
     }
 
     @Override
@@ -308,11 +315,15 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                     }
                 }
                 if (unhealthy.get()) {
-                    unhealthyRows.add(row);
+                    if (input.unhealthy) {
+                        unhealthyRows.add(row);
+                    }
                 } else if (active.get()) {
                     if (versionedPartitionName.getPartitionName().isSystemPartition()) {
-                        systemRows.add(row);
-                    } else {
+                        if (input.system) {
+                            systemRows.add(row);
+                        }
+                    } else if (input.active) {
                         activeRows.add(row);
                     }
                 }
@@ -383,8 +394,11 @@ public class AmzaChatterPluginRegion implements PageRegion<AmzaChatterPluginRegi
                 }
             }
 
+            data.put("unhealthy", input.unhealthy);
             data.put("unhealthyRows", unhealthyRows);
+            data.put("active", input.active);
             data.put("activeRows", activeRows);
+            data.put("system", input.system);
             data.put("systemRows", systemRows);
 
             return renderer.render(template, data);

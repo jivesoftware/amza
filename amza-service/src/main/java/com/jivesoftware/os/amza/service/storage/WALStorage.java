@@ -52,7 +52,6 @@ import com.jivesoftware.os.amza.service.SickPartitions;
 import com.jivesoftware.os.jive.utils.ordered.id.OrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.jivesoftware.os.mlogger.core.ValueType;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -208,9 +207,6 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
         long ttlVersion,
         boolean expectedEndOfMerge) throws Exception {
 
-        final String metricPrefix = "partition>" + new String(versionedPartitionName.getPartitionName().getName())
-            + ">ring>" + new String(versionedPartitionName.getPartitionName().getRingName()) + ">";
-
         WALTx.Compacted<I> compact = walTx.compact(rowType,
             tombstoneTimestampId,
             tombstoneVersion,
@@ -244,7 +240,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                     return UIO.longsBytes(marker);
                 });
             } catch (Exception e) {
-                LOG.inc(metricPrefix + "failedCompaction");
+                LOG.inc("failedCompaction");
                 LOG.error("Failed to compact {}, attempting to reload", new Object[] { versionedPartitionName }, e);
                 loadInternal(-1, -1, true, false, false);
                 return -1;
@@ -253,15 +249,7 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
             keyCount.set(compacted.keyCount);
             clobberCount.set(0);
 
-            LOG.set(ValueType.COUNT, metricPrefix + "sizeBeforeCompaction", compacted.sizeBeforeCompaction);
-            LOG.set(ValueType.COUNT, metricPrefix + "sizeAfterCompaction", compacted.sizeAfterCompaction);
-            LOG.set(ValueType.COUNT, metricPrefix + "keeps", compacted.keyCount);
-            LOG.set(ValueType.COUNT, metricPrefix + "clobbers", compacted.clobberCount);
-            LOG.set(ValueType.COUNT, metricPrefix + "tombstones", compacted.tombstoneCount);
-            LOG.set(ValueType.COUNT, metricPrefix + "ttl", compacted.ttlCount);
-            LOG.set(ValueType.COUNT, metricPrefix + "duration", compacted.duration);
-            LOG.inc(metricPrefix + "compacted");
-
+            LOG.info("Completed compaction: {}", compacted);
             return compacted.sizeAfterCompaction;
         } finally {
             releaseAll();

@@ -14,7 +14,6 @@ import com.jivesoftware.os.amza.client.http.exceptions.NoLongerTheLeaderExceptio
 import com.jivesoftware.os.amza.client.http.exceptions.NotSolveableException;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -76,8 +75,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                 return solve(solutionLog, partitionName, family, partitionCall, 1, false, merger, additionalSolverAfterNMillis, abandonSolutionAfterNMillis,
                     leader.ringMember, leader);
             } catch (LeaderElectionInProgressException | NoLongerTheLeaderException | ExecutionException e) {
-                LOG.inc("reattempts>write>" + e.getClass().getSimpleName() + ">" + consistency.name() +
-                    ">" + new String(partitionName.getName(), StandardCharsets.UTF_8));
+                LOG.inc("reattempts>write>" + e.getClass().getSimpleName() + ">" + consistency.name());
                 partitionRoutingCache.invalidate(partitionName);
                 ring = ring(partitionName,
                     consistency,
@@ -134,8 +132,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                         future = callerThreads.submit(() -> clientProvider.call(partitionName, initialLeader.ringMember, initialLeader, family, call));
                         answer = future.get(abandonLeaderSolutionAfterNMillis, TimeUnit.MILLISECONDS);
                     } catch (LeaderElectionInProgressException | NoLongerTheLeaderException | ExecutionException e) {
-                        LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name() +
-                            ">" + new String(partitionName.getName(), StandardCharsets.UTF_8));
+                        LOG.inc("reattempts>read>" + e.getClass().getSimpleName() + ">" + consistency.name());
                         partitionRoutingCache.invalidate(partitionName);
                         ring = ring(partitionName,
                             consistency,
@@ -166,7 +163,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     LOG.error("Timed out reading from leader.", x);
                     throw x;
                 } else {
-                    LOG.inc("timeout>read>" + consistency.name() + ">" + new String(partitionName.getName(), StandardCharsets.UTF_8));
+                    LOG.inc("timeout>read>" + consistency.name());
                     LOG.warn("Timed out reading from leader.", x);
                 }
             } catch (Exception x) {
@@ -175,7 +172,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
                     LOG.error("Failed to read from leader.", x);
                     throw x;
                 } else {
-                    LOG.inc("failover>read>" + consistency.name() + ">" + new String(partitionName.getName(), StandardCharsets.UTF_8));
+                    LOG.inc("failover>read>" + consistency.name());
                     LOG.warn("Failed to read from leader.", x);
                 }
             }
@@ -333,7 +330,7 @@ public class AmzaClientCallRouter<C, E extends Throwable> implements RouteInvali
             }
             return result;
         } catch (NotSolveableException nse) {
-            LOG.inc("notSolveable>" + new String(partitionName.getName(), StandardCharsets.UTF_8));
+            LOG.inc("notSolveable");
             partitionRoutingCache.invalidate(partitionName);
             if (solutionLog != null) {
                 solutionLog.add("Not solvable. " + (System.currentTimeMillis() - start) + "millis");

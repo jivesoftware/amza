@@ -512,7 +512,6 @@ public class RowChangeTaker implements RowChanges {
         private final RowsTaker rowsTaker;
         private final OnCompletion onCompletion;
         private final OnError onError;
-        private final String metricName;
 
         private final AtomicLong version = new AtomicLong(0);
 
@@ -536,8 +535,6 @@ public class RowChangeTaker implements RowChanges {
             this.rowsTaker = rowsTaker;
             this.onCompletion = onCompletion;
             this.onError = onError;
-            PartitionName partitionName = remoteVersionedPartitionName.getPartitionName();
-            this.metricName = new String(partitionName.getName()) + "-" + new String(partitionName.getRingName());
         }
 
         private void moreRowsAvailable(long txId) {
@@ -563,9 +560,7 @@ public class RowChangeTaker implements RowChanges {
                     try {
 
                         LOG.startTimer("take>all");
-                        LOG.startTimer("take>" + metricName);
                         LOG.inc("take>all");
-                        LOG.inc("take>" + metricName);
                         try {
                             long highwaterMark = highwaterStorage.get(remoteRingMember, localVersionedPartitionName);
 //                            if (highwaterMark == null) {
@@ -585,7 +580,6 @@ public class RowChangeTaker implements RowChanges {
 
                             if (highwaterMark >= takeToTxId.get()) {
                                 LOG.inc("take>fully>all");
-                                LOG.inc("take>fully>" + metricName);
                                 amzaStats.took(remoteRingMember);
                                 amzaStats.takeErrors.setCount(remoteRingMember, 0);
                                 if (takeFailureListener.isPresent()) {
@@ -612,7 +606,6 @@ public class RowChangeTaker implements RowChanges {
 
                                 if (rowsResult.error != null) {
                                     LOG.inc("take>errors>all");
-                                    LOG.inc("take>errors>" + metricName);
                                     if (takeFailureListener.isPresent()) {
                                         takeFailureListener.get().failedToTake(remoteRingMember, remoteRingHost, rowsResult.error);
                                     }
@@ -624,7 +617,6 @@ public class RowChangeTaker implements RowChanges {
                                     amzaStats.takeErrors.add(remoteRingMember);
                                 } else if (rowsResult.unreachable != null) {
                                     LOG.inc("take>unreachable>all");
-                                    LOG.inc("take>unreachable>" + metricName);
                                     if (takeFailureListener.isPresent()) {
                                         takeFailureListener.get().failedToTake(remoteRingMember, remoteRingHost, rowsResult.unreachable);
                                     }
@@ -675,7 +667,6 @@ public class RowChangeTaker implements RowChanges {
                                     }
 
                                     LOG.inc("take>fully>all");
-                                    LOG.inc("take>fully>" + metricName);
                                     amzaStats.took(remoteRingMember);
                                     amzaStats.takeErrors.setCount(remoteRingMember, 0);
                                     if (takeFailureListener.isPresent()) {
@@ -715,7 +706,6 @@ public class RowChangeTaker implements RowChanges {
                             }
                         } finally {
                             LOG.stopTimer("take>all");
-                            LOG.stopTimer("take>" + metricName);
                         }
 
                     } catch (Exception x) {

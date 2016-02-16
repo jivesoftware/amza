@@ -23,7 +23,7 @@ import com.jivesoftware.os.lab.LABEnvironment;
 import com.jivesoftware.os.lab.api.ValueIndex;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
-import com.sleepycat.je.DatabaseNotFoundException;
+import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Semaphore;
@@ -385,21 +385,21 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
                             compactingWALIndex.commit(fsync);
                             compactingWALIndex.close();
-                            rename(Type.compacting, Type.compacted);
+                            rename(Type.compacting, Type.compacted, true);
 
                             primaryDb.close();
                             primaryDb = null;
                             prefixDb.close();
                             prefixDb = null;
                             if (hasActive) {
-                                rename(Type.active, Type.backup);
+                                rename(Type.active, Type.backup, false);
                             }
 
                             if (commit != null) {
                                 commit.call();
                             }
 
-                            rename(Type.compacted, Type.active);
+                            rename(Type.compacted, Type.active, true);
                             removeDatabase(Type.backup);
 
                             primaryDb = environment.open(name.getPrimaryName(),
@@ -408,7 +408,7 @@ public class LABPointerIndexWALIndex implements WALIndex {
                                 config.getSplitWhenKeysTotalExceedsNBytes(),
                                 config.getSplitWhenValuesTotalExceedsNBytes(),
                                 config.getSplitWhenValuesAndKeysTotalExceedsNBytes());
-                            
+
                             prefixDb = environment.open(name.getPrefixName(),
                                 config.getEntriesBetweenLeaps(),
                                 config.getMaxUpdatesBeforeFlush(),
@@ -426,22 +426,18 @@ public class LABPointerIndexWALIndex implements WALIndex {
         }
     }
 
-    private void rename(Type fromType, Type toType) throws Exception {
-        environment.rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName());
-        environment.rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName());
+    private void rename(Type fromType, Type toType, boolean required) throws Exception {
+        if (!environment.rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName()) && required) {
+            throw new IOException("Failed to rename database: " + name.typeName(fromType).getPrimaryName() + " to: " + name.typeName(toType).getPrimaryName());
+        }
+        if (!environment.rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName()) && required) {
+            throw new IOException("Failed to rename database: " + name.typeName(fromType).getPrefixName() + " to: " + name.typeName(toType).getPrefixName());
+        }
     }
 
     private void removeDatabase(Type type) throws Exception {
-        try {
-            environment.remove(name.typeName(type).getPrimaryName());
-        } catch (DatabaseNotFoundException e) {
-            // yummm
-        }
-        try {
-            environment.remove(name.typeName(type).getPrefixName());
-        } catch (DatabaseNotFoundException e) {
-            // yummm
-        }
+        environment.remove(name.typeName(type).getPrimaryName());
+        environment.remove(name.typeName(type).getPrefixName());
     }
 
     @Override

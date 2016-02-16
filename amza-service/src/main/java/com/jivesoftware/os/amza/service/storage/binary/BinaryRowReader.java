@@ -49,7 +49,7 @@ public class BinaryRowReader implements WALReader {
 
         byte[] intLongBuffer = new byte[8];
         synchronized (parent.lock()) {
-            IReadable filer = parent.reader(null, parent.length(), 1024 * 1024);
+            IReadable filer = parent.reader(null, parent.length(), true, 0);
             long filerLength = filer.length();
             if (backwardScan) {
                 long seekTo = filerLength;
@@ -113,7 +113,7 @@ public class BinaryRowReader implements WALReader {
             }
 
             long[] truncateAfterRowAtFp = new long[] { Long.MIN_VALUE };
-            scan(0, true, preTruncationNotifier, (rowFP, rowTxId, rowType, row) -> {
+            scan(0, true, true, 1024 * 1024, preTruncationNotifier, (rowFP, rowTxId, rowType, row) -> {
                 long result = forward.row(rowFP, rowTxId, rowType, row);
                 if (result != -1) {
                     if (result < -1) {
@@ -132,7 +132,7 @@ public class BinaryRowReader implements WALReader {
                 }
             } else {
                 // Have to reacquire filer because scan may have truncated
-                filer = parent.reader(filer, parent.length(), 1024 * 1024);
+                filer = parent.reader(filer, parent.length(), false, 0);
                 filer.seek(truncateAfterRowAtFp[0]);
                 long headLength = UIO.readInt(filer, "length", intLongBuffer);
                 long truncatedLength = truncateAfterRowAtFp[0] + 4 + headLength + 4;
@@ -146,8 +146,12 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public boolean reverseScan(RowStream stream) throws Exception {
+        return reverseScan(stream, false, 0); //TODO config
+    }
+
+    private boolean reverseScan(RowStream stream, boolean fallBackToChannelReader, int bufferSize) throws Exception {
         long boundaryFp = parent.length(); // last length int
-        IReadable parentFiler = parent.reader(null, boundaryFp, 0);
+        IReadable parentFiler = parent.reader(null, boundaryFp, fallBackToChannelReader, bufferSize);
         if (boundaryFp < 0) {
             return true;
         }
@@ -191,87 +195,17 @@ public class BinaryRowReader implements WALReader {
         }
     }
 
-    /*@Override
-    public boolean reverseScan(RowStream stream) throws Exception {
-        long boundaryFp = parent.length();
-        if (boundaryFp == 0) {
-            return true;
-        }
-        byte[] intLongBuffer = new byte[8];
-        IReadable parentFiler = parent.reader(null, boundaryFp, 0);
-        long read = 0;
-        try {
-            int pageSize = 1024 * 1024;
-            byte[] page = new byte[pageSize];
-            byte[] rowTypeByte = new byte[1];
-
-            while (true) {
-                long nextBoundaryFp = Math.max(boundaryFp - pageSize, 0);
-                int nextPageSize = (int) (boundaryFp - nextBoundaryFp);
-                if (page.length != nextPageSize) {
-                    page = new byte[nextPageSize];
-                }
-
-                parentFiler.seek(nextBoundaryFp);
-                int readLength = parentFiler.read(page);
-
-                HeapFiler filer = HeapFiler.fromBytes(page, readLength);
-                long seekTo = filer.length() - 4;
-                if (seekTo >= 0) {
-                    while (true) {
-                        long rowFP;
-                        RowType rowType;
-                        long rowTxId;
-                        byte[] row;
-                        filer.seek(seekTo);
-                        int priorLength = UIO.readInt(filer, "priorLength", intLongBuffer);
-                        if (seekTo < priorLength + 4) {
-                            seekTo += 4;
-                            pageSize = Math.max(4096, priorLength + 8); //TODO something smart
-                            break;
-                        }
-
-                        seekTo -= (priorLength + 4);
-                        filer.seek(seekTo);
-
-                        int length = UIO.readInt(filer, "length", intLongBuffer);
-                        filer.read(rowTypeByte);
-                        rowType = RowType.fromByte(rowTypeByte[0]);
-                        rowTxId = UIO.readLong(filer, "txId", intLongBuffer);
-                        row = new byte[length - (1 + 8)];
-                        if (row.length > 0) {
-                            filer.read(row);
-                        }
-                        rowFP = nextBoundaryFp + seekTo;
-                        read += (filer.getFilePointer() - seekTo);
-                        if (rowType != null) {
-                            if (!stream.row(rowFP, rowTxId, rowType, row)) {
-                                return false;
-                            }
-                        }
-
-                        if (seekTo >= 4) {
-                            seekTo -= 4;
-                        } else {
-                            break;
-                        }
-                    }
-                    boundaryFp = nextBoundaryFp + seekTo;
-                } else {
-                    break;
-                }
-            }
-            return true;
-        } finally {
-            ioStats.read.addAndGet(read);
-        }
-    }*/
     @Override
     public boolean scan(long offsetFp, boolean allowRepairs, RowStream stream) throws Exception {
-        return scan(offsetFp, allowRepairs, null, stream);
+        return scan(offsetFp, allowRepairs, false, 1024 * 1024, null, stream); //TODO config
     }
 
-    private boolean scan(long offsetFp, boolean allowRepairs, PreTruncationNotifier preTruncationNotifier, RowStream stream) throws Exception {
+    private boolean scan(long offsetFp,
+        boolean allowRepairs,
+        boolean fallBackToChannelReader,
+        int bufferSize,
+        PreTruncationNotifier preTruncationNotifier,
+        RowStream stream) throws Exception {
         long fileLength = 0;
         long read = 0;
         try {
@@ -280,7 +214,7 @@ public class BinaryRowReader implements WALReader {
             byte[] intLongBuffer = new byte[8];
             while (fileLength < parent.length()) {
                 fileLength = parent.length();
-                filer = parent.reader(filer, fileLength, 1024 * 1024); //TODO config
+                filer = parent.reader(filer, fileLength, fallBackToChannelReader, bufferSize);
                 while (true) {
                     long rowFP;
                     long rowTxId = -1;
@@ -375,12 +309,12 @@ public class BinaryRowReader implements WALReader {
     public byte[] readTypeByteTxIdAndRow(long position) throws IOException {
         int length = -1;
         try {
-            IReadable filer = parent.reader(null, position + 4, 0);
+            IReadable filer = parent.reader(null, position + 4, false, 0);
 
             filer.seek(position);
             length = UIO.readInt(filer, "length", new byte[4]);
 
-            filer = parent.reader(filer, position + 4 + length, 0);
+            filer = parent.reader(filer, position + 4 + length, false, 0);
 
             filer.seek(position + 4);
             byte[] row = new byte[length];
@@ -396,18 +330,18 @@ public class BinaryRowReader implements WALReader {
 
     @Override
     public boolean read(Fps fps, RowStream rowStream) throws Exception {
-        IReadable[] filerRef = { parent.reader(null, 0, 0) };
+        IReadable[] filerRef = { parent.reader(null, 0, false, 0) };
         byte[] rawLength = new byte[4];
         byte[] rowTypeByteAndTxId = new byte[1 + 8];
         return fps.consume(fp -> {
             int length = -1;
             try {
-                IReadable filer = parent.reader(filerRef[0], fp + 4, 0);
+                IReadable filer = parent.reader(filerRef[0], fp + 4, false, 0);
                 filer.seek(fp);
                 filer.read(rawLength);
                 length = UIO.bytesInt(rawLength);
 
-                filer = parent.reader(filer, fp + 4 + length, 0);
+                filer = parent.reader(filer, fp + 4 + length, false, 0);
                 filer.seek(fp + 4);
                 filer.read(rowTypeByteAndTxId);
                 RowType rowType = RowType.fromByte(rowTypeByteAndTxId[0]);

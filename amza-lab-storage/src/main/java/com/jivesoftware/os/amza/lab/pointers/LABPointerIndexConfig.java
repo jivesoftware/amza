@@ -31,4 +31,6 @@ public interface LABPointerIndexConfig extends Config {
     @LongDefault(10 * 1024 * 1024)
     long getSplitWhenValuesAndKeysTotalExceedsNBytes();
 
+    @IntDefault(24)
+    int getConcurrency();
 }

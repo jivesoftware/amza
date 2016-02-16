@@ -193,7 +193,7 @@ public class DeltaStripeWALStorageNGTest {
     }
 
     private DeltaStripeWALStorage loadDeltaStripe() throws Exception {
-        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(1, new AmzaStats(), new SickThreads(), deltaWALFactory, walIndexProviderRegistry, 20_000);
+        DeltaStripeWALStorage delta = new DeltaStripeWALStorage(1, new AmzaStats(), new SickThreads(), deltaWALFactory, walIndexProviderRegistry, 20_000, 8);
         delta.load(txPartitionState, partitionIndex, currentVersionProvider, primaryRowMarshaller);
         return delta;
     }

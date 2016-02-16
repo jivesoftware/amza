@@ -108,14 +108,15 @@ public class DeltaStripeWALStorage {
         SickThreads sickThreads,
         DeltaWALFactory deltaWALFactory,
         WALIndexProviderRegistry walIndexProviderRegistry,
-        long mergeAfterNUpdates) {
+        long mergeAfterNUpdates,
+        int mergeDeltaThreads) {
         this.sickThreads = sickThreads;
         this.index = index;
         this.amzaStats = amzaStats;
         this.deltaWALFactory = deltaWALFactory;
         this.walIndexProviderRegistry = walIndexProviderRegistry;
         this.mergeAfterNUpdates = mergeAfterNUpdates;
-        this.mergeDeltaThreads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors(), // TODO expose to config;
+        this.mergeDeltaThreads = Executors.newFixedThreadPool(mergeDeltaThreads,
             new ThreadFactoryBuilder().setNameFormat("merge-deltas-" + index + "-%d").build());
     }
 

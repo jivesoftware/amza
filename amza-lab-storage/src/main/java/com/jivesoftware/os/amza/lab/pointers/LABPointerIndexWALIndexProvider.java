@@ -43,7 +43,12 @@ public class LABPointerIndexWALIndexProvider implements WALIndexProvider<LABPoin
             if (!active.exists() && !active.mkdirs()) {
                 throw new RuntimeException("Failed while trying to mkdirs for " + active);
             }
-            this.environments[i] = new LABEnvironment(active, new LABValueMerger(), config.getUseMemMap(), config.getMinMergeDebt(), config.getMaxMergeDebt());
+            this.environments[i] = new LABEnvironment(active,
+                new LABValueMerger(),
+                config.getUseMemMap(),
+                config.getMinMergeDebt(),
+                config.getMaxMergeDebt(),
+                config.getConcurrency());
         }
     }
 

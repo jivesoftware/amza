@@ -52,7 +52,7 @@ public class MemoryBackedWALFiler implements WALFiler {
     }
 
     @Override
-    public IReadable reader(IReadable current, long requiredLength, int bufferSize) throws IOException {
+    public IReadable reader(IReadable current, long requiredLength, boolean fallBackToChannelReader, int bufferSize) throws IOException {
         if (current != null && current.length() >= requiredLength && current.length() <= filer.length()) {
             return current;
         }

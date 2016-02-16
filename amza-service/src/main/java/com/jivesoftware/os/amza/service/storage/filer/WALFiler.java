@@ -13,7 +13,7 @@ public interface WALFiler extends ICloseable {
 
     void truncate(long size) throws IOException;
 
-    IReadable reader(IReadable current, long requiredLength, int bufferSize) throws IOException;
+    IReadable reader(IReadable current, long requiredLength, boolean fallBackToChannelReader, int bufferSize) throws IOException;
 
     IAppendOnly appender() throws IOException;
 

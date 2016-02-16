@@ -68,7 +68,7 @@ public class DiskBackedWALFiler implements WALFiler {
     }
 
     @Override
-    public IReadable reader(IReadable current, long requiredLength, int bufferSize) throws IOException {
+    public IReadable reader(IReadable current, long requiredLength, boolean fallBackToChannelReader, int bufferSize) throws IOException {
         if (!useMemMap) {
             if (current != null) {
                 return current;
@@ -79,13 +79,14 @@ public class DiskBackedWALFiler implements WALFiler {
         }
 
         synchronized (memMapLock) {
-            long parentSize = size.get();
-            if (current != null && current.length() <= parentSize && current.length() >= requiredLength) {
-                return current;
-            }
             long length = size.get();
             if (current != null && current.length() <= length && current.length() >= requiredLength) {
                 return current;
+            }
+            if (fallBackToChannelReader && memMapFilerLength.get() < requiredLength) {
+                // mmap is too small, fall back to channel reader
+                DiskBackedWALFilerChannelReader reader = new DiskBackedWALFilerChannelReader(this, channel, closed);
+                return bufferSize > 0 ? new HeapBufferedReadable(reader, bufferSize) : reader;
             }
             memMapFiler.seek(length);
             memMapFilerLength.set(length);

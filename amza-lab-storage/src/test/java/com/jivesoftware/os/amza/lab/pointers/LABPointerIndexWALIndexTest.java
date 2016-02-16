@@ -360,6 +360,8 @@ public class LABPointerIndexWALIndexTest {
             });
         }
 
+        index.commit(false);
+
         CompactionWALIndex compactionWALIndex = index.startCompaction(true);
         compactionWALIndex.merge((stream) -> {
             for (long i = 100; i < 200; i++) {

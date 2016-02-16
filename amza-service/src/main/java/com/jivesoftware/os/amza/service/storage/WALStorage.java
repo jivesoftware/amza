@@ -235,7 +235,8 @@ public class WALStorage<I extends WALIndex> implements RangeScannable {
                         0,
                         fpOfLastLeap,
                         updatesSinceLeap,
-                        stripedKeyHighwaterTimestamps, 0);
+                        stripedKeyHighwaterTimestamps,
+                        0);
 
                     return UIO.longsBytes(marker);
                 });

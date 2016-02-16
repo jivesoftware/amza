@@ -205,10 +205,12 @@ public class AmzaServiceInitializer {
             config.takeSystemReofferDeltaMillis,
             config.takeReofferDeltaMillis);
 
+        int numProc = Runtime.getRuntime().availableProcessors();
+
         PartitionStore ringIndex = partitionIndex.get(PartitionCreator.RING_INDEX);
         PartitionStore nodeIndex = partitionIndex.get(PartitionCreator.NODE_INDEX);
-        ConcurrentBAHash<CacheId<RingTopology>> ringsCache = new ConcurrentBAHash<>(13, true, Runtime.getRuntime().availableProcessors());
-        ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentBAHash<>(13, true, Runtime.getRuntime().availableProcessors());
+        ConcurrentBAHash<CacheId<RingTopology>> ringsCache = new ConcurrentBAHash<>(13, true, numProc);
+        ConcurrentBAHash<CacheId<RingSet>> ringMemberRingNamesCache = new ConcurrentBAHash<>(13, true, numProc);
 
         AtomicLong nodeCacheId = new AtomicLong(0);
         AmzaRingStoreReader ringStoreReader = new AmzaRingStoreReader(ringMember, ringIndex, nodeIndex, ringsCache, ringMemberRingNamesCache, nodeCacheId);
@@ -330,7 +332,8 @@ public class AmzaServiceInitializer {
                 sickThreads,
                 deltaWALFactory,
                 indexProviderRegistry,
-                maxUpdatesBeforeCompaction);
+                maxUpdatesBeforeCompaction,
+                numProc);
 
             int stripeId = i;
             partitionStripes[i] = new PartitionStripe("stripe-" + i,

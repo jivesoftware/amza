@@ -395,7 +395,7 @@ public class AmzaAquariumProvider implements AquariumTransactor, TakeCoordinator
                             quorum);
                     }
                 } else {
-                    LOG.info("{} is {} and does not need repair.", versionedPartitionName);
+                    LOG.info("{} is {} and does not need repair.", versionedPartitionName, existing.getState());
                 }
             }
 

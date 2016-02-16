@@ -385,21 +385,23 @@ public class LABPointerIndexWALIndex implements WALIndex {
 
                             compactingWALIndex.commit(fsync);
                             compactingWALIndex.close();
-                            rename(Type.compacting, Type.compacted, true);
 
+                            boolean compactedNonEmpty = rename(Type.compacting, Type.compacted, false);
                             primaryDb.close();
                             primaryDb = null;
                             prefixDb.close();
                             prefixDb = null;
                             if (hasActive) {
-                                rename(Type.active, Type.backup, false);
+                                rename(Type.active, Type.backup, compactedNonEmpty);
                             }
 
                             if (commit != null) {
                                 commit.call();
                             }
 
-                            rename(Type.compacted, Type.active, true);
+                            if (compactedNonEmpty) {
+                                rename(Type.compacted, Type.active, true);
+                            }
                             removeDatabase(Type.backup);
 
                             primaryDb = environment.open(name.getPrimaryName(),
@@ -426,13 +428,17 @@ public class LABPointerIndexWALIndex implements WALIndex {
         }
     }
 
-    private void rename(Type fromType, Type toType, boolean required) throws Exception {
-        if (!environment.rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName()) && required) {
-            throw new IOException("Failed to rename database: " + name.typeName(fromType).getPrimaryName() + " to: " + name.typeName(toType).getPrimaryName());
+    private boolean rename(Type fromType, Type toType, boolean required) throws Exception {
+        boolean primaryRenamed = environment.rename(name.typeName(fromType).getPrimaryName(), name.typeName(toType).getPrimaryName());
+        boolean prefixRenamed = environment.rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName());
+        if (!primaryRenamed && (required || prefixRenamed)) {
+            throw new IOException("Failed to rename" +
+                " from:" + name.typeName(fromType).getPrimaryName() +
+                " to:" + name.typeName(toType).getPrimaryName() +
+                " required:" + required +
+                " prefix:" + prefixRenamed);
         }
-        if (!environment.rename(name.typeName(fromType).getPrefixName(), name.typeName(toType).getPrefixName()) && required) {
-            throw new IOException("Failed to rename database: " + name.typeName(fromType).getPrefixName() + " to: " + name.typeName(toType).getPrefixName());
-        }
+        return primaryRenamed;
     }
 
     private void removeDatabase(Type type) throws Exception {

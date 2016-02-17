@@ -26,6 +26,7 @@ public interface AvailableRowsTaker {
         TimestampedRingHost localTimestampedRingHost,
         RingMember remoteRingMember,
         RingHost remoteRingHost,
+        boolean system,
         long takeSessionId,
         long timeoutMillis,
         AvailableStream availableStream) throws Exception;

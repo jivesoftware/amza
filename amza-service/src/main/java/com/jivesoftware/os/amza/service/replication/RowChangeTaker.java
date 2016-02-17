@@ -92,7 +92,8 @@ public class RowChangeTaker implements RowChanges {
     private final Object systemConsumerLock = new Object();
     private final Object realignmentLock = new Object();
 
-    private final ConcurrentHashMap<RingMember, AvailableRowsReceiver> availableRowsReceivers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, AvailableRowsReceiver> systemAvailableRowsReceivers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RingMember, AvailableRowsReceiver> stripedAvailableRowsReceivers = new ConcurrentHashMap<>();
 
     public RowChangeTaker(AmzaStats amzaStats,
         AmzaRingStoreReader amzaRingReader,
@@ -145,13 +146,14 @@ public class RowChangeTaker implements RowChanges {
 
         int numberOfStripes = partitionStripeFunction.getNumberOfStripes();
         ExecutorService consumerThreadPool = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("availableRowsConsumer-%d").build());
-        scheduleConsumer(systemConsumerLock, consumerThreadPool, versionedPartitionName -> versionedPartitionName.getPartitionName().isSystemPartition());
+        scheduleConsumer(systemConsumerLock, consumerThreadPool, systemAvailableRowsReceivers, versionedPartitionName -> true);
         for (int i = 0; i < numberOfStripes; i++) {
             int stripe = i;
-            scheduleConsumer(stripedConsumerLocks[i], consumerThreadPool, versionedPartitionName -> {
-                PartitionName partitionName = versionedPartitionName.getPartitionName();
-                return !partitionName.isSystemPartition() && partitionStripeFunction.stripe(partitionName) == stripe;
-            });
+            scheduleConsumer(stripedConsumerLocks[i], 
+                consumerThreadPool,
+                stripedAvailableRowsReceivers,
+                versionedPartitionName -> partitionStripeFunction.stripe(versionedPartitionName.getPartitionName()) == stripe
+            );
         }
 
         ExecutorService cya = Executors.newFixedThreadPool(1, new ThreadFactoryBuilder().setNameFormat("cya-%d").build());
@@ -159,22 +161,32 @@ public class RowChangeTaker implements RowChanges {
             while (true) {
                 try {
                     Set<RingMember> desireRingMembers = amzaRingReader.getNeighboringRingMembers(AmzaRingReader.SYSTEM_RING);
-                    for (RingMember ringMember : Sets.difference(desireRingMembers, availableRowsReceivers.keySet())) {
-                        availableRowsReceivers.compute(ringMember, (RingMember key, AvailableRowsReceiver taker) -> {
+                    for (RingMember ringMember : Sets.difference(desireRingMembers, stripedAvailableRowsReceivers.keySet())) {
+                        systemAvailableRowsReceivers.compute(ringMember, (key, taker) -> {
                             if (taker == null) {
-                                taker = new AvailableRowsReceiver(primaryRowMarshaller, binaryHighwaterRowMarshaller, ringMember);
-                                //LOG.info("ADDED AvailableRows for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
+                                taker = new AvailableRowsReceiver(primaryRowMarshaller, binaryHighwaterRowMarshaller, ringMember, true);
+                                availableRowsReceiverThreadPool.submit(taker);
+                            }
+                            return taker;
+                        });
+                        stripedAvailableRowsReceivers.compute(ringMember, (key, taker) -> {
+                            if (taker == null) {
+                                taker = new AvailableRowsReceiver(primaryRowMarshaller, binaryHighwaterRowMarshaller, ringMember, false);
                                 availableRowsReceiverThreadPool.submit(taker);
                             }
                             return taker;
                         });
                     }
-                    for (RingMember ringMember : Sets.difference(availableRowsReceivers.keySet(), desireRingMembers)) {
-                        availableRowsReceivers.compute(ringMember, (key, taker) -> {
+                    for (RingMember ringMember : Sets.difference(stripedAvailableRowsReceivers.keySet(), desireRingMembers)) {
+                        systemAvailableRowsReceivers.compute(ringMember, (key, taker) -> {
                             taker.dispose();
-                            //LOG.info("REMOVED AvailableRows for ringMember:" + ringMember + " for " + amzaRingReader.getRingMember());
                             return null;
                         });
+                        stripedAvailableRowsReceivers.compute(ringMember, (key, taker) -> {
+                            taker.dispose();
+                            return null;
+                        });
+
                     }
 
                 } catch (InterruptedException x) {
@@ -204,12 +216,14 @@ public class RowChangeTaker implements RowChanges {
 
     private void scheduleConsumer(Object consumerLock,
         ExecutorService consumerThreadPool,
+        ConcurrentHashMap<RingMember, AvailableRowsReceiver> availableRowsReceivers,
         Predicate<VersionedPartitionName> partitionNamePredicate) throws InterruptedException {
 
         consumerThreadPool.submit(() -> {
             while (true) {
                 boolean consumed = false;
                 try {
+
                     for (RowChangeTaker.AvailableRowsReceiver availableRowsReceiver : availableRowsReceivers.values()) {
                         consumed |= availableRowsReceiver.consume(partitionNamePredicate);
                     }
@@ -271,6 +285,7 @@ public class RowChangeTaker implements RowChanges {
         private final BinaryPrimaryRowMarshaller primaryRowMarshaller;
         private final BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller;
         private final RingMember remoteRingMember;
+        private final boolean system;
 
         private final ConcurrentHashMap<VersionedPartitionName, RowTaker> versionedPartitionRowTakers = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<VersionedPartitionName, SessionedTxId> availablePartitionTxIds = new ConcurrentHashMap<>();
@@ -278,10 +293,12 @@ public class RowChangeTaker implements RowChanges {
 
         public AvailableRowsReceiver(BinaryPrimaryRowMarshaller primaryRowMarshaller,
             BinaryHighwaterRowMarshaller binaryHighwaterRowMarshaller,
-            RingMember remoteRingMember) {
+            RingMember remoteRingMember,
+            boolean system) {
             this.primaryRowMarshaller = primaryRowMarshaller;
             this.binaryHighwaterRowMarshaller = binaryHighwaterRowMarshaller;
             this.remoteRingMember = remoteRingMember;
+            this.system = system;
         }
 
         public void dispose() {
@@ -300,6 +317,7 @@ public class RowChangeTaker implements RowChanges {
                         amzaRingReader.getRingHost(),
                         remoteRingMember,
                         remoteRingHost,
+                        system,
                         sessionId,
                         longPollTimeoutMillis,
                         (remoteVersionedPartitionName, txId) -> {

@@ -123,7 +123,7 @@ public class Main {
         amzaServiceConfig.workingDirectories = workingDirs;
 
         BAInterner interner = new BAInterner();
-        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(amzaStats, interner);
+        AvailableRowsTaker availableRowsTaker = new HttpAvailableRowsTaker(interner);
 
         PartitionPropertyMarshaller partitionPropertyMarshaller = new PartitionPropertyMarshaller() {
 

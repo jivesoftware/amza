@@ -268,8 +268,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 LOG.warn("Awaiting online for expunged partition {}, we will compost and retry", partitionName);
                 partitionComposter.compostPartitionIfNecessary(partitionName);
             }
-        }
-        while (System.currentTimeMillis() < endAfterTimestamp);
+        } while (System.currentTimeMillis() < endAfterTimestamp);
     }
 
     public AmzaPartitionRoute getPartitionRoute(PartitionName partitionName, long waitForLeaderInMillis) throws Exception {
@@ -295,8 +294,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     LOG.warn("Getting route for expunged partition {}, we will compost and retry", partitionName);
                     partitionComposter.compostPartitionIfNecessary(partitionName);
                 }
-            }
-            while (System.currentTimeMillis() < endAfterTimestamp);
+            } while (System.currentTimeMillis() < endAfterTimestamp);
         }
 
         awaitLeader(partitionName, Math.max(endAfterTimestamp - System.currentTimeMillis(), 0));
@@ -376,8 +374,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                     LOG.warn("Awaiting leader for expunged partition {}, we will compost and retry", partitionName);
                     partitionComposter.compostPartitionIfNecessary(partitionName);
                 }
-            }
-            while (System.currentTimeMillis() < endAfterTimestamp);
+            } while (System.currentTimeMillis() < endAfterTimestamp);
         }
         throw new TimeoutException("Timed out awaiting leader for " + partitionName);
     }
@@ -431,7 +428,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     @Override
-    public void availableRowsStream(ChunkWriteable writeable,
+    public void availableRowsStream(boolean system,
+        ChunkWriteable writeable,
         RingMember remoteRingMember,
         TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
@@ -442,7 +440,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(new SnappyOutputStream(out));
 
-        takeCoordinator.availableRowsStream(txHighestPartitionTx,
+        takeCoordinator.availableRowsStream(system,
+            txHighestPartitionTx,
             ringStoreReader,
             partitionStateStorage,
             remoteRingMember,
@@ -477,7 +476,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
     }
 
     // for testing only
-    public void availableRowsStream(RingMember remoteRingMember,
+    public void availableRowsStream(boolean system,
+        RingMember remoteRingMember,
         TimestampedRingHost remoteTimestampedRingHost,
         long takeSessionId,
         long timeoutMillis,
@@ -485,7 +485,8 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
         Callable<Void> deliverCallback,
         Callable<Void> pingCallback) throws Exception {
         ringStoreWriter.register(remoteRingMember, remoteTimestampedRingHost.ringHost, remoteTimestampedRingHost.timestampId);
-        takeCoordinator.availableRowsStream(txHighestPartitionTx,
+        takeCoordinator.availableRowsStream(system,
+            txHighestPartitionTx,
             ringStoreReader,
             partitionStateStorage,
             remoteRingMember,
@@ -555,7 +556,7 @@ public class AmzaService implements AmzaInstance, PartitionProvider {
                 try {
                     versionedAquarium.wipeTheGlass();
                 } catch (Exception x) {
-                    LOG.warn("Failed to mark as ketchup for partition {}", new Object[] { partitionName }, x);
+                    LOG.warn("Failed to mark as ketchup for partition {}", new Object[]{partitionName}, x);
                 }
             }
             return null;

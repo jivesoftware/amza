@@ -110,9 +110,10 @@ public class AmzaReplicationRestEndpoints {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    @Path("/rows/available/{ringMember}/{ringHost}/{ringTimestampId}/{takeSessionId}/{timeoutMillis}")
+    @Path("/rows/available/{ringMember}/{ringHost}/{system}/{ringTimestampId}/{takeSessionId}/{timeoutMillis}")
     public ChunkedOutput<byte[]> availableRowsStream(@PathParam("ringMember") String ringMemberString,
         @PathParam("ringHost") String ringHost,
+        @PathParam("system") boolean system,
         @PathParam("ringTimestampId") long ringTimestampId,
         @PathParam("takeSessionId") long takeSessionId,
         @PathParam("timeoutMillis") long timeoutMillis) {
@@ -123,6 +124,7 @@ public class AmzaReplicationRestEndpoints {
             new Thread(() -> {
                 try {
                     amzaInstance.availableRowsStream(
+                        system,
                         chunkedOutput::write,
                         new RingMember(ringMemberString),
                         new TimestampedRingHost(RingHost.fromCanonicalString(ringHost), ringTimestampId),

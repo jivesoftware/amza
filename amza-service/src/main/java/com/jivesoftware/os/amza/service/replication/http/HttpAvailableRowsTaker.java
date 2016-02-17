@@ -20,7 +20,6 @@ import com.jivesoftware.os.amza.api.BAInterner;
 import com.jivesoftware.os.amza.api.ring.RingHost;
 import com.jivesoftware.os.amza.api.ring.RingMember;
 import com.jivesoftware.os.amza.api.ring.TimestampedRingHost;
-import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker;
 import com.jivesoftware.os.amza.service.take.StreamingTakesConsumer;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
@@ -42,12 +41,10 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
 
     private static final MetricLogger LOG = MetricLoggerFactory.getLogger();
 
-    private final AmzaStats amzaStats;
     private final ConcurrentHashMap<RingHost, HttpRequestHelper> requestHelpers = new ConcurrentHashMap<>();
     private final StreamingTakesConsumer streamingTakesConsumer;
 
-    public HttpAvailableRowsTaker(AmzaStats amzaStats, BAInterner interner) {
-        this.amzaStats = amzaStats;
+    public HttpAvailableRowsTaker(BAInterner interner) {
         this.streamingTakesConsumer = new StreamingTakesConsumer(interner);
     }
 
@@ -56,6 +53,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
         TimestampedRingHost localTimestampedRingHost,
         RingMember remoteRingMember,
         RingHost remoteRingHost,
+        boolean system,
         long takeSessionId,
         long timeoutMillis,
         AvailableStream availableStream) throws Exception {
@@ -64,6 +62,7 @@ public class HttpAvailableRowsTaker implements AvailableRowsTaker {
             "/amza/rows/available" +
                 "/" + localRingMember.getMember() +
                 "/" + localTimestampedRingHost.ringHost.toCanonicalString() +
+                "/" + system +
                 "/" + localTimestampedRingHost.timestampId +
                 "/" + takeSessionId +
                 "/" + timeoutMillis);

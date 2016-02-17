@@ -8,6 +8,7 @@ import com.jivesoftware.os.amza.service.partition.TxHighestPartitionTx;
 import com.jivesoftware.os.amza.service.partition.VersionedPartitionProvider;
 import com.jivesoftware.os.amza.service.replication.PartitionStateStorage;
 import com.jivesoftware.os.amza.service.ring.AmzaRingReader;
+import com.jivesoftware.os.amza.service.ring.AmzaRingReader.RingNameStream;
 import com.jivesoftware.os.amza.service.ring.RingTopology;
 import com.jivesoftware.os.amza.service.stats.AmzaStats;
 import com.jivesoftware.os.amza.service.take.AvailableRowsTaker.AvailableStream;
@@ -17,6 +18,7 @@ import com.jivesoftware.os.jive.utils.ordered.id.IdPacker;
 import com.jivesoftware.os.jive.utils.ordered.id.TimestampedOrderIdProvider;
 import com.jivesoftware.os.mlogger.core.MetricLogger;
 import com.jivesoftware.os.mlogger.core.MetricLoggerFactory;
+import java.util.Arrays;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -224,7 +226,7 @@ public class TakeCoordinator {
         }
     }
 
-    public void availableRowsStream(TxHighestPartitionTx txHighestPartitionTx,
+    public void availableRowsStream(boolean system, TxHighestPartitionTx txHighestPartitionTx,
         AmzaRingReader ringReader,
         PartitionStateStorage partitionStateStorage,
         RingMember remoteRingMember,
@@ -244,8 +246,13 @@ public class TakeCoordinator {
         while (true) {
             long start = updates.get();
 
-            long[] suggestedWaitInMillis = new long[] { Long.MAX_VALUE };
-            ringReader.getRingNames(remoteRingMember, (ringName) -> {
+            long[] suggestedWaitInMillis = new long[]{Long.MAX_VALUE};
+
+            RingNameStream ringNameStream = (ringName) -> {
+                if (!system && Arrays.equals(ringName, AmzaRingReader.SYSTEM_RING)) {
+                    return true;
+                }
+
                 TakeRingCoordinator ring = ensureRingCoordinator(ringName, () -> {
                     try {
                         return ringReader.getRing(ringName);
@@ -262,7 +269,13 @@ public class TakeCoordinator {
                             watchAvailableStream));
                 }
                 return true;
-            });
+            };
+
+            if (system) {
+                ringNameStream.stream(AmzaRingReader.SYSTEM_RING);
+            } else {
+                ringReader.getRingNames(remoteRingMember, ringNameStream);
+            }
 
             if (offered.get() == 0) {
                 pingCallback.call(); // Ping aka keep the socket alive
